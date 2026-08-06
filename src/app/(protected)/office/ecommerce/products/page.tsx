@@ -49,7 +49,7 @@ import {
     Filter,
     ChevronRight,
     X,
-    SlidersHorizontal,
+    // SlidersHorizontal,
 } from "lucide-react";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,

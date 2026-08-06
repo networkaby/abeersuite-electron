@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { invProductToPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupRoots } from "@/shared/lib/shop/groupCategory";
+import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
@@ -12,11 +12,11 @@ import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     try {
-        const [bands, rules, policy, groupRoots] = await Promise.all([
+        const [bands, rules, policy, groupIndex] = await Promise.all([
             loadBarcodeBands(),
             loadShopPublishRules(),
             loadShopStockPolicy(),
-            loadShopGroupRoots(),
+            loadShopGroupIndex(),
         ]);
         const products = await invProductDb(prisma).findMany({
             where: { isListedInShop: true, isActive: true },
@@ -27,7 +27,7 @@ export async function GET() {
             .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
             // HIDE policy drops out-of-stock products from the storefront entirely.
             .filter(({ avail }) => avail.visible)
-            .map(({ p, avail }) => invProductToPublic(p, { bands, avail, groupRoots }))
+            .map(({ p, avail }) => invProductToPublic(p, { bands, avail, groupIndex }))
             // Defensive: never show a half-built product even if the flag is stale.
             .filter((p) => shopQualification(p, rules).qualified);
         return NextResponse.json(published);

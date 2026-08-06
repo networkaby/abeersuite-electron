@@ -262,8 +262,11 @@ export default function ProductForm({
         subheading: subheading.trim() || null,
         description: description.trim() || null,
         category: shopCategory.trim() || "Accessories",
-        // Live preview only — the marketing collection is not edited on this form.
+        // Live preview only — the office-side classification and the group chain
+        // are not edited on this form, so the preview card carries neither.
         collection: null,
+        department: null,
+        categoryPath: [],
         pricePaise: shopPricePaise,
         mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
         badge: badge.trim() || null,

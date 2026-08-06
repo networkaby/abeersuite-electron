@@ -29,6 +29,8 @@ export function invProductDb(prisma: PrismaClient) {
             where?: Record<string, unknown>;
             include?: Record<string, unknown>;
             orderBy?: unknown;
+            take?: number;
+            skip?: number;
         }) => Promise<InvProductWithCategory[]>;
 
         findFirst: (args: {

@@ -26,7 +26,7 @@ Project almost complete. Focus:
 Databases:
 
 - Two separate DBs: **demo db** and **live DB**.
-- `CURRENT_DB = live DB` → may reset freely. _(Change to `live` on production data — then no full reset. Update when connected DB changes.)_
+- `CURRENT_DB = demo DB` → may reset freely. _(Change to_ `live` _on production data — then no full reset. Update when connected DB changes.) we are using [localhost](http://localhost) with local PGSQL demo data_
 
 ### Evolving concepts
 
@@ -72,8 +72,9 @@ Dev loop = capture → edit → seed: configure in UI → `pnpm seed:personal:ca
 1. **Generic bootstrap** — `lib/codeOwnedCatalog.ts` for permission definitions (single source, both bootstraps import it); `bootstrap-seed.ts` if generic demo content changes.
 2. **Personal bootstrap** — `data/personal.local.json` for grants and real config (R1 auto-tops-up new catalog permissions, so catalog-only additions need no grant edit); `lib/personalSnapshot.ts` if a NEW config table was added.
 3. **Apply to DB with a targeted script — never a full seed** (full seed = hundreds of slow remote upserts):
-   - Permissions → `pnpm seed:apply-permissions` (edit its `ADDITIONS` list first).
-   - Else → small idempotent one-off tsx script (same pattern as `apply-permissions.ts`), run, then delete or reuse.
+
+- Permissions → `pnpm seed:apply-permissions` (edit its `ADDITIONS` list first).
+- Else → small idempotent one-off tsx script (same pattern as `apply-permissions.ts`), run, then delete or reuse.
 
 Also update affected `dummy-*.ts` and `hard-clean.ts` if needed.
 

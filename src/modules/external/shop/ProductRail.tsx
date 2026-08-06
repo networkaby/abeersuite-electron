@@ -2,14 +2,32 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { cn } from "@/shared/lib/format/utils";
 
-export default function FeaturedRow({
+/**
+ * One horizontally-scrolling row of product cards.
+ *
+ * The single rail used everywhere a row of products appears: the store home's
+ * "Top picks" and "Today's deals", and the product page's "Similar products".
+ * They render identically by construction — same card, same scroll behaviour,
+ * same measurements — because they are the same component.
+ *
+ * Mobile-first: the row is a snap-scrolling strip at every width (a customer on
+ * a phone swipes; there is no desktop-only grid variant to keep in sync).
+ */
+export default function ProductRail({
     id,
     eyebrow,
     title,
     subtitle,
     products,
     accent = "primary",
+    /** Where "see all" points. Omit to hide the link entirely. */
+    seeAllHref = "#catalog",
+    seeAllLabel = "See all in catalog",
+    /** Home-page sections are separated by a rule; in-page rails supply their own. */
+    bordered = true,
+    className,
 }: {
     id?: string;
     eyebrow?: string;
@@ -17,6 +35,10 @@ export default function FeaturedRow({
     subtitle?: string;
     products: ShopProductPublic[];
     accent?: "primary" | "violet" | "emerald";
+    seeAllHref?: string | null;
+    seeAllLabel?: string;
+    bordered?: boolean;
+    className?: string;
 }) {
     if (products.length === 0) return null;
 
@@ -28,8 +50,8 @@ export default function FeaturedRow({
               : "text-primary";
 
     return (
-        <section id={id} className="border-b border-border/60 scroll-mt-24 sm:scroll-mt-20">
-            <div className="mx-auto max-w-6xl px-3 py-10 sm:px-4 sm:py-12">
+        <section id={id} className={cn(bordered && "border-b border-border/60", "scroll-mt-24 sm:scroll-mt-20", className)}>
+            <div className={cn("mx-auto max-w-6xl", bordered && "px-3 py-10 sm:px-4 sm:py-12")}>
                 <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-6">
                     <div className="min-w-0">
                         {eyebrow ? (
@@ -38,13 +60,15 @@ export default function FeaturedRow({
                         <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
                         {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
                     </div>
-                    <Link
-                        href="#catalog"
-                        className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted-foreground touch-manipulation hover:text-primary"
-                    >
-                        See all in catalog
-                        <ArrowRight className="size-4" />
-                    </Link>
+                    {seeAllHref ? (
+                        <Link
+                            href={seeAllHref}
+                            className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted-foreground touch-manipulation hover:text-primary"
+                        >
+                            {seeAllLabel}
+                            <ArrowRight className="size-4" />
+                        </Link>
+                    ) : null}
                 </div>
 
                 <div className="-mx-3 flex snap-x snap-mandatory gap-0 overflow-x-auto px-3 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] sm:-mx-4 sm:px-4">

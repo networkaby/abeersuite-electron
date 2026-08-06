@@ -5,14 +5,15 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, productPath } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupRoots } from "@/shared/lib/shop/groupCategory";
+import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import ProductGallery from "@/modules/external/shop/ProductGallery";
 import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
 import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";
-import ProductCard from "@/modules/external/shop/ProductCard";
+import ProductRail from "@/modules/external/shop/ProductRail";
+import { loadSimilarProducts } from "@/shared/lib/shop/similarProducts";
 import { ChevronRight } from "lucide-react";
 import JsonLd from "@/shared/components/JsonLd";
 import { buildProductLd } from "@/shared/lib/seo/jsonLd";
@@ -32,10 +33,10 @@ import { buildProductLd } from "@/shared/lib/seo/jsonLd";
 const loadProduct = cache(async (handle: string) => {
     const decoded = decodeURIComponent(handle);
     const db = invProductDb(prisma);
-    const [bands, policy, groupRoots] = await Promise.all([
+    const [bands, policy, groupIndex] = await Promise.all([
         loadBarcodeBands(),
         loadShopStockPolicy(),
-        loadShopGroupRoots(),
+        loadShopGroupIndex(),
     ]);
 
     const where = /^\d+$/.test(decoded)
@@ -53,7 +54,7 @@ const loadProduct = cache(async (handle: string) => {
     const avail = resolveAvailability(p.stock, p.allowBackorder, policy, p.reserved);
     if (!avail.visible) return null;
 
-    return shopProductToPublic(p, { bands, avail, groupRoots });
+    return shopProductToPublic(p, { bands, avail, groupIndex });
 });
 
 export async function generateMetadata({
@@ -95,38 +96,12 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
     const product = await loadProduct(handle);
     if (!product) notFound();
 
-    // "You may also like" renders the same ProductCard as the listing pages, so
-    // it needs the same bands and availability — otherwise the related strip
-    // quotes a different price than the card the customer just clicked.
-    const [bands, policy, groupRoots] = await Promise.all([
-        loadBarcodeBands(),
-        loadShopStockPolicy(),
-        loadShopGroupRoots(),
-    ]);
-    // "Same category" must mirror the resolution rule in invProductToPublic:
-    // a product is in this category if its group's ROOT carries the name, or if
-    // its shopCategory override spells it. Matching the raw shopCategory column
-    // alone would miss every product that gets its category from the group tree.
-    const siblingGroupIds = [...groupRoots.entries()]
-        .filter(([, rootName]) => rootName === product.category)
-        .map(([groupId]) => groupId);
-    const relatedRows = await invProductDb(prisma).findMany({
-        where: {
-            isListedInShop: true,
-            isActive: true,
-            OR: [
-                { shopCategory: product.category },
-                { shopCategory: null, groupId: { in: siblingGroupIds } },
-            ],
-            NOT: { id: product.id },
-        },
-        include: { category: { select: { name: true } } },
-        orderBy: { id: "asc" },
-    });
-    const related = relatedRows
-        .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy, p.reserved) }))
-        .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupRoots }));
+    // Similar = same office GROUP, widening up the ancestor chain only if the
+    // leaf is thin. The previous implementation matched on the group's ROOT,
+    // which pooled every mouse, keyboard, cabinet and monitor together (all root
+    // at "IT Products") and fetched them unbounded — now that the catalogue is
+    // actually classified that is 80+ cards on a single product page.
+    const similar = await loadSimilarProducts({ id: product.id, groupId: product.groupId });
 
     const canonicalPath = productPath(product);
 
@@ -136,12 +111,26 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
                 offer price and availability always match what the customer sees. */}
             <JsonLd data={buildProductLd(product)} />
 
+            {/* Full group chain, department-first: Shop › IT Products › Mouse › …
+                `categoryPath` arrives nearest-ancestor-first, so it is reversed
+                to read top-down the way a breadcrumb must. */}
             <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground mb-8">
                 <Link href="/shop" className="hover:text-foreground">
                     Shop
                 </Link>
+                {[...product.categoryPath].reverse().map((name) => (
+                    <span key={name} className="flex items-center gap-1">
+                        <ChevronRight className="size-4 opacity-60" />
+                        <Link
+                            href={`/shop?category=${encodeURIComponent(name)}`}
+                            className="hover:text-foreground"
+                        >
+                            {name}
+                        </Link>
+                    </span>
+                ))}
                 <ChevronRight className="size-4 opacity-60" />
-                <Link href={`/shop#cat-${encodeURIComponent(product.category)}`} className="hover:text-foreground">
+                <Link href={`/shop?category=${encodeURIComponent(product.category)}`} className="hover:text-foreground">
                     {product.category}
                 </Link>
                 <ChevronRight className="size-4 opacity-60" />
@@ -164,19 +153,16 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
 
             <ProductDetailTabs product={product} />
 
-            {related.length > 0 ? (
-                <section className="mt-20 border-t border-border/80 pt-12">
-                    <h2 className="text-2xl font-bold tracking-tight">You may also like</h2>
-                    <p className="text-sm text-muted-foreground mt-1">More in {product.category}</p>
-                    <ul className="mt-8 grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-4">
-                        {related.map((r) => (
-                            <li key={r.id} className="flex min-h-0 h-full flex-col">
-                                <ProductCard product={r} className="min-h-0 flex-1" />
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            ) : null}
+            <ProductRail
+                className="mt-20 border-t border-border/80 pt-12"
+                bordered={false}
+                eyebrow="Similar products"
+                title="More like this"
+                subtitle={`Other items in ${product.category}`}
+                products={similar}
+                seeAllHref={`/shop?category=${encodeURIComponent(product.category)}`}
+                seeAllLabel={`See all ${product.category}`}
+            />
         </main>
     );
 }

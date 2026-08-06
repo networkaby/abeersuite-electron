@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupRoots } from "@/shared/lib/shop/groupCategory";
+import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
@@ -19,9 +19,9 @@ import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
 import PromoBanners from "@/modules/external/store/PromoBanners";
 import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
-import FeaturedRow from "@/modules/external/store/FeaturedRow";
+import ProductRail from "@/modules/external/shop/ProductRail";
 import BrandStrip from "@/modules/external/store/BrandStrip";
-import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+// import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 import JsonLd from "@/shared/components/JsonLd";
 import { buildSiteLd } from "@/shared/lib/seo/jsonLd";
 
@@ -62,13 +62,13 @@ export default async function StoreHomePage({
     searchParams: Promise<{ q?: string; category?: string }>;
 }) {
     const sp = await searchParams;
-    const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
+    // const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules, policy, groupRoots] = await Promise.all([
+    const [bands, rules, policy, groupIndex] = await Promise.all([
         loadBarcodeBands(),
         loadShopPublishRules(),
         loadShopStockPolicy(),
-        loadShopGroupRoots(),
+        loadShopGroupIndex(),
     ]);
     const rows = await invProductDb(prisma).findMany({
         where: { isListedInShop: true, isActive: true },
@@ -78,7 +78,7 @@ export default async function StoreHomePage({
     const products = rows
         .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
         .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupRoots }))
+        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupIndex }))
         .filter((p) => shopQualification(p, rules).qualified);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
@@ -113,7 +113,7 @@ export default async function StoreHomePage({
 
             <PromoBanners banners={PROMO_BANNERS_TOP} columns={2} />
 
-            <FeaturedRow
+            <ProductRail
                 id="featured"
                 eyebrow="Trending"
                 title="Top picks for you"
@@ -125,7 +125,7 @@ export default async function StoreHomePage({
 
             <PromoBanners banners={PROMO_BANNERS_BOTTOM} columns={3} />
 
-            <FeaturedRow
+            <ProductRail
                 id="deals"
                 eyebrow="Today's deals"
                 title="Save big — limited stock"
@@ -136,12 +136,12 @@ export default async function StoreHomePage({
 
             <BrandStrip />
 
-            <ShopCatalogClient
+            {/* <ShopCatalogClient
                 products={products}
                 allCategories={allCategories}
                 initialQuery={sp.q ?? ""}
                 initialCategory={initialCategory}
-            />
+            /> */}
         </>
     );
 }

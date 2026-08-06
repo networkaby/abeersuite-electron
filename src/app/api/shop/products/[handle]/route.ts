@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { invProductToPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupRoots } from "@/shared/lib/shop/groupCategory";
+import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
@@ -30,18 +30,18 @@ export async function GET(_req: Request, ctx: { params: Promise<{ handle: string
         if (!product) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
-        const [bands, rules, policy, groupRoots] = await Promise.all([
+        const [bands, rules, policy, groupIndex] = await Promise.all([
             loadBarcodeBands(),
             loadShopPublishRules(),
             loadShopStockPolicy(),
-            loadShopGroupRoots(),
+            loadShopGroupIndex(),
         ]);
         const avail = resolveAvailability(product.stock, product.allowBackorder, policy);
         // HIDE policy: out-of-stock product is removed from the shop.
         if (!avail.visible) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
-        const pub = invProductToPublic(product, { bands, avail, groupRoots });
+        const pub = invProductToPublic(product, { bands, avail, groupIndex });
         // Defensive: a listed-but-incomplete product 404s rather than rendering broken.
         if (!shopQualification(pub, rules).qualified) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -1,6 +1,8 @@
 import type { InvProductFull } from "@/shared/types/inventoryTypes";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
-import type { GroupRootMap } from "@/shared/lib/shop/groupCategory";
+// From groupTree, NOT groupCategory: this module is reached from client
+// components, and groupCategory imports prisma. See groupTree.ts.
+import { rootOf, type ShopGroupIndex } from "@/shared/lib/shop/groupTree";
 import type { StockStatus } from "@/modules/ecommerce/lib/shopStock";
 
 /** Serializable storefront shape (SSR → client, APIs). */
@@ -11,17 +13,32 @@ export type ShopProductPublic = {
     subheading: string | null;
     description: string | null;
     /**
-     * Customer-facing category — sourced from the office **Group** tree (root
-     * name), NOT from office Category. Drives the category chips, showcase,
-     * shop filter, breadcrumb and JSON-LD. See groupCategory.ts.
+     * Customer-facing category — the product's **OWN** office Group ("Mouse",
+     * "HD Dome"), NOT its root and NOT office Category. Drives the chips, shop
+     * filter, breadcrumb and JSON-LD. See groupCategory.ts.
      */
     category: string;
+    /**
+     * The department the category sits under — the ROOT of the group chain
+     * ("IT Products"). Used for top-level grouping and the breadcrumb, so the
+     * listing page can still show departments without the category itself being
+     * flattened to one.
+     */
+    department: string | null;
+    /** Ancestors nearest-first, for breadcrumbs: ["IT Products"] for Mouse. */
+    categoryPath: string[];
     /**
      * Customer-facing collection — the office **Category** (marketing bucket:
      * "Office Supplies", "Luxury Items"). A secondary merchandising axis; it
      * deliberately does not compete with `category` for navigation.
      */
     collection: string | null;
+    /**
+     * The product's office Group id — the taxonomy key the storefront navigates
+     * by. Carried so callers can resolve siblings ("similar products") and the
+     * breadcrumb chain without re-querying the product.
+     */
+    groupId: number | null;
     pricePaise: number;
     mrpPaise: number | null;
     badge: string | null;
@@ -44,8 +61,8 @@ export type ShopProductPublicOptions = {
     bands?: BarcodeBand[];
     /** Resolved stock display state. */
     avail?: { status: StockStatus; orderable: boolean };
-    /** groupId → root group name, from `loadShopGroupRoots()`. */
-    groupRoots?: GroupRootMap;
+    /** groupId → group + ancestors, from `loadShopGroupIndex()`. */
+    groupIndex?: ShopGroupIndex;
 };
 
 /**
@@ -62,7 +79,8 @@ export function invProductToPublic(
     p: InvProductFull & { category?: { name: string } | null },
     opts: ShopProductPublicOptions = {}
 ): ShopProductPublic {
-    const { bands, avail, groupRoots } = opts;
+    const { bands, avail, groupIndex } = opts;
+    const group = p.groupId != null ? groupIndex?.get(p.groupId) : undefined;
     const rawGal = p.galleryJson;
     let galleryUrls: string[] = [];
     if (Array.isArray(rawGal)) {
@@ -84,15 +102,14 @@ export function invProductToPublic(
         name: p.name,
         subheading: p.shopSubheading,
         description: p.shopDescription,
-        // Storefront category comes from the office GROUP tree (root name), with
-        // shopCategory as the per-product hand-override. Office Category is
-        // deliberately NOT in this chain — it is the marketing bucket and now
-        // surfaces separately as `collection`.
-        category:
-            p.shopCategory ??
-            (p.groupId != null ? groupRoots?.get(p.groupId) : null) ??
-            "Accessories",
+        // Storefront category = the product's OWN group, with shopCategory as the
+        // per-product hand-override. Office Category is deliberately NOT in this
+        // chain — it is an office-only classification and surfaces as `collection`.
+        category: p.shopCategory ?? group?.name ?? "Accessories",
+        department: group ? rootOf(group).name : null,
+        categoryPath: group?.ancestors.map((a) => a.name) ?? [],
         collection: p.category?.name ?? null,
+        groupId: p.groupId,
         // Shop price = printed barcode tag (shelf == shop == receipt) when bands are
         // supplied, else the materialized effectiveSalePricePaise. Exposed under the
         // stable shop field name `pricePaise` so the storefront UI is unchanged.
