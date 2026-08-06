@@ -17,6 +17,7 @@ import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { demoRating } from "@/shared/lib/shop/productPublic";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import ProductCard from "./ProductCard";
+import ProductListRow from "./ProductListRow";
 import {
     Search,
     SlidersHorizontal,
@@ -260,7 +261,7 @@ function ShopCatalogInner({
     const [ratingMin, setRatingMin] = useState<number | null>(null);
     const [inStockOnly, setInStockOnly] = useState(false);
     const [sort, setSort] = useState<SortKey>("featured");
-    const [dense, setDense] = useState(false);
+    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [showFilters, setShowFilters] = useState(false);
 
     const priceBands = useMemo(() => buildPriceBands(products), [products]);
@@ -658,21 +659,21 @@ function ShopCatalogInner({
                             <div className="flex justify-end rounded-lg border border-border p-0.5 sm:justify-start">
                                 <Button
                                     type="button"
-                                    variant={!dense ? "secondary" : "ghost"}
+                                    variant={viewMode === "grid" ? "secondary" : "ghost"}
                                     size="icon"
                                     className="size-11 touch-manipulation sm:size-9"
-                                    onClick={() => setDense(false)}
-                                    aria-label="Comfortable grid"
+                                    onClick={() => setViewMode("grid")}
+                                    aria-label="Grid view"
                                 >
                                     <LayoutGrid className="size-4" />
                                 </Button>
                                 <Button
                                     type="button"
-                                    variant={dense ? "secondary" : "ghost"}
+                                    variant={viewMode === "list" ? "secondary" : "ghost"}
                                     size="icon"
                                     className="size-11 touch-manipulation sm:size-9"
-                                    onClick={() => setDense(true)}
-                                    aria-label="Dense grid"
+                                    onClick={() => setViewMode("list")}
+                                    aria-label="List view"
                                 >
                                     <LayoutList className="size-4" />
                                 </Button>
@@ -720,20 +721,23 @@ function ShopCatalogInner({
                                         {items.length} item{items.length === 1 ? "" : "s"}
                                     </span>
                                 </div>
-                                <ul
-                                    className={cn(
-                                        "grid auto-rows-fr gap-6",
-                                        dense
-                                            ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                                            : "sm:grid-cols-2 xl:grid-cols-3"
-                                    )}
-                                >
-                                    {items.map((p) => (
-                                        <li key={p.id} className="flex min-h-0 h-full flex-col">
-                                            <ProductCard product={p} className="min-h-0 flex-1" />
-                                        </li>
-                                    ))}
-                                </ul>
+                                {viewMode === "list" ? (
+                                    <ul className="flex flex-col gap-4">
+                                        {items.map((p) => (
+                                            <li key={p.id}>
+                                                <ProductListRow product={p} />
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <ul className="grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                                        {items.map((p) => (
+                                            <li key={p.id} className="flex min-h-0 h-full flex-col">
+                                                <ProductCard product={p} className="min-h-0 flex-1" />
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </section>
                         ))
                     )}
