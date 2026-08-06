@@ -50,43 +50,58 @@ export async function PUT(
         // All-access departments pool everything (`isAllAccess` / null ids) → no filtering.
         const pool = await getDepartmentPool(role.departmentId);
         const allowed = pool && !pool.isAllAccess ? new Set(pool.permissionIds ?? []) : null;
+        // Sidebar pooling is module-level, not link-level: once the pool holds ANY
+        // link of a module, the WHOLE module (every current link, including ones
+        // added to the sidebar after the pool was last saved) is unlocked. This
+        // matches the Role page's own display gate (`.some(...)` in
+        // SidebarVisibilitySection) — a page added to an already-adopted module is
+        // assignable straight from the Role page, no re-tick in Departments needed.
+        // A module with NOTHING pooled yet still needs an explicit first tick.
+        const unlockedSidebarIds = allowed
+            ? new Set(
+                SIDEBAR_MODULES
+                    .filter((m) => m.pooled && m.childPermissionIds.some((id) => allowed.has(id)))
+                    .flatMap((m) => m.childPermissionIds)
+            )
+            : null;
         // The pool pools MODULE VISIBILITY (`ui:sidebar:*` links); the granular
         // create/edit/delete LEVEL behind a link is a per-role decision, so those
         // ids never sit in the pool. Unlock a link's granular ids once the link
-        // itself is pooled — else the editor lets you tick e.g. Contacts → Create
-        // but the filter below would silently drop it (see SIDEBAR_LINK_GRANULAR_IDS).
+        // itself is unlocked (pooled directly, or via its module) — else the editor
+        // lets you tick e.g. Contacts → Create but the filter below would silently
+        // drop it (see SIDEBAR_LINK_GRANULAR_IDS).
         const unlockedGranular = allowed
             ? new Set(
                 Object.entries(SIDEBAR_LINK_GRANULAR_IDS)
-                    .filter(([linkId]) => allowed.has(linkId))
+                    .filter(([linkId]) => allowed.has(linkId) || unlockedSidebarIds!.has(linkId))
                     .flatMap(([, granularIds]) => granularIds)
             )
             : null;
         // Extra capability toggles (compliance:tax:edit, pricing:*) — same principle as
         // the granular CRUD ids above: the department greenlights the module/link, and
         // the finer toggle is a per-role decision, so the pool never carries the toggle
-        // id itself. Unlock it once its parent link is pooled, else the filter below
+        // id itself. Unlock it once its parent link is unlocked, else the filter below
         // would silently drop it (see SIDEBAR_LINK_EXTRA_TOGGLE).
         const unlockedExtra = allowed
             ? new Set(
                 Object.entries(SIDEBAR_LINK_EXTRA_TOGGLE)
-                    .filter(([linkId]) => allowed.has(linkId))
+                    .filter(([linkId]) => allowed.has(linkId) || unlockedSidebarIds!.has(linkId))
                     .map(([, toggle]) => toggle.id)
             )
             : null;
         // Module-level toggles (Contacts → show suppliers): unlocked once ANY of
-        // the module's trigger links is pooled — same principle as the per-link
+        // the module's trigger links is unlocked — same principle as the per-link
         // extra toggles above.
         const unlockedModuleExtra = allowed
             ? new Set(
                 Object.values(MODULE_EXTRA_TOGGLE)
-                    .filter((t) => t.showWhenAnyLinkId.some((id) => allowed.has(id)))
+                    .filter((t) => t.showWhenAnyLinkId.some((id) => allowed.has(id) || unlockedSidebarIds!.has(id)))
                     .map((t) => t.id)
             )
             : null;
         const permissionIds = allowed
             ? data.permissionIds.filter((id) =>
-                allowed.has(id) || isUnpooled(id) || unlockedGranular!.has(id)
+                allowed.has(id) || isUnpooled(id) || unlockedSidebarIds!.has(id) || unlockedGranular!.has(id)
                 || unlockedExtra!.has(id) || unlockedModuleExtra!.has(id))
             : data.permissionIds;
 
