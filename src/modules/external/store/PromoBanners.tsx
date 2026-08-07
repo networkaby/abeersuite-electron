@@ -16,7 +16,7 @@ export default function PromoBanners({
     className,
 }: {
     banners: PromoBanner[];
-    columns?: 2 | 3;
+    columns?: 1 | 2 | 3;
     className?: string;
 }) {
     if (banners.length === 0) return null;
@@ -24,7 +24,9 @@ export default function PromoBanners({
     const gridCls =
         columns === 3
             ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            : "grid gap-4 sm:grid-cols-2";
+            : columns === 1
+              ? "grid gap-4"
+              : "grid gap-4 sm:grid-cols-2";
 
     return (
         <section className={cn("border-b border-border/60 bg-muted/20", className)}>
@@ -41,7 +43,13 @@ export default function PromoBanners({
                                         src={b.imageUrl}
                                         alt={b.imageAlt}
                                         fill
-                                        sizes={columns === 3 ? "(max-width:1024px) 100vw, 33vw" : "(max-width:640px) 100vw, 50vw"}
+                                        sizes={
+                                            columns === 3
+                                                ? "(max-width:1024px) 100vw, 33vw"
+                                                : columns === 1
+                                                  ? "100vw"
+                                                  : "(max-width:640px) 100vw, 50vw"
+                                        }
                                         className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                                     />
                                     <div className="absolute inset-0 bg-linear-to-r from-black/80 via-black/40 to-black/10 sm:from-black/75 sm:via-black/35 sm:to-transparent" />

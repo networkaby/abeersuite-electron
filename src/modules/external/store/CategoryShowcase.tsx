@@ -9,7 +9,17 @@ type CategoryEntry = {
     fallbackImageUrl?: string | null;
 };
 
-export default function CategoryShowcase({ categories }: { categories: CategoryEntry[] }) {
+export default function CategoryShowcase({
+    categories,
+    eyebrow = "Departments",
+    title = "Shop by category",
+    subtitle = "Tap a department to jump to its section in the catalog below.",
+}: {
+    categories: CategoryEntry[];
+    eyebrow?: string;
+    title?: string;
+    subtitle?: string;
+}) {
     if (categories.length === 0) return null;
 
     return (
@@ -17,11 +27,9 @@ export default function CategoryShowcase({ categories }: { categories: CategoryE
             <div className="mx-auto max-w-6xl px-3 py-10 sm:px-4 sm:py-14">
                 <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Departments</p>
-                        <h2 className="mt-2 text-xl font-bold tracking-tight sm:text-3xl">Shop by category</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Tap a department to jump to its section in the catalog below.
-                        </p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{eyebrow}</p>
+                        <h2 className="mt-2 text-xl font-bold tracking-tight sm:text-3xl">{title}</h2>
+                        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
                     </div>
                 </div>
 

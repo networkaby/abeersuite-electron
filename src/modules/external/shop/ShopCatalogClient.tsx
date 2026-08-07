@@ -243,11 +243,13 @@ function ShopCatalogInner({
     allCategories,
     initialQuery,
     initialCategory,
+    title = "Catalog",
 }: {
     products: ShopProductPublic[];
     allCategories: string[];
     initialQuery: string;
     initialCategory: string;
+    title?: string;
 }) {
     const router = useRouter();
     const [q, setQ] = useState(initialQuery);
@@ -618,7 +620,7 @@ function ShopCatalogInner({
                 <div className="min-w-0 flex-1 space-y-8">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Catalog</h2>
+                            <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 {hasMore
                                     ? `Showing ${visible.length} of ${filtered.length} products`
@@ -766,6 +768,7 @@ export default function ShopCatalogClient(props: {
     allCategories: string[];
     initialQuery: string;
     initialCategory: string;
+    title?: string;
 }) {
     return (
         <Suspense

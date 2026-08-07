@@ -355,6 +355,7 @@ Sketch discussed:
 
 ## 💡 Ideas (parking lot)
 
+- **Cloudinary orphaned-image cleanup.** No image is ever deleted from Cloudinary when replaced or when its parent record is deleted — only `secure_url` strings are stored (`InvProduct.imageUrl` + `galleryJson`, `InvCategory.imageUrl`, `InvProductGroup.imageUrl`, `InvBrand.imageUrl`, `User.avatarUrl`, `CustomerSocialProfile.avatarUrl`/`coverUrl`); no `public_id` is persisted anywhere and there's no server-side Cloudinary SDK/Admin API wired yet (uploads go straight browser→Cloudinary via a signed-upload flow, `src/shared/lib/cloudinary.ts`). **Decided approach:** not per-route delete-on-replace/delete-on-parent-delete wiring (rejected — touches too many routes for the current simplification phase). Instead, a standalone reconciliation script `scripts/cleanup-cloudinary.ts` (pattern like `apply-permissions.ts`) that lists all Cloudinary assets under the `avatars/` and `shop/products/` folders via the Admin API, cross-references against every DB field above, and reports/deletes whatever's orphaned (in Cloudinary, not referenced in DB). Default dry-run (print only); `--delete` flag to actually destroy. Run manually/ad hoc, no cron. Not yet built.
 - Pipeline-specific dashboards per pipeline (Repair / Sales / etc.).
 - B2B Company portal — companies see all linked devices/tickets.
 - Despatch courier integration — auto-generate tracking label from "Pending Despatch" worker.

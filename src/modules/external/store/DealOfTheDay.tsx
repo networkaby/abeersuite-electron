@@ -6,7 +6,15 @@ import { Star, Flame, ArrowRight } from "lucide-react";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { demoRating, productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 
-export default function DealOfTheDay({ product }: { product: ShopProductPublic | null }) {
+export default function DealOfTheDay({
+    product,
+    eyebrow = "Deal of the day",
+    title = "Biggest savings — limited stock",
+}: {
+    product: ShopProductPublic | null;
+    eyebrow?: string;
+    title?: string;
+}) {
     if (!product) return null;
     const img = product.galleryUrls[0] ?? product.imageUrl;
     const href = productPath(product);
@@ -27,11 +35,9 @@ export default function DealOfTheDay({ product }: { product: ShopProductPublic |
                     <div>
                         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400">
                             <Flame className="size-3.5" />
-                            Deal of the day
+                            {eyebrow}
                         </p>
-                        <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-                            Biggest savings — limited stock
-                        </h2>
+                        <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
                     </div>
                     <Link
                         href="#deals"

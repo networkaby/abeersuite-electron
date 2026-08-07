@@ -4,20 +4,56 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ArrowUp, ArrowDown, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, ExternalLink, Trash2, Plus, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { parseDigitsInput, parseSignedInput } from "@/shared/lib/format";
+import { cn } from "@/shared/lib/format/utils";
 import {
-    DEFAULT_HOME_LAYOUT,
-    HOME_SECTION_LABELS,
-    type HomeSectionConfig,
+    DEFAULT_HOME_INSTANCES,
+    HOME_SECTION_TYPE_DEFS,
+    RAIL_KINDS,
+    homeSectionTypeDef,
+    isFallbackInstance,
+    isInstanceActive,
+    newHomeInstance,
+    resolveHomeSections,
+    type HomeSectionInstance,
+    type HomeSectionType,
+    type RailKind,
 } from "@/shared/lib/shop/homeLayout";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { DEFAULT_TRUST_ITEMS } from "@/modules/external/store/TrustStrip";
+import type { BrandStripBrand } from "@/modules/external/store/BrandStripView";
+import SectionPreview, { type PreviewData } from "@/modules/ecommerce/components/homeEditor/SectionPreview";
+import BannerSlidesEditor from "@/modules/ecommerce/components/homeEditor/BannerSlidesEditor";
+import TrustItemsEditor from "@/modules/ecommerce/components/homeEditor/TrustItemsEditor";
+import HeadingEditor from "@/modules/ecommerce/components/homeEditor/HeadingEditor";
 
-// Retry transient GET failures (dev-compile hiccups) so the page reflects the
-// real saved order instead of silently falling back to defaults, which could
-// then get saved over the owner's real layout.
+// Per-type placeholder text for "heading" kind instances — the text a blank
+// field falls back to, i.e. what the component's own hardcoded default says.
+const HEADING_FIELDS: Partial<Record<HomeSectionType, ("eyebrow" | "title" | "subtitle")[]>> = {
+    categoryShowcase: ["eyebrow", "title", "subtitle"],
+    dealOfTheDay: ["eyebrow", "title"],
+    brandStrip: ["eyebrow", "title"],
+    fullCatalog: ["title"],
+};
+const HEADING_PLACEHOLDERS: Partial<Record<HomeSectionType, { eyebrow?: string; title?: string; subtitle?: string }>> = {
+    categoryShowcase: {
+        eyebrow: "Departments",
+        title: "Shop by category",
+        subtitle: "Tap a department to jump to its section in the catalog below.",
+    },
+    dealOfTheDay: { eyebrow: "Deal of the day", title: "Biggest savings — limited stock" },
+    brandStrip: { eyebrow: "Trusted brands", title: "Original products from leading manufacturers" },
+    fullCatalog: { title: "Catalog" },
+};
+
 async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T> {
     let lastErr: unknown;
     for (let i = 0; i < tries; i++) {
@@ -31,23 +67,394 @@ async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T
     throw lastErr;
 }
 
+function sortForDisplay(rows: HomeSectionInstance[]): HomeSectionInstance[] {
+    return [...rows].sort((a, b) => a.sectionNo - b.sectionNo || b.priority - a.priority);
+}
+
 /**
- * Customize Home — on/off + reorder for the storefront home page's existing
- * sections. No new section types here; this only decides which of the
- * sections the code already knows how to render show up, and in what order.
- * See src/shared/lib/shop/homeLayout.ts for the section catalogue.
+ * Buffered numeric text input — same pattern as the print-template settings
+ * page's NumberField: type freely, commit on blur. Per repo rule, never
+ * `<input type="number">` (breaks on paste, spinner steals scroll, silently
+ * clamps mid-edit) — plain text + inputMode + a sanitizer instead.
  */
+function BufferedIntField({
+    value,
+    onCommit,
+    allowNegative,
+    className,
+    "aria-label": ariaLabel,
+}: {
+    value: number;
+    onCommit: (n: number) => void;
+    allowNegative?: boolean;
+    className?: string;
+    "aria-label"?: string;
+}) {
+    const [text, setText] = useState(String(value));
+    useEffect(() => setText(String(value)), [value]);
+    const sanitize = allowNegative ? parseSignedInput : parseDigitsInput;
+    return (
+        <Input
+            inputMode={allowNegative ? "text" : "numeric"}
+            value={text}
+            onChange={(e) => setText(sanitize(e.target.value))}
+            onBlur={() => {
+                const n = parseInt(text, 10);
+                const next = Number.isNaN(n) ? value : n;
+                setText(String(next));
+                if (next !== value) onCommit(next);
+            }}
+            className={className}
+            aria-label={ariaLabel}
+        />
+    );
+}
+
+/**
+ * One-line summary in the row, just enough to tell near-identical sections
+ * apart. The real visual is the right-hand LIVE PREVIEW panel — a squeezed
+ * thumbnail here was unreadable.
+ */
+function InstanceSummary({ inst }: { inst: HomeSectionInstance }) {
+    const kind = homeSectionTypeDef(inst.type).kind;
+    if (kind === "banner") {
+        const slides = inst.content.slides ?? [];
+        const noun = inst.type === "hero" ? "slide" : "banner";
+        if (slides.length === 0) {
+            return <span className="truncate text-xs text-muted-foreground">No {noun}s yet</span>;
+        }
+        return (
+            <span className="truncate text-xs text-muted-foreground">
+                {slides.length} {noun}
+                {slides.length === 1 ? "" : "s"} · {slides[0].title || "(untitled)"}
+            </span>
+        );
+    }
+    if (kind === "trust") {
+        return (
+            <span className="truncate text-xs text-muted-foreground">
+                {inst.content.items?.length ?? DEFAULT_TRUST_ITEMS.length} items
+            </span>
+        );
+    }
+    if (kind === "productRail") {
+        const rk = RAIL_KINDS.find((r) => r.value === inst.content.railKind);
+        return <span className="truncate text-xs text-muted-foreground">{rk ? rk.label : "Pick a rule"}</span>;
+    }
+    if (kind === "stub") {
+        return <span className="text-xs text-muted-foreground">Not wired up yet</span>;
+    }
+    const placeholder = HEADING_PLACEHOLDERS[inst.type];
+    return (
+        <span className="truncate text-xs text-muted-foreground">
+            {inst.content.title || placeholder?.title || "Live catalogue data"}
+        </span>
+    );
+}
+
+/**
+ * Scaled preview frame — same idea as the print-template settings page's
+ * ScaledPreviewBox: storefront sections are built for a ~1280px page, so CSS
+ * `zoom` shrinks the real component to fit the narrower preview column
+ * without re-styling anything.
+ */
+const todayIso = new Date().toISOString().slice(0, 10);
+
+function formatDateShort(iso: string): string {
+    const d = new Date(`${iso}T00:00:00`);
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * Date range + live/scheduled status, shown inline on each row. `renders`
+ * tells us whether THIS instance is the one actually winning its sectionNo
+ * slot right now — only one instance per sectionNo ever shows on the
+ * storefront, so two "Active now" rows sharing a No. would be misleading;
+ * the loser needs to say so.
+ */
+function ScheduleInfo({ inst, renders }: { inst: HomeSectionInstance; renders: boolean }) {
+    if (isFallbackInstance(inst)) {
+        return (
+            <span
+                className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    inst.enabled && renders
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        : "bg-muted text-muted-foreground"
+                )}
+            >
+                {!inst.enabled ? "Fallback · switched off" : renders ? "Fallback · showing now" : "Fallback · on standby"}
+            </span>
+        );
+    }
+    const { startAt, endAt } = inst;
+    const range = startAt || endAt
+        ? `${startAt ? formatDateShort(startAt) : "Always"} → ${endAt ? formatDateShort(endAt) : "Always"}`
+        : null;
+    const active = inst.enabled && isInstanceActive(inst, todayIso);
+    return (
+        <span className="flex flex-wrap items-center gap-1.5">
+            {range ? (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                    {range}
+                </span>
+            ) : null}
+            {inst.enabled ? (
+                <span
+                    className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                        renders
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                            : "bg-muted text-muted-foreground"
+                    )}
+                >
+                    {renders ? "Active now" : active ? "Active window · overridden" : "Not active"}
+                </span>
+            ) : null}
+        </span>
+    );
+}
+
+function ScaledPreviewBox({ zoom, children }: { zoom: number; children: React.ReactNode }) {
+    return (
+        <div className="overflow-auto rounded-md border border-border bg-background">
+            <div style={{ zoom }}>{children}</div>
+        </div>
+    );
+}
+
+function SectionRow({
+    inst,
+    renders,
+    isSelected,
+    isOpen,
+    onSelect,
+    onDuplicate,
+    onRemove,
+    onUpdate,
+    onSetSectionNo,
+    onSetPriority,
+    onToggleExpanded,
+}: {
+    inst: HomeSectionInstance;
+    renders: boolean;
+    isSelected: boolean;
+    isOpen: boolean;
+    onSelect: () => void;
+    onDuplicate: () => void;
+    onRemove: () => void;
+    onUpdate: (patch: Partial<HomeSectionInstance>) => void;
+    onSetSectionNo: (n: number) => void;
+    onSetPriority: (n: number) => void;
+    onToggleExpanded: () => void;
+}) {
+    const def = homeSectionTypeDef(inst.type);
+    const fallback = isFallbackInstance(inst);
+    return (
+        <div
+            onClick={onSelect}
+            className={cn(
+                "rounded-md border transition-colors",
+                isSelected ? "border-primary ring-1 ring-primary/30" : "border-border hover:border-primary/40"
+            )}
+        >
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                <div className="flex items-center gap-1">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={onDuplicate}
+                        aria-label={`Duplicate ${inst.label}`}
+                        title="Duplicate"
+                    >
+                        <Copy className="size-3.5" aria-hidden />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-destructive"
+                        onClick={onRemove}
+                        aria-label={`Delete ${inst.label}`}
+                        title="Delete"
+                    >
+                        <Trash2 className="size-3.5" aria-hidden />
+                    </Button>
+                </div>
+
+                <div className="min-w-40 flex-1 space-y-0.5">
+                    <Input
+                        value={inst.label}
+                        onChange={(e) => onUpdate({ label: e.target.value })}
+                        className="h-7 border-transparent bg-transparent px-1 text-sm font-medium shadow-none hover:border-border focus-visible:border-border"
+                    />
+                    <p className="px-1 text-[11px] text-muted-foreground">{def.label}</p>
+                </div>
+
+                <div className="hidden max-w-48 flex-1 shrink-0 items-center sm:flex">
+                    <InstanceSummary inst={inst} />
+                </div>
+
+                <div className="hidden shrink-0 items-center md:flex">
+                    <ScheduleInfo inst={inst} renders={renders} />
+                </div>
+
+                <div className="flex items-center gap-1">
+                    <div className="grid gap-0.5">
+                        <Label className="text-[10px] text-muted-foreground">No.</Label>
+                        <BufferedIntField
+                            value={inst.sectionNo}
+                            onCommit={onSetSectionNo}
+                            className="h-7 w-16"
+                            aria-label={`${inst.label} section number`}
+                        />
+                    </div>
+                    <div className="grid gap-0.5">
+                        <Label className="text-[10px] text-muted-foreground">Priority</Label>
+                        <BufferedIntField
+                            value={inst.priority}
+                            onCommit={onSetPriority}
+                            allowNegative
+                            className="h-7 w-16"
+                            aria-label={`${inst.label} priority`}
+                        />
+                    </div>
+                </div>
+
+                <Switch
+                    checked={inst.enabled}
+                    onCheckedChange={(v) => onUpdate({ enabled: v })}
+                    aria-label={`${inst.label} enabled`}
+                />
+
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    onClick={onToggleExpanded}
+                    aria-label={isOpen ? "Collapse" : "Expand"}
+                >
+                    {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                </Button>
+            </div>
+
+            {isOpen ? (
+                <div className="space-y-3 border-t border-border px-3 py-3">
+                    <div className="md:hidden">
+                        <ScheduleInfo inst={inst} renders={renders} />
+                    </div>
+                    {fallback ? (
+                        <p className="text-xs text-muted-foreground">
+                            This is the permanent fallback for section No. {inst.sectionNo} — it renders whenever
+                            nothing else in that slot is currently scheduled, regardless of any date range.
+                        </p>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2 sm:w-64">
+                            <div className="grid gap-1">
+                                <Label className="text-xs font-normal">Show from</Label>
+                                <Input
+                                    type="date"
+                                    value={inst.startAt ?? ""}
+                                    onChange={(e) => onUpdate({ startAt: e.target.value || undefined })}
+                                />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label className="text-xs font-normal">Show until</Label>
+                                <Input
+                                    type="date"
+                                    value={inst.endAt ?? ""}
+                                    onChange={(e) => onUpdate({ endAt: e.target.value || undefined })}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <ContentEditor inst={inst} onChange={(content) => onUpdate({ content })} />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function ContentEditor({ inst, onChange }: { inst: HomeSectionInstance; onChange: (content: HomeSectionInstance["content"]) => void }) {
+    const kind = homeSectionTypeDef(inst.type).kind;
+    if (kind === "banner") {
+        return <BannerSlidesEditor content={inst.content} onChange={onChange} isHero={inst.type === "hero"} />;
+    }
+    if (kind === "trust") {
+        return (
+            <TrustItemsEditor
+                items={inst.content.items}
+                defaultItems={DEFAULT_TRUST_ITEMS}
+                onChange={(items) => onChange({ ...inst.content, items: items ?? undefined })}
+            />
+        );
+    }
+    if (kind === "productRail") {
+        return (
+            <div className="space-y-2">
+                <div className="grid gap-1">
+                    <Label className="text-xs font-normal">Picking rule</Label>
+                    <Select
+                        value={inst.content.railKind ?? "featured"}
+                        onValueChange={(v) => onChange({ ...inst.content, railKind: v as RailKind })}
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {RAIL_KINDS.map((r) => (
+                                <SelectItem key={r.value} value={r.value}>
+                                    {r.label}
+                                    {r.implemented ? "" : " — not wired yet"}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <HeadingEditor content={inst.content} onChange={onChange} fields={["eyebrow", "title", "subtitle"]} />
+            </div>
+        );
+    }
+    if (kind === "stub") {
+        return (
+            <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                    This section type isn't wired up to real data yet — you can schedule and position it now, but it
+                    won't appear on the storefront until it's built.
+                </p>
+                <HeadingEditor content={inst.content} onChange={onChange} fields={["title"]} placeholders={{ title: "Caption" }} />
+            </div>
+        );
+    }
+    return (
+        <HeadingEditor
+            content={inst.content}
+            onChange={onChange}
+            fields={HEADING_FIELDS[inst.type] ?? ["title"]}
+            placeholders={HEADING_PLACEHOLDERS[inst.type]}
+        />
+    );
+}
+
 export default function CustomizeHomePage() {
-    const [layout, setLayout] = useState<HomeSectionConfig[]>(DEFAULT_HOME_LAYOUT);
+    const [instances, setInstances] = useState<HomeSectionInstance[]>(DEFAULT_HOME_INSTANCES);
     const [loaded, setLoaded] = useState(false);
     const [loadError, setLoadError] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [addType, setAddType] = useState<HomeSectionType>("promoBanner");
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [previewData, setPreviewData] = useState<PreviewData>({ products: [], brands: [] });
+    const [fullSize, setFullSize] = useState(false);
 
     const load = useCallback(async () => {
         setLoadError(false);
         try {
-            const data = await getWithRetry<{ layout: HomeSectionConfig[] }>("/api/ecommerce/home-layout");
-            setLayout(data.layout);
+            const data = await getWithRetry<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout");
+            setInstances(data.layout);
             setLoaded(true);
         } catch {
             setLoadError(true);
@@ -58,27 +465,131 @@ export default function CustomizeHomePage() {
         void load();
     }, [load]);
 
-    const move = (index: number, dir: -1 | 1) => {
-        setLayout((rows) => {
-            const target = index + dir;
-            if (target < 0 || target >= rows.length) return rows;
-            const next = [...rows];
-            [next[index], next[target]] = [next[target], next[index]];
+    // Real catalogue data for the preview — the same published-products payload
+    // the storefront itself renders from, so a previewed rail / category grid /
+    // deal shows the actual products a customer would see. Failure is
+    // non-fatal: content-only sections (hero, banners, trust) still preview.
+    useEffect(() => {
+        void (async () => {
+            const [products, brands] = await Promise.all([
+                axios
+                    .get<ShopProductPublic[]>("/api/shop/products")
+                    .then((r) => r.data)
+                    .catch(() => [] as ShopProductPublic[]),
+                axios
+                    .get<BrandStripBrand[]>("/api/inventory/brands?withProducts=1")
+                    .then((r) => r.data.filter((b) => b.imageUrl))
+                    .catch(() => [] as BrandStripBrand[]),
+            ]);
+            setPreviewData({ products, brands });
+        })();
+    }, []);
+
+    const updateInstance = (id: string, patch: Partial<HomeSectionInstance>) => {
+        setInstances((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    };
+
+    // Priority -1 means "this instance IS the fallback" — only one per
+    // sectionNo group is meaningful, so block setting a second one instead of
+    // silently leaving an ambiguous pair (resolveGroup only trusts the first
+    // match it finds, which would be confusing to depend on here).
+    // Within one sectionNo group, priority is the tie-breaker — two instances
+    // sharing both the same No. AND the same priority makes the winner
+    // ambiguous (resolveGroup would just pick whichever array order won),
+    // so it's blocked outright rather than left to silently depend on that.
+    const setPriority = (id: string, next: number) => {
+        const inst = instances.find((i) => i.id === id);
+        const clash = inst && instances.some(
+            (i) => i.id !== id && i.sectionNo === inst.sectionNo && i.priority === next
+        );
+        if (clash) {
+            toast.error(
+                next === -1
+                    ? "This section number already has a fallback. Only one fallback per section number."
+                    : "This section number already has a section with that priority. Use a different priority."
+            );
+            return;
+        }
+        updateInstance(id, { priority: next });
+    };
+
+    // Same guard, the other direction: moving an instance into a section
+    // number that already has one at the same priority.
+    const setSectionNo = (id: string, next: number) => {
+        const inst = instances.find((i) => i.id === id);
+        const clash = inst && instances.some((i) => i.id !== id && i.sectionNo === next && i.priority === inst.priority);
+        if (clash) {
+            toast.error(
+                inst!.priority === -1
+                    ? "This section number already has a fallback. Only one fallback per section number."
+                    : "This section number already has a section with that priority. Use a different priority."
+            );
+            return;
+        }
+        updateInstance(id, { sectionNo: next });
+    };
+
+    const removeInstance = (id: string) => {
+        setInstances((prev) => prev.filter((i) => i.id !== id));
+        setSelectedId((cur) => (cur === id ? null : cur));
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
             return next;
         });
     };
 
-    const toggle = (key: HomeSectionConfig["key"], enabled: boolean) => {
-        setLayout((rows) => rows.map((r) => (r.key === key ? { ...r, enabled } : r)));
+    const duplicateInstance = (id: string) => {
+        setInstances((prev) => {
+            const src = prev.find((i) => i.id === id);
+            if (!src) return prev;
+            // A copy can't share both sectionNo and priority with its source
+            // (that's now blocked as an ambiguous tie) — a fallback (-1) only
+            // ever gets one slot per sectionNo, so it needs a whole new
+            // sectionNo; anything else just needs the next free priority in
+            // the same slot.
+            let sectionNo = src.sectionNo;
+            let priority = src.priority;
+            if (src.priority === -1) {
+                sectionNo = Math.max(...prev.map((i) => i.sectionNo)) + 10;
+                priority = 0;
+            } else {
+                const used = new Set(prev.filter((i) => i.sectionNo === sectionNo).map((i) => i.priority));
+                while (used.has(priority)) priority += 1;
+            }
+            const clone: HomeSectionInstance = {
+                ...src,
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                label: `${src.label} (copy)`,
+                sectionNo,
+                priority,
+            };
+            return [...prev, clone];
+        });
+    };
+
+    const addSection = () => {
+        const nextNo = instances.length > 0 ? Math.max(...instances.map((i) => i.sectionNo)) + 10 : 10;
+        const inst = newHomeInstance(addType, nextNo);
+        setInstances((prev) => [...prev, inst]);
+        setExpanded((prev) => new Set(prev).add(inst.id));
+        setSelectedId(inst.id);
+    };
+
+    const toggleExpanded = (id: string) => {
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
     };
 
     const save = async () => {
         setSaving(true);
         try {
-            const { data } = await axios.put<{ layout: HomeSectionConfig[] }>("/api/ecommerce/home-layout", {
-                layout,
-            });
-            setLayout(data.layout);
+            const { data } = await axios.put<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout", instances);
+            setInstances(data.layout);
             toast.success("Home page layout saved");
         } catch {
             toast.error("Failed to save layout");
@@ -87,14 +598,63 @@ export default function CustomizeHomePage() {
         }
     };
 
+    const allRows = sortForDisplay(instances);
+    const normalRows = allRows.filter((i) => !isFallbackInstance(i));
+    const fallbackRows = allRows.filter(isFallbackInstance);
+    const selected = instances.find((i) => i.id === selectedId) ?? null;
+    // Which instance actually wins each sectionNo slot right now — only one
+    // renders per slot, so every row's "Active now" badge must be measured
+    // against this, not its own schedule in isolation.
+    const winnerIds = new Set(resolveHomeSections(instances, todayIso).map((i) => i.id));
+
+    // Card header toolbar — the page itself never scrolls (only the section
+    // list does), so one bar at the top stays reachable at all times.
+    const toolbar = (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+                <Select value={addType} onValueChange={(v) => setAddType(v as HomeSectionType)}>
+                    <SelectTrigger className="w-56">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {HOME_SECTION_TYPE_DEFS.map((d) => (
+                            <SelectItem key={d.type} value={d.type}>
+                                {d.label}
+                                {d.implemented ? "" : " — not wired yet"}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="sm" onClick={addSection} disabled={!loaded}>
+                    <Plus className="mr-1.5 size-3.5" /> Add section
+                </Button>
+            </div>
+
+            <div className="flex items-center gap-3">
+                {!loaded ? <span className="text-xs text-muted-foreground">Loading…</span> : null}
+                <Button variant="outline" size="sm" asChild>
+                    <Link href="/" target="_blank" rel="noopener noreferrer">
+                        View storefront
+                        <ExternalLink className="ml-1.5 size-3.5" aria-hidden />
+                    </Link>
+                </Button>
+                <Button type="button" onClick={() => void save()} disabled={!loaded || saving}>
+                    {saving ? "Saving…" : "Save layout"}
+                </Button>
+            </div>
+        </div>
+    );
+
     return (
-        <div className="mx-auto max-w-2xl space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        // <div className="mx-auto max-w-3xl space-y-4">
+        <div className="mx-auto flex h-full w-full items-stretch gap-4 overflow-hidden">
+            {/* <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight">Customize home</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Turn storefront home page sections on or off, and reorder them. Changes apply to{" "}
-                        <span className="font-medium">/</span> for every customer.
+                        Add, duplicate, schedule and prioritise storefront home page sections. Page order follows
+                        Section No.; when two sections share a number, the highest Priority that's currently in its
+                        date window wins. Changes apply to <span className="font-medium">/</span> for every customer.
                     </p>
                 </div>
                 <Button variant="outline" size="sm" asChild>
@@ -103,81 +663,131 @@ export default function CustomizeHomePage() {
                         <ExternalLink className="ml-1.5 size-3.5" aria-hidden />
                     </Link>
                 </Button>
-            </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Sections</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                    {loadError ? (
-                        <div className="flex items-center justify-between rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
-                            <span className="text-destructive">Couldn’t load the current layout.</span>
-                            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
-                                Retry
-                            </Button>
-                        </div>
-                    ) : (
-                        <>
-                            {layout.map((section, i) => {
-                                const meta = HOME_SECTION_LABELS[section.key];
-                                return (
-                                    <div
-                                        key={section.key}
-                                        className="flex items-center gap-3 rounded-md border border-border px-3 py-2.5"
-                                    >
-                                        <div className="flex flex-col">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-6"
-                                                disabled={!loaded || saving || i === 0}
-                                                onClick={() => move(i, -1)}
-                                                aria-label={`Move ${meta.label} up`}
-                                            >
-                                                <ArrowUp className="size-3.5" aria-hidden />
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-6"
-                                                disabled={!loaded || saving || i === layout.length - 1}
-                                                onClick={() => move(i, 1)}
-                                                aria-label={`Move ${meta.label} down`}
-                                            >
-                                                <ArrowDown className="size-3.5" aria-hidden />
-                                            </Button>
-                                        </div>
-
-                                        <div className="min-w-0 flex-1">
-                                            <Label htmlFor={`section-${section.key}`} className="font-normal">
-                                                {meta.label}
-                                            </Label>
-                                            <p className="text-xs text-muted-foreground">{meta.hint}</p>
-                                        </div>
-
-                                        <Switch
-                                            id={`section-${section.key}`}
-                                            checked={section.enabled}
-                                            disabled={!loaded || saving}
-                                            onCheckedChange={(v) => toggle(section.key, v)}
-                                        />
-                                    </div>
-                                );
-                            })}
-
-                            <div className="flex items-center justify-end gap-3 pt-1">
-                                {!loaded ? <span className="text-xs text-muted-foreground">Loading…</span> : null}
-                                <Button type="button" onClick={() => void save()} disabled={!loaded || saving}>
-                                    {saving ? "Saving…" : "Save layout"}
+            </div> */}
+            <div className="flex min-w-0 flex-1 flex-col">
+                <Card className="flex min-h-0 flex-1 flex-col gap-0 py-0">
+                    <CardHeader className="gap-2 border-b border-border px-4 py-3">
+                        <CardTitle className="text-base">Sections</CardTitle>
+                        {!loadError ? toolbar : null}
+                    </CardHeader>
+                    <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+                        {loadError ? (
+                            <div className="flex items-center justify-between rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
+                                <span className="text-destructive">Couldn't load the current layout.</span>
+                                <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+                                    Retry
                                 </Button>
                             </div>
+                        ) : (
+                            <>
+                                {normalRows.map((inst) => (
+                                    <SectionRow
+                                        key={inst.id}
+                                        inst={inst}
+                                        renders={winnerIds.has(inst.id)}
+                                        isSelected={selectedId === inst.id}
+                                        isOpen={expanded.has(inst.id)}
+                                        onSelect={() => setSelectedId(inst.id)}
+                                        onDuplicate={() => duplicateInstance(inst.id)}
+                                        onRemove={() => removeInstance(inst.id)}
+                                        onUpdate={(patch) => updateInstance(inst.id, patch)}
+                                        onSetSectionNo={(n) => setSectionNo(inst.id, n)}
+                                        onSetPriority={(n) => setPriority(inst.id, n)}
+                                        onToggleExpanded={() => toggleExpanded(inst.id)}
+                                    />
+                                ))}
+
+                                <div className="pt-2">
+                                    <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                                        Fallback sections
+                                    </p>
+                                    {fallbackRows.length === 0 ? (
+                                        <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                                            No fallback set. Set a section's priority to -1 to make it the permanent
+                                            fallback for its section number.
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {fallbackRows.map((inst) => (
+                                                <SectionRow
+                                                    key={inst.id}
+                                                    inst={inst}
+                                                    renders={winnerIds.has(inst.id)}
+                                                    isSelected={selectedId === inst.id}
+                                                    isOpen={expanded.has(inst.id)}
+                                                    onSelect={() => setSelectedId(inst.id)}
+                                                    onDuplicate={() => duplicateInstance(inst.id)}
+                                                    onRemove={() => removeInstance(inst.id)}
+                                                    onUpdate={(patch) => updateInstance(inst.id, patch)}
+                                                    onSetSectionNo={(n) => setSectionNo(inst.id, n)}
+                                                    onSetPriority={(n) => setPriority(inst.id, n)}
+                                                    onToggleExpanded={() => toggleExpanded(inst.id)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+            {/* LIVE PREVIEW — renders the selected section exactly as the
+                storefront would, whatever its on/off or schedule state, so a
+                seasonal or switched-off section can be designed here instead
+                of being experimented with on the live site. */}
+            <div className="hidden w-[41rem] shrink-0 xl:flex xl:flex-col">
+                <div className="flex min-h-0 flex-1 flex-col gap-2">
+                    <div className="flex shrink-0 items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                            Live preview
+                        </p>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!selected}
+                            onClick={() => setFullSize(true)}
+                        >
+                            <Maximize2 className="mr-1.5 size-3.5" aria-hidden /> Full size
+                        </Button>
+                    </div>
+
+                    {selected ? (
+                        <>
+                            <p className="shrink-0 truncate text-sm font-medium">
+                                {selected.label}
+                                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                    {homeSectionTypeDef(selected.type).label}
+                                    {selected.enabled ? "" : " · switched off"}
+                                    {selected.startAt || selected.endAt ? " · scheduled" : ""}
+                                </span>
+                            </p>
+                            <div className="min-h-0 flex-1 overflow-auto">
+                                <ScaledPreviewBox zoom={0.55}>
+                                    <SectionPreview inst={selected} data={previewData} />
+                                </ScaledPreviewBox>
+                            </div>
                         </>
+                    ) : (
+                        <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                            Select a section on the left to preview it.
+                        </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </div>
+
+            {/* Full-size popup — same section at native storefront width. */}
+            <Dialog open={fullSize} onOpenChange={setFullSize}>
+                <DialogContent className="max-w-[95vw] sm:max-w-[95vw]">
+                    <DialogHeader>
+                        <DialogTitle>{selected ? selected.label : "Preview"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="max-h-[80vh] overflow-auto rounded-md border border-border bg-background">
+                        {selected ? <SectionPreview inst={selected} data={previewData} /> : null}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

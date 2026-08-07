@@ -9,14 +9,16 @@ import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
+import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
 import {
-    HERO_SLIDES,
-    PROMO_BANNERS_TOP,
-    PROMO_BANNERS_BOTTOM,
-    STORE_PAGE_HEADING,
-} from "@/shared/lib/shop/storeContent";
-import type { HomeSectionKey } from "@/shared/lib/shop/homeLayout";
+    resolveHomeSections,
+    activeSlides,
+    toHeroSlide,
+    toPromoBanner,
+    type HomeSectionInstance,
+} from "@/shared/lib/shop/homeLayout";
 import { loadHomeLayout } from "@/shared/lib/shop/loadHomeLayout";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
@@ -59,6 +61,100 @@ function pickDealOfTheDay(products: ShopProductPublic[]): ShopProductPublic | nu
     return sorted[0] ?? null;
 }
 
+type PageData = {
+    categoryEntries: { name: string; count: number; fallbackImageUrl: string | null }[];
+    featured: ShopProductPublic[];
+    deals: ShopProductPublic[];
+    dealOfTheDay: ShopProductPublic | null;
+    products: ShopProductPublic[];
+    allCategories: string[];
+    query: string;
+    initialCategory: string;
+};
+
+/**
+ * Render one resolved section. Every section is self-complete: a hero
+ * carousel is this one instance's own slide list, a promo strip is its own
+ * banner list — nothing is assembled from sibling sections.
+ *
+ * Slides are filtered by their own display period, so an out-of-season slide
+ * drops out of the rotation while the rest keep showing. Every branch is
+ * defensive: a section with nothing left to show renders nothing rather than
+ * an empty shell, since `resolveHomeSections` only checked the section's own
+ * schedule/priority, not whether its content was ever filled in.
+ */
+function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: string): ReactNode {
+    const { content } = inst;
+    switch (inst.type) {
+        case "hero": {
+            const slides = activeSlides(content, todayIso).map(toHeroSlide);
+            return slides.length > 0 ? <HeroCarousel slides={slides} /> : null;
+        }
+        case "promoBanner":
+        case "shopByNeed":
+        case "serviceBlock":
+        case "storeLocator":
+        case "whatsappStrip": {
+            const banners = activeSlides(content, todayIso).map(toPromoBanner);
+            return banners.length > 0 ? <PromoBanners banners={banners} columns={content.columns ?? 1} /> : null;
+        }
+        case "trustStrip":
+            return <TrustStrip items={content.items} />;
+        case "categoryShowcase":
+            return (
+                <CategoryShowcase
+                    categories={data.categoryEntries}
+                    eyebrow={content.eyebrow}
+                    title={content.title}
+                    subtitle={content.subtitle}
+                />
+            );
+        case "productRail": {
+            // Only "featured" and "deals" have real product-selection logic
+            // wired up so far — other rail kinds are addable/schedulable
+            // already, but render nothing until their picking rule exists.
+            const products =
+                content.railKind === "deals" ? data.deals : content.railKind === "featured" ? data.featured : null;
+            if (!products) return null;
+            return (
+                <ProductRail
+                    id={inst.id}
+                    eyebrow={content.eyebrow}
+                    title={content.title ?? "Products"}
+                    subtitle={content.subtitle}
+                    products={products}
+                    accent={content.accent === "amber" ? "primary" : (content.accent ?? "primary")}
+                />
+            );
+        }
+        case "dealOfTheDay":
+            return <DealOfTheDay product={data.dealOfTheDay} eyebrow={content.eyebrow} title={content.title} />;
+        case "brandStrip":
+            return <BrandStrip eyebrow={content.eyebrow} title={content.title} />;
+        case "fullCatalog":
+            return (
+                <ShopCatalogClient
+                    products={data.products}
+                    allCategories={data.allCategories}
+                    initialQuery={data.query}
+                    initialCategory={data.initialCategory}
+                    title={content.title}
+                />
+            );
+        // Not wired up yet — addable/schedulable in Customize Home, but the
+        // data they need (cart, view history, order history, coupons)
+        // doesn't exist on the storefront yet.
+        case "couponStrip":
+        case "wishlistNudge":
+        case "recentPurchases":
+        case "cartPreview":
+        case "abandonedCart":
+        case "recentlyViewed":
+        case "relatedAlternatives":
+            return null;
+    }
+}
+
 export default async function StoreHomePage({
     searchParams,
 }: {
@@ -67,7 +163,7 @@ export default async function StoreHomePage({
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules, policy, groupIndex, layout] = await Promise.all([
+    const [bands, rules, policy, groupIndex, instances] = await Promise.all([
         loadBarcodeBands(),
         loadShopPublishRules(),
         loadShopStockPolicy(),
@@ -97,49 +193,19 @@ export default async function StoreHomePage({
         })
         .sort((a, b) => b.count - a.count);
 
-    const featured = pickFeatured(products);
-    const deals = pickDeals(products);
-    const dealOfTheDay = pickDealOfTheDay(products);
-
-    // One render branch per known section key. Order and visibility come
-    // entirely from `layout` (Ecommerce → Customize Home) — this switch never
-    // reorders or filters anything itself.
-    const sections: Record<HomeSectionKey, ReactNode> = {
-        hero: <HeroCarousel slides={HERO_SLIDES} />,
-        trustStrip: <TrustStrip />,
-        categoryShowcase: <CategoryShowcase categories={categoryEntries} />,
-        promoBannersTop: <PromoBanners banners={PROMO_BANNERS_TOP} columns={2} />,
-        topPicks: (
-            <ProductRail
-                id="featured"
-                eyebrow="Trending"
-                title="Top picks for you"
-                subtitle="Hand-picked best sellers across categories."
-                products={featured}
-            />
-        ),
-        dealOfTheDay: <DealOfTheDay product={dealOfTheDay} />,
-        promoBannersBottom: <PromoBanners banners={PROMO_BANNERS_BOTTOM} columns={3} />,
-        todaysDeals: (
-            <ProductRail
-                id="deals"
-                eyebrow="Today's deals"
-                title="Save big — limited stock"
-                subtitle="Biggest discounts right now, sorted by % off."
-                products={deals}
-                accent="emerald"
-            />
-        ),
-        brandStrip: <BrandStrip />,
-        fullCatalog: (
-            <ShopCatalogClient
-                products={products}
-                allCategories={allCategories}
-                initialQuery={sp.q ?? ""}
-                initialCategory={initialCategory}
-            />
-        ),
+    const data: PageData = {
+        categoryEntries,
+        featured: pickFeatured(products),
+        deals: pickDeals(products),
+        dealOfTheDay: pickDealOfTheDay(products),
+        products,
+        allCategories,
+        query: sp.q ?? "",
+        initialCategory,
     };
+
+    const todayIso = businessTodayIso();
+    const winners = resolveHomeSections(instances, todayIso);
 
     return (
         <>
@@ -149,11 +215,9 @@ export default async function StoreHomePage({
             {/* The page's single h1 — see STORE_PAGE_HEADING for why it is hidden. */}
             <h1 className="sr-only">{STORE_PAGE_HEADING}</h1>
 
-            {layout
-                .filter((s) => s.enabled)
-                .map((s) => (
-                    <Fragment key={s.key}>{sections[s.key]}</Fragment>
-                ))}
+            {winners.map((inst) => (
+                <Fragment key={inst.id}>{renderSection(inst, data, todayIso)}</Fragment>
+            ))}
         </>
     );
 }

@@ -211,9 +211,10 @@ model OrgDefaults {
   posEstimateShowDiscountsJson Json?
 
   // Storefront home page layout — which sections show and in what order
-  // (Ecommerce → Customize Home). null = the code default order, all on.
-  // Shape: { key: string, enabled: boolean }[]. Admin-chosen, so
-  // bootstrap-seed leaves it untouched (survives reseed).
+  // (Ecommerce → Customize Home). null = the code default instances. Shape:
+  // HomeSectionInstance[] (id, type, label, sectionNo, priority, enabled,
+  // startAt?, endAt?, content) — see src/shared/lib/shop/homeLayout.ts.
+  // Admin-chosen, so bootstrap-seed leaves it untouched (survives reseed).
   storefrontHomeJson Json?
 
   updatedAt DateTime @updatedAt

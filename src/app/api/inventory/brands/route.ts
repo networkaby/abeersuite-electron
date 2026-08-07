@@ -7,11 +7,18 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-export async function GET() {
+export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const rows = await prisma.invBrand.findMany({ orderBy: { name: "asc" } });
+        // ?withProducts=1 — storefront-facing callers (brand strip, its
+        // Customize Home preview) only want brands that actually have
+        // something to show; admin pickers/masters want the full list.
+        const withProducts = new URL(req.url).searchParams.get("withProducts") === "1";
+        const rows = await prisma.invBrand.findMany({
+            where: withProducts ? { products: { some: { isListedInShop: true, isActive: true } } } : undefined,
+            orderBy: { name: "asc" },
+        });
         return NextResponse.json(rows);
     } catch (e) {
         return handleApiError(e, "Failed to fetch brands");
