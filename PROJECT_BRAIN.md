@@ -237,7 +237,8 @@ GET /api/customers/find?q=rosy+laptop&month=2026-05&group=Sundry+Debtors
 13. **Schema migration hygiene** — GST/HSN + naming-convention columns were added via `db push`, no migration. Needs a proper migration before any prod deploy.
 14. **Franchisee support** — model independent shops that use your brand but are separate legal entities (own PAN, own GSTIN). Distinct from company-owned `Branch` (same legal entity, your stock, your cash, your books) on every dimension that matters: a franchisee is a `Company` row under Sundry Debtors, sales to them are real B2B vouchers (IGST / CGST+SGST per state), their end-customer sales never enter your books, and royalty is a separate ledger. Smallest first step: add `isFranchisee Boolean @default(false)` + `royaltyPercent Decimal?` + `franchiseStartedAt DateTime?` on `Company`; surface a "Franchisee" filter / badge in customer lists; partner-portal access (one login per franchisee proprietor) reusing existing customer-portal infra. Bigger follow-ups: monthly royalty invoice generation, stock advisory dashboards, contract documents. See chat 2026-05-23 for the full company-owned-vs-franchisee comparison.
 15. **Loyalty points** — earn/redeem points on POS + shop sales; per-customer balance, configurable accrual rate, redemption as discount or store credit; ledger-backed so liability shows on the books.
-16. **Long-term**: SLA alerts; B2B Company portal; ERP module foundation; per-customer pricing tiers.
+16. **Inactive masters excluded from all dropdowns** — Warranty Terms, Units, Categories, Groups, Brands, etc. marked `isActive = false` should not appear in any dropdown/select UI across the app. Affects: warranty-term picker on products, unit select on voucher lines, brand/category filters, etc. Start with warranty terms (seen on inventory/masters/warranty-terms).
+17. **Long-term**: SLA alerts; B2B Company portal; ERP module foundation; per-customer pricing tiers.
 
 ---
 

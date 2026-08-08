@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": 1,
-    "exportedAt": "2026-07-28T17:30:07.670Z",
+    "exportedAt": "2026-08-07T18:22:14.677Z",
     "note": "Personal config snapshot — everything except tickets, vouchers, customers, products."
   },
   "singletons": {
@@ -84,7 +84,7 @@
         "mrp": true,
         "image": true,
         "price": true,
-        "stock": true,
+        "stock": false,
         "category": true,
         "description": true
       },
@@ -94,7 +94,8 @@
         "coupon": false,
         "manual": false,
         "loyalty": false
-      }
+      },
+      "storefrontHomeJson": null
     },
     "invNamingConfig": {
       "nameFields": [
@@ -106,7 +107,7 @@
         {
           "kind": "group",
           "enabled": true,
-          "defaultValue": "General"
+          "defaultValue": null
         },
         {
           "kind": "modelNo",
@@ -115,6 +116,13 @@
         },
         {
           "kind": "userPart",
+          "enabled": true,
+          "defaultValue": null
+        },
+        {
+          "kind": "warranty",
+          "prefix": "(Warranty-",
+          "suffix": ")",
           "enabled": true,
           "defaultValue": null
         }
@@ -132,17 +140,19 @@
           "defaultValue": null
         },
         {
-          "kind": "category",
-          "enabled": true,
-          "defaultValue": null
-        },
-        {
           "kind": "modelNo",
           "enabled": true,
           "defaultValue": null
         },
         {
+          "kind": "userPart",
+          "enabled": true,
+          "defaultValue": null
+        },
+        {
           "kind": "warranty",
+          "prefix": "(Warranty-",
+          "suffix": ")",
           "enabled": true,
           "defaultValue": null
         }
@@ -163,21 +173,17 @@
           "kind": "modelNo",
           "enabled": true,
           "defaultValue": null
+        },
+        {
+          "kind": "userPart",
+          "enabled": true,
+          "defaultValue": null
         }
       ],
       "fallbackFields": {
-        "brand": [
-          "group",
-          "category"
-        ],
-        "group": [
-          "category",
-          "brand"
-        ],
-        "category": [
-          "group",
-          "brand"
-        ]
+        "brand": [],
+        "group": [],
+        "category": []
       },
       "slugEnabled": true,
       "slugSeparator": "-",
@@ -388,8 +394,463 @@
       "baseUnitCode": "MTR"
     }
   ],
-  "invBrands": [],
+  "invBrands": [
+    {
+      "name": "EVM",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Acer",
+      "isActive": true,
+      "slug": "acer",
+      "imageUrl": "https://cdn.simpleicons.org/acer/83B81A",
+      "description": null
+    },
+    {
+      "name": "AMD",
+      "isActive": true,
+      "slug": "amd",
+      "imageUrl": "https://cdn.simpleicons.org/amd/ED1C24",
+      "description": null
+    },
+    {
+      "name": "Apple",
+      "isActive": true,
+      "slug": "apple",
+      "imageUrl": "https://cdn.simpleicons.org/apple/000000",
+      "description": null
+    },
+    {
+      "name": "Asus",
+      "isActive": true,
+      "slug": "asus",
+      "imageUrl": "https://cdn.simpleicons.org/asus/000000",
+      "description": null
+    },
+    {
+      "name": "Dell",
+      "isActive": true,
+      "slug": "dell",
+      "imageUrl": "https://cdn.simpleicons.org/dell/007DB8",
+      "description": null
+    },
+    {
+      "name": "Gigabyte",
+      "isActive": true,
+      "slug": "gigabyte",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "HP",
+      "isActive": true,
+      "slug": "hp",
+      "imageUrl": "https://cdn.simpleicons.org/hp/0096D6",
+      "description": null
+    },
+    {
+      "name": "HCL",
+      "isActive": true,
+      "slug": "hcl",
+      "imageUrl": "https://cdn.simpleicons.org/hcl",
+      "description": null
+    },
+    {
+      "name": "Intel",
+      "isActive": true,
+      "slug": "intel",
+      "imageUrl": "https://cdn.simpleicons.org/intel/0071C5",
+      "description": null
+    },
+    {
+      "name": "Lenovo",
+      "isActive": true,
+      "slug": "lenovo",
+      "imageUrl": "https://cdn.simpleicons.org/lenovo/E2231A",
+      "description": null
+    },
+    {
+      "name": "LG",
+      "isActive": true,
+      "slug": "lg",
+      "imageUrl": "https://cdn.simpleicons.org/lg/A50034",
+      "description": null
+    },
+    {
+      "name": "MSI",
+      "isActive": true,
+      "slug": "msi",
+      "imageUrl": "https://cdn.simpleicons.org/msibusiness/FF0000",
+      "description": null
+    },
+    {
+      "name": "Samsung",
+      "isActive": true,
+      "slug": "samsung",
+      "imageUrl": "https://cdn.simpleicons.org/samsung/1428A0",
+      "description": null
+    },
+    {
+      "name": "Sony",
+      "isActive": true,
+      "slug": "sony",
+      "imageUrl": "https://cdn.simpleicons.org/sony/000000",
+      "description": null
+    },
+    {
+      "name": "Corsair",
+      "isActive": true,
+      "slug": "corsair",
+      "imageUrl": "https://cdn.simpleicons.org/corsair",
+      "description": null
+    },
+    {
+      "name": "Crucial",
+      "isActive": true,
+      "slug": "crucial",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Kingston",
+      "isActive": true,
+      "slug": "kingston",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "SanDisk",
+      "isActive": true,
+      "slug": "sandisk",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Seagate",
+      "isActive": true,
+      "slug": "seagate",
+      "imageUrl": "https://cdn.simpleicons.org/seagate/6FBE44",
+      "description": null
+    },
+    {
+      "name": "Toshiba",
+      "isActive": true,
+      "slug": "toshiba",
+      "imageUrl": "https://cdn.simpleicons.org/toshiba",
+      "description": null
+    },
+    {
+      "name": "Transcend",
+      "isActive": true,
+      "slug": "transcend",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "WD",
+      "isActive": true,
+      "slug": "wd",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Brother",
+      "isActive": true,
+      "slug": "brother",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Canon",
+      "isActive": true,
+      "slug": "canon",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Epson",
+      "isActive": true,
+      "slug": "epson",
+      "imageUrl": "https://cdn.simpleicons.org/epson",
+      "description": null
+    },
+    {
+      "name": "Kyocera",
+      "isActive": true,
+      "slug": "kyocera",
+      "imageUrl": "https://cdn.simpleicons.org/kyocera",
+      "description": null
+    },
+    {
+      "name": "Lexmark",
+      "isActive": true,
+      "slug": "lexmark",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Panasonic",
+      "isActive": true,
+      "slug": "panasonic",
+      "imageUrl": "https://cdn.simpleicons.org/panasonic",
+      "description": null
+    },
+    {
+      "name": "Ricoh",
+      "isActive": true,
+      "slug": "ricoh",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "TVS",
+      "isActive": true,
+      "slug": "tvs",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Xerox",
+      "isActive": true,
+      "slug": "xerox",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Annke",
+      "isActive": true,
+      "slug": "annke",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Axis",
+      "isActive": true,
+      "slug": "axis",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Bosch",
+      "isActive": true,
+      "slug": "bosch",
+      "imageUrl": "https://cdn.simpleicons.org/bosch",
+      "description": null
+    },
+    {
+      "name": "CP Plus",
+      "isActive": true,
+      "slug": "cp-plus",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Dahua",
+      "isActive": true,
+      "slug": "dahua",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Ezviz",
+      "isActive": true,
+      "slug": "ezviz",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Godrej",
+      "isActive": true,
+      "slug": "godrej",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Hanwha",
+      "isActive": true,
+      "slug": "hanwha",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Hikvision",
+      "isActive": true,
+      "slug": "hikvision",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Honeywell",
+      "isActive": true,
+      "slug": "honeywell",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Reolink",
+      "isActive": true,
+      "slug": "reolink",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Zicom",
+      "isActive": true,
+      "slug": "zicom",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Cisco",
+      "isActive": true,
+      "slug": "cisco",
+      "imageUrl": "https://cdn.simpleicons.org/cisco",
+      "description": null
+    },
+    {
+      "name": "D-Link",
+      "isActive": true,
+      "slug": "d-link",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Grandstream",
+      "isActive": true,
+      "slug": "grandstream",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Netgear",
+      "isActive": true,
+      "slug": "netgear",
+      "imageUrl": "https://cdn.simpleicons.org/netgear",
+      "description": null
+    },
+    {
+      "name": "Tenda",
+      "isActive": true,
+      "slug": "tenda",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "TP-Link",
+      "isActive": true,
+      "slug": "tp-link",
+      "imageUrl": "https://cdn.simpleicons.org/tplink/4ACBD6",
+      "description": null
+    },
+    {
+      "name": "Ubiquiti",
+      "isActive": true,
+      "slug": "ubiquiti",
+      "imageUrl": "https://cdn.simpleicons.org/ubiquiti",
+      "description": null
+    },
+    {
+      "name": "APC",
+      "isActive": true,
+      "slug": "apc",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Beetel",
+      "isActive": true,
+      "slug": "beetel",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Belkin",
+      "isActive": true,
+      "slug": "belkin",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Boat",
+      "isActive": true,
+      "slug": "boat",
+      "imageUrl": "https://cdn.simpleicons.org/boat",
+      "description": null
+    },
+    {
+      "name": "Hola",
+      "isActive": true,
+      "slug": "hola",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "iBall",
+      "isActive": true,
+      "slug": "iball",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Intex",
+      "isActive": true,
+      "slug": "intex",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Logitech",
+      "isActive": true,
+      "slug": "logitech",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Luminous",
+      "isActive": true,
+      "slug": "luminous",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Microtek",
+      "isActive": true,
+      "slug": "microtek",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Nvidia",
+      "isActive": true,
+      "slug": "nvidia",
+      "imageUrl": "https://cdn.simpleicons.org/nvidia/76B900",
+      "description": null
+    },
+    {
+      "name": "Stanley",
+      "isActive": true,
+      "slug": "stanley",
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Zebronics",
+      "isActive": true,
+      "slug": "zebronics",
+      "imageUrl": null,
+      "description": null
+    }
+  ],
   "invWarrantyTerms": [
+    {
+      "name": "1 Year",
+      "description": "12-month manufacturer warranty.",
+      "durationDays": 365,
+      "isActive": true
+    },
     {
       "name": "No Warranty",
       "description": "Sold as-is — no warranty coverage.",
@@ -427,12 +888,6 @@
       "isActive": true
     },
     {
-      "name": "1 Year",
-      "description": "12-month manufacturer / seller warranty.",
-      "durationDays": 365,
-      "isActive": true
-    },
-    {
       "name": "2 Years",
       "description": "24-month warranty.",
       "durationDays": 730,
@@ -449,16 +904,1170 @@
       "description": "60-month warranty.",
       "durationDays": 1825,
       "isActive": true
-    },
-    {
-      "name": "1YM",
-      "description": "12-month manufacturer",
-      "durationDays": 365,
-      "isActive": true
     }
   ],
-  "invCategories": [],
-  "invProductGroups": [],
+  "invCategories": [
+    {
+      "name": "Retails Solution",
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "isActive": true,
+      "parentName": null
+    },
+    {
+      "name": "Professional & Office",
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "isActive": true,
+      "parentName": null
+    },
+    {
+      "name": "Small Business",
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "isActive": true,
+      "parentName": null
+    },
+    {
+      "name": "Home Security",
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "isActive": true,
+      "parentName": null
+    },
+    {
+      "name": "Industrial security system",
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "isActive": true,
+      "parentName": null
+    },
+    {
+      "name": "IT Products",
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "isActive": true,
+      "parentName": null
+    }
+  ],
+  "invProductGroups": [
+    {
+      "name": "Paper & Stationary",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Bond Paper",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Paper & Stationary"
+    },
+    {
+      "name": "Copier Paper",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Paper & Stationary"
+    },
+    {
+      "name": "Lamination Roll",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Paper & Stationary"
+    },
+    {
+      "name": "IT Products",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Monitor",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Keyboard",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Mouse",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "CCTV & Surveillance",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "HD CCTV",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "CCTV & Surveillance"
+    },
+    {
+      "name": "IP CCTV",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "CCTV & Surveillance"
+    },
+    {
+      "name": "HD Dome",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "HD CCTV"
+    },
+    {
+      "name": "HD Bullet",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "HD CCTV"
+    },
+    {
+      "name": "Standalone Cameras / 360",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "CCTV & Surveillance"
+    },
+    {
+      "name": "IP Bullet",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IP CCTV"
+    },
+    {
+      "name": "IP Dome",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IP CCTV"
+    },
+    {
+      "name": "Storage Products",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Pen Drive",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Storage Products"
+    },
+    {
+      "name": "Memory Card",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Storage Products"
+    },
+    {
+      "name": "HDD & SSD",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Storage Products"
+    },
+    {
+      "name": "HDD",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "HDD & SSD"
+    },
+    {
+      "name": "NVME SSD",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "HDD & SSD"
+    },
+    {
+      "name": "SATA SSD",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "HDD & SSD"
+    },
+    {
+      "name": "Power Backup and Stablizer",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "UPS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Power Backup and Stablizer"
+    },
+    {
+      "name": "Photo Paper",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Paper & Stationary"
+    },
+    {
+      "name": "Thermal Paper Toll",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Paper & Stationary"
+    },
+    {
+      "name": "DVR & NVR",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "CCTV & Surveillance"
+    },
+    {
+      "name": "CCTV Accessories",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "CCTV & Surveillance"
+    },
+    {
+      "name": "Laptop",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Laptop Accessories",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Desktop & CPU",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Cabinet",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Motherboard",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "RAM",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "SMPS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Cooling & Fan",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "IT Products"
+    },
+    {
+      "name": "Printers & Consumables",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Printer",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Printers & Consumables"
+    },
+    {
+      "name": "Ink",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Printers & Consumables"
+    },
+    {
+      "name": "Cartridge",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Printers & Consumables"
+    },
+    {
+      "name": "Toner",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Printers & Consumables"
+    },
+    {
+      "name": "Ribbon",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Printers & Consumables"
+    },
+    {
+      "name": "Audio & Video",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Earphone",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Audio & Video"
+    },
+    {
+      "name": "Headphone",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Audio & Video"
+    },
+    {
+      "name": "Speaker",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Audio & Video"
+    },
+    {
+      "name": "Microphone",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Audio & Video"
+    },
+    {
+      "name": "Webcam",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Audio & Video"
+    },
+    {
+      "name": "Networking",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Router",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Networking"
+    },
+    {
+      "name": "WiFi Adapter",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Networking"
+    },
+    {
+      "name": "Network Switch",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Networking"
+    },
+    {
+      "name": "Network Cable",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Networking"
+    },
+    {
+      "name": "Cables & Connectors",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "HDMI Cable",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "USB Cable",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "Data Cable",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "Power Cable",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "AV & Audio Cable",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "Converter & Adapter",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "Cable Accessories",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Cables & Connectors"
+    },
+    {
+      "name": "Software & Security",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Antivirus",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Software & Security"
+    },
+    {
+      "name": "Barcode & POS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Barcode Scanner",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Barcode & POS"
+    },
+    {
+      "name": "Barcode Label",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Barcode & POS"
+    },
+    {
+      "name": "POS Accessories",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Barcode & POS"
+    },
+    {
+      "name": "Mobile & Accessories",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Mobile Charger",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Mobile & Accessories"
+    },
+    {
+      "name": "Car Charger",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Mobile & Accessories"
+    },
+    {
+      "name": "Power Bank",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Mobile & Accessories"
+    },
+    {
+      "name": "Phone",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Mobile & Accessories"
+    },
+    {
+      "name": "Card Reader",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Storage Products"
+    },
+    {
+      "name": "Optical Media",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Storage Products"
+    },
+    {
+      "name": "PVC Card",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Paper & Stationary"
+    },
+    {
+      "name": "Stabilizer",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Power Backup and Stablizer"
+    },
+    {
+      "name": "Inverter & Battery",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "Power Backup and Stablizer"
+    }
+  ],
   "invAttributeMasters": [],
   "strategyPoints": [
     {
@@ -470,6 +2079,11 @@
       "dimension": "BRAND",
       "refKey": "1",
       "points": "5"
+    },
+    {
+      "dimension": "GROUP",
+      "refKey": "3",
+      "points": "-5"
     }
   ],
   "voucherPrintTemplates": [
@@ -2468,6 +4082,27 @@
       "parentName": "Current Assets"
     },
     {
+      "name": "Credit Card",
+      "type": "LIABILITY",
+      "sortOrder": 15,
+      "isActive": true,
+      "parentName": "Loans (Liability)"
+    },
+    {
+      "name": "BNPL A/c",
+      "type": "LIABILITY",
+      "sortOrder": 17,
+      "isActive": true,
+      "parentName": "Loans (Liability)"
+    },
+    {
+      "name": "Wallets",
+      "type": "ASSET",
+      "sortOrder": 65,
+      "isActive": true,
+      "parentName": "Current Assets"
+    },
+    {
       "name": "Capital Account",
       "type": "LIABILITY",
       "sortOrder": 10,
@@ -2648,25 +4283,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "PhonePe",
-      "code": null,
-      "normalBalance": null,
-      "description": "UPI Payment",
-      "isActive": true,
-      "groupId": {
-        "name": "Payment Gateway"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2680,9 +4307,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "PhonePe",
+      "code": null,
+      "normalBalance": null,
+      "description": "UPI Payment",
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2696,9 +4355,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2712,9 +4379,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2728,9 +4403,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2744,25 +4427,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Razorpay",
-      "code": null,
-      "normalBalance": null,
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Payment Gateway"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2776,9 +4451,65 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Razorpay",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Payment Gateway"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Carriage Inward (Purchase Courier)",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Additional Purchase Cost"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2792,9 +4523,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2808,9 +4547,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2824,9 +4571,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2840,25 +4595,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Carriage Inward",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Additional Purchase Cost"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2872,9 +4619,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2888,41 +4643,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash – Counter 23 rakesh – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "CGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2936,47 +4667,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "SBI CC A/c 873",
-      "code": "1010",
-      "normalBalance": "CREDIT",
-      "description": "",
-      "isActive": true,
-      "groupId": {
-        "name": "Bank OD A/c"
-      },
-      "creditLimit": null,
-      "bankJson": {
-        "ifsc": "SBIN0008462",
-        "branch": "Abhayapuri",
-        "bankName": "State Bank of India",
-        "beneficiary": "Network Service",
-        "accountNumber": "33605435873"
-      },
-      "openingBalance": "534077.44",
-      "openingBalanceType": "CREDIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
-      "parentName": null
-    },
-    {
-      "name": "Bandhan Bank Loan 0193",
-      "code": null,
-      "normalBalance": null,
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Unsecured Loans"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": "341564",
-      "openingBalanceType": "CREDIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -2990,31 +4691,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "Bankdhan Bank Current A/c  0020",
+      "name": "Bandhan Bank Loan 0193",
       "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Bank Accounts"
+        "name": "Unsecured Loans"
       },
       "creditLimit": null,
-      "bankJson": {
-        "ifsc": "BDBL0002540",
-        "branch": "Abhayapuri",
-        "bankName": "Bandhan Bank",
-        "beneficiary": "Network Service",
-        "accountNumber": "2010003160020"
-      },
-      "openingBalance": "36569.19",
-      "openingBalanceType": "DEBIT",
-      "openingBalanceDate": "2026-07-25T00:00:00.000Z",
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "341564",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3034,25 +4745,17 @@
         "beneficiary": "Sahanas Parbin",
         "accountNumber": "20200081634022"
       },
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": "9144",
       "openingBalanceType": "DEBIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
-      "parentName": null
-    },
-    {
-      "name": "Purchase A/c",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Purchase Accounts"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3066,9 +4769,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3082,9 +4793,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3096,9 +4815,17 @@
       "groupId": null,
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3112,25 +4839,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Retained Earnings",
-      "code": "3100",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Reserves & Surplus"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3144,9 +4863,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3160,9 +4887,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3176,9 +4911,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3192,9 +4935,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3208,9 +4959,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3224,25 +4983,65 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "New Room",
-      "code": null,
-      "normalBalance": null,
+      "name": "Retained Earnings",
+      "code": "3100",
+      "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Fixed Assets"
+        "name": "Reserves & Surplus"
       },
       "creditLimit": null,
       "bankJson": null,
-      "openingBalance": "400000",
-      "openingBalanceType": "DEBIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Purchase A/c",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Purchase Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3256,9 +5055,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3272,25 +5079,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Service Charges Income",
-      "code": "4000",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Direct Incomes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3304,9 +5103,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3320,9 +5127,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3336,9 +5151,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3352,9 +5175,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3368,9 +5199,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3384,25 +5223,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "Sales A/c",
-      "code": null,
+      "name": "Service Charges Income",
+      "code": "4000",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Sales Accounts"
+        "name": "Direct Incomes"
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3416,25 +5271,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "Discount Allowed",
+      "name": "New Room",
       "code": null,
-      "normalBalance": "DEBIT",
+      "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Indirect Expenses"
+        "name": "Fixed Assets"
       },
       "creditLimit": null,
       "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "400000",
+      "openingBalanceType": "DEBIT",
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3448,9 +5319,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3464,9 +5343,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3480,9 +5367,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3496,9 +5391,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3512,9 +5415,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3528,9 +5439,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3544,9 +5463,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3560,9 +5487,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3576,9 +5511,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3592,9 +5535,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3608,9 +5559,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3624,25 +5583,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Coupon Discounts",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3656,9 +5607,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3672,25 +5631,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "Cash – Vault – Head Office",
+      "name": "Coupon Discounts",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Cash-in-Hand"
+        "name": "Indirect Expenses"
       },
       "creditLimit": null,
       "bankJson": null,
-      "openingBalance": "9503",
-      "openingBalanceType": "DEBIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3704,9 +5679,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": "25109",
       "openingBalanceType": "DEBIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash – Counter 23 rakesh – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": "2026-07-26T00:00:00.000Z",
+      "reconciledAt": "2026-07-29T17:22:19.203Z",
+      "reconciledById": 7,
       "parentName": null
     },
     {
@@ -3720,9 +5727,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3736,9 +5751,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3752,9 +5775,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3768,9 +5799,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3784,9 +5823,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3800,9 +5847,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3816,9 +5871,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3832,9 +5895,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3848,9 +5919,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3864,9 +5943,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3880,9 +5967,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3896,9 +5991,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3912,9 +6015,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3928,9 +6039,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3944,9 +6063,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3960,25 +6087,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "Cash Short",
-      "code": "6950",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -3992,9 +6111,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4008,9 +6135,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4024,9 +6159,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4040,9 +6183,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4056,25 +6207,65 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "Cash – Counter 22 Prokash – Head Office",
+      "name": "Adjustment",
       "code": null,
+      "normalBalance": null,
+      "description": "for adjust the liabilities and asset diffrences",
+      "isActive": true,
+      "groupId": {
+        "name": "Capital Account"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "98419.44",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash Short",
+      "code": "6950",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Cash-in-Hand"
+        "name": "Indirect Expenses"
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4088,9 +6279,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": "92952",
       "openingBalanceType": "CREDIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4104,9 +6303,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": "90000",
       "openingBalanceType": "CREDIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4120,9 +6327,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": "100000",
       "openingBalanceType": "CREDIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "test bnpl",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "BNPL A/c"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4136,41 +6375,41 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": "1825",
       "openingBalanceType": "CREDIT",
-      "openingBalanceDate": "2026-07-24T00:00:00.000Z",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
-      "name": "Round Off",
+      "name": "test credit card",
       "code": null,
-      "normalBalance": "CREDIT",
+      "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Indirect Incomes"
+        "name": "Credit Card"
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
-      "parentName": null
-    },
-    {
-      "name": "SGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "creditLimit": null,
-      "bankJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4184,9 +6423,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4200,9 +6447,17 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     },
     {
@@ -4216,9 +6471,247 @@
       },
       "creditLimit": null,
       "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
       "openingBalance": null,
       "openingBalanceType": null,
       "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash – Counter 22 Prokash – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Sales A/c",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "CGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "SGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Discount Allowed",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Bankdhan Bank Current A/c  0020",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Bank Accounts"
+      },
+      "creditLimit": null,
+      "bankJson": {
+        "ifsc": "BDBL0002540",
+        "branch": "Abhayapuri",
+        "bankName": "Bandhan Bank",
+        "beneficiary": "Network Service",
+        "accountNumber": "2010003160020"
+      },
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "36569.19",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Cash – Vault – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "9503",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "SBI CC A/c 873",
+      "code": "1010",
+      "normalBalance": "CREDIT",
+      "description": "",
+      "isActive": true,
+      "groupId": {
+        "name": "Bank OD A/c"
+      },
+      "creditLimit": null,
+      "bankJson": {
+        "ifsc": "SBIN0008462",
+        "limit": "550000",
+        "branch": "Abhayapuri",
+        "bankName": "State Bank of India",
+        "fundTier": "",
+        "beneficiary": "Network Service",
+        "accountNumber": "33605435873"
+      },
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "534077.44",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null
+    },
+    {
+      "name": "Round Off",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Incomes"
+      },
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null
     }
   ],
@@ -4463,7 +6956,7 @@
       "id": "BR-HQ",
       "name": "Head Office",
       "address": "Kalaparishad Market, Main Road, Abhayapuri",
-      "phone": "+91 88769 96996",
+      "phone": "+91 88769 96969",
       "addressLine1": "Kalaparishad Market, Main Road",
       "addressLine2": "Abhayapuri, District Bongaigaon",
       "city": "Bongaigaon",
@@ -4559,100 +7052,36 @@
       "permissionId": "ui:sidebar:administration:recurring-tasks"
     },
     {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:basket-analysis"
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:accountancy:usable-fund"
     },
     {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:stock-health"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:discount-impact"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:branch-comparison"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:abc-analysis"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:products"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:item-ledger"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:reorder"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:masters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:masters:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:boms"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:gst-rates"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:attribute-masters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:warranty-terms"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:groups"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:categories"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:units"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:brands"
-    },
-    {
-      "roleId": "R2",
+      "roleId": "R3",
       "permissionId": "ui:sidebar:crm:deals"
     },
     {
-      "roleId": "R2",
+      "roleId": "R3",
       "permissionId": "ui:sidebar:crm:reconnect"
     },
     {
-      "roleId": "R2",
+      "roleId": "R3",
       "permissionId": "ui:sidebar:crm:call-log"
     },
     {
-      "roleId": "R2",
+      "roleId": "R3",
       "permissionId": "ui:sidebar:help:help-desk"
     },
     {
-      "roleId": "R2",
+      "roleId": "R3",
       "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "roleId": "R3",
+      "permissionId": "ui:sidebar:administration:work-board"
     },
     {
       "roleId": "R2",
@@ -4721,518 +7150,6 @@
     {
       "roleId": "R2",
       "permissionId": "tiers:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:outward-supplies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:inward-supplies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:net-gst-liability"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:hsn-summary"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:tax-classification"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:org-chart"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:pos-counters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos-counters:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:positions"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "positions:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:departments"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "departments:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:branches"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "branches:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:role"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "roles:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:admin:users"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "users:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:org-defaults"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:e-commerce"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:payment-methods"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:couriers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:standard-courier"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:pos-services"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-groups"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-tools"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-import"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:backup-restore"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:credit-limit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:post:payment"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:post:journal"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:post:debit-note"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:post:credit-note"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:post:contra"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:post:receipt"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:purchase-return"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:sale-return"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:purchase"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:sale"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:grn"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:rejection-out"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:rejection-in"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:manufacturing-journal"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:branch-transfer"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:physical-stock"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:challan"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:sales-order"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:purchase-order"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "inventory:voucher:post:estimate"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:pos"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:sale"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:expense"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:receipt"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:estimate"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:sale-return"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:create:order"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:open"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:close"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:drop"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:inbox"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:work-flow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pos:shift-reports"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pos:counters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:force-close"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:customers:companies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "customers:view:creditors"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:repair:all-repair"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:repair:device-location"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "customers:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "tickets:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:daybook"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:pending-inventory"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:stock-summary"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "products:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:account-ledger"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "accountancy:masters:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:bank-book"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:cash-book"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:loans-book"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:balance-sheet"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:vouchers-register"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:financial-insights"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:trial-balance"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:receivables"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:payables"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:cash-flow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:fund-flow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:statistics"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:masters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:account-groups"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:ledgers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:accountancy:opening-balance"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:customer-profit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:bill-profit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:top-customers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:rfm-segmentation"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:party-sale-purchase"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:item-profit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:item-by-party"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:inactive-customers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:sales-trend"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:price-variance"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:movement-register"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:supplier-purchases"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:stock-turnover"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "help:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "deals:create"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "tasks:create"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:crm:deals"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:crm:reconnect"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:crm:call-log"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:help:help-desk"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:e-commerce:orders"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:e-commerce:products"
-    },
-    {
-      "roleId": "R3",
-      "permissionId": "ui:sidebar:administration:work-board"
     },
     {
       "roleId": "R3",
@@ -5329,6 +7246,174 @@
     {
       "roleId": "R3",
       "permissionId": "tasks:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:outward-supplies"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:inward-supplies"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:net-gst-liability"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:hsn-summary"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:tax-classification"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:org-chart"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:pos-counters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos-counters:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:positions"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "positions:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:departments"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "departments:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:branches"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "branches:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:role"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "roles:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:admin:users"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "users:create"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:organisation"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:journal"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:debit-note"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:post:credit-note"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:grn"
     },
     {
       "roleId": "R1",
@@ -5956,6 +8041,10 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:organisation"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "ui:sidebar:settings:payment-methods"
     },
     {
@@ -5997,137 +8086,445 @@
     {
       "roleId": "R1",
       "permissionId": "ui:sidebar:workspace:work-flow"
-    }
-  ],
-  "departmentPermissions": [
+    },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:rejection-out"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:rejection-in"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:manufacturing-journal"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:branch-transfer"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:physical-stock"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:challan"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:sales-order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:purchase-order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:post:estimate"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:sale"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:expense"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:receipt"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:estimate"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:sale-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:create:order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:open"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:close"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:drop"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:work-flow"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:pos:shift-reports"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:pos:counters"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
+      "permissionId": "pos:shift:force-close"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:customers:person"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:customers:companies"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
+      "permissionId": "customers:view:creditors"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:repair:all-repair"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:repair:device-location"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:administration:work-board"
+      "roleId": "R2",
+      "permissionId": "customers:edit"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:e-commerce:orders"
+      "roleId": "R2",
+      "permissionId": "tickets:edit"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:e-commerce:products"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:daybook"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:help:help-desk"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:pending-inventory"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:org-defaults"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:stock-summary"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:e-commerce"
+      "roleId": "R2",
+      "permissionId": "products:edit"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:payment-methods"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:account-ledger"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:couriers"
+      "roleId": "R2",
+      "permissionId": "accountancy:masters:edit"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:standard-courier"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:bank-book"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:pos-services"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:cash-book"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:credit-limit"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:loans-book"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:workflow"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:balance-sheet"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:naming-convention"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:profit-loss-a-c"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:year-ending"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:vouchers-register"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:financial-insights"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:qr-display"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:bank-reconciliation"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:trial-balance"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:backup-restore"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:receivables"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:downloads"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:payables"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:item-import"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:cash-flow"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-import"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:fund-flow"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-tools"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:ratio-analysis"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-groups"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:statistics"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:masters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:account-groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:ledgers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:chart-of-accounts"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:opening-balance"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:customer-profit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:bill-profit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:top-customers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:rfm-segmentation"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:party-sale-purchase"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:item-profit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:item-by-party"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:inactive-customers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:sales-trend"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:price-variance"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:movement-register"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:supplier-purchases"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:stock-turnover"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:basket-analysis"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:stock-health"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:discount-impact"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:branch-comparison"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:abc-analysis"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:products"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:item-ledger"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:reorder"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:masters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:masters:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:boms"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:gst-rates"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:attribute-masters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:warranty-terms"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:categories"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:units"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:brands"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:deals"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:reconnect"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:call-log"
     },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:accountancy:usable-fund"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "compliance:tax:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:payment"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:receipt"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:contra"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:cancel:sale"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:cancel:purchase"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:cancel:sale-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:voucher:cancel:purchase-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:administration:recurring-tasks"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "tasks:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "deals:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "help:edit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:e-commerce:masters"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:e-commerce:customize-home"
+    }
+  ],
+  "departmentPermissions": [
     {
       "departmentId": "DEP-OP",
       "permissionId": "inventory:voucher:create:purchase"
@@ -6447,6 +8844,10 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "finance:voucher:delete:journal"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:organisation"
     },
     {
       "departmentId": "DEP-OP",
@@ -6879,6 +9280,146 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:accountancy:usable-fund"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:administration:recurring-tasks"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:administration:work-board"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:organisation"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:crm:deals"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:crm:reconnect"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:crm:call-log"
     }
   ],
   "positions": [
@@ -6938,20 +9479,20 @@
   ],
   "users": [
     {
-      "name": "Nabajyoty Das",
-      "email": "naba@networkservice.in",
+      "name": "Prokash Karamkar",
+      "email": "prokash@networkservice.in",
       "role": null,
       "title": null,
       "scope": "OWN",
-      "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159211/avatars/o838yvq0dzpoyzdf77x6.jpg",
-      "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159249/avatars/ne07bpdtkbchjm9dtcoq.jpg",
+      "avatarUrl": null,
+      "coverUrl": null,
       "phone": null,
-      "birthday": "2002-07-20T00:00:00.000Z",
+      "birthday": null,
       "bio": null,
       "linkedIn": null,
       "twitter": null,
-      "instagram": "nabajyoti__27",
-      "facebook": "Nabajyoti Das",
+      "instagram": null,
+      "facebook": null,
       "managerEmail": null
     },
     {
@@ -6972,20 +9513,20 @@
       "managerEmail": null
     },
     {
-      "name": "Prokash Karamkar",
-      "email": "prokash@networkservice.in",
+      "name": "Nabajyoty Das",
+      "email": "naba@networkservice.in",
       "role": null,
       "title": null,
       "scope": "OWN",
-      "avatarUrl": null,
-      "coverUrl": null,
+      "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159211/avatars/o838yvq0dzpoyzdf77x6.jpg",
+      "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159249/avatars/ne07bpdtkbchjm9dtcoq.jpg",
       "phone": null,
-      "birthday": null,
+      "birthday": "2002-07-20T00:00:00.000Z",
       "bio": null,
       "linkedIn": null,
       "twitter": null,
-      "instagram": null,
-      "facebook": null,
+      "instagram": "nabajyoti__27",
+      "facebook": "Nabajyoti Das",
       "managerEmail": null
     },
     {
@@ -6994,8 +9535,8 @@
       "role": "R1",
       "title": null,
       "scope": "OWN",
-      "avatarUrl": null,
-      "coverUrl": null,
+      "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785528672/avatars/awyjapkigh8crzrz3gd6.png",
+      "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785528664/avatars/stvblrz6iezdm44astbg.jpg",
       "phone": null,
       "birthday": null,
       "bio": null,
@@ -7041,18 +9582,6 @@
   "userPermissions": [],
   "paymentGateways": [
     {
-      "provider": "razorpay",
-      "displayName": "Razorpay",
-      "environment": "TEST",
-      "enabledForCounter": false,
-      "enabledForOnline": true,
-      "configJson": {
-        "settlementAccountId": 6898
-      },
-      "sortOrder": 10,
-      "isActive": true
-    },
-    {
       "provider": "pay_on_delivery",
       "displayName": "Pay on delivery",
       "environment": "TEST",
@@ -7092,6 +9621,18 @@
       },
       "sortOrder": 30,
       "isActive": false
+    },
+    {
+      "provider": "razorpay",
+      "displayName": "Razorpay",
+      "environment": "LIVE",
+      "enabledForCounter": false,
+      "enabledForOnline": true,
+      "configJson": {
+        "settlementAccountId": 6898
+      },
+      "sortOrder": 10,
+      "isActive": true
     }
   ],
   "deliveryMethods": [
@@ -7335,7 +9876,36 @@
       }
     }
   ],
-  "customerGroups": [],
+  "customerGroups": [
+    {
+      "name": "Govt Office",
+      "isActive": true
+    },
+    {
+      "name": "Private Office",
+      "isActive": true
+    },
+    {
+      "name": "Govt School",
+      "isActive": true
+    },
+    {
+      "name": "Private School",
+      "isActive": true
+    },
+    {
+      "name": "B2B",
+      "isActive": true
+    },
+    {
+      "name": "Agent/ Mechanic",
+      "isActive": true
+    },
+    {
+      "name": "CSP/CSC/DTP/ONLINE Shop",
+      "isActive": true
+    }
+  ],
   "posCounters": [
     {
       "branchId": "BR-HQ",
@@ -7344,33 +9914,29 @@
         "code": null,
         "name": "Cash – Counter 22 Prokash – Head Office"
       },
-      "allowedExpenseAccountIds": [],
+      "allowedExpenseAccountIds": [
+        {
+          "code": null,
+          "name": "Tea & Donation Exp"
+        },
+        {
+          "code": null,
+          "name": "Carriage Inward (Purchase Courier)"
+        }
+      ],
       "isActive": true,
       "epbxExtension": "22"
     },
     {
       "branchId": "BR-HQ",
-      "name": "Counter 21 naba",
+      "name": "Counter 23 rakesh",
       "tillAccountId": {
         "code": null,
-        "name": "Cash – Counter 21 naba – Head Office"
+        "name": "Cash – Counter 23 rakesh – Head Office"
       },
-      "allowedExpenseAccountIds": [
-        {
-          "code": null,
-          "name": "Carriage Inward"
-        },
-        {
-          "code": null,
-          "name": "Printing & Stationery"
-        },
-        {
-          "code": null,
-          "name": "Tea & Donation Exp"
-        }
-      ],
+      "allowedExpenseAccountIds": [],
       "isActive": true,
-      "epbxExtension": "21"
+      "epbxExtension": "23"
     },
     {
       "branchId": "BR-HQ",
@@ -7390,56 +9956,33 @@
     },
     {
       "branchId": "BR-HQ",
-      "name": "Counter 23 rakesh",
+      "name": "Counter 21 naba",
       "tillAccountId": {
         "code": null,
-        "name": "Cash – Counter 23 rakesh – Head Office"
+        "name": "Cash – Counter 21 naba – Head Office"
       },
-      "allowedExpenseAccountIds": [],
+      "allowedExpenseAccountIds": [
+        {
+          "code": null,
+          "name": "Carriage Inward (Purchase Courier)"
+        },
+        {
+          "code": null,
+          "name": "Printing & Stationery"
+        },
+        {
+          "code": null,
+          "name": "Tea & Donation Exp"
+        }
+      ],
       "isActive": true,
-      "epbxExtension": "23"
+      "epbxExtension": "21"
     }
   ],
   "posPaymentAccounts": [
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 22 Prokash"
-      },
-      "channel": "UPI",
-      "label": "PhonePe",
-      "accountId": {
-        "code": null,
-        "name": "PhonePe"
-      },
-      "vpa": "Q001860615@ybl",
-      "configJson": {},
-      "sortOrder": 0,
-      "isActive": true,
-      "defaultVisible": true,
-      "gatewayId": null
-    },
-    {
-      "counterId": {
-        "branchId": "BR-HQ",
-        "name": "Counter 22 Prokash"
-      },
-      "channel": "CARD",
-      "label": "SBI Swipe",
-      "accountId": {
-        "code": null,
-        "name": "SBI POS"
-      },
-      "vpa": null,
-      "configJson": {},
-      "sortOrder": 1,
-      "isActive": true,
-      "defaultVisible": true,
-      "gatewayId": null
-    },
-    {
-      "counterId": {
-        "branchId": "BR-HQ",
         "name": "Counter 24 aka"
       },
       "channel": "UPI",
@@ -7531,6 +10074,42 @@
       "counterId": {
         "branchId": "BR-HQ",
         "name": "Counter 21 naba"
+      },
+      "channel": "CARD",
+      "label": "SBI Swipe",
+      "accountId": {
+        "code": null,
+        "name": "SBI POS"
+      },
+      "vpa": null,
+      "configJson": {},
+      "sortOrder": 1,
+      "isActive": true,
+      "defaultVisible": true,
+      "gatewayId": null
+    },
+    {
+      "counterId": {
+        "branchId": "BR-HQ",
+        "name": "Counter 22 Prokash"
+      },
+      "channel": "UPI",
+      "label": "PhonePe",
+      "accountId": {
+        "code": null,
+        "name": "PhonePe"
+      },
+      "vpa": "Q001860615@ybl",
+      "configJson": {},
+      "sortOrder": 0,
+      "isActive": true,
+      "defaultVisible": true,
+      "gatewayId": null
+    },
+    {
+      "counterId": {
+        "branchId": "BR-HQ",
+        "name": "Counter 22 Prokash"
       },
       "channel": "CARD",
       "label": "SBI Swipe",
@@ -7675,16 +10254,7 @@
       "entityType": "help"
     }
   ],
-  "workGroups": [
-    {
-      "id": "G1",
-      "name": "calling",
-      "label": "calling",
-      "color": "#96D345",
-      "order": 1,
-      "permissionId": null
-    }
-  ],
+  "workGroups": [],
   "works": [],
   "workGroupWorks": [],
   "ticketStatuses": [
@@ -7743,82 +10313,10 @@
       "pipelineId": "P3"
     },
     {
-      "id": "S63",
-      "label": "Scrap",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 12,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": null,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S6",
-      "label": "Ready",
-      "color": "bg-green-100 text-green-700",
-      "order": 6,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": null,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S1",
-      "label": "Received",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 1,
-      "isTerminal": false,
-      "isEntryPoint": true,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": "Confirm the device and accessories are logged before moving on.",
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": 24,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
-    {
-      "id": "S62",
-      "label": "Escalated - Send to service",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 5,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": null,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
-    {
       "id": "S65",
       "label": "Sent To Service",
       "color": "#455FD3",
-      "order": 7,
+      "order": 60,
       "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
@@ -7826,7 +10324,25 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
-      "resolveTimeHours": null,
+      "resolveTimeHours": 120,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
+      "id": "S5",
+      "label": "Received Back",
+      "color": "bg-purple-100 text-purple-700",
+      "order": 70,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": 24,
       "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
@@ -7885,24 +10401,6 @@
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P4"
-    },
-    {
-      "id": "S3",
-      "label": "Repairing",
-      "color": "bg-blue-100 text-blue-700",
-      "order": 3,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": 24,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
     },
     {
       "id": "S25",
@@ -7995,10 +10493,28 @@
       "pipelineId": "P2"
     },
     {
+      "id": "S1",
+      "label": "Received",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 10,
+      "isTerminal": false,
+      "isEntryPoint": true,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": "Confirm the device and accessories are logged before moving on.",
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": 24,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
       "id": "S7",
       "label": "Returned",
       "color": "bg-gray-200 text-gray-500",
-      "order": 7,
+      "order": 500,
       "isTerminal": true,
       "isEntryPoint": false,
       "actionLabel": null,
@@ -8007,6 +10523,24 @@
       "announceOnEntry": false,
       "etaText": null,
       "resolveTimeHours": null,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
+      "id": "S6",
+      "label": "Ready",
+      "color": "bg-green-100 text-green-700",
+      "order": 80,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": 48,
       "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
@@ -8103,6 +10637,24 @@
       "pipelineId": "P9"
     },
     {
+      "id": "S63",
+      "label": "Scrap",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 1000,
+      "isTerminal": true,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": null,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
       "id": "S38",
       "label": "Proposal Sent",
       "color": "bg-yellow-100 text-yellow-700",
@@ -8137,6 +10689,24 @@
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P8"
+    },
+    {
+      "id": "S9",
+      "label": "Cancelled by Customer",
+      "color": "bg-gray-100 text-gray-400",
+      "order": 110,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": 48,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
     },
     {
       "id": "S42",
@@ -8175,6 +10745,24 @@
       "pipelineId": "P2"
     },
     {
+      "id": "S66",
+      "label": "Rejected by Technician",
+      "color": "#D3458A",
+      "order": 120,
+      "isTerminal": false,
+      "isEntryPoint": false,
+      "actionLabel": null,
+      "warrantyScope": "any",
+      "leavePrompt": null,
+      "announceOnEntry": false,
+      "etaText": null,
+      "resolveTimeHours": 48,
+      "resolveGroupId": null,
+      "workId": null,
+      "startWorkerId": null,
+      "pipelineId": "P1"
+    },
+    {
       "id": "S43",
       "label": "Under Review",
       "color": "bg-yellow-100 text-yellow-700",
@@ -8211,10 +10799,10 @@
       "pipelineId": "P7"
     },
     {
-      "id": "S4",
-      "label": "Escalated -Visit",
-      "color": "bg-orange-100 text-orange-700",
-      "order": 5,
+      "id": "S3",
+      "label": "Repairing",
+      "color": "bg-blue-100 text-blue-700",
+      "order": 20,
       "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
@@ -8222,17 +10810,17 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
-      "resolveTimeHours": null,
+      "resolveTimeHours": 48,
       "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P1"
     },
     {
-      "id": "S5",
-      "label": "Received Back",
-      "color": "bg-purple-100 text-purple-700",
-      "order": 5,
+      "id": "S61",
+      "label": "Need Help",
+      "color": "bg-gray-100 text-gray-600",
+      "order": 30,
       "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
@@ -8240,7 +10828,7 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
-      "resolveTimeHours": null,
+      "resolveTimeHours": 24,
       "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
@@ -8299,24 +10887,6 @@
       "workId": null,
       "startWorkerId": null,
       "pipelineId": "P6"
-    },
-    {
-      "id": "S66",
-      "label": "Rejected by Technician",
-      "color": "#D3458A",
-      "order": 16,
-      "isTerminal": false,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": null,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
     },
     {
       "id": "S32",
@@ -8445,10 +11015,10 @@
       "pipelineId": "P4"
     },
     {
-      "id": "S61",
-      "label": "Need Help",
-      "color": "bg-gray-100 text-gray-600",
-      "order": 4,
+      "id": "S8",
+      "label": "Closed - No Fix",
+      "color": "bg-red-100 text-red-600",
+      "order": 130,
       "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
@@ -8456,7 +11026,7 @@
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
-      "resolveTimeHours": null,
+      "resolveTimeHours": 48,
       "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
@@ -8481,18 +11051,18 @@
       "pipelineId": "P8"
     },
     {
-      "id": "S8",
-      "label": "Closed - No Fix",
-      "color": "bg-red-100 text-red-600",
-      "order": 8,
-      "isTerminal": true,
+      "id": "S62",
+      "label": "Escalated - Send to service",
+      "color": "#D3456B",
+      "order": 50,
+      "isTerminal": false,
       "isEntryPoint": false,
       "actionLabel": null,
       "warrantyScope": "any",
       "leavePrompt": null,
       "announceOnEntry": false,
       "etaText": null,
-      "resolveTimeHours": null,
+      "resolveTimeHours": 48,
       "resolveGroupId": null,
       "workId": null,
       "startWorkerId": null,
@@ -8733,24 +11303,6 @@
       "pipelineId": "P6"
     },
     {
-      "id": "S9",
-      "label": "Cancelled",
-      "color": "bg-gray-100 text-gray-400",
-      "order": 9,
-      "isTerminal": true,
-      "isEntryPoint": false,
-      "actionLabel": null,
-      "warrantyScope": "any",
-      "leavePrompt": null,
-      "announceOnEntry": false,
-      "etaText": null,
-      "resolveTimeHours": null,
-      "resolveGroupId": null,
-      "workId": null,
-      "startWorkerId": null,
-      "pipelineId": "P1"
-    },
-    {
       "id": "S57",
       "label": "Requested",
       "color": "bg-gray-100 text-gray-600",
@@ -8868,22 +11420,6 @@
       "toStatusId": "S60"
     },
     {
-      "fromStatusId": "S1",
-      "toStatusId": "S3"
-    },
-    {
-      "fromStatusId": "S1",
-      "toStatusId": "S62"
-    },
-    {
-      "fromStatusId": "S1",
-      "toStatusId": "S66"
-    },
-    {
-      "fromStatusId": "S1",
-      "toStatusId": "S9"
-    },
-    {
       "fromStatusId": "S3",
       "toStatusId": "S6"
     },
@@ -8949,6 +11485,34 @@
     },
     {
       "fromStatusId": "S3",
+      "toStatusId": "S61"
+    },
+    {
+      "fromStatusId": "S61",
+      "toStatusId": "S62"
+    },
+    {
+      "fromStatusId": "S61",
+      "toStatusId": "S8"
+    },
+    {
+      "fromStatusId": "S61",
+      "toStatusId": "S65"
+    },
+    {
+      "fromStatusId": "S1",
+      "toStatusId": "S3"
+    },
+    {
+      "fromStatusId": "S1",
+      "toStatusId": "S66"
+    },
+    {
+      "fromStatusId": "S1",
+      "toStatusId": "S9"
+    },
+    {
+      "fromStatusId": "S1",
       "toStatusId": "S61"
     }
   ],

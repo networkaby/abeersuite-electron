@@ -715,13 +715,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .then((r) => {
                 const cb = r.data.filter((a) => isMoneyGroupName(a.group?.name));
                 setCashBankAccounts(cb);
-                // chargeAccounts = every non-party ledger that ISN'T a
-                // cash/bank/OD til (those are tender accounts, picked above).
-                // Operators see Packing Income / Discount Allowed /
-                // Service Charges / Insurance etc. in the "+ Add Account"
-                // picker — anything they might want to surface as a
-                // separate JE leg on the voucher.
-                setChargeAccounts(r.data.filter((a) => !isMoneyGroupName(a.group?.name)));
+                // chargeAccounts = Income/Expense ledgers only (those are
+                // the only natures a "+ Add Account" charge line can post
+                // to — Packing Income / Discount Allowed / Service Charges /
+                // Insurance etc.). Asset/Liability ledgers are excluded even
+                // though they aren't money accounts.
+                setChargeAccounts(r.data.filter((a) => a.group?.type === "INCOME" || a.group?.type === "EXPENSE"));
                 if (isEditing) return;
                 // Last-used account, else Petty Cash. See pickDefaultTenderAccount
                 // (module scope) — reset()-after-save uses the same resolver.
@@ -1123,8 +1122,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             return;
         }
         const validLines = lines.filter((l) => l.product && parseFloat(l.quantity) > 0);
-        if (!validLines.length) {
-            toast.error("Add at least one item with a product and quantity");
+        const hasValidCharge = charges.some((c) => c.accountId != null && Math.abs(parseFloat(c.amount) || 0) > 0.005);
+        if (!validLines.length && !hasValidCharge) {
+            toast.error("Add at least one item, or an additional charge");
             return;
         }
         if (copy.refLabel && !copy.refOptional) {

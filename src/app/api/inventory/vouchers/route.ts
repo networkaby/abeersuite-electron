@@ -312,9 +312,15 @@ export async function POST(req: NextRequest) {
 
     // Manufacturing Journal is allowed to have zero stock lines IF it has at
     // least one expense (Charges) line — covers pure-overhead allocations.
-    // Every other type requires at least one line.
-    if (!lines.length && !(isManufacturingJournal && charges.length > 0)) {
-        return NextResponse.json({ error: "At least one line item required" }, { status: 400 });
+    // SALE / PURCHASE are allowed to have zero item lines too — a pure
+    // service invoice (e.g. "Service charge for computer repairing") posted
+    // entirely through the "+ Add Account" charges, no stock item involved.
+    // Every other type still requires at least one item line.
+    const isSaleOrPurchase = type === "SALE" || type === "PURCHASE";
+    if (!lines.length
+        && !(isManufacturingJournal && charges.length > 0)
+        && !(isSaleOrPurchase && charges.length > 0)) {
+        return NextResponse.json({ error: "At least one line item or charge required" }, { status: 400 });
     }
 
     let branchId: string;
