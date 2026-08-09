@@ -53,6 +53,12 @@ export async function GET(req: Request) {
             include: {
                 parent: { select: { id: true, code: true, name: true } },
                 group:  { select: { id: true, name: true, type: true } },
+                // Party ledgers only — lets the voucher combobox search a
+                // Sundry Debtor / Creditor by mobile number, not just name.
+                ...(includeParties ? {
+                    person:  { select: { phones: { select: { phone: true, isPrimary: true } } } },
+                    company: { select: { phones: { select: { phone: true, isPrimary: true } } } },
+                } : {}),
             },
         });
         // Truth-path closing from JournalLine (folds in master openings),
@@ -60,10 +66,18 @@ export async function GET(req: Request) {
         // all show numbers that match the Balance Sheet by construction.
         const nbMap = await loadNormalBalanceMap();
         const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
-        const accountsWithEffective = accounts.map((a) => ({
-            ...a,
-            balance: closingMap.get(a.id) ?? 0,
-        }));
+        const accountsWithEffective = accounts.map((a) => {
+            // Flatten the party's phones to a plain string[] (primary first) so
+            // the client just filters/renders — person & company objects drop out.
+            const { person, company, ...rest } = a as typeof a & {
+                person?:  { phones: { phone: string; isPrimary: boolean }[] } | null;
+                company?: { phones: { phone: string; isPrimary: boolean }[] } | null;
+            };
+            const phones = [...(person?.phones ?? []), ...(company?.phones ?? [])]
+                .sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary))
+                .map((p) => p.phone);
+            return { ...rest, phones, balance: closingMap.get(a.id) ?? 0 };
+        });
         return NextResponse.json(accountsWithEffective);
     } catch (e) {
         return handleApiError(e, "Failed to fetch GL accounts");

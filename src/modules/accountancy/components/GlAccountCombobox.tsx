@@ -20,6 +20,9 @@ export interface GlAccount {
     balance?: number;
     normalBalance?: "DEBIT" | "CREDIT" | null;
     group?: { id?: number; name?: string | null; type?: string | null } | null;
+    /** Party ledgers only (includeParties=true): linked contact numbers,
+     *  primary first. Lets the user find a Sundry Debtor by mobile. */
+    phones?: string[];
     // Carried through so BalanceHint can compute an "Available" figure for
     // Bank OD A/c / Credit Card ledgers — see facilityLimit.ts.
     bankJson?: unknown;
@@ -58,10 +61,16 @@ export function GlAccountCombobox({
     useEffect(syncQuery, [syncQuery]);
 
     const q = query.trim().toLowerCase();
+    // Digits-only form of the query, so "9954999", "99549 99" and "+91 99549…"
+    // all match the stored number however it was typed in.
+    const qDigits = q.replace(/\D/g, "");
     const filtered = q && q !== selectedLabel.toLowerCase()
         ? accounts.filter((a) =>
             a.name.toLowerCase().includes(q) ||
-            (a.code ?? "").toLowerCase().includes(q),
+            (a.code ?? "").toLowerCase().includes(q) ||
+            (qDigits.length >= 3 && (a.phones ?? []).some(
+                (p) => p.replace(/\D/g, "").includes(qDigits),
+            )),
         )
         : accounts;
 
@@ -236,9 +245,11 @@ export function GlAccountCombobox({
                                         <div className="flex items-baseline gap-2 min-w-0">
                                             <span className="font-medium truncate">{a.name}</span>
                                         </div>
-                                        {a.group?.name && (
-                                            <div className="text-[10px] text-muted-foreground truncate">
-                                                {a.group.name}
+                                        {(a.group?.name || a.phones?.length) && (
+                                            <div className="flex items-baseline gap-2 text-[10px] text-muted-foreground truncate">
+                                                {a.group?.name && <span className="truncate">{a.group.name}</span>}
+                                                {/* Primary number — tells two same-name parties apart */}
+                                                {a.phones?.[0] && <span className="tabular-nums">{a.phones[0]}</span>}
                                             </div>
                                         )}
                                     </li>
