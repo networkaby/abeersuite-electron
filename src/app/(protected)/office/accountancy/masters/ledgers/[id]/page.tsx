@@ -6,14 +6,14 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     ArrowLeft, Search, ChevronLeft, ChevronRight as ChevronRightIcon,
-    Loader2, Pencil, Check, X,
+    Loader2, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
-import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
+import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
@@ -31,6 +31,7 @@ interface GroupNode extends GroupOption {
 interface LedgerItem {
     id: number;
     name: string;
+    aliases: string[];
     code: string | null;
     type: string | null;
     normalBalance: NormalBalance | null;
@@ -41,6 +42,14 @@ interface LedgerItem {
     groupId: number | null;
     group: { id: number; name: string; type: string } | null;
     _count: { lines: number };
+    bankJson?: unknown;
+    loanJson?: unknown;
+    creditCardJson?: unknown;
+    bnplJson?: unknown;
+    walletJson?: unknown;
+    gatewayJson?: unknown;
+    openingBalance?: number | null;
+    openingBalanceType?: NormalBalance | null;
 }
 
 function flatGroups(nodes: GroupNode[]): GroupOption[] {
@@ -67,24 +76,19 @@ export default function GroupLedgersPage() {
     const [page, setPage]             = useState(1);
     const [search, setSearch]         = useState("");
     const [loading, setLoading]       = useState(true);
-    const [groups, setGroups]         = useState<GroupOption[]>([]);
-    const [editId, setEditId]         = useState<number | null>(null);
-    const [editGroupId, setEditGroupId] = useState<number | null>(null);
-    const [saving, setSaving]         = useState(false);
+    const [editTarget, setEditTarget] = useState<LedgerItem | null>(null);
 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEscapeBack();
 
-    // Load all groups once — both for the edit dropdown and to resolve this
-    // group's name/type. (Single light call; the balance-heavy `withLedgers`
-    // variant is only used by the Ledgers tree page.)
+    // Resolve this group's name/type for the header. (Single light call; the
+    // balance-heavy `withLedgers` variant is only used by the Ledgers tree
+    // page. EditLedgerDialog fetches its own group list for the picker.)
     useEffect(() => {
         axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => {
-                const all = flatGroups(r.data);
-                setGroups(all);
-                const g = all.find((x) => x.id === Number(id));
+                const g = flatGroups(r.data).find((x) => x.id === Number(id));
                 if (g) { setGroupName(g.name); setGroupType(g.type); }
             })
             .catch(() => { /* silent */ });
@@ -122,23 +126,6 @@ export default function GroupLedgersPage() {
     const goPage = (p: number) => {
         setPage(p);
         load(p, search);
-    };
-
-    const saveGroup = async (itemId: number) => {
-        setSaving(true);
-        try {
-            await axios.patch(`/api/accountancy/ledgers/${itemId}`, {
-                groupId: editGroupId,
-            });
-            toast.success("Group updated");
-            setEditId(null);
-            load(page, search);
-        } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed");
-        } finally {
-            setSaving(false);
-        }
     };
 
     const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -226,7 +213,6 @@ export default function GroupLedgersPage() {
                                 </td>
                             </tr>
                         ) : items.map((item, i) => {
-                            const isEditing  = editId === item.id;
                             const isIdentity = item.customerId !== null || item.companyId !== null;
                             const rowNum     = (page - 1) * LIMIT + i + 1;
 
@@ -246,15 +232,9 @@ export default function GroupLedgersPage() {
                                                 </span>
                                             )}
                                         </div>
-                                        {/* Inline group edit selector */}
-                                        {isEditing && (
-                                            <div className="mt-1.5 w-56">
-                                                <GroupCombobox
-                                                    value={editGroupId}
-                                                    onChange={setEditGroupId}
-                                                    groups={groups}
-                                                    autoFocus
-                                                />
+                                        {item.aliases.length > 0 && (
+                                            <div className="mt-0.5 text-[11px] italic text-muted-foreground truncate">
+                                                {item.aliases.join(", ")}
                                             </div>
                                         )}
                                     </td>
@@ -273,36 +253,13 @@ export default function GroupLedgersPage() {
 
                                     <td className="px-4 py-2.5 text-right">
                                         <div className="flex items-center gap-1 justify-end">
-                                            {isEditing ? (
-                                                <>
-                                                    <Button
-                                                        variant="ghost" size="icon-sm"
-                                                        className="text-green-600 hover:bg-green-50"
-                                                        onClick={() => saveGroup(item.id)}
-                                                        disabled={saving}
-                                                    >
-                                                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost" size="icon-sm"
-                                                        className="text-muted-foreground hover:bg-muted"
-                                                        onClick={() => setEditId(null)}
-                                                    >
-                                                        <X size={14} />
-                                                    </Button>
-                                                </>
-                                            ) : (
-                                                <Button
-                                                    variant="ghost" size="icon-sm"
-                                                    className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                                    onClick={() => {
-                                                        setEditId(item.id);
-                                                        setEditGroupId(item.groupId);
-                                                    }}
-                                                >
-                                                    <Pencil size={14} />
-                                                </Button>
-                                            )}
+                                            <Button
+                                                variant="ghost" size="icon-sm"
+                                                className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                onClick={() => setEditTarget(item)}
+                                            >
+                                                <Pencil size={14} />
+                                            </Button>
                                         </div>
                                     </td>
                                 </tr>
@@ -340,6 +297,13 @@ export default function GroupLedgersPage() {
                 </div>
             )}
             </div>
+
+            <EditLedgerDialog
+                open={editTarget !== null}
+                onOpenChange={(v) => { if (!v) setEditTarget(null); }}
+                ledger={editTarget as EditableLedger | null}
+                onSaved={() => load(page, search)}
+            />
         </ScrollArea>
     );
 }

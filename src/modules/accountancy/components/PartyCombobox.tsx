@@ -75,7 +75,7 @@ export function PartyCombobox({
         const q = term.trim();
         if (q.length < 1) { setResults([]); return; }
         setLoading(true);
-        axios.get<LookupResponse[]>(`/api/person?lookup=${encodeURIComponent(q)}`)
+        axios.get<LookupResponse[]>(`/api/person?lookup=${encodeURIComponent(q)}&wide=1`)
             .then((r) => { setResults(r.data); setHighlighted(0); })
             .catch(() => setResults([]))
             .finally(() => setLoading(false));
