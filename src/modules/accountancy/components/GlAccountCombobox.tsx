@@ -12,6 +12,7 @@
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { useComboboxNav } from "@/shared/hooks";
+import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 
 export interface GlAccount {
     id: number;
@@ -23,6 +24,8 @@ export interface GlAccount {
     /** Party ledgers only (includeParties=true): linked contact numbers,
      *  primary first. Lets the user find a Sundry Debtor by mobile. */
     phones?: string[];
+    /** Tally-style alternate names — searchable, shown under the name. */
+    aliases?: string[];
     // Carried through so BalanceHint can compute an "Available" figure for
     // Bank OD A/c / Credit Card ledgers — see facilityLimit.ts.
     bankJson?: unknown;
@@ -67,6 +70,7 @@ export function GlAccountCombobox({
     const filtered = q && q !== selectedLabel.toLowerCase()
         ? accounts.filter((a) =>
             a.name.toLowerCase().includes(q) ||
+            aliasMatches(a.aliases, q) ||
             (a.code ?? "").toLowerCase().includes(q) ||
             (qDigits.length >= 3 && (a.phones ?? []).some(
                 (p) => p.replace(/\D/g, "").includes(qDigits),
@@ -245,11 +249,15 @@ export function GlAccountCombobox({
                                         <div className="flex items-baseline gap-2 min-w-0">
                                             <span className="font-medium truncate">{a.name}</span>
                                         </div>
-                                        {(a.group?.name || a.phones?.length) && (
+                                        {(a.group?.name || a.phones?.length || a.aliases?.length) && (
                                             <div className="flex items-baseline gap-2 text-[10px] text-muted-foreground truncate">
                                                 {a.group?.name && <span className="truncate">{a.group.name}</span>}
                                                 {/* Primary number — tells two same-name parties apart */}
                                                 {a.phones?.[0] && <span className="tabular-nums">{a.phones[0]}</span>}
+                                                {/* Why this row matched when the query was an alias */}
+                                                {!!a.aliases?.length && (
+                                                    <span className="truncate italic">{a.aliases.join(", ")}</span>
+                                                )}
                                             </div>
                                         )}
                                     </li>

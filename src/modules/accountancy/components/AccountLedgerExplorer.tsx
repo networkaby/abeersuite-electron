@@ -6,7 +6,7 @@
 //   /office/accountancy/bank-ledgers      — groupNames: ["Bank Accounts"]
 //   /office/accountancy/loan-ledgers      — groupNames: ["Loans (Liability)", "Secured Loans", "Unsecured Loans"]
 //
-// Left panel: filtered list of accounts (search by name/code/group).
+// Left panel: filtered list of accounts (search by name/alias/code/group).
 // Right panel: selected account's ledger with running balance, opening/closing
 // pseudo-rows, source-voucher links. Uses /api/accountancy/reports/ledger/[id]
 // (truth-path running balance) and /api/accountancy/ledgers (flat GL list).
@@ -37,6 +37,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
+import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,8 @@ type NormalBalance = "DEBIT" | "CREDIT";
 interface LedgerListItem {
     id: number;
     name: string;
+    /** Alternate names — searchable here, editable in the Edit dialog. */
+    aliases?: string[];
     code: string | null;
     normalBalance: NormalBalance | null;
     balance: number;
@@ -268,6 +271,7 @@ export function AccountLedgerExplorer({
         return accounts.filter(
             (a) =>
                 a.name.toLowerCase().includes(q) ||
+                aliasMatches(a.aliases, q) ||
                 (a.code ?? "").toLowerCase().includes(q) ||
                 (a.group?.name ?? "").toLowerCase().includes(q),
         );
@@ -286,6 +290,7 @@ export function AccountLedgerExplorer({
         ? {
             id: editSource.id,
             name: editSource.name,
+            aliases: editSource.aliases,
             groupId: editSource.group?.id ?? null,
             bankJson: editSource.bankJson,
             loanJson: editSource.loanJson,
@@ -338,7 +343,7 @@ export function AccountLedgerExplorer({
                     count={accounts.length}
                     search={search}
                     onSearchChange={setSearch}
-                    searchPlaceholder="Search name, code, or group…"
+                    searchPlaceholder="Search name, alias, code, or group…"
                     onAdd={() => setCreateOpen(true)}
                     addLabel="Create"
                     onTitleClick={selectedId ? () => setSelectedId(null) : undefined}

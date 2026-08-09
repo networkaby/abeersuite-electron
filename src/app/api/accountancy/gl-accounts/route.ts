@@ -53,6 +53,8 @@ export async function GET(req: Request) {
             include: {
                 parent: { select: { id: true, code: true, name: true } },
                 group:  { select: { id: true, name: true, type: true } },
+                // Alternate names — the combobox filters on them client-side.
+                aliases: { select: { alias: true }, orderBy: { id: "asc" } },
                 // Party ledgers only — lets the voucher combobox search a
                 // Sundry Debtor / Creditor by mobile number, not just name.
                 ...(includeParties ? {
@@ -69,14 +71,21 @@ export async function GET(req: Request) {
         const accountsWithEffective = accounts.map((a) => {
             // Flatten the party's phones to a plain string[] (primary first) so
             // the client just filters/renders — person & company objects drop out.
-            const { person, company, ...rest } = a as typeof a & {
+            // Aliases flatten the same way — the client only ever wants the strings.
+            const { person, company, aliases, ...rest } = a as typeof a & {
                 person?:  { phones: { phone: string; isPrimary: boolean }[] } | null;
                 company?: { phones: { phone: string; isPrimary: boolean }[] } | null;
+                aliases?: { alias: string }[];
             };
             const phones = [...(person?.phones ?? []), ...(company?.phones ?? [])]
                 .sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary))
                 .map((p) => p.phone);
-            return { ...rest, phones, balance: closingMap.get(a.id) ?? 0 };
+            return {
+                ...rest,
+                phones,
+                aliases: (aliases ?? []).map((x) => x.alias),
+                balance: closingMap.get(a.id) ?? 0,
+            };
         });
         return NextResponse.json(accountsWithEffective);
     } catch (e) {

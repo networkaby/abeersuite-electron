@@ -43,6 +43,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import type { PrismaClient } from "../../../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
+import { aliasRows } from "../../../src/modules/accountancy/lib/accountAlias";
 
 export const SNAPSHOT_VERSION = 1;
 
@@ -294,10 +295,19 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const groupNameById = new Map(groupRows.map((g) => [g.id, g.name]));
     const accountGroups = groupRows.map((g) => ({ ...omit(g, ["id", "parentId"]), parentName: g.parentId != null ? groupNameById.get(g.parentId) ?? null : null }));
 
-    const accRows = await prisma.account.findMany({ where: { personId: null, companyId: null } });
+    const accRows = await prisma.account.findMany({
+        where: { personId: null, companyId: null },
+        // Aliases travel with their ledger as plain strings — aliasKey is derived
+        // on restore, never captured.
+        include: { aliases: { select: { alias: true }, orderBy: { id: "asc" } } },
+    });
     const accNameById = new Map(accRows.map((a) => [a.id, a.name]));
     const accounts = accRows.map((a) => externalize(
-        { ...omit(a, ["id", "parentId", "personId", "companyId", "balance", "createdAt"]), parentName: a.parentId != null ? accNameById.get(a.parentId) ?? null : null },
+        {
+            ...omit(a, ["id", "parentId", "personId", "companyId", "balance", "createdAt", "aliases"]),
+            parentName: a.parentId != null ? accNameById.get(a.parentId) ?? null : null,
+            aliases: a.aliases.map((x) => x.alias),
+        },
         { groupId: "accountGroup" }, idx,
     ));
 
@@ -480,8 +490,18 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     idx = await buildRefIndex(prisma); // groups now exist
     const accWhere = (a: Row) => (a.code ? { code: a.code } : { name: a.name, personId: null, companyId: null });
     for (const a of snap.accounts) {
-        const { parentName, ...rest } = internalize(a, { groupId: "accountGroup" }, idx);
+        const { parentName, aliases, ...rest } = internalize(a, { groupId: "accountGroup" }, idx);
         await put(prisma.account, accWhere(a), rest);
+        // Aliases are a child table, so they can't ride the upsert payload.
+        // Replace the ledger's set — upsert-only semantics still hold, nothing
+        // outside this ledger is touched.
+        const aliasList = Array.isArray(aliases) ? (aliases as string[]) : [];
+        const self = await prisma.account.findFirst({ where: accWhere(a), select: { id: true } });
+        if (!self) continue;
+        await prisma.accountAlias.deleteMany({ where: { accountId: self.id } });
+        for (const row of aliasRows(aliasList)) {
+            await prisma.accountAlias.create({ data: { accountId: self.id, ...row } });
+        }
     }
     for (const a of snap.accounts) {
         if (!a.parentName) continue;

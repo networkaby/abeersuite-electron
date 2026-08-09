@@ -30,10 +30,13 @@ import {
 import {
     flattenGroups, type GroupNode, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
+import { formatAliasInput, parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
 
 export interface EditableLedger {
     id: number;
     name: string;
+    /** Alternate names, as returned flattened by the ledger routes. */
+    aliases?: string[];
     groupId: number | null;
     bankJson?: unknown;
     loanJson?: unknown;
@@ -65,6 +68,7 @@ export function EditLedgerDialog({
     const [saving, setSaving] = useState(false);
 
     const [name, setName] = useState("");
+    const [aliases, setAliases] = useState("");
     const [groupId, setGroupId] = useState<number | null>(null);
     const [particulars, setParticulars] = useState<ParticularsState>(emptyParticulars);
     const [openingBalance, setOpeningBalance] = useState("");
@@ -74,6 +78,7 @@ export function EditLedgerDialog({
     useEffect(() => {
         if (!open || !ledger) return;
         setName(ledger.name);
+        setAliases(formatAliasInput(ledger.aliases ?? []));
         setGroupId(ledger.groupId);
         setParticulars(parseParticulars(ledger as unknown as Record<string, unknown>));
         setOpeningBalance(ledger.openingBalance ? String(ledger.openingBalance) : "");
@@ -104,6 +109,10 @@ export function EditLedgerDialog({
         try {
             const payload: Record<string, unknown> = {
                 name: name.trim(),
+                // Only sent when the caller handed us the current aliases. A
+                // surface that doesn't load them must not clear them — omitting
+                // the key leaves them untouched (the route treats [] as "clear").
+                ...(ledger.aliases !== undefined ? { aliases: parseAliasInput(aliases) } : {}),
                 groupId,
                 // Particulars for kinds the chosen group doesn't match are sent
                 // as null, so moving a ledger between groups clears the stale set.
@@ -142,6 +151,21 @@ export function EditLedgerDialog({
                             autoFocus
                             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
                         />
+                    </div>
+                    <div className="space-y-1.5 col-span-2">
+                        <Label>
+                            Alias <span className="font-normal text-muted-foreground">— optional, comma separated</span>
+                        </Label>
+                        <Input
+                            value={aliases}
+                            onChange={(e) => setAliases(e.target.value)}
+                            placeholder="SBI, State Bank"
+                            onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            Alternate names to find this ledger while typing. Each alias must be
+                            unique across all ledgers. Printing always uses the name above.
+                        </p>
                     </div>
                     <div className="space-y-1.5 col-span-2">
                         <Label>Under (Group)</Label>

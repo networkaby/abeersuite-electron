@@ -23,6 +23,8 @@ type LedgerRow = {
     name: string;
     code: string | null;
     normalBalance: "DEBIT" | "CREDIT" | null;
+    /** Alternate names — carried through so the Edit dialog opens pre-filled. */
+    aliases: string[];
     isActive: boolean;
     personId: number | null;
     companyId: number | null;
@@ -151,6 +153,7 @@ export async function GET(req: Request) {
                     bnplJson: true, walletJson: true, gatewayJson: true,
                     openingBalance: true, openingBalanceType: true,
                     openingBalanceDate: true,
+                    aliases: { select: { alias: true }, orderBy: { id: "asc" } },
                 },
             }),
             loadNormalBalanceMap(),
@@ -166,6 +169,7 @@ export async function GET(req: Request) {
             const arr = ledgersByGroup.get(a.groupId) ?? [];
             arr.push({
                 ...a,
+                aliases: a.aliases.map((x) => x.alias),
                 openingBalance: a.openingBalance !== null ? toNumber(a.openingBalance) : null,
                 openingBalanceDate: a.openingBalanceDate
                     ? a.openingBalanceDate.toISOString().slice(0, 10)

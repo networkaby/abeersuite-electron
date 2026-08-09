@@ -11,6 +11,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
 import { toDateOnly } from "@/shared/lib/format/formatDate";
+import { ALIAS_MAX_LENGTH, aliasRows } from "@/modules/accountancy/lib/accountAlias";
+import { aliasConflictResponse } from "@/modules/accountancy/lib/accountAliasServer";
 
 // Bank-ledger particulars — same shape as the create route (kept local: route
 // files may only export handlers). All-blank or null clears the stored value.
@@ -97,6 +99,8 @@ const updateSchema = z.object({
     name: z.string().trim().min(1).max(200).optional(),
     groupId: z.number().int().positive().nullable().optional(),
     code: z.string().trim().max(32).nullable().optional(),
+    // Full replacement set — omit to leave aliases untouched, [] to clear them.
+    aliases: z.array(z.string().trim().max(ALIAS_MAX_LENGTH)).max(20).optional(),
     description: z.string().trim().max(1000).nullable().optional(),
     isActive: z.boolean().optional(),
     bankJson: bankJsonSchema.nullable().optional(),
@@ -175,17 +179,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         openingBalanceDate: null,
                     }
                     : {}),
+                // Replacement set: wipe the old rows and write the new ones in the
+                // same statement, so freeing an alias and re-using it on this same
+                // ledger never trips the unique index.
+                ...(body.aliases !== undefined
+                    ? { aliases: { deleteMany: {}, create: aliasRows(body.aliases) } }
+                    : {}),
             },
-            include: { group: { select: { id: true, name: true, type: true } } },
+            include: {
+                group: { select: { id: true, name: true, type: true } },
+                aliases: { select: { alias: true }, orderBy: { id: "asc" } },
+            },
         });
         if (body.openingBalance !== undefined) await reconcileOpeningSuspense();
         return NextResponse.json({
             ...account,
+            aliases: account.aliases.map((x) => x.alias),
             balance: effectiveAccountBalance(account),
             openingBalance: account.openingBalance != null ? toNumber(account.openingBalance) : null,
             openingBalanceDate: account.openingBalanceDate ? toDateOnly(account.openingBalanceDate) : null,
         });
     } catch (e) {
+        const aliasClash = await aliasConflictResponse(e, body.aliases);
+        if (aliasClash) return aliasClash;
         if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }

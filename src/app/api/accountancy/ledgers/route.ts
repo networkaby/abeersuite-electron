@@ -9,15 +9,22 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
 import { type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { ALIAS_MAX_LENGTH, aliasKeyOf, aliasRows } from "@/modules/accountancy/lib/accountAlias";
+import { aliasConflictResponse } from "@/modules/accountancy/lib/accountAliasServer";
 import { toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[number] & {
     group: { id: number; name: string; type: GroupTypeStr } | null;
+    aliases?: { alias: string }[];
 };
+
+// Every ledger read carries its alternate names; the client only wants strings.
+const withAliases = { select: { alias: true }, orderBy: { id: "asc" } } as const;
 
 function serializeLedger<T extends AccountWithGroup>(a: T) {
     return {
         ...a,
+        aliases: (a.aliases ?? []).map((x) => x.alias),
         balance: effectiveAccountBalance(a),
         openingBalance: a.openingBalance != null ? toNumber(a.openingBalance) : null,
         openingBalanceDate: a.openingBalanceDate ? toDateOnly(a.openingBalanceDate) : null,
@@ -125,6 +132,8 @@ const createSchema = z.object({
     name: z.string().trim().min(1).max(200),
     groupId: z.number().int().positive(),
     code: z.string().trim().max(32).nullish(),
+    // Alternate names — unique across the whole chart of accounts.
+    aliases: z.array(z.string().trim().max(ALIAS_MAX_LENGTH)).max(20).optional(),
     description: z.string().trim().max(1000).nullish(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     sortOrder: z.number().int().min(0).max(9999).optional(),
@@ -170,7 +179,15 @@ export async function GET(req: Request) {
             const where = {
                 groupId: Number(groupId),
                 ...(activeOnly ? { isActive: true } : {}),
-                ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
+                // An alias finds the ledger exactly like its name does.
+                ...(search
+                    ? {
+                        OR: [
+                            { name: { contains: search, mode: "insensitive" as const } },
+                            { aliases: { some: { aliasKey: { contains: aliasKeyOf(search) } } } },
+                        ],
+                    }
+                    : {}),
             };
             const [items, total] = await prisma.$transaction([
                 prisma.account.findMany({
@@ -180,6 +197,7 @@ export async function GET(req: Request) {
                     take: limit,
                     include: {
                         group: { select: { id: true, name: true, type: true } },
+                        aliases: withAliases,
                     },
                 }),
                 prisma.account.count({ where }),
@@ -197,6 +215,7 @@ export async function GET(req: Request) {
             orderBy: [{ groupId: "asc" }, { name: "asc" }],
             include: {
                 group: { select: { id: true, name: true, type: true } },
+                aliases: withAliases,
             },
         });
         return NextResponse.json(ledgers.map((l) => serializeLedger(l)));
@@ -232,11 +251,14 @@ export async function POST(req: Request) {
                 ...(body.bnplJson && !emptyBnpl(body.bnplJson) ? { bnplJson: body.bnplJson } : {}),
                 ...(body.walletJson && !emptyWallet(body.walletJson) ? { walletJson: body.walletJson } : {}),
                 ...(body.gatewayJson && !emptyGateway(body.gatewayJson) ? { gatewayJson: body.gatewayJson } : {}),
+                ...(body.aliases?.length ? { aliases: { create: aliasRows(body.aliases) } } : {}),
             },
         });
         if (body.openingBalance != null) await reconcileOpeningSuspense();
         return NextResponse.json(account, { status: 201 });
     } catch (e) {
+        const aliasClash = await aliasConflictResponse(e, body.aliases);
+        if (aliasClash) return aliasClash;
         if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }

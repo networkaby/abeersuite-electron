@@ -30,6 +30,7 @@ import {
 import {
     flattenGroups, inheritedNormalBalance, type GroupNode, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
+import { parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
 
 export interface CreatedLedger {
     id: number;
@@ -57,12 +58,14 @@ export function CreateLedgerDialog({
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<{
         name: string;
+        aliases: string;
         groupId: number | null;
         description: string;
         openingBalance: string;
         openingBalanceType: "DEBIT" | "CREDIT";
     }>({
         name: "",
+        aliases: "",
         groupId: null,
         description: "",
         openingBalance: "",
@@ -75,6 +78,7 @@ export function CreateLedgerDialog({
         if (!open) return;
         setForm({
             name: "",
+            aliases: "",
             groupId: defaultGroupId ?? null,
             description: "",
             openingBalance: "",
@@ -116,6 +120,7 @@ export function CreateLedgerDialog({
             // (loadNormalBalanceMap infers it from group.type at read time).
             const payload: Record<string, unknown> = {
                 name: form.name.trim(),
+                aliases: parseAliasInput(form.aliases),
                 groupId: form.groupId,
                 description: form.description.trim() || null,
                 ...particularsPayload(selectedGroup?.name, particulars),
@@ -155,6 +160,21 @@ export function CreateLedgerDialog({
                             autoFocus
                             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
                         />
+                    </div>
+                    <div className="space-y-1.5 col-span-2">
+                        <Label>
+                            Alias <span className="font-normal text-muted-foreground">— optional, comma separated</span>
+                        </Label>
+                        <Input
+                            value={form.aliases}
+                            onChange={(e) => setForm((f) => ({ ...f, aliases: e.target.value }))}
+                            placeholder="SBI, State Bank"
+                            onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            Alternate names to find this ledger while typing. Each alias must be
+                            unique across all ledgers. Printing always uses the name above.
+                        </p>
                     </div>
                     <div className="space-y-1.5">
                         <Label>Under (Group) <span className="text-destructive">*</span></Label>

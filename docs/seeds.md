@@ -109,7 +109,7 @@ demo clutter. Reset staff passwords after (new users get `changeme123`).
 |---|---|
 | Config singletons — `OrgDefaults`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig` | `Ticket*` (tickets) |
 | Inventory/tax masters — `GstRate`, `InvUnit`, `InvWarrantyTerm`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvAttributeMaster`, `StrategyPoint`, `VoucherPrintTemplate` | `UniversalVoucher*` / journal / invoice / payment / stock-ledger (vouchers) |
-| Chart of accounts — `AccountGroup` + `Account` **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
+| Chart of accounts — `AccountGroup` + `Account` (+ its `AccountAlias` rows) **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
 | Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |
 | Org structure — `Branch`, `Department` | `Coupon` / `GiftCard` / `LoyaltyEarnRule` / `LoyaltyMilestone` (entangle products + customers — only the **config singletons** above are kept) |
 | RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned — `lib/codeOwnedCatalog.ts`) | |

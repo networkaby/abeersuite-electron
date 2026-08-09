@@ -19,6 +19,8 @@ type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 interface LedgerRow {
     id: number;
     name: string;
+    /** Alternate names — passed straight to the edit dialog so it opens filled. */
+    aliases: string[];
     code: string | null;
     normalBalance: "DEBIT" | "CREDIT" | null;
     isActive: boolean;
