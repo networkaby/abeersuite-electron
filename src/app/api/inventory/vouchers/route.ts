@@ -121,6 +121,62 @@ export async function GET(req: NextRequest) {
         if (a.personId  != null) personToAccount.set(a.personId,  a.id);
         if (a.companyId != null) companyToAccount.set(a.companyId, a.id);
     }
+    // A stored partyId may since have been converted (Person→Company or
+    // Company→Person) — the Account moved to the new row and the old id no
+    // longer resolves directly. Follow the conversion tombstone
+    // (convertedToCompanyId / convertedToPersonId) so the Day Book / register
+    // link still lands on the party's live profile instead of going dead.
+    const unresolvedPartyIds = partyIds.filter(
+        (id) => !personToAccount.has(id) && !companyToAccount.has(id),
+    );
+    const convertedKind     = new Map<number, "person" | "company">();
+    const convertedEntityId = new Map<number, number>();
+    const convertedAccountId = new Map<number, number>();
+    if (unresolvedPartyIds.length > 0) {
+        const [convertedPersons, convertedCompanies] = await Promise.all([
+            prisma.person.findMany({
+                where: { id: { in: unresolvedPartyIds }, convertedToCompanyId: { not: null } },
+                select: { id: true, convertedToCompanyId: true },
+            }),
+            prisma.company.findMany({
+                where: { id: { in: unresolvedPartyIds }, convertedToPersonId: { not: null } },
+                select: { id: true, convertedToPersonId: true },
+            }),
+        ]);
+        const targetCompanyIds = convertedPersons.map((p) => p.convertedToCompanyId!);
+        const targetPersonIds  = convertedCompanies.map((c) => c.convertedToPersonId!);
+        if (targetCompanyIds.length > 0 || targetPersonIds.length > 0) {
+            const targetAccounts = await prisma.account.findMany({
+                where: {
+                    OR: [
+                        { companyId: { in: targetCompanyIds } },
+                        { personId:  { in: targetPersonIds } },
+                    ],
+                },
+                select: { id: true, personId: true, companyId: true },
+            });
+            const accountByCompanyId = new Map(
+                targetAccounts.filter((a) => a.companyId != null).map((a) => [a.companyId as number, a.id]),
+            );
+            const accountByPersonId = new Map(
+                targetAccounts.filter((a) => a.personId != null).map((a) => [a.personId as number, a.id]),
+            );
+            for (const p of convertedPersons) {
+                const accId = accountByCompanyId.get(p.convertedToCompanyId!);
+                if (accId == null) continue;
+                convertedKind.set(p.id, "company");
+                convertedEntityId.set(p.id, p.convertedToCompanyId!);
+                convertedAccountId.set(p.id, accId);
+            }
+            for (const c of convertedCompanies) {
+                const accId = accountByPersonId.get(c.convertedToPersonId!);
+                if (accId == null) continue;
+                convertedKind.set(c.id, "person");
+                convertedEntityId.set(c.id, c.convertedToPersonId!);
+                convertedAccountId.set(c.id, accId);
+            }
+        }
+    }
     // 5D-2: resolve creator names from each row's spine (createdById on the spine).
     const creatorIds = [...new Set(vouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
     const creatorById = new Map(
@@ -160,6 +216,15 @@ export async function GET(req: NextRequest) {
         // disambiguates at write time).
         const accFromPerson  = personToAccount.get(v.partyId);
         const accFromCompany = companyToAccount.get(v.partyId);
+        // Fall back to the conversion tombstone when neither side resolved —
+        // the party living at v.partyId today may be a different kind/id.
+        const kind = accFromPerson != null ? "person" as const
+            : accFromCompany != null ? "company" as const
+            : convertedKind.get(v.partyId);
+        const entityId = accFromPerson != null || accFromCompany != null
+            ? v.partyId
+            : convertedEntityId.get(v.partyId) ?? null;
+        const resolvedAccountId = accFromPerson ?? accFromCompany ?? convertedAccountId.get(v.partyId) ?? null;
         return {
             ...v,
             type:            v.universalVoucher?.type,   // 5D-11: type on spine
@@ -171,9 +236,9 @@ export async function GET(req: NextRequest) {
             ...partyDisplay,
             createdBy:       creatorName(v),
             converted:       convertedIds.has(v.id),
-            partyAccountId:  accFromPerson ?? accFromCompany ?? null,
-            partyPersonId:   accFromPerson  != null ? v.partyId : null,
-            partyCompanyId:  accFromPerson  == null && accFromCompany != null ? v.partyId : null,
+            partyAccountId:  resolvedAccountId,
+            partyPersonId:   kind === "person" ? entityId : null,
+            partyCompanyId:  kind === "company" ? entityId : null,
         };
     });
 

@@ -55,6 +55,7 @@ async function lookupAccounts(
         OR: [
             { name: { contains: t, mode: "insensitive" as const } },
             { phones: { some: { phone: { contains: t } } } },
+            { account: { is: { aliases: { some: { alias: { contains: t, mode: "insensitive" as const } } } } } },
             ...(wide
                 ? [
                     { address: { contains: t, mode: "insensitive" as const } },
