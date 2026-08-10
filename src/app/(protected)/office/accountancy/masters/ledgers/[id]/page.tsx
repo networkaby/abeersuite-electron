@@ -182,7 +182,7 @@ export default function GroupLedgersPage() {
                 <Input
                     value={search}
                     onChange={(e) => handleSearch(e.target.value)}
-                    placeholder="Search by account name…"
+                    placeholder="Search by name or keyword…"
                     className="pl-9"
                 />
             </div>

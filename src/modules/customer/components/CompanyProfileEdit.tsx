@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { X, Plus, Check } from "lucide-react";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import { extractApiError } from "@/shared/lib/api";
+import { parseAliasInput, formatAliasInput } from "@/modules/accountancy/lib/accountAlias";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +20,10 @@ interface EmailApiRow { id: number; email: string; label: string | null; isPrima
 
 export interface CompanyProfile {
     id: number;
+    accountId: number;
     name: string;
     address: string | null;
+    aliases: string[];
     companyReg: string | null;
     taxId: string | null;
     phones: ContactRow[];
@@ -36,6 +39,7 @@ interface Props {
 export default function CompanyProfileEdit({ profile, onSaved }: Props) {
     const [name, setName] = useState(profile.name);
     const [address, setAddress] = useState(profile.address ?? "");
+    const [aliases, setAliases] = useState(() => formatAliasInput(profile.aliases));
     const [companyReg, setCompanyReg] = useState(profile.companyReg ?? "");
     const [taxId, setTaxId] = useState(profile.taxId ?? "");
     const [phones, setPhones] = useState<ContactRow[]>(profile.phones);
@@ -49,6 +53,7 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
     const dirty =
         name !== profile.name ||
         address !== (profile.address ?? "") ||
+        aliases !== formatAliasInput(profile.aliases) ||
         companyReg !== (profile.companyReg ?? "") ||
         taxId !== (profile.taxId ?? "");
 
@@ -61,12 +66,17 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
         if (!name.trim()) { toast.error("Company name is required"); return; }
         setSaving(true);
         try {
-            await axios.put(`/api/companies/${profile.id}`, {
-                name: name.trim(),
-                address: address.trim() || null,
-                companyReg: companyReg.trim() || null,
-                taxId: taxId.trim() || null,
-            });
+            await Promise.all([
+                axios.put(`/api/companies/${profile.id}`, {
+                    name: name.trim(),
+                    address: address.trim() || null,
+                    companyReg: companyReg.trim() || null,
+                    taxId: taxId.trim() || null,
+                }),
+                axios.patch(`/api/accountancy/ledgers/${profile.accountId}`, {
+                    aliases: parseAliasInput(aliases),
+                }),
+            ]);
             toast.success("Saved");
             onSaved();
         } catch (e) {
@@ -149,6 +159,17 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
                 <div className="space-y-1.5">
                     <Label htmlFor="ce-name">Company Name</Label>
                     <Input id="ce-name" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                    <Label htmlFor="ce-aliases">
+                        Keywords <span className="font-normal text-muted-foreground">— optional, comma separated</span>
+                    </Label>
+                    <Input
+                        id="ce-aliases"
+                        value={aliases}
+                        onChange={e => setAliases(e.target.value)}
+                        placeholder="Alternate names to find this company by"
+                    />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">

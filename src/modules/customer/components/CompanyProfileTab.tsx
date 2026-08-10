@@ -28,6 +28,7 @@ interface Props {
         isActive?: boolean;
         name: string;
         address: string | null;
+        aliases?: string[];
         companyReg: string | null;
         taxId: string | null;
         contactRows: { phones: ProfileData["phones"]; emails: ProfileData["emails"] } | null;
@@ -53,8 +54,10 @@ export default function CompanyProfileTab({
                 key={detail.id}
                 profile={{
                     id: detail.id,
+                    accountId: detail.accountId,
                     name: detail.name,
                     address: detail.address,
+                    aliases: detail.aliases ?? [],
                     companyReg: detail.companyReg,
                     taxId: detail.taxId,
                     phones: detail.contactRows?.phones ?? [],

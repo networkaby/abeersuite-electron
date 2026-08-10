@@ -80,6 +80,7 @@ interface CompanyDetail {
     phone: string | null;
     email: string | null;
     address: string | null;
+    aliases: string[];
     companyReg: string | null;
     taxId: string | null;
     createdAt: string;

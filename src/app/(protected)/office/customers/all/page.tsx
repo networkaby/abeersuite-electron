@@ -79,6 +79,7 @@ type PersonDetail = {
     phone: string | null;
     email: string | null;
     address: string | null;
+    aliases: string[];
     createdAt: string;
     devices: CustomerDevice[];
     companies: { id: number; company: { id: number; name: string; phone: string | null; accountId: number } }[];
@@ -102,6 +103,7 @@ type CompanyDetail = {
     phone: string | null;
     email: string | null;
     address: string | null;
+    aliases: string[];
     companyReg: string | null;
     taxId: string | null;
     createdAt: string;

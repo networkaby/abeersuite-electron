@@ -1,10 +1,11 @@
-// Ledger aliases (Tally-style alternate names) — one place for the parsing,
-// normalisation and matching rules shared by the ledger routes, the ledger
-// dialogs and the account comboboxes.
+// Ledger aliases / keywords (Tally-style alternate names) — one place for the
+// parsing, normalisation and matching rules shared by the ledger routes, the
+// ledger dialogs and the account comboboxes.
 //
 // Storage lives in AccountAlias: `alias` as typed, `aliasKey` lowercased and
-// uniquely indexed. Everything that writes an alias must go through
-// aliasRows() so those two columns can never drift apart.
+// indexed (not unique — the same keyword may sit on more than one ledger).
+// Everything that writes an alias must go through aliasRows() so those two
+// columns can never drift apart.
 
 /** Longest alias we store — mirrors AccountAlias.alias @db.VarChar(200). */
 export const ALIAS_MAX_LENGTH = 200;

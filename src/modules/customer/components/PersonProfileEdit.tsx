@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { X, Plus, Check } from "lucide-react";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import { extractApiError } from "@/shared/lib/api";
+import { parseAliasInput, formatAliasInput } from "@/modules/accountancy/lib/accountAlias";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +16,10 @@ interface EmailRow { id: number; email: string; label: string | null; isPrimary:
 
 export interface PersonProfile {
     id: number;
+    accountId: number;
     name: string;
     address: string | null;
+    aliases: string[];
     phones: PhoneRow[];
     emails: EmailRow[];
 }
@@ -30,6 +33,7 @@ interface Props {
 export default function PersonProfileEdit({ profile, onSaved }: Props) {
     const [name, setName] = useState(profile.name);
     const [address, setAddress] = useState(profile.address ?? "");
+    const [aliases, setAliases] = useState(() => formatAliasInput(profile.aliases));
     const [phones, setPhones] = useState<PhoneRow[]>(profile.phones);
     const [emails, setEmails] = useState<EmailRow[]>(profile.emails);
     const [saving, setSaving] = useState(false);
@@ -38,7 +42,9 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
     const [addingEmail, setAddingEmail] = useState(false);
     const [newEmail, setNewEmail] = useState("");
 
-    const dirty = name !== profile.name || address !== (profile.address ?? "");
+    const dirty = name !== profile.name
+        || address !== (profile.address ?? "")
+        || aliases !== formatAliasInput(profile.aliases);
 
     // Derived — recomputed on each render, no extra state needed.
     // phoneError/emailError return null for empty strings so no guard needed.
@@ -49,10 +55,15 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
         if (!name.trim()) { toast.error("Name is required"); return; }
         setSaving(true);
         try {
-            await axios.put(`/api/person/${profile.id}`, {
-                name: name.trim(),
-                address: address.trim() || null,
-            });
+            await Promise.all([
+                axios.put(`/api/person/${profile.id}`, {
+                    name: name.trim(),
+                    address: address.trim() || null,
+                }),
+                axios.patch(`/api/accountancy/ledgers/${profile.accountId}`, {
+                    aliases: parseAliasInput(aliases),
+                }),
+            ]);
             toast.success("Saved");
             onSaved();
         } catch (e) {
@@ -135,6 +146,17 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
                 <div className="space-y-1.5">
                     <Label htmlFor="pe-name">Name</Label>
                     <Input id="pe-name" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                    <Label htmlFor="pe-aliases">
+                        Keywords <span className="font-normal text-muted-foreground">— optional, comma separated</span>
+                    </Label>
+                    <Input
+                        id="pe-aliases"
+                        value={aliases}
+                        onChange={e => setAliases(e.target.value)}
+                        placeholder="Alternate names to find this customer by"
+                    />
                 </div>
                 <div className="space-y-1.5">
                     <Label htmlFor="pe-address">Address</Label>

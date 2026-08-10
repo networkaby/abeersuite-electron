@@ -10,7 +10,6 @@ import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalan
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
 import { type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ALIAS_MAX_LENGTH, aliasKeyOf, aliasRows } from "@/modules/accountancy/lib/accountAlias";
-import { aliasConflictResponse } from "@/modules/accountancy/lib/accountAliasServer";
 import { toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[number] & {
@@ -132,7 +131,7 @@ const createSchema = z.object({
     name: z.string().trim().min(1).max(200),
     groupId: z.number().int().positive(),
     code: z.string().trim().max(32).nullish(),
-    // Alternate names — unique across the whole chart of accounts.
+    // Alternate names / keywords — not unique, may repeat across ledgers.
     aliases: z.array(z.string().trim().max(ALIAS_MAX_LENGTH)).max(20).optional(),
     description: z.string().trim().max(1000).nullish(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
@@ -257,8 +256,6 @@ export async function POST(req: Request) {
         if (body.openingBalance != null) await reconcileOpeningSuspense();
         return NextResponse.json(account, { status: 201 });
     } catch (e) {
-        const aliasClash = await aliasConflictResponse(e, body.aliases);
-        if (aliasClash) return aliasClash;
         if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }

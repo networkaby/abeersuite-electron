@@ -44,6 +44,7 @@ export async function GET(
             account: {
                 include: {
                     group: { select: { id: true, name: true } },
+                    aliases: { select: { alias: true }, orderBy: { id: "asc" } },
                     devices: {
                         include: {
                             // A device's repair tickets hang off TicketRepair now.
@@ -85,6 +86,7 @@ export async function GET(
         email: person.emails[0]?.email ?? null,
         accountId: person.account!.id,
         creditLimit: person.account!.creditLimit,
+        aliases: person.account!.aliases.map((a) => a.alias),
         accountGroupId: person.account!.group?.id ?? null,
         accountGroupName: person.account!.group?.name ?? null,
         openingBalance: person.account!.openingBalance,

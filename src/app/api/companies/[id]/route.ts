@@ -43,6 +43,7 @@ export async function GET(
             account: {
                 include: {
                     group: { select: { id: true, name: true } },
+                    aliases: { select: { alias: true }, orderBy: { id: "asc" } },
                     devices: {
                         include: {
                             repairs: {
@@ -92,6 +93,7 @@ export async function GET(
         ...company,
         accountId: company.account!.id,
         creditLimit: company.account!.creditLimit,
+        aliases: company.account!.aliases.map((a) => a.alias),
         accountGroupId: company.account!.group?.id ?? null,
         accountGroupName: company.account!.group?.name ?? null,
         openingBalance: company.account!.openingBalance,

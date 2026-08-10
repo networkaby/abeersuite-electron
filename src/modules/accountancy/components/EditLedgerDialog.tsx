@@ -154,7 +154,7 @@ export function EditLedgerDialog({
                     </div>
                     <div className="space-y-1.5 col-span-2">
                         <Label>
-                            Alias <span className="font-normal text-muted-foreground">— optional, comma separated</span>
+                            Keywords <span className="font-normal text-muted-foreground">— optional, comma separated</span>
                         </Label>
                         <Input
                             value={aliases}
@@ -163,8 +163,8 @@ export function EditLedgerDialog({
                             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
                         />
                         <p className="text-[11px] text-muted-foreground">
-                            Alternate names to find this ledger while typing. Each alias must be
-                            unique across all ledgers. Printing always uses the name above.
+                            Alternate names to find this ledger while typing — the same keyword can
+                            sit on more than one ledger. Printing always uses the name above.
                         </p>
                     </div>
                     <div className="space-y-1.5 col-span-2">

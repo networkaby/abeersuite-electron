@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -12,7 +12,6 @@ import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalan
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
 import { toDateOnly } from "@/shared/lib/format/formatDate";
 import { ALIAS_MAX_LENGTH, aliasRows } from "@/modules/accountancy/lib/accountAlias";
-import { aliasConflictResponse } from "@/modules/accountancy/lib/accountAliasServer";
 
 // Bank-ledger particulars — same shape as the create route (kept local: route
 // files may only export handlers). All-blank or null clears the stored value.
@@ -124,8 +123,12 @@ const updateSchema = z.object({
 });
 
 // PATCH /api/accountancy/ledgers/[id]
+// requireAuth, not requirePermission: the ledger master-data dialogs stay
+// gated by ACCOUNTANCY_MASTERS_EDIT in the UI, but this same route also
+// saves the alias/keyword field from the customer profile page — permissions
+// are UI-only here (see AGENTS.md), so the API stays open to any signed-in user.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT);
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -200,8 +203,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             openingBalanceDate: account.openingBalanceDate ? toDateOnly(account.openingBalanceDate) : null,
         });
     } catch (e) {
-        const aliasClash = await aliasConflictResponse(e, body.aliases);
-        if (aliasClash) return aliasClash;
         if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }

@@ -30,6 +30,7 @@ interface Props {
         isActive?: boolean;
         name: string;
         address: string | null;
+        aliases?: string[];
         phones: ProfileData["phones"];
         emails: ProfileData["emails"];
         devices: ComponentProps<typeof DevicesMiniGrid>["devices"];
@@ -55,8 +56,10 @@ export default function PersonProfileTab({
                 key={detail.id}
                 profile={{
                     id: detail.id,
+                    accountId: detail.accountId,
                     name: detail.name,
                     address: detail.address,
+                    aliases: detail.aliases ?? [],
                     phones: detail.phones ?? [],
                     emails: detail.emails ?? [],
                 }}

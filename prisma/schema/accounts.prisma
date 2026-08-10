@@ -147,7 +147,7 @@ model Account {
   giftCardBreakageConfigs  CouponConfig[]             @relation("GiftCardBreakageLedger")
   giftCards                GiftCard[]                 @relation("AccountGiftCards")
   reconciledBy             User?                      @relation("AccountReconciledBy", fields: [reconciledById], references: [id])
-  // Tally-style alternate names — search/pick only, never printed. See AccountAlias.
+  // Tally-style alternate names / keywords — search/pick only, never printed, not unique. See AccountAlias.
   aliases                  AccountAlias[]
 
   @@index([isActive])
@@ -158,29 +158,31 @@ model Account {
 
 // ── AccountAlias ─────────────────────────────────────────────────────────────
 //
-// Tally-style alternate names for a ledger. A ledger may carry many ("SBI",
-// "State Bank" both find "State Bank of India — Current A/c"), so this is a
-// child table rather than a column: an alias must be UNIQUE across the whole
-// chart of accounts, and Postgres cannot enforce uniqueness over values inside
-// a JSON array — only over a real column.
+// Tally-style alternate names / search keywords for a ledger. A ledger may
+// carry many ("SBI", "State Bank" both find "State Bank of India — Current
+// A/c"), so this is a child table rather than a column. In practice these
+// behave more like tags than strict aliases — the same keyword may usefully
+// sit on more than one ledger — so aliasKey is NOT unique across the chart
+// of accounts.
 //
 // `alias` keeps the case the user typed (that is what the picker shows);
-// `aliasKey` is its lowercased form and carries the unique index, so "SBI" and
-// "sbi" collide the way a human expects. Both are written together — see
-// normalizeAlias() in modules/accountancy/lib/accountAlias.ts.
+// `aliasKey` is its lowercased form, so "SBI" and "sbi" collide the way a
+// human expects and are never stored twice on the same ledger. Both are
+// written together — see aliasRows() in modules/accountancy/lib/accountAlias.ts.
 //
 // Search / selection only. The printed name of a ledger is always Account.name.
 model AccountAlias {
   id        Int      @id @default(autoincrement())
   accountId Int
   alias     String   @db.VarChar(200)
-  /// Lowercased `alias` — the uniqueness key. Never displayed.
-  aliasKey  String   @unique @db.VarChar(200)
+  /// Lowercased `alias` — used for case-insensitive matching. Never displayed.
+  aliasKey  String   @db.VarChar(200)
   createdAt DateTime @default(now())
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
+  @@index([aliasKey])
 }
 
 // ── CreditLimitConfig (singleton, id=1) ──────────────────────────────────────
