@@ -158,6 +158,57 @@ function optLabel(o: Opt | undefined | null): string {
     return composed || "—";
 }
 
+/// Row painting. Every row gets an OPAQUE background (never a translucent
+/// tint) because the frozen left columns use `bg-inherit` — a see-through row
+/// colour would let the horizontally scrolled cells ghost through them.
+/// Precedence: dirty > selected > active > inactive > zebra.
+const ROW_BG = {
+    zebra: "bg-[color-mix(in_oklab,var(--muted)_55%,var(--background))]",
+    plain: "bg-background",
+    inactive: "bg-[color-mix(in_oklab,var(--muted)_85%,var(--background))]",
+    active: "bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]",
+    selected: "bg-[color-mix(in_oklab,#0ea5e9_14%,var(--background))]",
+    dirty: "bg-[color-mix(in_oklab,#f59e0b_18%,var(--background))]",
+} as const;
+
+/// Colour bar painted down the first cell of the row — the at-a-glance
+/// "what is going on with this line" signal.
+const ROW_BAR = {
+    none: "",
+    active: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--primary)]",
+    selected: "[&>td:first-child]:shadow-[inset_3px_0_0_#0ea5e9]",
+    dirty: "[&>td:first-child]:shadow-[inset_3px_0_0_#f59e0b]",
+    inactive: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--muted-foreground)]",
+} as const;
+
+function rowClasses(o: {
+    dirty: boolean;
+    selected: boolean;
+    active: boolean;
+    inactive: boolean;
+    odd: boolean;
+}): string {
+    const bg = o.dirty ? ROW_BG.dirty
+        : o.selected ? ROW_BG.selected
+        : o.active ? ROW_BG.active
+        : o.inactive ? ROW_BG.inactive
+        : o.odd ? ROW_BG.zebra
+        : ROW_BG.plain;
+    const bar = o.dirty ? ROW_BAR.dirty
+        : o.selected ? ROW_BAR.selected
+        : o.active ? ROW_BAR.active
+        : o.inactive ? ROW_BAR.inactive
+        : ROW_BAR.none;
+    // Own hover colour so twMerge drops the primitive's translucent one.
+    const hover = "hover:bg-[color-mix(in_oklab,var(--primary)_16%,var(--background))]";
+    const ring = o.active ? "outline outline-1 -outline-offset-1 outline-primary/40" : "";
+    return [bg, bar, hover, ring].filter(Boolean).join(" ");
+}
+
+/// Fixed pixel widths of the frozen left columns, used to compute each one's
+/// `left` offset. Must match the w-* classes on the matching <TableHead>.
+const FROZEN_W = { select: 40, index: 40, sku: 112 } as const;
+
 export default function InventoryProductsPage() {
     const router = useRouter();
     const pathname = usePathname();
@@ -181,6 +232,11 @@ export default function InventoryProductsPage() {
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [pageSize, setPageSize] = useState<number>(100);
     const [pageIndex, setPageIndex] = useState<number>(0);
+
+    /// The row the operator is currently on — set on click or on focus landing
+    /// inside the row. Purely visual (the "active line" highlight); survives a
+    /// dropdown closing, which plain CSS :focus-within would not.
+    const [activeRowId, setActiveRowId] = useState<number | null>(null);
 
     /// Sort state. null = the natural order returned by the API.
     /// Click cycles null → asc → desc → null.
@@ -610,6 +666,14 @@ export default function InventoryProductsPage() {
 
     const isEdit = mode === "edit";
 
+    // Left offsets for the frozen identity columns (select / # / SKU / Name),
+    // so a cell far to the right always stays tied to a visible product name.
+    const leftIndex = isEdit ? FROZEN_W.select : 0;
+    const leftSku = leftIndex + FROZEN_W.index;
+    const leftName = leftSku + (showCol("sku") ? FROZEN_W.sku : 0);
+    const frozenCell = "sticky z-10 bg-inherit";
+    const frozenHead = "sticky z-30 bg-inherit";
+
     useEscape(() => router.back());
 
     return (
@@ -762,11 +826,13 @@ export default function InventoryProductsPage() {
                 Matches the Update & Print Labels grid. */}
             <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <div className={isEdit && selected.size > 0 ? "pb-20" : ""}>
-                    <Table>
-                        <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
-                            <TableRow>
+                    {/* In edit mode every cell is an input, so draw the grid
+                        lines — without them the row reads as a soup of boxes. */}
+                    <Table className={isEdit ? "[&_tbody_td:not(:last-child)]:border-r [&_tbody_td]:border-border/50 [&_tbody_td]:py-1.5" : undefined}>
+                        <TableHeader className="sticky top-0 z-20 bg-[color-mix(in_oklab,var(--muted)_75%,var(--background))] [&_th]:bg-[color-mix(in_oklab,var(--muted)_75%,var(--background))] [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
+                            <TableRow className="hover:bg-inherit">
                                 {isEdit ? (
-                                    <TableHead className="w-10">
+                                    <TableHead className={`w-10 ${frozenHead}`} style={{ left: 0 }}>
                                         <Checkbox
                                             checked={allPageSelected}
                                             onCheckedChange={toggleAllPage}
@@ -774,9 +840,9 @@ export default function InventoryProductsPage() {
                                         />
                                     </TableHead>
                                 ) : null}
-                                <TableHead className="w-10">#</TableHead>
-                                {showCol("sku") ? <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead> : null}
-                                {showCol("name") ? <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead> : null}
+                                <TableHead className={`w-10 ${frozenHead}`} style={{ left: leftIndex }}>#</TableHead>
+                                {showCol("sku") ? <TableHead className={`w-28 ${frozenHead}`} style={{ left: leftSku }}><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead> : null}
+                                {showCol("name") ? <TableHead className={`min-w-64 border-r-2 border-border ${frozenHead}`} style={{ left: leftName }}><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead> : null}
                                 {showCol("namePart") ? <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead> : null}
                                 {showCol("category") ? (
                                 <TableHead className="min-w-44">
@@ -866,11 +932,18 @@ export default function InventoryProductsPage() {
                                     return (
                                         <TableRow
                                             key={r.id}
-                                            data-state={isSelected ? "selected" : undefined}
-                                            className={isDirty ? "bg-amber-50/50 dark:bg-amber-950/20" : undefined}
+                                            onMouseDown={() => setActiveRowId(r.id)}
+                                            onFocusCapture={() => setActiveRowId(r.id)}
+                                            className={rowClasses({
+                                                dirty: isDirty,
+                                                selected: isSelected,
+                                                active: activeRowId === r.id,
+                                                inactive: !(val(r, "isActive") as boolean),
+                                                odd: i % 2 === 1,
+                                            })}
                                         >
                                             {isEdit ? (
-                                                <TableCell>
+                                                <TableCell className={frozenCell} style={{ left: 0 }}>
                                                     <Checkbox
                                                         checked={isSelected}
                                                         onCheckedChange={() => toggleRow(r.id)}
@@ -878,12 +951,15 @@ export default function InventoryProductsPage() {
                                                     />
                                                 </TableCell>
                                             ) : null}
-                                            <TableCell className="text-muted-foreground text-sm align-top">{pageStart + i + 1}</TableCell>
-                                            {showCol("sku") ? <TableCell className="font-mono text-xs align-top whitespace-nowrap">{r.sku}</TableCell> : null}
+                                            <TableCell className={`text-muted-foreground text-sm align-top ${frozenCell}`} style={{ left: leftIndex }}>{pageStart + i + 1}</TableCell>
+                                            {showCol("sku") ? <TableCell className={`font-mono text-xs align-top whitespace-nowrap ${frozenCell}`} style={{ left: leftSku }}>{r.sku}</TableCell> : null}
 
                                             {/* Name */}
                                             {showCol("name") ? (
-                                            <TableCell className={isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}>
+                                            <TableCell
+                                                className={`${frozenCell} shadow-[1px_0_0_var(--border),6px_0_8px_-6px_rgba(0,0,0,0.18)] ${isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}`}
+                                                style={{ left: leftName }}
+                                            >
                                                 {isEdit ? (
                                                     <div className="flex items-start gap-1">
                                                         {/* Name is derived, not typed — edit the Custom column or
@@ -1420,6 +1496,7 @@ function CellSelect({
     clearable = true,
     onCreate,
     createLabel = "+ New",
+    placeholder = "—",
 }: {
     value: number | null;
     options: Opt[];
@@ -1427,6 +1504,7 @@ function CellSelect({
     clearable?: boolean;
     onCreate?: () => Promise<number | null>;
     createLabel?: string;
+    placeholder?: string;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
