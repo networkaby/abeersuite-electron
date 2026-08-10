@@ -349,7 +349,7 @@ function StatusBadge({ status }: { status: CounterCard["status"] }) {
 }
 
 function VarianceCell({ paise }: { paise: string | null }) {
-    if (paise == null) return <span className="text-muted-foreground/40">—</span>;
+    if (paise == null) return <span className="text-muted-foreground/65">—</span>;
     const amount = Number(paise) / 100;
     if (amount === 0) return <span className="text-emerald-700 dark:text-emerald-400">₹0</span>;
     const abs = Math.abs(amount);

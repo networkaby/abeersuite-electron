@@ -51,7 +51,7 @@ export function StarRating({
                         className={
                             value != null && n <= value
                                 ? "fill-amber-400 text-amber-400"
-                                : "text-muted-foreground/40"
+                                : "text-muted-foreground/65"
                         }
                     />
                 </button>

@@ -253,7 +253,7 @@ function AccountSection({
                             </td>
                             <td className="px-5 py-3">
                                 <span className="text-xs text-muted-foreground">
-                                    {a.group?.name ?? <span className="italic text-muted-foreground/50">—</span>}
+                                    {a.group?.name ?? <span className="italic text-muted-foreground/65">—</span>}
                                 </span>
                             </td>
                             <td className="px-5 py-3">

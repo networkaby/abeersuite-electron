@@ -137,20 +137,20 @@ export default function ShiftsReportPage() {
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono">₹{fmt(Number(r.openingFloatPaise) / 100)}</td>
                                         <td className="px-4 py-3 text-right font-mono">
-                                            {r.declaredCashPaise != null ? `₹${fmt(Number(r.declaredCashPaise) / 100)}` : <span className="text-muted-foreground/40">—</span>}
+                                            {r.declaredCashPaise != null ? `₹${fmt(Number(r.declaredCashPaise) / 100)}` : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                                            {r.toVaultPaise != null ? `₹${fmt(Number(r.toVaultPaise) / 100)}` : <span className="text-muted-foreground/40">—</span>}
+                                            {r.toVaultPaise != null ? `₹${fmt(Number(r.toVaultPaise) / 100)}` : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono">
-                                            {variance == null ? <span className="text-muted-foreground/40">—</span> : <VarianceCell amount={variance} />}
+                                            {variance == null ? <span className="text-muted-foreground/65">—</span> : <VarianceCell amount={variance} />}
                                         </td>
                                         <td className="px-4 py-3 text-center text-muted-foreground">{r._count.drops}</td>
                                         <td className="px-4 py-3 text-center">
                                             <StatusBadge status={r.status} />
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            <Link href={`/office/pos/shifts/${r.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                            <Link href={`/office/pos/shifts/${r.id}`} className="text-muted-foreground/65 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

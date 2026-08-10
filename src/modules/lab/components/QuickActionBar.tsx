@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { buildQuickActions } from "@/modules/lab/lib/quickActions";
+import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
 
 /**
  * Slim vertical toolbar of Front Office quick actions, pinned to the far-right
@@ -29,7 +30,8 @@ export default function QuickActionBar({ onNewTicket }: QuickActionBarProps) {
                             key={a.label}
                             type="button"
                             disabled
-                            className={`${btn} ${a.accent}`}
+                            className={btn}
+                            style={{ backgroundColor: moduleTint(a.module, 16), color: moduleColor(a.module) }}
                             title={`${a.label} — soon`}
                             aria-label={a.label}
                         >
@@ -42,7 +44,8 @@ export default function QuickActionBar({ onNewTicket }: QuickActionBarProps) {
                         <Link
                             key={a.label}
                             href={a.href}
-                            className={`${btn} ${a.accent}`}
+                            className={btn}
+                            style={{ backgroundColor: moduleTint(a.module, 16), color: moduleColor(a.module) }}
                             title={`${a.label} · ${a.hint}`}
                             aria-label={a.label}
                         >
@@ -55,7 +58,8 @@ export default function QuickActionBar({ onNewTicket }: QuickActionBarProps) {
                         key={a.label}
                         type="button"
                         onClick={a.onClick}
-                        className={`${btn} ${a.accent}`}
+                        className={btn}
+                            style={{ backgroundColor: moduleTint(a.module, 16), color: moduleColor(a.module) }}
                         title={`${a.label} · ${a.hint}`}
                         aria-label={a.label}
                     >

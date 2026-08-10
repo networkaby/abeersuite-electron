@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
+import { moduleColor, moduleIconStyle, moduleTint } from "@/shared/lib/format/moduleTheme";
 import { canViewModule, canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
@@ -124,8 +125,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
                                 <div key={mod.key}>
                                     {idx > 0 && <div className="mb-5 -mx-5 border-t border-border/50" />}
                                     <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        <ModIcon size={12} />
-                                        {mod.label}
+                                        <ModIcon size={12} style={moduleIconStyle(mod.key)} />
+                                        <span style={moduleIconStyle(mod.key)}>{mod.label}</span>
                                     </div>
                                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleActions.map((action) => {
@@ -135,12 +136,16 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
 
                                             const inner = (
                                                 <div className="flex h-full items-center gap-2.5 px-3 py-2">
-                                                    <div className={[
-                                                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm",
-                                                        isPrimary
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "bg-muted text-muted-foreground",
-                                                    ].join(" ")}>
+                                                    {/* Chip tinted in the owning module's hue — the same colour
+                                                        that module wears in the sidebar and the Quick Actions bar.
+                                                        Primary actions get a stronger wash than secondary ones. */}
+                                                    <div
+                                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm"
+                                                        style={{
+                                                            backgroundColor: moduleTint(mod.key, isPrimary ? 22 : 12),
+                                                            color: moduleColor(mod.key),
+                                                        }}
+                                                    >
                                                         <Icon size={13} />
                                                     </div>
                                                     <div className="min-w-0 flex-1">

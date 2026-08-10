@@ -501,28 +501,28 @@ export default function StockSummaryPage() {
                                             </td>
                                             {showCatBrandCols && (
                                                 <>
-                                                    <td className="px-3 py-2 text-muted-foreground/50">—</td>
-                                                    <td className="px-3 py-2 text-muted-foreground/50">—</td>
+                                                    <td className="px-3 py-2 text-muted-foreground/65">—</td>
+                                                    <td className="px-3 py-2 text-muted-foreground/65">—</td>
                                                 </>
                                             )}
                                             <td className="px-3 py-2 text-right font-mono">
-                                                {g.unitCode != null && g.totalQty > 0 ? `${g.totalQty} ${g.unitCode}` : <span className="text-muted-foreground/50">—</span>}
+                                                {g.unitCode != null && g.totalQty > 0 ? `${g.totalQty} ${g.unitCode}` : <span className="text-muted-foreground/65">—</span>}
                                             </td>
-                                            <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                            <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
                                             <td className="px-3 py-2 text-right font-mono font-semibold">
-                                                {g.totalValue !== 0 ? fmt(g.totalValue) : <span className="text-muted-foreground/50">—</span>}
+                                                {g.totalValue !== 0 ? fmt(g.totalValue) : <span className="text-muted-foreground/65">—</span>}
                                             </td>
                                             {showProfit && (
                                                 <>
-                                                    <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                                    <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
                                                     <td className="px-3 py-2 text-right font-mono">
-                                                        {g.totalSaleValue > 0 ? fmt(g.totalSaleValue) : <span className="text-muted-foreground/50">—</span>}
+                                                        {g.totalSaleValue > 0 ? fmt(g.totalSaleValue) : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     <td className={`px-3 py-2 text-right font-mono ${g.totalProfit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                                                        {g.profitRows > 0 ? fmt(g.totalProfit) : <span className="text-muted-foreground/50">—</span>}
+                                                        {g.profitRows > 0 ? fmt(g.totalProfit) : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     <td className="px-3 py-2 text-right font-mono">
-                                                        {g.margin != null ? `${g.margin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                                        {g.margin != null ? `${g.margin.toFixed(2)}%` : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                 </>
                                             )}
@@ -559,10 +559,10 @@ export default function StockSummaryPage() {
                                                     {showCatBrandCols && (
                                                         <>
                                                             <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                                                                {r.category?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                                                {r.category?.name ?? <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                             <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                                                                {r.brand?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                                                {r.brand?.name ?? <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                         </>
                                                     )}
@@ -572,26 +572,26 @@ export default function StockSummaryPage() {
                                                     <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
                                                         {r.valuation.unitCost > 0
                                                             ? fmt(r.valuation.unitCost)
-                                                            : <span className="text-muted-foreground/50">—</span>}
+                                                            : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     <td className="px-3 py-1.5 text-right font-mono">
                                                         {r.valuation.value > 0
                                                             ? fmt(r.valuation.value)
-                                                            : <span className="text-muted-foreground/50">—</span>}
+                                                            : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     {showProfit && (
                                                         <>
                                                             <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                                                                {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/50">—</span>}
+                                                                {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                             <td className="px-3 py-1.5 text-right font-mono">
-                                                                {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/50">—</span>}
+                                                                {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                             <td className={`px-3 py-1.5 text-right font-mono ${profit != null && profit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                                                                {profit != null ? fmt(profit) : <span className="text-muted-foreground/50">—</span>}
+                                                                {profit != null ? fmt(profit) : <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                             <td className="px-3 py-1.5 text-right font-mono">
-                                                                {margin != null ? `${margin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                                                {margin != null ? `${margin.toFixed(2)}%` : <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                         </>
                                                     )}
@@ -623,20 +623,20 @@ export default function StockSummaryPage() {
                                         <td></td>
                                     </>
                                 )}
-                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
-                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
+                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
                                 <td className="px-3 py-2 text-right font-mono">{fmt(grandTotalValue)}</td>
                                 {showProfit && (
                                     <>
-                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
                                         <td className="px-3 py-2 text-right font-mono">
-                                            {grandSaleValue > 0 ? fmt(grandSaleValue) : <span className="text-muted-foreground/50">—</span>}
+                                            {grandSaleValue > 0 ? fmt(grandSaleValue) : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className={`px-3 py-2 text-right font-mono ${grandProfit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                                            {grandSaleValue > 0 ? fmt(grandProfit) : <span className="text-muted-foreground/50">—</span>}
+                                            {grandSaleValue > 0 ? fmt(grandProfit) : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono">
-                                            {grandMargin != null ? `${grandMargin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                            {grandMargin != null ? `${grandMargin.toFixed(2)}%` : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                     </>
                                 )}
@@ -708,13 +708,13 @@ export default function StockSummaryPage() {
                                             )}
                                         </td>
                                         <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                                            {r.group?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                            {r.group?.name ?? <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                                            {r.category?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                            {r.category?.name ?? <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                                            {r.brand?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                            {r.brand?.name ?? <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5 text-right font-mono">
                                             {r.stock} {r.unit.code}
@@ -722,26 +722,26 @@ export default function StockSummaryPage() {
                                         <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
                                             {r.valuation.unitCost > 0
                                                 ? fmt(r.valuation.unitCost)
-                                                : <span className="text-muted-foreground/50">—</span>}
+                                                : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-3 py-1.5 text-right font-mono">
                                             {r.valuation.value > 0
                                                 ? fmt(r.valuation.value)
-                                                : <span className="text-muted-foreground/50">—</span>}
+                                                : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         {showProfit && (
                                             <>
                                                 <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                                                    {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/50">—</span>}
+                                                    {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-mono">
-                                                    {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/50">—</span>}
+                                                    {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                                 <td className={`px-3 py-1.5 text-right font-mono ${profit != null && profit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                                                    {profit != null ? fmt(profit) : <span className="text-muted-foreground/50">—</span>}
+                                                    {profit != null ? fmt(profit) : <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-mono">
-                                                    {margin != null ? `${margin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                                    {margin != null ? `${margin.toFixed(2)}%` : <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                             </>
                                         )}
@@ -764,20 +764,20 @@ export default function StockSummaryPage() {
                         <tfoot>
                             <tr className="border-t-2 border-border bg-muted/30 font-semibold">
                                 <td className="px-3 py-2" colSpan={4}>Grand Total ({sortedItems.length} item{sortedItems.length === 1 ? "" : "s"})</td>
-                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
-                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
+                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
                                 <td className="px-3 py-2 text-right font-mono">{fmt(grandTotalValue)}</td>
                                 {showProfit && (
                                     <>
-                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground/65">—</td>
                                         <td className="px-3 py-2 text-right font-mono">
-                                            {grandSaleValue > 0 ? fmt(grandSaleValue) : <span className="text-muted-foreground/50">—</span>}
+                                            {grandSaleValue > 0 ? fmt(grandSaleValue) : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className={`px-3 py-2 text-right font-mono ${grandProfit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                                            {grandSaleValue > 0 ? fmt(grandProfit) : <span className="text-muted-foreground/50">—</span>}
+                                            {grandSaleValue > 0 ? fmt(grandProfit) : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono">
-                                            {grandMargin != null ? `${grandMargin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                            {grandMargin != null ? `${grandMargin.toFixed(2)}%` : <span className="text-muted-foreground/65">—</span>}
                                         </td>
                                     </>
                                 )}

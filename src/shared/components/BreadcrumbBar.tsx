@@ -19,7 +19,7 @@ export interface BreadcrumbBarProps {
 export function BreadcrumbBar({ children, className }: BreadcrumbBarProps) {
     return (
         <div className={cn(
-            "shrink-0 border-b bg-card px-6 py-2.5",
+            "shrink-0 border-b border-border-strong bg-surface-raised px-6 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
             className,
         )}>
             {children}

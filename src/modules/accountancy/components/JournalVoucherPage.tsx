@@ -745,7 +745,7 @@ function AmountCell({
                 value="—"
                 readOnly
                 tabIndex={-1}
-                className="h-9 text-right tabular-nums text-muted-foreground/40 bg-muted/30 cursor-default"
+                className="h-9 text-right tabular-nums text-muted-foreground/65 bg-muted/30 cursor-default"
             />
         );
     }

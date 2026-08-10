@@ -151,10 +151,10 @@ export default function ReceivablesPage() {
                                     >
                                         <td className="px-3 py-2.5 font-medium text-foreground">{p.accountName}</td>
                                         <td className="px-3 py-2.5 text-right text-muted-foreground">{p.billCount}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{p.buckets.b0_30 > 0 ? fmt(p.buckets.b0_30) : <span className="text-muted-foreground/40">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-amber-600">{p.buckets.b30_60 > 0 ? fmt(p.buckets.b30_60) : <span className="text-muted-foreground/40">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-orange-600">{p.buckets.b60_90 > 0 ? fmt(p.buckets.b60_90) : <span className="text-muted-foreground/40">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-red-600">{p.buckets.b90_plus > 0 ? fmt(p.buckets.b90_plus) : <span className="text-muted-foreground/40">—</span>}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono">{p.buckets.b0_30 > 0 ? fmt(p.buckets.b0_30) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono text-amber-600">{p.buckets.b30_60 > 0 ? fmt(p.buckets.b30_60) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono text-orange-600">{p.buckets.b60_90 > 0 ? fmt(p.buckets.b60_90) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono text-red-600">{p.buckets.b90_plus > 0 ? fmt(p.buckets.b90_plus) : <span className="text-muted-foreground/65">—</span>}</td>
                                         <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(p.totalOutstanding)}</td>
                                         <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>
                                     </tr>
@@ -221,7 +221,7 @@ export default function ReceivablesPage() {
                                             <td className="px-3 py-2.5 font-medium text-foreground">{b.accountName}</td>
                                             <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
                                             <td className="px-3 py-2.5 text-right font-mono">{fmt(b.totalAmount)}</td>
-                                            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/40">—</span>}</td>
+                                            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
                                             <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
                                             <td className={`px-3 py-2.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
                                             <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>

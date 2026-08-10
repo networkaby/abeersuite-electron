@@ -95,7 +95,7 @@ export default function InactiveCustomersPage() {
                             ) : data.rows.map((r) => (
                                 <tr key={r.accountId} className="border-b last:border-0 hover:bg-muted/40">
                                     <td className="px-3 py-2.5 font-medium text-foreground">{r.name}</td>
-                                    <td className="px-3 py-2.5 font-mono text-xs">{r.phone ?? <span className="text-muted-foreground/40">—</span>}</td>
+                                    <td className="px-3 py-2.5 font-mono text-xs">{r.phone ?? <span className="text-muted-foreground/65">—</span>}</td>
                                     <td className="px-3 py-2.5 text-right text-xs text-muted-foreground">{fmtDate(r.lastPurchase)}</td>
                                     <td className="px-3 py-2.5 text-right font-mono text-red-600">{r.daysAgo}</td>
                                     <td className="px-3 py-2.5 text-right font-mono">{r.bills}</td>

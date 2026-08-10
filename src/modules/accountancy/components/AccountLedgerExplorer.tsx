@@ -619,13 +619,13 @@ export function AccountLedgerExplorer({
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                        {row.branchName ?? <span className="text-muted-foreground/40">—</span>}
+                                                        {row.branchName ?? <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                        {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/40">—</span>}
+                                                        {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                        {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/40">—</span>}
+                                                        {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
                                                     <td className={cn(
                                                         "px-4 py-2.5 text-right font-mono text-xs font-semibold",

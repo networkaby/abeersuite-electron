@@ -897,7 +897,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                 )}
                             </div>
                             <div className="pt-6 text-right font-mono tabular-nums text-sm">
-                                {topTotal > 0 ? `₹ ${fmt(topTotal)}` : <span className="text-muted-foreground/40">—</span>}
+                                {topTotal > 0 ? `₹ ${fmt(topTotal)}` : <span className="text-muted-foreground/65">—</span>}
                             </div>
                         </div>
                     </div>

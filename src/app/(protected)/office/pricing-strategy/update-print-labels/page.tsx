@@ -34,6 +34,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import { gridRowClass } from "@/shared/lib/format";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -444,7 +445,7 @@ function voiceClass(selected: boolean): string {
 }
 
 const SELLING_TAG = (
-    <span className="mb-0.5 flex items-center justify-end gap-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-600">
+    <span className="mb-0.5 flex items-center justify-end gap-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-600">
         <Check className="size-2.5" /> selling
     </span>
 );
@@ -492,7 +493,7 @@ const ProductRow = memo(function ProductRow({
     const dirty = r.salePrice.trim() !== r.baseline.trim();
 
     return (
-        <TableRow data-state={selected ? "selected" : undefined}>
+        <TableRow className={gridRowClass({ selected, dirty, odd: index % 2 === 1 })}>
             <TableCell>
                 <Checkbox checked={selected} onCheckedChange={() => onToggleSel(r.id)} aria-label={`Select ${r.name}`} />
             </TableCell>
@@ -621,7 +622,7 @@ const ProductRow = memo(function ProductRow({
                                 {bc.hint && bc.hint !== "m" ? <span className="ml-1 text-[10px] text-muted-foreground">·{bc.hint}</span> : null}
                             </span>
                             {dateCode ? (
-                                <span className="rounded bg-muted px-1 text-[9px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
+                                <span className="rounded bg-muted px-1 text-[10px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
                                     {dateCode}
                                 </span>
                             ) : null}

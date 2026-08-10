@@ -490,7 +490,7 @@ export default function InboxModule({
                         {/* Groups */}
                         <SectionLabel icon={Users2} label="Groups" unread={totalUnread(groupRooms)} />
                         {groupRooms.length === 0
-                            ? <p className="px-3 py-1 text-xs text-muted-foreground/50 italic">No groups</p>
+                            ? <p className="px-3 py-1 text-xs text-muted-foreground/65 italic">No groups</p>
                             : groupRooms.map((r) => (
                                 <RoomRow key={r.id} room={r} displayName={r.name} />
                             ))
@@ -634,7 +634,7 @@ export default function InboxModule({
                                                         </div>
                                                     ) : (
                                                         /* Timestamp on hover for grouped messages */
-                                                        <span className="hidden group-hover:flex h-8 items-center justify-end text-[10px] text-muted-foreground/50 w-full pr-1">
+                                                        <span className="hidden group-hover:flex h-8 items-center justify-end text-[10px] text-muted-foreground/65 w-full pr-1">
                                                             {formatInboxTime(message.createdAt)}
                                                         </span>
                                                     )}
@@ -651,7 +651,7 @@ export default function InboxModule({
                                                                 {formatInboxTime(message.createdAt)}
                                                             </span>
                                                             {message.pending && (
-                                                                <span className="text-[10px] text-muted-foreground/50 italic">sending…</span>
+                                                                <span className="text-[10px] text-muted-foreground/65 italic">sending…</span>
                                                             )}
                                                         </div>
                                                     )}
@@ -693,7 +693,7 @@ export default function InboxModule({
                                                 ? `@ ${dmPartnerName(activeRoom, currentUserId, teamUsers)}`
                                                 : `# ${activeRoom.name}`
                                         }`}
-                                        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/50 max-h-40"
+                                        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/65 max-h-40"
                                         style={{ overflowY: "auto" }}
                                         onInput={(e) => {
                                             const el = e.currentTarget;
@@ -713,7 +713,7 @@ export default function InboxModule({
                                     </Button>
                                 </div>
                             )}
-                            <p className="mt-1 px-1 text-[10px] text-muted-foreground/40">
+                            <p className="mt-1 px-1 text-[10px] text-muted-foreground/65">
                                 Enter to send · Shift+Enter for new line
                             </p>
                         </div>

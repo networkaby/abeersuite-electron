@@ -263,7 +263,7 @@ export function PosScreenShell({
                                                     <div className="min-w-0">
                                                         <div className="truncate text-sm font-medium">{l.name}</div>
                                                         {isService ? (
-                                                            <Badge className="mt-0.5 border-transparent bg-sky-100 text-[9px] text-sky-700 dark:bg-sky-900/60 dark:text-sky-300">
+                                                            <Badge className="mt-0.5 border-transparent bg-sky-100 text-[10px] text-sky-700 dark:bg-sky-900/60 dark:text-sky-300">
                                                                 <Wrench size={9} className="mr-0.5" /> Service
                                                             </Badge>
                                                         ) : (

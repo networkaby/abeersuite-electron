@@ -118,7 +118,7 @@ function StarRating({ stars }: { stars: number }) {
                     className={
                         i < stars
                             ? "fill-amber-400 text-amber-400"
-                            : "text-muted-foreground/25"
+                            : "text-muted-foreground/65"
                     }
                 />
             ))}
@@ -303,7 +303,7 @@ export default function CustomerContextPanel({
                         )}
                         {detail?.gstin && (
                             <span className="flex items-center gap-1.5 text-muted-foreground sm:col-span-2">
-                                <span className="shrink-0 rounded bg-muted px-1 font-mono text-[9px] text-foreground">
+                                <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px] text-foreground">
                                     GST
                                 </span>
                                 {detail.gstin}
@@ -412,7 +412,7 @@ export default function CustomerContextPanel({
                                                     </span>
                                                     {t.ticketStatus && (
                                                         <span
-                                                            className="ml-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-medium"
+                                                            className="ml-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium"
                                                             style={{
                                                                 backgroundColor: t.ticketStatus.color
                                                                     ? `${t.ticketStatus.color}20`

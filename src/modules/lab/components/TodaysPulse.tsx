@@ -120,7 +120,7 @@ export default function TodaysPulse() {
                                     </span>
                                     <ArrowRight
                                         size={12}
-                                        className="shrink-0 text-muted-foreground/50"
+                                        className="shrink-0 text-muted-foreground/65"
                                     />
                                 </Link>
                             </li>

@@ -154,13 +154,13 @@ export default function GroupDetailPage() {
                                         <span className="font-medium hover:underline">{sg.name}</span>
                                     </td>
                                     <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
-                                        {sg.childGroupCount > 0 ? sg.childGroupCount : <span className="text-muted-foreground/30">—</span>}
+                                        {sg.childGroupCount > 0 ? sg.childGroupCount : <span className="text-muted-foreground/65">—</span>}
                                     </td>
                                     <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
-                                        {sg.accountCount > 0 ? sg.accountCount : <span className="text-muted-foreground/30">—</span>}
+                                        {sg.accountCount > 0 ? sg.accountCount : <span className="text-muted-foreground/65">—</span>}
                                     </td>
                                     <td className="px-4 py-2.5 text-right font-mono">
-                                        {sg.rolledUpBalance !== 0 ? fmt(sg.rolledUpBalance) : <span className="text-muted-foreground/30">—</span>}
+                                        {sg.rolledUpBalance !== 0 ? fmt(sg.rolledUpBalance) : <span className="text-muted-foreground/65">—</span>}
                                     </td>
                                 </tr>
                             ))}
@@ -203,7 +203,7 @@ export default function GroupDetailPage() {
                                         )}
                                     </td>
                                     <td className="px-4 py-2.5 text-right font-mono">
-                                        {l.balance !== 0 ? fmt(l.balance) : <span className="text-muted-foreground/30">—</span>}
+                                        {l.balance !== 0 ? fmt(l.balance) : <span className="text-muted-foreground/65">—</span>}
                                     </td>
                                 </tr>
                             ))}

@@ -408,17 +408,17 @@ export default function NeedsAttentionPage() {
                                         {/* group / category / brand */}
                                         <td className="px-2 py-1.5 text-xs text-muted-foreground align-top max-w-[120px]">
                                             <span className="block truncate" title={item.groupName ?? "—"}>
-                                                {item.groupName ?? <span className="text-muted-foreground/50">—</span>}
+                                                {item.groupName ?? <span className="text-muted-foreground/65">—</span>}
                                             </span>
                                         </td>
                                         <td className="px-2 py-1.5 text-xs text-muted-foreground align-top max-w-[140px]">
                                             <span className="block truncate" title={item.categoryName ?? "—"}>
-                                                {item.categoryName ?? <span className="text-muted-foreground/50">—</span>}
+                                                {item.categoryName ?? <span className="text-muted-foreground/65">—</span>}
                                             </span>
                                         </td>
                                         <td className="px-2 py-1.5 text-xs text-muted-foreground align-top max-w-[100px]">
                                             <span className="block truncate" title={item.brandName ?? "—"}>
-                                                {item.brandName ?? <span className="text-muted-foreground/50">—</span>}
+                                                {item.brandName ?? <span className="text-muted-foreground/65">—</span>}
                                             </span>
                                         </td>
 

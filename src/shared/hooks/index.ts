@@ -5,6 +5,7 @@ export { useDeleteWithConfirm } from "./useDeleteWithConfirm";
 export { useApiResource } from "./useApiResource";
 export { useTallyDate, parseTallyDate, isoToDisplay, toIsoDate } from "./useTallyDate";
 export { useEscape } from "./useEscape";
+export { useActiveRow } from "./useActiveRow";
 export { useEscapeBack } from "./useEscapeBack";
 export { useNow } from "./useNow";
 export { useDebouncedValue } from "./useDebouncedValue";

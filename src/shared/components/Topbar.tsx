@@ -18,7 +18,7 @@ export function TopBar() {
     } = usePanelStore();
 
     return (
-        <div className="flex h-9 shrink-0 items-center border-b border-border bg-background/80 backdrop-blur px-2 gap-1 z-30 relative">
+        <div className="flex h-9 shrink-0 items-center border-b border-border-strong bg-surface-frame px-2 gap-1 z-30 relative">
             {/* ── Sidebar trigger ─────────────────────────────── */}
             <Button
                 variant="ghost"

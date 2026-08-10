@@ -46,7 +46,8 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
-import { useEscape } from "@/shared/hooks";
+import { useEscape, useActiveRow } from "@/shared/hooks";
+import { gridRowClass, GRID_FROZEN_CELL, GRID_FROZEN_HEAD, GRID_FROZEN_EDGE } from "@/shared/lib/format";
 import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
@@ -151,53 +152,6 @@ function optLabel(o: Opt | undefined | null): string {
     return composed || "—";
 }
 
-/// Row painting. Every row gets an OPAQUE background (never a translucent
-/// tint) because the frozen left columns use `bg-inherit` — a see-through row
-/// colour would let the horizontally scrolled cells ghost through them.
-/// Precedence: dirty > selected > active > inactive > zebra.
-const ROW_BG = {
-    zebra: "bg-[color-mix(in_oklab,var(--muted)_55%,var(--background))]",
-    plain: "bg-background",
-    inactive: "bg-[color-mix(in_oklab,var(--muted)_85%,var(--background))]",
-    active: "bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]",
-    selected: "bg-[color-mix(in_oklab,#0ea5e9_14%,var(--background))]",
-    dirty: "bg-[color-mix(in_oklab,#f59e0b_18%,var(--background))]",
-} as const;
-
-/// Colour bar painted down the first cell of the row — the at-a-glance
-/// "what is going on with this line" signal.
-const ROW_BAR = {
-    none: "",
-    active: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--primary)]",
-    selected: "[&>td:first-child]:shadow-[inset_3px_0_0_#0ea5e9]",
-    dirty: "[&>td:first-child]:shadow-[inset_3px_0_0_#f59e0b]",
-    inactive: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--muted-foreground)]",
-} as const;
-
-function rowClasses(o: {
-    dirty: boolean;
-    selected: boolean;
-    active: boolean;
-    inactive: boolean;
-    odd: boolean;
-}): string {
-    const bg = o.dirty ? ROW_BG.dirty
-        : o.selected ? ROW_BG.selected
-            : o.active ? ROW_BG.active
-                : o.inactive ? ROW_BG.inactive
-                    : o.odd ? ROW_BG.zebra
-                        : ROW_BG.plain;
-    const bar = o.dirty ? ROW_BAR.dirty
-        : o.selected ? ROW_BAR.selected
-            : o.active ? ROW_BAR.active
-                : o.inactive ? ROW_BAR.inactive
-                    : ROW_BAR.none;
-    // Own hover colour so twMerge drops the primitive's translucent one.
-    const hover = "hover:bg-[color-mix(in_oklab,var(--primary)_16%,var(--background))]";
-    const ring = o.active ? "outline outline-1 -outline-offset-1 outline-primary/40" : "";
-    return [bg, bar, hover, ring].filter(Boolean).join(" ");
-}
-
 /// Fixed pixel widths of the frozen left columns, used to compute each one's
 /// `left` offset. Must match the w-* classes on the matching <TableHead>.
 const FROZEN_W = { select: 40, index: 40, sku: 112 } as const;
@@ -226,10 +180,8 @@ export default function InventoryProductsPage() {
     const [pageSize, setPageSize] = useState<number>(100);
     const [pageIndex, setPageIndex] = useState<number>(0);
 
-    /// The row the operator is currently on — set on click or on focus landing
-    /// inside the row. Purely visual (the "active line" highlight); survives a
-    /// dropdown closing, which plain CSS :focus-within would not.
-    const [activeRowId, setActiveRowId] = useState<number | null>(null);
+    /// The row the operator is currently on — drives the active-line highlight.
+    const { rowProps, isActive: isActiveRow } = useActiveRow<number>();
 
     /// Sort state. null = the natural order returned by the API.
     /// Click cycles null → asc → desc → null.
@@ -664,8 +616,8 @@ export default function InventoryProductsPage() {
     const leftIndex = isEdit ? FROZEN_W.select : 0;
     const leftSku = leftIndex + FROZEN_W.index;
     const leftName = leftSku + (showCol("sku") ? FROZEN_W.sku : 0);
-    const frozenCell = "sticky z-10 bg-inherit";
-    const frozenHead = "sticky z-30 bg-inherit";
+    const frozenCell = GRID_FROZEN_CELL;
+    const frozenHead = GRID_FROZEN_HEAD;
 
     useEscape(() => router.back());
 
@@ -880,12 +832,11 @@ export default function InventoryProductsPage() {
                                         return (
                                             <TableRow
                                                 key={r.id}
-                                                onMouseDown={() => setActiveRowId(r.id)}
-                                                onFocusCapture={() => setActiveRowId(r.id)}
-                                                className={rowClasses({
+                                                {...rowProps(r.id)}
+                                                className={gridRowClass({
                                                     dirty: isDirty,
                                                     selected: isSelected,
-                                                    active: activeRowId === r.id,
+                                                    active: isActiveRow(r.id),
                                                     inactive: !(val(r, "isActive") as boolean),
                                                     odd: i % 2 === 1,
                                                 })}
@@ -905,7 +856,7 @@ export default function InventoryProductsPage() {
                                                 {/* Name */}
                                                 {showCol("name") ? (
                                                     <TableCell
-                                                        className={`${frozenCell} shadow-[1px_0_0_var(--border),6px_0_8px_-6px_rgba(0,0,0,0.18)] ${isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}`}
+                                                        className={`${frozenCell} ${GRID_FROZEN_EDGE} ${isEdit ? "min-w-48 align-top whitespace-normal wrap-break-word" : "font-medium align-top whitespace-normal wrap-break-word"}`}
                                                         style={{ left: leftName }}
                                                     >
                                                         {isEdit ? (
@@ -950,7 +901,7 @@ export default function InventoryProductsPage() {
 
                                                 {/* Custom (namePart) — operator-curated portion that survives regenerate */}
                                                 {showCol("namePart") ? (
-                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal wrap-break-word" : "text-sm align-top whitespace-normal wrap-break-word"}>
                                                         {isEdit ? (
                                                             <Input
                                                                 value={(val(r, "namePart") as string | null) ?? ""}
@@ -966,7 +917,7 @@ export default function InventoryProductsPage() {
 
                                                 {/* Category */}
                                                 {showCol("category") ? (
-                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal wrap-break-word" : "text-sm align-top whitespace-normal wrap-break-word"}>
                                                         {isEdit ? (
                                                             <CellSelect
                                                                 value={val(r, "categoryId") as number | null}
@@ -982,7 +933,7 @@ export default function InventoryProductsPage() {
 
                                                 {/* Brand */}
                                                 {showCol("brand") ? (
-                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal wrap-break-word" : "text-sm align-top whitespace-normal wrap-break-word"}>
                                                         {isEdit ? (
                                                             <CellSelect
                                                                 value={val(r, "brandId") as number | null}
@@ -1014,7 +965,7 @@ export default function InventoryProductsPage() {
 
                                                 {/* Warranty */}
                                                 {showCol("warranty") ? (
-                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                    <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal wrap-break-word" : "text-sm align-top whitespace-normal wrap-break-word"}>
                                                         {isEdit ? (
                                                             <CellSelect
                                                                 value={val(r, "warrantyTermId") as number | null}
@@ -1030,7 +981,7 @@ export default function InventoryProductsPage() {
 
                                                 {/* Unit */}
                                                 {showCol("unit") ? (
-                                                    <TableCell className={isEdit ? "min-w-28 align-top" : "text-muted-foreground text-sm align-top whitespace-normal break-words"}>
+                                                    <TableCell className={isEdit ? "min-w-28 align-top" : "text-muted-foreground text-sm align-top whitespace-normal wrap-break-word"}>
                                                         {isEdit ? (
                                                             <CellSelect
                                                                 value={val(r, "unitId") as number}

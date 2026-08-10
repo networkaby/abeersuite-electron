@@ -150,7 +150,7 @@ export default function LedgerOutstandingsPage({
                                         </td>
                                         <td className={`px-3 py-2.5 text-right font-mono ${BUCKET_COLORS[b.bucket]}`}>{b.daysOverdue}</td>
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(b.totalAmount)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/40">—</span>}</td>
+                                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono font-semibold ${BUCKET_COLORS[b.bucket]}`}>{fmt(b.outstanding)}</td>
                                     </tr>
                                 ))}

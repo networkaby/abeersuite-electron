@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { buildQuickActions } from "@/modules/lab/lib/quickActions";
+import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
 
 interface QuickActionTilesProps {
     /** Called when the "New repair ticket" tile is clicked. */
@@ -22,7 +23,8 @@ export default function QuickActionTiles({ onNewTicket }: QuickActionTilesProps)
                     const inner = (
                         <>
                             <div
-                                className={`inline-flex h-11 w-11 items-center justify-center rounded-md ${tile.accent}`}
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-md"
+                                style={{ backgroundColor: moduleTint(tile.module, 16), color: moduleColor(tile.module) }}
                             >
                                 <Icon size={22} />
                             </div>
@@ -32,7 +34,7 @@ export default function QuickActionTiles({ onNewTicket }: QuickActionTilesProps)
                                         {tile.label}
                                     </span>
                                     {tile.soon && (
-                                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                             soon
                                         </span>
                                     )}

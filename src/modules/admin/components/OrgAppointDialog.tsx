@@ -135,7 +135,7 @@ export default function OrgAppointDialog({
                                         <p className="text-[10px] text-muted-foreground truncate">{u.email}</p>
                                     </div>
                                     {isHolder && (
-                                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Already holder</span>
+                                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Already holder</span>
                                     )}
                                     {busyId === u.id && (
                                         <span className="text-[10px] text-muted-foreground italic">…</span>

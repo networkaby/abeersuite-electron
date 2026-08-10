@@ -86,7 +86,7 @@ export default function SalesTrendPage() {
                                         <td className="px-3 py-2.5 font-medium text-foreground">{m.label}</td>
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(m.revenue)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(m.lastYearRevenue)}</td>
-                                        <td className={`px-3 py-2.5 text-right font-mono ${m.yoyPct === null ? "text-muted-foreground/40" : m.yoyPct < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                                        <td className={`px-3 py-2.5 text-right font-mono ${m.yoyPct === null ? "text-muted-foreground/65" : m.yoyPct < 0 ? "text-red-600" : "text-emerald-600"}`}>
                                             {m.yoyPct === null ? "—" : `${m.yoyPct > 0 ? "+" : ""}${m.yoyPct.toFixed(1)}%`}
                                         </td>
                                         <td className={`px-3 py-2.5 text-right font-mono ${m.profit < 0 ? "text-red-600" : ""}`}>{fmt(m.profit)}</td>

@@ -471,7 +471,7 @@ export default function InventoryDetailsPage() {
                                                         </td>
                                                         <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                                                             {tx.type === "OPENING" && new Date(tx.date).getFullYear() === 1970
-                                                                ? <span className="text-muted-foreground/50">—</span>
+                                                                ? <span className="text-muted-foreground/65">—</span>
                                                                 : formatDate(tx.date)}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-right font-mono text-xs">

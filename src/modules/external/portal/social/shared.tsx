@@ -194,7 +194,7 @@ export function PostRow({ post, ownerContext }: { post: WallItem; ownerContext?:
 export function EmptyPosts({ label }: { label: string }) {
     return (
         <div className="rounded-lg border-2 border-dashed border-border/70 bg-card/50 py-12 text-center">
-            <MessageSquare className="mx-auto size-7 text-muted-foreground/40" />
+            <MessageSquare className="mx-auto size-7 text-muted-foreground/65" />
             <p className="mt-1 text-sm text-muted-foreground">{label}</p>
         </div>
     );

@@ -189,7 +189,7 @@ function Section({
                     {title}
                 </span>
                 {soon && (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         soon
                     </span>
                 )}

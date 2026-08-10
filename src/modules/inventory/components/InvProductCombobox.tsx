@@ -426,7 +426,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                 <button
                     type="button"
                     onMouseDown={cb.clear}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground text-base leading-none pr-1"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground/65 hover:text-muted-foreground text-base leading-none pr-1"
                     tabIndex={-1}
                 >
                     ×

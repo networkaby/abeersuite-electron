@@ -9,6 +9,7 @@ import axios from "axios";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
+import { moduleActiveStyle, moduleIconStyle } from "@/shared/lib/format/moduleTheme";
 import { canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
@@ -195,6 +196,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             label: a.label,
             subtitle: a.subtitle,
             icon: a.icon,
+            module: a.module,
             variant: a.variant,
             href: a.href,
             newTab: a.newTab,
@@ -211,7 +213,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     return (
         <>
             <aside
-                className="relative flex h-full flex-col border-l border-border bg-sidebar shrink-0 overflow-hidden"
+                className="relative flex h-full flex-col border-l border-border-strong bg-surface-rail shrink-0 overflow-hidden"
                 style={{
                     width: isHidden ? 0 : collapsed ? 64 : barWidth,
                     transition: barDragging ? "none" : "width 0.3s ease",
@@ -304,15 +306,28 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                     "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
                                     collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
                                     action.disabled
-                                        ? "cursor-not-allowed text-muted-foreground/30"
+                                        ? "cursor-not-allowed text-muted-foreground/65"
                                         : isActive
-                                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                            ? ""
                                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                 ].join(" ");
 
+                                // Each action wears its owning module's hue, so "Sale +" here and
+                                // Accountancy in the sidebar are the same colour. The glyph carries
+                                // it at rest; the whole row tints only when active.
+                                const rowStyle = action.disabled
+                                    ? undefined
+                                    : isActive
+                                        ? moduleActiveStyle(action.module)
+                                        : undefined;
+
                                 const inner = (
                                     <>
-                                        <Icon size={17} className="shrink-0" />
+                                        <Icon
+                                            size={17}
+                                            className="shrink-0"
+                                            style={action.disabled || isActive ? undefined : moduleIconStyle(action.module)}
+                                        />
                                         {!collapsed && (
                                             <>
                                                 <span className="flex-1 truncate text-left">{action.label}</span>
@@ -334,6 +349,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                             key={`${action.label}|${action.action ?? action.href ?? ""}`}
                                             href={resolvedHref}
                                             className={rowClass}
+                                            style={rowStyle}
                                             title={titleAttr}
                                             onContextMenu={(e) => {
                                                 e.preventDefault();
@@ -356,6 +372,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                         disabled={action.disabled}
                                         onClick={() => handleAction(action)}
                                         className={rowClass}
+                                        style={rowStyle}
                                     >
                                         {inner}
                                     </button>

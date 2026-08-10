@@ -47,7 +47,7 @@ function SidedCell({ value, normalSide, bold, italic, underline }: {
     // Ledger rows render italic ⇒ drop one point so they read as detail.
     const sizeClass = italic ? "text-[13px]" : "text-sm";
     if (Math.abs(value) < 0.005) {
-        return <td className={`px-3 py-1 text-right font-mono ${sizeClass} text-muted-foreground/40`}>—</td>;
+        return <td className={`px-3 py-1 text-right font-mono ${sizeClass} text-muted-foreground/65`}>—</td>;
     }
     const onNormal = value > 0;
     const side = onNormal ? normalSide : (normalSide === "DEBIT" ? "CREDIT" : "DEBIT");
@@ -66,7 +66,7 @@ function SidedCell({ value, normalSide, bold, italic, underline }: {
 function PlainCell({ value, bold, italic, underline }: { value: number; bold?: boolean; italic?: boolean; underline?: boolean }) {
     const sizeClass = italic ? "text-[13px]" : "text-sm";
     if (Math.abs(value) < 0.005) {
-        return <td className={`px-3 py-1 text-right font-mono ${sizeClass} text-muted-foreground/40`}>—</td>;
+        return <td className={`px-3 py-1 text-right font-mono ${sizeClass} text-muted-foreground/65`}>—</td>;
     }
     return (
         <td className={`px-3 py-1 text-right font-mono ${sizeClass} ${bold ? "font-semibold" : ""} ${italic ? "italic" : ""}`}>

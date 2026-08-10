@@ -262,7 +262,7 @@ function DetailPanel({ post, pinned, onUnpin }: { post: PositionNode | null; pin
     if (!post) {
         return (
             <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center">
-                <Eye size={20} className="mx-auto text-muted-foreground/50 mb-2" />
+                <Eye size={20} className="mx-auto text-muted-foreground/65 mb-2" />
                 <p className="text-xs text-muted-foreground">
                     Hover or click any position to see details
                 </p>
@@ -328,7 +328,7 @@ function DetailPanel({ post, pinned, onUnpin }: { post: PositionNode | null; pin
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium leading-tight truncate">{h.user.name}</p>
                                         {h.user.userRole && (
-                                            <Badge className={`${h.user.userRole.color} text-[9px] px-1 py-0 mt-0.5`}>
+                                            <Badge className={`${h.user.userRole.color} text-[10px] px-1 py-0 mt-0.5`}>
                                                 {h.user.userRole.label}
                                             </Badge>
                                         )}

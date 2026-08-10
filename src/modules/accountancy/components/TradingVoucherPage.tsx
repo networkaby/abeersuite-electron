@@ -69,7 +69,8 @@ import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { extractApiError } from "@/shared/lib/api";
-import { parseDecimalInput, round2, todayIso } from "@/shared/lib/format";
+import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/format";
+import { useActiveRow } from "@/shared/hooks/useActiveRow";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -262,6 +263,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
 
     const [saving, setSaving] = useState(false);
     const [lines, setLines] = useState<LineState[]>([newLine()]);
+
+    /// Which item line the operator is typing on — 15 columns wide, so without
+    /// this it is easy to key a rate into the wrong row.
+    const { rowProps: lineRowProps, isActive: isActiveLine } = useActiveRow<number>();
     // After addLine() (button click or Enter on last-row Amount) this holds
     // the new row's id. React's `autoFocus` only fires on mount, which is
     // exactly when the new InvProductCombobox renders — so we just thread the
@@ -1522,10 +1527,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 {/* ── Item table ───────────────────────────────────────────── */}
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm border-collapse">
-                        <thead className="sticky top-0 z-10 bg-muted border-b border-border text-xs text-muted-foreground">
+                        <thead className="sticky top-0 z-20 bg-[color-mix(in_oklab,var(--muted)_85%,var(--background))] border-b-2 border-border text-xs font-semibold text-foreground">
                             <tr>
                                 <th rowSpan={2} className="w-8 px-1 py-2 text-center font-medium align-bottom">
-                                    <ScanLine size={13} className="text-muted-foreground/60 mx-auto" />
+                                    <ScanLine size={13} className="text-muted-foreground mx-auto" />
                                 </th>
                                 <th rowSpan={2} className="px-2 py-2 text-left font-medium min-w-45 align-bottom">ITEM</th>
                                 {prefs.lineDescription && (
@@ -1540,7 +1545,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 {prefs.freeQty && (
                                     <th rowSpan={2} className="px-1 py-2 text-right font-medium w-14 align-bottom" title="Free / complimentary quantity">FREE</th>
                                 )}
-                                <th rowSpan={2} className="px-1 py-2 text-center font-medium w-10 text-muted-foreground/60 align-bottom">UNIT</th>
+                                <th rowSpan={2} className="px-1 py-2 text-center font-medium w-10 text-muted-foreground align-bottom">UNIT</th>
                                 <th rowSpan={2} className="px-2 py-2 text-right font-medium w-20 align-bottom">
                                     {/* Toggle: price column treats entered rate as excl. or incl. tax */}
                                     <button
@@ -1587,7 +1592,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 </th>
                             </tr>
                             {(prefs.lineDiscount || prefs.lineTax) && (
-                                <tr className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                                <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                                     {prefs.lineDiscount && (
                                         <>
                                             <th className="px-1 pb-1 text-right font-medium w-12 border-l border-border/40">%</th>
@@ -1609,7 +1614,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 const mrp = line.product?.mrp;
                                 return (
                                     <Fragment key={line.id}>
-                                        <tr className="border-b border-border/50 hover:bg-muted/20 group">
+                                        <tr
+                                            {...lineRowProps(line.id)}
+                                            className={`border-b border-border group ${gridRowClass({
+                                                active: isActiveLine(line.id),
+                                                odd: i % 2 === 1,
+                                            })}`}
+                                        >
                                             <td className="px-1 py-1 text-muted-foreground text-xs">
                                                 {/* Row number + delete button on the LEFT — Vyapar layout.
                                                     Delete only shows on group-hover so the column stays narrow

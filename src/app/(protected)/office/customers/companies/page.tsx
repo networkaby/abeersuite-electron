@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { moduleSelectedStyle } from "@/shared/lib/format/moduleTheme";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
@@ -303,9 +305,9 @@ export default function CompaniesPage() {
                             variant="ghost"
                             className={cn(
                                 "h-auto w-full justify-start rounded-none border-b px-4 py-3",
-                                selectedId === company.id && "bg-muted",
                                 !company.isActive && "opacity-50",
                             )}
+                            style={selectedId === company.id ? moduleSelectedStyle("customers") : undefined}
                             onClick={() => setSelectedId(company.id)}
                         >
                             <div className="flex w-full items-center gap-3 text-left">
@@ -454,7 +456,7 @@ export default function CompaniesPage() {
                                                                     <TableCell><span className="text-sm font-medium">{device.brand} {device.model}</span></TableCell>
                                                                     <TableCell className="text-xs text-muted-foreground">{device.type}</TableCell>
                                                                     <TableCell className="font-mono text-xs text-muted-foreground">{latest ? `#${latest.id}` : "—"}</TableCell>
-                                                                    <TableCell>{latest ? <Badge className={latest.ticketStatus.color}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
+                                                                    <TableCell>{latest ? <Badge {...badgeColor(latest.ticketStatus.color)}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
                                                                     <TableCell className="text-xs text-muted-foreground">{device.tickets.length}</TableCell>
                                                                     <TableCell className="text-right">
                                                                         {latest && (

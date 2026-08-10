@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { badgeColor } from "@/shared/lib/format/entityColor";
+import { moduleSelectedStyle } from "@/shared/lib/format/moduleTheme";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -378,9 +380,9 @@ export default function AllCustomersPage() {
                                 variant="ghost"
                                 className={cn(
                                     "h-auto w-full justify-start rounded-none border-b px-4 py-3",
-                                    isActive && "bg-muted",
                                     !item.isActive && "opacity-50",
                                 )}
+                                style={isActive ? moduleSelectedStyle("customers") : undefined}
                             >
                                 <Link
                                     href={`/office/customers/${item.accountId ?? "#"}`}
@@ -520,7 +522,7 @@ export default function AllCustomersPage() {
                                                                     <span className="text-sm font-medium">{ticket.device.brand} {ticket.device.model}</span>
                                                                     <span className="block text-xs text-muted-foreground">{ticket.device.type}</span>
                                                                 </TableCell>
-                                                                <TableCell><Badge className={ticket.ticketStatus.color}>{ticket.ticketStatus.label}</Badge></TableCell>
+                                                                <TableCell><Badge {...badgeColor(ticket.ticketStatus.color)}>{ticket.ticketStatus.label}</Badge></TableCell>
                                                                 <TableCell><Badge className={PRIORITY_META[ticket.priority]?.color ?? ""}>{PRIORITY_META[ticket.priority]?.label ?? ticket.priority}</Badge></TableCell>
                                                                 <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
                                                             </TableRow>
@@ -682,7 +684,7 @@ export default function AllCustomersPage() {
                                                                     <TableCell><span className="text-sm font-medium">{device.brand} {device.model}</span></TableCell>
                                                                     <TableCell className="text-xs text-muted-foreground">{device.type}</TableCell>
                                                                     <TableCell className="font-mono text-xs text-muted-foreground">{latest ? `#${latest.id}` : "—"}</TableCell>
-                                                                    <TableCell>{latest ? <Badge className={latest.ticketStatus.color}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
+                                                                    <TableCell>{latest ? <Badge {...badgeColor(latest.ticketStatus.color)}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
                                                                     <TableCell className="text-xs text-muted-foreground">{device.tickets.length}</TableCell>
                                                                 </TableRow>
                                                             );

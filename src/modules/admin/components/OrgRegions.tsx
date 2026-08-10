@@ -184,7 +184,7 @@ function PosCard({ position, accent, compact = false, canManage = false, onConte
     const avatarBox = compact ? "w-8 h-8" : "w-10 h-10";
     const avatarSize = compact ? 28 : 36;
     const nameSize = compact ? "text-[10px]" : "text-[11px]";
-    const titleSize = compact ? "text-[8.5px]" : "text-[9px]";
+    const titleSize = compact ? "text-[10px]" : "text-[10px]";
 
     const handleContext = (e: React.MouseEvent) => {
         if (!canManage || !onContextMenu) return;
@@ -211,7 +211,7 @@ function PosCard({ position, accent, compact = false, canManage = false, onConte
                 </span>
             )}
             {!vacant && position.holders.length > 1 && (
-                <span className="mt-0.5 text-[9px] text-muted-foreground">+{position.holders.length - 1}</span>
+                <span className="mt-0.5 text-[10px] text-muted-foreground">+{position.holders.length - 1}</span>
             )}
         </div>
     );
@@ -255,7 +255,7 @@ function DeptBox({
             title={canManage ? "Right-click for actions" : undefined}
         >
             <div className="flex items-center justify-center mb-1">
-                <p className="text-[9px] uppercase tracking-wider text-center font-bold text-emerald-700 dark:text-emerald-300">
+                <p className="text-[10px] uppercase tracking-wider text-center font-bold text-emerald-700 dark:text-emerald-300">
                     {name}
                 </p>
             </div>

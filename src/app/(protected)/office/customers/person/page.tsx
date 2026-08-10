@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { moduleSelectedStyle } from "@/shared/lib/format/moduleTheme";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
@@ -303,6 +305,7 @@ export default function CustomersPage() {
                                 "h-auto w-full justify-start rounded-none border-b px-4 py-3",
                                 !customer.isActive && "opacity-50",
                             )}
+                            style={selectedId === customer.id ? moduleSelectedStyle("customers") : undefined}
                         >
                             <Link
                                 href={`/office/customers/${customer.account?.id ?? "#"}`}
@@ -454,7 +457,7 @@ export default function CustomersPage() {
                                                                     <span className="text-sm font-medium">{ticket.device.brand} {ticket.device.model}</span>
                                                                     <span className="block text-xs text-muted-foreground">{ticket.device.type}</span>
                                                                 </TableCell>
-                                                                <TableCell><Badge className={ticket.ticketStatus.color}>{ticket.ticketStatus.label}</Badge></TableCell>
+                                                                <TableCell><Badge {...badgeColor(ticket.ticketStatus.color)}>{ticket.ticketStatus.label}</Badge></TableCell>
                                                                 <TableCell><Badge className={PRIORITY_META[ticket.priority]?.color ?? ""}>{PRIORITY_META[ticket.priority]?.label ?? ticket.priority}</Badge></TableCell>
                                                                 <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
                                                                 <TableCell />

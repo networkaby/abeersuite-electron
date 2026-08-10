@@ -406,7 +406,7 @@ function WallTab({
                 <p className="text-center text-sm text-muted-foreground py-8">Loading wall…</p>
             ) : posts.length === 0 ? (
                 <div className="border-2 border-dashed border-border bg-card/50 py-12 text-center space-y-1">
-                    <MessageSquare size={28} className="mx-auto text-muted-foreground/40" />
+                    <MessageSquare size={28} className="mx-auto text-muted-foreground/65" />
                     <p className="text-sm text-muted-foreground">
                         No posts yet. Be the first to write on {profile.name.split(" ")[0]}&apos;s wall!
                     </p>
@@ -436,7 +436,7 @@ function WallTab({
                                                 onClick={() => handleDelete(post.id)}
                                                 variant="ghost"
                                                 size="icon-xs"
-                                                className="text-muted-foreground/50 hover:text-destructive"
+                                                className="text-muted-foreground/65 hover:text-destructive"
                                                 title="Delete"
                                             >
                                                 <Trash2 size={13} />
@@ -1047,7 +1047,7 @@ function SecurityTab({ profileId }: { profileId: number }) {
 //                                                 Expires {new Date(p.userOverride!.expiresAt).toLocaleDateString()}
 //                                             </p>
 //                                         )}
-//                                         <p className="font-mono text-[10px] text-muted-foreground/40 select-all">{p.id}</p>
+//                                         <p className="font-mono text-[10px] text-muted-foreground/65 select-all">{p.id}</p>
 //                                     </div>
 //                                     <Button
 //                                         onClick={() => handleRemoveOverride(p.id)}
@@ -1098,7 +1098,7 @@ function SecurityTab({ profileId }: { profileId: number }) {
 //                                                 )}
 //                                             </div>
 //                                             {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
-//                                             <p className="font-mono text-[10px] text-muted-foreground/50 select-all">{p.id}</p>
+//                                             <p className="font-mono text-[10px] text-muted-foreground/65 select-all">{p.id}</p>
 //                                         </div>
 //                                     </div>
 //                                 ))}
@@ -1134,7 +1134,7 @@ function FriendsTab({ userId }: { userId: number }) {
     if (friends.length === 0) {
         return (
             <div className="border-2 border-dashed border-border bg-card/50 py-12 text-center">
-                <Users size={28} className="mx-auto text-muted-foreground/40" />
+                <Users size={28} className="mx-auto text-muted-foreground/65" />
                 <p className="mt-1 text-sm text-muted-foreground">No friends yet.</p>
             </div>
         );
@@ -1219,7 +1219,7 @@ function ActivityTimelineTab({
 
             {items.length === 0 ? (
                 <div className="border-2 border-dashed border-border bg-card/50 py-12 text-center space-y-1">
-                    <Activity size={28} className="mx-auto text-muted-foreground/40" />
+                    <Activity size={28} className="mx-auto text-muted-foreground/65" />
                     <p className="text-sm text-muted-foreground">No tracked activity in this time range.</p>
                 </div>
             ) : (

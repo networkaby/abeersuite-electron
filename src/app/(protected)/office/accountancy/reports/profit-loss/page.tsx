@@ -65,7 +65,7 @@ function AmountCells({ value, weight, abs = true }: {
     const cell =
         display !== 0
             ? <span className={display < 0 ? "text-destructive" : weightCls}>{fmt(Math.abs(display))}</span>
-            : <span className={isLedger ? "text-muted-foreground/30" : "text-muted-foreground/40"}>—</span>;
+            : <span className={isLedger ? "text-muted-foreground/65" : "text-muted-foreground/65"}>—</span>;
     return (
         <>
             <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[90px]">

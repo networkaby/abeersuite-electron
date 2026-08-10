@@ -316,10 +316,10 @@ function AccountOpeningSection({
                                     <span className="font-medium">{a.name}</span>
                                 </td>
                                 <td className="px-5 py-2 text-right font-mono">
-                                    {a.openingBalanceType === "DEBIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/40">—</span>}
+                                    {a.openingBalanceType === "DEBIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/65">—</span>}
                                 </td>
                                 <td className="px-5 py-2 text-right font-mono">
-                                    {a.openingBalanceType === "CREDIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/40">—</span>}
+                                    {a.openingBalanceType === "CREDIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/65">—</span>}
                                 </td>
                             </tr>
                         ))}

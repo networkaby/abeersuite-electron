@@ -34,14 +34,14 @@ function HolderRow({ user }: { user: PositionNode["holders"][number]["user"] }) 
                     onError={() => setImgErr(true)}
                 />
             ) : (
-                <div className={`flex shrink-0 items-center justify-center rounded-full w-5 h-5 text-[9px] font-bold border border-card ${user.role ? (AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600") : "bg-gray-100 text-gray-600"}`}>
+                <div className={`flex shrink-0 items-center justify-center rounded-full w-5 h-5 text-[10px] font-bold border border-card ${user.role ? (AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600") : "bg-gray-100 text-gray-600"}`}>
                     {initials(user.name)}
                 </div>
             )}
             <div className="text-left min-w-0">
                 <p className="text-[11px] font-medium truncate leading-none">{user.name}</p>
                 {user.userRole && (
-                    <Badge className={`${user.userRole.color} text-[9px] px-1 py-0 mt-0.5`}>
+                    <Badge className={`${user.userRole.color} text-[10px] px-1 py-0 mt-0.5`}>
                         {user.userRole.label}
                     </Badge>
                 )}

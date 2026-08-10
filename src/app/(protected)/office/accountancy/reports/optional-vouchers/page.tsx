@@ -244,7 +244,7 @@ export default function OptionalVouchersPage() {
                                                 <td className="px-3 py-2.5 font-mono text-primary text-xs whitespace-nowrap">{r.reference}</td>
                                                 <td className="px-3 py-2.5 truncate max-w-[180px]" onClick={(e) => { if (partyHref) e.stopPropagation(); }}>
                                                     {r.partyName == null
-                                                        ? <span className="text-muted-foreground/50">—</span>
+                                                        ? <span className="text-muted-foreground/65">—</span>
                                                         : partyHref
                                                             ? <Link href={partyHref} className="text-primary hover:underline">{r.partyName}</Link>
                                                             : r.partyName}
@@ -253,10 +253,10 @@ export default function OptionalVouchersPage() {
                                                 <td className="px-3 py-2.5 text-center">
                                                     {r.stockDir === "IN"  ? <ArrowDownToLine size={14} className="inline text-green-600" />
                                                   : r.stockDir === "OUT" ? <ArrowUpFromLine size={14} className="inline text-blue-600" />
-                                                  :                        <span className="text-muted-foreground/40">—</span>}
+                                                  :                        <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                                 <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">
-                                                    {r.totalAmount > 0 ? `₹ ${fmt(r.totalAmount)}` : <span className="text-muted-foreground/40">—</span>}
+                                                    {r.totalAmount > 0 ? `₹ ${fmt(r.totalAmount)}` : <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                                 <td className="px-3 py-2.5">
                                                     {r.refVoucher ? (
@@ -267,7 +267,7 @@ export default function OptionalVouchersPage() {
                                                         >
                                                             {r.refVoucher.reference} ↗
                                                         </Link>
-                                                    ) : <span className="text-muted-foreground/30 text-xs">—</span>}
+                                                    ) : <span className="text-muted-foreground/65 text-xs">—</span>}
                                                 </td>
                                                 <td className="px-3 py-2.5 text-center">
                                                     <span className={`text-xs px-2 py-0.5 font-medium rounded-sm ${JOURNAL_STATUS_COLORS[r.status]}`}>{r.status}</span>

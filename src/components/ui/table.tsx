@@ -6,8 +6,13 @@ import { cn } from "@/shared/lib/format/utils"
 
 const tableWrapperClasses = "relative w-full overflow-x-auto"
 const tableBaseClasses = "w-full caption-bottom text-sm"
+// Hover and selection are the two signals that tell an operator which line
+// they are on, so they must be visible on a dense 1000-row grid — the old
+// muted/50 wash was not. Both are opaque mixes against the page background, so
+// they read the same in light and dark, and tailwind-merge lets a page pass its
+// own bg-* to override (see gridRowClass in shared/lib/format/gridRow).
 const tableInteractiveRowClasses =
-  "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+  "border-b transition-colors hover:bg-[color-mix(in_oklab,var(--primary)_12%,var(--background))] has-aria-expanded:bg-muted/50 data-[state=selected]:bg-[color-mix(in_oklab,#0ea5e9_14%,var(--background))]"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (

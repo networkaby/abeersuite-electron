@@ -129,7 +129,7 @@ export function PermissionMatrix({
                                             {isNA || isLocked ? (
                                                 <span
                                                     title={title}
-                                                    className="mx-auto flex h-6 w-6 items-center justify-center border border-dashed border-border bg-muted/30 text-muted-foreground/40"
+                                                    className="mx-auto flex h-6 w-6 items-center justify-center border border-dashed border-border bg-muted/30 text-muted-foreground/65"
                                                 >
                                                     {isLocked && <Lock size={10} />}
                                                 </span>

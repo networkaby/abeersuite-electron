@@ -64,13 +64,13 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
             {user.avatarUrl && !imgErr ? (
                 <Image src={user.avatarUrl} alt={user.name} width={16} height={16} className="rounded-full object-cover" onError={() => setImgErr(true)} />
             ) : (
-                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600"}`}>
+                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600"}`}>
                     {initials(user.name)}
                 </span>
             )}
             <span className="font-medium">{user.name}</span>
             {user.userRole && (
-                <Badge className={`${user.userRole.color} text-[9px] px-1 py-0`}>{user.userRole.label}</Badge>
+                <Badge className={`${user.userRole.color} text-[10px] px-1 py-0`}>{user.userRole.label}</Badge>
             )}
             {onRemove && (
                 <Button type="button" variant="ghost" size="icon-xs" onClick={onRemove} className="ml-0.5" title="Remove">
@@ -275,7 +275,7 @@ function AssignPanel({
                                 >
                                     <span className="font-medium">{u.name}</span>
                                     {u.userRole && (
-                                        <Badge className={`${u.userRole.color} text-[9px] px-1 py-0`}>{u.userRole.label}</Badge>
+                                        <Badge className={`${u.userRole.color} text-[10px] px-1 py-0`}>{u.userRole.label}</Badge>
                                     )}
                                     {u.title && <span className="text-muted-foreground">{u.title}</span>}
                                 </Button>

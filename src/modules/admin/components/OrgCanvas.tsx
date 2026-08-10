@@ -245,7 +245,7 @@ function DeptCard({ node }: { node: CanvasNode }) {
                 </p>
             </div>
             {node.sub && (
-                <p className="text-[9px] text-emerald-700/70 dark:text-emerald-300/70">{node.sub}</p>
+                <p className="text-[10px] text-emerald-700/70 dark:text-emerald-300/70">{node.sub}</p>
             )}
         </div>
     );
@@ -271,7 +271,7 @@ function PositionCard({ node }: { node: CanvasNode }) {
                 </p>
             </div>
             {node.sub && (
-                <p className={`text-[9px] mt-0.5 truncate ${
+                <p className={`text-[10px] mt-0.5 truncate ${
                     node.vacant ? "text-amber-700/70 dark:text-amber-300/70" : "text-sky-700/70 dark:text-sky-300/70"
                 }`}>
                     {node.sub}

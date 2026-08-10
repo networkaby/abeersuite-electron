@@ -311,7 +311,7 @@ export function VoucherRegisterTable({
                                                       {r.party}
                                                   </Link>
                                                 : r.party)
-                                            : <span className="text-muted-foreground/40">—</span>}
+                                            : <span className="text-muted-foreground/65">—</span>}
                                     </td>
 
                                     {/* Narration — italic when optional */}

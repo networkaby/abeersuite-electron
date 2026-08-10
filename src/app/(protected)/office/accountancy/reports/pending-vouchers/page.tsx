@@ -295,7 +295,7 @@ function SettleDialog({
                                             </td>
                                             <td className="px-3 py-2 font-mono text-primary text-xs whitespace-nowrap">{v.reference}</td>
                                             <td className="px-3 py-2 text-muted-foreground truncate max-w-[140px]">
-                                                {v.partyName ?? <span className="text-muted-foreground/40">—</span>}
+                                                {v.partyName ?? <span className="text-muted-foreground/65">—</span>}
                                             </td>
                                             <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap">
                                                 {v.totalAmount > 0 ? `₹ ${fmt(v.totalAmount)}` : "—"}
@@ -622,17 +622,17 @@ export default function PendingVouchersPage() {
                                                                 </span>
                                                             </td>
                                                             <td className="px-3 py-2.5 font-mono text-primary text-xs whitespace-nowrap">{r.reference}</td>
-                                                            <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{r.branchName ?? <span className="text-muted-foreground/30">—</span>}</td>
+                                                            <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{r.branchName ?? <span className="text-muted-foreground/65">—</span>}</td>
                                                             <td className="px-3 py-2.5 truncate max-w-[180px]" onClick={(e) => { if (partyHref) e.stopPropagation(); }}>
                                                                 {r.partyName == null
-                                                                    ? <span className="text-muted-foreground/50">—</span>
+                                                                    ? <span className="text-muted-foreground/65">—</span>
                                                                     : partyHref
                                                                         ? <Link href={partyHref} className="text-primary hover:underline">{r.partyName}</Link>
                                                                         : r.partyName}
                                                             </td>
                                                             <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[260px]">{r.description}</td>
                                                             <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">
-                                                                {r.totalAmount > 0 ? `₹ ${fmt(r.totalAmount)}` : <span className="text-muted-foreground/40">—</span>}
+                                                                {r.totalAmount > 0 ? `₹ ${fmt(r.totalAmount)}` : <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                             <td className={`px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap ${ageClass(r.daysOpen)}`}>
                                                                 {r.daysOpen}d
@@ -753,10 +753,10 @@ export default function PendingVouchersPage() {
                                                         <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{r.productSku}</td>
                                                         <td className="px-3 py-2.5 text-xs text-muted-foreground">{r.unitCode}</td>
                                                         <td className="px-3 py-2.5 text-right font-mono tabular-nums text-cyan-700">
-                                                            {r.totalIn > 0 ? `+${r.totalIn}` : <span className="text-muted-foreground/30">—</span>}
+                                                            {r.totalIn > 0 ? `+${r.totalIn}` : <span className="text-muted-foreground/65">—</span>}
                                                         </td>
                                                         <td className="px-3 py-2.5 text-right font-mono tabular-nums text-amber-700">
-                                                            {r.totalOut > 0 ? `-${r.totalOut}` : <span className="text-muted-foreground/30">—</span>}
+                                                            {r.totalOut > 0 ? `-${r.totalOut}` : <span className="text-muted-foreground/65">—</span>}
                                                         </td>
                                                         <td className={`px-3 py-2.5 text-right font-mono tabular-nums font-semibold ${net > 0 ? "text-cyan-700" : net < 0 ? "text-amber-700" : "text-muted-foreground"}`}>
                                                             {net > 0 ? `+${net}` : net}

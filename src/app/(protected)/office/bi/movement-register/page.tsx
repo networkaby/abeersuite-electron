@@ -103,9 +103,9 @@ export default function MovementRegisterPage() {
                                         {r.category && <span className="ml-2 text-xs text-muted-foreground">{r.category}</span>}
                                     </td>
                                     <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmtQty(r.opening)}</td>
-                                    <td className="px-3 py-2.5 text-right font-mono">{r.inQty > 0 ? fmtQty(r.inQty) : <span className="text-muted-foreground/40">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right font-mono">{r.inQty > 0 ? fmtQty(r.inQty) : <span className="text-muted-foreground/65">—</span>}</td>
                                     <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{r.inValue > 0 ? fmt(r.inValue) : "—"}</td>
-                                    <td className="px-3 py-2.5 text-right font-mono">{r.outQty > 0 ? fmtQty(r.outQty) : <span className="text-muted-foreground/40">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right font-mono">{r.outQty > 0 ? fmtQty(r.outQty) : <span className="text-muted-foreground/65">—</span>}</td>
                                     <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{r.outValue > 0 ? fmt(r.outValue) : "—"}</td>
                                     <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmtQty(r.closing)}</td>
                                     <td className="px-3 py-2.5 text-muted-foreground">

@@ -79,7 +79,7 @@ type Section = { name: string; node: GroupNode | null };
 
 // Zeros are noise in a totals column — show a dash instead.
 function dash(n: number) {
-    return n !== 0 ? fmt(n) : <span className="text-muted-foreground/40">—</span>;
+    return n !== 0 ? fmt(n) : <span className="text-muted-foreground/65">—</span>;
 }
 
 function sumSection(ledgers: LedgerNode[]) {

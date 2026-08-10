@@ -1,8 +1,8 @@
 import { type ComponentType } from "react";
 import {
     Wrench,
-    ShoppingCart,
-    Truck,
+    Monitor,
+    Send,
     MessageSquarePlus,
     Package,
     CreditCard,
@@ -18,7 +18,12 @@ export interface QuickAction {
     label: string;
     hint: string;
     icon: ComponentType<{ size?: number; className?: string }>;
-    accent: string;
+    /**
+     * Owning module key (see MODULES). The tile's colour comes from the module
+     * hue, so a quick action is the same colour as the module it lands you in —
+     * these used to carry an ad-hoc palette that matched nothing else.
+     */
+    module: string;
     /** Either a navigation href OR a click handler (mutually exclusive). */
     href?: string;
     onClick?: () => void;
@@ -33,49 +38,49 @@ export function buildQuickActions(handlers: { onNewTicket: () => void }): QuickA
             label: "New repair ticket",
             hint: "Customer dropped off a device",
             icon: Wrench,
-            accent: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+            module: "repair",
             onClick: handlers.onNewTicket,
         },
         {
             label: "New POS sale",
             hint: "Counter sale to a walk-in",
-            icon: ShoppingCart,
-            accent: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+            icon: Monitor,
+            module: "pos",
             href: "/vouchers/pos/new",
         },
         {
             label: "New delivery order",
             hint: "Send goods to a customer address",
-            icon: Truck,
-            accent: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+            icon: Send,
+            module: "orders",
             href: "/office/ecommerce",
         },
         {
             label: "Log enquiry / lead",
             hint: "Phone, WhatsApp or walk-in query",
             icon: MessageSquarePlus,
-            accent: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+            module: "crm",
             href: "/office/crm/deals?new=1",
         },
         {
             label: "Courier arrived (GRN)",
             hint: "Receive a parcel from a supplier",
             icon: Package,
-            accent: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
+            module: "inventory",
             href: "/vouchers/grn/new",
         },
         {
             label: "Pay a bill",
             hint: "Electricity, rent, supplier payment",
             icon: CreditCard,
-            accent: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
+            module: "accountancy",
             href: "/vouchers/payments/new",
         },
         {
             label: "Internal request",
             hint: "Packaging, consumables, supplies",
             icon: Boxes,
-            accent: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+            module: "inventory",
             soon: true,
         },
     ];

@@ -266,7 +266,7 @@ export default function LedgersPage() {
                                                     <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
                                                         {g._count.accounts > 0
                                                             ? <span className="font-medium text-foreground">{g._count.accounts}</span>
-                                                            : <span className="text-muted-foreground/50">—</span>}
+                                                            : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
 
                                                     {/* Balance (rolled up) */}
@@ -275,7 +275,7 @@ export default function LedgersPage() {
                                                             ? <span className={g.totalBalance < 0 ? "text-destructive" : "text-foreground"}>
                                                                 {drCr(g.totalBalance)}
                                                             </span>
-                                                            : <span className="text-muted-foreground/50">—</span>}
+                                                            : <span className="text-muted-foreground/65">—</span>}
                                                     </td>
 
                                                     {/* View accounts link */}
@@ -362,7 +362,7 @@ export default function LedgersPage() {
                                                         ? <span className={l.balance < 0 ? "text-destructive" : "text-foreground"}>
                                                             {drCr(l.balance)}
                                                         </span>
-                                                        : <span className="text-muted-foreground/50">0.00</span>}
+                                                        : <span className="text-muted-foreground">0.00</span>}
                                                 </td>
 
                                                 {/* Edit / delete buttons */}

@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import ButtonBar from "@/shared/components/ButtonBar";
+import ModuleSurface from "@/shared/components/ModuleSurface";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
 
@@ -50,7 +51,9 @@ export default async function ProtectedLayout({
                         roleColor: user.roleColor,
                         avatarUrl: user.avatarUrl,
                     }} />
-                    <main className="flex-1 overflow-hidden">{children}</main>
+                    <main className="flex-1 overflow-hidden">
+                        <ModuleSurface>{children}</ModuleSurface>
+                    </main>
                     <ButtonBar user={{
                         name: user.name,
                         role: user.role,

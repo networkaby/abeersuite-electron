@@ -151,9 +151,9 @@ function VoucherTypeCard({
                             {rows.map((r) => (
                                 <tr key={r.type} className="border-b last:border-0 hover:bg-muted/40">
                                     <td className="px-3 py-2 text-foreground">{labels[r.type] ?? r.type}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{r.posted || <span className="text-muted-foreground/40">—</span>}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{r.draft || <span className="text-muted-foreground/40">—</span>}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{r.cancelled || <span className="text-muted-foreground/40">—</span>}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{r.posted || <span className="text-muted-foreground/65">—</span>}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{r.draft || <span className="text-muted-foreground/65">—</span>}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{r.cancelled || <span className="text-muted-foreground/65">—</span>}</td>
                                     <td className="px-3 py-2 text-right font-mono font-semibold">{r.total}</td>
                                 </tr>
                             ))}

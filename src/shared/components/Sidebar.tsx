@@ -18,6 +18,13 @@ import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
 import { useInboxUnread, useNavCounts, refreshNavCounts } from "@/shared/hooks/useNavCounts";
 import { NAV_SURFACE, WORK_INBOX_SURFACE } from "@/shared/lib/nav/navSurfaces";
+import { moduleActiveStyle, moduleIconStyle } from "@/shared/lib/format/moduleTheme";
+
+/// Top-level surfaces that own a module hue. Anything not listed falls back to
+/// the theme primary — Inbox and Work Flow span every module, so no single
+/// module colour would be honest for them.
+const surfaceModule = (href: string): string | undefined =>
+    href.startsWith("/vouchers/pos") ? "pos" : undefined;
 import UserAvatar from "@/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
@@ -204,12 +211,19 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         const active = pathname.startsWith(href);
         return [
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-            active
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            active ? "" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             collapsed ? "justify-center px-2" : "",
         ].join(" ");
     };
+
+    /// Top-level surfaces are not modules, so they take the theme primary
+    /// (moduleColor falls back to it for an unknown key) except POS, Admin and
+    /// Settings, which DO own a hue. Active → tinted pill + bar; resting → the
+    /// glyph alone carries the colour.
+    const navStyle = (href: string, modKey?: string) =>
+        pathname.startsWith(href) ? moduleActiveStyle(modKey) : undefined;
+    const navIconStyle = (href: string, modKey?: string) =>
+        pathname.startsWith(href) ? undefined : moduleIconStyle(modKey);
 
     const resolveHref = (child: ModuleChild): string | undefined => {
         if (!child.href) return undefined;
@@ -248,7 +262,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             return hasActiveDescendant(item.children.filter(canViewChild));
         });
 
-    const renderModuleChildren = (items: ModuleChild[], depth = 0, parentKey = "root"): ReactNode =>
+    const renderModuleChildren = (items: ModuleChild[], depth = 0, parentKey = "root", modKey = ""): ReactNode =>
         items
             .filter(canViewChild)
             .map((child, index) => {
@@ -272,7 +286,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 className={[
                                     "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                     child.disabled
-                                        ? "cursor-not-allowed text-muted-foreground/30"
+                                        ? "cursor-not-allowed text-muted-foreground/65"
                                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                 ].join(" ")}
                             >
@@ -293,7 +307,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                             {hasSubChildren && isOpen && (
                                 <div className="ml-3 space-y-0.5 border-l border-border pl-3">
-                                    {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey)}
+                                    {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey, modKey)}
                                 </div>
                             )}
                         </div>
@@ -323,13 +337,12 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         href={href}
                                         className={[
                                             "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                            isActiveChild
-                                                ? "bg-primary text-primary-foreground"
-                                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                            isActiveChild ? "" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                             child.disabled ? "pointer-events-none opacity-40" : "",
                                         ].join(" ")}
+                                        style={isActiveChild ? moduleActiveStyle(modKey) : undefined}
                                     >
-                                        <CIcon size={15} className="shrink-0" />
+                                        <CIcon size={15} className="shrink-0" style={isActiveChild ? undefined : moduleIconStyle(modKey)} />
                                         <span className="truncate">{child.label}</span>
                                         {child.disabled && (
                                             <Badge variant="secondary" className="h-4 px-1 text-[10px]">
@@ -365,7 +378,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     className={[
                                         "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
                                         child.disabled
-                                            ? "cursor-not-allowed text-muted-foreground/30"
+                                            ? "cursor-not-allowed text-muted-foreground/65"
                                             : "text-muted-foreground",
                                     ].join(" ")}
                                 >
@@ -397,7 +410,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                         {hasSubChildren && isOpen && (
                             <div className="ml-3 space-y-0.5 border-l border-border pl-3">
-                                {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey)}
+                                {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey, modKey)}
                             </div>
                         )}
                     </div>
@@ -448,7 +461,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     return (
         <aside
-            className="relative flex h-full flex-col border-r border-border bg-sidebar shrink-0 overflow-hidden"
+            className="relative flex h-full flex-col border-r border-border-strong bg-surface-rail shrink-0 overflow-hidden"
             style={{
                 width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
                 transition: sidebarDragging ? "none" : "width 0.3s ease",
@@ -599,10 +612,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                 key={item.href}
                                                 href={item.href}
                                                 className={linkClass(item.href)}
+                                                style={navStyle(item.href, surfaceModule(item.href))}
                                                 title={collapsed ? `${item.label}${badgeTitle ? ` (${badgeTitle})` : ""}` : ""}
                                             >
                                                 <span className="relative shrink-0">
-                                                    <Icon size={17} className="shrink-0" />
+                                                    <Icon
+                                                        size={17}
+                                                        className="shrink-0"
+                                                        style={navIconStyle(item.href, surfaceModule(item.href))}
+                                                    />
                                                     <CountDot show={collapsed && fresh > 0} />
                                                 </span>
                                                 {!collapsed && (
@@ -628,12 +646,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                 }
                                                 className={[
                                                     "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                                    isActiveParent
-                                                        ? "bg-primary text-primary-foreground"
-                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                    isActiveParent ? "" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                                 ].join(" ")}
+                                                style={isActiveParent ? moduleActiveStyle(surfaceModule(item.href)) : undefined}
                                             >
-                                                <Icon size={17} className="shrink-0" />
+                                                <Icon
+                                                    size={17}
+                                                    className="shrink-0"
+                                                    style={isActiveParent ? undefined : moduleIconStyle(surfaceModule(item.href))}
+                                                />
                                                 <span className="flex-1 truncate text-left">{item.label}</span>
                                                 <ChevronDown
                                                     size={13}
@@ -651,11 +672,24 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                 className={[
                                                                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                                     isWorkspaceChildActive(child.href, visibleChildren)
-                                                                        ? "bg-primary text-primary-foreground"
+                                                                        ? ""
                                                                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                                                 ].join(" ")}
+                                                                style={
+                                                                    isWorkspaceChildActive(child.href, visibleChildren)
+                                                                        ? moduleActiveStyle(surfaceModule(item.href))
+                                                                        : undefined
+                                                                }
                                                             >
-                                                                <child.icon size={15} className="shrink-0" />
+                                                                <child.icon
+                                                                    size={15}
+                                                                    className="shrink-0"
+                                                                    style={
+                                                                        isWorkspaceChildActive(child.href, visibleChildren)
+                                                                            ? undefined
+                                                                            : moduleIconStyle(surfaceModule(item.href))
+                                                                    }
+                                                                />
                                                                 <span className="truncate">{child.label}</span>
                                                             </Link>
                                                         );
@@ -694,7 +728,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                         className={[
                                                             "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
                                                             mod.disabled
-                                                                ? "cursor-not-allowed text-muted-foreground/30"
+                                                                ? "cursor-not-allowed text-muted-foreground/65"
                                                                 : "text-muted-foreground",
                                                         ].join(" ")}
                                                     >
@@ -704,12 +738,12 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                     <Link
                                                         href={mod.dashboardHref}
                                                         title={`${mod.label}${badgeTitle ? ` (${badgeTitle})` : ""}`}
-                                                        className={[
-                                                            "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
+                                                        className="flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors hover:bg-muted"
+                                                        style={
                                                             pathname.startsWith(mod.dashboardHref)
-                                                                ? "bg-primary text-primary-foreground"
-                                                                : "text-muted-foreground hover:bg-muted",
-                                                        ].join(" ")}
+                                                                ? moduleActiveStyle(mod.key)
+                                                                : moduleIconStyle(mod.key)
+                                                        }
                                                     >
                                                         <span className="relative">
                                                             <Icon size={17} />
@@ -724,7 +758,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                             className={[
                                                                 "flex h-auto w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
                                                                 mod.disabled
-                                                                    ? "cursor-not-allowed text-muted-foreground/30"
+                                                                    ? "cursor-not-allowed text-muted-foreground/65"
                                                                     : "text-muted-foreground",
                                                             ].join(" ")}
                                                         >
@@ -746,15 +780,18 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                         [mod.key]: true,
                                                                     }))
                                                                 }
-                                                                className={[
-                                                                    "flex h-auto flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                className="flex h-auto flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 hover:bg-muted"
+                                                                style={
                                                                     pathname.startsWith(mod.dashboardHref)
-                                                                        ? "bg-primary text-primary-foreground"
-                                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                                                ].join(" ")}
+                                                                        ? moduleActiveStyle(mod.key)
+                                                                        : undefined
+                                                                }
                                                             >
-                                                                <Icon size={17} className="shrink-0" />
-                                                                <span className="flex-1 truncate text-left">{mod.label}</span>
+                                                                {/* The glyph always carries the module hue; the label stays
+                                                                    neutral until the module is active, so 12 coloured rows
+                                                                    never shout at once. */}
+                                                                <Icon size={17} className="shrink-0" style={moduleIconStyle(mod.key)} />
+                                                                <span className={`flex-1 truncate text-left ${pathname.startsWith(mod.dashboardHref) ? "" : "text-muted-foreground"}`}>{mod.label}</span>
                                                                 <CountBadges fresh={fresh} total={total} />
                                                             </Link>
                                                             <Button
@@ -780,7 +817,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                                                     {isOpen && (
                                                         <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                                            {renderModuleChildren(mod.children)}
+                                                            {renderModuleChildren(mod.children, 0, "root", mod.key)}
                                                         </div>
                                                     )}
                                                 </>
@@ -803,6 +840,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             variant="ghost"
                                             onClick={() => !collapsed && setAdminOpen((o) => !o)}
                                             className={linkClass("/office/admin/users")}
+                                            style={navStyle("/office/admin", "administration")}
                                             title={collapsed ? "Admin" : ""}
                                         >
                                             <ShieldCheck size={17} className="shrink-0" />
@@ -820,8 +858,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         {adminOpen && !collapsed && (
                                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
                                                 {visibleAdmin.map(({ label, href, icon: Icon }) => (
-                                                    <Link key={href} href={href} className={linkClass(href)}>
-                                                        <Icon size={15} className="shrink-0" />
+                                                    <Link key={href} href={href} className={linkClass(href)} style={navStyle(href, "administration")}>
+                                                        <Icon size={15} className="shrink-0" style={navIconStyle(href, "administration")} />
                                                         <span className="truncate">{label}</span>
                                                     </Link>
                                                 ))}
@@ -838,6 +876,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             variant="ghost"
                                             onClick={() => !collapsed && setSettingsOpen((o) => !o)}
                                             className={linkClass("/office/settings")}
+                                            style={navStyle("/office/settings", "settings")}
                                             title={collapsed ? "Settings" : ""}
                                         >
                                             <Settings size={17} className="shrink-0" />
@@ -855,8 +894,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         {settingsOpen && !collapsed && (
                                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
                                                 {visibleSettings.map(({ label, href, icon: Icon }) => (
-                                                    <Link key={href} href={href} className={linkClass(href)}>
-                                                        <Icon size={15} className="shrink-0" />
+                                                    <Link key={href} href={href} className={linkClass(href)} style={navStyle(href, "settings")}>
+                                                        <Icon size={15} className="shrink-0" style={navIconStyle(href, "settings")} />
                                                         <span className="truncate">{label}</span>
                                                     </Link>
                                                 ))}

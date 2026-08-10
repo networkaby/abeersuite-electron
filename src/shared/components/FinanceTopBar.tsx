@@ -145,7 +145,7 @@ export default function FinanceTopBar({
     const { sidebarMode, barMode, toggleSidebarVisible, toggleBarVisible } = usePanelStore();
 
     return (
-        <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-border bg-sidebar/60 px-3 backdrop-blur-sm">
+        <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-border-strong bg-surface-frame px-3">
 
             {/* Sidebar show/hide toggle */}
             <button

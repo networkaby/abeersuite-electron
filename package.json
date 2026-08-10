@@ -41,7 +41,8 @@
     "seed:apply-workgroup-name": "tsx prisma/seeds/apply-workgroup-name.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
-    "precommit": "tsx scripts/check-doc-sync.ts --strict",
+    "check:nav-icons": "tsx scripts/check-nav-icons.ts",
+    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts",
     "install:git-hooks": "tsx scripts/install-git-hooks.ts"
   },
   "dependencies": {

@@ -175,7 +175,7 @@ export default function StockHealthPage() {
                                         <td className="px-3 py-2 text-right font-mono" title={r.clearanceDays > 0 ? `${r.clearanceDays} clearance day(s) in the window — excluded from demand and the revival ladder` : undefined}>
                                             {r.activeDays || "—"}
                                             {r.clearanceDays > 0 && (
-                                                <span className="ml-1 rounded px-1 py-0.5 text-[9px] font-medium bg-purple-500/15 text-purple-600">clr {r.clearanceDays}</span>
+                                                <span className="ml-1 rounded px-1 py-0.5 text-[10px] font-medium bg-purple-500/15 text-purple-600">clr {r.clearanceDays}</span>
                                             )}
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono">{r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}</td>

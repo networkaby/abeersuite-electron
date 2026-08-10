@@ -79,7 +79,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks, onLinked }: 
                         </Link>
                         {lc.customer.phone && <span className="text-xs text-muted-foreground">· {lc.customer.phone}</span>}
                     </div>
-                    <Button onClick={() => unlink(lc.customer.id, lc.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/40 hover:text-destructive">
+                    <Button onClick={() => unlink(lc.customer.id, lc.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/65 hover:text-destructive">
                         <X size={14} />
                     </Button>
                 </div>

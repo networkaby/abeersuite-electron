@@ -124,7 +124,7 @@ function NodeCard({
                 {children}
             </div>
             {vacant && (
-                <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1 py-0.5 text-[9px] font-medium">
+                <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1 py-0.5 text-[10px] font-medium">
                     <AlertCircle size={9} /> Vacant
                 </span>
             )}
@@ -479,7 +479,7 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
                         {/* Board members — org-wide posts shown inline */}
                         {!boardCollapsed && structure.orgWidePositions.length > 0 && (
                             <div className="mt-3 pt-3 border-t border-amber-400/20">
-                                <p className="text-[9px] uppercase tracking-widest text-amber-400/60 mb-2">
+                                <p className="text-[10px] uppercase tracking-widest text-amber-400/60 mb-2">
                                     Members · {structure.orgWidePositions.length} seat{structure.orgWidePositions.length !== 1 ? "s" : ""}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
@@ -502,7 +502,7 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
                                                     <p className="text-[11px] font-bold text-white leading-tight">{p.title}</p>
                                                 </div>
                                                 {vacant ? (
-                                                    <p className="mt-1 text-[9px] text-amber-400/80 italic">Vacant seat</p>
+                                                    <p className="mt-1 text-[10px] text-amber-400/80 italic">Vacant seat</p>
                                                 ) : (
                                                     <div className="mt-1.5 flex items-center gap-1">
                                                         {p.holders.slice(0, 2).map(h => (

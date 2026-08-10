@@ -212,7 +212,7 @@ export function PosBillSummary({
                             {chips.flatMap((chip, i) =>
                                 i === 0
                                     ? [chip]
-                                    : [<Plus key={`sep-${i}`} size={11} className="shrink-0 text-muted-foreground/40" />, chip],
+                                    : [<Plus key={`sep-${i}`} size={11} className="shrink-0 text-muted-foreground/65" />, chip],
                             )}
                         </div>
                         {/* combined total on the right of the SAME line */}

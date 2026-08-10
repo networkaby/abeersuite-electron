@@ -219,7 +219,7 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
                             onClick={() => void deletePhone(p.id)}
                             variant="ghost"
                             size="icon-xs"
-                            className="shrink-0 text-muted-foreground/40 hover:text-destructive"
+                            className="shrink-0 text-muted-foreground/65 hover:text-destructive"
                         >
                             <X size={13} />
                         </Button>
@@ -288,7 +288,7 @@ export default function CompanyProfileEdit({ profile, onSaved }: Props) {
                             onClick={() => void deleteEmail(em.id)}
                             variant="ghost"
                             size="icon-xs"
-                            className="shrink-0 text-muted-foreground/40 hover:text-destructive"
+                            className="shrink-0 text-muted-foreground/65 hover:text-destructive"
                         >
                             <X size={13} />
                         </Button>

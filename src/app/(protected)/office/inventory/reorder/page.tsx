@@ -39,6 +39,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { extractApiError } from "@/shared/lib/api";
+import { gridRowClass } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
 
 type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
@@ -473,7 +474,7 @@ export default function ReorderPage() {
         : data?.lowCount ?? 0;
 
     const renderItemRow = (r: ReorderRow, indent = false) => (
-        <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/40 ${r.isLow ? "bg-amber-500/5" : ""} ${selected.has(r.id) ? "bg-primary/5" : ""}`}>
+        <tr key={r.id} className={`border-b last:border-0 ${gridRowClass({ selected: selected.has(r.id), attention: r.isLow })}`}>
             <td className="w-8 px-2 py-2 text-center">
                 <input
                     type="checkbox"
@@ -503,7 +504,7 @@ export default function ReorderPage() {
             >
                 {r.avgDailyUsage > 0 ? r.avgDailyUsage.toFixed(2) : "—"}
                 {r.clearanceDays > 0 && (
-                    <span className="ml-1 rounded px-1 py-0.5 text-[9px] font-medium bg-purple-500/15 text-purple-600" title={`${r.clearanceDays} day(s) of clearance-priced sales in the window — excluded from demand`}>
+                    <span className="ml-1 rounded px-1 py-0.5 text-[10px] font-medium bg-purple-500/15 text-purple-600" title={`${r.clearanceDays} day(s) of clearance-priced sales in the window — excluded from demand`}>
                         clr
                     </span>
                 )}
@@ -560,7 +561,7 @@ export default function ReorderPage() {
         return (
             <Fragment key={`${keyPrefix}${b.key}`}>
             <tr
-                className={`border-b last:border-0 hover:bg-muted/40 ${b.isLow ? "bg-amber-500/5" : ""} ${multi ? "cursor-pointer" : ""}`}
+                className={`border-b last:border-0 ${multi ? "cursor-pointer" : ""} ${gridRowClass({ attention: b.isLow })}`}
                 onClick={multi ? () => toggleExpand(b.key) : undefined}
             >
                 <td className={`px-3 py-2 ${indent ? "pl-7" : ""}`}>
@@ -624,7 +625,7 @@ export default function ReorderPage() {
     };
 
     const itemTableHead = (
-        <thead className="border-b bg-muted text-xs text-muted-foreground">
+        <thead className="sticky top-0 z-10 border-b bg-[color-mix(in_oklab,var(--muted)_85%,var(--background))] text-xs font-semibold text-foreground">
             <tr>
                 <th className="w-8 px-2 py-2 text-center">
                     <input
@@ -925,7 +926,7 @@ export default function ReorderPage() {
                             </button>
                             {skippedOpen && (
                                 <table className="w-full border-t text-sm">
-                                    <thead className="border-b bg-muted text-xs text-muted-foreground">
+                                    <thead className="sticky top-0 z-10 border-b bg-[color-mix(in_oklab,var(--muted)_85%,var(--background))] text-xs font-semibold text-foreground">
                                         <tr>
                                             <th className="px-3 py-2 text-left font-medium">Item</th>
                                             <th className="px-3 py-2 text-right font-medium">Last sale</th>
@@ -960,7 +961,7 @@ export default function ReorderPage() {
                     ) : (
                     <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">
-                            <thead className="border-b bg-muted text-xs text-muted-foreground">
+                            <thead className="sticky top-0 z-10 border-b bg-[color-mix(in_oklab,var(--muted)_85%,var(--background))] text-xs font-semibold text-foreground">
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Band (group · cost range)</th>
                                     <th className="px-3 py-2 text-right font-medium">Items</th>

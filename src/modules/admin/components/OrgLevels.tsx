@@ -115,7 +115,7 @@ function LevelCard({ icon, name, title, accent, href, vacant, delay = 0 }: Level
                 <p className="text-[11px] text-white/60 text-center mt-0.5 leading-tight">{title}</p>
             )}
             {vacant && (
-                <span className="mt-1.5 inline-flex items-center gap-0.5 rounded bg-amber-500/20 text-amber-300 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider">
+                <span className="mt-1.5 inline-flex items-center gap-0.5 rounded bg-amber-500/20 text-amber-300 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider">
                     <AlertCircle size={9} /> Vacant
                 </span>
             )}

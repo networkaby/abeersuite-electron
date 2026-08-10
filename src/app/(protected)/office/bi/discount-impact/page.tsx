@@ -115,10 +115,10 @@ export default function DiscountImpactPage() {
                                         </td>
                                         <td className="px-3 py-2.5 text-right font-mono">{fmtQty(r.qty)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(r.gross)}</td>
-                                        <td className={`px-3 py-2.5 text-right font-mono ${r.discount > 0 ? "text-red-600" : "text-muted-foreground/40"}`}>{r.discount > 0 ? fmt(r.discount) : "—"}</td>
+                                        <td className={`px-3 py-2.5 text-right font-mono ${r.discount > 0 ? "text-red-600" : "text-muted-foreground/65"}`}>{r.discount > 0 ? fmt(r.discount) : "—"}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono ${ateMargin(r) ? "text-red-600 font-semibold" : ""}`}>{r.discountPct.toFixed(1)}%</td>
-                                        {pivot === "customer" && <td className={`px-3 py-2.5 text-right font-mono ${r.coupon > 0 ? "text-red-600" : "text-muted-foreground/40"}`}>{r.coupon > 0 ? fmt(r.coupon) : "—"}</td>}
-                                        {pivot === "customer" && <td className={`px-3 py-2.5 text-right font-mono ${r.loyalty > 0 ? "text-red-600" : "text-muted-foreground/40"}`}>{r.loyalty > 0 ? fmt(r.loyalty) : "—"}</td>}
+                                        {pivot === "customer" && <td className={`px-3 py-2.5 text-right font-mono ${r.coupon > 0 ? "text-red-600" : "text-muted-foreground/65"}`}>{r.coupon > 0 ? fmt(r.coupon) : "—"}</td>}
+                                        {pivot === "customer" && <td className={`px-3 py-2.5 text-right font-mono ${r.loyalty > 0 ? "text-red-600" : "text-muted-foreground/65"}`}>{r.loyalty > 0 ? fmt(r.loyalty) : "—"}</td>}
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(r.revenue)}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono font-semibold ${r.profit < 0 ? "text-red-600" : ""}`}>{fmt(r.profit)}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono ${r.marginPct < 0 ? "text-red-600" : ""}`}>{r.marginPct.toFixed(1)}%</td>

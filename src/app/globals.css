@@ -4,6 +4,14 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Elevation ladder — see the --surface-* block below. Use bg-surface-frame /
+     bg-surface-rail / bg-surface-raised on chrome instead of guessing between
+     background / sidebar / card. The page tier has no utility on purpose: it is
+     applied once as --background on <body>, and every page inherits it. */
+  --color-surface-frame: var(--surface-frame);
+  --color-surface-rail: var(--surface-rail);
+  --color-surface-raised: var(--surface-raised);
+  --color-border-strong: var(--border-strong);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
@@ -49,13 +57,30 @@
 
 /* ── Active theme: Royal Blue ─────────────────────────────────────────────── */
 :root {
-  --background: oklch(0.985 0.006 255);
+  /* ── Elevation ladder ────────────────────────────────────────────────────
+     Four tiers, 4-6% lightness apart — small enough to look deliberate, big
+     enough that the eye finds the edge without hunting. Chrome goes DARKER
+     around a light canvas: framing the work reads calm, darkening the work
+     itself reads dirty and tires you faster.
+       0 frame  — top bars (the app's outer edge)
+       1 rail   — sidebar, quick actions bar
+       2 page   — page content
+       3 raised — cards, tables, breadcrumb, dialogs, popovers
+     Every tier boundary also gets a 1px --border-strong, so separation never
+     rests on lightness alone. */
+  --surface-frame: oklch(0.900 0.022 258);
+  --surface-rail: oklch(0.922 0.020 258);
+  --surface-page: oklch(0.966 0.011 255);
+  --surface-raised: oklch(1 0 0);
+  --border-strong: oklch(0.822 0.028 256);
+
+  --background: var(--surface-page);
   --foreground: oklch(0.205 0.03 262);
 
-  --card: oklch(1 0 0);
+  --card: var(--surface-raised);
   --card-foreground: oklch(0.205 0.03 262);
 
-  --popover: oklch(1 0 0);
+  --popover: var(--surface-raised);
   --popover-foreground: oklch(0.205 0.03 262);
 
   --primary: oklch(0.546 0.245 262);
@@ -64,15 +89,15 @@
   --secondary: oklch(0.945 0.028 259);
   --secondary-foreground: oklch(0.35 0.09 262);
 
-  --muted: oklch(0.962 0.014 255);
+  --muted: oklch(0.934 0.019 255);
   --muted-foreground: oklch(0.53 0.05 260);
 
   --accent: oklch(0.91 0.05 258);
   --accent-foreground: oklch(0.3 0.08 262);
 
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.89 0.02 256);
-  --input: oklch(0.89 0.02 256);
+  --border: oklch(0.865 0.024 256);
+  --input: oklch(0.875 0.022 256);
   --ring: oklch(0.546 0.245 262);
 
   --chart-1: oklch(0.546 0.245 262);
@@ -81,27 +106,55 @@
   --chart-4: oklch(0.74 0.12 223);
   --chart-5: oklch(0.82 0.07 212);
 
+  /* ── Module hues ────────────────────────────────────────────────────────
+     One hue per office module, evenly spaced ~30° around the wheel so no two
+     neighbours in the sidebar can be confused. Colour here is NAVIGATION, not
+     decoration: the same hue marks a module in the sidebar, its hub card and
+     its page header, so "Accountancy is teal-green" becomes muscle memory.
+     Tuned for readability on a light background (L .55 / C .16).
+     Deliberately NOT reused for data state — inside a grid, amber/sky/primary
+     already mean unsaved/selected/active (see shared/lib/format/gridRow). */
+  --m-repair: oklch(0.55 0.17 20);
+  --m-pos: oklch(0.56 0.16 50);
+  --m-help: oklch(0.54 0.13 80);
+  --m-ecommerce: oklch(0.54 0.15 110);
+  --m-inventory: oklch(0.53 0.14 140);
+  --m-accountancy: oklch(0.54 0.13 170);
+  --m-orders: oklch(0.55 0.13 200);
+  --m-customers: oklch(0.55 0.16 230);
+  --m-bi: oklch(0.55 0.19 260);
+  --m-crm: oklch(0.55 0.19 290);
+  --m-administration: oklch(0.55 0.18 320);
+  --m-settings: oklch(0.55 0.17 350);
+
   --radius: 0.625rem;
 
-  --sidebar: oklch(0.995 0.004 255);
+  --sidebar: var(--surface-rail);
   --sidebar-foreground: oklch(0.28 0.05 262);
   --sidebar-primary: oklch(0.546 0.245 262);
   --sidebar-primary-foreground: oklch(0.985 0.01 255);
   --sidebar-accent: oklch(0.95 0.022 258);
   --sidebar-accent-foreground: oklch(0.34 0.085 262);
-  --sidebar-border: oklch(0.89 0.02 256);
+  --sidebar-border: oklch(0.87 0.024 256);
   --sidebar-ring: oklch(0.546 0.245 262);
 }
 
 /* ── Active dark theme: Royal Blue ───────────────────────────────────────── */
 .dark {
-  --background: oklch(0.18 0.025 262);
+  /* Elevation ladder — dark. Same direction as light: chrome darker, canvas lighter. */
+  --surface-frame: oklch(0.132 0.024 262);
+  --surface-rail: oklch(0.168 0.028 262);
+  --surface-page: oklch(0.205 0.030 262);
+  --surface-raised: oklch(0.240 0.033 262);
+  --border-strong: oklch(1 0 0 / 18%);
+
+  --background: var(--surface-page);
   --foreground: oklch(0.96 0.01 255);
 
-  --card: oklch(0.22 0.03 262);
+  --card: var(--surface-raised);
   --card-foreground: oklch(0.96 0.01 255);
 
-  --popover: oklch(0.22 0.03 262);
+  --popover: var(--surface-raised);
   --popover-foreground: oklch(0.96 0.01 255);
 
   --primary: oklch(0.68 0.19 258);
@@ -127,7 +180,21 @@
   --chart-4: oklch(0.49 0.1 220);
   --chart-5: oklch(0.4 0.07 214);
 
-  --sidebar: oklch(0.22 0.03 262);
+  /* Module hues — lifted and de-saturated for a dark background (L .76 / C .14). */
+  --m-repair: oklch(0.76 0.15 20);
+  --m-pos: oklch(0.78 0.14 50);
+  --m-help: oklch(0.79 0.13 80);
+  --m-ecommerce: oklch(0.78 0.14 110);
+  --m-inventory: oklch(0.77 0.13 140);
+  --m-accountancy: oklch(0.78 0.12 170);
+  --m-orders: oklch(0.78 0.12 200);
+  --m-customers: oklch(0.76 0.14 230);
+  --m-bi: oklch(0.75 0.15 260);
+  --m-crm: oklch(0.75 0.15 290);
+  --m-administration: oklch(0.75 0.15 320);
+  --m-settings: oklch(0.76 0.15 350);
+
+  --sidebar: var(--surface-rail);
   --sidebar-foreground: oklch(0.9 0.02 255);
   --sidebar-primary: oklch(0.68 0.19 258);
   --sidebar-primary-foreground: oklch(0.19 0.03 262);
