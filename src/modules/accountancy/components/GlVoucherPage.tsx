@@ -410,9 +410,26 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     // be matched back onto their Transfer-from rows (drawer + amount).
     const [pendingCheques, setPendingCheques] = useState<DenomJson["cheques"] | null>(null);
 
+    // Payment/Receipt only: "Income/Expenditure" toggle narrows the particulars
+    // dropdown to just the relevant P&L ledgers (EXPENSE for Payment, INCOME for
+    // Receipt) for the common case of posting a plain expense/income entry —
+    // instead of the full chart of accounts. Off by default so party/asset/
+    // liability ledgers (e.g. loan repayment, advance to supplier) stay reachable.
+    const isPayRec = kind === "PAYMENT" || kind === "RECEIPT";
+    const [incomeExpOnly, setIncomeExpOnly] = useState(false);
+    const rowNatureType = kind === "PAYMENT" ? "EXPENSE" : "INCOME";
+
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const topAccounts = accounts.filter(copy.topFilter);
-    const rowAccounts = accounts.filter(copy.rowFilter);
+    // Sales/Purchase Accounts groups carry inventory-linked trading ledgers
+    // (Sales A/c, Purchase A/c, and their Returns) — those belong on
+    // sale/purchase vouchers, not a plain expense/income Payment or Receipt.
+    const rowAccounts = accounts
+        .filter(copy.rowFilter)
+        .filter((a) => !isPayRec || !incomeExpOnly ||
+            (a.group?.type === rowNatureType &&
+                a.group?.name !== ACCOUNT_GROUPS.SALES_ACCOUNTS &&
+                a.group?.name !== ACCOUNT_GROUPS.PURCHASE_ACCOUNTS));
     const topAccount  = effectiveTopAccountId ? accountById.get(effectiveTopAccountId) : undefined;
 
     // "Bank-like" = Bank Accounts or Bank OD A/c — both are a real cash/cheque
@@ -887,7 +904,18 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
                     {/* Particulars rows */}
                     <div className="space-y-1">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium px-1">{copy.rowsHeader}</p>
+                        <div className="flex items-center justify-between px-1">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{copy.rowsHeader}</p>
+                            {isPayRec && (
+                                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                                    <Checkbox
+                                        checked={incomeExpOnly}
+                                        onCheckedChange={(v) => setIncomeExpOnly(v === true)}
+                                    />
+                                    {kind === "PAYMENT" ? "Income / Expenditure — show only expense ledgers" : "Income / Expenditure — show only income ledgers"}
+                                </label>
+                            )}
+                        </div>
                         <table className="w-full">
                             <thead>
                                 <tr className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
