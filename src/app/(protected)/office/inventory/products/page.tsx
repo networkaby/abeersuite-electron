@@ -26,13 +26,6 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import {
     Table,
     TableBody,
     TableCell,
@@ -1497,6 +1490,7 @@ function CellSelect({
     onCreate,
     createLabel = "+ New",
     placeholder = "—",
+    openUp = false,
 }: {
     value: number | null;
     options: Opt[];
@@ -1505,6 +1499,8 @@ function CellSelect({
     onCreate?: () => Promise<number | null>;
     createLabel?: string;
     placeholder?: string;
+    /// Bulk bar sits at the bottom of the viewport — open the list upward there.
+    openUp?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -1586,7 +1582,7 @@ function CellSelect({
                 aria-expanded={open}
             >
                 <span className={"truncate " + (selectedLabel ? "" : "text-muted-foreground")}>
-                    {selectedLabel || "—"}
+                    {selectedLabel || placeholder}
                 </span>
                 <span className="flex items-center gap-0.5 shrink-0">
                     {clearable && value != null ? (
@@ -1604,7 +1600,7 @@ function CellSelect({
                 </span>
             </button>
             {open ? (
-                <div className="absolute z-30 left-0 right-0 mt-1 rounded-md border border-border bg-popover text-popover-foreground shadow-md min-w-56">
+                <div className={"absolute z-30 left-0 right-0 rounded-md border border-border bg-popover text-popover-foreground shadow-md min-w-56 " + (openUp ? "bottom-full mb-1" : "mt-1")}>
                     <div className="p-1 border-b border-border">
                         <input
                             ref={inputRef}
@@ -1628,7 +1624,7 @@ function CellSelect({
                         />
                     </div>
                     <ul ref={listRef} className="max-h-64 overflow-auto py-1" role="listbox">
-                        {clearable && value != null ? (
+                        {clearable ? (
                             <li>
                                 <button
                                     type="button"
@@ -1681,8 +1677,9 @@ function CellSelect({
     );
 }
 
-/// Bulk-apply toolbar cell — uses Radix Select (only 5 instances, no perf
-/// concern) with a paired Apply button so a stray click doesn't write.
+/// Bulk-apply toolbar cell — same searchable CellSelect as the grid cells, with
+/// a paired Apply button so a stray pick doesn't write. Picking "— clear —"
+/// arms a blank-out (clearPending) instead of selecting an id.
 function BulkApply({
     label,
     options,
@@ -1698,45 +1695,36 @@ function BulkApply({
     clearable?: boolean;
     onCreate?: () => Promise<number | null>;
 }) {
-    const [v, setV] = useState<string>("");
-    const CLEAR = "__clear__";
-    const NEW = "__new__";
+    const [v, setV] = useState<number | null>(null);
+    const [clearPending, setClearPending] = useState(false);
     return (
         <div className="flex items-center gap-1">
-            <Select
-                value={v}
-                onValueChange={async (next) => {
-                    if (next === NEW && onCreate) {
-                        const id = await onCreate();
-                        if (id != null) setV(String(id));
-                        return;
-                    }
-                    setV(next);
-                }}
-            >
-                <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder={label} />
-                </SelectTrigger>
-                <SelectContent>
-                    {clearable ? <SelectItem value={CLEAR}>— clear —</SelectItem> : null}
-                    {onCreate ? <SelectItem value={NEW}>+ New {label.toLowerCase()}</SelectItem> : null}
-                    {options.map((o) => (
-                        <SelectItem key={o.id} value={String(o.id)}>
-                            {optLabel(o)}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            <div className="w-36">
+                <CellSelect
+                    value={v}
+                    options={options}
+                    clearable={clearable}
+                    onCreate={onCreate}
+                    createLabel={`+ New ${label.toLowerCase()}`}
+                    placeholder={clearPending ? "— clear —" : label}
+                    openUp
+                    onChange={(id) => {
+                        setV(id);
+                        setClearPending(id == null);
+                    }}
+                />
+            </div>
             <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="h-8"
-                disabled={!v}
+                disabled={v == null && !clearPending}
                 onClick={() => {
-                    if (!v) return;
-                    onApply(field, v === CLEAR ? "" : v);
-                    setV("");
+                    if (v == null && !clearPending) return;
+                    onApply(field, clearPending ? "" : String(v));
+                    setV(null);
+                    setClearPending(false);
                 }}
             >
                 Apply
