@@ -72,7 +72,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
             include: {
                 universalVoucher: {
-                    select: { id: true, date: true, voucherNo: true, description: true },   // 5D-7: UVNo = id
+                    select: { id: true, date: true, voucherNo: true, description: true, type: true },   // 5D-7: UVNo = id
                 },
             },
         });
@@ -123,6 +123,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             return {
                 id: l.id,
                 journalEntryId: srcUvId,
+                voucherType: l.universalVoucher.type,
                 date: toDateOnly(l.universalVoucher.date),
                 reference: l.universalVoucher.voucherNo ?? formatUvNo(l.universalVoucher.id),
                 description: l.universalVoucher.description ?? "",

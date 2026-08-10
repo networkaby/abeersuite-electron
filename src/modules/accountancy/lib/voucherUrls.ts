@@ -21,6 +21,18 @@ export const GL_EDIT_BASE: Record<string, string> = {
     DEBIT_NOTE:  "/vouchers/debit-notes",
 };
 
+/**
+ * Classify a UniversalVoucher's `type` string into its CombinedRow source
+ * bucket — mirrors the split useCombinedVouchers fetches separately (inv/gl/je).
+ * JOURNAL is its own source; anything with a GL edit page is "gl"; everything
+ * else (SALE/PURCHASE/POS/ESTIMATE/ORDER/…) is "inv".
+ */
+export function voucherSourceForType(type: string): VoucherSource {
+    if (type === "JOURNAL") return "je";
+    if (GL_EDIT_BASE[type]) return "gl";
+    return "inv";
+}
+
 /** URL to open a voucher in its edit form (prefilled with its data). */
 export function referenceHref(
     source: VoucherSource,

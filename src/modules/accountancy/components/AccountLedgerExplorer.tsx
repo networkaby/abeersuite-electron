@@ -39,6 +39,8 @@ import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedge
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
+import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
+import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +87,7 @@ interface GroupTreeNode {
 interface LedgerRow {
     id: number;
     journalEntryId: number;
+    voucherType: string;
     date: string;
     reference: string;
     description: string;
@@ -549,6 +552,7 @@ export function AccountLedgerExplorer({
                                                 <th className="px-4 py-2 text-right font-medium">Debit</th>
                                                 <th className="px-4 py-2 text-right font-medium">Credit</th>
                                                 <th className="px-4 py-2 text-right font-medium">Balance</th>
+                                                <th className="px-4 py-2 text-right font-medium w-10" />
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border">
@@ -562,11 +566,12 @@ export function AccountLedgerExplorer({
                                                 <td className="px-4 py-2 text-right font-mono font-semibold">
                                                     {drCr(detail.openingBalance, detail.account.normalBalance)}
                                                 </td>
+                                                <td className="px-4 py-2" />
                                             </tr>
 
                                             {detail.rows.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                                                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-sm">
                                                         No transactions in this period
                                                     </td>
                                                 </tr>
@@ -628,6 +633,15 @@ export function AccountLedgerExplorer({
                                                     )}>
                                                         {drCr(row.balance, detail.account.normalBalance)}
                                                     </td>
+                                                    <td className="px-4 py-2.5 text-right">
+                                                        <DayBookActionsMenu
+                                                            rawId={row.journalEntryId}
+                                                            source={voucherSourceForType(row.voucherType)}
+                                                            kind={row.voucherType}
+                                                            reference={row.reference}
+                                                            onChanged={() => { if (selectedId) loadDetail(selectedId, from, to); }}
+                                                        />
+                                                    </td>
                                                 </tr>
                                                 );
                                             })}
@@ -647,6 +661,7 @@ export function AccountLedgerExplorer({
                                                     <td className="px-4 py-2 text-right font-mono font-semibold text-primary">
                                                         {drCr(detail.closingBalance, detail.account.normalBalance)}
                                                     </td>
+                                                    <td className="px-4 py-2" />
                                                 </tr>
                                             )}
                                         </tbody>
