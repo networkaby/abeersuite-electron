@@ -21,6 +21,8 @@ export type Item = {
     date: string;
     /** How many copies of this label to print (≥ 1). */
     copies: number;
+    /** Current on-hand stock, shown for the batch/copies decision. */
+    stock?: number | null;
 };
 
 /** A product the designer asks the parent to add to the shared set (₹ values). */
@@ -86,5 +88,6 @@ export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], co
         mrp: mrp != null ? mrp.toFixed(2) : "0",
         date: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",
         copies,
+        stock: it.stock,
     };
 }

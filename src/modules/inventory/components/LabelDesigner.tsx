@@ -358,6 +358,7 @@ export function LabelDesigner({
                             <TableHead className="text-right text-xs">MRP ₹</TableHead>
                             <TableHead className="text-xs">Price date</TableHead>
                             <TableHead className="text-center text-xs">Secret code</TableHead>
+                            <TableHead className="text-right text-xs">Stock</TableHead>
                             <TableHead className="text-center text-xs">Copies</TableHead>
                             <TableHead className="w-8" />
                         </TableRow>
@@ -365,7 +366,7 @@ export function LabelDesigner({
                     <TableBody>
                         {items.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                                <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                                     No labels yet — search/scan above, pick a voucher, or add products in the Selected product tab.
                                 </TableCell>
                             </TableRow>
@@ -388,6 +389,7 @@ export function LabelDesigner({
                                             </div>
                                         ) : null}
                                     </TableCell>
+                                    <TableCell className="text-right font-mono text-xs">{it.stock ?? "—"}</TableCell>
                                     <TableCell className="text-center">
                                         <Input
                                             type="number"
