@@ -341,7 +341,10 @@ export default function PricingStrategiesPage() {
     const [productPts, setProductPts] = useState<Points>({});
 
     const [query, setQuery] = useState("");
-    const [filtersOpen, setFiltersOpen] = useState(false);
+    // Two independent toggles instead of one — a combined taxonomy + range panel
+    // grew tall enough to cover the page.
+    const [taxonomyOpen, setTaxonomyOpen] = useState(false);
+    const [rangesOpen, setRangesOpen] = useState(false);
     const [conditions, setConditions] = useState<MatchConditionsValue>(() => emptyMatchConditions());
     // Points / margin range filters (find products by their per-dimension points or total margin).
     const [ptRanges, setPtRanges] = useState<Record<RangeKey, Range>>(() => emptyRanges());
@@ -439,11 +442,13 @@ export default function PricingStrategiesPage() {
         });
     }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPtsN, groupParentById, productPts]);
 
-    // Active facet count for the Filter button badge.
-    const filterCount =
+    // Active facet counts for the two Filter button badges — split so each
+    // toggle's badge only counts what its own panel holds.
+    const taxonomyFilterCount =
         (conditions.brandIds.size > 0 ? 1 : 0) +
         (conditions.groupIds.size > 0 ? 1 : 0) +
-        (conditions.categoryIds.size > 0 ? 1 : 0) +
+        (conditions.categoryIds.size > 0 ? 1 : 0);
+    const rangeFilterCount =
         (conditions.minCost.trim() || conditions.maxCost.trim() ? 1 : 0) +
         (conditions.minStock.trim() || conditions.maxStock.trim() ? 1 : 0) +
         (Object.values(ptRanges).filter(rangeActive).length);
@@ -655,15 +660,29 @@ export default function PricingStrategiesPage() {
                         <div className="ml-auto flex items-center gap-2">
                             <Button
                                 type="button"
-                                variant={filtersOpen ? "secondary" : "outline"}
+                                variant={taxonomyOpen ? "secondary" : "outline"}
                                 size="sm"
                                 className="h-8"
-                                onClick={() => setFiltersOpen((o) => !o)}
+                                onClick={() => setTaxonomyOpen((o) => !o)}
                             >
-                                <Filter className="size-3.5" /> Filters
-                                {filterCount > 0 ? (
+                                <Tag className="size-3.5" /> Filter
+                                {taxonomyFilterCount > 0 ? (
                                     <span className="ml-1 rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                                        {filterCount}
+                                        {taxonomyFilterCount}
+                                    </span>
+                                ) : null}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={rangesOpen ? "secondary" : "outline"}
+                                size="sm"
+                                className="h-8"
+                                onClick={() => setRangesOpen((o) => !o)}
+                            >
+                                <Filter className="size-3.5" /> Range filter
+                                {rangeFilterCount > 0 ? (
+                                    <span className="ml-1 rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                                        {rangeFilterCount}
                                     </span>
                                 ) : null}
                             </Button>
@@ -678,20 +697,52 @@ export default function PricingStrategiesPage() {
                         </div>
                     </div>
 
-                    {filtersOpen ? (
+                    {/* Split into two panels — combined they grew tall enough to cover
+                        the page. Each opens independently and only carries its own
+                        clear-all count. */}
+                    {taxonomyOpen ? (
                         <div className="rounded-md border bg-muted/30 p-3">
                             <div className="mb-3 flex items-center justify-between">
-                                {/* <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span> */}
-                                {filterCount > 0 ? (
+                                <span className="text-xs font-medium">Filter</span>
+                                {taxonomyFilterCount > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setConditions((c) => ({
+                                            ...c, brandIds: new Set(), groupIds: new Set(), categoryIds: new Set(),
+                                        }))}
+                                        className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                                    >
+                                        Clear ({taxonomyFilterCount})
+                                    </button>
+                                ) : null}
+                            </div>
+                            <MatchConditions
+                                brands={brands}
+                                groups={groups}
+                                categories={categories}
+                                value={conditions}
+                                onChange={(patch) => setConditions((c) => ({ ...c, ...patch }))}
+                                sections={["taxonomy"]}
+                            />
+                        </div>
+                    ) : null}
+
+                    {rangesOpen ? (
+                        <div className="rounded-md border bg-muted/30 p-3">
+                            <div className="mb-3 flex items-center justify-between">
+                                <span className="text-xs font-medium">Range filter</span>
+                                {rangeFilterCount > 0 ? (
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setConditions(emptyMatchConditions());
+                                            setConditions((c) => ({
+                                                ...c, minCost: "", maxCost: "", minStock: "", maxStock: "",
+                                            }));
                                             setPtRanges(emptyRanges());
                                         }}
                                         className="text-xs text-muted-foreground underline-offset-2 hover:underline"
                                     >
-                                        Clear all ({filterCount})
+                                        Clear ({rangeFilterCount})
                                     </button>
                                 ) : null}
                             </div>
@@ -703,6 +754,7 @@ export default function PricingStrategiesPage() {
                                     value={conditions}
                                     onChange={(patch) => setConditions((c) => ({ ...c, ...patch }))}
                                     showStaleDays={false}
+                                    sections={["ranges"]}
                                 />
                                 <div className="space-y-2 border-t pt-3">
                                     <span className="text-xs font-medium">Points &amp; margin ranges</span>

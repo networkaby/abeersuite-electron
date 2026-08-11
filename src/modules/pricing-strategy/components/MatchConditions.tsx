@@ -317,6 +317,7 @@ function RangeSegment({
 
 export function MatchConditions({
     brands, groups, categories, value, onChange, showStaleDays = true,
+    sections = ["taxonomy", "ranges"],
 }: {
     brands: Master[];
     groups: Master[];
@@ -325,10 +326,16 @@ export function MatchConditions({
     onChange: (patch: Partial<MatchConditionsValue>) => void;
     /** Hide the "Days since last sale" range when the data source can't supply staleness. */
     showStaleDays?: boolean;
+    /** Which halves to render — split across two toggles when both would
+     *  otherwise stack into one tall panel that covers the page. */
+    sections?: ("taxonomy" | "ranges")[];
 }) {
+    const showTaxonomy = sections.includes("taxonomy");
+    const showRanges = sections.includes("ranges");
     return (
         <>
             {/* Taxonomy filters (multi-select) */}
+            {showTaxonomy ? (
             <div className="space-y-2">
                 {/* <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Match conditions <span className="font-normal normal-case">(empty = matches every product)</span>
@@ -356,8 +363,10 @@ export function MatchConditions({
                     />
                 </div>
             </div>
+            ) : null}
 
             {/* Range filters — three segments */}
+            {showRanges ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <RangeSegment
                     icon={IndianRupee}
@@ -404,6 +413,7 @@ export function MatchConditions({
                     />
                 ) : null}
             </div>
+            ) : null}
 
             {/* Attribute filters */}
             {/* <div className="space-y-2">
