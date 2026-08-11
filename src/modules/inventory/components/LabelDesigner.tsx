@@ -9,11 +9,12 @@
  * products stay in sync with the Selected product tab. Prices/dates are set in
  * that tab; here the labels are read-only and just rendered + printed.
  *
- * Secret date code (staff-only, customer can't read it):
- *   - year   → omitted
- *   - MM     → 2-digit month  (01–12)
- *   - T      → ten-day third of the month: 1 = 1–10, 2 = 11–20, 3 = 21–end
- *   e.g. 2026-05-14 → "052"   (May, second third)
+ * Copies: each label carries its own count (how many to print). The parent owns
+ * it like everything else — the designer just shows the input and repeats the
+ * label that many times in the print sheet. See `defaultCopies` for the rule that
+ * picks the starting number (stock qty when re-priced, incoming qty otherwise).
+ *
+ * Secret date code: staff-only price age. See `lib/secretDateCode.ts`.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -44,38 +45,16 @@ import {
 import { FileText, Loader2, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
+import { clampCopies, type AddedProduct, type Item } from "@/modules/inventory/lib/labelItems";
+import { secretBucketLabel, secretDateCode } from "@/modules/inventory/lib/secretDateCode";
 
-// ── Public types ──────────────────────────────────────────────────────────────
+// ── Public types (shape lives in lib/labelItems — re-exported for call sites) ──
 
-/** One label, as rendered by the designer (all display strings, in ₹). */
-export type Item = { id: number; name: string; barcode: string; price: string; mrp: string; date: string };
+export type { Item, AddedProduct };
 
-/** A product the designer asks the parent to add to the shared set (₹ values). */
-export type AddedProduct = { name: string; barcode: string; salePrice: number | null; costPrice: number | null; mrp: number | null };
-
-// ── Secret date code ─────────────────────────────────────────────────────────
-
-/** Ten-day third of a month: 1 (1–10), 2 (11–20), 3 (21–end). */
-function tenDayThird(day: number): 1 | 2 | 3 {
-    if (day <= 10) return 1;
-    if (day <= 20) return 2;
-    return 3;
-}
-
-/**
- * Build the secret code from a "YYYY-MM-DD" string. Parsed from the string
- * directly (no Date object) so there are no timezone surprises.
- * Returns "" for an empty/invalid date.
- */
-function secretDateCode(dateStr: string): string {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
-    if (!m) return "";
-    const day = parseInt(m[3], 10);
-    if (day < 1 || day > 31) return "";
-    return `${m[2]}${tenDayThird(day)}`;
-}
-
-const THIRD_LABEL = ["", "days 1–10", "days 11–20", "days 21–end"];
+/** Preview cap — a re-priced product can be hundreds of copies; the print sheet
+ *  emits every one, but the on-screen preview stops here to stay responsive. */
+const PREVIEW_LIMIT = 60;
 
 // ── Label size presets (mm) ──────────────────────────────────────────────────
 
@@ -90,7 +69,7 @@ const PRESETS: Preset[] = [
 type VoucherListRow = { id: number; type: string; reference: string; date: string; partyName: string | null; _count?: { lines: number } };
 type VoucherLineFromApi = { productId: number; quantity: string | number; mrpPaise: number | null; product: { id: number; sku: string; name: string } };
 type VoucherFromApi = { id: number; type: string; reference: string; lines: VoucherLineFromApi[] };
-type ProductLookupRow = { id: number; sku: string; name: string; barcode1: string | null; pricePaise: number | null; mrpPaise: number | null };
+type ProductLookupRow = { id: number; sku: string; name: string; barcode1: string | null; pricePaise: number | null; mrpPaise: number | null; stock: number | null };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -101,6 +80,8 @@ type LabelDesignerProps = {
     onAddProducts: (products: AddedProduct[]) => void;
     /** Drop a label from the shared set. */
     onRemoveItem: (id: number) => void;
+    /** Change how many copies of one label to print. */
+    onCopiesChange: (id: number, copies: number) => void;
     /** Go to the price/barcode editor (parent switches sub-tab). Button hidden if omitted. */
     onUpdateBarcode?: () => void;
     /** Deep-link prefill: when set, this GRN/Purchase voucher's lines are added
@@ -120,6 +101,7 @@ export function LabelDesigner({
     items,
     onAddProducts,
     onRemoveItem,
+    onCopiesChange,
     onUpdateBarcode,
     prefillVoucherId = null,
     onPrefillConsumed,
@@ -129,7 +111,7 @@ export function LabelDesigner({
 }: LabelDesignerProps) {
     // Global label options (apply to every label).
     const [showHeader, setShowHeader] = useState(true);
-    const [header, setHeader] = useState("NETWORK SERVICE  ·  +91 8876996996");
+    const [header, setHeader] = useState("NETWORK SERVICE");
     const [showMrp, setShowMrp] = useState(true);
     const [showSecret, setShowSecret] = useState(true);
     const [side, setSide] = useState<"left" | "right">("right");
@@ -147,11 +129,13 @@ export function LabelDesigner({
         if (!sp) return;
         setPickCount((c) => c + 1);
         onAddProducts([{
+            id: sp.id,
             name: sp.name,
             barcode: sp.sku,
             salePrice: sp.salePrice ?? null,
             costPrice: sp.costPrice ?? null,
             mrp: sp.mrp ?? null,
+            stock: sp.stock,
         }]);
     };
 
@@ -191,28 +175,34 @@ export function LabelDesigner({
     }
     const openVoucherPicker = () => { setVoucherPickerOpen(true); loadVoucherList(); };
 
-    // Fetch one GRN/Purchase voucher and add its (deduped) lines to the shared set.
+    // Fetch one GRN/Purchase voucher and add its lines to the shared set. One
+    // product = one label row; repeat lines of the same product add their units
+    // together, because the received qty is what seeds the copies count.
     // Shared by the picker dialog and the ?fromVoucher deep-link prefill.
     async function addVoucherById(id: number) {
         try {
             const r = await axios.get<VoucherFromApi>(`/api/inventory/vouchers/${id}`);
-            const seen = new Set<string>();
-            const products: AddedProduct[] = [];
+            const byBarcode = new Map<string, AddedProduct>();
             for (const line of r.data.lines) {
-                if ((Math.ceil(Math.max(0, Number(line.quantity) || 0))) <= 0) continue;
+                const qty = Math.ceil(Math.max(0, Number(line.quantity) || 0));
+                if (qty <= 0) continue;
                 const lookup = lookupById.get(line.productId);
                 const barcode = (lookup?.barcode1 && lookup.barcode1.trim()) || line.product.sku;
-                if (seen.has(barcode)) continue;
-                seen.add(barcode);
+                const already = byBarcode.get(barcode);
+                if (already) { already.incomingQty = (already.incomingQty ?? 0) + qty; continue; }
                 const mrpPaise = line.mrpPaise ?? lookup?.mrpPaise ?? null;
-                products.push({
+                byBarcode.set(barcode, {
+                    id: line.productId,
                     name: line.product.name,
                     barcode,
                     salePrice: lookup?.pricePaise != null ? lookup.pricePaise / 100 : null,
                     costPrice: null,
                     mrp: mrpPaise != null ? mrpPaise / 100 : null,
+                    incomingQty: qty,
+                    stock: lookup?.stock ?? null,
                 });
             }
+            const products = [...byBarcode.values()];
             if (products.length) onAddProducts(products);
             toast.success(products.length ? `Added ${products.length} product${products.length === 1 ? "" : "s"} from ${r.data.reference}` : `No products in ${r.data.reference}`);
         } catch {
@@ -246,6 +236,15 @@ export function LabelDesigner({
             return v.reference.toLowerCase().includes(q) || (v.partyName ?? "").toLowerCase().includes(q);
         });
     }, [voucherList, voucherSearch, voucherTypeFilter]);
+
+    // One entry per printed label — a product with 12 copies expands to 12 cards.
+    // The sheet prints every one; the preview shows the first PREVIEW_LIMIT.
+    const printLabels = useMemo(
+        () => items.flatMap((it) =>
+            Array.from({ length: clampCopies(it.copies) }, (_, k) => ({ key: `${it.id}-${k}`, item: it }))),
+        [items],
+    );
+    const totalCopies = printLabels.length;
 
     const secretStyle: React.CSSProperties = {
         writingMode: "vertical-rl",
@@ -359,13 +358,14 @@ export function LabelDesigner({
                             <TableHead className="text-right text-xs">MRP ₹</TableHead>
                             <TableHead className="text-xs">Price date</TableHead>
                             <TableHead className="text-center text-xs">Secret code</TableHead>
+                            <TableHead className="text-center text-xs">Copies</TableHead>
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {items.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                                <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                                     No labels yet — search/scan above, pick a voucher, or add products in the Selected product tab.
                                 </TableCell>
                             </TableRow>
@@ -384,9 +384,20 @@ export function LabelDesigner({
                                         <span className="font-mono text-sm font-semibold">{code || "—"}</span>
                                         {code ? (
                                             <div className="text-[10px] text-muted-foreground">
-                                                {code.slice(0, 2)} · {THIRD_LABEL[Number(code.slice(2))]}
+                                                {code.slice(0, 2)} · {secretBucketLabel(Number(code.slice(2)))}
                                             </div>
                                         ) : null}
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={999}
+                                            value={it.copies}
+                                            onChange={(e) => onCopiesChange(it.id, clampCopies(parseInt(e.target.value, 10)))}
+                                            className="mx-auto h-7 w-16 text-center text-xs font-mono"
+                                            aria-label={`Copies of ${it.name}`}
+                                        />
                                     </TableCell>
                                     <TableCell>
                                         <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => onRemoveItem(it.id)}>
@@ -401,43 +412,48 @@ export function LabelDesigner({
             </div>
 
             {/* ── Labels preview grid (screen) ─────────────────────────────── */}
+            {/* `zoom` (not transform: scale) so the enlarged labels take up real
+                layout height — the box grows downward instead of clipping. Only
+                the horizontal overflow scrolls. */}
             <div className="print-hide">
                 <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Preview — {items.length} label{items.length !== 1 ? "s" : ""} (enlarged ×{zoom})
+                    Preview — {totalCopies} label{totalCopies !== 1 ? "s" : ""} from {items.length} product{items.length !== 1 ? "s" : ""} (enlarged ×{zoom})
+                    {totalCopies > PREVIEW_LIMIT ? ` · showing first ${PREVIEW_LIMIT}` : ""}
                 </div>
-                <div className="overflow-auto rounded-sm border bg-[#fafafa] p-6">
-                    <div className="lt-grid" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
-                        {items.map((it) => (
-                            <LabelCard key={it.id} preset={preset} item={it}
+                <div className="overflow-x-auto rounded-sm border bg-[#fafafa] p-6">
+                    <div className="lt-grid" style={{ zoom }}>
+                        {printLabels.slice(0, PREVIEW_LIMIT).map(({ key, item }) => (
+                            <LabelCard key={key} preset={preset} item={item}
                                 header={showHeader ? header : ""} showMrp={showMrp}
-                                code={showSecret ? secretDateCode(it.date) : ""} side={side} secretStyle={secretStyle} />
+                                code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle} />
                         ))}
                     </div>
                 </div>
             </div>
 
-            {/* ── Print-only: labels at real size ──────────────────────────── */}
+            {/* ── Print-only: labels at real size, every copy ──────────────── */}
             <div className="label-print-area" style={{ ["--label-cols" as string]: preset.cols }}>
-                {items.map((it) => (
-                    <LabelCard key={it.id} preset={preset} item={it}
+                {printLabels.map(({ key, item }) => (
+                    <LabelCard key={key} preset={preset} item={item}
                         header={showHeader ? header : ""} showMrp={showMrp}
-                        code={showSecret ? secretDateCode(it.date) : ""} side={side} secretStyle={secretStyle} />
+                        code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle} />
                 ))}
             </div>
 
             {/* ── Pick from GRN / Purchase — adds voucher lines to the shared set ─ */}
             <Dialog open={voucherPickerOpen} onOpenChange={setVoucherPickerOpen}>
-                <DialogContent className="!max-w-3xl print-hide">
+                <DialogContent className="max-w-3xl! print-hide">
                     <DialogHeader>
                         <DialogTitle>Pick a GRN or Purchase voucher</DialogTitle>
                         <DialogDescription>
-                            Adds each line as a product (deduped) to the selection. Only POSTED vouchers are shown.
+                            Adds each line as a label, with its received qty as the copies count.
+                            Only POSTED vouchers are shown.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-wrap items-center gap-2">
                         <Input value={voucherSearch} onChange={(e) => setVoucherSearch(e.target.value)} placeholder="Search by reference or party…" className="h-8 max-w-xs" autoFocus />
                         <Select value={voucherTypeFilter} onValueChange={(v) => setVoucherTypeFilter(v as "all" | "GRN" | "PURCHASE")}>
-                            <SelectTrigger className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 w-35"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All</SelectItem>
                                 <SelectItem value="GRN">GRN</SelectItem>
@@ -457,11 +473,11 @@ export function LabelDesigner({
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead className="w-[100px]">Date</TableHead>
-                                        <TableHead className="w-[90px]">Type</TableHead>
+                                        <TableHead className="w-25">Date</TableHead>
+                                        <TableHead className="w-22.5">Type</TableHead>
                                         <TableHead>Reference</TableHead>
                                         <TableHead>Party</TableHead>
-                                        <TableHead className="w-[70px] text-right">Lines</TableHead>
+                                        <TableHead className="w-17.5 text-right">Lines</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

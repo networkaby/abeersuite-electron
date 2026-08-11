@@ -23,6 +23,7 @@ export default async function PricingStrategyLayout({ children }: { children: Re
                     "costing": "Costing",
                     "needs-attention": "Needs Attention",
                     "update-print-labels": "Update & Print Labels",
+                    "print-labels": "Print Labels",
                 }}
             />
             <div className="min-h-0 flex-1 overflow-hidden">

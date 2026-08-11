@@ -81,6 +81,17 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "inventory",
         description: "Clear every strategy point at once on the Pricing Strategy → Strategies page.",
     },
+    // Pricing Strategy → Print labels nav link — the printing half of the label
+    // job on its own page (search/scan/voucher, shared queue with Update & print
+    // labels). Derived automatically by sidebarPermissionSeeds() from the
+    // MODULE_SECTIONS child in utils/constants.ts; mirrored here so an existing DB
+    // gets it without a full seed.
+    {
+        id: "ui:sidebar:pricing-strategy:print-labels",
+        label: "Pricing Strategy → Print labels",
+        module: "ui",
+        description: 'Show the "Print labels" link under Pricing Strategy in the sidebar.',
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";

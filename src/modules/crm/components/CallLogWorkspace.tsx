@@ -249,9 +249,9 @@ export default function CallLogWorkspace() {
                 ] as const).map(([label, apply]) => (
                     <Button key={label} variant="outline" size="sm" className="h-8" onClick={apply}>{label}</Button>
                 ))}
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[9.5rem]" aria-label="From date" />
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-38" aria-label="From date" />
                 <span className="text-muted-foreground">to</span>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[9.5rem]" aria-label="To date" />
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-38" aria-label="To date" />
                 {(dateFrom || dateTo) && (
                     <Button variant="ghost" size="sm" className="h-8" onClick={() => setRange(null)}>Clear</Button>
                 )}

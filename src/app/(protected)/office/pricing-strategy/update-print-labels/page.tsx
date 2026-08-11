@@ -29,7 +29,7 @@
  *   voicePrice = cost_incl × (1 + margin% / 100)
  */
 
-import { type ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -54,7 +54,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { LabelDesigner, type Item as LabelItem, type AddedProduct } from "@/modules/inventory/components/LabelDesigner";
+import { todayISO } from "@/modules/inventory/lib/labelItems";
+import { secretDateCode } from "@/modules/inventory/lib/secretDateCode";
+import { useLabelPrintStore } from "@/store/labelPrintStore";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -224,24 +226,6 @@ function profitOf(
 }
 
 const rupee = (n: number | null) => (n == null ? "—" : `₹${n.toFixed(2)}`);
-
-// Secret barcode date code: year omitted, MM + ten-day third (1 = days 1–10,
-// 2 = 11–20, 3 = 21–end). e.g. 2026-05-14 → "052". Lets staff gauge how old a
-// printed price is without showing customers a plain date.
-function secretDateCode(iso: string): string {
-    if (!iso) return "";
-    const d = new Date(`${iso}T00:00:00`);
-    if (isNaN(d.getTime())) return "";
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const day = d.getDate();
-    const third = day <= 10 ? 1 : day <= 20 ? 2 : 3;
-    return `${mm}${third}`;
-}
-
-function todayISO(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 // ── Barcode price (the headroom price printed on the label) ───────────────────
 //
@@ -467,7 +451,7 @@ type RowPersistPatch = { marginPercent?: number | null; mrpPaise?: number | null
 // stable `r` references for unchanged rows (setRows keeps them via the ternary).
 const ProductRow = memo(function ProductRow({
     r, index, hidden, selected,
-    onUpdate, onPersist, onToggleSel, onRemove,
+    onUpdate, onPersist, onToggleSel, onRemove, removeTitle,
 }: {
     r: Row;
     index: number;
@@ -477,6 +461,8 @@ const ProductRow = memo(function ProductRow({
     onPersist: (id: number, patch: RowPersistPatch, opts?: { reload?: boolean }) => void;
     onToggleSel: (id: number) => void;
     onRemove: (id: number) => void;
+    /** What the trash button does on this tab — it differs (see `remove`). */
+    removeTitle: string;
 }) {
     const show = (k: ColKey) => !hidden.has(k);
     const strategyPrice = strategyRupees(r);
@@ -632,7 +618,7 @@ const ProductRow = memo(function ProductRow({
             ) : null}
 
             <TableCell>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => onRemove(r.id)}>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={removeTitle} title={removeTitle} onClick={() => onRemove(r.id)}>
                     <Trash2 className="size-4 text-muted-foreground" />
                 </Button>
             </TableCell>
@@ -645,25 +631,21 @@ const ProductRow = memo(function ProductRow({
 export default function GeneratePage() {
     const [rows, setRows] = useState<Row[]>([]);
     const [loading, setLoading] = useState(true);
-    const nextId = useRef(-1); // locally-added rows get negative ids (never persisted)
     const [query, setQuery] = useState("");
     // Client-side pagination of the rendered rows (pageSize 0 = show All).
     const [pageSize, setPageSize] = useState(150);
     const [pageIndex, setPageIndex] = useState(0);
     // Top tab (All products / Selected product) + the working "selection".
     const [tab, setTab] = useState<"all" | "selected">("all");
-    // Sub-tab inside "Selected product": price/barcode table vs the label designer.
-    const [selTab, setSelTab] = useState<"price" | "print">("price");
 
-    // Deep-link: ?fromVoucher=<id> (from the GRN/Purchase "Print labels" action).
-    // Land on Selected product → Print so the designer mounts and prefills.
     const router = useRouter();
     const searchParams = useSearchParams();
-    const fromVoucher = searchParams.get("fromVoucher");
-    const fromVoucherId = fromVoucher && /^\d+$/.test(fromVoucher) ? Number(fromVoucher) : null;
+    // ?view=selected — arriving from the Print labels page to price the queued
+    // products. Same shared queue, so the Selected tab already holds them.
+    const view = searchParams.get("view");
     useEffect(() => {
-        if (fromVoucherId != null) { setTab("selected"); setSelTab("print"); }
-    }, [fromVoucherId]);
+        if (view === "selected") setTab("selected");
+    }, [view]);
 
     // ── Load real products (engine) + barcode bands (OrgDefaults) ─────────────
     // Merge preserves locally-edited sticky Sale-Price fields and any locally
@@ -713,7 +695,15 @@ export default function GeneratePage() {
         }
     }, [loadData]);
 
-    const [selectionIds, setSelectionIds] = useState<Set<number>>(new Set());
+    // The label queue lives in a module-level store, so the products picked here
+    // are the SAME list the standalone Print labels page shows (and the other way
+    // round). See src/store/labelPrintStore.ts.
+    const queueIds = useLabelPrintStore((s) => s.ids);
+    const queueAdd = useLabelPrintStore((s) => s.add);
+    const queueRemove = useLabelPrintStore((s) => s.remove);
+    const queueClear = useLabelPrintStore((s) => s.clear);
+    const queueMarkTouched = useLabelPrintStore((s) => s.markTouched);
+    const selectionIds = useMemo(() => new Set(queueIds), [queueIds]);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [fBrand, setFBrand] = useState("ALL");
     const [fCategory, setFCategory] = useState("ALL");
@@ -865,24 +855,6 @@ export default function GeneratePage() {
     const pageStart = pageSize === 0 ? 0 : safePage * pageSize;
     const pageRows = pageSize === 0 ? listRows : listRows.slice(pageStart, pageStart + pageSize);
 
-    // Selected rows → label items for the Print tab. The printed price is the
-    // barcode price (the band-buffered cap), falling back to the sale price.
-    const printItems = useMemo<LabelItem[]>(() =>
-        selectionRows.map((r) => {
-            const saved = numOrNull(r.salePrice);
-            const m = numOrNull(r.mrp);
-            const bc = saved != null ? barcodePrice(saved, m != null && m > 0 ? m : null).value : null;
-            const price = bc ?? saved ?? applicableSalePrice(r);
-            return {
-                id: r.id,
-                name: r.name,
-                barcode: r.barcode || String(r.id),
-                price: price != null ? String(Math.round(price)) : "0",
-                mrp: r.mrp || "0",
-                date: r.savedAt || todayISO(),
-            };
-        }), [selectionRows]);
-
     const toggleSort = (key: SortKey) =>
         setSort((s) => (s && s.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
 
@@ -904,54 +876,24 @@ export default function GeneratePage() {
 
     // Push the ticked rows into the selection (feeds the Selected product tab), then clear ticks.
     const addToSelection = () => {
-        setSelectionIds((prev) => new Set([...prev, ...selected]));
+        queueAdd([...selected]);
         setSelected(new Set());
     };
-    // Products added from the Print tab (combobox / voucher) flow back into the
-    // shared set: an existing row (by barcode) is just selected; a new product
-    // becomes a fresh pricing row and is selected — so it shows in BOTH tabs.
-    const addProducts = (products: AddedProduct[]) => {
-        const byBarcode = new Map(rows.filter((r) => r.barcode).map((r) => [r.barcode, r]));
-        const additions: Row[] = [];
-        const selectIds: number[] = [];
-        for (const p of products) {
-            const existing = p.barcode ? byBarcode.get(p.barcode) : undefined;
-            if (existing) { selectIds.push(existing.id); continue; }
-            const id = nextId.current--;  // local-only rows get negative ids (never persisted)
-            const sale = p.salePrice != null ? String(p.salePrice) : "";
-            const row: Row = {
-                id, name: p.name, sku: "", barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
-                method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", additionalExcl: 0, gst: "18",
-                margin: "25", strategyMargin: "30", strategyPaise: null, salePrice: sale, baseline: sale,
-                mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", baseSource: "SAVED", savedAt: "", savedProfit: "",
-            };
-            additions.push(row);
-            if (row.barcode) byBarcode.set(row.barcode, row); // dedupe within this batch
-            selectIds.push(id);
-        }
-        if (additions.length) setRows((prev) => [...prev, ...additions]);
-        setSelectionIds((prev) => new Set([...prev, ...selectIds]));
-    };
-
-    // Removing a label in the Print tab just drops it from the shared selection
-    // (the product stays in the All products catalog).
-    const removePrintItem = (id: number) =>
-        setSelectionIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
-
     const update = useCallback((id: number, patch: Partial<Row>) =>
         setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
+    // The row's trash button means different things on the two tabs. On Selected it
+    // takes the product OUT of the print queue (it stays in the catalogue — that is
+    // the only way to un-pick a product, since ticking is one-way). On All products
+    // it drops the row from this working list as before.
     const remove = useCallback((id: number) => {
+        if (tab === "selected") { queueRemove(id); return; }
         setRows((prev) => prev.filter((r) => r.id !== id));
         setSelected((prev) => {
             const next = new Set(prev);
             next.delete(id);
             return next;
         });
-    }, []);
+    }, [tab, queueRemove]);
     // Freeze = persist the sticky Sale Price for CHECKED rows via the sale-price
     // endpoint, then reflect the freeze locally (baseline + date + decided profit).
     // SAVED rows store savedSalePricePaise; STRATEGY/COMPUTED rows clear it (follow
@@ -964,6 +906,9 @@ export default function GeneratePage() {
     const save = async () => {
         const today = todayISO();
         const checked = rows.filter(isSaveTarget);
+        // Rows whose printed tag actually moves — every piece of that stock needs a
+        // fresh label, so their copies default to the full stock qty (see defaultCopies).
+        const repriced = checked.filter(rowDirty).map((r) => r.id);
         const payload = checked
             .filter((r) => r.id > 0)
             .map((r) => {
@@ -1000,6 +945,7 @@ export default function GeneratePage() {
                 }),
             );
             setSelected(new Set());
+            if (repriced.length) queueMarkTouched(repriced);
             toast.success(`Frozen — ${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
@@ -1135,9 +1081,14 @@ export default function GeneratePage() {
                             <Plus className="size-4" /> Add to selection{selected.size > 0 ? ` (${selected.size})` : ""}
                         </Button>
                     ) : (
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setSelTab("print")} title="Go to the Print view — lay these out as labels (you can also add products there)">
-                            <Printer className="size-4" /> Go to Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
-                        </Button>
+                        <>
+                            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={queueClear} disabled={selectionIds.size === 0} title="Empty the whole selection (the products stay in the catalogue)">
+                                Clear selection
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => router.push("/office/pricing-strategy/print-labels")} title="Open Print labels — the same products laid out as labels (you can add more there)">
+                                <Printer className="size-4" /> Go to Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
+                            </Button>
+                        </>
                     )}
                     <span className="text-xs text-muted-foreground">
                         {selected.size > 0
@@ -1272,6 +1223,7 @@ export default function GeneratePage() {
                                 onPersist={persist}
                                 onToggleSel={toggleSel}
                                 onRemove={remove}
+                                removeTitle={tab === "selected" ? "Remove from selection" : "Remove from this list"}
                             />
                         ))}
                     </TableBody>
@@ -1314,37 +1266,12 @@ export default function GeneratePage() {
         </>
     );
 
-    // The single header row (tab switcher + toolbar) lives inside productBody, so
-    // the table view and the print view each carry the switcher — no separate tabs row.
-    const showTable = tab === "all" || (tab === "selected" && selTab === "price");
+    // This page is the PRICING half of the label job — the table, and nothing else.
+    // Laying the labels out and printing them lives on its own page (Pricing
+    // Strategy → Print labels), working off the same shared queue.
     return (
         <div className="flex h-full flex-col overflow-hidden px-4 pt-3 pb-3">
-            {/* Table view: All products, or Selected → price. productBody's toolbar carries the switcher. */}
-            <div className={showTable ? "flex min-h-0 flex-1 flex-col" : "hidden"}>{productBody}</div>
-
-            {/* Print view — LabelDesigner stays mounted while on the Selected tab so
-                its label settings survive price↔print toggles. */}
-            {tab === "selected" ? (
-                <div className={selTab === "print" ? "flex min-h-0 flex-1 flex-col overflow-y-auto" : "hidden"}>
-                    <div className="mb-3 flex items-center gap-3">
-                        {tabSwitcher}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setSelTab("price")}>
-                            Update price / barcode
-                        </Button>
-                    </div>
-                    <LabelDesigner
-                        items={printItems}
-                        onAddProducts={addProducts}
-                        onRemoveItem={removePrintItem}
-                        onUpdateBarcode={() => setSelTab("price")}
-                        prefillVoucherId={fromVoucherId}
-                        onPrefillConsumed={() => router.replace("/office/pricing-strategy/update-print-labels", { scroll: false })}
-                        pageTitle="Print labels"
-                        pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Update price / barcode."
-                        rootClassName="pb-10"
-                    />
-                </div>
-            ) : null}
+            <div className="flex min-h-0 flex-1 flex-col">{productBody}</div>
         </div>
     );
 }
