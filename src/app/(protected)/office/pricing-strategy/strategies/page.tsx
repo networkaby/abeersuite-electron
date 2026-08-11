@@ -132,18 +132,30 @@ function PointSection({
     rows,
     points,
     onChange,
+    relevantKeys,
 }: {
     title: string;
     icon: React.ComponentType<{ className?: string }>;
     rows: Row[];
     points: Points;
     onChange: (key: string, value: string) => void;
+    /** Keys worth showing — those carried by the products currently in view (plus
+     *  their ancestors). Rows outside it are hidden unless "Show all" is on. */
+    relevantKeys: Set<string>;
 }) {
     const [open, setOpen] = useState(true);
+    const [showAll, setShowAll] = useState(false);
     const [q, setQ] = useState("");
     const activeCount = rows.filter((r) => num(points[r.key] ?? "") !== 0).length;
+    // Hide entries no product in view belongs to. A row that already carries
+    // points stays visible regardless — otherwise a stray value would be
+    // unreachable (invisible but still priced into every product under it).
+    const relevant = showAll
+        ? rows
+        : rows.filter((r) => relevantKeys.has(r.key) || num(points[r.key] ?? "") !== 0);
+    const hiddenCount = rows.length - relevant.length;
     const needle = q.trim().toLowerCase();
-    const shown = needle ? rows.filter((r) => r.label.toLowerCase().includes(needle)) : rows;
+    const shown = needle ? relevant.filter((r) => r.label.toLowerCase().includes(needle)) : relevant;
     return (
         <div className="rounded-md border bg-card">
             <button
@@ -169,20 +181,40 @@ function PointSection({
                 {rows.length === 0 ? (
                     <div className="px-3 py-2 text-xs italic text-muted-foreground">None yet.</div>
                 ) : (
-                    <div className="flex items-center gap-1.5 border-b px-2.5 py-1.5">
-                        <Search className="size-3.5 text-muted-foreground" />
-                        <input
-                            type="text"
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder={`Filter ${title.toLowerCase()}…`}
-                            className="flex-1 bg-transparent text-xs outline-none"
-                        />
-                    </div>
+                    <>
+                        <div className="flex items-center gap-1.5 border-b px-2.5 py-1.5">
+                            <Search className="size-3.5 text-muted-foreground" />
+                            <input
+                                type="text"
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                                placeholder={`Filter ${title.toLowerCase()}…`}
+                                className="flex-1 bg-transparent text-xs outline-none"
+                            />
+                        </div>
+                        {hiddenCount > 0 || showAll ? (
+                            <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-2.5 py-1 text-[10px] text-muted-foreground">
+                                <span>
+                                    {showAll
+                                        ? `All ${rows.length} shown`
+                                        : `${hiddenCount} hidden — no product in view`}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAll((s) => !s)}
+                                    className="underline-offset-2 hover:text-foreground hover:underline"
+                                >
+                                    {showAll ? "Only in view" : "Show all"}
+                                </button>
+                            </div>
+                        ) : null}
+                    </>
                 )}
                 <div className="divide-y">
                     {rows.length > 0 && shown.length === 0 ? (
-                        <div className="px-3 py-2 text-xs italic text-muted-foreground">No matches.</div>
+                        <div className="px-3 py-2 text-xs italic text-muted-foreground">
+                            {needle ? "No matches." : "Nothing in view."}
+                        </div>
                     ) : null}
                     {shown.map((r) => (
                         <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 pr-3"
@@ -439,6 +471,36 @@ export default function PricingStrategiesPage() {
         });
     }, [rows, query, conditions, ptRanges, brands, categories, groups]);
 
+    // Which brands / categories / groups the products currently in view actually
+    // belong to. The point editors are trimmed to these, so the panel shows what
+    // is worth editing instead of the whole master list — and it narrows further
+    // as filters are applied. Ancestors are kept: a parent group prices its
+    // children (points cascade), so it must stay reachable even when no product
+    // sits on the parent itself.
+    const relevant = useMemo(() => {
+        const catParentById = Object.fromEntries(categories.map((c) => [String(c.id), c.parentId ?? null]));
+        const addWithAncestors = (
+            set: Set<string>,
+            id: number | null,
+            parentById: Record<string, number | null>,
+        ) => {
+            let cur: number | null = id;
+            while (cur != null && !set.has(String(cur))) {
+                set.add(String(cur));
+                cur = parentById[String(cur)] ?? null;
+            }
+        };
+        const brand = new Set<string>();
+        const category = new Set<string>();
+        const group = new Set<string>();
+        for (const { p } of visible) {
+            if (p.brandId != null) brand.add(String(p.brandId));
+            addWithAncestors(category, p.categoryId, catParentById);
+            addWithAncestors(group, p.groupId, groupParentById);
+        }
+        return { brand, category, group };
+    }, [visible, categories, groupParentById]);
+
     // Reset to page 1 whenever the filtered result set changes size (new search /
     // filter), so the user never lands on an out-of-range page.
     useEffect(() => {
@@ -526,10 +588,13 @@ export default function PricingStrategiesPage() {
                     </div>
 
                     <PointSection title="Brands" icon={Tag} rows={flatRows(brands)} points={brandPts}
+                        relevantKeys={relevant.brand}
                         onChange={(k, v) => setBrandPts((s) => ({ ...s, [k]: v }))} />
                     <PointSection title="Categories" icon={FolderTree} rows={treeRows(categories)} points={catPts}
+                        relevantKeys={relevant.category}
                         onChange={(k, v) => setCatPts((s) => ({ ...s, [k]: v }))} />
                     <PointSection title="Groups" icon={Boxes} rows={treeRows(groups)} points={groupPts}
+                        relevantKeys={relevant.group}
                         onChange={(k, v) => setGroupPts((s) => ({ ...s, [k]: v }))} />
                 </div>
 

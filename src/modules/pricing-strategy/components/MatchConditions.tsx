@@ -103,9 +103,42 @@ export function buildHierarchy(rows: Master[]): (Master & { depth: number })[] {
 // Inline searchable checkbox list. Renders compact chips for selected ids on
 // top, then a search input, then a scrollable checkbox list. No popover —
 // keeps the form behaviour boring and predictable.
+//
+// Hierarchical lists (groups, categories) also get an "Include child" toggle.
+// It is purely a TICKING AID: with it on, ticking a parent also ticks every
+// descendant, so the boxes on screen are exactly the ids that will be matched.
+// Matching itself never expands anything — the ticks do their own job.
+
+/** id → its direct children ids, from the parentId links already on `items`. */
+function childrenMapOf(items: Master[]): Map<number, number[]> {
+    const m = new Map<number, number[]>();
+    for (const it of items) {
+        const pid = it.parentId ?? null;
+        if (pid == null) continue;
+        const arr = m.get(pid) ?? [];
+        arr.push(it.id);
+        m.set(pid, arr);
+    }
+    return m;
+}
+
+/** The id itself plus every descendant beneath it (cycle-safe). */
+function withDescendants(id: number, children: Map<number, number[]>): number[] {
+    const out: number[] = [];
+    const seen = new Set<number>();
+    const stack = [id];
+    while (stack.length) {
+        const cur = stack.pop()!;
+        if (seen.has(cur)) continue;
+        seen.add(cur);
+        out.push(cur);
+        for (const k of children.get(cur) ?? []) stack.push(k);
+    }
+    return out;
+}
 
 function MultiSelectGroup({
-    label, helper, items, selected, onChange, icon: Icon,
+    label, helper, items, selected, onChange, icon: Icon, hierarchical = false,
 }: {
     label: string;
     helper?: string;
@@ -113,18 +146,37 @@ function MultiSelectGroup({
     selected: Set<number>;
     onChange: (next: Set<number>) => void;
     icon: React.ComponentType<{ className?: string }>;
+    /** Show the "Include child" toggle — only meaningful for parent/child lists. */
+    hierarchical?: boolean;
 }) {
     const [q, setQ] = useState("");
+    const [includeChildren, setIncludeChildren] = useState(false);
     const filtered = useMemo(() => {
         const needle = q.trim().toLowerCase();
         if (!needle) return items;
         return items.filter((m) => m.name.toLowerCase().includes(needle));
     }, [items, q]);
 
+    const children = useMemo(() => childrenMapOf(items), [items]);
+
     const toggle = (id: number) => {
         const next = new Set(selected);
-        if (next.has(id)) next.delete(id); else next.add(id);
+        // With the toggle on, a parent carries its whole subtree in/out with it.
+        const ids = hierarchical && includeChildren ? withDescendants(id, children) : [id];
+        if (next.has(id)) for (const i of ids) next.delete(i);
+        else for (const i of ids) next.add(i);
         onChange(next);
+    };
+
+    // Turning the toggle ON tops up whatever is already ticked, so the screen
+    // immediately shows the full subtree rather than waiting for a re-tick.
+    // Turning it OFF leaves existing ticks alone — the user can untick freely.
+    const setIncludeChildrenAndTopUp = (on: boolean) => {
+        setIncludeChildren(on);
+        if (!on || selected.size === 0) return;
+        const next = new Set(selected);
+        for (const id of selected) for (const i of withDescendants(id, children)) next.add(i);
+        if (next.size !== selected.size) onChange(next);
     };
 
     const clearAll = () => onChange(new Set());
@@ -153,6 +205,16 @@ function MultiSelectGroup({
             </div>
             {helper ? <p className="text-[11px] text-muted-foreground -mt-1">{helper}</p> : null}
             <div className="border border-border rounded-sm bg-card">
+                {hierarchical ? (
+                    <label className="flex cursor-pointer items-center gap-2 border-b border-border px-2 py-1.5 text-[11px] hover:bg-muted/50">
+                        <Checkbox
+                            checked={includeChildren}
+                            onCheckedChange={(c) => setIncludeChildrenAndTopUp(c === true)}
+                        />
+                        <span>Include child</span>
+                        <span className="text-muted-foreground">— ticking a parent ticks its sub-{label.toLowerCase()}</span>
+                    </label>
+                ) : null}
                 <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
                     <Search className="size-3.5 text-muted-foreground" />
                     <input
@@ -280,14 +342,14 @@ export function MatchConditions({
                     />
                     <MultiSelectGroup
                         label="Groups" icon={FolderTree}
-                        // helper="Auto-includes sub-groups."
+                        hierarchical
                         items={buildHierarchy(groups)}
                         selected={value.groupIds}
                         onChange={(ids) => onChange({ groupIds: ids })}
                     />
                     <MultiSelectGroup
                         label="Categories" icon={Boxes}
-                        // helper="Auto-includes sub-categories."
+                        hierarchical
                         items={buildHierarchy(categories)}
                         selected={value.categoryIds}
                         onChange={(ids) => onChange({ categoryIds: ids })}
@@ -452,8 +514,10 @@ export function coerce(s: string): string | number | boolean {
 
 // ── Client-side matcher (UI-only test page) ───────────────────────────────────
 // Mirrors the server matcher's shape closely enough for a sample-data preview.
-// NOTE: taxonomy membership is direct (no descendant expansion) — fine for flat
-// sample masters; the real matcher expands sub-groups/sub-categories server-side.
+// NOTE: taxonomy membership is DIRECT — a product matches only if its own
+// group/category id is ticked. Descendants are never expanded here; the
+// "Include child" toggle in MultiSelectGroup does that expansion at tick time,
+// so what you see ticked is exactly what matches.
 
 export type ConditionProduct = {
     brandId: number | null;
