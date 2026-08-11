@@ -127,6 +127,8 @@ export const PERMISSIONS = {
     // Pricing Strategy — one edit gate per page. Viewing rides the sidebar link
     // grant. Each key passes its matching route.
     PRICING_STRATEGY_SET:               "pricing:strategy:set",
+    // Separate from SET: Reset wipes every point in one click.
+    PRICING_STRATEGY_RESET:             "pricing:strategy:reset",
     PRICING_COSTING_MANAGE:             "pricing:costing:manage",
     PRICING_LABELS_APPLY:               "pricing:labels:apply",
 

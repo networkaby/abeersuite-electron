@@ -72,6 +72,15 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "ui",
         description: 'Show the "Customize Home" link under E-Commerce in the sidebar.',
     },
+    // Reset on Pricing Strategy → Strategies clears every point in one click.
+    // Split out of pricing:strategy:set so routine point tuning doesn't carry the
+    // authority to wipe the lot. Grantable via the Strategies link's extra toggle.
+    {
+        id: "pricing:strategy:reset",
+        label: "Reset all strategy points",
+        module: "inventory",
+        description: "Clear every strategy point at once on the Pricing Strategy → Strategies page.",
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";

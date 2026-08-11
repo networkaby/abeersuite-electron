@@ -601,12 +601,14 @@ export const SIDEBAR_LINK_GRANULAR_IDS: Record<string, string[]> = Object.fromEn
     })
 );
 
-// A sidebar link with ONE extra yes/no permission beyond "can see this page" —
-// simpler than a full matrix row, for links where only a single additional
-// capability makes sense. Shown as a small toggle next to the link's chip,
+// A sidebar link with extra yes/no permissions beyond "can see this page" —
+// simpler than a full matrix row, for links where a handful of additional
+// capabilities make sense. Shown as small toggles next to the link's chip,
 // only once the link itself is ticked (can't grant an edit on a page the role
-// can't open). Keyed by the link's `ui:sidebar:*` permission id.
-export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: string }> = {
+// can't open). Keyed by the link's `ui:sidebar:*` permission id; a single
+// toggle may be written bare instead of as a one-item list.
+export type ExtraToggle = { id: string; label: string };
+export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle[]> = {
     // POS counters board — seeing it is oversight; the extra toggle grants the
     // authority to emergency-close a stuck operator shift from it.
     [sidebarChildPermissionId("pos", "counters")]: {
@@ -619,10 +621,12 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: stri
     },
     // Pricing Strategy — one edit toggle per page. "Needs attention" isn't here:
     // it edits the product, so its edit rides inventory:manage, not a pricing key.
-    [sidebarChildPermissionId("pricing-strategy", "strategies")]: {
-        id: "pricing:strategy:set",
-        label: "Can set strategy",
-    },
+    [sidebarChildPermissionId("pricing-strategy", "strategies")]: [
+        { id: "pricing:strategy:set", label: "Can set strategy" },
+        // Deliberately separate from "Can set strategy": Reset clears every point
+        // in one click and reprices the whole catalogue.
+        { id: "pricing:strategy:reset", label: "Can reset all points" },
+    ],
     [sidebarChildPermissionId("pricing-strategy", "costing")]: {
         id: "pricing:costing:manage",
         label: "Can manage costing",
@@ -634,6 +638,13 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, { id: string; label: stri
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
 };
+
+/** The extra toggles for a link, as a list (bare entries normalise to one item). */
+export function extraTogglesFor(linkPermissionId: string): ExtraToggle[] {
+    const v = SIDEBAR_LINK_EXTRA_TOGGLE[linkPermissionId];
+    if (!v) return [];
+    return Array.isArray(v) ? v : [v];
+}
 
 // A MODULE-level extra toggle: one yes/no capability that spans the whole module
 // rather than a single link, so it renders on its own after the module's links

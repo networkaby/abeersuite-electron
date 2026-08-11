@@ -212,7 +212,7 @@ function MultiSelectGroup({
                             onCheckedChange={(c) => setIncludeChildrenAndTopUp(c === true)}
                         />
                         <span>Include child</span>
-                        <span className="text-muted-foreground">— ticking a parent ticks its sub-{label.toLowerCase()}</span>
+                        {/* <span className="text-muted-foreground">— ticking a parent ticks its sub-{label.toLowerCase()}</span> */}
                     </label>
                 ) : null}
                 <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">

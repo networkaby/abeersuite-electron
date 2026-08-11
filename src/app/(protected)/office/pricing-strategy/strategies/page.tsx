@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
     Calculator,
@@ -56,6 +57,8 @@ import { PaginationBar } from "@/shared/components/PaginationBar";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
 import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
 import { sumGroupPointsWithAncestors } from "@/modules/pricing-strategy/lib/groupPointsHierarchy";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Default rows-per-page for the preview table (full list is paginated, not capped).
 const DEFAULT_PAGE_SIZE = 50;
@@ -225,7 +228,9 @@ function PointSection({
                                         {depthBullets(r.depth)}
                                     </span>
                                 ) : null}
-                                <span className="truncate">{r.label}</span>
+                                {/* The panel is narrow, so long names truncate — the
+                                    title carries the full one on hover. */}
+                                <span className="truncate" title={r.label}>{r.label}</span>
                             </span>
                             <div className="flex shrink-0 items-center gap-1">
                                 <Input
@@ -319,6 +324,9 @@ function RangeRow({
 export default function PricingStrategiesPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
 
     const [brands, setBrands] = useState<Master[]>([]);
     const [categories, setCategories] = useState<Master[]>([]);
@@ -518,7 +526,20 @@ export default function PricingStrategiesPage() {
         return { avg, min: Math.min(...ms), max: Math.max(...ms) };
     }, [visible]);
 
+    // Reset clears every point at once, which reprices the whole catalogue on the
+    // next Save. Kept behind its own permission (not pricing:strategy:set) so the
+    // people who tune points day to day aren't one stray click from wiping them,
+    // and confirmed even for those who hold it.
+    const canReset = hasPermissionWithScope(permissions, PERMISSIONS.PRICING_STRATEGY_RESET);
     const reset = () => {
+        if (!canReset) return;
+        const filled =
+            (baseN !== 0 ? 1 : 0) +
+            [brandPts, catPts, groupPts, productPts]
+                .reduce((a, m) => a + Object.values(m).filter((v) => num(v) !== 0).length, 0);
+        if (filled > 0 && !window.confirm(
+            `Clear all ${filled} strategy point value${filled === 1 ? "" : "s"}? Every product falls back to base only.`,
+        )) return;
         setBase("");
         setBrandPts({});
         setCatPts({});
@@ -559,7 +580,10 @@ export default function PricingStrategiesPage() {
     return (
         <div className="flex h-full flex-col px-2 pt-2 pb-1">
             {/* <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,360px)_1fr] lg:grid-rows-[minmax(0,1fr)]"> */}
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(200px,250px)_1fr] lg:grid-rows-[minmax(0,1fr)]">
+            {/* Preview track is minmax(0,1fr), NOT 1fr: a bare 1fr keeps
+                min-width:auto, so the track grows to the table's min-width instead
+                of letting the table scroll sideways inside it. */}
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(200px,250px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
                 {/* ── Point editors ── */}
                 <div className="space-y-3 overflow-y-auto pb-2 lg:min-h-0">
                     <div className="flex items-center gap-2">
@@ -599,7 +623,9 @@ export default function PricingStrategiesPage() {
                 </div>
 
                 {/* ── Live preview ── */}
-                <div className="flex min-h-0 flex-col gap-3">
+                {/* min-w-0 for the same reason as the track above — without it this
+                    flex column reports the table's min-width as its own minimum. */}
+                <div className="flex min-h-0 min-w-0 flex-col gap-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                             <div className="relative w-56">
@@ -641,9 +667,11 @@ export default function PricingStrategiesPage() {
                                     </span>
                                 ) : null}
                             </Button>
-                            <Button type="button" variant="outline" size="sm" className="h-8" onClick={reset}>
-                                <RotateCcw className="size-4" /> Reset
-                            </Button>
+                            {canReset ? (
+                                <Button type="button" variant="outline" size="sm" className="h-8" onClick={reset}>
+                                    <RotateCcw className="size-4" /> Reset
+                                </Button>
+                            ) : null}
                             <Button type="button" size="sm" className="h-8" onClick={save} disabled={saving}>
                                 {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
                             </Button>
@@ -696,13 +724,20 @@ export default function PricingStrategiesPage() {
                     ) : null}
 
                     {/* Flex-column table: thead is a fixed flex item, tbody is the only
-                        scroll region. Every row shares one CSS-grid template so the
-                        header and body columns stay aligned without table layout. */}
+                        vertical scroll region. Every row shares one CSS-grid template
+                        so the header and body columns stay aligned without table layout.
+                        Horizontal overflow is handled by the shadcn table container
+                        (one level in), so thead and tbody slide together — and the
+                        columns keep their widths instead of the product name being
+                        squeezed to one letter per line on a narrow pane.
+                        tbody must pin overflow-x to hidden: with overflow-y auto the
+                        CSS spec computes a `visible` x-axis to `auto`, which would
+                        give tbody its own sideways scrollbar and leave thead behind. */}
                     <div
-                        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-card [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&>div]:overflow-hidden"
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-card [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&>div]:overflow-x-auto [&>div]:overflow-y-hidden"
                         style={{ "--sbw": `${scrollbarW}px` } as React.CSSProperties}
                     >
-                        <Table className="flex min-h-0 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(0,1fr)_160px_84px_72px_96px_96px_96px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
+                        <Table className="flex min-h-0 min-w-[820px] flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:overflow-x-hidden [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(180px,1fr)_minmax(150px,170px)_84px_72px_88px_88px_88px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
                             <TableHeader className="bg-muted [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                                 <TableRow>
                                     <TableHead className="text-xs">Product</TableHead>

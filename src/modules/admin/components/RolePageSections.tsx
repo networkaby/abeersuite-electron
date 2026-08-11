@@ -6,7 +6,7 @@
 // everything it needs via props.
 
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
     Check,
     ChevronDown,
@@ -44,7 +44,7 @@ import {
     INLINE_HIDDEN_MATRIX_ROW_KEYS,
     toSharedMatrixRow,
     SIDEBAR_LINK_MATRIX_ROW_KEY,
-    SIDEBAR_LINK_EXTRA_TOGGLE,
+    extraTogglesFor,
     MODULE_EXTRA_TOGGLE,
     type WorkRow,
     type WorkGroupRow,
@@ -814,11 +814,11 @@ export function SidebarVisibilitySection({
         // level + row, so links sharing a row at THIS level open one table here;
         // the same row at another level opens its own table there.
         const expanded = matrixRow ? expandedRows.has(rowStateKey(scopeKey, matrixRow.key)) : false;
-        const extraToggle = SIDEBAR_LINK_EXTRA_TOGGLE[node.permissionId];
+        const extraToggles = extraTogglesFor(node.permissionId);
         // When a ticked link carries its own controls (a create/edit/delete matrix
         // and/or a guard toggle), wrap the whole group in a subtle cluster so those
         // controls read as belonging to THIS link — not the next chip beside it.
-        const hasControls = isOn && (!!matrixRow || !!extraToggle);
+        const hasControls = isOn && (!!matrixRow || extraToggles.length > 0);
         return (
             <div
                 key={node.permissionId}
@@ -867,10 +867,12 @@ export function SidebarVisibilitySection({
                         <ChevronDown size={12} className={["transition-transform", expanded ? "rotate-180" : ""].join(" ")} />
                     </Button>
                 )}
-                {/* Single extra yes/no capability on top of "can see this page" (e.g.
-                    Tax Classification's edit grant) — only offered once the link
-                    itself is ticked. */}
-                {extraToggle && isOn && extraToggleChip(extraToggle)}
+                {/* Extra yes/no capabilities on top of "can see this page" (e.g. Tax
+                    Classification's edit grant) — only offered once the link itself
+                    is ticked. */}
+                {isOn && extraToggles.map((t) => (
+                    <React.Fragment key={t.id}>{extraToggleChip(t)}</React.Fragment>
+                ))}
             </div>
         );
     };

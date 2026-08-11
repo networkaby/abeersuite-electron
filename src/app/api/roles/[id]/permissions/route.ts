@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
-import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, MODULE_EXTRA_TOGGLE } from "@/modules/admin/lib/roleMatrixConfig";
+import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, extraTogglesFor, MODULE_EXTRA_TOGGLE } from "@/modules/admin/lib/roleMatrixConfig";
 
 // Permissions the Role editor assigns role-direct, never department-pooled:
 // Works (`work:*`), POS operations (`pos:*` — vouchers + shift/till), and the
@@ -84,9 +84,9 @@ export async function PUT(
         // would silently drop it (see SIDEBAR_LINK_EXTRA_TOGGLE).
         const unlockedExtra = allowed
             ? new Set(
-                Object.entries(SIDEBAR_LINK_EXTRA_TOGGLE)
-                    .filter(([linkId]) => allowed.has(linkId) || unlockedSidebarIds!.has(linkId))
-                    .map(([, toggle]) => toggle.id)
+                Object.keys(SIDEBAR_LINK_EXTRA_TOGGLE)
+                    .filter((linkId) => allowed.has(linkId) || unlockedSidebarIds!.has(linkId))
+                    .flatMap((linkId) => extraTogglesFor(linkId).map((t) => t.id))
             )
             : null;
         // Module-level toggles (Contacts → show suppliers): unlocked once ANY of

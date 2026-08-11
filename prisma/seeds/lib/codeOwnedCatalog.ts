@@ -117,6 +117,10 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // pricing strategy — one edit gate per page (view rides the sidebar link grant).
     // "Needs attention" edits the product itself, so it stays on inventory:manage.
     { id: "pricing:strategy:set", label: "Set pricing strategy", module: "inventory", description: "Edit the markup / strategy-point rules on the Pricing Strategy → Strategies page." },
+    // Reset clears EVERY point in one click (base + all brand/category/group/SKU),
+    // repricing the whole catalogue. Kept separate from :set so day-to-day pricing
+    // staff can tune points without being one misclick from wiping the lot.
+    { id: "pricing:strategy:reset", label: "Reset all strategy points", module: "inventory", description: "Clear every strategy point at once on the Pricing Strategy → Strategies page." },
     { id: "pricing:costing:manage", label: "Manage costing", module: "inventory", description: "Add, edit, and remove cost draws on the Pricing Strategy → Costing page." },
     { id: "pricing:labels:apply", label: "Apply prices & print labels", module: "inventory", description: "Bulk-apply sale prices and print labels on the Pricing Strategy → Update & print labels page." },
 
