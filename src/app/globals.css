@@ -3,6 +3,56 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Dark chrome, light canvas ───────────────────────────────────────────────
+   The four chrome roots (top bars + both rails) carry `dark chrome-surface`.
+   `dark` flips the token set so text, muted text and the module hues get their
+   dark-tuned values; `chrome-surface` then overrides the two surface colours.
+
+   Why the override is needed: the .dark surface values are tuned for an
+   ALL-dark app, where the page tier is dark too. Reused as chrome beside a
+   white canvas they read as near-black (rgb 4,8,16) — glare, not contrast.
+   These are lifted to the range real dark-chrome UIs use, and they must live
+   here rather than in .dark, or true dark mode would end up with a rail
+   LIGHTER than its own page tier and the elevation ladder would invert. */
+.dark.chrome-surface {
+  --surface-frame: oklch(0.303 0.030 262);
+  --surface-rail: oklch(0.346 0.032 262);
+  /* A real edge, not the white hairline .dark uses — this border also faces
+     the light canvas, where a translucent-white line reads as a glow. */
+  --border-strong: oklch(0.450 0.034 262);
+
+  /* Foregrounds run lighter than the .dark defaults. Nav rows sit at
+     text-muted-foreground when resting (32 uses across the sidebar and quick
+     actions bar), and .dark's 0.76 was tuned against an all-dark page, not
+     against a rail — on chrome it reads as dim, half-disabled text. */
+  --foreground: oklch(0.985 0.008 255);
+  --muted-foreground: oklch(0.855 0.032 252);
+
+  /* Hover surfaces must sit ABOVE the rail. .dark's --muted is L .26 — below
+     the lifted rail at L .273 — so `hover:bg-muted` (15 of the 23 hover uses
+     across the sidebar and quick actions bar) was painting rows DARKER than
+     their own background: a negative lift, i.e. no hover feedback at all.
+     Both are now a definite step up from the rail. */
+  --muted: oklch(0.425 0.034 262);
+  --accent: oklch(0.462 0.052 260);
+
+  /* Module hues lifted to match. The .dark values (L .75-.79) were tuned for a
+     near-black background; on the lifted rail they need to climb with it or the
+     glyphs lose their separation from the surface. */
+  --m-repair: oklch(0.835 0.135 20);
+  --m-pos: oklch(0.850 0.125 50);
+  --m-help: oklch(0.860 0.120 80);
+  --m-ecommerce: oklch(0.850 0.125 110);
+  --m-inventory: oklch(0.845 0.120 140);
+  --m-accountancy: oklch(0.850 0.110 170);
+  --m-orders: oklch(0.850 0.110 200);
+  --m-customers: oklch(0.835 0.125 230);
+  --m-bi: oklch(0.825 0.135 260);
+  --m-crm: oklch(0.825 0.135 290);
+  --m-administration: oklch(0.825 0.135 320);
+  --m-settings: oklch(0.830 0.135 350);
+}
+
 @theme inline {
   /* Elevation ladder — see the --surface-* block below. Use bg-surface-frame /
      bg-surface-rail / bg-surface-raised on chrome instead of guessing between

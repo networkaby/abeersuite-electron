@@ -58,18 +58,18 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
 function CountBadges({ fresh, total }: { fresh: number; total: number }) {
     return (
-        <>
+        <span className="flex shrink-0 items-center gap-1">
             {fresh > 0 && (
-                <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
                     {fresh > 99 ? "99+" : fresh}
                 </span>
             )}
             {total > 0 && (
-                <span className="shrink-0 text-[10px] font-medium leading-none text-muted-foreground/70">
+                <span className="rounded bg-muted px-1.5 py-px text-[10px] font-medium leading-none text-muted-foreground/80">
                     {total > 99 ? "99+" : total}
                 </span>
             )}
-        </>
+        </span>
     );
 }
 
@@ -461,7 +461,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     return (
         <aside
-            className="relative flex h-full flex-col border-r border-border-strong bg-surface-rail shrink-0 overflow-hidden"
+            className="dark chrome-surface relative flex h-full flex-col border-r border-border-strong bg-surface-rail shrink-0 overflow-hidden text-foreground"
             style={{
                 width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
                 transition: sidebarDragging ? "none" : "width 0.3s ease",
@@ -624,10 +624,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                     <CountDot show={collapsed && fresh > 0} />
                                                 </span>
                                                 {!collapsed && (
-                                                    <>
-                                                        <span className="flex-1 truncate">{item.label}</span>
+                                                    <span className="flex flex-1 min-w-0 items-center gap-1.5">
+                                                        <span className="min-w-0 truncate">{item.label}</span>
                                                         <CountBadges fresh={fresh} total={total} />
-                                                    </>
+                                                    </span>
                                                 )}
                                             </Link>
                                         );
@@ -791,8 +791,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                     neutral until the module is active, so 12 coloured rows
                                                                     never shout at once. */}
                                                                 <Icon size={17} className="shrink-0" style={moduleIconStyle(mod.key)} />
-                                                                <span className={`flex-1 truncate text-left ${pathname.startsWith(mod.dashboardHref) ? "" : "text-muted-foreground"}`}>{mod.label}</span>
-                                                                <CountBadges fresh={fresh} total={total} />
+                                                                <span className="flex flex-1 min-w-0 items-center gap-1.5 text-left">
+                                                                    <span className={`min-w-0 truncate ${pathname.startsWith(mod.dashboardHref) ? "" : "text-muted-foreground"}`}>{mod.label}</span>
+                                                                    <CountBadges fresh={fresh} total={total} />
+                                                                </span>
                                                             </Link>
                                                             <Button
                                                                 type="button"

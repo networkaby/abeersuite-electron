@@ -79,8 +79,3 @@ export function moduleSelectedStyle(key?: string | null): CSSProperties {
         fontWeight: 600,
     };
 }
-
-/// Hover state on a rail — a hint of the active tint, no bar.
-export function moduleHoverTint(key?: string | null): string {
-    return `color-mix(in oklab, ${moduleColor(key)} 12%, var(--surface-rail))`;
-}

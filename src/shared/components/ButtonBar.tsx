@@ -213,7 +213,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     return (
         <>
             <aside
-                className="relative flex h-full flex-col border-l border-border-strong bg-surface-rail shrink-0 overflow-hidden"
+                className="dark chrome-surface relative flex h-full flex-col border-l border-border-strong bg-surface-rail shrink-0 overflow-hidden text-foreground"
                 style={{
                     width: isHidden ? 0 : collapsed ? 64 : barWidth,
                     transition: barDragging ? "none" : "width 0.3s ease",
