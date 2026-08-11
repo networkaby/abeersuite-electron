@@ -181,6 +181,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     });
     const [nestedChildOpen, setNestedChildOpen] = useState<Record<string, boolean>>({});
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
 
     // Fetch live avatarUrl so it reflects changes without re-login
     useEffect(() => {
@@ -923,19 +925,19 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         type="button"
                         variant="ghost"
                         onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-                        title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                        title={mounted && resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                         className={[
                             "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground",
                             collapsed ? "justify-center px-2" : "",
                         ].join(" ")}
                     >
-                        {resolvedTheme === "dark"
+                        {mounted && resolvedTheme === "dark"
                             ? <Sun size={17} className="shrink-0" />
                             : <Moon size={17} className="shrink-0" />
                         }
                         {!collapsed && (
                             <span className="truncate">
-                                {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                                {mounted && resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
                             </span>
                         )}
                     </Button>

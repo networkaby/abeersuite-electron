@@ -55,6 +55,7 @@ import {
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
 import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
+import { sumGroupPointsWithAncestors } from "@/modules/pricing-strategy/lib/groupPointsHierarchy";
 
 // Default rows-per-page for the preview table (full list is paginated, not capped).
 const DEFAULT_PAGE_SIZE = 50;
@@ -366,13 +367,24 @@ export default function PricingStrategiesPage() {
 
     const baseN = num(base);
 
+    // Group id → parentId, for cascading a group's points up to its ancestors
+    // (mirrors the server engine in additiveMargin.ts).
+    const groupParentById = useMemo(
+        () => Object.fromEntries(groups.map((g) => [String(g.id), g.parentId ?? null])),
+        [groups],
+    );
+    const groupPtsN = useMemo(() => strMapToNum(groupPts), [groupPts]);
+
     const rows = useMemo(() => {
         return products.map((p) => {
+            const groupPtsTotal = p.groupId != null
+                ? sumGroupPointsWithAncestors(p.groupId, groupPtsN, groupParentById)
+                : 0;
             const pieces: Piece[] = [
                 { label: "base", pts: baseN },
                 { label: `brand · ${nameOf(brands, p.brandId)}`, pts: p.brandId != null ? num(brandPts[String(p.brandId)] ?? "") : 0 },
                 { label: `category · ${nameOf(categories, p.categoryId)}`, pts: p.categoryId != null ? num(catPts[String(p.categoryId)] ?? "") : 0 },
-                { label: `group · ${nameOf(groups, p.groupId)}`, pts: p.groupId != null ? num(groupPts[String(p.groupId)] ?? "") : 0 },
+                { label: `group · ${nameOf(groups, p.groupId)} (incl. parent)`, pts: groupPtsTotal },
                 { label: "product (per-SKU override)", pts: num(productPts[String(p.id)] ?? "") },
             ];
             const margin = pieces.reduce((a, x) => a + x.pts, 0);
@@ -385,7 +397,7 @@ export default function PricingStrategiesPage() {
             const profit = p.costPaise != null ? Math.round(p.costPaise * (margin / 100)) : null;
             return { p, pieces, margin, costIncl, price, profit };
         });
-    }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPts, productPts]);
+    }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPtsN, groupParentById, productPts]);
 
     // Active facet count for the Filter button badge.
     const filterCount =

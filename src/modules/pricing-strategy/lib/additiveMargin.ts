@@ -16,6 +16,7 @@
 // Replaces the dropped PricingStrategy engine (pickStrategy + applyStrategy).
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { sumGroupPointsWithAncestors } from "./groupPointsHierarchy";
 
 /** Grouped points — same shape the points GET/PUT API uses. */
 export interface StrategyPointsResolved {
@@ -24,12 +25,20 @@ export interface StrategyPointsResolved {
     category: Record<string, number>;
     group: Record<string, number>;
     product: Record<string, number>;
+    /** InvProductGroup id → parentId, for cascading GROUP points up the tree. */
+    groupParentById: Record<string, number | null>;
 }
 
 /** Load the single org-wide additive-margin point set, grouped by dimension. */
 export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
-    const rows = await prisma.strategyPoint.findMany();
-    const out: StrategyPointsResolved = { base: 0, brand: {}, category: {}, group: {}, product: {} };
+    const [rows, groups] = await Promise.all([
+        prisma.strategyPoint.findMany(),
+        prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
+    ]);
+    const out: StrategyPointsResolved = {
+        base: 0, brand: {}, category: {}, group: {}, product: {},
+        groupParentById: Object.fromEntries(groups.map((g) => [String(g.id), g.parentId])),
+    };
     for (const r of rows) {
         const v = Number(r.points);
         switch (r.dimension) {
@@ -45,7 +54,11 @@ export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
     return out;
 }
 
-/** Sum the points that apply to a product: base + its brand + category + group + per-product. */
+/**
+ * Sum the points that apply to a product: base + its brand + category +
+ * group (own group's points PLUS every ancestor group's, see
+ * groupPointsHierarchy.ts) + per-product.
+ */
 export function additiveMarginPct(
     p: { id?: number; brandId: number | null; categoryId: number | null; groupId: number | null },
     points: StrategyPointsResolved,
@@ -53,7 +66,7 @@ export function additiveMarginPct(
     let m = points.base;
     if (p.brandId    != null) m += points.brand[String(p.brandId)]       ?? 0;
     if (p.categoryId != null) m += points.category[String(p.categoryId)] ?? 0;
-    if (p.groupId    != null) m += points.group[String(p.groupId)]       ?? 0;
+    if (p.groupId    != null) m += sumGroupPointsWithAncestors(p.groupId, points.group, points.groupParentById);
     if (p.id         != null) m += points.product[String(p.id)]          ?? 0;
     return m;
 }
