@@ -32,6 +32,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     // stays the effective/strategy price so the form round-trips it unchanged.
     savedSalePricePaise: number | null;
     barcodePricePaise: number | null;
+    /** Every scannable code on the product (barcode + EAN + UPC) — search only. */
+    codes: { kind: string; value: string }[];
 };
 
 export function invProductToAdmin(
@@ -39,6 +41,7 @@ export function invProductToAdmin(
         category?: { name: string } | null;
         brand?: { name: string } | null;
         group?: { name: string } | null;
+        codes?: { kind: string; value: string }[];
     },
     bands?: BarcodeBand[]
 ): ShopProductAdmin {
@@ -72,6 +75,7 @@ export function invProductToAdmin(
         shopCategory: p.shopCategory,
         savedSalePricePaise: p.savedSalePricePaise,
         barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null,
+        codes: p.codes ?? [],
     };
 }
 

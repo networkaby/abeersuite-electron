@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { productMatchesQuery } from "@/shared/lib/inventory";
 
 type InvProductOption = {
     id: number;
@@ -14,6 +15,7 @@ type InvProductOption = {
     name: string;
     unit: { code: string };
     brand: { name: string } | null;
+    codes?: { kind: string; value: string }[];
 };
 
 export function InvProductPicker({
@@ -43,11 +45,7 @@ export function InvProductPicker({
     }, [value, products]);
 
     const filtered = query.trim()
-        ? products.filter(
-              (p) =>
-                  p.sku.toLowerCase().includes(query.toLowerCase()) ||
-                  p.name.toLowerCase().includes(query.toLowerCase())
-          )
+        ? products.filter((p) => productMatchesQuery(p, query))
         : products;
 
     const pick = (p: InvProductOption) => {
@@ -91,7 +89,7 @@ export function InvProductPicker({
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                         <Input
                             className="pl-9"
-                            placeholder="Search SKU or name…"
+                            placeholder="Search SKU, name, or barcode…"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             autoFocus

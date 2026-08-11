@@ -52,6 +52,8 @@ export type Snapshot = {
 
 export type ProductOption = {
     id: number; sku: string; name: string;
+    /// Every scannable code on the product (barcode + EAN + UPC) — search only.
+    codes?: { kind: string; value: string }[];
     /// Materialized effective sale price (paise) — the value POS charges.
     /// Read straight from the products/lookup response (column of the same name).
     effectiveSalePricePaise?: number | null;

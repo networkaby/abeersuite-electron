@@ -25,6 +25,7 @@ import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { productMatchesQuery } from "@/shared/lib/inventory";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -212,10 +213,10 @@ export function usePosBilling(opts: {
     // Products only — services have no barcode, so they are NOT scannable/typed
     // here; they are added from the "+ Add service charge" button in the cart.
     const filteredProducts = useMemo(() => {
-        const q = productQuery.trim().toLowerCase();
+        const q = productQuery.trim();
         if (!q) return [] as ProductOption[];
         return allProducts
-            .filter((p) => p.sku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
+            .filter((p) => productMatchesQuery(p, q))
             .slice(0, 8);
     }, [productQuery, allProducts]);
 

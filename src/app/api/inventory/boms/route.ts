@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
             where: onlyActive ? { isActive: true } : {},
             orderBy: { name: "asc" },
             include: {
-                outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } },
+                outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } }, codes: { select: { kind: true, value: true } } } },
                 lines: {
                     include: { product: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } } },
                 },
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
                 lines: { create: b.lines.map((l) => ({ productId: l.productId, qty: l.qty })) },
             },
             include: {
-                outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } },
+                outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } }, codes: { select: { kind: true, value: true } } } },
                 lines: { include: { product: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } } } },
             },
         });

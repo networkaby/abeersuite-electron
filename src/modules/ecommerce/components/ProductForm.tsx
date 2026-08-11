@@ -292,6 +292,8 @@ export default function ProductForm({
         shopCategory: shopCategory.trim() || null,
         savedSalePricePaise: initial?.savedSalePricePaise ?? null,
         barcodePricePaise: initial?.barcodePricePaise ?? null,
+        // Preview card is display-only; codes exist purely for list search.
+        codes: initial?.codes ?? [],
         // availability is display-only on the storefront; the admin preview card
         // doesn't need a resolved value.
         stockStatus: "in_stock",

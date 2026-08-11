@@ -49,6 +49,7 @@ interface ReorderRow {
     id: number;
     sku: string;
     name: string;
+    codes: { kind: string; value: string }[];
     /** BOM output — made in-house; hidden from Smart bands, badged here. */
     inHouse: boolean;
     movementClass: MovementClass;
@@ -330,7 +331,7 @@ export default function ReorderPage() {
 
     const q = search.trim().toLowerCase();
     const passesFilters = useCallback((r: ReorderRow): boolean => {
-        if (q && !r.name.toLowerCase().includes(q) && !r.sku.toLowerCase().includes(q)) return false;
+        if (q && !r.name.toLowerCase().includes(q) && !r.sku.toLowerCase().includes(q) && !r.codes.some((c) => c.value.toLowerCase().includes(q))) return false;
         for (const [field, set] of filters) {
             const v = fieldValue(r, field);
             if (!set.has(v ?? NONE_KEY)) return false;

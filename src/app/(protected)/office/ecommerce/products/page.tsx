@@ -131,13 +131,17 @@ function StatusBadge({ status }: { status: ProductStatus }) {
 }
 
 export default function EcommerceProductsPage() {
-    const saved = useRef(loadSavedView()).current;
+    // Plain defaults on first render — sessionStorage doesn't exist during SSR,
+    // so seeding these useState calls from loadSavedView() (as before) made the
+    // client's first paint diverge from the server HTML and triggered a
+    // hydration mismatch. The saved view is restored client-side in an effect
+    // below, after mount.
     const [products, setProducts] = useState<ShopProductAdmin[]>([]);
     const [open, setOpen] = useState(false);
-    const [tab, setTab] = useState<TabKey>(saved.tab ?? "all");
-    const [query, setQuery] = useState(saved.query ?? "");
-    const [page, setPage] = useState(saved.page ?? 1);
-    const [pageSize, setPageSize] = useState(saved.pageSize ?? PAGE_SIZE);
+    const [tab, setTab] = useState<TabKey>("all");
+    const [query, setQuery] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(PAGE_SIZE);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
     // Owner-configured publish rules (edited in Shop settings). Used to compute
@@ -151,12 +155,13 @@ export default function EcommerceProductsPage() {
 
     // Filter panel
     const [showFilters, setShowFilters] = useState(false);
-    const [categoryFilter, setCategoryFilter] = useState(saved.categoryFilter ?? "all");
-    const [brandFilter, setBrandFilter] = useState(saved.brandFilter ?? "all");
-    const [groupFilter, setGroupFilter] = useState(saved.groupFilter ?? "all");
-    const [stockFilter, setStockFilter] = useState<StockFilter>(saved.stockFilter ?? "all");
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>(saved.statusFilter ?? "all");
-    const [activeFilter, setActiveFilter] = useState<ActiveFilter>(saved.activeFilter ?? "all");
+    const [categoryFilter, setCategoryFilter] = useState("all");
+    const [brandFilter, setBrandFilter] = useState("all");
+    const [groupFilter, setGroupFilter] = useState("all");
+    const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+    const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
+    const restoredScrollTop = useRef(0);
 
     const load = () => {
         axios
@@ -171,6 +176,26 @@ export default function EcommerceProductsPage() {
             .get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules")
             .then((r) => setRules(r.data.rules))
             .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
+    }, []);
+
+    // Restore the persisted view AFTER mount — sessionStorage is client-only, so
+    // reading it during render would desync the first paint from the SSR HTML.
+    const viewRestored = useRef(false);
+    useEffect(() => {
+        if (viewRestored.current) return;
+        viewRestored.current = true;
+        const saved = loadSavedView();
+        if (saved.tab) setTab(saved.tab);
+        if (saved.query) setQuery(saved.query);
+        if (saved.page) setPage(saved.page);
+        if (saved.pageSize) setPageSize(saved.pageSize);
+        if (saved.categoryFilter) setCategoryFilter(saved.categoryFilter);
+        if (saved.brandFilter) setBrandFilter(saved.brandFilter);
+        if (saved.groupFilter) setGroupFilter(saved.groupFilter);
+        if (saved.stockFilter) setStockFilter(saved.stockFilter);
+        if (saved.statusFilter) setStatusFilter(saved.statusFilter);
+        if (saved.activeFilter) setActiveFilter(saved.activeFilter);
+        restoredScrollTop.current = saved.scrollTop ?? 0;
     }, []);
 
     const categories = useMemo(
@@ -217,7 +242,7 @@ export default function EcommerceProductsPage() {
                 const k = productStatus(p, rules).kind;
                 if (statusFilter === "needs" ? k !== "draft" : k !== statusFilter) return false;
             }
-            if (q && !`${p.name} ${p.sku} ${p.category} ${p.brandName ?? ""} ${p.groupName ?? ""}`.toLowerCase().includes(q))
+            if (q && !`${p.name} ${p.sku} ${p.category} ${p.brandName ?? ""} ${p.groupName ?? ""} ${(p.codes ?? []).map((c) => c.value).join(" ")}`.toLowerCase().includes(q))
                 return false;
             return true;
         });
@@ -239,6 +264,9 @@ export default function EcommerceProductsPage() {
     // Scrollable table ref + persisted view (page/filters/scroll) so back/Esc returns here.
     const scrollRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
+        // Wait for the restore pass, otherwise this fires first with the plain
+        // defaults and wipes the saved view before it can be read back.
+        if (!viewRestored.current) return;
         // Merge over the existing entry so we never clobber the saved scrollTop
         // (which `persistScroll` owns) — important on the initial mount.
         try {
@@ -260,11 +288,11 @@ export default function EcommerceProductsPage() {
     useEffect(() => {
         if (scrollRestored.current || products.length === 0) return;
         scrollRestored.current = true;
-        const top = saved.scrollTop ?? 0;
+        const top = restoredScrollTop.current;
         if (top > 0) requestAnimationFrame(() => {
             if (scrollRef.current) scrollRef.current.scrollTop = top;
         });
-    }, [products, saved.scrollTop]);
+    }, [products]);
 
     // Throttle scroll saves (onScroll fires rapidly) to ~once per 200ms.
     const scrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

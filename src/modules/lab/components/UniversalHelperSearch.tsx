@@ -42,6 +42,8 @@ interface Product {
     stock: number;
     pricePaise: number | null;
     brand: { name: string } | null;
+    /// Every scannable code on the product (barcode + EAN + UPC) — search only.
+    codes?: { kind: string; value: string }[];
 }
 
 interface TicketSearchRow {
@@ -201,7 +203,7 @@ export default function UniversalHelperSearch() {
         if (!hasQuery) return [];
         return products
             .filter(p =>
-                `${p.name} ${p.sku ?? ""} ${p.brand?.name ?? ""}`.toLowerCase().includes(q)
+                `${p.name} ${p.sku ?? ""} ${p.brand?.name ?? ""} ${(p.codes ?? []).map(c => c.value).join(" ")}`.toLowerCase().includes(q)
             )
             .slice(0, 6);
     }, [q, products, hasQuery]);

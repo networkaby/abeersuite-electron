@@ -29,6 +29,7 @@ export async function GET(req: Request) {
             select: {
                 id: true, sku: true, name: true, createdAt: true,
                 stock: true, groupId: true, categoryId: true,
+                codes: { select: { kind: true, value: true } },
                 bomOutputs: { select: { id: true }, take: 1 },
                 unit: { select: { code: true } },
                 group: { select: { name: true } },
@@ -64,6 +65,7 @@ export async function GET(req: Request) {
 
     interface HealthRow {
         id: number; sku: string; name: string;
+        codes: { kind: string; value: string }[];
         unit: string | null; group: string | null; brand: string | null; category: string | null;
         inHouse: boolean;
         movementClass: MovementClass;
@@ -97,6 +99,7 @@ export async function GET(req: Request) {
             id: p.id,
             sku: p.sku,
             name: p.name,
+            codes: p.codes,
             unit: p.unit?.code ?? null,
             group: p.group?.name ?? null,
             brand: p.brand?.name ?? null,

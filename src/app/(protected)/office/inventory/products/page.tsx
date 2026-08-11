@@ -336,13 +336,14 @@ export default function InventoryProductsPage() {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        // 1. free-text search across SKU/name/namePart/model/barcode
+        // 1. free-text search across SKU/name/namePart/model/every scannable code
+        //    (barcode, EAN, UPC — not just the primary barcode1).
         let out = !q ? rows : rows.filter((r) =>
             r.sku.toLowerCase().includes(q) ||
             r.name.toLowerCase().includes(q) ||
             (r.namePart ?? "").toLowerCase().includes(q) ||
             (r.modelNo ?? "").toLowerCase().includes(q) ||
-            (r.barcode1 ?? "").toLowerCase().includes(q),
+            r.codes.some((c) => c.value.toLowerCase().includes(q)),
         );
         // 2. per-column multi-select filters
         for (const [field, allowed] of colFilters) {

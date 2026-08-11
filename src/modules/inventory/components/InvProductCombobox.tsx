@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 import axios from "axios";
 import { Plus } from "lucide-react";
 import { useComboboxNav } from "@/shared/hooks";
-import { primaryBarcode } from "@/shared/lib/inventory";
+import { primaryBarcode, productMatchesQuery } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
 import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
 import type { InvProductFormState } from "./InvProductFormFields";
@@ -37,6 +37,7 @@ type ProductOption = {
     unit:       { code: string };
     brand:      { name: string } | null;
     barcode1:   string | null;
+    codes?:     { kind: string; value: string }[];
 };
 
 export type SelectedProduct = {
@@ -116,11 +117,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     useEffect(syncQuery, [syncQuery]);
 
     const filtered = query.trim()
-        ? products.filter((p) =>
-            p.name.toLowerCase().includes(query.toLowerCase()) ||
-            p.sku.toLowerCase().includes(query.toLowerCase()) ||
-            (p.barcode1 ?? "").includes(query)
-          )
+        ? products.filter((p) => productMatchesQuery(p, query))
         : products;
 
     const cb = useComboboxNav({

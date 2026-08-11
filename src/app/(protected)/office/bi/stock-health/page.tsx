@@ -21,6 +21,7 @@ type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
 
 interface Row {
     id: number; sku: string; name: string;
+    codes: { kind: string; value: string }[];
     unit: string | null; group: string | null; brand: string | null; category: string | null;
     inHouse: boolean;
     movementClass: MovementClass;
@@ -70,7 +71,7 @@ export default function StockHealthPage() {
         const q = search.trim().toLowerCase();
         return data.rows.filter((r) =>
             (classFilter === "ALL" || r.movementClass === classFilter) &&
-            (!q || r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q)),
+            (!q || r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q) || r.codes.some((c) => c.value.toLowerCase().includes(q))),
         );
     }, [data, classFilter, search]);
 

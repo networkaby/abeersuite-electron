@@ -48,6 +48,7 @@ const productInclude = {
     category: { select: { name: true } },
     brand: { select: { name: true } },
     group: { select: { name: true } },
+    codes: { select: { kind: true, value: true } },
 } as const;
 
 export async function GET(req: Request) {
@@ -65,6 +66,7 @@ export async function GET(req: Request) {
                         { name: { contains: q, mode: "insensitive" } },
                         { sku: { contains: q, mode: "insensitive" } },
                         { slug: { contains: q, mode: "insensitive" } },
+                        { codes: { some: { value: { contains: q, mode: "insensitive" } } } },
                     ],
                 } : {}),
                 ...(shopCategory && shopCategory !== "all" ? { shopCategory } : {}),

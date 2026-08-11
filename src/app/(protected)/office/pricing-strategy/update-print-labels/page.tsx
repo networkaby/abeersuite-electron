@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
 import { gridRowClass } from "@/shared/lib/format";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
+import { productMatchesQuery } from "@/shared/lib/inventory";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -109,6 +110,7 @@ type Row = {
     name: string;
     sku: string;            // stock-keeping unit — shown under the name + searchable
     barcode: string;        // scannable EAN/SKU printed on the label (feeds the Print tab)
+    codes: { kind: string; value: string }[]; // every scannable code (barcode+EAN+UPC) — search only
     brand: string;          // taxonomy — for the Brand filter (mirrors InvProduct.brand)
     category: string;       // taxonomy — for the Category filter
     group: string;          // taxonomy — for the Group filter
@@ -166,6 +168,7 @@ function itemToRow(it: PricingItem): Row {
         name: it.name,
         sku: it.sku ?? "",
         barcode: it.barcode ?? "",
+        codes: it.codes ?? [],
         brand: it.brandName ?? "",
         category: it.categoryName ?? "",
         group: it.groupName ?? "",
@@ -798,7 +801,7 @@ export default function GeneratePage() {
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
         let v = rows;
-        if (q) v = v.filter((r) => r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q));
+        if (q) v = v.filter((r) => productMatchesQuery(r, q));
         if (fBrand !== "ALL") v = v.filter((r) => r.brand === fBrand);
         if (fCategory !== "ALL") v = v.filter((r) => r.category === fCategory);
         if (fGroup !== "ALL") v = v.filter((r) => r.group === fGroup);

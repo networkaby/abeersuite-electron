@@ -58,3 +58,41 @@ export function normalizeProductCodes(codes: readonly ProductCode[] | null | und
     }
     return [...byValue.values()];
 }
+
+/**
+ * Prisma `where` fragment for "search a product by anything scannable":
+ * name, SKU, or any code (barcode / EAN / UPC) — partial, case-insensitive.
+ * Returns undefined for a blank query (caller should skip the filter, not
+ * apply an always-false one). Shared so every product search surface (grid,
+ * pricing items, ecommerce admin, POS, help-desk lookup, …) matches the same
+ * fields instead of drifting field-by-field.
+ */
+export function productSearchWhere(q: string | null | undefined) {
+    const query = q?.trim();
+    if (!query) return undefined;
+    return {
+        OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { sku: { contains: query, mode: "insensitive" as const } },
+            { codes: { some: { value: { contains: query, mode: "insensitive" as const } } } },
+        ],
+    };
+}
+
+/**
+ * Client-side counterpart of {@link productSearchWhere} for lists already
+ * fetched into the browser (POS product picker, help-desk universal search,
+ * update-print-labels table, …). Same fields, same partial/case-insensitive
+ * matching, so a query behaves identically whether filtered server- or
+ * client-side.
+ */
+export function productMatchesQuery(
+    p: { name: string; sku?: string | null; codes?: readonly { value: string }[] | null },
+    q: string,
+): boolean {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    if (p.name.toLowerCase().includes(needle)) return true;
+    if (p.sku && p.sku.toLowerCase().includes(needle)) return true;
+    return (p.codes ?? []).some((c) => c.value.toLowerCase().includes(needle));
+}

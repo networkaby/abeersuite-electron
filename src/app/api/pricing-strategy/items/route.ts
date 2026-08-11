@@ -63,6 +63,8 @@ export interface PricingItem {
     gstRatePct:           number;
     /** Primary scannable barcode (first BARCODE InvProductCode). null = none set. */
     barcode:              string | null;
+    /** Every scannable code on the product (barcode + EAN + UPC) — search only. */
+    codes:                { kind: string; value: string }[];
     /** Days since the last SALE/POS. null = never sold. Only populated with ?withSaleAge=1. */
     daysSinceLastSale:    number | null;
     /** Saved human sale price (paise). null = not set. Source of the barcode. */
@@ -207,6 +209,7 @@ export async function GET(req: Request) {
                 appliedRoundingPaise:  0,
                 gstRatePct,
                 barcode:               primaryBarcode(p.codes),
+                codes:                 p.codes,
                 daysSinceLastSale:     lastSaleAge.get(p.id) ?? null,
                 savedSalePricePaise:   p.savedSalePricePaise,
                 effectiveSalePriceSource: p.effectiveSalePriceSource,

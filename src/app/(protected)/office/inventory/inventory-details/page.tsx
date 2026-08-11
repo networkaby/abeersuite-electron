@@ -33,6 +33,7 @@ type ProductListItem = {
     stock: number;
     lowStockThreshold: number;
     isLow: boolean;
+    codes: { kind: string; value: string }[];
     unit: { code: string; label: string };
     brand: { name: string } | null;
     category: { name: string } | null;
@@ -195,7 +196,8 @@ export default function InventoryDetailsPage() {
         ? products.filter(
             (p) =>
                 p.name.toLowerCase().includes(search.toLowerCase()) ||
-                p.sku.toLowerCase().includes(search.toLowerCase()),
+                p.sku.toLowerCase().includes(search.toLowerCase()) ||
+                p.codes.some((c) => c.value.toLowerCase().includes(search.toLowerCase())),
         )
         : products;
 

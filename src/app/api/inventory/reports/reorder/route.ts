@@ -43,6 +43,7 @@ export async function GET(req: Request) {
                 lowStockThreshold: true, leadTimeDays: true,
                 effectiveSalePricePaise: true,
                 groupId: true, categoryId: true,
+                codes: { select: { kind: true, value: true } },
                 // BOM-output check: produced in-house → never a procurement signal.
                 bomOutputs: { select: { id: true }, take: 1 },
                 unit: { select: { code: true } },
@@ -102,6 +103,7 @@ export async function GET(req: Request) {
             id: p.id,
             sku: p.sku,
             name: p.name,
+            codes: p.codes,
             inHouse,
             movementClass: m.movementClass,
             daysSinceLastSale: m.daysSinceLastSale,

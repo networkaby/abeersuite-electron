@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: Params) {
         const row = await prisma.invBom.findUnique({
             where: { id },
             include: {
-                outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } },
+                outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } }, codes: { select: { kind: true, value: true } } } },
                 lines: { include: { product: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } } } },
             },
         });
@@ -54,7 +54,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     } : {}),
                 },
                 include: {
-                    outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } },
+                    outputProduct: { select: { id: true, sku: true, name: true, unit: { select: { code: true } }, codes: { select: { kind: true, value: true } } } },
                     lines: { include: { product: { select: { id: true, sku: true, name: true, unit: { select: { code: true } } } } } },
                 },
             });

@@ -13,12 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { productMatchesQuery } from "@/shared/lib/inventory";
 
 export type BomPickerPayload = {
     id:              number;
     name:            string;
     outputProductId: number;
-    outputProduct:   { id: number; sku: string; name: string; unit: { code: string } } | null;
+    outputProduct:   { id: number; sku: string; name: string; unit: { code: string }; codes?: { kind: string; value: string }[] } | null;
     outputQty:       number;
     lines:           {
         productId: number;
@@ -67,8 +68,7 @@ export function BomPicker({
     const filtered = query.trim()
         ? boms.filter((b) =>
             b.name.toLowerCase().includes(query.toLowerCase()) ||
-            (b.outputProduct?.name ?? "").toLowerCase().includes(query.toLowerCase()) ||
-            (b.outputProduct?.sku ?? "").toLowerCase().includes(query.toLowerCase()),
+            (b.outputProduct != null && productMatchesQuery(b.outputProduct, query)),
         )
         : boms;
 

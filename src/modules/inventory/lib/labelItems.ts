@@ -81,7 +81,7 @@ export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], co
     return {
         id: it.id,
         name: it.name,
-        barcode: it.barcode?.trim() || it.sku?.trim() || String(it.id),
+        barcode: it.sku?.trim() || it.barcode?.trim() || String(it.id),
         price: price != null ? String(Math.round(price)) : "0",
         mrp: mrp != null ? mrp.toFixed(2) : "0",
         date: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",

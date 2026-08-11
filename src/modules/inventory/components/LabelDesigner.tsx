@@ -187,7 +187,7 @@ export function LabelDesigner({
                 const qty = Math.ceil(Math.max(0, Number(line.quantity) || 0));
                 if (qty <= 0) continue;
                 const lookup = lookupById.get(line.productId);
-                const barcode = (lookup?.barcode1 && lookup.barcode1.trim()) || line.product.sku;
+                const barcode = line.product.sku?.trim() || (lookup?.barcode1 && lookup.barcode1.trim()) || String(line.productId);
                 const already = byBarcode.get(barcode);
                 if (already) { already.incomingQty = (already.incomingQty ?? 0) + qty; continue; }
                 const mrpPaise = line.mrpPaise ?? lookup?.mrpPaise ?? null;
