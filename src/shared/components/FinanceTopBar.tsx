@@ -55,7 +55,7 @@ function Pill({
                     negative ? "text-red-600 dark:text-red-400" : (colorClass ?? "text-foreground"),
                 ].join(" ")}
             >
-                <span className="shrink-0 opacity-60">{icon}</span>
+                <span className="shrink-0 opacity-90">{icon}</span>
                 <span className="text-muted-foreground">{label}</span>
                 <span className="font-mono font-semibold">₹{fmt(Math.abs(value))}</span>
                 {negative && <span className="text-[10px] text-red-500">(Dr)</span>}
@@ -63,7 +63,7 @@ function Pill({
 
             {/* Sub-account dropdown */}
             {open && hasDropdown && (
-                <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-border bg-popover py-1 shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-1 min-w-50 rounded-lg border border-border bg-popover py-1 shadow-lg">
                     {detail.map((d) => (
                         <div
                             key={d.name}
@@ -223,7 +223,7 @@ export default function FinanceTopBar({
             <div className="ml-auto flex items-center gap-2">
                 <BranchSwitcher />
                 {canView && lastUpdated && (
-                    <span className="text-[10px] text-muted-foreground/60 hidden sm:block">
+                    <span className="text-[10px] text-muted-foreground/85 hidden sm:block">
                         {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                 )}
@@ -243,7 +243,7 @@ export default function FinanceTopBar({
                         onClick={recompute}
                         disabled={recomputing}
                         title="Recompute cached balances from journal entries (rarely needed — only if you suspect drift)"
-                        className={`text-muted-foreground/60 hover:text-foreground transition-colors ${recomputing ? "animate-spin" : ""}`}
+                        className={`text-muted-foreground/85 hover:text-foreground transition-colors ${recomputing ? "animate-spin" : ""}`}
                     >
                         <Wrench size={11} />
                     </button>

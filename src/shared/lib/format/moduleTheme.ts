@@ -50,9 +50,15 @@ export function moduleIconStyle(key?: string | null): CSSProperties {
     return { color: moduleColor(key) };
 }
 
-/// The active nav item: tinted pill + a solid bar on the leading edge + the
-/// hue as text colour. Replaces a flat primary block, which said "selected"
-/// but never said "selected WHAT".
+/// The active nav item: tinted pill + a solid bar on the leading edge + bold,
+/// near-white text. Replaces a flat primary block, which said "selected" but
+/// never said "selected WHAT".
+///
+/// Text goes to --foreground rather than the module hue: a mid-brightness hue
+/// as body text reads as only mildly emphasised at nav-label size, which is
+/// what "active" must NOT look like. Full-brightness bold text is the actual
+/// highlight; the hue still carries the module identity through the pill tint
+/// and the left bar (and through the icon, which stays hue-coloured at rest).
 ///
 /// Mixed against --surface-rail, NOT --background: every caller is a nav rail
 /// (sidebar, quick actions bar), and mixing against the page canvas produced a
@@ -61,9 +67,9 @@ export function moduleIconStyle(key?: string | null): CSSProperties {
 /// against the rail and kept high enough to read at a glance in both themes.
 export function moduleActiveStyle(key?: string | null): CSSProperties {
     return {
-        backgroundColor: `color-mix(in oklab, ${moduleColor(key)} 30%, var(--surface-rail))`,
-        color: moduleColor(key),
-        fontWeight: 600,
+        backgroundColor: `color-mix(in oklab, ${moduleColor(key)} 26%, var(--surface-rail))`,
+        color: "var(--foreground)",
+        fontWeight: 700,
         boxShadow: `inset 3px 0 0 ${moduleColor(key)}`,
     };
 }

@@ -15,11 +15,11 @@
    here rather than in .dark, or true dark mode would end up with a rail
    LIGHTER than its own page tier and the elevation ladder would invert. */
 .dark.chrome-surface {
-  --surface-frame: oklch(0.303 0.030 262);
-  --surface-rail: oklch(0.346 0.032 262);
+  --surface-frame: oklch(0.360 0.032 262);
+  --surface-rail: oklch(0.410 0.034 262);
   /* A real edge, not the white hairline .dark uses — this border also faces
      the light canvas, where a translucent-white line reads as a glow. */
-  --border-strong: oklch(0.450 0.034 262);
+  --border-strong: oklch(0.510 0.036 262);
 
   /* Foregrounds run lighter than the .dark defaults. Nav rows sit at
      text-muted-foreground when resting (32 uses across the sidebar and quick
@@ -33,8 +33,8 @@
      across the sidebar and quick actions bar) was painting rows DARKER than
      their own background: a negative lift, i.e. no hover feedback at all.
      Both are now a definite step up from the rail. */
-  --muted: oklch(0.425 0.034 262);
-  --accent: oklch(0.462 0.052 260);
+  --muted: oklch(0.485 0.036 262);
+  --accent: oklch(0.520 0.054 260);
 
   /* Module hues lifted to match. The .dark values (L .75-.79) were tuned for a
      near-black background; on the lifted rail they need to climb with it or the
