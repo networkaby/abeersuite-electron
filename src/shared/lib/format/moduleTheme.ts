@@ -60,14 +60,22 @@ export function moduleIconStyle(key?: string | null): CSSProperties {
 /// highlight; the hue still carries the module identity through the pill tint
 /// and the left bar (and through the icon, which stays hue-coloured at rest).
 ///
-/// Mixed against --surface-rail, NOT --background: every caller is a nav rail
+/// Built from --surface-rail, NOT --background: every caller is a nav rail
 /// (sidebar, quick actions bar), and mixing against the page canvas produced a
 /// pill only ~2% off the rail it sat on — i.e. no visible selection at all.
-/// A selection has to step clearly off ITS OWN surface, so the strength is set
-/// against the rail and kept high enough to read at a glance in both themes.
+/// A selection has to step clearly off ITS OWN surface.
+///
+/// The pill goes DEEPER than the rail rather than lighter. The rail is a
+/// mid-light saturated blue, so tinting it with a light module hue moved it
+/// toward the text and dropped white-on-pill to ~4.1:1 (under AA) while barely
+/// separating from the rail. Darkening first, then tinting, gives ~9:1 text and
+/// a clear step — and it pairs with hover, which lifts LIGHTER, so the two
+/// states move in opposite directions and can never be confused.
 export function moduleActiveStyle(key?: string | null): CSSProperties {
     return {
-        backgroundColor: `color-mix(in oklab, ${moduleColor(key)} 26%, var(--surface-rail))`,
+        backgroundColor: `color-mix(in oklab, ${moduleColor(
+            key,
+        )} 20%, color-mix(in oklab, black 44%, var(--surface-rail)))`,
         color: "var(--foreground)",
         fontWeight: 700,
         boxShadow: `inset 3px 0 0 ${moduleColor(key)}`,

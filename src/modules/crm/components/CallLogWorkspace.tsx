@@ -183,7 +183,7 @@ export default function CallLogWorkspace() {
         }
     };
 
-    
+
 
     return (
         <div className="flex h-full flex-col gap-3 p-4">
@@ -260,7 +260,7 @@ export default function CallLogWorkspace() {
             {/* List */}
             <div className="min-h-0 flex-1 overflow-auto rounded-md border">
                 <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-muted/60 text-left text-xs uppercase text-muted-foreground">
+                    <thead className="sticky top-0 bg-muted/99 text-left text-xs uppercase text-muted-foreground">
                         <tr>
                             <th className="px-3 py-2 font-medium">When</th>
                             <th className="px-3 py-2 font-medium">Direction</th>
@@ -278,68 +278,68 @@ export default function CallLogWorkspace() {
                             <tr><td colSpan={colCount} className="px-3 py-10 text-center text-muted-foreground">No calls found.</td></tr>
                         )}
                         {items.map((c, i) => (
-                          <Fragment key={c.id}>
-                            {/* Day divider — landmarks while scanning a long list. */}
-                            {(i === 0 || dayLabel(items[i - 1].occurredAt) !== dayLabel(c.occurredAt)) && (
-                                <tr className="border-t bg-muted/40">
-                                    <td colSpan={colCount} className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                                        {dayLabel(c.occurredAt)}
+                            <Fragment key={c.id}>
+                                {/* Day divider — landmarks while scanning a long list. */}
+                                {(i === 0 || dayLabel(items[i - 1].occurredAt) !== dayLabel(c.occurredAt)) && (
+                                    <tr className="border-t bg-muted/40">
+                                        <td colSpan={colCount} className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                                            {dayLabel(c.occurredAt)}
+                                        </td>
+                                    </tr>
+                                )}
+                                <tr className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
+                                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
+                                    <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium">{formatCallerNumber(c.rawNumber)}</td>
+                                    <td className="px-3 py-2">
+                                        {c.customer ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                {c.customer.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
+                                                {c.customer.name}
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted-foreground">Unknown</span>
+                                        )}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
+                                        {[c.fromExt && `from ${c.fromExt}`, c.toExt && `to ${c.toExt}`, c.trunk].filter(Boolean).join(" · ") || "—"}
+                                    </td>
+                                    {showHost && (
+                                        <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
+                                            {c.sourceHost ?? <span className="text-muted-foreground/65">—</span>}
+                                            {c.alsoPushedBy.length > 0 && (
+                                                <span
+                                                    className="block text-[11px] text-muted-foreground/60"
+                                                    title="Also pushed this call, but arrived after the winner"
+                                                >
+                                                    also {c.alsoPushedBy.join(", ")}
+                                                </span>
+                                            )}
+                                        </td>
+                                    )}
+                                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{c.missed ? "—" : durationLabel(c.speechSec || c.durationSec)}</td>
+                                    <td className="max-w-[16rem] truncate px-3 py-2 text-muted-foreground">{c.note ?? ""}</td>
+                                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Add / edit note" onClick={() => openNote(c)}>
+                                                <StickyNote size={15} />
+                                            </Button>
+                                            {!c.customer && c.rawNumber && (
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber))}>
+                                                    <UserPlus size={15} />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost" size="icon" className="h-8 w-8"
+                                                title={c.spam ? "Remove spam flag" : "Flag number as spam"}
+                                                onClick={() => void toggleSpam(c)}
+                                            >
+                                                {c.spam ? <ShieldCheck size={15} className="text-emerald-600" /> : <ShieldAlert size={15} className="text-red-500" />}
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
-                            )}
-                            <tr className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
-                                <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
-                                <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
-                                <td className="whitespace-nowrap px-3 py-2 font-medium">{formatCallerNumber(c.rawNumber)}</td>
-                                <td className="px-3 py-2">
-                                    {c.customer ? (
-                                        <span className="inline-flex items-center gap-1.5">
-                                            {c.customer.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
-                                            {c.customer.name}
-                                        </span>
-                                    ) : (
-                                        <span className="text-muted-foreground">Unknown</span>
-                                    )}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
-                                    {[c.fromExt && `from ${c.fromExt}`, c.toExt && `to ${c.toExt}`, c.trunk].filter(Boolean).join(" · ") || "—"}
-                                </td>
-                                {showHost && (
-                                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
-                                        {c.sourceHost ?? <span className="text-muted-foreground/65">—</span>}
-                                        {c.alsoPushedBy.length > 0 && (
-                                            <span
-                                                className="block text-[11px] text-muted-foreground/60"
-                                                title="Also pushed this call, but arrived after the winner"
-                                            >
-                                                also {c.alsoPushedBy.join(", ")}
-                                            </span>
-                                        )}
-                                    </td>
-                                )}
-                                <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{c.missed ? "—" : durationLabel(c.speechSec || c.durationSec)}</td>
-                                <td className="max-w-[16rem] truncate px-3 py-2 text-muted-foreground">{c.note ?? ""}</td>
-                                <td className="whitespace-nowrap px-3 py-2 text-right">
-                                    <div className="flex items-center justify-end gap-1">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Add / edit note" onClick={() => openNote(c)}>
-                                            <StickyNote size={15} />
-                                        </Button>
-                                        {!c.customer && c.rawNumber && (
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber))}>
-                                                <UserPlus size={15} />
-                                            </Button>
-                                        )}
-                                        <Button
-                                            variant="ghost" size="icon" className="h-8 w-8"
-                                            title={c.spam ? "Remove spam flag" : "Flag number as spam"}
-                                            onClick={() => void toggleSpam(c)}
-                                        >
-                                            {c.spam ? <ShieldCheck size={15} className="text-emerald-600" /> : <ShieldAlert size={15} className="text-red-500" />}
-                                        </Button>
-                                    </div>
-                                </td>
-                            </tr>
-                          </Fragment>
+                            </Fragment>
                         ))}
                     </tbody>
                 </table>

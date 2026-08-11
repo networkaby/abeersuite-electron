@@ -15,43 +15,50 @@
    here rather than in .dark, or true dark mode would end up with a rail
    LIGHTER than its own page tier and the elevation ladder would invert. */
 .dark.chrome-surface {
-  --surface-frame: oklch(0.360 0.032 262);
-  --surface-rail: oklch(0.410 0.034 262);
-  /* A real edge, not the white hairline .dark uses — this border also faces
-     the light canvas, where a translucent-white line reads as a glow. */
-  --border-strong: oklch(0.510 0.036 262);
+  /* Rail/frame are hand-picked (a saturated blue, not a slate). Everything
+     below is DERIVED from that choice — hover, border, label and icon values
+     were all tuned against the previous slate rail and had to be re-solved, or
+     they collapse: at the old values `hover:bg-muted` sat at 1.03:1 against
+     this rail (no hover at all) and the border at 1.16:1 (no edge). If the
+     rail is edited again, re-check every token in this block. */
+  --surface-frame: oklch(48.426% 0.16635 262.848);
+  --surface-rail: oklch(48.426% 0.16635 262.848);
 
-  /* Foregrounds run lighter than the .dark defaults. Nav rows sit at
-     text-muted-foreground when resting (32 uses across the sidebar and quick
-     actions bar), and .dark's 0.76 was tuned against an all-dark page, not
-     against a rail — on chrome it reads as dim, half-disabled text. */
+  /* Kept in the rail's own hue family with real chroma. Greys here read as
+     dirt against a saturated blue, so these lift by lightness, not by
+     desaturating. */
+  --border-strong: oklch(0.690 0.125 262.8);
+  --muted: oklch(0.585 0.150 262.8);
+  --accent: oklch(0.645 0.140 262.8);
+
+  /* Nav rows rest at text-muted-foreground (32 uses across the sidebar and
+     quick actions bar). Against this lighter rail the previous 0.855 fell to
+     4.27:1 — under AA — so it climbs with the rail. */
   --foreground: oklch(0.985 0.008 255);
-  --muted-foreground: oklch(0.855 0.032 252);
+  --muted-foreground: oklch(0.910 0.030 255);
 
-  /* Hover surfaces must sit ABOVE the rail. .dark's --muted is L .26 — below
-     the lifted rail at L .273 — so `hover:bg-muted` (15 of the 23 hover uses
-     across the sidebar and quick actions bar) was painting rows DARKER than
-     their own background: a negative lift, i.e. no hover feedback at all.
-     Both are now a definite step up from the rail. */
-  --muted: oklch(0.485 0.036 262);
-  --accent: oklch(0.520 0.054 260);
+  /* Fallback hue for the surfaces that belong to no module (Inbox, Work Flow,
+     POS). .dark's primary is a mid blue at 2.20:1 here — near-invisible on a
+     blue rail — so the chrome gets a light one. */
+  --primary: oklch(0.885 0.060 258);
 
-  /* Module hues lifted to match. The .dark values (L .75-.79) were tuned for a
-     near-black background; on the lifted rail they need to climb with it or the
-     glyphs lose their separation from the surface. */
-  --m-repair: oklch(0.835 0.135 20);
-  --m-pos: oklch(0.850 0.125 50);
-  --m-help: oklch(0.860 0.120 80);
-  --m-ecommerce: oklch(0.850 0.125 110);
-  --m-inventory: oklch(0.845 0.120 140);
-  --m-accountancy: oklch(0.850 0.110 170);
-  --m-orders: oklch(0.850 0.110 200);
-  --m-customers: oklch(0.835 0.125 230);
-  --m-bi: oklch(0.825 0.135 260);
-  --m-crm: oklch(0.825 0.135 290);
-  --m-administration: oklch(0.825 0.135 320);
-  --m-settings: oklch(0.830 0.135 350);
+  /* Module hues lifted to L .885. The glyph must separate from the rail, and
+     the rail is now light: at the old L .845 the blue-family hues (bi 260,
+     customers 230) dropped toward the rail's own colour. */
+  --m-repair: oklch(0.885 0.125 20);
+  --m-pos: oklch(0.885 0.115 50);
+  --m-help: oklch(0.890 0.110 80);
+  --m-ecommerce: oklch(0.885 0.115 110);
+  --m-inventory: oklch(0.885 0.110 140);
+  --m-accountancy: oklch(0.885 0.100 170);
+  --m-orders: oklch(0.885 0.100 200);
+  --m-customers: oklch(0.885 0.115 230);
+  --m-bi: oklch(0.880 0.120 260);
+  --m-crm: oklch(0.880 0.120 290);
+  --m-administration: oklch(0.880 0.120 320);
+  --m-settings: oklch(0.885 0.120 350);
 }
+
 
 @theme inline {
   /* Elevation ladder — see the --surface-* block below. Use bg-surface-frame /
@@ -118,8 +125,8 @@
        3 raised — cards, tables, breadcrumb, dialogs, popovers
      Every tier boundary also gets a 1px --border-strong, so separation never
      rests on lightness alone. */
-  --surface-frame: oklch(0.900 0.022 258);
-  --surface-rail: oklch(0.922 0.020 258);
+  --surface-frame: oklch(0.9 0.022 258);
+  --surface-rail: oklch(0.922 0.02 258);
   --surface-page: oklch(0.966 0.011 255);
   --surface-raised: oklch(1 0 0);
   --border-strong: oklch(0.822 0.028 256);
@@ -194,8 +201,8 @@
   /* Elevation ladder — dark. Same direction as light: chrome darker, canvas lighter. */
   --surface-frame: oklch(0.132 0.024 262);
   --surface-rail: oklch(0.168 0.028 262);
-  --surface-page: oklch(0.205 0.030 262);
-  --surface-raised: oklch(0.240 0.033 262);
+  --surface-page: oklch(0.205 0.03 262);
+  --surface-raised: oklch(0.24 0.033 262);
   --border-strong: oklch(1 0 0 / 18%);
 
   --background: var(--surface-page);
