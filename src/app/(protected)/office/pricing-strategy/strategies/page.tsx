@@ -681,7 +681,7 @@ export default function PricingStrategiesPage() {
                     {filtersOpen ? (
                         <div className="rounded-md border bg-muted/30 p-3">
                             <div className="mb-3 flex items-center justify-between">
-                                <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span>
+                                {/* <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span> */}
                                 {filterCount > 0 ? (
                                     <button
                                         type="button"
@@ -737,7 +737,7 @@ export default function PricingStrategiesPage() {
                         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-card [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&>div]:overflow-x-auto [&>div]:overflow-y-hidden"
                         style={{ "--sbw": `${scrollbarW}px` } as React.CSSProperties}
                     >
-                        <Table className="flex min-h-0 min-w-[820px] flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:overflow-x-hidden [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(180px,1fr)_minmax(150px,170px)_84px_72px_88px_88px_88px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
+                        <Table className="flex min-h-0 min-w-205 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-(--sbw) [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:overflow-x-hidden [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(180px,1fr)_minmax(150px,170px)_84px_72px_88px_88px_88px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
                             <TableHeader className="bg-muted [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                                 <TableRow>
                                     <TableHead className="text-xs">Product</TableHead>
@@ -760,7 +760,7 @@ export default function PricingStrategiesPage() {
                                 ) : null}
                                 {pageRows.map(({ p, pieces, margin, costIncl, price, profit }) => (
                                     <TableRow key={p.id}>
-                                        <TableCell className="whitespace-normal break-words text-sm font-medium leading-snug">{p.name}</TableCell>
+                                        <TableCell className="whitespace-normal wrap-break-word text-sm font-medium leading-snug">{p.name}</TableCell>
                                         <TableCell className="whitespace-normal"><Breakdown pieces={pieces} margin={margin} /></TableCell>
                                         <TableCell className="flex items-center justify-end gap-1">
                                             <Input
