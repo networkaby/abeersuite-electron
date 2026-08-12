@@ -86,7 +86,7 @@ const enumFromCode = (c: CostCode): string =>
 
 // ── Toggleable columns (show/hide) ───────────────────────────────────────────
 // Name / # / select / remove are always shown; everything else can be hidden.
-type ColKey = "brand" | "category" | "group" | "stock" | "cost" | "margin" | "strategy" | "computed" | "sale" | "mrp" | "barcode";
+type ColKey = "brand" | "category" | "group" | "stock" | "cost" | "margin" | "strategy" | "computed" | "sale" | "selling" | "mrp" | "barcode";
 const COLS: { key: ColKey; label: string }[] = [
     { key: "brand", label: "Brand" },
     { key: "category", label: "Category" },
@@ -94,12 +94,28 @@ const COLS: { key: ColKey; label: string }[] = [
     { key: "stock", label: "Stock" },
     { key: "cost", label: "Cost + Method" },
     { key: "margin", label: "Margin %" },
-    { key: "strategy", label: "Strategy" },
     { key: "computed", label: "Computed" },
+    { key: "strategy", label: "Strategy" },
     { key: "sale", label: "Sale Price" },
+    { key: "selling", label: "Selling" },
     { key: "mrp", label: "MRP" },
-    { key: "barcode", label: "Barcode (cap)" },
+    { key: "barcode", label: "Barcode" },
 ];
+
+// ── Column colour groups (visual grouping only, no logic) ────────────────────
+// Read-only/derived voices: neutral. Editable + persisted fields: amber tint.
+// Print-facing outputs (what actually gets charged/printed): emerald tint.
+const COL_TINT: Partial<Record<ColKey, string>> = {
+    stock: "bg-slate-50 dark:bg-slate-900/40",
+    cost: "bg-slate-50 dark:bg-slate-900/40",
+    computed: "bg-slate-50 dark:bg-slate-900/40",
+    strategy: "bg-slate-50 dark:bg-slate-900/40",
+    margin: "bg-amber-50 dark:bg-amber-950/20",
+    sale: "bg-amber-50 dark:bg-amber-950/20",
+    mrp: "bg-amber-50 dark:bg-amber-950/20",
+    selling: "bg-emerald-50 dark:bg-emerald-950/20",
+    barcode: "bg-emerald-50 dark:bg-emerald-950/20",
+};
 
 // ── Row data (UI only) ───────────────────────────────────────────────────────
 
@@ -426,8 +442,12 @@ function profitGapPct(r: Row): number | null {
 
 // ── Voice cell (clickable price chip) ─────────────────────────────────────────
 
-function voiceClass(selected: boolean): string {
-    return `w-full rounded px-1.5 py-1 text-right transition-colors ${selected ? "bg-emerald-50 ring-1 ring-emerald-400" : "cursor-pointer hover:bg-muted"
+// `clickable` = the chip itself switches the selling voice (Strategy / Computed).
+// The Sale Price cell passes false: it holds an editable input, so clicking or
+// tabbing into it must NOT silently move the selling voice — that flip is the
+// Selling dropdown's job alone.
+function voiceClass(selected: boolean, clickable = true): string {
+    return `w-full rounded px-1.5 py-1 text-right transition-colors ${selected ? "bg-emerald-50 ring-1 ring-emerald-400" : clickable ? "cursor-pointer hover:bg-muted" : ""
         }`;
 }
 
@@ -495,12 +515,12 @@ const ProductRow = memo(function ProductRow({
             {show("category") ? <TableCell className="text-xs text-muted-foreground">{r.category || "—"}</TableCell> : null}
             {show("group") ? <TableCell className="text-xs text-muted-foreground">{r.group || "—"}</TableCell> : null}
             {show("stock") ? (
-                <TableCell className={`text-right text-xs font-mono ${stockQty(r) <= 0 ? "text-red-600" : ""}`}>
+                <TableCell className={`text-right text-xs font-mono ${COL_TINT.stock} ${stockQty(r) <= 0 ? "text-red-600" : ""}`}>
                     {r.stock === "" ? "—" : r.stock}
                 </TableCell>
             ) : null}
             {show("cost") ? (
-                <TableCell className="align-top">
+                <TableCell className={`align-top ${COL_TINT.cost}`}>
                     <div className="flex flex-col items-end gap-1">
                         <span className="text-xs font-mono text-muted-foreground">
                             {r.costIncl === "" ? "—" : `₹${r.costIncl}`}
@@ -534,7 +554,7 @@ const ProductRow = memo(function ProductRow({
                 </TableCell>
             ) : null}
             {show("margin") ? (
-                <TableCell className="text-right">
+                <TableCell className={`text-right ${COL_TINT.margin}`}>
                     <Input
                         inputMode="decimal"
                         value={r.margin}
@@ -546,18 +566,8 @@ const ProductRow = memo(function ProductRow({
                 </TableCell>
             ) : null}
 
-            {show("strategy") ? (
-                <TableCell className="p-1 text-right align-top">
-                    <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => onUpdate(r.id, { saleSource: "STRATEGY" })}>
-                        {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
-                        <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
-                        <ProfitSub p={stratProfit} />
-                    </button>
-                </TableCell>
-            ) : null}
-
             {show("computed") ? (
-                <TableCell className="p-1 text-right align-top">
+                <TableCell className={`p-1 text-right align-top ${COL_TINT.computed}`}>
                     <button type="button" className={voiceClass(r.saleSource === "MY")} onClick={() => onUpdate(r.id, { saleSource: "MY" })}>
                         {r.saleSource === "MY" ? SELLING_TAG : null}
                         <span className="block text-sm font-mono font-semibold">{rupee(myPrice)}</span>
@@ -566,16 +576,24 @@ const ProductRow = memo(function ProductRow({
                 </TableCell>
             ) : null}
 
+            {show("strategy") ? (
+                <TableCell className={`p-1 text-right align-top ${COL_TINT.strategy}`}>
+                    <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => onUpdate(r.id, { saleSource: "STRATEGY" })}>
+                        {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
+                        <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
+                        <ProfitSub p={stratProfit} />
+                    </button>
+                </TableCell>
+            ) : null}
+
             {show("sale") ? (
-                <TableCell className="p-1 text-right align-top">
-                    { }
-                    <div className={voiceClass(r.saleSource === "SAVED")} onClick={() => onUpdate(r.id, { saleSource: "SAVED" })}>
+                <TableCell className={`p-1 text-right align-top ${COL_TINT.sale}`}>
+                    <div className={voiceClass(r.saleSource === "SAVED", false)}>
                         {r.saleSource === "SAVED" ? SELLING_TAG : null}
                         <Input
                             inputMode="decimal"
                             value={r.salePrice}
                             placeholder="—"
-                            onFocus={() => onUpdate(r.id, { saleSource: "SAVED" })}
                             onChange={(e) => onUpdate(r.id, { salePrice: e.target.value })}
                             className={`h-7 w-24 text-right text-xs font-mono font-semibold ${dirty ? "ring-1 ring-amber-400 focus-visible:ring-amber-400" : ""}`}
                         />
@@ -584,8 +602,23 @@ const ProductRow = memo(function ProductRow({
                 </TableCell>
             ) : null}
 
+            {show("selling") ? (
+                <TableCell className={`text-right ${COL_TINT.selling}`}>
+                    {/* The one deliberate control for which voice POS/shop charges.
+                        Editing Sale Price no longer moves it — you pick it here. */}
+                    <Select value={r.saleSource} onValueChange={(v) => onUpdate(r.id, { saleSource: v as SaleSource })}>
+                        <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="STRATEGY">Strategy</SelectItem>
+                            <SelectItem value="MY">Computed</SelectItem>
+                            <SelectItem value="SAVED" disabled={savedPrice == null}>Sale Price</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </TableCell>
+            ) : null}
+
             {show("mrp") ? (
-                <TableCell className="text-right">
+                <TableCell className={`text-right ${COL_TINT.mrp}`}>
                     <Input
                         inputMode="decimal"
                         value={r.mrp}
@@ -598,7 +631,7 @@ const ProductRow = memo(function ProductRow({
             ) : null}
 
             {show("barcode") ? (
-                <TableCell className="text-right">
+                <TableCell className={`text-right ${COL_TINT.barcode}`}>
                     {bc == null || bc.value == null ? (
                         <span className="text-xs text-muted-foreground">—</span>
                     ) : (
@@ -760,7 +793,7 @@ export default function GeneratePage() {
         } catch { /* corrupt blob → ignore, fall back to defaults */ }
         setHydrated(true);
         // run once
-         
+
     }, []);
     useEffect(() => {
         if (!hydrated) return;
@@ -968,9 +1001,9 @@ export default function GeneratePage() {
             ? sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
             : <ChevronsUpDown className="size-3 opacity-40" />;
 
-    const SortTh = ({ label, k, align = "right", thClass = "" }: { label: string; k: SortKey; align?: "left" | "right"; thClass?: string }) => (
+    const SortTh = ({ label, k, align = "right", thClass = "", title }: { label: string; k: SortKey; align?: "left" | "right"; thClass?: string; title?: string }) => (
         <TableHead className={`text-xs ${align === "right" ? "text-right" : ""} ${thClass}`}>
-            <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground">
+            <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground" title={title}>
                 {label}{sortIcon(k)}
             </button>
         </TableHead>
@@ -1178,7 +1211,7 @@ export default function GeneratePage() {
                 ONLY the rows scroll — the page never does. The horizontal scrollbar
                 stays pinned at its bottom and the sticky header keeps the column row
                 visible while rows scroll under it. */}
-            <div className="min-h-0 flex-1 overflow-auto rounded-sm border [&>[data-slot=table-container]]:overflow-x-visible">
+            <div className="min-h-0 flex-1 overflow-auto rounded-sm border *:data-[slot=table-container]:overflow-x-visible">
                 {/* Compact density: tighter than the default shadcn cell padding so the
                     grid fits more columns and the Product name gets the leftover width. */}
                 <Table className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1">
@@ -1192,14 +1225,15 @@ export default function GeneratePage() {
                             {show("brand") ? <SortTh label="Brand" k="brand" align="left" /> : null}
                             {show("category") ? <SortTh label="Category" k="category" align="left" /> : null}
                             {show("group") ? <SortTh label="Group" k="group" align="left" /> : null}
-                            {show("stock") ? <SortTh label="Stock" k="stock" /> : null}
-                            {show("cost") ? <SortTh label="Cost (incl)" k="cost" /> : null}
-                            {show("margin") ? <TableHead className="text-right text-xs">Margin %</TableHead> : null}
-                            {show("strategy") ? <SortTh label="Strategy" k="strategy" /> : null}
-                            {show("computed") ? <SortTh label="Computed" k="computed" /> : null}
-                            {show("sale") ? <SortTh label="Sale Price" k="saved" /> : null}
-                            {show("mrp") ? <TableHead className="text-right text-xs">MRP</TableHead> : null}
-                            {show("barcode") ? <SortTh label="Barcode (cap)" k="barcode" /> : null}
+                            {show("stock") ? <SortTh label="Stock" k="stock" thClass={COL_TINT.stock} /> : null}
+                            {show("cost") ? <SortTh label="Cost (incl)" k="cost" thClass={COL_TINT.cost} /> : null}
+                            {show("margin") ? <TableHead className={`text-right text-xs ${COL_TINT.margin}`}>Margin %</TableHead> : null}
+                            {show("computed") ? <SortTh label="Computed" k="computed" thClass={COL_TINT.computed} /> : null}
+                            {show("strategy") ? <SortTh label="Strategy" k="strategy" thClass={COL_TINT.strategy} title="Go to Strategy page to change" /> : null}
+                            {show("sale") ? <SortTh label="Sale Price" k="saved" thClass={COL_TINT.sale} title="Manual — you type this price" /> : null}
+                            {show("selling") ? <TableHead className={`text-right text-xs ${COL_TINT.selling}`}>Selling</TableHead> : null}
+                            {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
+                            {show("barcode") ? <SortTh label="Barcode" k="barcode" thClass={COL_TINT.barcode} title="Edit Sale Price to change" /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>

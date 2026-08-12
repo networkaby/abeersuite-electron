@@ -721,7 +721,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
             { label: "Costing", icon: Gauge, href: "/office/pricing-strategy/costing" },
             { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
-            { label: "Update & print labels", icon: FileStack, href: "/office/pricing-strategy/update-print-labels" },
+            { label: "Update prices", icon: FileStack, href: "/office/pricing-strategy/update-print-labels" },
             { label: "Print labels", icon: Printer, href: "/office/pricing-strategy/print-labels" },
         ],
     },

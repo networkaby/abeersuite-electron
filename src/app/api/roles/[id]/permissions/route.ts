@@ -99,20 +99,35 @@ export async function PUT(
                     .map((t) => t.id)
             )
             : null;
-        const permissionIds = allowed
+        const pooledIds = allowed
             ? data.permissionIds.filter((id) =>
                 allowed.has(id) || isUnpooled(id) || unlockedSidebarIds!.has(id) || unlockedGranular!.has(id)
                 || unlockedExtra!.has(id) || unlockedModuleExtra!.has(id))
             : data.permissionIds;
 
-        // Replace full permission set for this role
-        await prisma.rolePermission.deleteMany({ where: { roleId } });
-        if (permissionIds.length > 0) {
-            await prisma.rolePermission.createMany({
-                data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
-                skipDuplicates: true,
-            });
-        }
+        // Drop ids with no Permission row. The editor's checkboxes are built from
+        // CODE (SIDEBAR_MODULES / the matrix config), so a nav link added — or a
+        // label renamed without a pinned `sidebarKey` — mints an id the DB has not
+        // been seeded with yet. Sending it would fail the createMany on a foreign
+        // key, which (before the transaction below) left the role with NO grants.
+        const known = await prisma.permission.findMany({
+            where: { id: { in: pooledIds } },
+            select: { id: true },
+        });
+        const knownIds = new Set(known.map((p) => p.id));
+        const permissionIds = pooledIds.filter((id) => knownIds.has(id));
+
+        // Replace full permission set for this role — atomically, so a rejected id
+        // can never leave the role emptied by the delete half of the swap.
+        await prisma.$transaction(async (tx) => {
+            await tx.rolePermission.deleteMany({ where: { roleId } });
+            if (permissionIds.length > 0) {
+                await tx.rolePermission.createMany({
+                    data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
+                    skipDuplicates: true,
+                });
+            }
+        });
         // The role's grants changed — every holder's JWT is now stale; revoke so
         // they pick up the new set on next login.
         await revokeRoleSessions(roleId);
