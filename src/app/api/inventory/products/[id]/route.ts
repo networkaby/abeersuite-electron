@@ -141,6 +141,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 // Reorder inputs (Reorder page inline edit).
                 ...(b.lowStockThreshold !== undefined ? { lowStockThreshold: b.lowStockThreshold } : {}),
                 ...(b.leadTimeDays !== undefined ? { leadTimeDays: b.leadTimeDays } : {}),
+                ...(b.orderPackQty !== undefined ? { orderPackQty: b.orderPackQty } : {}),
+                ...(b.minOrderQty !== undefined ? { minOrderQty: b.minOrderQty } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
                 ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
                 ...(b.slug !== undefined ? { slug: b.slug } : {}),

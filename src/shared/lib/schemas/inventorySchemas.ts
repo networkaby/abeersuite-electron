@@ -192,6 +192,10 @@ export const invProductUpdateSchema = invProductCreateSchema.partial().extend({
     lowStockThreshold: z.coerce.number().int().min(0).optional(),
     /// Per-product supplier lead time (days); null = org default.
     leadTimeDays: z.coerce.number().int().min(0).max(365).optional().nullable(),
+    /// Supplier order multiple (pack/case); null = sold loose.
+    orderPackQty: z.coerce.number().int().min(0).optional().nullable(),
+    /// Supplier minimum order qty; null = no floor.
+    minOrderQty: z.coerce.number().int().min(0).optional().nullable(),
 });
 
 // ── Naming convention (InvNamingConfig singleton) ──────────────────────────

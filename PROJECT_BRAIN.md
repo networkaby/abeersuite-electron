@@ -364,7 +364,8 @@ Sketch discussed:
 - B2B Company portal — companies see all linked devices/tickets.
 - Despatch courier integration — auto-generate tracking label from "Pending Despatch" worker.
 - Position model — named slots in the org chart (needed at 50+ users).
-- Per-branch reorder inputs on `InvProductBranch` — the Reorder page (2026-07-23) computes usage per branch, but `lowStockThreshold` / `leadTimeDays` are still global on `InvProduct`.
+- Per-branch reorder inputs on `InvProductBranch` — the Reorder page (2026-07-23) computes usage per branch, but `lowStockThreshold` / `leadTimeDays` / `orderPackQty` / `minOrderQty` are still global on `InvProduct`.
+- Supplier-specific pack/MOQ — `orderPackQty` / `minOrderQty` (added 2026-08-12) live on the product, so a product bought from two suppliers on different terms can only carry one. Move them onto a supplier↔product link when multi-supplier procurement is built.
 - Assemble/bundle products (assembled PC, CCTV set kits) — sellable bundles of group products; rides BOM + Manufacturing like repacking, needs its own product/pricing surface (noted 2026-07-23).
 - Customer Quality flag block-scope **settings toggle** — today the no-discount flag is a hard-coded all-block (tier + coupons + loyalty); the future refinement is an admin setting choosing which benefits the flag blocks. (Feature itself shipped 2026-07-23.)
 - GSTIN auto-fill from public GST lookup API when typing a 15-char GSTIN.
