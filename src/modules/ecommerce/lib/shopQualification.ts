@@ -137,7 +137,20 @@ export function storefrontQualifiable(
         category: string | null;
     }
 ): ShopQualifiable {
-    return { ...pub, ...raw };
+    // Take the office scalars EXPLICITLY, never `...raw`. Callers pass the whole
+    // Prisma row (typed down by the Pick above), and that row carries a `category`
+    // RELATION object from `include: { category: … }`. A wholesale spread would put
+    // that object over `pub`'s resolved category string, and the category rule then
+    // calls .trim() on an object → 500 on every storefront surface.
+    return {
+        ...pub,
+        groupId: raw.groupId,
+        brandId: raw.brandId,
+        stock: raw.stock,
+        allowBackorder: raw.allowBackorder,
+        weightGrams: raw.weightGrams,
+        mrpPaise: raw.mrpPaise,
+    };
 }
 
 export function shopQualification(

@@ -65,10 +65,18 @@ export default function ProductForm({
         if (keys.length === 0) return [{ k: "", v: "" }];
         return keys.map((k) => ({ k, v: s[k] ?? "" }));
     });
-    const [stock, setStock] = useState<string>(
-        initial?.stock === null || initial?.stock === undefined ? "" : String(initial.stock)
-    );
-    const [lowStockThreshold, setLowStockThreshold] = useState(String(initial?.lowStockThreshold ?? 5));
+    // Stock is NOT editable here — InvProduct.stock is a cached ledger balance
+    // (openingStock + Σ inQty − outQty), rebuilt by recomputeProductStock after
+    // every voucher post / cancel / delete / restore. A manual write survives
+    // only until the next voucher, so an input box here can only lie. Shown
+    // read-only below; stock changes by posting an inventory voucher.
+    const stockValue = initial?.stock ?? null;
+    // Low-stock threshold is a REORDER input, not a shop field — nothing in the
+    // storefront reads it. It is the manual floor in
+    // max(avgDailyUsage × leadTimeDays, lowStockThreshold), and the Reorder page
+    // edits it in context (it shows the computed reorder level beside the floor,
+    // so you can see whether the floor is doing anything). Read-only here.
+    const lowStockThresholdValue = initial?.lowStockThreshold ?? 5;
     const [weightGrams, setWeightGrams] = useState<string>(
         initial?.weightGrams == null ? "" : String(initial.weightGrams)
     );
@@ -168,8 +176,6 @@ export default function ProductForm({
         // next autosave run so it doesn't re-PATCH the value right back.
         galleryFirstRun.current = true;
         setGalleryStatus("idle");
-        setStock(initial.stock === null || initial.stock === undefined ? "" : String(initial.stock));
-        setLowStockThreshold(String(initial.lowStockThreshold ?? 5));
         setWeightGrams(initial.weightGrams == null ? "" : String(initial.weightGrams));
         setLengthCm(dimStr(initial.lengthCm));
         setBreadthCm(dimStr(initial.breadthCm));
@@ -237,7 +243,7 @@ export default function ProductForm({
             groupId: initial?.groupId ?? null,
             brandId: initial?.brandId ?? null,
             mrpPaise: effectiveMrpPaise,
-            stock: stock.trim() === "" ? null : parseInt(stock, 10),
+            stock: stockValue,
             allowBackorder,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
         },
@@ -274,8 +280,8 @@ export default function ProductForm({
         imageUrl: previewGallery[0] ?? null,
         galleryUrls: previewGallery,
         specs: Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()])),
-        stock: stock.trim() === "" ? null : parseInt(stock, 10),
-        lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
+        stock: stockValue,
+        lowStockThreshold: lowStockThresholdValue,
         isListedInShop: listedEffective,
         allowBackorder,
         isActive,
@@ -312,14 +318,14 @@ export default function ProductForm({
             shopSubheading: subheading.trim() || null,
             shopDescription: description.trim() || null,
             shopCategory: shopCategory.trim() || null,
-            // pricePaise / mrpPaise deliberately absent — this form does not own
-            // them (see the state block above). The PATCH route skips any column
-            // it isn't sent, so the pricing engine keeps ownership.
+            // pricePaise / mrpPaise / stock / lowStockThreshold deliberately
+            // absent — this form does not own them (see the state block above).
+            // The PATCH route skips any column it isn't sent, so the pricing
+            // engine keeps price/MRP, the stock ledger keeps stock, and the
+            // Reorder page keeps the threshold.
             shopBadge: badge.trim() || null,
             galleryUrls,
             specs,
-            stock: stock.trim() === "" ? null : parseInt(stock, 10),
-            lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
             lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
             breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),
@@ -457,15 +463,39 @@ export default function ProductForm({
                     <Input value={badge} onChange={(e) => setBadge(e.target.value)} placeholder="e.g. Sale" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
+                    {/* Stock is read-only — it is the ledger balance, not an input.
+                        It changes by posting an inventory voucher. */}
                     <div className="grid gap-2">
-                        <Label>Stock (blank = unlimited)</Label>
-                        <Input value={stock} onChange={(e) => setStock(e.target.value)} inputMode="numeric" />
+                        <Label className="text-muted-foreground">Stock (from ledger)</Label>
+                        <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
+                            <span className="text-sm font-semibold tabular-nums">
+                                {stockValue === null ? "Not tracked" : stockValue}
+                            </span>
+                        </div>
                     </div>
+                    {/* Reorder input, not a shop field — the storefront never reads
+                        it. Edited on the Reorder page, which shows it in context. */}
                     <div className="grid gap-2">
-                        <Label>Low-stock threshold</Label>
-                        <Input value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} inputMode="numeric" />
+                        <div className="flex items-center justify-between gap-2">
+                            <Label className="text-muted-foreground">Low-stock floor</Label>
+                            <a
+                                href="/office/inventory/reorder"
+                                className="inline-flex items-center gap-1 text-xs text-primary underline"
+                            >
+                                Reorder
+                                <ExternalLink className="size-3" />
+                            </a>
+                        </div>
+                        <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
+                            <span className="text-sm font-semibold tabular-nums">{lowStockThresholdValue}</span>
+                        </div>
                     </div>
                 </div>
+                <p className="-mt-2 text-xs text-muted-foreground">
+                    Stock comes from posted inventory vouchers — edit it there, not here.
+                    &ldquo;Not tracked&rdquo; means the shop always treats it as in stock. The low-stock
+                    floor only feeds the Reorder report, never the storefront.
+                </p>
                 <div className="grid gap-2">
                     <Label>Shipping weight (grams)</Label>
                     <Input
