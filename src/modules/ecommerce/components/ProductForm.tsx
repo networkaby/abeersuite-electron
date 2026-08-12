@@ -526,6 +526,14 @@ export default function ProductForm({
                                     setSpecPairs(next);
                                 }}
                             />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                onClick={() => setSpecPairs(specPairs.filter((_, j) => j !== i))}
+                            >
+                                <X className="size-4" />
+                            </Button>
                         </div>
                     ))}
                     <Button
