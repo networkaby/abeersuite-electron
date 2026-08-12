@@ -21,6 +21,35 @@ export const barcodeBandSchema = z.object({
 });
 export type BarcodeBand = z.infer<typeof barcodeBandSchema>;
 
+/**
+ * Barcode-label design, saved on OrgDefaults.labelTemplateJson.
+ *
+ * Barcode labels are the documented EXCEPTION to the voucher print-template
+ * surface: they are designed in the settings bar on Pricing Strategy → Print
+ * labels and saved here, so the next person to print gets the same label
+ * without redoing the switches.
+ *
+ * Every field optional — a template saved before a new switch existed must keep
+ * loading, with the code default filling the gap (see LABEL_TEMPLATE_DEFAULTS).
+ */
+export const labelTemplateSchema = z.object({
+    /// Which size preset was last chosen (LabelDesigner PRESETS id).
+    presetId:       z.string().max(40),
+    showHeader:     z.boolean(),
+    /// Store name printed across the top of every label.
+    header:         z.string().max(60),
+    showMrp:        z.boolean(),
+    showSecret:     z.boolean(),
+    /// Caption printed before the selling price ("Offer", "Rate", …). Empty =
+    /// price prints bare, which is the long-standing behaviour. MRP's own
+    /// caption is fixed and not customisable.
+    salePriceLabel: z.string().max(16),
+    /// Which edge the staff-only secret date code runs down.
+    side:           z.enum(["left", "right"]),
+    orientation:    z.enum(["spine", "upright"]),
+}).partial();
+export type LabelTemplate = z.infer<typeof labelTemplateSchema>;
+
 export const orgDefaultsUpdateSchema = z.object({
     defaultUnitId:              z.number().int().positive().nullable().optional(),
     /// FK to GstRate master — used as the final fallback in the cascading
@@ -67,6 +96,8 @@ export const orgDefaultsUpdateSchema = z.object({
         coupon:  z.boolean(),
         manual:  z.boolean(),
     }).optional(),
+    /// Barcode-label design (Print labels settings bar). See labelTemplateSchema.
+    labelTemplateJson:          labelTemplateSchema.optional(),
 });
 
 export type OrgDefaultsUpdateInput = z.infer<typeof orgDefaultsUpdateSchema>;

@@ -14,6 +14,12 @@
  * - `showText`  — when true (default), prints the value below the bars in jsbarcode's font.
  * - `fontSize`  — font size for the readable text (default 12).
  * - `margin`    — quiet zone around the barcode (default 4).
+ * - `stretch`   — when true, the barcode fills its container's width at a FIXED
+ *                 height instead of scaling proportionally. Bar/space ratios are
+ *                 preserved (every bar scales by the same factor), so scanning is
+ *                 unaffected — but a long code no longer prints with short, thin
+ *                 bars just because it has more digits. Opt-in: the default
+ *                 (proportional) is what the receipt/invoice/parcel prints use.
  * - `className` — applied to the wrapping <svg>; useful for sizing in print stylesheets.
  *
  * Errors (empty value, characters outside the Code128 set) are caught and
@@ -30,6 +36,7 @@ type Props = {
     showText?:  boolean;
     fontSize?:  number;
     margin?:    number;
+    stretch?:   boolean;
     className?: string;
 };
 
@@ -39,6 +46,7 @@ export function BarcodeSvg({
     showText = true,
     fontSize = 12,
     margin = 4,
+    stretch = false,
     className = "",
 }: Props) {
     const svgRef = useRef<SVGSVGElement>(null);
@@ -69,11 +77,15 @@ export function BarcodeSvg({
             const w = svg.getAttribute("width");
             const h = svg.getAttribute("height");
             if (w && h) svg.setAttribute("viewBox", `0 0 ${parseFloat(w)} ${parseFloat(h)}`);
+            // Stretch mode: drop the aspect-ratio lock so CSS can set width and
+            // height independently. Horizontal scaling is uniform, so the bar to
+            // space ratio the scanner reads is unchanged.
+            svg.setAttribute("preserveAspectRatio", stretch ? "none" : "xMidYMid meet");
         } catch {
             svg.style.display = "none";
             errEl.style.display = "inline";
         }
-    }, [value, height, showText, fontSize, margin]);
+    }, [value, height, showText, fontSize, margin, stretch]);
 
     return (
         <>

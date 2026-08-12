@@ -70,6 +70,40 @@ export function todayISO(): string {
 }
 
 /**
+ * The label's product-name font. A CONDENSED family, because the name is the one
+ * field that never fits: 41mm of a 50mm label holds ~32 characters of ordinary
+ * sans, but ~40 of this, at the same point size. Condensing beats reducing the
+ * font size — a smaller size loses cap height AND stroke weight together, which
+ * is what actually breaks up on a 203dpi thermal head, while condensing costs
+ * only width, the dimension in short supply. Arial Narrow ships with Windows;
+ * the rest are fallbacks for other machines.
+ */
+export const LABEL_NAME_FONT =
+    '"Arial Narrow", "Roboto Condensed", "Archivo Narrow", ui-sans-serif, system-ui, sans-serif';
+
+/** Never condense past this — below it the strokes start to merge in print. */
+export const LABEL_NAME_MIN_SCALE = 0.8;
+
+/**
+ * How far a name must be squeezed horizontally to fit `availableMm`, as a scaleX
+ * factor. 1 = fits already (leave it alone — short names must not look squashed).
+ * Floors at LABEL_NAME_MIN_SCALE, past which the name still gets an ellipsis.
+ *
+ * Measured on a canvas rather than in the DOM so a 300-copy run costs one
+ * measurement per PRODUCT, not per printed label, and never triggers layout.
+ */
+export function nameFitScale(name: string, availableMm: number, fontSizePt: number): number {
+    if (!name || typeof document === "undefined") return 1;
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return 1;
+    ctx.font = `600 ${(fontSizePt * 96) / 72}px ${LABEL_NAME_FONT}`;
+    const needPx = ctx.measureText(name).width;
+    const availPx = (availableMm * 96) / 25.4;
+    if (needPx <= availPx) return 1;
+    return Math.max(LABEL_NAME_MIN_SCALE, availPx / needPx);
+}
+
+/**
  * Engine item → label. The printed price is the barcode price (the band-buffered,
  * MRP-capped tag), falling back to the saved sale price, then to the price that
  * currently sells — so a product nobody has frozen yet still prints a real price.

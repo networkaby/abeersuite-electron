@@ -45,8 +45,12 @@ import {
 import { FileText, Loader2, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
-import { clampCopies, type AddedProduct, type Item } from "@/modules/inventory/lib/labelItems";
+import {
+    clampCopies, nameFitScale, LABEL_NAME_FONT,
+    type AddedProduct, type Item,
+} from "@/modules/inventory/lib/labelItems";
 import { secretBucketLabel, secretDateCode } from "@/modules/inventory/lib/secretDateCode";
+import type { LabelTemplate } from "@/shared/lib/schemas/orgDefaultsSchemas";
 
 // ── Public types (shape lives in lib/labelItems — re-exported for call sites) ──
 
@@ -66,15 +70,31 @@ const PREVIEW_LIMIT = 60;
  *  - "sheet" — ordinary A4 sheet of label stock, many rows per page.
  *  `cols` on a roll is the "up" count of the stock (2-up = 2 labels across). */
 type Preset = {
-    id: string; label: string; w: number; h: number; cols: number;
+    id: string; label: string; w: number; h: number; cols: number; rows: number;
     barHeight: number; fontSize: number; media: "roll" | "sheet";
 };
 const PRESETS: Preset[] = [
     // Matches the 4BARCODE driver stock "50 x 25 2up (100.0 mm x 25.0 mm)".
-    { id: "thermal-50x25", label: "Thermal 50 × 25 mm (2-up roll)", w: 50, h: 25, cols: 2, barHeight: 28, fontSize: 11, media: "roll" },
-    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, barHeight: 36, fontSize: 13, media: "sheet" },
-    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, barHeight: 26, fontSize: 10, media: "sheet" },
+    { id: "thermal-50x25", label: "Thermal 50 × 25 mm (2-up roll)", w: 50, h: 25, cols: 2, rows: 1, barHeight: 34, fontSize: 11, media: "roll" },
+    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, rows: 8, barHeight: 36, fontSize: 13, media: "sheet" },
+    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, rows: 10, barHeight: 26, fontSize: 10, media: "sheet" },
 ];
+
+/** Labels on one printed page. A roll page is a single row (the printer feeds
+ *  one row per page); an A4 sheet holds rows × cols. */
+const perPage = (p: Preset) => p.cols * p.rows;
+
+/** Code defaults for anything the saved template does not carry. */
+const LABEL_TEMPLATE_DEFAULTS = {
+    presetId:       PRESETS[0].id,
+    showHeader:     true,
+    header:         "NETWORK SERVICE",
+    showMrp:        true,
+    showSecret:     true,
+    salePriceLabel: "",
+    side:           "right" as "left" | "right",
+    orientation:    "spine" as "spine" | "upright",
+};
 
 // ── Voucher prefill (Pick from GRN / Purchase) ────────────────────────────────
 type VoucherListRow = { id: number; type: string; reference: string; date: string; partyName: string | null; _count?: { lines: number } };
@@ -120,16 +140,54 @@ export function LabelDesigner({
     pageSubtitle = "Pick products, then print.",
     rootClassName = "pb-10",
 }: LabelDesignerProps) {
-    // Global label options (apply to every label).
-    const [showHeader, setShowHeader] = useState(true);
-    const [header, setHeader] = useState("NETWORK SERVICE");
-    const [showMrp, setShowMrp] = useState(true);
-    const [showSecret, setShowSecret] = useState(true);
-    const [side, setSide] = useState<"left" | "right">("right");
-    const [orientation, setOrientation] = useState<"spine" | "upright">("spine");
-    const [presetId, setPresetId] = useState(PRESETS[0].id);
-    const [zoom, setZoom] = useState(2.5);
+    // Global label options (apply to every label). Seeded from the code defaults,
+    // then replaced by the saved org template once it loads.
+    const [showHeader, setShowHeader] = useState(LABEL_TEMPLATE_DEFAULTS.showHeader);
+    const [header, setHeader] = useState(LABEL_TEMPLATE_DEFAULTS.header);
+    const [showMrp, setShowMrp] = useState(LABEL_TEMPLATE_DEFAULTS.showMrp);
+    const [showSecret, setShowSecret] = useState(LABEL_TEMPLATE_DEFAULTS.showSecret);
+    const [salePriceLabel, setSalePriceLabel] = useState(LABEL_TEMPLATE_DEFAULTS.salePriceLabel);
+    const [side, setSide] = useState<"left" | "right">(LABEL_TEMPLATE_DEFAULTS.side);
+    const [orientation, setOrientation] = useState<"spine" | "upright">(LABEL_TEMPLATE_DEFAULTS.orientation);
+    const [presetId, setPresetId] = useState(LABEL_TEMPLATE_DEFAULTS.presetId);
+    // Preview magnification only — never printed, so it is NOT part of the saved
+    // template. 1 = the sheet at its true physical size on screen.
+    const [zoom, setZoom] = useState(1.5);
     const [settingsOpen, setSettingsOpen] = useState(true);
+
+    // ── Saved label template (OrgDefaults.labelTemplateJson) ──────────────────
+    const [savingTemplate, setSavingTemplate] = useState(false);
+    useEffect(() => {
+        axios.get<{ labelTemplateJson?: LabelTemplate | null }>("/api/settings/org-defaults")
+            .then((r) => {
+                const t = r.data.labelTemplateJson;
+                if (!t) return;
+                if (t.presetId != null && PRESETS.some((p) => p.id === t.presetId)) setPresetId(t.presetId);
+                if (t.showHeader != null) setShowHeader(t.showHeader);
+                if (t.header != null) setHeader(t.header);
+                if (t.showMrp != null) setShowMrp(t.showMrp);
+                if (t.showSecret != null) setShowSecret(t.showSecret);
+                if (t.salePriceLabel != null) setSalePriceLabel(t.salePriceLabel);
+                if (t.side != null) setSide(t.side);
+                if (t.orientation != null) setOrientation(t.orientation);
+            })
+            .catch(() => { /* code defaults stand */ });
+    }, []);
+
+    async function saveTemplate() {
+        setSavingTemplate(true);
+        try {
+            const labelTemplateJson: LabelTemplate = {
+                presetId, showHeader, header, showMrp, showSecret, salePriceLabel, side, orientation,
+            };
+            await axios.patch("/api/settings/org-defaults", { labelTemplateJson });
+            toast.success("Label design saved");
+        } catch {
+            toast.error("Failed to save label design");
+        } finally {
+            setSavingTemplate(false);
+        }
+    }
 
     const preset = PRESETS.find((p) => p.id === presetId) ?? PRESETS[0];
 
@@ -257,6 +315,39 @@ export function LabelDesigner({
     );
     const totalCopies = printLabels.length;
 
+    // Labels cut into PRINTED PAGES. The preview and the print sheet both render
+    // this same list with the same .lt-page box, so the preview cannot drift from
+    // the output — it used to be a separate reflowing flex grid, which is why it
+    // looked nothing like the paper.
+    const pages = useMemo(() => {
+        const n = perPage(preset);
+        const out: { key: string; item: Item }[][] = [];
+        for (let i = 0; i < printLabels.length; i += n) out.push(printLabels.slice(i, i + n));
+        return out;
+    }, [printLabels, preset]);
+
+    /** Whole pages worth of PREVIEW_LIMIT labels — never a half-drawn page. */
+    const previewPageCap = Math.max(1, Math.ceil(PREVIEW_LIMIT / perPage(preset)));
+
+    /** Geometry of one page — the physical sheet/row the printer feeds. */
+    const pageStyle = {
+        ["--label-cols" as string]: preset.cols,
+        ["--label-w" as string]: `${preset.w}mm`,
+        ["--label-h" as string]: `${preset.h}mm`,
+        ["--page-w" as string]: `${preset.cols * preset.w}mm`,
+        ["--page-h" as string]: `${preset.rows * preset.h}mm`,
+    } as React.CSSProperties;
+
+    // How far each product's name must be condensed to fit this preset. Keyed by
+    // product, NOT by label, so copies cost nothing. The usable width is the label
+    // minus its own 1.5mm side padding and the body's 3mm side padding (the gutter
+    // kept clear down both edges for the secret code).
+    const nameScaleById = useMemo(() => {
+        const availableMm = preset.w - 2 * 1.5 - 2 * 3;
+        const fontSizePt = 7; // .lt-name
+        return new Map(items.map((it) => [it.id, nameFitScale(it.name, availableMm, fontSizePt)]));
+    }, [items, preset.w]);
+
     const secretStyle: React.CSSProperties = {
         writingMode: "vertical-rl",
         textOrientation: orientation === "upright" ? "upright" : "mixed",
@@ -302,6 +393,16 @@ export function LabelDesigner({
                     <Opt label="Show MRP">
                         <Checkbox checked={showMrp} onCheckedChange={(v) => setShowMrp(!!v)} />
                     </Opt>
+                    <Opt label="Sale price caption">
+                        <Input
+                            value={salePriceLabel}
+                            onChange={(e) => setSalePriceLabel(e.target.value)}
+                            placeholder="none"
+                            maxLength={16}
+                            className="h-8 w-28 text-xs"
+                            title="Printed before the selling price, e.g. Offer or Rate. Leave empty to print the price on its own."
+                        />
+                    </Opt>
                     <Opt label="Show secret code">
                         <Checkbox checked={showSecret} onCheckedChange={(v) => setShowSecret(!!v)} />
                     </Opt>
@@ -334,6 +435,12 @@ export function LabelDesigner({
                     <Opt label={`Preview zoom ×${zoom}`}>
                         <input type="range" min={1} max={5} step={0.5} value={zoom}
                             onChange={(e) => setZoom(parseFloat(e.target.value))} className="w-40" />
+                    </Opt>
+                    <Opt label="&nbsp;">
+                        <Button type="button" variant="outline" size="sm" onClick={saveTemplate} disabled={savingTemplate}>
+                            {savingTemplate ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                            Save design
+                        </Button>
                     </Opt>
                 </div>
             ) : null}
@@ -424,32 +531,44 @@ export function LabelDesigner({
                 </Table>
             </div>
 
-            {/* ── Labels preview grid (screen) ─────────────────────────────── */}
-            {/* `zoom` (not transform: scale) so the enlarged labels take up real
-                layout height — the box grows downward instead of clipping. Only
-                the horizontal overflow scrolls. */}
+            {/* ── Preview: the real pages, at real size ────────────────────────
+                Same .lt-page boxes the printer gets, so this IS the output — the
+                only difference is `zoom` magnifying it (zoom, not transform, so
+                the enlarged sheet takes real layout height instead of clipping). */}
             <div className="print-hide">
                 <div className="mb-2 text-xs font-medium text-muted-foreground">
-                    Preview — {totalCopies} label{totalCopies !== 1 ? "s" : ""} from {items.length} product{items.length !== 1 ? "s" : ""} (enlarged ×{zoom})
-                    {totalCopies > PREVIEW_LIMIT ? ` · showing first ${PREVIEW_LIMIT}` : ""}
+                    Preview — {totalCopies} label{totalCopies !== 1 ? "s" : ""} from {items.length} product{items.length !== 1 ? "s" : ""}
+                    {" · "}{pages.length} page{pages.length !== 1 ? "s" : ""} of {preset.cols * preset.w}×{preset.rows * preset.h}mm
+                    {zoom !== 1 ? ` · shown ×${zoom}` : " · actual size"}
+                    {pages.length > previewPageCap ? ` · showing first ${previewPageCap}` : ""}
                 </div>
                 <div className="overflow-x-auto rounded-sm border bg-[#fafafa] p-6">
-                    <div className="lt-grid" style={{ zoom }}>
-                        {printLabels.slice(0, PREVIEW_LIMIT).map(({ key, item }) => (
-                            <LabelCard key={key} preset={preset} item={item}
-                                header={showHeader ? header : ""} showMrp={showMrp}
-                                code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle} />
+                    <div className="lt-preview" style={{ zoom }}>
+                        {pages.slice(0, previewPageCap).map((pageLabels, i) => (
+                            <div key={i} className="lt-page" style={pageStyle}>
+                                {pageLabels.map(({ key, item }) => (
+                                    <LabelCard key={key} preset={preset} item={item}
+                                        header={showHeader ? header : ""} showMrp={showMrp}
+                                        code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle}
+                                        nameScale={nameScaleById.get(item.id) ?? 1} salePriceLabel={salePriceLabel} />
+                                ))}
+                            </div>
                         ))}
                     </div>
                 </div>
             </div>
 
-            {/* ── Print-only: labels at real size, every copy ──────────────── */}
-            <div className="label-print-area" style={{ ["--label-cols" as string]: preset.cols }}>
-                {printLabels.map(({ key, item }) => (
-                    <LabelCard key={key} preset={preset} item={item}
-                        header={showHeader ? header : ""} showMrp={showMrp}
-                        code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle} />
+            {/* ── Print-only: every copy, one .lt-page per printed page ──────── */}
+            <div className="label-print-area">
+                {pages.map((pageLabels, i) => (
+                    <div key={i} className="lt-page" style={pageStyle}>
+                        {pageLabels.map(({ key, item }) => (
+                            <LabelCard key={key} preset={preset} item={item}
+                                header={showHeader ? header : ""} showMrp={showMrp}
+                                code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle}
+                                nameScale={nameScaleById.get(item.id) ?? 1} salePriceLabel={salePriceLabel} />
+                        ))}
+                    </div>
                 ))}
             </div>
 
@@ -516,7 +635,7 @@ export function LabelDesigner({
 // ── Label card ───────────────────────────────────────────────────────────────
 
 function LabelCard({
-    preset, item, header, showMrp, code, side, secretStyle,
+    preset, item, header, showMrp, code, side, secretStyle, nameScale = 1, salePriceLabel = "",
 }: {
     preset: Preset;
     item: Item;
@@ -525,19 +644,49 @@ function LabelCard({
     code: string;
     side: "left" | "right";
     secretStyle: React.CSSProperties;
+    /** Horizontal squeeze for the name, from nameFitScale. 1 = fits as-is. */
+    nameScale?: number;
+    /** Caption before the selling price ("Offer"). Empty = price prints bare. */
+    salePriceLabel?: string;
 }) {
     return (
         <div className="lt-label" style={{ ["--label-w" as string]: `${preset.w}mm`, ["--label-h" as string]: `${preset.h}mm` }}>
             {code ? <span className={`lt-secret lt-secret-${side}`} style={secretStyle}>{code}</span> : null}
             <div className="lt-body">
                 {header ? <div className="lt-header">{header}</div> : null}
-                {item.name ? <div className="lt-name">{item.name}</div> : null}
-                <div className="lt-barcode">
-                    <BarcodeSvg value={item.barcode} height={preset.barHeight} fontSize={preset.fontSize} margin={2} />
+                {/* The inner span is laid out 1/scale WIDER than the box, then
+                    squeezed back to exactly the box width — so the ellipsis (if
+                    the name is still too long at the floor) lands in the right
+                    place instead of at the unscaled width. */}
+                {item.name ? (
+                    <div className="lt-name">
+                        <span
+                            className="lt-name-fit"
+                            style={nameScale < 1
+                                ? { transform: `scaleX(${nameScale})`, width: `${100 / nameScale}%` }
+                                : undefined}
+                        >
+                            {item.name}
+                        </span>
+                    </div>
+                ) : null}
+                {/* The readable digits are HTML, NOT jsbarcode's own text: inside
+                    the SVG they shrank along with the bars, so a 13-digit code
+                    printed far smaller than a 6-digit one. Out here they are the
+                    same size on every label whatever the code length. */}
+                <div className="lt-barcode" style={{ ["--bar-h" as string]: `${preset.barHeight}px` }}>
+                    <BarcodeSvg value={item.barcode} height={preset.barHeight} showText={false} margin={0} stretch />
                 </div>
+                {item.barcode ? (
+                    <div className="lt-code" style={{ fontSize: `${preset.fontSize}px` }}>{item.barcode}</div>
+                ) : null}
                 <div className="lt-meta">
                     {showMrp && item.mrp && item.mrp !== "0" ? <span className="lt-mrp">MRP ₹{item.mrp}</span> : <span />}
-                    {item.price ? <span className="lt-price">₹{item.price}/-</span> : null}
+                    {item.price ? (
+                        <span className="lt-price">
+                            {salePriceLabel ? `${salePriceLabel} ` : ""}₹{item.price}/-
+                        </span>
+                    ) : null}
                 </div>
             </div>
         </div>
@@ -565,7 +714,22 @@ const pageCss = (p: Preset) => p.media === "roll"
     : `@page { size: A4; margin: 4mm; }`;
 
 const labelCss = `
-.lt-grid { display: flex; flex-wrap: wrap; gap: 2mm; align-content: flex-start; }
+/* One printed page. Identical on screen and on paper — the preview only adds a
+   hairline so you can see where the sheet ends. */
+.lt-page {
+    display: grid;
+    grid-template-columns: repeat(var(--label-cols, 2), var(--label-w, 50mm));
+    grid-auto-rows: var(--label-h, 25mm);
+    width: var(--page-w, 100mm);
+    height: var(--page-h, 25mm);
+    gap: 0;
+    box-sizing: border-box;
+    background: #fff;
+    overflow: hidden;
+}
+/* Screen only: page separation + a shadow so stacked pages read as sheets. */
+.lt-preview { display: flex; flex-direction: column; gap: 4mm; align-items: flex-start; }
+.lt-preview .lt-page { box-shadow: 0 0 0 1px #d4d4d4, 0 1px 3px rgba(0,0,0,0.12); }
 .lt-label {
     position: relative;
     width: var(--label-w, 50mm);
@@ -592,10 +756,22 @@ const labelCss = `
 }
 .lt-name {
     font-size: 7pt; font-weight: 600; line-height: 1.1;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0.5mm 0;
+    font-family: ${LABEL_NAME_FONT};
+    overflow: hidden; margin: 0.5mm 0;
 }
-.lt-barcode { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; max-width: 100%; }
-.lt-barcode svg { max-width: 100%; height: auto; }
+.lt-name-fit {
+    display: block; transform-origin: left center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lt-barcode { flex: 0 0 auto; display: block; width: 100%; }
+/* Full width, fixed height — see the stretch note in BarcodeSvg. Every label's
+   bars are the same size regardless of how many digits the code has. */
+.lt-barcode svg { display: block; width: 100%; height: var(--bar-h, 28px); }
+.lt-code {
+    font-family: ui-monospace, "Courier New", monospace;
+    font-weight: 600;
+    line-height: 1.1; letter-spacing: 0.2px; margin-top: 0.3mm;
+}
 .lt-meta {
     display: flex; justify-content: space-between; align-items: baseline;
     width: 100%; gap: 1mm; font-size: 7pt; line-height: 1.1; margin-top: 0.5mm;
@@ -604,8 +780,10 @@ const labelCss = `
 .lt-price { font-weight: 700; text-align: right; margin-left: auto; }
 
 /* The secret date code — vertical, pinned to one edge, staff-only. */
+/* Inset from the edges: pinned flush to a 25mm page, the smallest feed drift
+   shaved the top digit off ("075" printed as "75" on the second row). */
 .lt-secret {
-    position: absolute; top: 0; bottom: 0;
+    position: absolute; top: 0.8mm; bottom: 0.8mm;
     display: flex; align-items: center; justify-content: center;
     font-size: 6pt; font-weight: 700; letter-spacing: 1px; color: #000;
 }
@@ -629,11 +807,11 @@ const labelCss = `
         display: block !important; height: auto !important; max-height: none !important;
         overflow: visible !important; padding: 0 !important; margin: 0 !important; border: 0 !important;
     }
-    .label-print-area {
-        display: grid !important;
-        grid-template-columns: repeat(var(--label-cols, 3), var(--label-w, 50mm));
-        gap: 0; justify-content: start;
-    }
+    /* Pages stack; each .lt-page is exactly one @page box, so one page of labels
+       lands on one sheet and the preview above is literally the same layout. */
+    .label-print-area { display: block !important; }
+    .lt-page + .lt-page { break-before: page; }
+    .lt-page { box-shadow: none; }
     .lt-label { outline: none; break-inside: avoid; }
 }
 `;

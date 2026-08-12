@@ -217,5 +217,13 @@ model OrgDefaults {
   // Admin-chosen, so bootstrap-seed leaves it untouched (survives reseed).
   storefrontHomeJson Json?
 
+  // Barcode-label template (Pricing Strategy → Print labels, settings bar above
+  // the search box). Barcode labels are the documented EXCEPTION to the voucher
+  // print-template surface — they are designed and saved here, not there. null =
+  // the code defaults. Shape: LabelTemplate (presetId, header, which fields show,
+  // secret-code placement, salePriceLabel) — see orgDefaultsSchemas.ts.
+  // Admin-chosen, so bootstrap-seed leaves it untouched (survives reseed).
+  labelTemplateJson Json?
+
   updatedAt DateTime @updatedAt
 }
