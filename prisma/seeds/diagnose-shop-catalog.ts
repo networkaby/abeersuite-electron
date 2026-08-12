@@ -123,7 +123,6 @@ async function main() {
                 stock: p.stock,
                 allowBackorder: p.allowBackorder,
                 weightGrams: p.weightGrams,
-                gstRateId: p.gstRateId,
             },
             rules,
         );

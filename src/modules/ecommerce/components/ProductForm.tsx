@@ -21,16 +21,6 @@ import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 
-function rupeesFromPaise(p: number) {
-    return (p / 100).toFixed(2);
-}
-
-function paiseFromRupeesInput(s: string): number | null {
-    const n = parseFloat(s);
-    if (!Number.isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-}
-
 export default function ProductForm({
     initial,
     onSaved,
@@ -53,8 +43,13 @@ export default function ProductForm({
     const [subheading, setSubheading] = useState(initial?.subheading ?? initial?.name ?? "");
     const subheadingTouched = useRef(!!initial?.subheading);
     const [description, setDescription] = useState(initial?.description ?? "");
-    const [priceRupees, setPriceRupees] = useState(initial?.pricePaise ? rupeesFromPaise(initial.pricePaise) : "");
-    const [mrpRupees, setMrpRupees] = useState(initial?.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
+    // Price / MRP are deliberately NOT editable here. They are the SAME columns
+    // (effectiveSalePricePaise / mrpPaise) that sale vouchers, POS lines and the
+    // shelf label read — owned by the pricing-strategy engine, edited on the
+    // pricing-strategy items page which also sets the override lock, enforces
+    // the price ≤ MRP rule and re-materializes the price. A second editor here
+    // could only get that wrong (write above MRP, clobber a fresh recompute,
+    // then be silently reverted by the engine). Shown read-only below instead.
     const [badge, setBadge] = useState(initial?.badge ?? "");
     const [galleryUrls, setGalleryUrls] = useState<string[]>(initial?.galleryUrls ?? []);
     // Which gallery photo is selected in the uploader — lifted up so the live
@@ -166,8 +161,6 @@ export default function ProductForm({
         setSubheading(initial.subheading ?? initial.name ?? "");
         subheadingTouched.current = !!initial.subheading;
         setDescription(initial.description ?? "");
-        setPriceRupees(initial.pricePaise ? rupeesFromPaise(initial.pricePaise) : "");
-        setMrpRupees(initial.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
         setSelectedImage(0);
@@ -226,9 +219,11 @@ export default function ProductForm({
     }, [galleryUrls]);
 
     // Shop price = the barcode tag the storefront actually charges (derived from
-    // the saved sale price, server-side), falling back to the editable effective
+    // the saved sale price, server-side), falling back to the office effective
     // price while there's no saved price. Used for the live preview + readiness.
-    const shopPricePaise = initial?.barcodePricePaise ?? (paiseFromRupeesInput(priceRupees) ?? 0);
+    // Read-only: price is decided on the pricing-strategy items page.
+    const shopPricePaise = initial?.barcodePricePaise ?? initial?.pricePaise ?? 0;
+    const effectiveMrpPaise = initial?.mrpPaise ?? null;
 
     const qualification = shopQualification(
         {
@@ -237,15 +232,14 @@ export default function ProductForm({
             galleryUrls,
             description: description.trim() || null,
             category: shopCategory.trim() || null,
-            // Group / brand / GST rate aren't editable here — they come from the
-            // inventory master, so the checklist reads the loaded row.
+            // Group / brand aren't editable here — they come from the inventory
+            // master, so the checklist reads the loaded row.
             groupId: initial?.groupId ?? null,
             brandId: initial?.brandId ?? null,
-            mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
+            mrpPaise: effectiveMrpPaise,
             stock: stock.trim() === "" ? null : parseInt(stock, 10),
             allowBackorder,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
-            gstRateId: initial?.gstRateId ?? null,
         },
         rules
     );
@@ -275,7 +269,7 @@ export default function ProductForm({
         department: null,
         categoryPath: [],
         pricePaise: shopPricePaise,
-        mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
+        mrpPaise: effectiveMrpPaise,
         badge: badge.trim() || null,
         imageUrl: previewGallery[0] ?? null,
         galleryUrls: previewGallery,
@@ -290,7 +284,6 @@ export default function ProductForm({
         groupId: initial?.groupId ?? null,
         brandId: initial?.brandId ?? null,
         warrantyTermId: initial?.warrantyTermId ?? null,
-        gstRateId: initial?.gstRateId ?? null,
         weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
         lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
         breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),
@@ -309,7 +302,6 @@ export default function ProductForm({
     };
 
     const submit = async () => {
-        const pricePaise = paiseFromRupeesInput(priceRupees);
         if (!name.trim()) { toast.error("Name is required"); return; }
         if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return; }
         const specs = Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()]));
@@ -320,8 +312,9 @@ export default function ProductForm({
             shopSubheading: subheading.trim() || null,
             shopDescription: description.trim() || null,
             shopCategory: shopCategory.trim() || null,
-            pricePaise: pricePaise ?? null,
-            mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
+            // pricePaise / mrpPaise deliberately absent — this form does not own
+            // them (see the state block above). The PATCH route skips any column
+            // it isn't sent, so the pricing engine keeps ownership.
             shopBadge: badge.trim() || null,
             galleryUrls,
             specs,
@@ -428,15 +421,36 @@ export default function ProductForm({
                         onChange={(e) => setDescription(e.target.value)}
                     />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
-                        <Label>Price (₹)</Label>
-                        <Input type="text" inputMode="decimal" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value)} />
+                {/* Price / MRP are read-only here — same columns the sale vouchers,
+                    POS and shelf label use. Edited on the pricing-strategy items page. */}
+                <div className="rounded-md border border-border bg-muted/40 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <Label className="text-muted-foreground">Price &amp; MRP</Label>
+                        <a
+                            href="/office/pricing-strategy/items"
+                            className="inline-flex items-center gap-1 text-xs text-primary underline"
+                        >
+                            Edit in Pricing Strategy
+                            <ExternalLink className="size-3" />
+                        </a>
                     </div>
-                    <div className="grid gap-2">
-                        <Label>MRP (₹)</Label>
-                        <Input type="text" inputMode="decimal" value={mrpRupees} onChange={(e) => setMrpRupees(e.target.value)} />
+                    <div className="mt-2 grid grid-cols-2 gap-3">
+                        <div>
+                            <p className="text-xs text-muted-foreground">Shop price (barcode tag)</p>
+                            <p className="text-lg font-semibold tabular-nums">
+                                {shopPricePaise > 0 ? formatRupeesFromPaise(shopPricePaise) : "—"}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground">MRP</p>
+                            <p className="text-lg font-semibold tabular-nums">
+                                {effectiveMrpPaise ? formatRupeesFromPaise(effectiveMrpPaise) : "—"}
+                            </p>
+                        </div>
                     </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                        One price everywhere — shelf, POS and shop all charge this.
+                    </p>
                 </div>
                 <div className="grid gap-2">
                     <Label>Badge</Label>

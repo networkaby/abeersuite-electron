@@ -15,7 +15,6 @@ export type ShopPublishRules = {
     mrp: boolean;
     stock: boolean;
     weight: boolean;
-    gstRate: boolean;
 };
 
 /** Default rules = the original hardcoded gate (image + description + price). */
@@ -28,7 +27,6 @@ export const DEFAULT_SHOP_PUBLISH_RULES: ShopPublishRules = {
     mrp: false,
     stock: false,
     weight: false,
-    gstRate: false,
 };
 
 export type ShopRequirementKey = keyof ShopPublishRules;
@@ -46,7 +44,6 @@ export const SHOP_REQUIREMENT_LABELS: Record<ShopRequirementKey, string> = {
     mrp: "MRP",
     stock: "In stock",
     weight: "Shipping weight",
-    gstRate: "GST rate",
 };
 
 /** Coerce a stored OrgDefaults.shopPublishRulesJson value into clean rules. */
@@ -64,7 +61,6 @@ export function normalizeShopPublishRules(raw: unknown): ShopPublishRules {
         mrp: pick("mrp"),
         stock: pick("stock"),
         weight: pick("weight"),
-        gstRate: pick("gstRate"),
     };
 }
 
@@ -85,8 +81,6 @@ export type ShopQualifiable = {
     brandId?: number | null;
     /** Shipping weight of one unit in grams — drives the courier quote. */
     weightGrams?: number | null;
-    /** FK to the GstRate master (null = falls back to group / org default). */
-    gstRateId?: number | null;
 };
 
 export type ShopQualificationResult = {
@@ -111,8 +105,6 @@ const REQUIREMENT_CHECKS: Record<ShopRequirementKey, (p: ShopQualifiable) => boo
     // Must be set ON the product — the whole point is to stop the courier quote
     // silently falling back to the delivery method's default item weight.
     weight: (p) => (p.weightGrams ?? 0) > 0,
-    // Likewise: set on the product, not resolved from the group / org default.
-    gstRate: (p) => p.gstRateId != null,
 };
 
 const REQUIREMENT_ORDER: ShopRequirementKey[] = [
@@ -124,7 +116,6 @@ const REQUIREMENT_ORDER: ShopRequirementKey[] = [
     "mrp",
     "stock",
     "weight",
-    "gstRate",
 ];
 
 /**
@@ -136,7 +127,7 @@ const REQUIREMENT_ORDER: ShopRequirementKey[] = [
 export function storefrontQualifiable(
     raw: Pick<
         ShopQualifiable,
-        "groupId" | "brandId" | "stock" | "allowBackorder" | "weightGrams" | "gstRateId" | "mrpPaise"
+        "groupId" | "brandId" | "stock" | "allowBackorder" | "weightGrams" | "mrpPaise"
     >,
     pub: {
         pricePaise: number;

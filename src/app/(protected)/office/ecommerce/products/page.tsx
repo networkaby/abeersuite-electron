@@ -107,7 +107,6 @@ function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductSta
             stock: p.stock,
             allowBackorder: p.allowBackorder,
             weightGrams: p.weightGrams,
-            gstRateId: p.gstRateId,
         },
         rules
     );

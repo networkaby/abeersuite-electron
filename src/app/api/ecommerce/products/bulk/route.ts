@@ -42,7 +42,7 @@ export async function POST(req: Request) {
                 id: true, name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, gstRateId: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true,
             },
         });
 
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
                     shopDescription: p.shopDescription, shopCategory: p.shopCategory,
                     groupId: p.groupId, brandId: p.brandId,
                     stock: p.stock, allowBackorder: p.allowBackorder,
-                    weightGrams: p.weightGrams, gstRateId: p.gstRateId,
+                    weightGrams: p.weightGrams,
                     savedSalePricePaise: p.savedSalePricePaise, mrpPaise: p.mrpPaise,
                     effectiveSalePricePaise: p.effectiveSalePricePaise, slug: p.slug,
                 },
