@@ -57,6 +57,8 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { SortHeader } from "@/shared/components/SortHeader";
+import { useTableSort } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api";
 import { gridRowClass } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
@@ -133,6 +135,16 @@ interface Report {
 
 type FilterField = "group" | "category" | "brand";
 type View = "item" | FilterField;
+
+/** "signal" is the table default — the server's buy → review → ok triage. */
+type SortKey =
+    | "signal" | "name" | "group" | "brand"
+    | "stock" | "reserved" | "available" | "avgDailyUsage"
+    | "leadTimeDays" | "reorderLevel" | "lowStockThreshold"
+    | "shortfall" | "minOrderQty" | "orderQty";
+
+/** Rank for the "signal" sort — mirrors the server's own ordering. */
+const SIGNAL_RANK: Record<Signal, number> = { buy: 0, review: 1, ok: 2, untouched: 3, skipped: 4 };
 
 const ALL_BRANCHES = "__all__";
 const NONE_KEY = "__none__";
@@ -229,6 +241,10 @@ export default function ReorderPage() {
     const [tolerance, setTolerance] = useState(20);
     const [skippedOpen, setSkippedOpen] = useState(false);
     const [untouchedOpen, setUntouchedOpen] = useState(false);
+    // Default "signal" reproduces the server order, so the table looks
+    // untouched until a header is clicked. Third click on a column returns here.
+    const { sortKey, sortDir, toggleSort, isDefaultSort, resetSort } = useTableSort<SortKey>("signal", "desc");
+    const sortProps = { sortKey, sortDir, toggleSort };
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [view, setView] = useState<View>("item");
     const [sections, setSections] = useState<Set<string>>(new Set());
@@ -386,10 +402,41 @@ export default function ReorderPage() {
     // Considered rows (Regular / New / Slow) — the main table. Untouched leaves
     // with skipped: a catalogue entry nobody has ever traded is not a reorder
     // decision, and 751 of them buried the ~600 rows that are.
+    // Row comparator for the clickable headers. Text sorts case-insensitively
+    // with nulls LAST in both directions (an item with no brand shouldn't
+    // outrank one that has a brand just because "" < "A"); numbers sort
+    // numerically. Ties fall back to name so the order is stable across
+    // renders — without that, equal rows can swap places on every re-render.
+    const compareRows = useCallback((a: ReorderRow, b: ReorderRow): number => {
+        const dir = sortDir === "asc" ? 1 : -1;
+        const text = (x: string | null, y: string | null) =>
+            x == null && y == null ? 0 : x == null ? 1 : y == null ? -1
+                : x.localeCompare(y, undefined, { sensitivity: "base" }) * dir;
+        const num = (x: number | null, y: number | null) =>
+            ((x ?? -Infinity) - (y ?? -Infinity)) * dir;
+
+        let d = 0;
+        switch (sortKey) {
+            // Default view: triage order, biggest shortfall first inside each band.
+            case "signal": d = (SIGNAL_RANK[b.signal] - SIGNAL_RANK[a.signal]) * dir
+                || (a.shortfall - b.shortfall) * dir; break;
+            case "name": d = text(a.name, b.name); break;
+            case "group": d = text(a.group, b.group); break;
+            case "brand": d = text(a.brand, b.brand); break;
+            case "minOrderQty": d = num(a.minOrderQty, b.minOrderQty); break;
+            default: d = num(a[sortKey] as number, b[sortKey] as number); break;
+        }
+        return d || a.name.localeCompare(b.name);
+    }, [sortKey, sortDir]);
+
+    // Sorted HERE rather than per-view, so the Group/Category/Brand section
+    // views inherit the active header sort instead of overriding it.
+    // `.sort()` mutates, so it runs on the array `.filter()` just produced.
     const itemRows = useMemo(
         () => (data?.rows ?? []).filter((r) =>
-            r.signal !== "skipped" && r.signal !== "untouched" && (!lowOnly || r.isLow) && passesFilters(r)),
-        [data, lowOnly, passesFilters],
+            r.signal !== "skipped" && r.signal !== "untouched" && (!lowOnly || r.isLow) && passesFilters(r))
+            .sort(compareRows),
+        [data, lowOnly, passesFilters, compareRows],
     );
     // Untouched — created but never used. Its own section, NOT merged into
     // Skipped: "Dead" would misname them (dead sold once and stopped).
@@ -435,7 +482,10 @@ export default function ReorderPage() {
         return [...map.entries()]
             .map(([name, items]) => ({
                 name,
-                items: items.sort((a, b) => Number(b.isLow) - Number(a.isLow) || a.name.localeCompare(b.name)),
+                // Already ordered by the active header sort (itemRows is sorted
+                // upstream) — re-sorting here would silently override whichever
+                // column the user clicked.
+                items,
                 lowCount: items.filter((r) => r.isLow).length,
                 totalShortfall: items.reduce((s, r) => s + r.shortfall, 0),
             }))
@@ -728,18 +778,21 @@ export default function ReorderPage() {
                         onChange={toggleSelectAllShown}
                     />
                 </th>
-                <th className="px-3 py-2 text-left font-medium">Item</th>
-                <th className="px-3 py-2 text-right font-medium">Stock</th>
-                <th className="px-3 py-2 text-right font-medium">Reserved</th>
-                <th className="px-3 py-2 text-right font-medium">Available</th>
-                <th className="px-3 py-2 text-right font-medium">Avg use / day</th>
-                <th className="px-3 py-2 text-right font-medium">Lead time (d)</th>
-                <th className="px-3 py-2 text-right font-medium">Reorder level</th>
-                <th className="px-3 py-2 text-right font-medium">Min floor</th>
-                <th className="px-3 py-2 text-right font-medium">Shortfall</th>
-                <th className="px-3 py-2 text-right font-medium" title="Supplier minimum order qty — nothing below this.">MOQ</th>
-                <th className="px-3 py-2 text-right font-medium" title="Shortfall lifted to the MOQ — the quantity you can actually place.">Order</th>
-                <th className="px-3 py-2 text-center font-medium">Status</th>
+                {/* firstDir: text columns open A→Z, quantity columns open
+                    largest-first — clicking "Shortfall" means "show me the
+                    worst", not "show me the zeros". */}
+                <SortHeader k="name" label="Item" firstDir="asc" {...sortProps} />
+                <SortHeader k="stock" label="Stock" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="reserved" label="Reserved" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="available" label="Available" align="right" firstDir="asc" title="Ascending first — most oversold at the top." {...sortProps} />
+                <SortHeader k="avgDailyUsage" label="Avg use / day" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="leadTimeDays" label="Lead time (d)" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="reorderLevel" label="Reorder level" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="lowStockThreshold" label="Min floor" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="shortfall" label="Shortfall" align="right" firstDir="desc" {...sortProps} />
+                <SortHeader k="minOrderQty" label="MOQ" align="right" firstDir="desc" title="Supplier minimum order qty — nothing below this." {...sortProps} />
+                <SortHeader k="orderQty" label="Order" align="right" firstDir="desc" title="Shortfall lifted to the MOQ — the quantity you can actually place." {...sortProps} />
+                <SortHeader k="signal" label="Status" align="center" firstDir="desc" title="The default order: buy → review → ok, biggest shortfall first." {...sortProps} />
             </tr>
         </thead>
     );
@@ -840,6 +893,18 @@ export default function ReorderPage() {
                                 ? `${itemRows.length} / ${(data?.rows.length ?? 0) - (data?.counts.skipped ?? 0) - (data?.counts.untouched ?? 0)} shown · ${untouchedRows.length} untouched · ${skippedRows.length} skipped`
                                 : `${bandRows.length} / ${data?.bands?.length ?? 0} bands shown`}
                         </span>
+                        {/* Sorting is otherwise invisible state — say it out loud
+                            and give a one-click way back to the default order. */}
+                        {tab === "items" && !isDefaultSort && (
+                            <button
+                                type="button"
+                                onClick={resetSort}
+                                className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/20"
+                                title="Back to the default order: buy → review → ok, biggest shortfall first."
+                            >
+                                sorted by {sortKey} {sortDir === "asc" ? "↑" : "↓"} — reset
+                            </button>
+                        )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         {view !== "item" && (
