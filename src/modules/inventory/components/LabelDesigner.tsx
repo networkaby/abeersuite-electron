@@ -58,11 +58,22 @@ const PREVIEW_LIMIT = 60;
 
 // ── Label size presets (mm) ──────────────────────────────────────────────────
 
-type Preset = { id: string; label: string; w: number; h: number; cols: number; barHeight: number; fontSize: number };
+/** `media` decides the @page box:
+ *  - "roll"  — one printed page = ONE row of labels, sized to the physical web
+ *              (cols × w  ×  h) with zero margin. This is what a gap-sensor
+ *              thermal printer wants: it feeds exactly one row per page. The
+ *              page must match the driver's stock or Chrome shrinks to fit.
+ *  - "sheet" — ordinary A4 sheet of label stock, many rows per page.
+ *  `cols` on a roll is the "up" count of the stock (2-up = 2 labels across). */
+type Preset = {
+    id: string; label: string; w: number; h: number; cols: number;
+    barHeight: number; fontSize: number; media: "roll" | "sheet";
+};
 const PRESETS: Preset[] = [
-    { id: "thermal-50x25", label: "Thermal 50 × 25 mm", w: 50, h: 25, cols: 4, barHeight: 28, fontSize: 11 },
-    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, barHeight: 36, fontSize: 13 },
-    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, barHeight: 26, fontSize: 10 },
+    // Matches the 4BARCODE driver stock "50 x 25 2up (100.0 mm x 25.0 mm)".
+    { id: "thermal-50x25", label: "Thermal 50 × 25 mm (2-up roll)", w: 50, h: 25, cols: 2, barHeight: 28, fontSize: 11, media: "roll" },
+    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, barHeight: 36, fontSize: 13, media: "sheet" },
+    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, barHeight: 26, fontSize: 10, media: "sheet" },
 ];
 
 // ── Voucher prefill (Pick from GRN / Purchase) ────────────────────────────────
@@ -254,7 +265,7 @@ export function LabelDesigner({
 
     return (
         <div className={cn(rootClassName)}>
-            <style>{labelCss}</style>
+            <style>{labelCss + pageCss(preset)}</style>
 
             <div className="print-hide mb-4 flex items-end justify-between gap-4">
                 <div>
@@ -546,6 +557,13 @@ function Opt({ label, children }: { label: string; children: React.ReactNode }) 
 
 // ── Label styles (scoped) ─────────────────────────────────────────────────────
 
+/** `@page` can't read CSS variables, so the page box is baked per preset.
+ *  A roll page is exactly one row of labels — the same box the printer driver
+ *  declares as its stock — so Chrome prints at true size with no shrink-to-fit. */
+const pageCss = (p: Preset) => p.media === "roll"
+    ? `@page { size: ${p.w * p.cols}mm ${p.h}mm; margin: 0; }`
+    : `@page { size: A4; margin: 4mm; }`;
+
 const labelCss = `
 .lt-grid { display: flex; flex-wrap: wrap; gap: 2mm; align-content: flex-start; }
 .lt-label {
@@ -597,14 +615,25 @@ const labelCss = `
 
 @media print {
     .print-hide { display: none !important; }
-    body * { visibility: hidden; }
-    .label-print-area, .label-print-area * { visibility: visible; }
-    .label-print-area {
-        display: grid; position: absolute; left: 0; top: 0; width: 100%;
-        grid-template-columns: repeat(var(--label-cols, 3), var(--label-w, 50mm));
-        gap: 0; justify-content: center;
+    html, body { height: auto !important; overflow: visible !important; background: #fff; }
+    /* Only the label sheet prints. Everything that is neither the sheet, inside
+       it, nor an ancestor of it is REMOVED FROM LAYOUT. This used to be
+       body-star visibility:hidden, but hidden boxes keep their height, so
+       the app shell (sidebar + quick-actions rail) still emitted several blank
+       pages after the labels. :has() picks out the ancestor chain to spare. */
+    body *:not(:has(.label-print-area)):not(.label-print-area):not(.label-print-area *) {
+        display: none !important;
     }
-    .lt-label { outline: none; }
-    @page { margin: 4mm; }
+    /* The spared ancestors must not impose their own scroll box or padding. */
+    body :has(.label-print-area) {
+        display: block !important; height: auto !important; max-height: none !important;
+        overflow: visible !important; padding: 0 !important; margin: 0 !important; border: 0 !important;
+    }
+    .label-print-area {
+        display: grid !important;
+        grid-template-columns: repeat(var(--label-cols, 3), var(--label-w, 50mm));
+        gap: 0; justify-content: start;
+    }
+    .lt-label { outline: none; break-inside: avoid; }
 }
 `;

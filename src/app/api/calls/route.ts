@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parsePagination } from "@/shared/lib/api";
-import { phoneMatchKey, phoneKeyVariants } from "@/shared/lib/format";
+import { phoneMatchKey, phoneKeyVariants, normalizeDialedNumber } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
 import { Prisma } from "@/generated/prisma/client";
 import type { CallDirection } from "@/generated/prisma/client";
@@ -86,7 +86,10 @@ function mapPayloadToCall(p: CallPayload, occurredAt: Date, receivedAt: Date): P
     const rawNumber = sent?.trim() || null;
     return {
         direction: p.callType as CallDirection,
-        phone: phoneMatchKey(rawNumber),
+        // An outgoing dial string carries stray keypresses at the END, where the
+        // last-10 rule would slide off the number — clean it first so a callback
+        // keys to the same customer as the incoming call it answers.
+        phone: phoneMatchKey(p.callType === "OUTGOING" ? normalizeDialedNumber(rawNumber) : rawNumber),
         rawNumber,
         fromExt: p.fromExt ?? null,
         // Incoming: the extension that answered is `connectedExt`.

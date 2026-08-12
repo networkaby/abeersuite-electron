@@ -290,7 +290,7 @@ export default function CallLogWorkspace() {
                                 <tr className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
                                     <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
                                     <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
-                                    <td className="whitespace-nowrap px-3 py-2 font-medium">{formatCallerNumber(c.rawNumber)}</td>
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium" title={c.rawNumber ?? undefined}>{formatCallerNumber(c.rawNumber, c.direction)}</td>
                                     <td className="px-3 py-2">
                                         {c.customer ? (
                                             <span className="inline-flex items-center gap-1.5">
@@ -325,7 +325,7 @@ export default function CallLogWorkspace() {
                                                 <StickyNote size={15} />
                                             </Button>
                                             {!c.customer && c.rawNumber && (
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber))}>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber, c.direction))}>
                                                     <UserPlus size={15} />
                                                 </Button>
                                             )}

@@ -18,6 +18,8 @@ model Call {
 
   // Normalized match key — last-10-digit India form (phoneMatchKey). Null for
   // internal ext↔ext calls (no external number). This is the join to a customer.
+  // OUTGOING passes through normalizeDialedNumber first: a dial string carries
+  // stray keypresses at the END, where last-10 would slide off the number.
   phone     String?
   // The number exactly as the PBX sent it (dialed for OG, caller for IC) — audit.
   rawNumber String?
