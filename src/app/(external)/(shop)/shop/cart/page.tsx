@@ -123,13 +123,8 @@ export default function ShopCartPage() {
                                                         href={p ? productPath(p) : "/shop"}
                                                         className="font-semibold leading-snug hover:text-primary line-clamp-2"
                                                     >
-                                                        {p?.name ?? `Product #${l.productId}`}
+                                                        {p?.displayName ?? `Product #${l.productId}`}
                                                     </Link>
-                                                    {p?.subheading ? (
-                                                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                                                            {p.subheading}
-                                                        </p>
-                                                    ) : null}
                                                 </div>
                                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                                     <p className="text-lg font-semibold tabular-nums">

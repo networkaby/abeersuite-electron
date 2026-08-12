@@ -56,8 +56,7 @@ function matchesQuery(p: ShopProductPublic, q: string) {
     if (!q) return true;
     const n = norm(q);
     return (
-        norm(p.name).includes(n) ||
-        (p.subheading && norm(p.subheading).includes(n)) ||
+        norm(p.displayName).includes(n) ||
         (p.description && norm(p.description).includes(n)) ||
         norm(p.category).includes(n)
     );
@@ -338,7 +337,7 @@ function ShopCatalogInner({
                 list.sort((a, b) => b.pricePaise - a.pricePaise);
                 break;
             case "name":
-                list.sort((a, b) => a.name.localeCompare(b.name));
+                list.sort((a, b) => a.displayName.localeCompare(b.displayName));
                 break;
             case "rating":
                 list.sort((a, b) => demoRating(b.id).stars - demoRating(a.id).stars);
@@ -349,7 +348,7 @@ function ShopCatalogInner({
                     const ba = a.badge ? 1 : 0;
                     const bb = b.badge ? 1 : 0;
                     if (bb !== ba) return bb - ba;
-                    return a.name.localeCompare(b.name);
+                    return a.displayName.localeCompare(b.displayName);
                 });
                 break;
         }

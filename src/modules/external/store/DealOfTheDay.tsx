@@ -53,7 +53,7 @@ export default function DealOfTheDay({
                         {img ? (
                             <ShopRemoteImage
                                 src={img}
-                                alt={product.name}
+                                alt={product.displayName}
                                 fill
                                 sizes="(max-width:768px) 100vw, 50vw"
                                 className="object-cover transition-transform duration-500 hover:scale-[1.03]"
@@ -81,11 +81,8 @@ export default function DealOfTheDay({
                             href={href}
                             className="text-2xl font-bold leading-tight tracking-tight transition-colors hover:text-primary sm:text-3xl"
                         >
-                            {product.name}
+                            {product.displayName}
                         </Link>
-                        {product.subheading ? (
-                            <p className="text-base text-muted-foreground">{product.subheading}</p>
-                        ) : null}
 
                         <div className="flex items-center gap-1 text-amber-500">
                             {Array.from({ length: 5 }).map((_, i) => (

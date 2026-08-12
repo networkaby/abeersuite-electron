@@ -111,7 +111,7 @@ export function buildProductLd(p: ShopProductPublic) {
     return {
         "@context": "https://schema.org",
         "@type": "Product",
-        name: p.name,
+        name: p.displayName,
         url,
         ...(p.description ? { description: p.description } : {}),
         ...(images.length > 0 ? { image: images } : {}),

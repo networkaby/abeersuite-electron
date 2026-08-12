@@ -57,7 +57,7 @@ export default function ProductCard({
                         <Link href={href} {...linkProps} className="relative block size-full">
                             <ShopRemoteImage
                                 src={mainImg}
-                                alt={product.name}
+                                alt={product.displayName}
                                 fill
                                 frame="card"
                                 sizes="(max-width:640px)100vw,(max-width:1024px)50vw,33vw"
@@ -126,11 +126,8 @@ export default function ProductCard({
                         </span>
                     </div>
                     <Link href={href} {...linkProps} className="font-semibold leading-snug hover:text-primary transition-colors line-clamp-2">
-                        {product.name}
+                        {product.displayName}
                     </Link>
-                    {product.subheading ? (
-                        <p className="text-sm text-muted-foreground line-clamp-2">{product.subheading}</p>
-                    ) : null}
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{product.category}</p>
                     <div className="mt-auto flex flex-wrap items-baseline gap-2 pt-2">
                         <span className="text-xl font-bold tabular-nums">{formatRupeesFromPaise(product.pricePaise)}</span>

@@ -699,7 +699,7 @@ export default function ShopCheckoutPage() {
                                                 href={p ? productPath(p) : "/shop"}
                                                 className="text-sm font-medium leading-snug hover:text-primary line-clamp-2"
                                             >
-                                                {p?.name ?? `Product #${l.productId}`}
+                                                {p?.displayName ?? `Product #${l.productId}`}
                                             </Link>
                                             <p className="text-xs text-muted-foreground mt-0.5">Qty {l.quantity}</p>
                                         </div>

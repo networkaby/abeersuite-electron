@@ -41,7 +41,7 @@ export default function ProductListRow({ product, className }: { product: ShopPr
                     <Link href={href} className="relative block size-full">
                         <ShopRemoteImage
                             src={mainImg}
-                            alt={product.name}
+                            alt={product.displayName}
                             fill
                             frame="card"
                             sizes="(max-width:640px)100vw,192px"
@@ -70,7 +70,7 @@ export default function ProductListRow({ product, className }: { product: ShopPr
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
                         <Link href={href} className="font-semibold leading-snug hover:text-primary transition-colors line-clamp-2">
-                            {product.name}
+                            {product.displayName}
                         </Link>
                         <div className="flex items-center gap-1 text-amber-500">
                             {Array.from({ length: 5 }).map((_, i) => (
@@ -118,9 +118,6 @@ export default function ProductListRow({ product, className }: { product: ShopPr
                     </div>
                 </div>
 
-                {product.subheading ? (
-                    <p className="text-sm text-muted-foreground line-clamp-2">{product.subheading}</p>
-                ) : null}
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{product.category}</p>
 
                 <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-2">

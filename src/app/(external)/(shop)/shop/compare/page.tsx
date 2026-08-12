@@ -97,7 +97,7 @@ export default function ShopComparePage() {
                                                 href={productPath(p)}
                                                 className="font-semibold leading-snug hover:text-primary line-clamp-2"
                                             >
-                                                {p.name}
+                                                {p.displayName}
                                             </Link>
                                             <Button
                                                 type="button"

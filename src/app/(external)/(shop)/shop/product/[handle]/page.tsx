@@ -81,9 +81,9 @@ export async function generateMetadata({
     const p = await loadProduct(handle, preview);
     if (!p) return { title: "Product" };
     // A preview page must never surface in search results.
-    if (preview) return { title: p.name, robots: { index: false, follow: false } };
+    if (preview) return { title: p.displayName, robots: { index: false, follow: false } };
 
-    const description = p.subheading ?? p.description ?? undefined;
+    const description = p.description ?? undefined;
     // A product is reachable by numeric id AND by slug. Point both at the slug
     // form so the two URLs are not indexed as two products.
     const canonical = productPath(p);
@@ -92,12 +92,12 @@ export async function generateMetadata({
     return {
         // Just the product name — the root template appends the brand, and
         // "· Shop" in between only eats characters Google will truncate.
-        title: p.name,
+        title: p.displayName,
         description,
         alternates: { canonical },
         openGraph: {
             type: "website",
-            title: p.name,
+            title: p.displayName,
             description,
             url: canonical,
             // The product's own photo beats the generic store card here — this
@@ -163,7 +163,7 @@ export default async function ShopProductPage({
                     {product.category}
                 </Link>
                 <ChevronRight className="size-4 opacity-60" />
-                <span className="text-foreground font-medium line-clamp-1">{product.name}</span>
+                <span className="text-foreground font-medium line-clamp-1">{product.displayName}</span>
             </nav>
 
             {product.slug && /^\d+$/.test(decodeURIComponent(handle)) ? (
@@ -176,7 +176,7 @@ export default async function ShopProductPage({
             ) : null}
 
             <div className="grid gap-10 lg:grid-cols-2 lg:gap-12 items-start">
-                <ProductGallery urls={product.galleryUrls} alt={product.name} />
+                <ProductGallery urls={product.galleryUrls} alt={product.displayName} />
                 <ProductPurchasePanel product={product} />
             </div>
 

@@ -51,8 +51,7 @@ export default function ProductPurchasePanel({ product }: { product: ShopProduct
                 {product.badge ? <Badge variant="secondary">{product.badge}</Badge> : null}
                 <Badge variant="outline">{product.category}</Badge>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-balance">{product.name}</h1>
-            {product.subheading ? <p className="text-lg text-muted-foreground">{product.subheading}</p> : null}
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-balance">{product.displayName}</h1>
             <div className="flex flex-wrap items-center gap-2 text-amber-500">
                 {Array.from({ length: 5 }).map((_, i) => (
                     <Star

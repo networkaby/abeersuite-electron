@@ -46,7 +46,12 @@ export default function ProductForm({
     // shop fields
     const [slug, setSlug] = useState(initial?.slug ?? "");
     const [shopCategory, setShopCategory] = useState(initial?.category ?? "");
-    const [subheading, setSubheading] = useState(initial?.subheading ?? "");
+    // Online display name — manual, no naming-convention regen. Auto-filled from
+    // Name so the operator has something to override rather than typing from
+    // scratch; once they edit it directly it stops following Name. Falls back to
+    // Name on the storefront whenever it's left blank.
+    const [subheading, setSubheading] = useState(initial?.subheading ?? initial?.name ?? "");
+    const subheadingTouched = useRef(!!initial?.subheading);
     const [description, setDescription] = useState(initial?.description ?? "");
     const [priceRupees, setPriceRupees] = useState(initial?.pricePaise ? rupeesFromPaise(initial.pricePaise) : "");
     const [mrpRupees, setMrpRupees] = useState(initial?.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
@@ -92,34 +97,27 @@ export default function ProductForm({
     }, []);
 
     // ── Naming convention (Settings → Naming Convention) ──────────────────
-    // Online display name + slug are built from the product's masters (brand /
-    // group / model / warranty / …). Those masters are edited in Deep edit, not
-    // here, so this form asks the server what the convention produces rather
-    // than re-deriving it client-side — one naming engine, no drift.
-    const [regenBusy, setRegenBusy] = useState<null | "onlineName" | "slug" | "both">(null);
+    // Slug is built from the product's masters (brand / group / model / …),
+    // edited in Deep edit, not here — so this form asks the server what the
+    // convention produces rather than re-deriving it client-side. The online
+    // display name (subheading) is NOT part of this anymore: it's a manual
+    // field, auto-filled from Name and freely overridable — see subheading
+    // state above.
+    const [regenBusy, setRegenBusy] = useState<null | "slug">(null);
 
     const regenerate = useCallback(
-        async (which: "onlineName" | "slug" | "both", silent = false) => {
+        async (silent = false) => {
             const productId = initial?.id;
             if (!productId) return;
-            setRegenBusy(which);
+            setRegenBusy("slug");
             try {
                 const { data } = await axios.get<ProductNaming>(`/api/inventory/products/${productId}/naming`);
-                const touched: string[] = [];
-                if (which !== "slug" && data.onlineName) {
-                    setSubheading(data.onlineName);
-                    touched.push("online name");
-                }
-                if (which !== "onlineName" && data.slugEnabled && data.slug) {
+                if (data.slugEnabled && data.slug) {
                     setSlug(data.slug);
-                    touched.push("slug");
-                }
-                if (touched.length === 0) {
-                    if (!silent) toast.error("Naming convention produced nothing for this product");
-                } else if (silent) {
-                    toast.info(`Masters changed — ${touched.join(" and ")} rebuilt. Review, then Save.`);
-                } else {
-                    toast.success(`Rebuilt ${touched.join(" and ")} from the naming convention`);
+                    if (silent) toast.info("Masters changed — slug rebuilt. Review, then Save.");
+                    else toast.success("Rebuilt slug from the naming convention");
+                } else if (!silent) {
+                    toast.error("Naming convention produced no slug for this product");
                 }
             } catch (e: unknown) {
                 if (!silent) toast.error(extractApiError(e, "Couldn't read the naming convention"));
@@ -130,16 +128,16 @@ export default function ProductForm({
         [initial?.id]
     );
 
-    // Auto-rebuild when a naming source actually changed — i.e. the operator
-    // came back from Deep edit having swapped the brand / group / warranty. The
-    // signature is compared across `initial` reloads, so an unrelated refetch
-    // (saving price, photos) never rewrites the fields.
+    // Auto-rebuild the slug when a naming source actually changed — i.e. the
+    // operator came back from Deep edit having swapped the brand / group /
+    // warranty. The signature is compared across `initial` reloads, so an
+    // unrelated refetch (saving price, photos) never rewrites the field.
     //
     // ONLY while the product is unpublished. Before listing, masters are still
     // being settled and a rebuilt slug costs nothing. Once it is live the slug
     // IS a public URL that customers and search engines hold — a brand edit must
-    // not silently move it, so we stop auto-rebuilding and say so; the ⟳ buttons
-    // still force a rebuild when the operator genuinely wants one.
+    // not silently move it, so we stop auto-rebuilding and say so; the ⟳ button
+    // still forces a rebuild when the operator genuinely wants one.
     const namingSig = [
         initial?.brandId, initial?.groupId, initial?.categoryId,
         initial?.warrantyTermId, initial?.unitId,
@@ -156,7 +154,7 @@ export default function ProductForm({
             toast.info("Masters changed. This product is live, so its slug was left alone — use ⟳ to rebuild it.");
             return;
         }
-        void regenerate("both", true);
+        void regenerate(true);
     }, [namingSig, published, regenerate]);
 
     useEffect(() => {
@@ -165,7 +163,8 @@ export default function ProductForm({
         setName(initial.name ?? "");
         setSlug(initial.slug ?? "");
         setShopCategory(initial.category ?? "");
-        setSubheading(initial.subheading ?? "");
+        setSubheading(initial.subheading ?? initial.name ?? "");
+        subheadingTouched.current = !!initial.subheading;
         setDescription(initial.description ?? "");
         setPriceRupees(initial.pricePaise ? rupeesFromPaise(initial.pricePaise) : "");
         setMrpRupees(initial.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
@@ -267,6 +266,7 @@ export default function ProductForm({
         slug: slug.trim() || null,
         name: name.trim() || "Product name",
         subheading: subheading.trim() || null,
+        displayName: subheading.trim() || name.trim() || "Product name",
         description: description.trim() || null,
         category: shopCategory.trim() || "Accessories",
         // Live preview only — the office-side classification and the group chain
@@ -371,7 +371,18 @@ export default function ProductForm({
                     </div>
                     <div className="grid gap-2">
                         <Label>Name</Label>
-                        <Input value={name} onChange={(e) => setName(e.target.value)} />
+                        <Input
+                            value={name}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                setName(v);
+                                // Mirror into the online display name until the operator
+                                // edits that field directly — gives them a real starting
+                                // point instead of a blank box, without ever overwriting
+                                // a value they've already typed.
+                                if (!subheadingTouched.current) setSubheading(v);
+                            }}
+                        />
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -385,7 +396,7 @@ export default function ProductForm({
                                     variant="outline"
                                     size="icon-sm"
                                     disabled={regenBusy !== null}
-                                    onClick={() => void regenerate("slug")}
+                                    onClick={() => void regenerate()}
                                     title="Rebuild the slug from Settings → Naming Convention. Changing a live slug breaks its old URL."
                                 >
                                     <RefreshCw className="size-4" />
@@ -399,22 +410,15 @@ export default function ProductForm({
                     </div>
                 </div>
                 <div className="grid gap-2">
-                    <Label>Subheading (online display name)</Label>
-                    <div className="flex items-center gap-2">
-                        <Input value={subheading} onChange={(e) => setSubheading(e.target.value)} />
-                        {initial?.id ? (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-sm"
-                                disabled={regenBusy !== null}
-                                onClick={() => void regenerate("onlineName")}
-                                title="Rebuild from Settings → Naming Convention"
-                            >
-                                <RefreshCw className="size-4" />
-                            </Button>
-                        ) : null}
-                    </div>
+                    <Label>Online display name</Label>
+                    <Input
+                        value={subheading}
+                        onChange={(e) => {
+                            subheadingTouched.current = true;
+                            setSubheading(e.target.value);
+                        }}
+                        placeholder="Shown to customers — defaults to Name, edit to override"
+                    />
                 </div>
                 <div className="grid gap-2">
                     <Label>Description</Label>

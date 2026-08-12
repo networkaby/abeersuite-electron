@@ -9,8 +9,16 @@ import type { StockStatus } from "@/modules/ecommerce/lib/shopStock";
 export type ShopProductPublic = {
     id: number;
     slug: string | null;
+    /** Internal/offline name (InvProduct.name) — inventory, POS, admin lists. */
     name: string;
+    /** Manual online display name (InvProduct.shopSubheading). Customer-facing
+     *  surfaces should show `displayName`, not this — it's only kept for the
+     *  admin form to edit. */
     subheading: string | null;
+    /** What customers actually see as the product title: subheading if the
+     *  operator set one, else the offline name. Single source for every
+     *  customer-facing heading — never show `name` and `subheading` as two lines. */
+    displayName: string;
     description: string | null;
     /**
      * Customer-facing category — the product's **OWN** office Group ("Mouse",
@@ -111,6 +119,7 @@ export function invProductToPublic(
         slug: p.slug,
         name: p.name,
         subheading: p.shopSubheading,
+        displayName: p.shopSubheading?.trim() || p.name,
         description: p.shopDescription,
         // Storefront category = the product's OWN group, with shopCategory as the
         // per-product hand-override. Office Category is deliberately NOT in this
