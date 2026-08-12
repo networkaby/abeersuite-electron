@@ -106,7 +106,11 @@ export async function recomputePricesForProducts(
                 // (it is itself an explicit human choice). No cost needed.
                 effective = mrpCap(p.savedSalePricePaise, p.mrpPaise);
             } else if (p.priceOverridden) {
-                // Manual effectiveSalePricePaise set on the items page — leave it.
+                // TODO(old-concept): retired manual price-lock. The Items page that
+                // set this is deleted, so no new row can get the flag — but rows
+                // locked before the switch still rely on this skip. Migrate them to
+                // source=SAVED (savedSalePricePaise = effectiveSalePricePaise), then
+                // drop the column and this branch.
                 result.skipped += 1;
                 continue;
             } else {

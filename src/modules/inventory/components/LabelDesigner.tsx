@@ -780,12 +780,17 @@ const labelCss = `
 .lt-price { font-weight: 700; text-align: right; margin-left: auto; }
 
 /* The secret date code — vertical, pinned to one edge, staff-only. */
-/* Inset from the edges: pinned flush to a 25mm page, the smallest feed drift
-   shaved the top digit off ("075" printed as "75" on the second row). */
+/* Centred by transform, NOT by flex inside a top+bottom box. The old way made
+   the box height depend on top+bottom and then centred the glyphs with flex in
+   vertical writing-mode — screen resolved that as centred, paged media could
+   resolve it as start-aligned, so the code printed high on the label while the
+   preview showed it centred. top:50% + translateY(-50%) is unambiguous in both.
+   The box is now its own content height, so it can no longer touch the edges
+   either — that is what used to shave "075" down to "75" on feed drift. */
 .lt-secret {
-    position: absolute; top: 0.8mm; bottom: 0.8mm;
-    display: flex; align-items: center; justify-content: center;
+    position: absolute; top: 50%; transform: translateY(-50%);
     font-size: 6pt; font-weight: 700; letter-spacing: 1px; color: #000;
+    line-height: 1;
 }
 
 /* Screen: the print-only grid is hidden. */

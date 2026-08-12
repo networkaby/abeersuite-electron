@@ -42,10 +42,15 @@ export type AttrFilters     = z.infer<typeof attrFiltersSchema>;
 // PricingStrategy engine was dropped in favour of the additive StrategyPoint
 // model (see `strategyPointsSaveSchema` below + `additiveMargin.ts`).
 
-// Per-product pricing fields editable from the Items / Needs Attention pages.
-// All optional — callers patch only the columns they're touching.
+// Per-product pricing fields editable from the Needs Attention / Update & Print
+// Labels pages. All optional — callers patch only the columns they're touching.
 //
-// `effectiveSalePricePaise` flips `priceOverridden=true` when set (manual price lock).
+// TODO(old-concept): `priceOverridden` + `effectiveSalePricePaise` are the retired
+// manual price-lock, which the SAVED voice (`effectiveSalePriceSource` +
+// `savedSalePricePaise`) replaced. No UI writes them any more — they stay only
+// because `recomputePrices.ts` still reads `priceOverridden` as a skip-guard for
+// rows locked before the switch. Remove both after the DB migration that moves
+// those rows to source=SAVED.
 //
 // `openingRatePaise` is the Tally-style opening unit cost (excl-GST). It
 // writes to InvProduct.openingRate (Decimal rupees) and is picked up by the
@@ -63,17 +68,6 @@ export const pricingItemUpdateSchema = z
     });
 
 export type PricingItemUpdateInput = z.infer<typeof pricingItemUpdateSchema>;
-
-// Bulk apply: either explicit ids or "all eligible". When `productIds` is
-// omitted, the endpoint targets every active product where priceOverridden
-// is false. `forceOverridden` bypasses the override guard (lets you
-// reset all prices to formula on demand).
-export const pricingApplySchema = z.object({
-    productIds:      z.array(z.number().int().positive()).optional(),
-    forceOverridden: z.boolean().optional(),
-});
-
-export type PricingApplyInput = z.infer<typeof pricingApplySchema>;
 
 // ── Sticky Sale Price (Update & Print Labels "Freeze sale price") ───────────
 // Bulk-freeze: each row carries which voice sells + (for SAVED) the frozen

@@ -429,12 +429,13 @@ export default function ProductForm({
                     />
                 </div>
                 {/* Price / MRP are read-only here — same columns the sale vouchers,
-                    POS and shelf label use. Edited on the pricing-strategy items page. */}
+                    POS and shelf label use. Edited on Update & Print Labels, where
+                    the selling voice (Strategy / Computed / Saved) is chosen. */}
                 <div className="rounded-md border border-border bg-muted/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                         <Label className="text-muted-foreground">Price &amp; MRP</Label>
                         <Link
-                            href="/office/pricing-strategy/items"
+                            href="/office/pricing-strategy/update-print-labels"
                             className="inline-flex items-center gap-1 text-xs text-primary underline"
                         >
                             Edit in Pricing Strategy

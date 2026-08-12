@@ -18,7 +18,6 @@ export default async function PricingStrategyLayout({ children }: { children: Re
                 root={{ href: "/office/pricing-strategy", label: "Pricing Strategy" }}
                 escapeBack
                 labels={{
-                    "items": "Items",
                     "strategies": "Strategies",
                     "costing": "Costing",
                     "needs-attention": "Needs Attention",
