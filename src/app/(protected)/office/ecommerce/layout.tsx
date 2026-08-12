@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import AdminTabsNav from "@/modules/ecommerce/components/AdminTabsNav";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 

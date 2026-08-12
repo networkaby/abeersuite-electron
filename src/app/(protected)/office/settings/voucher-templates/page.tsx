@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
@@ -35,9 +36,9 @@ export default async function VoucherTemplatesPage() {
                     Customise the print template per voucher kind — header, GSTIN, terms, signature, footer.
                     Each kind has a <b>default paper format</b> (A4 or 80mm thermal); use the &ldquo;Preview as&rdquo; toggle
                     on the right to inspect the other format without changing the default. Open{" "}
-                    <a className="underline hover:text-foreground" href="/office/settings/voucher-templates/preview">
+                    <Link className="underline hover:text-foreground" href="/office/settings/voucher-templates/preview">
                         Print Preview
-                    </a>{" "}for a side-by-side demo gallery.
+                    </Link>{" "}for a side-by-side demo gallery.
                 </p>
             </div>
             <VoucherTemplatesPanel initialTemplates={templates} organisation={organisation} />

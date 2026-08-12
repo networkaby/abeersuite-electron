@@ -87,7 +87,7 @@ export default function BannerSlidesEditor({
 
             {slides.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
-                    No {isHero ? "slides" : "banners"} yet — this section won't show on the storefront.
+                    No {isHero ? "slides" : "banners"} yet — this section won&apos;t show on the storefront.
                 </p>
             ) : null}
 

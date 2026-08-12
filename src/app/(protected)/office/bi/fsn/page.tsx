@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
@@ -56,7 +57,7 @@ export default function FsnPage() {
                     <h1 className="text-2xl font-bold text-foreground">FSN & Dead Stock</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         Turnover-based (industry standard): Fast (turnover ≥ {data?.fastMinTurnover ?? 3}) / Slow / Non-moving in the period — non-moving with stock on hand is dead stock, its value locked.
-                        For the house recency lens that drives Reorder, see <a href="/office/bi/stock-health" className="underline hover:text-foreground">Stock Health</a>.
+                        For the house recency lens that drives Reorder, see <Link href="/office/bi/stock-health" className="underline hover:text-foreground">Stock Health</Link>.
                     </p>
                 </div>
                 <BiFilterBar

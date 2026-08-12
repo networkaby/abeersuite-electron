@@ -112,6 +112,7 @@ export default function GroupLedgersPage() {
             .finally(() => setLoading(false));
     }, [id]);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(1, ""); }, [load]);
 
     const handleSearch = (value: string) => {

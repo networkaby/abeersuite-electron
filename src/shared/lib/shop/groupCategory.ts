@@ -35,7 +35,7 @@ const MAX_GROUP_DEPTH = 10;
 // modules can use them without pulling this file's prisma import into the
 // browser bundle. Re-exported here for server callers' convenience.
 export { rootOf, type ShopGroup, type ShopGroupIndex } from "@/shared/lib/shop/groupTree";
-import type { ShopGroup, ShopGroupIndex } from "@/shared/lib/shop/groupTree";
+import type { ShopGroupIndex } from "@/shared/lib/shop/groupTree";
 
 /**
  * Build the groupId → group+ancestors index for the whole catalog in one query.

@@ -182,6 +182,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [nestedChildOpen, setNestedChildOpen] = useState<Record<string, boolean>>({});
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const [mounted, setMounted] = useState(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setMounted(true); }, []);
 
     // Fetch live avatarUrl so it reflects changes without re-login

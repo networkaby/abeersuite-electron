@@ -91,6 +91,7 @@ function BufferedIntField({
     "aria-label"?: string;
 }) {
     const [text, setText] = useState(String(value));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setText(String(value)), [value]);
     const sanitize = allowNegative ? parseSignedInput : parseDigitsInput;
     return (
@@ -422,8 +423,8 @@ function ContentEditor({ inst, onChange }: { inst: HomeSectionInstance; onChange
         return (
             <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
-                    This section type isn't wired up to real data yet — you can schedule and position it now, but it
-                    won't appear on the storefront until it's built.
+                    This section type isn&apos;t wired up to real data yet — you can schedule and position it now, but it
+                    won&apos;t appear on the storefront until it&apos;s built.
                 </p>
                 <HeadingEditor content={inst.content} onChange={onChange} fields={["title"]} placeholders={{ title: "Caption" }} />
             </div>
@@ -673,7 +674,7 @@ export default function CustomizeHomePage() {
                     <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
                         {loadError ? (
                             <div className="flex items-center justify-between rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
-                                <span className="text-destructive">Couldn't load the current layout.</span>
+                                <span className="text-destructive">Couldn&apos;t load the current layout.</span>
                                 <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
                                     Retry
                                 </Button>
@@ -703,7 +704,7 @@ export default function CustomizeHomePage() {
                                     </p>
                                     {fallbackRows.length === 0 ? (
                                         <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
-                                            No fallback set. Set a section's priority to -1 to make it the permanent
+                                            No fallback set. Set a section&apos;s priority to -1 to make it the permanent
                                             fallback for its section number.
                                         </p>
                                     ) : (

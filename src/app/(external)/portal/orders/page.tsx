@@ -193,7 +193,7 @@ export default async function PortalOrdersPage() {
                     title="My Orders"
                     description="Track your purchases across personal and company profiles."
                     icon={ShoppingBag}
-                    rightSlot={<Button variant="outline" asChild><a href="/shop">New order</a></Button>}
+                    rightSlot={<Button variant="outline" asChild><Link href="/shop">New order</Link></Button>}
                 />
 
                 {dtos.length === 0 ? (
