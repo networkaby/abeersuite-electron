@@ -26,7 +26,7 @@ export default function EcommerceMastersPage() {
 
     return (
         <div className="flex h-full flex-col gap-4">
-            <h2 className="text-xl font-semibold tracking-tight">Shop masters</h2>
+            {/* <h2 className="text-xl font-semibold tracking-tight">Shop masters</h2> */}
 
             <nav className="flex flex-none gap-1 border-b border-border" aria-label="Shop masters">
                 {SUB_TABS.map((t) => (

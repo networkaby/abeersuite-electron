@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, ImageIcon, Pencil } from "lucide-react";
+import { ChevronDown, ChevronRight, ImageIcon, Pencil, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,7 @@ export default function ShopMasterPresentationList({
     const [editId, setEditId] = useState<number | null>(null);
     const [form, setForm] = useState({ slug: "", imageUrl: null as string | null, description: "" });
     const [saving, setSaving] = useState(false);
+    const [search, setSearch] = useState("");
 
     const load = () => {
         setLoading(true);
@@ -80,7 +81,12 @@ export default function ShopMasterPresentationList({
         // eslint-disable-next-line react-hooks/exhaustive-deps -- apiBase/hierarchical are fixed per tab, not reactive
     }, [apiBase]);
 
-    const { visible, collapsed, toggle, expandAll, collapseAll, hasTree } = useCollapsibleTree(rows);
+    const normalizedSearch = search.trim().toLowerCase();
+    const searchedRows = normalizedSearch
+        ? rows.filter((r) => r.name.toLowerCase().includes(normalizedSearch))
+        : rows;
+
+    const { visible, collapsed, toggle, expandAll, collapseAll, hasTree } = useCollapsibleTree(searchedRows);
 
     const openEdit = (r: ShopMasterRow) => {
         setEditId(r.id);
@@ -108,18 +114,32 @@ export default function ShopMasterPresentationList({
 
     return (
         <div className="flex h-full flex-col gap-4 overflow-hidden">
-            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
-                <p className="text-sm text-muted-foreground">
-                    Storefront presentation for {resourceLabel.toLowerCase()}s — slug, image and description. Name
-                    {hierarchical ? ", hierarchy" : ""} and other master data stay on the{" "}
-                    <span className="font-medium text-foreground">Inventory → Masters</span> page.
-                </p>
-                {hasTree ? (
-                    <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={expandAll}>Expand all</Button>
-                        <Button type="button" variant="outline" size="sm" onClick={collapseAll}>Collapse all</Button>
+            <div className="flex flex-none flex-col gap-2">
+
+                <div className="flex items-center gap-2">
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={`Search ${resourceLabel.toLowerCase()}s…`}
+                            className="w-56 pl-8"
+                        />
                     </div>
-                ) : null}
+                    {hasTree ? (
+                        <>
+                            <Button type="button" variant="outline" size="sm" onClick={expandAll}>Expand all</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={collapseAll}>Collapse all</Button>
+                        </>
+                    ) : null}
+                    <p className="text-sm text-muted-foreground">
+                        {/* Storefront presentation for */}
+                        {resourceLabel.toLowerCase()}s — slug, image and description. Name
+                        {hierarchical ? ", hierarchy" : ""} and other master data stay on the{" "}
+                        <span className="font-medium text-foreground">Inventory → Masters</span> page.
+                    </p>
+                </div>
+
             </div>
 
             <Dialog open={editId != null} onOpenChange={(o) => { if (!o) setEditId(null); }}>
@@ -159,7 +179,7 @@ export default function ShopMasterPresentationList({
                 </DialogContent>
             </Dialog>
 
-            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
+            <div className="min-h-0 flex-1 overflow-auto border border-border **:data-[slot=table-container]:overflow-x-visible">
                 <Table>
                     <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
@@ -174,7 +194,10 @@ export default function ShopMasterPresentationList({
                         {loading ? (
                             <TableLoadingRow colSpan={5} />
                         ) : visible.length === 0 ? (
-                            <TableEmptyRow colSpan={5} message={`No ${resourceLabel.toLowerCase()}s yet.`} />
+                            <TableEmptyRow
+                                colSpan={5}
+                                message={normalizedSearch ? `No ${resourceLabel.toLowerCase()}s match "${search.trim()}".` : `No ${resourceLabel.toLowerCase()}s yet.`}
+                            />
                         ) : (
                             visible.map(({ row: r, depth, hasChildren }) => (
                                 <TableRow key={r.id}>
