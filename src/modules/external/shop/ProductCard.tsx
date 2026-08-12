@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { demoRating, productPath } from "@/shared/lib/shop/productPublic";
+import { demoRating, productPath, productPreviewPath } from "@/shared/lib/shop/productPublic";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { useShopCartStore } from "@/store/external/shopCartStore";
@@ -15,14 +15,30 @@ import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { useShopCompareStore, SHOP_COMPARE_MAX } from "@/store/external/shopCompareStore";
 import { toast } from "sonner";
 
-export default function ProductCard({ product, className }: { product: ShopProductPublic; className?: string }) {
+export default function ProductCard({
+    product,
+    className,
+    preview = false,
+}: {
+    product: ShopProductPublic;
+    className?: string;
+    /**
+     * Office-side use only: point the card's links at the staff preview URL so
+     * they resolve for an UNPUBLISHED product too (the plain path 404s until it
+     * is listed). Never set on the storefront.
+     */
+    preview?: boolean;
+}) {
     const add = useShopCartStore((s) => s.add);
     const toggleWish = useShopWishlistStore((s) => s.toggle);
     const wishHas = useShopWishlistStore((s) => s.has(product.id));
     const addCompare = useShopCompareStore((s) => s.add);
 
     const mainImg = product.galleryUrls[0] ?? product.imageUrl;
-    const href = productPath(product);
+    const href = preview ? productPreviewPath(product) : productPath(product);
+    // In the office preview card, links open in a new tab so the editor never
+    // loses the form (and its unsaved edits) by navigating away.
+    const linkProps = preview ? { target: "_blank", rel: "noopener noreferrer" } : {};
     const { stars, reviewCount } = demoRating(product.id);
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
@@ -38,7 +54,7 @@ export default function ProductCard({ product, className }: { product: ShopProdu
             >
                 <div className="relative aspect-4/3 overflow-hidden bg-muted">
                     {mainImg ? (
-                        <Link href={href} className="relative block size-full">
+                        <Link href={href} {...linkProps} className="relative block size-full">
                             <ShopRemoteImage
                                 src={mainImg}
                                 alt={product.name}
@@ -109,7 +125,7 @@ export default function ProductCard({ product, className }: { product: ShopProdu
                             {stars.toFixed(1)} ({reviewCount})
                         </span>
                     </div>
-                    <Link href={href} className="font-semibold leading-snug hover:text-primary transition-colors line-clamp-2">
+                    <Link href={href} {...linkProps} className="font-semibold leading-snug hover:text-primary transition-colors line-clamp-2">
                         {product.name}
                     </Link>
                     {product.subheading ? (
@@ -154,7 +170,7 @@ export default function ProductCard({ product, className }: { product: ShopProdu
                     className="h-11 min-h-11 w-full touch-manipulation rounded-full border-border/80 bg-background shadow-sm sm:h-10 sm:min-h-10 sm:w-auto sm:shrink-0"
                     asChild
                 >
-                    <Link href={href}>Details</Link>
+                    <Link href={href} {...linkProps}>Details</Link>
                 </Button>
             </div>
         </div>

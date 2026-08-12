@@ -41,9 +41,11 @@ import {
     AlertCircle,
     Filter,
     ChevronRight,
+    ExternalLink,
     X,
     // SlidersHorizontal,
 } from "lucide-react";
+import { productPreviewPath } from "@/shared/lib/shop/productPublic";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,
 // with the shadcn Table's own container overflow overridden so the header stays
@@ -657,6 +659,17 @@ export default function EcommerceProductsPage() {
                                                         {publishing.has(p.id) ? "…" : "Unpublish"}
                                                     </Button>
                                                 ) : null}
+                                                {/* Works whatever the publish state — draft, ready or live. */}
+                                                <Button variant="ghost" size="sm" asChild title="Preview on the storefront">
+                                                    <a
+                                                        href={productPreviewPath(p)}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        <ExternalLink className="size-4" />
+                                                        <span className="sr-only">Preview {p.name}</span>
+                                                    </a>
+                                                </Button>
                                                 <Button variant="ghost" size="sm" asChild>
                                                     <Link href={`/office/ecommerce/products/${p.id}`}>Edit</Link>
                                                 </Button>
@@ -699,9 +712,19 @@ export default function EcommerceProductsPage() {
                                                             {p.description?.trim() || <span className="text-muted-foreground italic">No description yet.</span>}
                                                         </p>
                                                     </div>
-                                                    <div className="sm:col-span-2 lg:col-span-4">
+                                                    <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-4">
                                                         <Button variant="outline" size="sm" asChild>
                                                             <Link href={`/office/ecommerce/products/${p.id}`}>Edit product</Link>
+                                                        </Button>
+                                                        <Button variant="outline" size="sm" asChild>
+                                                            <a
+                                                                href={productPreviewPath(p)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                            >
+                                                                Preview in shop
+                                                                <ExternalLink className="size-3.5" />
+                                                            </a>
                                                         </Button>
                                                     </div>
                                                 </div>

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
-import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { productPreviewPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
@@ -18,7 +18,7 @@ import {
     type ShopPublishRules,
 } from "@/modules/ecommerce/lib/shopQualification";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { Check, RefreshCw, X } from "lucide-react";
+import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 
 function rupeesFromPaise(p: number) {
@@ -419,7 +419,7 @@ export default function ProductForm({
                 <div className="grid gap-2">
                     <Label>Description</Label>
                     <textarea
-                        className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[100px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                        className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-25 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                     />
@@ -544,9 +544,26 @@ export default function ProductForm({
             </div>
 
             <div className="space-y-2">
-                <Label>Live preview</Label>
+                <div className="flex items-center justify-between">
+                    <Label>Live preview</Label>
+                    {/* Always available, published or not — the card below is only the
+                        listing tile; this opens the real product page. */}
+                    {/* {initial?.id ? (
+                        <a
+                            href={productPreviewPath({ id: initial.id, slug: initial.slug ?? null })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-primary underline"
+                        >
+                            Open full page
+                            <ExternalLink className="size-3" />
+                        </a>
+                    ) : (
+                        <span className="text-xs text-muted-foreground">Full page opens after you create it</span>
+                    )} */}
+                </div>
                 <div className="rounded-lg border border-dashed border-border p-4">
-                    <ProductCard product={previewProduct as ShopProductPublic} />
+                    <ProductCard product={previewProduct as ShopProductPublic} preview={!!initial?.id} />
                 </div>
                 {/* Photos sit under the live card: every change here is seen
                     immediately in the card above, so no second preview is needed. */}

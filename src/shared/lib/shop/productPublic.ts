@@ -55,6 +55,16 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
     return `/shop/product/${p.slug ?? p.id}`;
 }
 
+/**
+ * Storefront URL carrying the staff preview flag. Renders the product page
+ * whatever its publish state — an unpublished draft (no slug yet, so this falls
+ * back to the id) looks exactly as it will once live. The flag only works for a
+ * signed-in staff session; for anyone else the page 404s as usual.
+ */
+export function productPreviewPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
+    return `${productPath(p)}?preview=1`;
+}
+
 /** Optional reference data the mapper resolves against. */
 export type ShopProductPublicOptions = {
     /** Org barcode bands — see `pricePaise` note below. */
