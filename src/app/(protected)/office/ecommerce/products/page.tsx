@@ -99,8 +99,13 @@ function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductSta
             galleryUrls: p.galleryUrls,
             description: p.description,
             category: p.shopCategory,
+            groupId: p.groupId,
+            brandId: p.brandId,
             mrpPaise: p.mrpPaise,
             stock: p.stock,
+            allowBackorder: p.allowBackorder,
+            weightGrams: p.weightGrams,
+            gstRateId: p.gstRateId,
         },
         rules
     );

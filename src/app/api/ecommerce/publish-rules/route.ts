@@ -25,8 +25,11 @@ const putSchema = z.object({
     description: z.boolean().optional(),
     price: z.boolean().optional(),
     category: z.boolean().optional(),
+    brand: z.boolean().optional(),
     mrp: z.boolean().optional(),
     stock: z.boolean().optional(),
+    weight: z.boolean().optional(),
+    gstRate: z.boolean().optional(),
 });
 
 export async function PUT(req: Request) {

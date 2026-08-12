@@ -16,6 +16,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
+    /** Own GST rate FK (null = resolved from the group / org default). */
+    gstRateId: number | null;
     /** Shipping weight of one unit in grams (null = unset → quote uses fallback). */
     weightGrams: number | null;
     /** Parcel dimensions of one unit (cm) — drive volumetric weight. */
@@ -66,6 +68,7 @@ export function invProductToAdmin(
         groupId: p.groupId,
         brandId: p.brandId,
         warrantyTermId: p.warrantyTermId,
+        gstRateId: p.gstRateId,
         weightGrams: p.weightGrams ?? null,
         lengthCm: p.lengthCm ?? null,
         breadthCm: p.breadthCm ?? null,

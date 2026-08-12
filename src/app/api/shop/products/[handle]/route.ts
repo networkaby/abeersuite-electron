@@ -5,7 +5,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { handleApiError } from "@/shared/lib/api";
@@ -43,7 +43,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ handle: string
         }
         const pub = invProductToPublic(product, { bands, avail, groupIndex });
         // Defensive: a listed-but-incomplete product 404s rather than rendering broken.
-        if (!shopQualification(pub, rules).qualified) {
+        if (!shopQualification(storefrontQualifiable(product, pub), rules).qualified) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
         return NextResponse.json(pub);

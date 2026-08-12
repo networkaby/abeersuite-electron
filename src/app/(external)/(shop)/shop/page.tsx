@@ -4,7 +4,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import ShopPageBanner from "@/modules/external/shop/ShopPageBanner";
@@ -33,8 +33,9 @@ export default async function ShopCatalogPage({
     const products = rows
         .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
         .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupIndex }))
-        .filter((p) => shopQualification(p, rules).qualified);
+        .map(({ p, avail }) => ({ p, pub: shopProductToPublic(p, { bands, avail, groupIndex }) }))
+        .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
+        .map(({ pub }) => pub);
     const cats = [...new Set(products.map((p) => p.category))];
 
     const categoryPills = cats

@@ -80,6 +80,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
                 name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, gstRateId: true,
             },
         });
         if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -135,7 +136,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
                     b.shopDescription !== undefined ? b.shopDescription ?? null : existing.shopDescription,
                 shopCategory:
                     b.shopCategory !== undefined ? b.shopCategory ?? null : existing.shopCategory,
+                groupId: b.groupId !== undefined ? b.groupId ?? null : existing.groupId,
+                brandId: b.brandId !== undefined ? b.brandId ?? null : existing.brandId,
                 stock: b.stock !== undefined ? b.stock ?? null : existing.stock,
+                allowBackorder:
+                    b.allowBackorder !== undefined ? b.allowBackorder : existing.allowBackorder,
+                weightGrams:
+                    b.weightGrams !== undefined ? b.weightGrams ?? null : existing.weightGrams,
+                gstRateId: existing.gstRateId,
                 savedSalePricePaise: existing.savedSalePricePaise,
                 mrpPaise: b.mrpPaise !== undefined ? b.mrpPaise ?? null : existing.mrpPaise,
                 effectiveSalePricePaise:

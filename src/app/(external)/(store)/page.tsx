@@ -6,7 +6,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
@@ -178,8 +178,9 @@ export default async function StoreHomePage({
     const products = rows
         .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
         .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => shopProductToPublic(p, { bands, avail, groupIndex }))
-        .filter((p) => shopQualification(p, rules).qualified);
+        .map(({ p, avail }) => ({ p, pub: shopProductToPublic(p, { bands, avail, groupIndex }) }))
+        .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
+        .map(({ pub }) => pub);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
     const categoryEntries = allCategories

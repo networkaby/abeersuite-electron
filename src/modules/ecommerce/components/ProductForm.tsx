@@ -238,8 +238,15 @@ export default function ProductForm({
             galleryUrls,
             description: description.trim() || null,
             category: shopCategory.trim() || null,
+            // Group / brand / GST rate aren't editable here — they come from the
+            // inventory master, so the checklist reads the loaded row.
+            groupId: initial?.groupId ?? null,
+            brandId: initial?.brandId ?? null,
             mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
             stock: stock.trim() === "" ? null : parseInt(stock, 10),
+            allowBackorder,
+            weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
+            gstRateId: initial?.gstRateId ?? null,
         },
         rules
     );
@@ -283,6 +290,7 @@ export default function ProductForm({
         groupId: initial?.groupId ?? null,
         brandId: initial?.brandId ?? null,
         warrantyTermId: initial?.warrantyTermId ?? null,
+        gstRateId: initial?.gstRateId ?? null,
         weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
         lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
         breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),

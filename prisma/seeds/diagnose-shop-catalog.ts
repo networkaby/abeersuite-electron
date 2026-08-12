@@ -117,8 +117,13 @@ async function main() {
                 galleryUrls: gallery.length > 0 ? gallery : p.imageUrl ? [p.imageUrl] : [],
                 description: p.shopDescription,
                 category: p.shopCategory ?? p.category?.name ?? "Accessories",
+                groupId: p.groupId,
+                brandId: p.brandId,
                 mrpPaise: p.mrpPaise,
                 stock: p.stock,
+                allowBackorder: p.allowBackorder,
+                weightGrams: p.weightGrams,
+                gstRateId: p.gstRateId,
             },
             rules,
         );

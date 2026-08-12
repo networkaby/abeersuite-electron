@@ -5,7 +5,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification } from "@/modules/ecommerce/lib/shopQualification";
+import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { handleApiError } from "@/shared/lib/api";
@@ -27,9 +27,10 @@ export async function GET() {
             .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
             // HIDE policy drops out-of-stock products from the storefront entirely.
             .filter(({ avail }) => avail.visible)
-            .map(({ p, avail }) => invProductToPublic(p, { bands, avail, groupIndex }))
+            .map(({ p, avail }) => ({ p, pub: invProductToPublic(p, { bands, avail, groupIndex }) }))
             // Defensive: never show a half-built product even if the flag is stale.
-            .filter((p) => shopQualification(p, rules).qualified);
+            .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
+            .map(({ pub }) => pub);
         return NextResponse.json(published);
     } catch (e) {
         return handleApiError(e, "Failed to load products");

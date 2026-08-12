@@ -14,7 +14,12 @@ export type ShopListingInput = {
     galleryUrls: string[];
     shopDescription: string | null;
     shopCategory: string | null;
+    groupId: number | null;
+    brandId: number | null;
     stock: number | null;
+    allowBackorder: boolean;
+    weightGrams: number | null;
+    gstRateId: number | null;
     savedSalePricePaise: number | null;
     mrpPaise: number | null;
     effectiveSalePricePaise: number | null;
@@ -54,8 +59,13 @@ export function resolveShopListing(
             galleryUrls: m.galleryUrls,
             description: m.shopDescription,
             category: m.shopCategory,
+            groupId: m.groupId,
+            brandId: m.brandId,
             mrpPaise: m.mrpPaise,
             stock: m.stock,
+            allowBackorder: m.allowBackorder,
+            weightGrams: m.weightGrams,
+            gstRateId: m.gstRateId,
         },
         opts.rules ?? DEFAULT_SHOP_PUBLISH_RULES
     );

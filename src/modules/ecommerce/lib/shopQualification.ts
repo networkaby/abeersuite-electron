@@ -11,8 +11,11 @@ export type ShopPublishRules = {
     description: boolean;
     price: boolean;
     category: boolean;
+    brand: boolean;
     mrp: boolean;
     stock: boolean;
+    weight: boolean;
+    gstRate: boolean;
 };
 
 /** Default rules = the original hardcoded gate (image + description + price). */
@@ -21,8 +24,11 @@ export const DEFAULT_SHOP_PUBLISH_RULES: ShopPublishRules = {
     description: true,
     price: true,
     category: false,
+    brand: false,
     mrp: false,
     stock: false,
+    weight: false,
+    gstRate: false,
 };
 
 export type ShopRequirementKey = keyof ShopPublishRules;
@@ -32,9 +38,15 @@ export const SHOP_REQUIREMENT_LABELS: Record<ShopRequirementKey, string> = {
     image: "Product image",
     description: "Description",
     price: "Sale price",
-    category: "Shop category",
+    // Storefront category = the product's own `shopCategory` override, else the
+    // office group's name. Either one satisfies this rule, matching what the shop
+    // actually displays (productPublic: shopCategory ?? group.name).
+    category: "Shop Category (office group)",
+    brand: "Brand",
     mrp: "MRP",
     stock: "In stock",
+    weight: "Shipping weight",
+    gstRate: "GST rate",
 };
 
 /** Coerce a stored OrgDefaults.shopPublishRulesJson value into clean rules. */
@@ -48,8 +60,11 @@ export function normalizeShopPublishRules(raw: unknown): ShopPublishRules {
         description: pick("description"),
         price: pick("price"),
         category: pick("category"),
+        brand: pick("brand"),
         mrp: pick("mrp"),
         stock: pick("stock"),
+        weight: pick("weight"),
+        gstRate: pick("gstRate"),
     };
 }
 
@@ -58,11 +73,20 @@ export type ShopQualifiable = {
     imageUrl?: string | null;
     galleryUrls?: string[] | null;
     description?: string | null;
-    /** Explicit storefront category (shopCategory). */
+    /** Explicit storefront category override (shopCategory). */
     category?: string | null;
     mrpPaise?: number | null;
     /** Tracked stock (null = untracked → always counts as in stock). */
     stock?: number | null;
+    /** Per-product backorder override — makes the stock rule moot (still orderable). */
+    allowBackorder?: boolean;
+    /** Office masters (InvProduct.groupId / brandId). */
+    groupId?: number | null;
+    brandId?: number | null;
+    /** Shipping weight of one unit in grams — drives the courier quote. */
+    weightGrams?: number | null;
+    /** FK to the GstRate master (null = falls back to group / org default). */
+    gstRateId?: number | null;
 };
 
 export type ShopQualificationResult = {
@@ -77,13 +101,53 @@ const REQUIREMENT_CHECKS: Record<ShopRequirementKey, (p: ShopQualifiable) => boo
     image: (p) => Boolean(p.imageUrl) || (p.galleryUrls?.length ?? 0) > 0,
     description: (p) => Boolean(p.description && p.description.trim().length > 0),
     price: (p) => (p.pricePaise ?? 0) > 0,
-    category: (p) => Boolean(p.category && p.category.trim().length > 0),
+    category: (p) => Boolean(p.category && p.category.trim().length > 0) || p.groupId != null,
+    brand: (p) => p.brandId != null,
     mrp: (p) => (p.mrpPaise ?? 0) > 0,
-    // Untracked (null/undefined) counts as in stock; tracked must be > 0.
-    stock: (p) => p.stock === undefined || p.stock === null || p.stock > 0,
+    // Untracked (null/undefined) counts as in stock; tracked must be > 0. A
+    // backorder-enabled product is orderable at zero stock, so the rule is skipped.
+    stock: (p) =>
+        p.allowBackorder === true || p.stock === undefined || p.stock === null || p.stock > 0,
+    // Must be set ON the product — the whole point is to stop the courier quote
+    // silently falling back to the delivery method's default item weight.
+    weight: (p) => (p.weightGrams ?? 0) > 0,
+    // Likewise: set on the product, not resolved from the group / org default.
+    gstRate: (p) => p.gstRateId != null,
 };
 
-const REQUIREMENT_ORDER: ShopRequirementKey[] = ["image", "description", "price", "category", "mrp", "stock"];
+const REQUIREMENT_ORDER: ShopRequirementKey[] = [
+    "image",
+    "description",
+    "price",
+    "category",
+    "brand",
+    "mrp",
+    "stock",
+    "weight",
+    "gstRate",
+];
+
+/**
+ * Build the qualification input for a storefront surface, which holds the mapped
+ * public shape (resolved category + barcode price) but still needs the raw row's
+ * office/logistics scalars — those are deliberately not exposed in the public JSON.
+ * Keeps the shop pages, /[slug] and the shop APIs on one merge instead of four.
+ */
+export function storefrontQualifiable(
+    raw: Pick<
+        ShopQualifiable,
+        "groupId" | "brandId" | "stock" | "allowBackorder" | "weightGrams" | "gstRateId" | "mrpPaise"
+    >,
+    pub: {
+        pricePaise: number;
+        imageUrl: string | null;
+        galleryUrls: string[];
+        description: string | null;
+        category: string | null;
+    }
+): ShopQualifiable {
+    return { ...pub, ...raw };
+}
 
 export function shopQualification(
     p: ShopQualifiable,

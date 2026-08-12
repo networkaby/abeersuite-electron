@@ -106,7 +106,14 @@ export async function POST(req: Request) {
                 galleryUrls: galleryJson ?? [],
                 shopDescription: b.shopDescription ?? null,
                 shopCategory: b.shopCategory ?? null,
+                groupId: b.groupId ?? null,
+                brandId: b.brandId ?? null,
                 stock: b.stock === undefined ? null : b.stock,
+                allowBackorder: b.allowBackorder ?? false,
+                weightGrams: b.weightGrams ?? null,
+                // Not settable from the ecommerce create form — resolved later from
+                // the group / org default, so a brand-new row has none of its own.
+                gstRateId: null,
                 savedSalePricePaise: null,
                 mrpPaise: b.mrpPaise ?? null,
                 effectiveSalePricePaise: b.pricePaise ?? null,
