@@ -185,6 +185,57 @@ model AccountAlias {
   @@index([aliasKey])
 }
 
+// ── BiGstPlanningMonth ───────────────────────────────────────────────────────
+//
+// Monthly GST purchase planning — one row per calendar month (yearMonth =
+// "YYYY-MM"). Every figure has a computed source (purchase = GST-party purchase
+// vouchers, sale = sale vouchers, deposit = DEBIT legs on the selected bank / OD
+// ledgers). The three *Override columns are the manual hand: null = use the
+// computed value, a number = that number wins.
+
+model BiGstPlanningMonth {
+  yearMonth        String   @id // "2026-08"
+  purchaseOverride Decimal? @db.Decimal(14, 2)
+  saleOverride     Decimal? @db.Decimal(14, 2)
+  depositOverride  Decimal? @db.Decimal(14, 2)
+  updatedAt        DateTime @updatedAt
+}
+
+// ── BiGstPlanningFy ──────────────────────────────────────────────────────────
+//
+// One row per financial year (April–March), keyed by the starting year —
+// 2026 = FY 2026-27. GST cost for a month is (sale − purchase) × taxRate; the
+// FY budget is costLimit + extraCostPaid, and whatever the budget cannot absorb
+// carries into the next FY.
+
+model BiGstPlanningFy {
+  fyStartYear   Int      @id // 2026 = FY 2026-27
+  costLimit     Decimal  @default(0) @db.Decimal(14, 2)
+  /// Voluntary top-up — cost paid above the limit to clear the carry.
+  extraCostPaid Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt     DateTime @updatedAt
+}
+
+// ── BiGstPlanningConfig (singleton, id=1) ────────────────────────────────────
+//
+// Rates for the planning maths. taxRatePercent turns monthly value addition
+// into GST cost; depositGapPercent keeps bank deposit that far below sale;
+// presumptiveRatePercent is the slice of bank deposit the government deems
+// income (presumptive taxation), and incomeTaxFreeLimit is the income below
+// which no income tax falls due. Every figure is editable — none is hard-coded.
+
+model BiGstPlanningConfig {
+  id                    Int      @id @default(1)
+  taxRatePercent        Decimal  @default(18) @db.Decimal(5, 2)
+  depositGapPercent     Decimal  @default(10) @db.Decimal(5, 2)
+  presumptiveRatePercent Decimal @default(8) @db.Decimal(5, 2)
+  incomeTaxFreeLimit    Decimal  @default(1200000) @db.Decimal(14, 2)
+  /// Bank + Bank OD ledger ids whose deposits count, e.g. [12, 45, 67]. Picked
+  /// once and used for every month of every year.
+  bankAccountIds        Json     @default("[]")
+  updatedAt             DateTime @updatedAt
+}
+
 // ── CreditLimitConfig (singleton, id=1) ──────────────────────────────────────
 //
 // Global auto credit-limit calculator. The per-customer manual limit still lives

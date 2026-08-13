@@ -30,6 +30,7 @@ const REPORTS = [
     { href: "/office/bi/item-profit", icon: Box, label: "Item-wise Profit", desc: "Margin per product; pivot by category or brand; below-cost flags." },
     { href: "/office/bi/item-by-party", icon: Grid2x2, label: "Item by Party", desc: "One item, both sides — who buys it and who supplies it." },
     { href: "/office/bi/party-sale-purchase", icon: ArrowLeftRight, label: "Party Sale & Purchase", desc: "Sold-to vs bought-from per party, with the net flow." },
+    { href: "/office/bi/gst-purchase-planning", icon: ArrowLeftRight, label: "GST Purchase Planning", desc: "GST-party purchase, sale and bank deposit per month, with the FY GST cost budget and its carry-forward." },
     { href: "/office/bi/fsn", icon: ArrowLeftRight, label: "FSN & Dead Stock", desc: "Fast / Slow / Non-moving classes and the value locked in dead stock." },
     { href: "/office/bi/movement-register", icon: ClipboardList, label: "Item Movement Register", desc: "Opening, in, out and closing per item with the dated ledger." },
     { href: "/office/bi/rfm", icon: Network, label: "RFM Segmentation", desc: "Champions, Loyal, At-Risk, Lost — who to reward and who to win back." },

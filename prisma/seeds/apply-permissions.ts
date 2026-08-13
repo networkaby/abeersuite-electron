@@ -103,6 +103,12 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "ui",
         description: 'Show the "Update prices" link under Pricing Strategy in the sidebar.',
     },
+    {
+        id: "ui:sidebar:bi:gst-purchase-planning",
+        label: "Business Intelligence → GST Purchase Planning",
+        module: "ui",
+        description: 'Show the "GST Purchase Planning" link under Business Intelligence in the sidebar.',
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";
