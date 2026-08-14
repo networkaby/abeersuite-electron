@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { r2 } from "@/modules/bi/lib/marginEngine";
-import { loadBankAccountOptions, loadGstPlanningFy, upsertFyRow } from "@/modules/bi/lib/gstPlanning";
+import { getGstPlanningDataFyRange, loadBankAccountOptions, loadGstPlanningFy, upsertFyRow } from "@/modules/bi/lib/gstPlanning";
 
 export const maxDuration = 60;
 
@@ -27,41 +27,36 @@ export async function GET(req: Request) {
     }
 
     const branchId = searchParams.get("branchId") || null;
-    const [banks, result] = await Promise.all([
+    const [banks, result, dataRange] = await Promise.all([
         loadBankAccountOptions(),
         loadGstPlanningFy(fyStartYear, { branchId }),
+        getGstPlanningDataFyRange(),
     ]);
 
-    return NextResponse.json({ branchId, banks, ...result });
+    return NextResponse.json({ branchId, banks, dataRange, ...result });
 }
 
-// PATCH /api/bi/gst-purchase-planning/fy — the FY cost limit / extra cost paid.
+// PATCH /api/bi/gst-purchase-planning/fy — the FY's allowed purchase-vs-sale
+// difference. Signed: negative means selling below purchase on purpose.
 // Bank selection is permanent and lives on the /config route.
 export async function PATCH(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
-    const body = await req.json() as {
-        fyStartYear?: number;
-        costLimit?: number;
-        extraCostPaid?: number;
-    };
+    const body = await req.json() as { fyStartYear?: number; allowedDiff?: number };
 
     const fyStartYear = parseFyStartYear(body.fyStartYear);
     if (fyStartYear === null) {
         return NextResponse.json({ error: "fyStartYear required" }, { status: 400 });
     }
 
-    const costLimit = body.costLimit !== undefined ? Number(body.costLimit) : undefined;
-    const extraCostPaid = body.extraCostPaid !== undefined ? Number(body.extraCostPaid) : undefined;
-    if ((costLimit !== undefined && (!Number.isFinite(costLimit) || costLimit < 0))
-        || (extraCostPaid !== undefined && (!Number.isFinite(extraCostPaid) || extraCostPaid < 0))) {
-        return NextResponse.json({ error: "Amounts must be zero or more" }, { status: 400 });
+    const allowedDiff = body.allowedDiff !== undefined ? Number(body.allowedDiff) : undefined;
+    if (allowedDiff !== undefined && !Number.isFinite(allowedDiff)) {
+        return NextResponse.json({ error: "Allowed difference must be a number" }, { status: 400 });
     }
 
     await upsertFyRow(fyStartYear, {
-        ...(costLimit !== undefined ? { costLimit: r2(costLimit) } : {}),
-        ...(extraCostPaid !== undefined ? { extraCostPaid: r2(extraCostPaid) } : {}),
+        ...(allowedDiff !== undefined ? { allowedDiff: r2(allowedDiff) } : {}),
     });
 
     const [banks, result] = await Promise.all([

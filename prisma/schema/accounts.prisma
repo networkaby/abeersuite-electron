@@ -204,16 +204,22 @@ model BiGstPlanningMonth {
 // ── BiGstPlanningFy ──────────────────────────────────────────────────────────
 //
 // One row per financial year (April–March), keyed by the starting year —
-// 2026 = FY 2026-27. GST cost for a month is (sale − purchase) × taxRate; the
-// FY budget is costLimit + extraCostPaid, and whatever the budget cannot absorb
-// carries into the next FY.
+// 2026 = FY 2026-27.
+//
+// Purchase cannot be controlled, only forecast. Sale and bank deposit can. So
+// the year is steered by ONE figure: allowedDiff, the targeted gap between
+// purchase and sale. FY sale target = FY purchase + allowedDiff (negative =
+// deliberately selling below purchase, banking input credit). The deposit
+// ceiling then falls out of the sale target via the configured gap %.
+//
+// Both allowances are yearly, never monthly — an overshoot in an early month is
+// corrected by the run rate left for the remaining months.
 
 model BiGstPlanningFy {
-  fyStartYear   Int      @id // 2026 = FY 2026-27
-  costLimit     Decimal  @default(0) @db.Decimal(14, 2)
-  /// Voluntary top-up — cost paid above the limit to clear the carry.
-  extraCostPaid Decimal  @default(0) @db.Decimal(14, 2)
-  updatedAt     DateTime @updatedAt
+  fyStartYear Int      @id // 2026 = FY 2026-27
+  /// Signed target gap between FY purchase and FY sale. Negative = sale below purchase.
+  allowedDiff Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt   DateTime @updatedAt
 }
 
 // ── BiGstPlanningConfig (singleton, id=1) ────────────────────────────────────

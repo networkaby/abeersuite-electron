@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
+import { parseAmount, isAmountChars, parseSignedAmount, isSignedAmountChars } from "@/utils/numberInput";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { KpiCard } from "@/modules/bi/components/KpiCard";
 
@@ -44,10 +46,10 @@ interface PlanningConfig {
 }
 
 interface PresumptiveCheck {
-    deposit: number;
+    base: number;
     presumptiveIncome: number;
     taxFreeLimit: number;
-    maxDeposit: number;
+    maxBase: number;
     headroom: number;
     withinLimit: boolean;
 }
@@ -71,7 +73,7 @@ interface MonthlyReport {
         depositExcess: number;
         depositOk: boolean;
     };
-    fy: { fyStartYear: number; costLimit: number; extraCostPaid: number };
+    fy: { fyStartYear: number; allowedDiff: number };
     meta: { purchaseBills: number; partyCount: number };
     rows: PartyRow[];
 }
@@ -96,31 +98,76 @@ interface FyMonthRow {
     depositOk: boolean;
 }
 
+/** A yearly permission and the pace still needed to land on it. */
+interface Allowance {
+    target: number;
+    used: number;
+    left: number;
+    monthsLeft: number;
+    perMonth: number;
+    withinAllowance: boolean;
+}
+
+/** The year's plan: purchase it rides on, and the two allowances that fall out. */
+interface FyPlan {
+    purchase: { actual: number; forecast: number; total: number };
+    allowedDiff: number;
+    sale: Allowance;
+    deposit: Allowance;
+    cost: number;
+}
+
+/** Both presumptive bases tested against the income-tax free limit. */
+interface PresumptiveVerdict {
+    sale: PresumptiveCheck;
+    deposit: PresumptiveCheck;
+    withinLimit: boolean;
+}
+
 interface FyReport {
     config: PlanningConfig;
     banks: BankOption[];
+    dataRange: { min: number; max: number } | null;
     months: FyMonthRow[];
     fy: {
         fyStartYear: number;
         label: string;
-        costLimit: number;
-        extraCostPaid: number;
-        budget: number;
-        carryIn: number;
+        allowedDiff: number;
         costThisFy: number;
-        costIncurred: number;
-        costAbsorbed: number;
-        carryOut: number;
-        remainingBudget: number;
-        withinBudget: boolean;
     };
     totals: {
         purchase: number; sale: number; deposit: number; valueAddition: number;
         outputTax: number; inputTax: number; cost: number; maxDeposit: number;
         depositLimitLeft: number;
     };
-    presumptive: PresumptiveCheck;
-    depositBreachMonths: number;
+    presumptive: PresumptiveVerdict;
+    /** Presumptive test on `planBooked` — shown while the forecast is hidden. */
+    presumptiveBooked: PresumptiveVerdict;
+    plan: FyPlan;
+    /** The plan with the forecast dropped — purchase counts only what is booked. */
+    planBooked: FyPlan;
+    purchaseForecast: {
+        basisMonths: string[];
+        perMonth: number;
+        months: Record<string, number>;
+        actualTotal: number;
+        forecastTotal: number;
+        total: number;
+    };
+    monthGuides: Record<string, {
+        suggestedSale: number | null;
+        suggestedDeposit: number | null;
+        saleLimitLeft: number;
+        depositLimitLeft: number;
+        hasData: boolean;
+    }>;
+    headroom: {
+        saleSlack: number;
+        depositSlack: number;
+        months: number;
+        salePerMonth: number;
+        depositPerMonth: number;
+    };
 }
 
 function currentYearMonth(): string {
@@ -136,6 +183,23 @@ function fyStartYearOf(yearMonth: string): number {
 
 const fyLabel = (fyStartYear: number) =>
     `FY ${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`;
+
+/** Compact "2026-27" form for the FY dropdown (no "FY" prefix — the dropdown label already says it). */
+const fyShortLabel = (fyStartYear: number) =>
+    `${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`;
+
+/** The 12 yearMonth keys (Apr–Mar) belonging to a financial year, for the month rail. */
+function fyMonths(fyStartYear: number): string[] {
+    const months: string[] = [];
+    for (let m = 4; m <= 12; m++) months.push(`${fyStartYear}-${String(m).padStart(2, "0")}`);
+    for (let m = 1; m <= 3; m++) months.push(`${fyStartYear + 1}-${String(m).padStart(2, "0")}`);
+    return months;
+}
+
+const shortMonthLabel = (yearMonth: string) => {
+    const [y, m] = yearMonth.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short" });
+};
 
 /** Amount box that shows the computed figure until you type your own. */
 function OverrideField({
@@ -162,12 +226,7 @@ function OverrideField({
             onClear();
             return;
         }
-        const n = Number(draft.replace(/,/g, ""));
-        if (Number.isNaN(n) || n < 0) {
-            toast.error("Enter a valid amount");
-            return;
-        }
-        onSave(n);
+        onSave(parseAmount(draft));
     };
 
     return (
@@ -188,11 +247,10 @@ function OverrideField({
             </div>
             <div className="flex gap-2">
                 <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
+                    onChange={(e) => { if (isAmountChars(e.target.value)) setDraft(e.target.value); }}
                     onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
                     placeholder={fmt(figure.computed)}
                     disabled={saving}
@@ -206,6 +264,206 @@ function OverrideField({
                     ? `Manual — computed was ${fmt(figure.computed)}`
                     : `Computed${hint ? ` · ${hint}` : ""} — leave blank to keep using it`}
             </p>
+        </div>
+    );
+}
+
+/** Compact inline override box used inside a table cell — commits on blur/Enter. */
+function FyOverrideCell({
+    figure,
+    saving,
+    onSave,
+    onClear,
+}: {
+    figure: Figure & { isOverridden: boolean };
+    saving: boolean;
+    onSave: (value: number) => void;
+    onClear: () => void;
+}) {
+    const [draft, setDraft] = useState(figure.override === null ? "" : String(figure.override));
+
+    const commit = () => {
+        if (draft.trim() === "") {
+            if (figure.isOverridden) onClear();
+            return;
+        }
+        const n = parseAmount(draft);
+        if (n === figure.override) return;
+        onSave(n);
+    };
+
+    return (
+        <input
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            onChange={(e) => { if (isAmountChars(e.target.value)) setDraft(e.target.value); }}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") { commit(); (e.target as HTMLInputElement).blur(); }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            placeholder={fmt(figure.computed)}
+            disabled={saving}
+            className={`w-24 rounded border bg-transparent px-1.5 py-1 text-right font-mono text-sm outline-none focus:ring-1 focus:ring-primary ${
+                figure.isOverridden
+                    ? "border-amber-400 text-amber-700 dark:text-amber-400"
+                    : "border-transparent hover:border-border"
+            }`}
+        />
+    );
+}
+
+/** A projected figure shown beside the real one — never saved, never editable. */
+function ForecastFigure({ value }: { value: number }) {
+    return (
+        <span
+            className="ml-1.5 shrink-0 font-mono text-[11px] text-sky-600 dark:text-sky-400"
+            title="Forecast — averaged from the last months with data"
+        >
+            ~{fmt(value)}
+        </span>
+    );
+}
+
+/**
+ * What a still-open month SHOULD do. Unlike the forecast this is not a
+ * prediction — sale and deposit are controllable, so this is the instruction.
+ */
+function SuggestedFigure({ value }: { value: number }) {
+    return (
+        <span
+            className="ml-1.5 shrink-0 font-mono text-[11px] font-medium text-violet-600 dark:text-violet-400"
+            title="Suggested — the pace needed to land on the year's allowance"
+        >
+            →{fmt(value)}
+        </span>
+    );
+}
+
+/**
+ * A yearly allowance spelled out as a pace. This is the guidance: what the year
+ * permits, what is already gone, and what that leaves per remaining month — so
+ * an early overshoot reads as "slow down to X" rather than a bare failure.
+ */
+function AllowanceCard({
+    title,
+    allowance,
+    overLabel,
+    underLabel,
+    note,
+}: {
+    title: string;
+    allowance: Allowance;
+    overLabel: string;
+    underLabel: string;
+    note: string;
+}) {
+    const ok = allowance.withinAllowance;
+    return (
+        <div className={`rounded-lg border p-4 shadow-sm ${ok
+            ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/30"
+            : "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/30"
+            }`}>
+            <div className="flex items-center gap-2 text-sm font-medium">
+                {ok ? <CheckCircle2 size={18} className="text-emerald-600" />
+                    : <AlertTriangle size={18} className="text-amber-600" />}
+                {title} — {ok ? underLabel : overLabel}
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <div>
+                    <div className="text-muted-foreground">Year&rsquo;s allowance</div>
+                    <div className="font-mono text-sm text-foreground">{fmt(allowance.target)}</div>
+                </div>
+                <div>
+                    <div className="text-muted-foreground" title="Finished months only — the current month is still open, so it counts as one to come">
+                        Used (months closed)
+                    </div>
+                    <div className="font-mono text-sm text-foreground">{fmt(allowance.used)}</div>
+                </div>
+                <div>
+                    <div className="text-muted-foreground">{ok ? "Left" : "Over by"}</div>
+                    <div className={`font-mono text-sm ${ok ? "text-emerald-600" : "text-red-600"}`}>
+                        {fmt(Math.abs(allowance.left))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-3 border-t pt-2 text-sm">
+                {allowance.monthsLeft === 0 ? (
+                    <span className="text-muted-foreground">No months left in this FY to adjust in.</span>
+                ) : ok ? (
+                    <>
+                        <span className="font-medium text-foreground">{fmt(allowance.perMonth)}</span>
+                        <span className="text-muted-foreground">
+                            {" "}per month for the remaining {allowance.monthsLeft} month(s).
+                        </span>
+                    </>
+                ) : (
+                    <span className="text-amber-700 dark:text-amber-400">
+                        The year&rsquo;s allowance is already spent, with {allowance.monthsLeft} month(s)
+                        still to go — nothing further can be added without going over.
+                    </span>
+                )}
+            </div>
+
+            <p className="mt-2 text-[11px] text-muted-foreground">{note}</p>
+        </div>
+    );
+}
+
+/**
+ * Each still-running month's equal share of the slack standing today. Shown on
+ * the current month too — it is not finished, so it can still take its share.
+ */
+function HeadroomFigure({ value }: { value: number }) {
+    return (
+        <span
+            className={`ml-1.5 shrink-0 font-mono text-[11px] font-medium ${
+                value < 0 ? "text-red-500" : "text-amber-600 dark:text-amber-400"
+            }`}
+            title="Head room — today's slack split equally over the months still to run"
+        >
+            +{fmt(value)}
+        </span>
+    );
+}
+
+/** One presumptive base tested against the income-tax free limit. */
+function PresumptiveBase({
+    label,
+    check,
+    ratePercent,
+}: {
+    label: string;
+    check: PresumptiveCheck;
+    ratePercent: number;
+}) {
+    return (
+        <div className="rounded-md border border-border/60 bg-background/40 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                {check.withinLimit
+                    ? <CheckCircle2 size={14} className="text-emerald-600" />
+                    : <AlertTriangle size={14} className="text-amber-600" />}
+                {label}
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div>
+                    <div className="text-muted-foreground">Base</div>
+                    <div className="font-mono text-foreground">{fmt(check.base)}</div>
+                </div>
+                <div>
+                    <div className="text-muted-foreground">Deemed @ {ratePercent}%</div>
+                    <div className="font-mono text-foreground">{fmt(check.presumptiveIncome)}</div>
+                </div>
+                <div>
+                    <div className="text-muted-foreground">{check.headroom >= 0 ? "Headroom" : "Over by"}</div>
+                    <div className={`font-mono ${check.headroom >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {fmt(Math.abs(check.headroom))}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -230,12 +488,14 @@ function RuleInput({
         <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">{label}</Label>
             <Input
-                type="number"
-                min={0}
-                max={max}
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => {
+                    if (!isAmountChars(e.target.value)) return;
+                    if (max !== undefined && parseAmount(e.target.value) > max) return;
+                    onChange(e.target.value);
+                }}
                 disabled={disabled}
             />
             <p className="text-[10px] text-muted-foreground">{hint}</p>
@@ -248,42 +508,49 @@ export default function GstPurchasePlanningPage() {
     const [month, setMonth] = useState(currentYearMonth);
     const [fyStartYear, setFyStartYear] = useState(() => fyStartYearOf(currentYearMonth()));
     const [bankDraft, setBankDraft] = useState<number[]>([]);
-    const [limitDraft, setLimitDraft] = useState("");
-    const [extraDraft, setExtraDraft] = useState("");
+    const [diffDraft, setDiffDraft] = useState("");
     const [taxDraft, setTaxDraft] = useState("");
     const [gapDraft, setGapDraft] = useState("");
     const [presumptiveDraft, setPresumptiveDraft] = useState("");
     const [incomeLimitDraft, setIncomeLimitDraft] = useState("");
     const [saving, setSaving] = useState(false);
-    // Output tax and input tax are the working-out behind Cost this month —
-    // folded away until asked for.
-    const [showTaxDetail, setShowTaxDetail] = useState(false);
+    const [showConfig, setShowConfig] = useState(false);
+    // Forecast purchase and the suggested sale / deposit pace for months that
+    // have not finished — shown beside the real figures, never in place of them.
+    const [showForecast, setShowForecast] = useState(true);
 
     const { data, loading, reload } = useBiQuery<MonthlyReport>(`/api/bi/gst-purchase-planning?month=${month}`);
     const { data: fy, loading: fyLoading, reload: reloadFy } = useBiQuery<FyReport>(
         `/api/bi/gst-purchase-planning/fy?fy=${fyStartYear}`,
     );
 
+    // Hiding the forecast hides it everywhere — the KPIs, the two allowance
+    // cards and the presumptive test then read the booked-only plan, so nothing
+    // on the page is steered by figures the table no longer shows.
+    const plan = showForecast ? fy?.plan : fy?.planBooked;
+    const presumptive = showForecast ? fy?.presumptive : fy?.presumptiveBooked;
+    /** Word for the purchase every target is derived from, in the current view. */
+    const purchaseWord = showForecast ? "forecast purchase" : "booked purchase";
+
     useEffect(() => {
         if (!fy) return;
         setBankDraft(fy.config.bankAccountIds ?? []);
-        setLimitDraft(String(fy.fy.costLimit || ""));
-        setExtraDraft(String(fy.fy.extraCostPaid || ""));
+        setDiffDraft(String(fy.fy.allowedDiff || ""));
         setTaxDraft(String(fy.config.taxRatePercent));
         setGapDraft(String(fy.config.depositGapPercent));
         setPresumptiveDraft(String(fy.config.presumptiveRatePercent));
         setIncomeLimitDraft(String(fy.config.incomeTaxFreeLimit));
-    }, [fy?.fy.fyStartYear, fy?.fy.costLimit, fy?.fy.extraCostPaid, fy?.config]);
+    }, [fy?.fy.fyStartYear, fy?.fy.allowedDiff, fy?.config]);
 
     const reloadAll = useCallback(() => {
         reload();
         reloadFy();
     }, [reload, reloadFy]);
 
-    const savePlan = useCallback(async (patch: Record<string, unknown>) => {
+    const savePlan = useCallback(async (patch: Record<string, unknown>, yearMonth: string = month) => {
         setSaving(true);
         try {
-            await axios.patch("/api/bi/gst-purchase-planning", { yearMonth: month, ...patch });
+            await axios.patch("/api/bi/gst-purchase-planning", { yearMonth, ...patch });
             toast.success("Saved");
             reloadAll();
         } catch {
@@ -293,7 +560,7 @@ export default function GstPurchasePlanningPage() {
         }
     }, [month, reloadAll]);
 
-    const saveFy = useCallback(async (patch: { costLimit?: number; extraCostPaid?: number }) => {
+    const saveFy = useCallback(async (patch: { allowedDiff?: number }) => {
         setSaving(true);
         try {
             await axios.patch("/api/bi/gst-purchase-planning/fy", { fyStartYear, ...patch });
@@ -346,9 +613,32 @@ export default function GstPurchasePlanningPage() {
         || bankDraft.some((id) => !fy.config.bankAccountIds.includes(id))
     );
 
+    const currentYM = currentYearMonth();
+
     const openMonth = (yearMonth: string) => {
         setMonth(yearMonth);
         setTab("monthly");
+    };
+
+    // Previous 1 + every FY that has voucher data + upcoming 1.
+    const currentFyStart = fyStartYearOf(currentYM);
+    const rangeMin = (fy?.dataRange?.min ?? currentFyStart) - 1;
+    const rangeMax = (fy?.dataRange?.max ?? currentFyStart) + 1;
+    const fyYearOptions = Array.from(
+        new Set([
+            fyStartYear,
+            ...Array.from({ length: Math.max(0, rangeMax - rangeMin + 1) }, (_, i) => rangeMax - i),
+        ]),
+    ).sort((a, b) => b - a);
+
+    const monthRail = fyMonths(fyStartYear);
+
+    /** Picking an FY drags the month with it, so the Monthly tab never sits outside the chosen year. */
+    const selectFy = (nextFy: number) => {
+        setFyStartYear(nextFy);
+        if (fyStartYearOf(month) === nextFy) return;
+        const months = fyMonths(nextFy);
+        setMonth(months.includes(currentYM) ? currentYM : months[0]);
     };
 
     return (
@@ -364,10 +654,29 @@ export default function GstPurchasePlanningPage() {
                 </div>
 
                 <Tabs value={tab} onValueChange={setTab}>
-                    <TabsList>
-                        <TabsTrigger value="monthly">Monthly</TabsTrigger>
-                        <TabsTrigger value="fy">Financial year</TabsTrigger>
-                    </TabsList>
+                    {/* Tab switch + FY picker sit on one line, shared by both tabs so the
+                        financial year stays visible and selectable wherever you are. */}
+                    <div className="flex items-end gap-3 flex-wrap">
+                        <TabsList>
+                            <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                            <TabsTrigger value="fy">Financial year</TabsTrigger>
+                        </TabsList>
+                        <div className="space-y-1">
+                            <Label htmlFor="plan-fy" className="text-xs text-muted-foreground">
+                                Financial year
+                            </Label>
+                            <Select value={String(fyStartYear)} onValueChange={(v) => selectFy(Number(v))}>
+                                <SelectTrigger id="plan-fy" className="w-28">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {fyYearOptions.map((y) => (
+                                        <SelectItem key={y} value={String(y)}>{fyShortLabel(y)}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
 
                     <TabsContent value="monthly" className="space-y-5 mt-4">
                         <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -384,10 +693,30 @@ export default function GstPurchasePlanningPage() {
                                     className="w-40"
                                 />
                             </div>
-                            <Button variant="outline" size="sm" onClick={reload} disabled={loading}>
-                                {loading && <Loader2 className="animate-spin mr-1.5" size={14} />}
-                                Refresh
-                            </Button>
+                            <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+                                <div className="flex gap-1 overflow-x-auto min-w-0">
+                                    {monthRail.map((ym) => (
+                                        <button
+                                            key={ym}
+                                            type="button"
+                                            onClick={() => setMonth(ym)}
+                                            className={`shrink-0 rounded px-2.5 py-1.5 text-xs font-medium ${
+                                                ym === month
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : ym === currentYM
+                                                        ? "bg-primary/10 text-primary hover:bg-primary/20"
+                                                        : "text-muted-foreground hover:bg-muted"
+                                            }`}
+                                        >
+                                            {shortMonthLabel(ym)}
+                                        </button>
+                                    ))}
+                                </div>
+                                <Button variant="outline" size="sm" className="shrink-0" onClick={reload} disabled={loading}>
+                                    {loading && <Loader2 className="animate-spin mr-1.5" size={14} />}
+                                    Refresh
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Only the first load blanks the tab — a refetch after saving keeps
@@ -400,7 +729,7 @@ export default function GstPurchasePlanningPage() {
 
                         {data && (
                             <>
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-3 gap-3">
                                     <KpiCard
                                         label="Purchase (GST parties)"
                                         value={fmt(data.figures.purchase.effective)}
@@ -410,14 +739,7 @@ export default function GstPurchasePlanningPage() {
                                     <KpiCard
                                         label="Bank / OD deposit"
                                         value={fmt(data.figures.deposit.effective)}
-                                        sub={`Limit ${fmt(data.month.maxDeposit)} · left ${fmt(data.month.depositLimitLeft)}`}
-                                        tone={data.month.depositOk ? "default" : "negative"}
-                                    />
-                                    <KpiCard
-                                        label={`Cost this month @ ${data.config.taxRatePercent}%`}
-                                        value={fmt(data.month.cost)}
-                                        sub={`Final payable ${fmt(data.month.finalPayable)}`}
-                                        tone={data.month.cost > 0 ? "negative" : "primary"}
+                                        tone="default"
                                     />
                                 </div>
 
@@ -455,69 +777,14 @@ export default function GstPurchasePlanningPage() {
                                         />
                                     </div>
 
-                                    <div className="pt-1">
-                                        <div className={`rounded-md border p-3 text-sm ${data.month.depositOk
-                                            ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/30"
-                                            : "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/30"
-                                            }`}>
-                                            <div className="flex items-center gap-2 font-medium">
-                                                {data.month.depositOk
-                                                    ? <CheckCircle2 size={18} className="text-emerald-600" />
-                                                    : <AlertTriangle size={18} className="text-amber-600" />}
-                                                {data.month.depositOk ? "Deposit within limit" : "Deposit over limit"}
-                                            </div>
-                                            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                                <li>
-                                                    Deposit must stay {data.config.depositGapPercent}% below sale — this
-                                                    month&rsquo;s limit {fmt(data.month.maxDeposit)}.
-                                                </li>
-                                                <li>
-                                                    Deposit now {fmt(data.figures.deposit.effective)}, from the{" "}
-                                                    {data.config.bankAccountIds.length} ledger(s) selected on the
-                                                    Financial year tab.
-                                                </li>
-                                                <li>
-                                                    Carried forward {fmt(data.month.depositCarriedIn)} +{" "}
-                                                    {fmt(data.month.depositRoom)} this month ={" "}
-                                                    <span className={data.month.depositLimitLeft < 0 ? "text-red-600" : "text-emerald-600"}>
-                                                        {fmt(data.month.depositLimitLeft)}
-                                                    </span>{" "}
-                                                    limit left.
-                                                </li>
-                                                {!data.month.depositOk && (
-                                                    <li className="text-amber-600">
-                                                        Past the running limit by {fmt(-data.month.depositLimitLeft)} —
-                                                        bring deposit down by that much, or raise sale.
-                                                    </li>
-                                                )}
-                                                <li className="pt-1 border-t mt-2 flex items-center justify-between gap-2 text-foreground">
-                                                    <span>
-                                                        Cost this month{" "}
-                                                        <span className={data.month.cost > 0 ? "text-red-600" : "text-emerald-600"}>
-                                                            {fmt(data.month.cost)}
-                                                        </span>{" "}
-                                                        — final payable {fmt(data.month.finalPayable)} in{" "}
-                                                        {fyLabel(data.fy.fyStartYear)}.
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowTaxDetail((v) => !v)}
-                                                        className="inline-flex items-center gap-1 shrink-0 text-[11px] text-muted-foreground hover:underline"
-                                                    >
-                                                        {showTaxDetail ? <EyeOff size={11} /> : <Eye size={11} />}
-                                                        {showTaxDetail ? "hide" : "detail"}
-                                                    </button>
-                                                </li>
-                                                {showTaxDetail && (
-                                                    <li>
-                                                        Output tax on sale {fmt(data.month.outputTax)} − input tax on
-                                                        purchase {fmt(data.month.inputTax)} = {fmt(data.month.cost)};
-                                                        carried forward {fmt(data.month.carriedIn)}.
-                                                    </li>
-                                                )}
-                                            </ul>
-                                        </div>
-                                    </div>
+                                    {/* No pass/fail here — sale and deposit limits are yearly now,
+                                        so a single month is never judged on its own. */}
+                                    <p className="pt-1 text-xs text-muted-foreground">
+                                        Deposit is summed across the {data.config.bankAccountIds.length} ledger(s)
+                                        selected on the Financial year tab. Sale and deposit limits run for the whole
+                                        of {fyLabel(data.fy.fyStartYear)}, not per month — see the Financial year tab
+                                        for how much allowance is left and the pace it leaves.
+                                    </p>
                                 </div>
 
                                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -564,21 +831,7 @@ export default function GstPurchasePlanningPage() {
                     </TabsContent>
 
                     <TabsContent value="fy" className="space-y-5 mt-4">
-                        <div className="flex items-end justify-between gap-3 flex-wrap">
-                            <div className="space-y-1">
-                                <Label htmlFor="plan-fy" className="text-xs text-muted-foreground">
-                                    Financial year (April–March) — starting year
-                                </Label>
-                                <Input
-                                    id="plan-fy"
-                                    type="number"
-                                    min={2000}
-                                    max={2100}
-                                    value={fyStartYear}
-                                    onChange={(e) => setFyStartYear(Number(e.target.value) || fyStartYear)}
-                                    className="w-28"
-                                />
-                            </div>
+                        <div className="flex items-center justify-end">
                             <Button variant="outline" size="sm" onClick={reloadFy} disabled={fyLoading}>
                                 {fyLoading && <Loader2 className="animate-spin mr-1.5" size={14} />}
                                 Refresh
@@ -591,37 +844,70 @@ export default function GstPurchasePlanningPage() {
                             </div>
                         )}
 
-                        {fy && (
+                        {fy && plan && presumptive && (
                             <>
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                     <KpiCard
-                                        label="Cost budget"
-                                        value={fmt(fy.fy.budget)}
-                                        sub={`Limit ${fmt(fy.fy.costLimit)} + extra paid ${fmt(fy.fy.extraCostPaid)}`}
+                                        label={showForecast ? "Purchase (forecast)" : "Purchase (booked)"}
+                                        value={fmt(plan.purchase.total)}
+                                        sub={showForecast
+                                            ? `Actual ${fmt(plan.purchase.actual)} + forecast ${fmt(plan.purchase.forecast)}`
+                                            : "Billed by GST parties so far — no forecast"}
                                     />
                                     <KpiCard
-                                        label="Net cost incurred"
-                                        value={fmt(fy.fy.costIncurred)}
-                                        sub={`This FY ${fmt(fy.fy.costThisFy)} + carried in ${fmt(fy.fy.carryIn)}`}
+                                        label="Sale target"
+                                        value={fmt(plan.sale.target)}
+                                        sub={`Purchase ${plan.allowedDiff < 0 ? "−" : "+"} ${fmt(Math.abs(plan.allowedDiff))} allowed difference`}
                                         tone="primary"
                                     />
                                     <KpiCard
-                                        label="Budget left"
-                                        value={fmt(fy.fy.remainingBudget)}
-                                        sub={fy.fy.withinBudget ? "Within budget" : "Budget exhausted"}
-                                        tone={fy.fy.withinBudget ? "primary" : "negative"}
+                                        label="Sale still to do"
+                                        value={fmt(plan.sale.left)}
+                                        sub={plan.sale.monthsLeft > 0
+                                            ? `${fmt(plan.sale.perMonth)} / month × ${plan.sale.monthsLeft}`
+                                            : "No months left in this FY"}
+                                        tone={plan.sale.withinAllowance ? "default" : "negative"}
                                     />
                                     <KpiCard
-                                        label="Carries to next FY"
-                                        value={fmt(fy.fy.carryOut)}
-                                        sub={fy.fy.carryOut > 0
-                                            ? `Pay ${fmt(fy.fy.carryOut)} extra to clear it`
-                                            : "Nothing carried forward"}
-                                        tone={fy.fy.carryOut > 0 ? "negative" : "primary"}
+                                        label="Deposit room left"
+                                        value={fmt(plan.deposit.left)}
+                                        sub={plan.deposit.monthsLeft > 0
+                                            ? `${fmt(plan.deposit.perMonth)} / month × ${plan.deposit.monthsLeft}`
+                                            : "No months left in this FY"}
+                                        tone={plan.deposit.withinAllowance ? "primary" : "negative"}
                                     />
                                 </div>
 
-                                <div className="rounded-lg border border-border bg-card p-4 shadow-sm grid gap-4 lg:grid-cols-3">
+                                {/* The guidance the whole page exists for — what pace the rest
+                                    of the year needs, given what the early months already spent. */}
+                                <div className="grid gap-3 lg:grid-cols-2">
+                                    <AllowanceCard
+                                        title="Sale"
+                                        allowance={plan.sale}
+                                        overLabel="Already past the year's sale target"
+                                        underLabel="On track — sell at this pace"
+                                        note={`Target = ${purchaseWord} ${fmt(plan.purchase.total)} ${plan.allowedDiff < 0 ? "−" : "+"} ${fmt(Math.abs(plan.allowedDiff))}.`}
+                                    />
+                                    <AllowanceCard
+                                        title="Bank / OD deposit"
+                                        allowance={plan.deposit}
+                                        overLabel="Already past the year's deposit ceiling"
+                                        underLabel="Within the ceiling — deposit at this pace"
+                                        note={`Ceiling = sale target ${fmt(plan.sale.target)} less ${fy.config.depositGapPercent}%.`}
+                                    />
+                                </div>
+
+                                <div className="rounded-lg border border-border bg-card shadow-sm">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfig((v) => !v)}
+                                        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground"
+                                    >
+                                        <span>Configuration — banks, cost limit &amp; rules</span>
+                                        {showConfig ? <EyeOff size={14} className="text-muted-foreground" /> : <Eye size={14} className="text-muted-foreground" />}
+                                    </button>
+                                    {showConfig && (
+                                    <div className="px-4 pb-4 grid gap-4 lg:grid-cols-3">
                                     <div className="space-y-2 lg:col-span-3">
                                         <div className="flex items-center justify-between gap-2 flex-wrap">
                                             <Label className="text-xs text-muted-foreground">
@@ -669,57 +955,32 @@ export default function GstPurchasePlanningPage() {
                                         </p>
                                     </div>
 
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 lg:col-span-2">
                                         <Label className="text-xs text-muted-foreground">
-                                            Cost limit for {fy.fy.label}
+                                            Allowed purchase → sale difference for {fy.fy.label}
                                         </Label>
                                         <div className="flex gap-2">
                                             <Input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={limitDraft}
-                                                onChange={(e) => setLimitDraft(e.target.value)}
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={diffDraft}
+                                                onChange={(e) => { if (isSignedAmountChars(e.target.value)) setDiffDraft(e.target.value); }}
                                                 placeholder="0"
                                                 disabled={saving}
                                             />
                                             <Button
                                                 size="icon"
                                                 variant="secondary"
-                                                onClick={() => void saveFy({ costLimit: Number(limitDraft) || 0 })}
+                                                onClick={() => void saveFy({ allowedDiff: parseSignedAmount(diffDraft) })}
                                                 disabled={saving}
-                                                title="Save cost limit"
-                                            >
-                                                <Save size={16} />
-                                            </Button>
-                                        </div>
-                                        <p className="text-[11px] text-muted-foreground">GST cost you accept this FY.</p>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <Label className="text-xs text-muted-foreground">Extra cost paid</Label>
-                                        <div className="flex gap-2">
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                step="0.01"
-                                                value={extraDraft}
-                                                onChange={(e) => setExtraDraft(e.target.value)}
-                                                placeholder="0"
-                                                disabled={saving}
-                                            />
-                                            <Button
-                                                size="icon"
-                                                variant="secondary"
-                                                onClick={() => void saveFy({ extraCostPaid: Number(extraDraft) || 0 })}
-                                                disabled={saving}
-                                                title="Save extra cost paid"
+                                                title="Save allowed difference"
                                             >
                                                 <Save size={16} />
                                             </Button>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground">
-                                            Paid above the limit — clears carry instead of pushing it forward.
+                                            Signed. Negative sells below purchase (input credit builds up); positive
+                                            adds value and costs GST. Sale target = forecast purchase + this.
                                         </p>
                                     </div>
 
@@ -766,6 +1027,8 @@ export default function GstPurchasePlanningPage() {
                                             />
                                         </div>
                                     </div>
+                                    </div>
+                                    )}
                                 </div>
 
                                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -773,183 +1036,245 @@ export default function GstPurchasePlanningPage() {
                                         <span className="text-sm font-medium text-foreground">
                                             {fy.fy.label} — month by month
                                         </span>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 text-xs text-muted-foreground"
-                                            onClick={() => setShowTaxDetail((v) => !v)}
-                                        >
-                                            {showTaxDetail ? <EyeOff size={14} className="mr-1.5" /> : <Eye size={14} className="mr-1.5" />}
-                                            {showTaxDetail ? "Hide tax detail" : "Show tax detail"}
-                                        </Button>
+                                        {fy.purchaseForecast.basisMonths.length > 0 && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs text-muted-foreground"
+                                                onClick={() => setShowForecast((v) => !v)}
+                                                title={`Purchase averaged from ${fy.purchaseForecast.basisMonths.length} month(s) of real data`}
+                                            >
+                                                {showForecast ? <EyeOff size={14} className="mr-1.5" /> : <Eye size={14} className="mr-1.5" />}
+                                                {showForecast ? "Hide forecast & suggestions" : "Show forecast & suggestions"}
+                                            </Button>
+                                        )}
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className={`w-full text-sm ${showTaxDetail ? "min-w-4xl" : "min-w-176"}`}>
+                                        <table className="w-full text-sm min-w-176">
                                             <thead className="border-b bg-muted text-xs text-muted-foreground">
                                                 <tr>
                                                     <th className="px-3 py-2 text-left font-medium">Month</th>
                                                     <th className="px-3 py-2 text-right font-medium">Purchase</th>
                                                     <th className="px-3 py-2 text-right font-medium">Sale</th>
-                                                    {showTaxDetail && (
-                                                        <>
-                                                            <th className="px-3 py-2 text-right font-medium">Output tax</th>
-                                                            <th className="px-3 py-2 text-right font-medium">Input tax</th>
-                                                        </>
-                                                    )}
-                                                    <th className="px-3 py-2 text-right font-medium">Cost this month</th>
-                                                    <th className="px-3 py-2 text-right font-medium">Final payable</th>
+                                                    <th className="px-3 py-2 text-right font-medium">Sale limit left</th>
                                                     <th className="px-3 py-2 text-right font-medium">Deposit</th>
-                                                    <th className="px-3 py-2 text-right font-medium">Deposit limit</th>
-                                                    <th className="px-3 py-2 text-right font-medium">Limit left</th>
+                                                    <th className="px-3 py-2 text-right font-medium">Deposit limit left</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {fy.months.map((m) => (
+                                                {fy.months.map((m) => {
+                                                    const isCurrent = m.yearMonth === currentYM;
+                                                    const purchaseF = showForecast
+                                                        ? fy.purchaseForecast.months[m.yearMonth]
+                                                        : undefined;
+                                                    const g = fy.monthGuides[m.yearMonth];
+                                                    // A row with no data of its own is pure projection, so
+                                                    // with suggestions off it has nothing honest to show.
+                                                    const projectedOnly = g !== undefined && !g.hasData;
+                                                    const showLimits = g !== undefined && (g.hasData || showForecast);
+                                                    const suggest = showForecast && projectedOnly;
+                                                    // Every month from the current one on gets an equal share
+                                                    // of the slack standing today.
+                                                    const takesHeadroom = m.yearMonth >= currentYM;
+                                                    return (
                                                     <tr
                                                         key={m.yearMonth}
-                                                        className={`border-b last:border-0 hover:bg-muted/40 cursor-pointer ${!m.depositOk ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}`}
+                                                        className={`border-b last:border-0 hover:bg-muted/40 cursor-pointer ${
+                                                            isCurrent ? "bg-primary/5 ring-1 ring-inset ring-primary/30" : ""
+                                                        }`}
                                                         onClick={() => openMonth(m.yearMonth)}
                                                         title="Click to open the monthly detail"
                                                     >
-                                                        <td className="px-3 py-2.5 font-medium text-foreground">{m.monthLabel}</td>
-                                                        <td className="px-3 py-2.5 text-right font-mono">
-                                                            {fmt(m.purchase.effective)}
-                                                            {m.purchase.isOverridden && <span className="ml-1 text-[10px] text-amber-600">M</span>}
+                                                        <td className="px-3 py-2.5 font-medium text-foreground">
+                                                            {m.monthLabel}
+                                                            {isCurrent && <span className="ml-1.5 rounded bg-primary/15 px-1 py-0.5 text-[10px] font-medium text-primary">current</span>}
                                                         </td>
-                                                        <td className="px-3 py-2.5 text-right font-mono">
-                                                            {fmt(m.sale.effective)}
-                                                            {m.sale.isOverridden && <span className="ml-1 text-[10px] text-amber-600">M</span>}
+                                                        <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <FyOverrideCell
+                                                                    key={`${m.yearMonth}-purchase-${m.purchase.override}`}
+                                                                    figure={m.purchase}
+                                                                    saving={saving}
+                                                                    onSave={(v) => void savePlan({ purchaseOverride: v }, m.yearMonth)}
+                                                                    onClear={() => void savePlan({ purchaseOverride: null }, m.yearMonth)}
+                                                                />
+                                                                {purchaseF !== undefined && <ForecastFigure value={purchaseF} />}
+                                                            </div>
                                                         </td>
-                                                        {showTaxDetail && (
-                                                            <>
-                                                                <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(m.outputTax)}</td>
-                                                                <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(m.inputTax)}</td>
-                                                            </>
-                                                        )}
-                                                        <td className={`px-3 py-2.5 text-right font-mono ${m.cost > 0 ? "text-red-600" : "text-emerald-600"
-                                                            }`}>
-                                                            {fmt(m.cost)}
-                                                        </td>
-                                                        <td className={`px-3 py-2.5 text-right font-mono font-medium ${m.finalPayable > 0 ? "text-red-600" : "text-emerald-600"
-                                                            }`}>
-                                                            {fmt(m.finalPayable)}
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-right font-mono">
-                                                            {fmt(m.deposit.effective)}
-                                                            {m.deposit.isOverridden && <span className="ml-1 text-[10px] text-amber-600">M</span>}
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">
-                                                            {fmt(m.maxDeposit)}
+                                                        <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <FyOverrideCell
+                                                                    key={`${m.yearMonth}-sale-${m.sale.override}`}
+                                                                    figure={m.sale}
+                                                                    saving={saving}
+                                                                    onSave={(v) => void savePlan({ saleOverride: v }, m.yearMonth)}
+                                                                    onClear={() => void savePlan({ saleOverride: null }, m.yearMonth)}
+                                                                />
+                                                                {suggest && g.suggestedSale !== null && (
+                                                                    <SuggestedFigure value={g.suggestedSale} />
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td className={`px-3 py-2.5 text-right font-mono font-medium ${
-                                                            m.depositLimitLeft < 0 ? "text-red-600" : "text-emerald-600"
+                                                            !showLimits ? "text-muted-foreground"
+                                                                : g.saleLimitLeft < 0 ? "text-red-600" : "text-emerald-600"
                                                         }`}>
-                                                            {fmt(m.depositLimitLeft)}
+                                                            {showLimits ? fmt(g.saleLimitLeft) : "—"}
+                                                            {takesHeadroom && fy.headroom.months > 0 && (
+                                                                <HeadroomFigure value={fy.headroom.salePerMonth} />
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <FyOverrideCell
+                                                                    key={`${m.yearMonth}-deposit-${m.deposit.override}`}
+                                                                    figure={m.deposit}
+                                                                    saving={saving}
+                                                                    onSave={(v) => void savePlan({ depositOverride: v }, m.yearMonth)}
+                                                                    onClear={() => void savePlan({ depositOverride: null }, m.yearMonth)}
+                                                                />
+                                                                {suggest && g.suggestedDeposit !== null && (
+                                                                    <SuggestedFigure value={g.suggestedDeposit} />
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className={`px-3 py-2.5 text-right font-mono font-medium ${
+                                                            !showLimits ? "text-muted-foreground"
+                                                                : g.depositLimitLeft < 0 ? "text-red-600" : "text-emerald-600"
+                                                        }`}>
+                                                            {showLimits ? fmt(g.depositLimitLeft) : "—"}
+                                                            {takesHeadroom && fy.headroom.months > 0 && (
+                                                                <HeadroomFigure value={fy.headroom.depositPerMonth} />
+                                                            )}
                                                         </td>
                                                     </tr>
-                                                ))}
+                                                    );
+                                                })}
                                             </tbody>
                                             <tfoot className="border-t bg-muted/30 font-semibold">
                                                 <tr>
-                                                    <td className="px-3 py-2.5">FY total</td>
+                                                    <td className="px-3 py-2.5">Booked so far</td>
                                                     <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.totals.purchase)}</td>
                                                     <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.totals.sale)}</td>
-                                                    {showTaxDetail && (
-                                                        <>
-                                                            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(fy.totals.outputTax)}</td>
-                                                            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(fy.totals.inputTax)}</td>
-                                                        </>
-                                                    )}
-                                                    <td className={`px-3 py-2.5 text-right font-mono ${fy.fy.costThisFy > 0 ? "text-red-600" : "text-emerald-600"
-                                                        }`}>
-                                                        {fmt(fy.fy.costThisFy)}
-                                                    </td>
-                                                    <td className={`px-3 py-2.5 text-right font-mono ${fy.fy.costThisFy > 0 ? "text-red-600" : "text-emerald-600"
-                                                        }`}>
-                                                        {fmt(fy.fy.costThisFy)}
-                                                    </td>
+                                                    <td />
                                                     <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.totals.deposit)}</td>
-                                                    <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">
-                                                        {fmt(fy.totals.maxDeposit)}
-                                                    </td>
-                                                    <td className={`px-3 py-2.5 text-right font-mono ${
-                                                        fy.totals.depositLimitLeft < 0 ? "text-red-600" : "text-emerald-600"
-                                                    }`}>
-                                                        {fmt(fy.totals.depositLimitLeft)}
-                                                    </td>
+                                                    <td />
                                                 </tr>
+                                                {/* The year as planned — forecast purchase, and the sale
+                                                    and deposit allowances those forecasts permit. */}
+                                                {showForecast && fy.purchaseForecast.basisMonths.length > 0 && (
+                                                    <tr className="border-t text-sky-700 dark:text-sky-400">
+                                                        <td className="px-3 py-2.5 font-medium">FY allowance</td>
+                                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.plan.purchase.total)}</td>
+                                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.plan.sale.target)}</td>
+                                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.plan.sale.left)}</td>
+                                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.plan.deposit.target)}</td>
+                                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(fy.plan.deposit.left)}</td>
+                                                    </tr>
+                                                )}
                                             </tfoot>
                                         </table>
                                     </div>
                                 </div>
 
-                                <div className={`rounded-lg border p-4 shadow-sm ${fy.presumptive.withinLimit
+                                {/* Presumptive tax rides on BOTH bases — turnover is the statutory
+                                    one, deposit the cash proxy — so either can breach first. */}
+                                <div className={`rounded-lg border p-4 shadow-sm ${presumptive.withinLimit
                                     ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/30"
                                     : "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/30"
                                     }`}>
                                     <div className="flex items-center gap-2 text-sm font-medium">
-                                        {fy.presumptive.withinLimit
+                                        {presumptive.withinLimit
                                             ? <CheckCircle2 size={18} className="text-emerald-600" />
                                             : <AlertTriangle size={18} className="text-amber-600" />}
-                                        {fy.presumptive.withinLimit
-                                            ? "Bank deposit within the income-tax free limit"
-                                            : "Bank deposit past the income-tax free limit"}
+                                        {presumptive.withinLimit
+                                            ? "Sale and bank deposit both within the income-tax free limit"
+                                            : !presumptive.sale.withinLimit && !presumptive.deposit.withinLimit
+                                                ? "Sale AND bank deposit both past the income-tax free limit"
+                                                : !presumptive.sale.withinLimit
+                                                    ? "Sale target passes the income-tax free limit"
+                                                    : "Bank deposit passes the income-tax free limit"}
                                     </div>
-                                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                                        <div>
-                                            <div className="text-muted-foreground">Deposit this FY</div>
-                                            <div className="font-mono text-sm text-foreground">{fmt(fy.presumptive.deposit)}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-muted-foreground">
-                                                Deemed income @ {fy.config.presumptiveRatePercent}%
-                                            </div>
-                                            <div className="font-mono text-sm text-foreground">{fmt(fy.presumptive.presumptiveIncome)}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-muted-foreground">Tax-free limit</div>
-                                            <div className="font-mono text-sm text-foreground">{fmt(fy.presumptive.taxFreeLimit)}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-muted-foreground">
-                                                {fy.presumptive.headroom >= 0 ? "Deposit headroom" : "Deposit over by"}
-                                            </div>
-                                            <div className={`font-mono text-sm ${fy.presumptive.headroom >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                                {fmt(Math.abs(fy.presumptive.headroom))}
-                                            </div>
-                                        </div>
+
+                                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                        <PresumptiveBase
+                                            label="Sale target"
+                                            check={presumptive.sale}
+                                            ratePercent={fy.config.presumptiveRatePercent}
+                                        />
+                                        <PresumptiveBase
+                                            label="Bank / OD deposit ceiling"
+                                            check={presumptive.deposit}
+                                            ratePercent={fy.config.presumptiveRatePercent}
+                                        />
                                     </div>
+
                                     <p className="mt-3 text-xs text-muted-foreground">
-                                        {fy.config.presumptiveRatePercent}% of bank deposit counts as income under
-                                        presumptive taxation, and income up to {fmt(fy.presumptive.taxFreeLimit)} pays no
-                                        income tax — so deposit can reach{" "}
-                                        <span className="text-foreground font-mono">{fmt(fy.presumptive.maxDeposit)}</span>{" "}
+                                        {fy.config.presumptiveRatePercent}% of the base counts as income under
+                                        presumptive taxation, and income up to {fmt(presumptive.sale.taxFreeLimit)} pays
+                                        no income tax — so either base can reach{" "}
+                                        <span className="text-foreground font-mono">{fmt(presumptive.sale.maxBase)}</span>{" "}
                                         in {fy.fy.label} before tax starts.
+                                        {!showForecast && (
+                                            <> Both bases here stand on booked purchase only — the forecast is
+                                            hidden, so they will rise as more bills arrive.</>
+                                        )}
+                                        {!presumptive.sale.withinLimit && (
+                                            <> The sale target itself breaches this — lower the allowed difference, or
+                                            accept the income tax.</>
+                                        )}
                                     </p>
                                 </div>
 
                                 <div className="rounded-lg border border-border bg-card p-4 shadow-sm text-sm space-y-1.5">
-                                    <div className="font-medium text-foreground">How {fy.fy.label} settles</div>
+                                    <div className="font-medium text-foreground">How {fy.fy.label} is steered</div>
                                     <p className="text-muted-foreground text-xs">
-                                        Cost this FY {fmt(fy.fy.costThisFy)} plus {fmt(fy.fy.carryIn)} carried in
-                                        = {fmt(fy.fy.costIncurred)} against a
-                                        budget of {fmt(fy.fy.budget)}. Budget absorbs {fmt(fy.fy.costAbsorbed)};{" "}
-                                        {fy.fy.carryOut > 0
-                                            ? `${fmt(fy.fy.carryOut)} carries into ${fyLabel(fy.fy.fyStartYear + 1)} unless you pay it as extra cost.`
-                                            : "nothing carries forward."}
+                                        {showForecast ? (
+                                            <>
+                                                Purchase cannot be controlled, so it is forecast:{" "}
+                                                {fmt(plan.purchase.actual)} already billed plus{" "}
+                                                {fmt(plan.purchase.forecast)} predicted ={" "}
+                                                {fmt(plan.purchase.total)}
+                                                {fy.purchaseForecast.basisMonths.length > 0 && (
+                                                    <> — {fmt(fy.purchaseForecast.perMonth)} a month, averaged from the last{" "}
+                                                    {fy.purchaseForecast.basisMonths.length} month(s) with data</>
+                                                )}.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Purchase cannot be controlled. The forecast is hidden, so only the{" "}
+                                                {fmt(plan.purchase.total)} already billed is counted — every target
+                                                below stands on that alone and will rise as more bills arrive.
+                                            </>
+                                        )}
                                     </p>
                                     <p className="text-muted-foreground text-xs">
-                                        A month costs (sale − purchase) × {fy.config.taxRatePercent}% — negative when
-                                        purchase leads. Final payable carries that forward month by month.
+                                        Sale and deposit CAN be controlled, so they are targets, not predictions. Sale
+                                        target = {purchaseWord} {plan.allowedDiff < 0 ? "−" : "+"}{" "}
+                                        {fmt(Math.abs(plan.allowedDiff))} = {fmt(plan.sale.target)}. Deposit
+                                        ceiling = that less {fy.config.depositGapPercent}% = {fmt(plan.deposit.target)}.
                                     </p>
                                     <p className="text-muted-foreground text-xs">
-                                        Three rules to hold: GST cost under the FY budget · bank deposit at least{" "}
-                                        {fy.config.depositGapPercent}% below sale each month · bank deposit under{" "}
-                                        {fmt(fy.presumptive.maxDeposit)} for the FY, so deemed income stays inside the
-                                        income-tax free limit.
+                                        Both allowances are yearly, never monthly — a month only spends from the year&rsquo;s
+                                        pool. Whatever an early month overspent simply lowers the pace left for the rest,
+                                        which is what the two cards above state.
                                     </p>
+                                    {fy.headroom.months > 0 && (
+                                        <p className="text-muted-foreground text-xs">
+                                            Head room: {fmt(fy.headroom.saleSlack)} of sale slack and{" "}
+                                            {fmt(fy.headroom.depositSlack)} of deposit slack stand after the last month
+                                            with figures, split equally over the {fy.headroom.months} month(s) still to
+                                            run — {fmt(fy.headroom.salePerMonth)} sale and{" "}
+                                            {fmt(fy.headroom.depositPerMonth)} deposit each, the current month included
+                                            since it has not closed.
+                                        </p>
+                                    )}
                                     <p className="text-muted-foreground text-xs">
-                                        &ldquo;M&rdquo; against a figure means it is a manual override, not the computed value.
+                                        In the table: &ldquo;M&rdquo; is a manual override, not the computed value;
+                                        &ldquo;~&rdquo; is forecast purchase; &ldquo;→&rdquo; is the suggested total for
+                                        a month with no figures yet; &ldquo;+&rdquo; is that month&rsquo;s share of the
+                                        head room. The two &ldquo;limit left&rdquo; columns run the year&rsquo;s
+                                        allowance down month by month. Nothing but your own overrides is ever saved.
                                     </p>
                                 </div>
                             </>

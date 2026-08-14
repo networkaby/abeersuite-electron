@@ -83,8 +83,7 @@ export async function GET(req: Request) {
         },
         fy: {
             fyStartYear,
-            costLimit: fyResult.fy.costLimit,
-            extraCostPaid: fyResult.fy.extraCostPaid,
+            allowedDiff: fyResult.fy.allowedDiff,
         },
         meta: {
             purchaseBills: partyRows.reduce((s, r) => s + r.purchaseBills, 0),

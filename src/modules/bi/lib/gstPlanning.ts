@@ -1,12 +1,22 @@
-// GST purchase planning — monthly purchase (GST parties only), sale, and bank /
-// OD deposit, each computed from vouchers and each manually overridable.
+// GST purchase planning — purchase (GST parties only), sale, and bank / OD
+// deposit, each computed from vouchers and each manually overridable.
 //
-// Two rules ride on top:
-//   • Bank deposit must stay a configured % below sale (default 10%).
-//   • Value addition (sale − purchase) costs GST at the configured rate
-//     (default 18%). That cost is budgeted per financial year (April–March):
-//     budget = costLimit + extraCostPaid. Cost the budget cannot absorb carries
-//     into the next FY, and keeps carrying until a budget absorbs it.
+// The model splits the three figures by whether you can steer them:
+//
+//   • Purchase is UNCONTROLLABLE — it is whatever suppliers bill. Finished
+//     months use actuals; unfinished months are forecast from the average of
+//     the last few months with data.
+//   • Sale and bank deposit are CONTROLLABLE, so the plan states targets rather
+//     than predictions. FY sale target = FY purchase + allowedDiff (one signed
+//     figure you set). FY deposit ceiling = sale target less the gap %.
+//
+// Both allowances are YEARLY, never monthly. A month is not judged on its own —
+// it just consumes from the year's allowance, and whatever is left is spread
+// over the months still to come. That is how an early overshoot gets corrected:
+// it lowers the pace the rest of the year is allowed, rather than failing.
+//
+// On top sits the presumptive income-tax test, run against BOTH the sale target
+// and the deposit ceiling — either can push deemed income past the free limit.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
@@ -41,15 +51,29 @@ export interface GstPlanningConfig {
     bankAccountIds: number[];
 }
 
-/** The FY-level deposit test: deemed income against the tax-free limit. */
+/**
+ * The FY-level presumptive test for ONE base: deemed income against the
+ * tax-free limit. Run against sale and against bank deposit alike — under
+ * presumptive taxation turnover is the statutory base, and deposit is the cash
+ * proxy the department actually sees, so either one can breach first.
+ */
 export interface PresumptiveCheck {
-    deposit: number;
+    /** What was tested — FY sale, or FY bank deposit. */
+    base: number;
     presumptiveIncome: number;
     taxFreeLimit: number;
-    /** The deposit at which deemed income exactly reaches the limit. */
-    maxDeposit: number;
-    /** Deposit still available before income tax starts. Negative once over. */
+    /** The base at which deemed income exactly reaches the limit. */
+    maxBase: number;
+    /** Base still available before income tax starts. Negative once over. */
     headroom: number;
+    withinLimit: boolean;
+}
+
+/** Both presumptive tests plus the combined verdict the UI alerts on. */
+export interface PresumptiveVerdict {
+    sale: PresumptiveCheck;
+    deposit: PresumptiveCheck;
+    /** True only while BOTH bases stay inside the free limit. */
     withinLimit: boolean;
 }
 
@@ -100,17 +124,42 @@ export interface GstPlanningMonthRow {
 export interface GstPlanningFyRow {
     fyStartYear: number;
     label: string;
-    costLimit: number;
-    extraCostPaid: number;
-    budget: number;
-    carryIn: number;
+    /** The one steering figure — targeted gap between FY purchase and FY sale. */
+    allowedDiff: number;
     /** The FY's own cost — the sum of its twelve months, positive or negative. */
     costThisFy: number;
-    costIncurred: number;
-    costAbsorbed: number;
-    carryOut: number;
-    remainingBudget: number;
-    withinBudget: boolean;
+}
+
+/**
+ * One yearly allowance and how much of it is left. Both the sale allowance and
+ * the deposit allowance take this shape, so the UI renders them identically.
+ */
+export interface YearlyAllowance {
+    /** The full-year permission. */
+    target: number;
+    /** Consumed by the months already gone, including the part-finished current one. */
+    used: number;
+    /** target − used. Negative once the year's allowance is already spent. */
+    left: number;
+    /** Months still available to spend it in, current month included. */
+    monthsLeft: number;
+    /** left ÷ monthsLeft — the pace needed from here. Zero when no months remain. */
+    perMonth: number;
+    /** False once `left` has gone negative — the year is already over its allowance. */
+    withinAllowance: boolean;
+}
+
+/**
+ * The whole plan for one FY: what purchase is expected to be, what sale that
+ * permits, what deposit that permits, and the pace each needs from here.
+ */
+export interface GstPlanningFyPlan {
+    purchase: { actual: number; forecast: number; total: number };
+    allowedDiff: number;
+    sale: YearlyAllowance;
+    deposit: YearlyAllowance;
+    /** Projected FY GST cost — allowedDiff at the tax rate. Negative = credit. */
+    cost: number;
 }
 
 export const DEFAULT_PLANNING_CONFIG: GstPlanningConfig = {
@@ -179,6 +228,12 @@ export function monthLabel(yearMonth: string): string {
 
 function yearMonthFromDate(d: Date): string {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Today's "YYYY-MM" — the line between finished months and forecast ones. */
+function currentYearMonth(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function figure(computed: number, override: number | null): PlanningFigure {
@@ -391,6 +446,17 @@ export async function loadBankAccountOptions(): Promise<BankLedgerOption[]> {
         });
 }
 
+/** FY-start-year span of the earliest/latest voucher on record — drives the FY picker's range. */
+export async function getGstPlanningDataFyRange(): Promise<{ min: number; max: number } | null> {
+    const agg = await prisma.universalVoucher.aggregate({
+        _min: { date: true },
+        _max: { date: true },
+    });
+    if (!agg._min.date || !agg._max.date) return null;
+    const toFyStart = (d: Date) => (d.getUTCMonth() + 1 >= 4 ? d.getUTCFullYear() : d.getUTCFullYear() - 1);
+    return { min: toFyStart(agg._min.date), max: toFyStart(agg._max.date) };
+}
+
 export async function validateBankAccountIds(ids: number[]): Promise<boolean> {
     if (ids.length === 0) return true;
     const allowed = new Set((await loadBankAccountOptions()).map((b) => b.id));
@@ -432,18 +498,14 @@ export async function loadFyRow(fyStartYear: number) {
 }
 
 export interface FyPatch {
-    costLimit?: number;
-    extraCostPaid?: number;
+    allowedDiff?: number;
 }
 
 export async function upsertFyRow(fyStartYear: number, data: FyPatch) {
-    const writable = {
-        ...(data.costLimit !== undefined ? { costLimit: data.costLimit } : {}),
-        ...(data.extraCostPaid !== undefined ? { extraCostPaid: data.extraCostPaid } : {}),
-    };
+    const writable = data.allowedDiff !== undefined ? { allowedDiff: data.allowedDiff } : {};
     return prisma.biGstPlanningFy.upsert({
         where: { fyStartYear },
-        create: { fyStartYear, costLimit: 0, extraCostPaid: 0, ...writable },
+        create: { fyStartYear, allowedDiff: 0, ...writable },
         update: writable,
     });
 }
@@ -480,47 +542,59 @@ export function depositCeiling(sale: number, depositGapPercent: number): number 
 }
 
 /**
- * The FY deposit test. The government deems presumptiveRate% of bank deposit to
- * be income; while that deemed income stays under incomeTaxFreeLimit, no income
- * tax falls due. Inverting the rate gives the deposit ceiling to plan against.
+ * The presumptive test for one base. The government deems presumptiveRate% of
+ * the base to be income; while that deemed income stays under
+ * incomeTaxFreeLimit, no income tax falls due. Inverting the rate gives the
+ * ceiling to plan against.
  */
-export function presumptiveCheck(deposit: number, config: GstPlanningConfig): PresumptiveCheck {
+export function presumptiveCheck(base: number, config: GstPlanningConfig): PresumptiveCheck {
     const rate = config.presumptiveRatePercent / 100;
-    const presumptiveIncome = r2(Math.max(0, deposit) * rate);
-    const maxDeposit = rate > 0 ? r2(config.incomeTaxFreeLimit / rate) : 0;
+    const presumptiveIncome = r2(Math.max(0, base) * rate);
+    const maxBase = rate > 0 ? r2(config.incomeTaxFreeLimit / rate) : 0;
     return {
-        deposit: r2(deposit),
+        base: r2(base),
         presumptiveIncome,
         taxFreeLimit: r2(config.incomeTaxFreeLimit),
-        maxDeposit,
-        headroom: r2(maxDeposit - deposit),
+        maxBase,
+        headroom: r2(maxBase - base),
         withinLimit: presumptiveIncome <= config.incomeTaxFreeLimit,
     };
 }
 
-/**
- * Roll one FY's cost against its budget; whatever the budget misses carries on.
- * `costThisFy` is signed, so an FY whose purchases outrun its sales lands below
- * zero and consumes no budget at all.
- */
-export function rollFyBudget(input: {
-    costThisFy: number;
-    carryIn: number;
-    costLimit: number;
-    extraCostPaid: number;
-}): Pick<GstPlanningFyRow, "budget" | "costIncurred" | "costAbsorbed" | "carryOut" | "remainingBudget" | "withinBudget"> {
-    const budget = r2(input.costLimit + input.extraCostPaid);
-    const costIncurred = r2(input.costThisFy + input.carryIn);
-    // Credit in hand can't "spend" budget backwards, so absorption floors at zero.
-    const costAbsorbed = r2(Math.min(Math.max(0, costIncurred), budget));
-    const carryOut = r2(Math.max(0, costIncurred - budget));
+/** Test sale and deposit together — either breaching means income tax starts. */
+export function presumptiveVerdict(
+    sale: number,
+    deposit: number,
+    config: GstPlanningConfig,
+): PresumptiveVerdict {
+    const saleCheck = presumptiveCheck(sale, config);
+    const depositCheck = presumptiveCheck(deposit, config);
     return {
-        budget,
-        costIncurred,
-        costAbsorbed,
-        carryOut,
-        remainingBudget: r2(budget - costAbsorbed),
-        withinBudget: carryOut === 0,
+        sale: saleCheck,
+        deposit: depositCheck,
+        withinLimit: saleCheck.withinLimit && depositCheck.withinLimit,
+    };
+}
+
+/**
+ * Turn a yearly target into a pace. Months already gone have consumed part of
+ * the allowance; what is left is spread over the months still to come — which
+ * is exactly how an early overshoot gets corrected: it does not fail the year,
+ * it just lowers the pace the rest of the year is allowed.
+ */
+export function yearlyAllowance(
+    target: number,
+    used: number,
+    monthsLeft: number,
+): YearlyAllowance {
+    const left = r2(target - used);
+    return {
+        target: r2(target),
+        used: r2(used),
+        left,
+        monthsLeft,
+        perMonth: monthsLeft > 0 ? r2(left / monthsLeft) : 0,
+        withinAllowance: left >= 0,
     };
 }
 
@@ -576,8 +650,26 @@ export async function loadFyMonthRows(
         return { yearMonth, purchase, sale, deposit };
     }));
 
-    // Then walk the months in order — each month opens with the running totals
-    // the previous ones left behind, for cost and for deposit limit alike.
+    return chainMonths(base, config);
+}
+
+/** The bare figures a month is built from — everything else is derived. */
+export interface MonthBaseFigures {
+    yearMonth: string;
+    purchase: PlanningFigure;
+    sale: PlanningFigure;
+    deposit: PlanningFigure;
+}
+
+/**
+ * Walk the months in order — each month opens with the running totals the
+ * previous ones left behind, for cost and for deposit limit alike. Shared by the
+ * actual rows and by the forecast replay, so both chain identically.
+ */
+export function chainMonths(
+    base: MonthBaseFigures[],
+    config: GstPlanningConfig,
+): GstPlanningMonthRow[] {
     let carried = 0;
     let depositCarried = 0;
     return base.map((b) => {
@@ -609,37 +701,246 @@ export async function loadFyMonthRows(
     });
 }
 
+// ── purchase forecast ────────────────────────────────────────────────────────
+//
+// Purchase is the one figure that cannot be steered — it is whatever the
+// suppliers bill. Months that have not finished hold no vouchers yet, so their
+// purchase is predicted from the average of the last few months that DO have
+// data. Sale and deposit are deliberately NOT forecast: they are controllable,
+// so the plan states what they should be rather than guessing what they will be.
+//
+// Display-only — nothing is written, and a real voucher or a manual override
+// always wins once it exists.
+
+/** How many trailing months of real data the average is drawn from, at most. */
+export const FORECAST_BASIS_MONTHS = 6;
+
+export interface PurchaseForecast {
+    /** The months the average came from, newest last. Empty = nothing to forecast from. */
+    basisMonths: string[];
+    /** Average monthly purchase across the basis months. */
+    perMonth: number;
+    /** Predicted purchase per unfinished month, keyed by yearMonth. */
+    months: Record<string, number>;
+    /** Purchase already on the books for finished months of this FY. */
+    actualTotal: number;
+    /** Predicted purchase across the FY's unfinished months. */
+    forecastTotal: number;
+    /** actualTotal + forecastTotal — the FY purchase the plan is built on. */
+    total: number;
+}
+
+/** A month counts as "having data" only if purchase actually moved in it. */
+const monthHasPurchase = (m: GstPlanningMonthRow) => m.purchase.effective > 0;
+
 /**
- * The cost carry chains FY to FY, so an FY's opening carry is only knowable by
- * replaying the earlier years. `lookbackYears` bounds that replay — anything
- * older than the window is treated as settled.
+ * A month is KNOWN once there is nothing left to predict about it: it is in the
+ * past, or it already carries figures (booked or hand-entered). Known months
+ * always use their actuals — including the current month, whose real trade must
+ * never be replaced by a forecast. Only genuinely empty months get predicted.
  */
-export async function loadFyCarryIn(
-    fyStartYear: number,
-    config: GstPlanningConfig,
-    lookbackYears: number,
-    branchId?: string | null,
-): Promise<number> {
-    let carry = 0;
-    for (let year = fyStartYear - lookbackYears; year < fyStartYear; year++) {
-        // No bank ids — the replay only needs cost, which deposits never touch.
-        const [months, saved] = await Promise.all([
-            loadFyMonthRows(year, config, [], branchId),
-            loadFyRow(year),
-        ]);
-        carry = rollFyBudget({
-            costThisFy: fyNetCost(months),
-            carryIn: carry,
-            costLimit: toNumber(saved?.costLimit ?? 0),
-            extraCostPaid: toNumber(saved?.extraCostPaid ?? 0),
-        }).carryOut;
+export function isKnownMonth(m: GstPlanningMonthRow, todayYearMonth: string): boolean {
+    return m.yearMonth < todayYearMonth
+        || m.purchase.isOverridden || m.sale.isOverridden || m.deposit.isOverridden
+        || m.purchase.effective > 0 || m.sale.effective > 0 || m.deposit.effective > 0;
+}
+
+/**
+ * Forecast the FY's purchase. `months` are that FY's rows and `earlierMonths`
+ * the preceding FY's, used only when the FY itself does not yet hold enough
+ * finished months to average (e.g. the current month is April).
+ */
+export function buildPurchaseForecast(
+    months: GstPlanningMonthRow[],
+    earlierMonths: GstPlanningMonthRow[],
+    todayYearMonth: string,
+): PurchaseForecast {
+    // Basis = the newest months that have purchase and nothing left to predict.
+    // The current month only qualifies once it is hand-entered — otherwise its
+    // part-month figure would drag the average down.
+    const basisRows = [...earlierMonths, ...months]
+        .filter((m) => monthHasPurchase(m)
+            && (m.yearMonth < todayYearMonth || m.purchase.isOverridden))
+        .slice(-FORECAST_BASIS_MONTHS);
+
+    const perMonth = basisRows.length === 0
+        ? 0
+        : r2(basisRows.reduce((s, m) => s + m.purchase.effective, 0) / basisRows.length);
+
+    // Only a genuinely empty month is forecast — anything already known keeps
+    // its own figures.
+    const isForecastMonth = (m: GstPlanningMonthRow) =>
+        basisRows.length > 0 && !isKnownMonth(m, todayYearMonth);
+
+    const forecastMonths: Record<string, number> = {};
+    let actualTotal = 0;
+    let forecastTotal = 0;
+    for (const m of months) {
+        if (isForecastMonth(m)) {
+            forecastMonths[m.yearMonth] = perMonth;
+            forecastTotal = r2(forecastTotal + perMonth);
+        } else {
+            actualTotal = r2(actualTotal + m.purchase.effective);
+        }
     }
-    return carry;
+
+    return {
+        basisMonths: basisRows.map((m) => m.yearMonth),
+        perMonth,
+        months: forecastMonths,
+        actualTotal,
+        forecastTotal,
+        total: r2(actualTotal + forecastTotal),
+    };
+}
+
+/**
+ * Per-month guidance: what a month should do, and how much of the year's
+ * allowance survives it. Finished months carry no suggestion — they are done —
+ * and simply draw down the limit by what actually happened.
+ */
+export interface MonthGuide {
+    /** Pace this month should hit. Null for months already finished. */
+    suggestedSale: number | null;
+    suggestedDeposit: number | null;
+    /** Year's sale allowance still unspent after this month. */
+    saleLimitLeft: number;
+    /** Year's deposit allowance still unspent after this month. */
+    depositLimitLeft: number;
+    /**
+     * True when the month already has its own figures (past, booked, or
+     * hand-entered). False means the row is pure projection — so the UI blanks
+     * it when suggestions are switched off.
+     */
+    hasData: boolean;
+}
+
+/**
+ * Walk the FY accruing each allowance as the trade that earns it happens.
+ *
+ * The limits are RUNNING BALANCES, not the yearly total less what is spent —
+ * the year's full sale allowance is not available in April, because the
+ * purchase that earns it has not been billed yet. So at any month:
+ *
+ *   sale limit left    = purchase to date + allowedDiff − sale to date
+ *   deposit limit left = (sale to date less the gap %) − deposit to date
+ *
+ * Both land on zero at March once the suggested pace is followed, and both go
+ * negative the moment you are running ahead of what has been earned.
+ */
+export function buildMonthGuides(
+    months: GstPlanningMonthRow[],
+    plan: GstPlanningFyPlan,
+    purchaseForecast: PurchaseForecast,
+    config: GstPlanningConfig,
+    todayYearMonth: string,
+): Record<string, MonthGuide> {
+    const guides: Record<string, MonthGuide> = {};
+    let purchaseToDate = 0;
+    let saleToDate = 0;
+    let depositToDate = 0;
+
+    for (const m of months) {
+        const known = isKnownMonth(m, todayYearMonth);
+        // Known months state their own figures; only empty ones take a share of
+        // what the year has left, split equally between them.
+        const suggestedSale = known ? null : plan.sale.perMonth;
+        const suggestedDeposit = known ? null : plan.deposit.perMonth;
+
+        purchaseToDate = r2(purchaseToDate
+            + (purchaseForecast.months[m.yearMonth] ?? m.purchase.effective));
+        saleToDate = r2(saleToDate + (suggestedSale ?? m.sale.effective));
+        depositToDate = r2(depositToDate + (suggestedDeposit ?? m.deposit.effective));
+
+        guides[m.yearMonth] = {
+            suggestedSale,
+            suggestedDeposit,
+            // Sale may run ahead of purchase only by the allowed difference.
+            saleLimitLeft: r2(purchaseToDate + plan.allowedDiff - saleToDate),
+            // Deposit must stay the gap % below the sale actually made.
+            depositLimitLeft: r2(
+                depositCeiling(saleToDate, config.depositGapPercent) - depositToDate,
+            ),
+            hasData: known,
+        };
+    }
+    return guides;
+}
+
+/**
+ * The slack standing after the last month that has figures, split equally over
+ * every month still to run — the current one included, since it is not finished
+ * and can still absorb part of it. This is the "how much extra may each month
+ * take" number, as distinct from the suggested total for an empty month.
+ */
+export interface Headroom {
+    /** Slack carried at the last month with data. */
+    saleSlack: number;
+    depositSlack: number;
+    /** Months it is split across — current month through March. */
+    months: number;
+    /** saleSlack ÷ months. */
+    salePerMonth: number;
+    depositPerMonth: number;
+}
+
+export function buildHeadroom(
+    months: GstPlanningMonthRow[],
+    guides: Record<string, MonthGuide>,
+    todayYearMonth: string,
+): Headroom {
+    // Slack as it stands after the last month that actually has figures.
+    const known = months.filter((m) => guides[m.yearMonth]?.hasData);
+    const last = known.length > 0 ? guides[known[known.length - 1].yearMonth] : undefined;
+    const saleSlack = last?.saleLimitLeft ?? 0;
+    const depositSlack = last?.depositLimitLeft ?? 0;
+
+    // Every month from the current one to the end of the FY can still take a share.
+    const open = months.filter((m) => m.yearMonth >= todayYearMonth).length;
+
+    return {
+        saleSlack,
+        depositSlack,
+        months: open,
+        salePerMonth: open > 0 ? r2(saleSlack / open) : 0,
+        depositPerMonth: open > 0 ? r2(depositSlack / open) : 0,
+    };
+}
+
+/**
+ * Build the whole FY plan from the forecast purchase and the one allowed
+ * difference. Everything downstream — sale target, deposit ceiling, the pace
+ * each still needs — falls out of those two figures.
+ */
+export function buildFyPlan(input: {
+    purchase: PurchaseForecast;
+    allowedDiff: number;
+    saleUsed: number;
+    depositUsed: number;
+    monthsLeft: number;
+    config: GstPlanningConfig;
+}): GstPlanningFyPlan {
+    const saleTarget = r2(input.purchase.total + input.allowedDiff);
+    const depositTarget = depositCeiling(saleTarget, input.config.depositGapPercent);
+
+    return {
+        purchase: {
+            actual: input.purchase.actualTotal,
+            forecast: input.purchase.forecastTotal,
+            total: input.purchase.total,
+        },
+        allowedDiff: r2(input.allowedDiff),
+        sale: yearlyAllowance(saleTarget, input.saleUsed, input.monthsLeft),
+        deposit: yearlyAllowance(depositTarget, input.depositUsed, input.monthsLeft),
+        // Value addition across the year IS the allowed difference, so the GST
+        // cost is simply that at the tax rate. Negative = credit in hand.
+        cost: r2(input.allowedDiff * (input.config.taxRatePercent / 100)),
+    };
 }
 
 export async function loadGstPlanningFy(
     fyStartYear: number,
-    opts: { branchId?: string | null; lookbackYears?: number } = {},
+    opts: { branchId?: string | null; lookbackYears?: number; todayYearMonth?: string } = {},
 ): Promise<{
     config: GstPlanningConfig;
     months: GstPlanningMonthRow[];
@@ -650,14 +951,23 @@ export async function loadGstPlanningFy(
         /** The FY's closing deposit limit — spare room left after every month. */
         depositLimitLeft: number;
     };
-    presumptive: PresumptiveCheck;
-    depositBreachMonths: number;
+    presumptive: PresumptiveVerdict;
+    plan: GstPlanningFyPlan;
+    /** The same plan with the forecast dropped — purchase is only what is booked. */
+    planBooked: GstPlanningFyPlan;
+    /** Presumptive test run against `planBooked`, so it too carries no forecast. */
+    presumptiveBooked: PresumptiveVerdict;
+    purchaseForecast: PurchaseForecast;
+    monthGuides: Record<string, MonthGuide>;
+    headroom: Headroom;
 }> {
     const config = await loadPlanningConfig();
-    const [saved, carryIn, months] = await Promise.all([
+    const [saved, months, earlierMonths] = await Promise.all([
         loadFyRow(fyStartYear),
-        loadFyCarryIn(fyStartYear, config, opts.lookbackYears ?? 1, opts.branchId),
         loadFyMonthRows(fyStartYear, config, config.bankAccountIds, opts.branchId),
+        // Only needed so an FY that has barely started can still average the
+        // months just before it.
+        loadFyMonthRows(fyStartYear - 1, config, config.bankAccountIds, opts.branchId),
     ]);
 
     const totals = months.reduce(
@@ -678,10 +988,51 @@ export async function loadGstPlanningFy(
         },
     );
 
-    const costLimit = toNumber(saved?.costLimit ?? 0);
-    const extraCostPaid = toNumber(saved?.extraCostPaid ?? 0);
-    const netCost = fyNetCost(months);
-    const rolled = rollFyBudget({ costThisFy: netCost, carryIn, costLimit, extraCostPaid });
+    const todayYearMonth = opts.todayYearMonth ?? currentYearMonth();
+    const allowedDiff = toNumber(saved?.allowedDiff ?? 0);
+    const purchaseForecast = buildPurchaseForecast(months, earlierMonths, todayYearMonth);
+
+    // Everything already known — past months, and the current one once it has
+    // figures — counts as used. What is left is shared equally between the
+    // months that are still empty, which are the only ones there is room to
+    // steer. Purchase is forecast on the same split, so all three agree.
+    const emptyMonths = months.filter((m) => !isKnownMonth(m, todayYearMonth));
+    const monthsLeft = emptyMonths.length;
+    const used = months
+        .filter((m) => isKnownMonth(m, todayYearMonth))
+        .reduce(
+            (t, m) => ({
+                sale: r2(t.sale + m.sale.effective),
+                deposit: r2(t.deposit + m.deposit.effective),
+            }),
+            { sale: 0, deposit: 0 },
+        );
+
+    const plan = buildFyPlan({
+        purchase: purchaseForecast,
+        allowedDiff,
+        saleUsed: used.sale,
+        depositUsed: used.deposit,
+        monthsLeft,
+        config,
+    });
+    // Same plan with the prediction removed — purchase is only what suppliers
+    // have actually billed. This is what the UI shows once the forecast is
+    // hidden, so no card quietly keeps steering on numbers the table no longer
+    // displays. Only the purchase side changes; used / months-left are facts.
+    const planBooked = buildFyPlan({
+        purchase: {
+            ...purchaseForecast,
+            forecastTotal: 0,
+            total: purchaseForecast.actualTotal,
+        },
+        allowedDiff,
+        saleUsed: used.sale,
+        depositUsed: used.deposit,
+        monthsLeft,
+        config,
+    });
+    const monthGuides = buildMonthGuides(months, plan, purchaseForecast, config, todayYearMonth);
 
     return {
         config,
@@ -689,14 +1040,20 @@ export async function loadGstPlanningFy(
         fy: {
             fyStartYear,
             label: fyLabel(fyStartYear),
-            costLimit,
-            extraCostPaid,
-            carryIn,
-            costThisFy: netCost,
-            ...rolled,
+            allowedDiff,
+            costThisFy: fyNetCost(months),
         },
         totals,
-        presumptive: presumptiveCheck(totals.deposit, config),
-        depositBreachMonths: months.filter((m) => !m.depositOk).length,
+        // Both bases tested — the sale TARGET (what the plan commits you to) and
+        // the deposit ceiling, since either can push deemed income over the limit.
+        presumptive: presumptiveVerdict(plan.sale.target, plan.deposit.target, config),
+        plan,
+        planBooked,
+        presumptiveBooked: presumptiveVerdict(
+            planBooked.sale.target, planBooked.deposit.target, config,
+        ),
+        purchaseForecast,
+        monthGuides,
+        headroom: buildHeadroom(months, monthGuides, todayYearMonth),
     };
 }
