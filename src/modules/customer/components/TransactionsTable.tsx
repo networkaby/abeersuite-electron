@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { Card, CardContent } from "@/components/ui/card";
 import {
     Table,
@@ -37,11 +38,12 @@ const TX_STATUS_COLORS: Record<string, string> = {
     CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
-export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[] }) {
+export function TransactionsTable({ invVouchers, onChanged }: { invVouchers: TxInvVoucher[]; onChanged?: () => void }) {
     type Row = {
         id:         number;
         ref:        string;
         type:       string;
+        kind:       string;
         date:       string;
         total:      number;
         paid:       number;
@@ -63,6 +65,7 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
         id:         v.id,
         ref:        v.reference,
         type:       formatType(v.type),
+        kind:       v.type,
         date:       v.date,
         total:      Number(v.totalAmount),
         paid:       Number(v.amountPaid),
@@ -107,6 +110,7 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
                             <TableHead className="text-right">Paid</TableHead>
                             <TableHead className="text-right">Balance</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="w-10" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -139,6 +143,17 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
                                         <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLORS[row.status] ?? "bg-muted text-muted-foreground"}`}>
                                             {row.status.charAt(0) + row.status.slice(1).toLowerCase()}
                                         </span>
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    {!row.isOpening && (
+                                        <DayBookActionsMenu
+                                            rawId={row.id}
+                                            source="inv"
+                                            kind={row.kind}
+                                            reference={row.ref}
+                                            onChanged={onChanged}
+                                        />
                                     )}
                                 </TableCell>
                             </TableRow>

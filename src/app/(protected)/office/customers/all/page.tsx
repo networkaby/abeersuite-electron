@@ -235,14 +235,8 @@ export default function AllCustomersPage() {
         setCompanyTab(next);
     };
 
-    useEffect(() => {
+    const reloadTransactions = useCallback(() => {
         if (!selected) return;
-        const wantsTransactions =
-            (selected.kind === "person" && personTab === "transactions")
-            || (selected.kind === "company" && companyTab === "transactions");
-        if (!wantsTransactions || transactions) return;
-
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTxLoading(true);
         const url =
             selected.kind === "person"
@@ -254,7 +248,18 @@ export default function AllCustomersPage() {
             .then((r) => setTransactions(r.data))
             .catch(() => { })
             .finally(() => setTxLoading(false));
-    }, [selected, personTab, companyTab, transactions]);
+    }, [selected]);
+
+    useEffect(() => {
+        if (!selected) return;
+        const wantsTransactions =
+            (selected.kind === "person" && personTab === "transactions")
+            || (selected.kind === "company" && companyTab === "transactions");
+        if (!wantsTransactions || transactions) return;
+
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        reloadTransactions();
+    }, [selected, personTab, companyTab, transactions, reloadTransactions]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -589,7 +594,7 @@ export default function AllCustomersPage() {
                                     ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                     ) : (
-                                        <TransactionsTable invVouchers={transactions.invVouchers} />
+                                        <TransactionsTable invVouchers={transactions.invVouchers} onChanged={reloadTransactions} />
                                     )
                                 )}
                             </div>
@@ -717,7 +722,7 @@ export default function AllCustomersPage() {
                                     ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                     ) : (
-                                        <TransactionsTable invVouchers={transactions.invVouchers} />
+                                        <TransactionsTable invVouchers={transactions.invVouchers} onChanged={reloadTransactions} />
                                     )
                                 )}
                             </div>
