@@ -540,7 +540,7 @@ export default function GstPurchasePlanningPage() {
         setGapDraft(String(fy.config.depositGapPercent));
         setPresumptiveDraft(String(fy.config.presumptiveRatePercent));
         setIncomeLimitDraft(String(fy.config.incomeTaxFreeLimit));
-    }, [fy?.fy.fyStartYear, fy?.fy.allowedDiff, fy?.config]);
+    }, [fy]);
 
     const reloadAll = useCallback(() => {
         reload();

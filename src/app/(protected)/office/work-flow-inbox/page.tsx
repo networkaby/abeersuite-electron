@@ -59,7 +59,7 @@ export default async function AssignmentsPage() {
     // Per-request "now" for snooze (wakeAt) and SLA comparisons. This is an async
     // Server Component — it renders once per request, so reading the clock here is
     // stable; the purity rule targets re-rendering client components, not this case.
-    // eslint-disable-next-line react-hooks/purity
+     
     const nowDate = new Date();
     const now = nowDate.getTime();
 
