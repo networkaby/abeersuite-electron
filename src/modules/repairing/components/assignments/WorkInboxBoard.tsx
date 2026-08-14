@@ -21,6 +21,13 @@ export interface WorkInboxItem {
      *  no detail page yet (help / task / deal are list-only), so the row shows a plain
      *  #id instead of a link that would 500. */
     href: string | null;
+    /** Which module (pipeline) this ticket belongs to — Service & Repair, Help Desk,
+     *  Deals, Internal Management, etc. Shown as a colored chip so a mixed list of
+     *  flavours stays legible at a glance. */
+    moduleLabel: string;
+    moduleColor: string;
+    /** Big headline for the row — the device for a repair ticket, else Ticket.title. */
+    title: string;
     successTarget: { id: string; label: string } | null;
     failTarget: { id: string; label: string } | null;
     /** Outcome jumps straight to a stage (status) instead of a same-stage worker. */
@@ -173,25 +180,44 @@ export default function WorkInboxBoard({
                                         <AlertTriangle size={11} />Needs attention
                                     </span>
                                 )}
+                                <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${badgeColor(it.moduleColor).className}`} style={badgeColor(it.moduleColor).style}>
+                                    {it.moduleLabel}
+                                </span>
                                 <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${badgeColor(it.workColor).className}`} style={badgeColor(it.workColor).style}>
                                     {it.workLabel}
                                 </span>
                                 {it.href ? (
-                                    <Link href={it.href} className="shrink-0 text-sm font-semibold hover:underline">
+                                    <Link href={it.href} className="shrink-0 text-xs text-muted-foreground hover:underline">
                                         #{it.ticketId}
                                     </Link>
                                 ) : (
-                                    <span className="shrink-0 text-sm font-semibold">#{it.ticketId}</span>
+                                    <span className="shrink-0 text-xs text-muted-foreground">#{it.ticketId}</span>
                                 )}
-                                <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                                    {it.customer}<span className="mx-1">·</span>{it.device}
-                                    {it.phone && <><span className="mx-1">·</span>{it.phone}</>}
-                                </span>
                                 <span className="ml-auto flex shrink-0 items-center gap-2">
                                     <span className={`inline-flex items-center gap-1 ${it.needsAttention ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
                                         <Clock size={12} />{it.ageLabel}{it.overdueLabel ? ` · ${it.overdueLabel} over` : ""}
                                     </span>
-                                    {it.href && <Link href={it.href} className="text-primary hover:underline">Open</Link>}
+                                    {it.href && (
+                                        <Link
+                                            href={it.href}
+                                            className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                                        >
+                                            Open
+                                        </Link>
+                                    )}
+                                </span>
+                            </div>
+
+                            <div className="mt-1.5 flex items-baseline gap-2">
+                                {it.href ? (
+                                    <Link href={it.href} className="truncate text-base font-semibold text-foreground hover:underline">
+                                        {it.title}
+                                    </Link>
+                                ) : (
+                                    <span className="truncate text-base font-semibold text-foreground">{it.title}</span>
+                                )}
+                                <span className="min-w-0 truncate text-xs text-muted-foreground">
+                                    {it.customer}{it.phone && <><span className="mx-1">·</span>{it.phone}</>}
                                 </span>
                             </div>
 

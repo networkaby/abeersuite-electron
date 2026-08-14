@@ -22,12 +22,39 @@ export default async function AssignmentsPage() {
         company: { select: { name: true, phones: selectPrimaryPhone } },
     };
 
-    // Only the "ticket" flavour (Service & Repair) has a detail page today — help,
-    // task and deal are list-only surfaces. Linking those to the repair page 500s
-    // (it assumes a device row), so they get a plain #id, as the ticket page's own
-    // children list already does.
+    // Only the "ticket" flavour (Service & Repair) has a PER-ITEM detail page today.
+    // The other flavours (help / task / deal) are list-only surfaces — no /id route
+    // exists, so Open sends the staffer to that module's list instead of a dead link.
+    const MODULE_LIST_HREF: Record<string, string> = {
+        help: "/office/help",
+        deal: "/office/crm/deals",
+        task: "/office/administration",
+    };
     const detailHref = (entityType: string | null | undefined, id: number) =>
-        entityType === "ticket" ? `/office/repairing/tickets/${id}` : null;
+        entityType === "ticket" ? `/office/repairing/tickets/${id}` : (entityType && MODULE_LIST_HREF[entityType]) || null;
+
+    // The row's big headline. A repair ticket IS its device — "iPhone 13", "HP 640
+    // G6" — so the device name doubles as the title there. Other flavours (help,
+    // task, deal) carry their own Ticket.title (help's "subject" is mirrored onto
+    // it). When even that is blank, the customer's name alone isn't a useful
+    // headline (it's already shown on the line below) — pair it with what they
+    // actually asked for, Ticket.notes, the same free text staff see in the Edit
+    // dialog's Notes field. Bare customer name / bare notes are still fine alone.
+    const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max).trim() + "…" : s);
+    const itemTitle = (
+        deviceLine: string,
+        title: string | null | undefined,
+        notes: string | null | undefined,
+        accountName: string | null | undefined,
+        id: number,
+    ) => {
+        if (deviceLine) return deviceLine;
+        if (title?.trim()) return title.trim();
+        const note = notes?.trim() ? clip(notes.trim(), 60) : null;
+        const name = accountName?.trim() || null;
+        if (note && name) return `${note} — ${name}`;
+        return note || name || `Ticket #${id}`;
+    };
 
     // Per-request "now" for snooze (wakeAt) and SLA comparisons. This is an async
     // Server Component — it renders once per request, so reading the clock here is
@@ -47,7 +74,11 @@ export default async function AssignmentsPage() {
                 // The current status carries the resolve-time SLA (hours). Overdue =
                 // time-in-status (from statusEnteredAt) exceeds it → "needs attention".
                 ticketStatus: { select: { resolveTimeHours: true } },
-                pipeline: { select: { entityType: true } },
+                pipeline: { select: { entityType: true, label: true, color: true } },
+                // The sanctioned workflow→Account bridge — used to name non-repair
+                // rows (help/task/deal) that carry no title, where repair's
+                // repair.device.account path doesn't apply.
+                account: { select: { name: true } },
                 repair: { include: { device: { include: { account: { include: customerPhones } } } } },
                 ticketWorker: {
                     select: {
@@ -76,7 +107,7 @@ export default async function AssignmentsPage() {
                 id: true, note: true, createdAt: true,
                 author: true,
                 ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true, groups: { select: { workGroup: { select: { id: true, label: true, color: true } } } } } } } },
-                ticket: { select: { id: true, pipeline: { select: { entityType: true } }, repair: { select: { device: { select: { brand: true, model: true, account: { select: customerPhones } } } } } } },
+                ticket: { select: { id: true, title: true, notes: true, pipeline: { select: { entityType: true, label: true, color: true } }, account: { select: { name: true } }, repair: { select: { device: { select: { brand: true, model: true, account: { select: customerPhones } } } } } } },
             },
         }),
         prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groups: { select: { workGroup: { select: { id: true, label: true, color: true } } } } } }),
@@ -93,7 +124,11 @@ export default async function AssignmentsPage() {
                         resolveGroup: { select: { id: true, label: true, color: true } },
                     },
                 },
-                pipeline: { select: { entityType: true } },
+                pipeline: { select: { entityType: true, label: true, color: true } },
+                // The sanctioned workflow→Account bridge — used to name non-repair
+                // rows (help/task/deal) that carry no title, where repair's
+                // repair.device.account path doesn't apply.
+                account: { select: { name: true } },
                 repair: { include: { device: { include: { account: { include: customerPhones } } } } },
                 logs: {
                     where: { note: { not: null } },
@@ -119,7 +154,7 @@ export default async function AssignmentsPage() {
 
     // System-generated log notes (entry/auto-advance/claim/transfer/completion stamps)
     // are noise as "why" context — only surface free-text notes a human actually wrote.
-    const SYSTEM_NOTE = /^(Entered:|Auto-advanced|Claimed by|Reverted|Transferred|Reassigned|Unassigned|Escalat|Work done)/;
+    const SYSTEM_NOTE = /^(Entered:|Auto-advanced|Claimed by|Reverted|Transferred|Reassigned|Unassigned|Escalat|Work done|Reopened(\s|$)|Moved to ")/;
 
     const openItems: WorkInboxItem[] = tickets.map((t) => {
         // SLA breach = time since the ticket entered its current status exceeds that
@@ -167,6 +202,8 @@ export default async function AssignmentsPage() {
             id: String(t.id),
             ticketId: t.id,
             href: detailHref(t.pipeline?.entityType, t.id),
+            moduleLabel: t.pipeline?.label ?? "—",
+            moduleColor: t.pipeline?.color ?? "bg-muted text-muted-foreground",
             successTarget: t.ticketWorker?.successWorker ?? null,
             failTarget: t.ticketWorker?.failWorker ?? (scheduled ? selfTarget : null),
             successStatusTarget: t.ticketWorker?.successStatus ?? null,
@@ -194,6 +231,7 @@ export default async function AssignmentsPage() {
             customer: acct?.person?.name ?? acct?.company?.name ?? "—",
             phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
             device: `${device?.brand ?? ""} ${device?.model ?? ""}`.trim(),
+            title: itemTitle(`${device?.brand ?? ""} ${device?.model ?? ""}`.trim(), t.title, t.notes, t.account?.name, t.id),
             assignee: null,
             answer: null,
             answeredBy: null,
@@ -217,6 +255,8 @@ export default async function AssignmentsPage() {
             id: `done-${l.id}`,
             ticketId: l.ticket.id,
             href: detailHref(l.ticket.pipeline?.entityType, l.ticket.id),
+            moduleLabel: l.ticket.pipeline?.label ?? "—",
+            moduleColor: l.ticket.pipeline?.color ?? "bg-muted text-muted-foreground",
             successTarget: null,
             failTarget: null,
             successStatusTarget: null,
@@ -236,6 +276,7 @@ export default async function AssignmentsPage() {
             customer: acct?.person?.name ?? acct?.company?.name ?? "—",
             phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
             device: `${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(),
+            title: itemTitle(`${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(), l.ticket.title, l.ticket.notes, l.ticket.account?.name, l.ticket.id),
             assignee: null,
             outcome: unsuccess ? "unsuccess" : "success",
             answer: userNote,
@@ -264,6 +305,8 @@ export default async function AssignmentsPage() {
                 id: `sla-${t.id}`,
                 ticketId: t.id,
                 href: detailHref(t.pipeline?.entityType, t.id),
+                moduleLabel: t.pipeline?.label ?? "—",
+                moduleColor: t.pipeline?.color ?? "bg-muted text-muted-foreground",
                 successTarget: null,
                 failTarget: null,
                 successStatusTarget: null,
@@ -287,6 +330,7 @@ export default async function AssignmentsPage() {
                 customer: acct?.person?.name ?? acct?.company?.name ?? "—",
                 phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
                 device: `${device?.brand ?? ""} ${device?.model ?? ""}`.trim(),
+                title: itemTitle(`${device?.brand ?? ""} ${device?.model ?? ""}`.trim(), t.title, t.notes, t.account?.name, t.id),
                 assignee: null,
                 answer: null,
                 answeredBy: null,
