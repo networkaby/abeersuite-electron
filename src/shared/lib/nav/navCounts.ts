@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
 import { getUnreadTotal, getNotificationUnread } from "@/modules/message/lib/inbox";
 import {
     PIPELINE_NAV_SURFACES,
@@ -57,13 +58,29 @@ const getNavMasters = unstable_cache(
  * in its module for them.
  */
 export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
-    const [{ works, pipelines }, seenRows] = await Promise.all([
+    const now = new Date();
+
+    const [{ works, pipelines }, seenRows, slaCandidates] = await Promise.all([
         getNavMasters(),
         prisma.userSurfaceSeen.findMany({
             where: { userId: user.id },
             select: { surface: true, seenAt: true },
         }),
+        // Work-less overdue tickets also live in the Work Inbox (as chase-me notices),
+        // so the badge must count them. Overdue is a JS decision — Prisma cannot compare
+        // `now - statusEnteredAt` against a column — hence the small candidate fetch.
+        prisma.ticket.findMany({
+            where: workLessSlaCandidates(now),
+            select: {
+                id: true, statusEnteredAt: true, updatedAt: true,
+                ticketStatus: { select: { resolveTimeHours: true } },
+            },
+        }),
     ]);
+
+    const slaOverdue = slaCandidates.filter(
+        (t) => slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now.getTime()) > 0
+    );
 
     const seenBySurface = new Map(seenRows.map((r) => [r.surface, r.seenAt]));
     const pipelineIdByName = new Map(pipelines.map((p) => [p.name, p.id]));
@@ -75,7 +92,6 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
         if (id) surfaceByPipelineId.set(id, s.key);
     }
 
-    const now = new Date();
     const visibleWorkIds = works.filter((w) => passesWorkGate(user, w)).map((w) => w.id);
 
     // A snooze defers the item out of every badge until wakeAt passes.
@@ -92,6 +108,9 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
             notSnoozed,
             // The one-place rule: hand the ticket over to the Work Inbox badge.
             ...(visibleWorkIds.length ? [{ NOT: inMyWorkInbox }] : []),
+            // Same rule for work-less overdue rows — they now show in the Work Inbox,
+            // so they must not be double-counted in their module badge.
+            ...(slaOverdue.length ? [{ NOT: { id: { in: slaOverdue.map((t) => t.id) } } }] : []),
         ],
     };
 
@@ -132,7 +151,15 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
         hasWork ? prisma.ticket.count({ where: { AND: [workInboxBase, workFresh] } }) : 0,
     ]);
 
-    const counts: NavCounts = { [WORK_INBOX_SURFACE]: { all: workAll, new: workNew } };
+    // Work-less overdue rows use the same freshness rule as the work-bearing ones:
+    // entered its current status after the last time this user opened the board.
+    const slaNew = workSeenAt
+        ? slaOverdue.filter((t) => (t.statusEnteredAt ?? t.updatedAt) > workSeenAt).length
+        : slaOverdue.length;
+
+    const counts: NavCounts = {
+        [WORK_INBOX_SURFACE]: { all: workAll + slaOverdue.length, new: workNew + slaNew },
+    };
     for (const key of surfaceByPipelineId.values()) counts[key] = { all: 0, new: 0 };
 
     for (const row of moduleAll) {

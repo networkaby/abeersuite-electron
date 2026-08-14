@@ -6,6 +6,7 @@ import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/componen
 import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { slaEnteredAt, slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -21,7 +22,21 @@ export default async function AssignmentsPage() {
         company: { select: { name: true, phones: selectPrimaryPhone } },
     };
 
-    const [tickets, doneLogs, works] = await Promise.all([
+    // Only the "ticket" flavour (Service & Repair) has a detail page today — help,
+    // task and deal are list-only surfaces. Linking those to the repair page 500s
+    // (it assumes a device row), so they get a plain #id, as the ticket page's own
+    // children list already does.
+    const detailHref = (entityType: string | null | undefined, id: number) =>
+        entityType === "ticket" ? `/office/repairing/tickets/${id}` : null;
+
+    // Per-request "now" for snooze (wakeAt) and SLA comparisons. This is an async
+    // Server Component — it renders once per request, so reading the clock here is
+    // stable; the purity rule targets re-rendering client components, not this case.
+    // eslint-disable-next-line react-hooks/purity
+    const nowDate = new Date();
+    const now = nowDate.getTime();
+
+    const [tickets, doneLogs, works, slaCandidates] = await Promise.all([
         prisma.ticket.findMany({
             where: {
                 ticketStatus: { isTerminal: false },
@@ -32,6 +47,7 @@ export default async function AssignmentsPage() {
                 // The current status carries the resolve-time SLA (hours). Overdue =
                 // time-in-status (from statusEnteredAt) exceeds it → "needs attention".
                 ticketStatus: { select: { resolveTimeHours: true } },
+                pipeline: { select: { entityType: true } },
                 repair: { include: { device: { include: { account: { include: customerPhones } } } } },
                 ticketWorker: {
                     select: {
@@ -60,10 +76,33 @@ export default async function AssignmentsPage() {
                 id: true, note: true, createdAt: true,
                 author: true,
                 ticketWorker: { select: { label: true, work: { select: { id: true, label: true, color: true, groups: { select: { workGroup: { select: { id: true, label: true, color: true } } } } } } } },
-                ticket: { select: { id: true, repair: { select: { device: { select: { brand: true, model: true, account: { select: customerPhones } } } } } } },
+                ticket: { select: { id: true, pipeline: { select: { entityType: true } }, repair: { select: { device: { select: { brand: true, model: true, account: { select: customerPhones } } } } } } },
             },
         }),
         prisma.work.findMany({ orderBy: { order: "asc" }, select: { id: true, label: true, color: true, permissionId: true, successLabel: true, failLabel: true, prompt: true, startLabel: true, successPopup: true, failPopup: true, args: true, groups: { select: { workGroup: { select: { id: true, label: true, color: true } } } } } }),
+        // Work-less SLA rows: the status carries a resolve time but no Work, so the
+        // query above can never see them. Overdue ones still need chasing, so they
+        // surface here as notices under the status' resolveGroup ("OverDue").
+        prisma.ticket.findMany({
+            where: workLessSlaCandidates(nowDate),
+            orderBy: { updatedAt: "asc" },
+            include: {
+                ticketStatus: {
+                    select: {
+                        label: true, color: true, resolveTimeHours: true,
+                        resolveGroup: { select: { id: true, label: true, color: true } },
+                    },
+                },
+                pipeline: { select: { entityType: true } },
+                repair: { include: { device: { include: { account: { include: customerPhones } } } } },
+                logs: {
+                    where: { note: { not: null } },
+                    orderBy: { createdAt: "desc" },
+                    take: 12,
+                    select: { note: true, author: true },
+                },
+            },
+        }),
     ]);
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
@@ -82,19 +121,11 @@ export default async function AssignmentsPage() {
     // are noise as "why" context — only surface free-text notes a human actually wrote.
     const SYSTEM_NOTE = /^(Entered:|Auto-advanced|Claimed by|Reverted|Transferred|Reassigned|Unassigned|Escalat|Work done)/;
 
-    // Per-request "now" for snooze (wakeAt) comparisons. This is an async Server
-    // Component — it renders once per request, so reading the clock here is stable;
-    // the purity rule targets re-rendering client components, not this case.
-    // eslint-disable-next-line react-hooks/purity
-    const now = Date.now();
-    const HOUR_MS = 3_600_000;
     const openItems: WorkInboxItem[] = tickets.map((t) => {
         // SLA breach = time since the ticket entered its current status exceeds that
-        // status' resolveTimeHours. statusEnteredAt is stamped only on real status
-        // changes; fall back to updatedAt for tickets that predate the field.
-        const enteredAt = t.statusEnteredAt ?? t.updatedAt;
-        const slaHours = t.ticketStatus?.resolveTimeHours ?? null;
-        const overdueByMs = slaHours != null ? now - enteredAt.getTime() - slaHours * HOUR_MS : -1;
+        // status' resolveTimeHours (shared rule — see resolveTimeSla.ts).
+        const enteredAt = slaEnteredAt(t);
+        const overdueByMs = slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now);
         const needsAttention = overdueByMs > 0;
         const work = t.ticketWorker?.workId ? worksById[t.ticketWorker.workId] : undefined;
         const device = t.repair?.device ?? null;
@@ -135,6 +166,7 @@ export default async function AssignmentsPage() {
         return {
             id: String(t.id),
             ticketId: t.id,
+            href: detailHref(t.pipeline?.entityType, t.id),
             successTarget: t.ticketWorker?.successWorker ?? null,
             failTarget: t.ticketWorker?.failWorker ?? (scheduled ? selfTarget : null),
             successStatusTarget: t.ticketWorker?.successStatus ?? null,
@@ -184,6 +216,7 @@ export default async function AssignmentsPage() {
         return {
             id: `done-${l.id}`,
             ticketId: l.ticket.id,
+            href: detailHref(l.ticket.pipeline?.entityType, l.ticket.id),
             successTarget: null,
             failTarget: null,
             successStatusTarget: null,
@@ -215,10 +248,60 @@ export default async function AssignmentsPage() {
         };
     });
 
+    // Work-less overdue notices. No worker means no outcome to record, so these rows
+    // carry no work fields and no actions — the board shows them as "Needs attention"
+    // with an Open link, and they sort with the rest by longest-waiting. Not-yet-overdue
+    // work-less tickets stay out: the inbox lists things to do, not everything alive.
+    const slaItems: WorkInboxItem[] = slaCandidates
+        .map((t) => ({ t, overdueByMs: slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now) }))
+        .filter(({ overdueByMs }) => overdueByMs > 0)
+        .map(({ t, overdueByMs }) => {
+            const device = t.repair?.device ?? null;
+            const acct = device?.account ?? null;
+            const noteLog = t.logs.find((l) => l.note && !SYSTEM_NOTE.test(l.note));
+            const group = t.ticketStatus?.resolveGroup ?? null;
+            return {
+                id: `sla-${t.id}`,
+                ticketId: t.id,
+                href: detailHref(t.pipeline?.entityType, t.id),
+                successTarget: null,
+                failTarget: null,
+                successStatusTarget: null,
+                failStatusTarget: null,
+                retryScheduled: false,
+                // No work — the badge names the STATUS the ticket is stuck in, which is
+                // the honest label here. An empty workId also marks the row action-less.
+                workId: "",
+                workLabel: t.ticketStatus?.label ?? "—",
+                workColor: t.ticketStatus?.color ?? "bg-muted text-muted-foreground",
+                // The status' resolveGroup is the chip ("OverDue"); unset → "Ungrouped".
+                groups: group ? [group] : [],
+                args: [],
+                status: "todo" as const,
+                coverLabel: "",
+                ask: null,
+                context: [],
+                problem: device?.problem?.trim() || null,
+                lastNote: noteLog?.note ?? null,
+                lastNoteBy: (noteLog?.author as { userName?: string })?.userName ?? null,
+                customer: acct?.person?.name ?? acct?.company?.name ?? "—",
+                phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
+                device: `${device?.brand ?? ""} ${device?.model ?? ""}`.trim(),
+                assignee: null,
+                answer: null,
+                answeredBy: null,
+                snoozed: false,
+                wakeLabel: null,
+                ageLabel: timeAgo(slaEnteredAt(t)),
+                needsAttention: true,
+                overdueLabel: formatDuration(overdueByMs),
+            };
+        });
+
     // Needs-attention (SLA-breached) items float to the top; the query already
     // orders by longest-waiting, and Array.sort is stable, so within each group the
     // longest-waiting-first order is preserved.
-    const sortedOpen = [...openItems].sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
+    const sortedOpen = [...openItems, ...slaItems].sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
 
     // Drop items whose work the caller can't act on (gated work, permission not
     // held) — private to its holders, not just absent from a filter chip. Items
@@ -227,5 +310,9 @@ export default async function AssignmentsPage() {
         (it) => !it.workId || visibleWorkIds.has(it.workId)
     );
 
-    return <WorkInboxBoard items={visibleItems} currentUserId={userId} />;
+    return (
+        <div className="h-full overflow-y-auto px-6 py-5">
+            <WorkInboxBoard items={visibleItems} currentUserId={userId} />
+        </div>
+    );
 }

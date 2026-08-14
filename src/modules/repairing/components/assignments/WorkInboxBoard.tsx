@@ -17,6 +17,10 @@ import { WORK_INBOX_SURFACE } from "@/shared/lib/nav/navSurfaces";
 export interface WorkInboxItem {
     id: string;
     ticketId: number;
+    /** Detail-page URL for this ticket's pipeline flavour; null when that flavour has
+     *  no detail page yet (help / task / deal are list-only), so the row shows a plain
+     *  #id instead of a link that would 500. */
+    href: string | null;
     successTarget: { id: string; label: string } | null;
     failTarget: { id: string; label: string } | null;
     /** Outcome jumps straight to a stage (status) instead of a same-stage worker. */
@@ -172,9 +176,13 @@ export default function WorkInboxBoard({
                                 <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${badgeColor(it.workColor).className}`} style={badgeColor(it.workColor).style}>
                                     {it.workLabel}
                                 </span>
-                                <Link href={`/office/repairing/tickets/${it.ticketId}`} className="shrink-0 text-sm font-semibold hover:underline">
-                                    #{it.ticketId}
-                                </Link>
+                                {it.href ? (
+                                    <Link href={it.href} className="shrink-0 text-sm font-semibold hover:underline">
+                                        #{it.ticketId}
+                                    </Link>
+                                ) : (
+                                    <span className="shrink-0 text-sm font-semibold">#{it.ticketId}</span>
+                                )}
                                 <span className="min-w-0 flex-1 truncate text-muted-foreground">
                                     {it.customer}<span className="mx-1">·</span>{it.device}
                                     {it.phone && <><span className="mx-1">·</span>{it.phone}</>}
@@ -183,7 +191,7 @@ export default function WorkInboxBoard({
                                     <span className={`inline-flex items-center gap-1 ${it.needsAttention ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
                                         <Clock size={12} />{it.ageLabel}{it.overdueLabel ? ` · ${it.overdueLabel} over` : ""}
                                     </span>
-                                    <Link href={`/office/repairing/tickets/${it.ticketId}`} className="text-primary hover:underline">Open</Link>
+                                    {it.href && <Link href={it.href} className="text-primary hover:underline">Open</Link>}
                                 </span>
                             </div>
 
@@ -236,7 +244,9 @@ export default function WorkInboxBoard({
                                             </span>
                                         </span>
                                     )}
-                                    {!answered && !snoozed && (
+                                    {/* No workId = a work-less SLA notice: there is no worker to
+                                        record an outcome against, so it is view-and-open only. */}
+                                    {!answered && !snoozed && !!it.workId && (
                                         <WorkActions
                                             ticketId={it.ticketId}
                                             workLabel={it.workLabel}
