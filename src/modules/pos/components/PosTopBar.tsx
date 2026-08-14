@@ -109,7 +109,7 @@ export function PosTopBar({
             <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.open("/vouchers/pos", "_blank", "noopener")}
+                onClick={() => window.open("/vouchers/pos/new", "_blank", "noopener")}
                 title="Open another POS in a new tab — start a parallel bill while this one waits"
             >
                 <ExternalLink size={14} /> New

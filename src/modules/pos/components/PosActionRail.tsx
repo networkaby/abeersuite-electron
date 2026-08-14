@@ -19,12 +19,13 @@ export type PosActionRailProps = {
     onHelp: () => void;
     onTicket: () => void;
     onEnquiry: () => void;
+    onTask: () => void;
     canExp?: boolean;
     canRcv?: boolean;
 };
 
-export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, canExp = true, canRcv = true }: PosActionRailProps) {
-    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry };
+export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, canExp = true, canRcv = true }: PosActionRailProps) {
+    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask };
     const flags: Record<PosRailAccessKey, boolean> = { canRcv, canExp };
 
     return (

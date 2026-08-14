@@ -279,6 +279,7 @@ export const POS_RAIL_ACTIONS: PosRailAction[] = [
 
     { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", title: "Create a repair ticket for a customer" },
     { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
+    { key: "task", label: "Task", icon: SquareCheckBig, kind: "action", title: "Add an internal work item to the board" },
 
 ];
 

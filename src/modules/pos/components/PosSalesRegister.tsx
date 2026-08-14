@@ -24,16 +24,18 @@ import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type PosSale = {
-    id:             number;
-    reference:      string;
-    date:           string;
-    description:    string;
-    paymentMode:    string | null;
-    totalAmount:    string;
+    id: number;
+    reference: string;
+    date: string;
+    description: string;
+    paymentMode: string | null;
+    refundMode: string | null;
+    originalRef: string | null;
+    totalAmount: string;
     amountReceived: string;
-    branch:         string;
-    cashier:        string;
-    lineCount:      number;
+    branch: string;
+    cashier: string;
+    lineCount: number;
 };
 
 type ApiResponse = {
@@ -49,7 +51,7 @@ type CashMove = {
 
 // Counter till cash book (ledger with running balance).
 type CounterOpt = { id: number; name: string; tillAccount: { name: string } };
-type LedgerRow  = {
+type LedgerRow = {
     id: number; date: string; reference: string; particulars: string;
     debit: number | null; credit: number | null; balance: number; printUrl: string | null;
 };
@@ -67,21 +69,26 @@ type PosDoc = {
 };
 
 const PAY_COLORS: Record<string, string> = {
-    CASH:           "bg-green-50 text-green-700",
-    BANK_TRANSFER:  "bg-blue-50 text-blue-700",
-    CARD:           "bg-purple-50 text-purple-700",
+    CASH: "bg-green-50 text-green-700",
+    BANK_TRANSFER: "bg-blue-50 text-blue-700",
+    CARD: "bg-purple-50 text-purple-700",
     MOBILE_PAYMENT: "bg-orange-50 text-orange-700",
+};
+
+const REFUND_COLORS: Record<string, string> = {
+    CASH: "bg-green-50 text-green-700",
+    CREDIT: "bg-blue-50 text-blue-700",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function PosSalesRegister() {
-    const [items, setItems]       = useState<PosSale[]>([]);
-    const [total, setTotal]       = useState(0);
-    const [loading, setLoading]   = useState(true);
-    const [q, setQ]               = useState("");
-    const [page, setPage]         = useState(1);
-    const limit                   = 50;
+    const [items, setItems] = useState<PosSale[]>([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [q, setQ] = useState("");
+    const [page, setPage] = useState(1);
+    const limit = 50;
 
     // ── Active POS shift — the full status/money bar lives on this overview
     //    page (hidden on the billing screen to save space). Read + manage here.
@@ -97,8 +104,8 @@ export function PosSalesRegister() {
     }, []);
     useEffect(() => { refreshShift(); }, [refreshShift]);
 
-    const [tab, setTab]                 = useState<"sales" | "orders" | "estimates" | "cash" | "ledger">("sales");
-    const [moves, setMoves]             = useState<CashMove[]>([]);
+    const [tab, setTab] = useState<"sales" | "returns" | "orders" | "estimates" | "cash" | "ledger">("sales");
+    const [moves, setMoves] = useState<CashMove[]>([]);
     const [movesLoading, setMovesLoading] = useState(false);
 
     useEffect(() => {
@@ -111,14 +118,14 @@ export function PosSalesRegister() {
     }, [tab]);
 
     // ── POS Orders / Estimates (POS_ORDER / POS_ESTIMATE vouchers) ───────────
-    const [posDocs, setPosDocs]               = useState<PosDoc[]>([]);
+    const [posDocs, setPosDocs] = useState<PosDoc[]>([]);
     const [posDocsLoading, setPosDocsLoading] = useState(false);
-    const [docQuery, setDocQuery]             = useState("");
-    const [pendingOnly, setPendingOnly]       = useState(false);
+    const [docQuery, setDocQuery] = useState("");
+    const [pendingOnly, setPendingOnly] = useState(false);
     // Shared OPTIONAL date range for Sales / Orders / Estimates / Cash tabs
     // (empty = all dates). The Cash Book tab keeps its own today-defaulted range.
-    const [rangeFrom, setRangeFrom]           = useState("");
-    const [rangeTo, setRangeTo]               = useState("");
+    const [rangeFrom, setRangeFrom] = useState("");
+    const [rangeTo, setRangeTo] = useState("");
     const inDateRange = (iso: string) => {
         const d = iso.slice(0, 10);
         if (rangeFrom && d < rangeFrom) return false;
@@ -154,9 +161,9 @@ export function PosSalesRegister() {
 
     // ── Till cash book (ledger) ──────────────────────────────────────────────
     const todayISO = todayIso();
-    const [counters, setCounters]   = useState<CounterOpt[]>([]);
+    const [counters, setCounters] = useState<CounterOpt[]>([]);
     const [counterId, setCounterId] = useState<number | null>(null);
-    const [ledger, setLedger]       = useState<LedgerData | null>(null);
+    const [ledger, setLedger] = useState<LedgerData | null>(null);
     const [ledgerLoading, setLedgerLoading] = useState(false);
 
     useEffect(() => {
@@ -170,7 +177,7 @@ export function PosSalesRegister() {
         if (tab !== "ledger" || counterId == null) return;
         // Shared range; the cash book needs a bounded daily view, so empty ⇒ today.
         const effFrom = rangeFrom || todayISO;
-        const effTo   = rangeTo   || todayISO;
+        const effTo = rangeTo || todayISO;
         setLedgerLoading(true);
         axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${counterId}&from=${effFrom}&to=${effTo}`)
             .then((r) => setLedger(r.data))
@@ -178,12 +185,14 @@ export function PosSalesRegister() {
             .finally(() => setLedgerLoading(false));
     }, [tab, counterId, rangeFrom, rangeTo, todayISO]);
 
-    const load = useCallback(async (search: string, pg: number, f: string, t: string) => {
+    const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
+    const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string) => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
+                kind: kind,
                 limit: String(limit),
-                page:  String(pg),
+                page: String(pg),
                 ...(search ? { q: search } : {}),
                 ...(f ? { from: f } : {}),
                 ...(t ? { to: t } : {}),
@@ -192,13 +201,13 @@ export function PosSalesRegister() {
             setItems(data.items);
             setTotal(data.total);
         } catch {
-            toast.error("Failed to load POS sales");
+            toast.error(kind === "returns" ? "Failed to load POS returns" : "Failed to load POS sales");
         } finally {
             setLoading(false);
         }
     }, []);
 
-    useEffect(() => { void load(q, page, rangeFrom, rangeTo); }, [load, q, page, rangeFrom, rangeTo]);
+    useEffect(() => { void load(listKind, q, page, rangeFrom, rangeTo); }, [load, listKind, q, page, rangeFrom, rangeTo]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -256,14 +265,14 @@ export function PosSalesRegister() {
                         POS Sales
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        {total} sale{total !== 1 ? "s" : ""} recorded
+                        {total} {tab === "returns" ? `return${total !== 1 ? "s" : ""}` : `sale${total !== 1 ? "s" : ""}`} recorded
                     </p>
                 </div>
             </div>
 
             {/* ── Tabs ── */}
             <div className="flex gap-1 border-b border-border">
-                {([["sales", "Sales"], ["orders", "Orders"], ["estimates", "Estimates"], ["cash", "Cash In / Out"], ["ledger", "Cash Book"]] as const).map(([k, label]) => (
+                {([["sales", "Sales"], ["returns", "Returns"], ["orders", "Orders"], ["estimates", "Estimates"], ["cash", "Cash In / Out"], ["ledger", "Cash Book"]] as const).map(([k, label]) => (
                     <button
                         key={k}
                         type="button"
@@ -302,8 +311,8 @@ export function PosSalesRegister() {
                     <Input
                         className="h-9 pl-8 text-sm"
                         placeholder="Search…"
-                        value={tab === "sales" ? q : docQuery}
-                        onChange={(e) => { if (tab === "sales") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
+                        value={tab === "sales" || tab === "returns" ? q : docQuery}
+                        onChange={(e) => { if (tab === "sales" || tab === "returns") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
                     />
                 </div>
                 {(tab === "orders" || tab === "estimates") && (
@@ -314,120 +323,135 @@ export function PosSalesRegister() {
                 )}
             </div>
 
-            {tab === "sales" && (
-            <>
-            {/* ── Table ── (search + date filter live in the shared bar above) */}
-            {loading ? (
-                <div className="flex justify-center py-12">
-                    <Loader2 size={24} className="animate-spin text-muted-foreground" />
-                </div>
-            ) : items.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
-                    <Monitor size={32} className="opacity-30" />
-                    <p>No POS sales found{q ? " matching that search" : ""}.</p>
-                    <Button variant="outline" size="sm" asChild>
-                        <a href="/vouchers/pos/new" target="_blank" rel="noopener noreferrer">
-                            <ExternalLink size={13} /> Open POS Register
-                        </a>
-                    </Button>
-                </div>
-            ) : (
+            {(tab === "sales" || tab === "returns") && (
                 <>
-                    <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
-                        <table className="w-full text-sm">
-                            <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
-                                <tr>
-                                    <th className="px-4 py-2.5 text-left font-medium">Reference</th>
-                                    <th className="px-4 py-2.5 text-left font-medium">Date</th>
-                                    <th className="px-4 py-2.5 text-left font-medium">Branch</th>
-                                    <th className="px-4 py-2.5 text-left font-medium">Cashier</th>
-                                    <th className="px-4 py-2.5 text-left font-medium">Payment</th>
-                                    <th className="px-4 py-2.5 text-right font-medium">Items</th>
-                                    <th className="px-4 py-2.5 text-right font-medium">Total</th>
-                                    <th className="px-4 py-2.5 text-right font-medium">Print</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {items.map((s) => (
-                                    <tr key={s.id} className="hover:bg-muted/30 transition-colors">
-                                        <td className="px-4 py-2.5">
-                                            <span className="font-mono text-xs font-medium">{s.reference}</span>
-                                            {s.description && (
-                                                <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-                                                    {s.description}
-                                                </p>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
-                                            {new Date(s.date).toLocaleDateString("en-IN", {
-                                                day: "2-digit", month: "short", year: "numeric",
-                                            })}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-muted-foreground">{s.branch}</td>
-                                        <td className="px-4 py-2.5 text-muted-foreground">{s.cashier}</td>
-                                        <td className="px-4 py-2.5">
-                                            {s.paymentMode && (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className={`text-[10px] font-medium ${PAY_COLORS[s.paymentMode] ?? "bg-muted text-muted-foreground"}`}
-                                                >
-                                                    {s.paymentMode.replace("_", " ")}
-                                                </Badge>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right text-muted-foreground">
-                                            {s.lineCount}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right font-semibold font-mono">
-                                            ₹{fmt(Number(s.totalAmount))}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right">
-                                            <button
-                                                type="button"
-                                                title="Print receipt (thermal → browser fallback)"
-                                                onClick={() => window.open(`/receipt/invoice/${s.id}?kind=POS`, "_blank", "noopener")}
-                                                className="inline-flex text-muted-foreground hover:text-foreground"
-                                            >
-                                                <Printer size={14} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* ── Pagination ── */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <span>Page {page} of {totalPages} · {total} total</span>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline" size="sm"
-                                    disabled={page <= 1}
-                                    onClick={() => setPage((p) => p - 1)}
-                                >
-                                    Previous
-                                </Button>
-                                <Button
-                                    variant="outline" size="sm"
-                                    disabled={page >= totalPages}
-                                    onClick={() => setPage((p) => p + 1)}
-                                >
-                                    Next
-                                </Button>
-                            </div>
+                    {/* ── Table ── (search + date filter live in the shared bar above) */}
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 size={24} className="animate-spin text-muted-foreground" />
                         </div>
-                    )}
-                </>
-            )}
+                    ) : items.length === 0 ? (
+                        <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
+                            <Monitor size={32} className="opacity-30" />
+                            <p>{tab === "returns" ? "No POS returns found" : "No POS sales found"}{q ? " matching that search" : ""}.</p>
+                            <Button variant="outline" size="sm" asChild>
+                                <a href="/vouchers/pos/new" target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink size={13} /> Open POS Register
+                                </a>
+                            </Button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
+                                <table className="w-full text-sm">
+                                    <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
+                                        <tr>
+                                            <th className="px-4 py-2.5 text-left font-medium">Reference</th>
+                                            <th className="px-4 py-2.5 text-left font-medium">Date</th>
+                                            {tab === "returns" && <th className="px-4 py-2.5 text-left font-medium">Original</th>}
+                                            <th className="px-4 py-2.5 text-left font-medium">Branch</th>
+                                            <th className="px-4 py-2.5 text-left font-medium">Cashier</th>
+                                            <th className="px-4 py-2.5 text-left font-medium">{tab === "returns" ? "Refund" : "Payment"}</th>
+                                            <th className="px-4 py-2.5 text-right font-medium">Items</th>
+                                            <th className="px-4 py-2.5 text-right font-medium">Total</th>
+                                            <th className="px-4 py-2.5 text-right font-medium">Print</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                        {items.map((s) => (
+                                            <tr key={s.id} className="hover:bg-muted/30 transition-colors">
+                                                <td className="px-4 py-2.5">
+                                                    <span className="font-mono text-xs font-medium">{s.reference}</span>
+                                                    {s.description && (
+                                                        <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                                                            {s.description}
+                                                        </p>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
+                                                    {new Date(s.date).toLocaleDateString("en-IN", {
+                                                        day: "2-digit", month: "short", year: "numeric",
+                                                    })}
+                                                </td>
+                                                {tab === "returns" && (
+                                                    <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
+                                                        {s.originalRef ?? <span className="text-[11px] not-italic text-muted-foreground">Lost invoice</span>}
+                                                    </td>
+                                                )}
+                                                <td className="px-4 py-2.5 text-muted-foreground">{s.branch}</td>
+                                                <td className="px-4 py-2.5 text-muted-foreground">{s.cashier}</td>
+                                                <td className="px-4 py-2.5">
+                                                    {tab === "returns" ? (
+                                                        s.refundMode && (
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className={`text-[10px] font-medium ${REFUND_COLORS[s.refundMode] ?? "bg-muted text-muted-foreground"}`}
+                                                            >
+                                                                {s.refundMode}
+                                                            </Badge>
+                                                        )
+                                                    ) : s.paymentMode && (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className={`text-[10px] font-medium ${PAY_COLORS[s.paymentMode] ?? "bg-muted text-muted-foreground"}`}
+                                                        >
+                                                            {s.paymentMode.replace("_", " ")}
+                                                        </Badge>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-right text-muted-foreground">
+                                                    {s.lineCount}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-right font-semibold font-mono">
+                                                    ₹{fmt(Number(s.totalAmount))}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-right">
+                                                    <button
+                                                        type="button"
+                                                        title={tab === "returns" ? "Print return voucher" : "Print receipt (thermal → browser fallback)"}
+                                                        onClick={() => window.open(tab === "returns" ? `/receipt/voucher/inv/${s.id}` : `/receipt/invoice/${s.id}?kind=POS`, "_blank", "noopener")}
+                                                        className="inline-flex text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <Printer size={14} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
 
-            {/* ── Quick-access return link ── */}
-            <p className="text-xs text-muted-foreground">
-                <RotateCcw size={11} className="inline mr-1" />
-                To process a return, open the POS Register and click the <strong>Return</strong> button in the top bar.
-            </p>
-            </>
+                            {/* ── Pagination ── */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                    <span>Page {page} of {totalPages} · {total} total</span>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="outline" size="sm"
+                                            disabled={page <= 1}
+                                            onClick={() => setPage((p) => p - 1)}
+                                        >
+                                            Previous
+                                        </Button>
+                                        <Button
+                                            variant="outline" size="sm"
+                                            disabled={page >= totalPages}
+                                            onClick={() => setPage((p) => p + 1)}
+                                        >
+                                            Next
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* ── Quick-access return link ── */}
+                    <p className="text-xs text-muted-foreground">
+                        <RotateCcw size={11} className="inline mr-1" />
+                        To process a return, open the POS Register and click the <strong>Return</strong> button in the top bar.
+                    </p>
+                </>
             )}
 
             {(tab === "orders" || tab === "estimates") && (() => {
