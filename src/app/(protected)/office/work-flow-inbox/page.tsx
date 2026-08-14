@@ -192,8 +192,8 @@ export default async function AssignmentsPage() {
                         label: a.label,
                         value: isEntryArg(a) ? (ctxVal == null || ctxVal === "" ? null : String(ctxVal))
                             : a.source === META_PREV_OUTCOME ? prevOutcome
-                            : a.source === META_LAST_NOTE ? lastNoteVal
-                            : resolveTicketSource(a.source, ticketLike),
+                                : a.source === META_LAST_NOTE ? lastNoteVal
+                                    : resolveTicketSource(a.source, ticketLike),
                     };
                 })
                 .filter((c): c is { label: string; value: string } => !!c.value)
@@ -247,47 +247,47 @@ export default async function AssignmentsPage() {
     const finishedItems: WorkInboxItem[] = doneLogs
         .filter((l): l is typeof l & { ticket: NonNullable<typeof l.ticket> } => l.ticket !== null)
         .map((l) => {
-        const work = l.ticketWorker?.work;
-        const acct = l.ticket.repair?.device?.account ?? null;
-        const unsuccess = !!l.note?.includes("· Unsuccess");
-        const userNote = l.note?.split(" — ").slice(1).join(" — ").trim() || null;
-        return {
-            id: `done-${l.id}`,
-            ticketId: l.ticket.id,
-            href: detailHref(l.ticket.pipeline?.entityType, l.ticket.id),
-            moduleLabel: l.ticket.pipeline?.label ?? "—",
-            moduleColor: l.ticket.pipeline?.color ?? "bg-muted text-muted-foreground",
-            successTarget: null,
-            failTarget: null,
-            successStatusTarget: null,
-            failStatusTarget: null,
-            retryScheduled: false,
-            workId: work?.id ?? "",
-            workLabel: work?.label ?? l.ticketWorker?.label ?? "Work",
-            workColor: work?.color ?? "bg-muted text-muted-foreground",
-            groups: work?.groups ? work.groups.map((g) => g.workGroup) : [],
-            status: "answered",
-            coverLabel: l.ticketWorker?.label ?? "",
-            ask: null,
-            context: [],
-            problem: null,
-            lastNote: null,
-            lastNoteBy: null,
-            customer: acct?.person?.name ?? acct?.company?.name ?? "—",
-            phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
-            device: `${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(),
-            title: itemTitle(`${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(), l.ticket.title, l.ticket.notes, l.ticket.account?.name, l.ticket.id),
-            assignee: null,
-            outcome: unsuccess ? "unsuccess" : "success",
-            answer: userNote,
-            answeredBy: (l.author as { userName?: string })?.userName ?? null,
-            snoozed: false,
-            wakeLabel: null,
-            ageLabel: timeAgo(l.createdAt),
-            needsAttention: false,
-            overdueLabel: null,
-        };
-    });
+            const work = l.ticketWorker?.work;
+            const acct = l.ticket.repair?.device?.account ?? null;
+            const unsuccess = !!l.note?.includes("· Unsuccess");
+            const userNote = l.note?.split(" — ").slice(1).join(" — ").trim() || null;
+            return {
+                id: `done-${l.id}`,
+                ticketId: l.ticket.id,
+                href: detailHref(l.ticket.pipeline?.entityType, l.ticket.id),
+                moduleLabel: l.ticket.pipeline?.label ?? "—",
+                moduleColor: l.ticket.pipeline?.color ?? "bg-muted text-muted-foreground",
+                successTarget: null,
+                failTarget: null,
+                successStatusTarget: null,
+                failStatusTarget: null,
+                retryScheduled: false,
+                workId: work?.id ?? "",
+                workLabel: work?.label ?? l.ticketWorker?.label ?? "Work",
+                workColor: work?.color ?? "bg-muted text-muted-foreground",
+                groups: work?.groups ? work.groups.map((g) => g.workGroup) : [],
+                status: "answered",
+                coverLabel: l.ticketWorker?.label ?? "",
+                ask: null,
+                context: [],
+                problem: null,
+                lastNote: null,
+                lastNoteBy: null,
+                customer: acct?.person?.name ?? acct?.company?.name ?? "—",
+                phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
+                device: `${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(),
+                title: itemTitle(`${l.ticket.repair?.device?.brand ?? ""} ${l.ticket.repair?.device?.model ?? ""}`.trim(), l.ticket.title, l.ticket.notes, l.ticket.account?.name, l.ticket.id),
+                assignee: null,
+                outcome: unsuccess ? "unsuccess" : "success",
+                answer: userNote,
+                answeredBy: (l.author as { userName?: string })?.userName ?? null,
+                snoozed: false,
+                wakeLabel: null,
+                ageLabel: timeAgo(l.createdAt),
+                needsAttention: false,
+                overdueLabel: null,
+            };
+        });
 
     // Work-less overdue notices. No worker means no outcome to record, so these rows
     // carry no work fields and no actions — the board shows them as "Needs attention"
