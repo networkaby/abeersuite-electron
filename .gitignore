@@ -52,8 +52,6 @@ demo.env.example
 next-env.d.ts
 .pnpm-store
 
-/src/generated/prisma
-
 # Sentry Config File
 .env.sentry-build-plugin
 
@@ -73,3 +71,14 @@ block.env.local
 # Database dumps pulled down from Dropbox for local restore testing. These are
 # full production dumps (real customer + ledger data) — never commit them.
 *.dump
+
+src/generated/
+
+# Local scratch / debug scripts and restore dumps — personal tooling, not app
+# code. Never commit these.
+_tmp_t.ts
+_tmp_*.ts
+dbrows.local.ts
+backup.sql
+backup-*.sql
+restore-*.sql
