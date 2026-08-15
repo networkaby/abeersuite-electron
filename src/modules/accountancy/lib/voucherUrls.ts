@@ -47,16 +47,21 @@ export function referenceHref(
 }
 
 /** Print variants offered by the register 3-dot menu. */
-export type ReceiptVariant = "thermal" | "pdf72" | "pdfA4";
+export type ReceiptVariant = "thermal" | "pdf";
 
 /**
  * URL to open a voucher's printable receipt.
  *
  * `thermal` routes POS sales and GL receipts/payments to their dedicated relay
- * pages (real thermal-bridge print, untouched); every other kind — and both PDF
- * variants — go through the generic template-driven `/receipt/voucher` route.
- * `pdf72` renders a 72mm-wide slip; `pdfA4` a full A4 page. Both auto-open the
- * browser print dialog, where the user can pick a printer or "Save as PDF".
+ * pages (real thermal-bridge print, untouched); every other kind goes through
+ * the generic template-driven `/receipt/voucher` route with `mode=thermal` so the
+ * page can still resolve the voucher's configured template but force the thermal
+ * relay when the user intentionally chose that action.
+ *
+ * The PDF/browser route intentionally leaves the format unset so the server can
+ * follow each voucher kind's configured print template/default paper. The page
+ * still exposes the format picker for a user override, defaulting to the
+ * template's choice.
  */
 export function receiptHref(
     source: VoucherSource,
@@ -64,15 +69,18 @@ export function receiptHref(
     kind: string,
     variant: ReceiptVariant,
 ): string {
-    if (variant === "thermal") {
-        // POS + ONLINE_INVOICE share the rich customer-receipt page (ladder,
-        // per-kind template) — ONLINE_INVOICE is the parcel-insert print.
-        if (source === "inv" && (kind === "POS" || kind === "ONLINE_INVOICE")) return `/receipt/invoice/${rawId}?kind=${kind}`;
-        if (source === "gl" && (kind === "RECEIPT" || kind === "PAYMENT")) return `/receipt/payment/${rawId}`;
-        return `/receipt/voucher/${source}/${rawId}?paper=THERMAL_80MM`;
+    const posLikeInvoice = source === "inv" && (kind === "POS" || kind === "ONLINE_INVOICE");
+    const paymentLikeReceipt = source === "gl" && (kind === "RECEIPT" || kind === "PAYMENT");
+
+    if (posLikeInvoice) {
+        const qs = variant === "thermal" ? `?kind=${kind}` : `?kind=${kind}&autoprint=0`;
+        return `/receipt/invoice/${rawId}${qs}`;
     }
-    if (variant === "pdf72") return `/receipt/voucher/${source}/${rawId}?paper=THERMAL_80MM&width=72`;
-    return `/receipt/voucher/${source}/${rawId}?paper=A4`;
+    if (paymentLikeReceipt) {
+        return variant === "thermal" ? `/receipt/payment/${rawId}` : `/receipt/payment/${rawId}?autoprint=0`;
+    }
+    if (variant === "thermal") return `/receipt/voucher/${source}/${rawId}?mode=thermal`;
+    return `/receipt/voucher/${source}/${rawId}?autoprint=0`;
 }
 
 /**

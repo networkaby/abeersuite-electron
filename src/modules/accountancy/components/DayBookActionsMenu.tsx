@@ -216,11 +216,8 @@ export function DayBookActionsMenu({
                     <DropdownMenuItem onSelect={() => goPrint("thermal")} disabled={busy}>
                         <Printer className="size-4" /> Print (thermal)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => goPrint("pdf72")} disabled={busy}>
-                        <FileText className="size-4" /> PDF 72mm
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => goPrint("pdfA4")} disabled={busy}>
-                        <FileText className="size-4" /> PDF A4
+                    <DropdownMenuItem onSelect={() => goPrint("pdf")} disabled={busy}>
+                        <FileText className="size-4" /> Print / PDF
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={goEdit} disabled={busy}>
