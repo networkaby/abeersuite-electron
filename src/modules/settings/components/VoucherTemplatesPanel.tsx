@@ -320,7 +320,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                  doesn't push the form into a sliver when A4 is selected
                  (A4 native = 210mm ≈ 793px). Preview itself fits inside via
                  CSS zoom. ─────────────────────────────────────────────── */}
-            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_740px] gap-4">
+            <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_500px] gap-4">
                 {/* Form */}
                 <div className="rounded-lg border bg-card p-4 space-y-3 min-w-0">
                     <header className="flex items-center justify-between gap-2 flex-wrap">
@@ -805,21 +805,24 @@ function Field({
 function ScaledPreviewBox({
     format, children,
 }: { format: PaperFormat; children: React.ReactNode }) {
+    const panelClass = "flex justify-center rounded-md border bg-muted/20 w-full overflow-x-hidden overflow-y-auto min-h-0 max-h-[calc(100vh-180px)]";
+
     if (format === "A4") {
         return (
-            <div className="rounded-md border bg-muted/20 overflow-auto max-h-[calc(100vh-150px)]">
-                {/*  zoom shrinks layout box; widely supported in modern Chromium+Webkit
-                     and is now also implemented in Firefox 126+. A4 native ≈ 793px →
-                     0.90 fits the ~740px preview column. */}
-                <div style={{ zoom: 0.90 }}>
+            <div className={panelClass}>
+                {/* Fill the preview panel instead of forcing a narrow 440px band.
+                    The full-size dialog already provides native-scale inspection,
+                    so the inline live preview should consume the available box width
+                    while allowing vertical scroll for longer documents. */}
+                <div className="w-full max-w-full" style={{ zoom: 0.62 }}>
                     {children}
                 </div>
             </div>
         );
     }
     return (
-        <div className="rounded-md border bg-muted/20 overflow-auto max-h-[calc(100vh-150px)]">
-            <div className="flex justify-center p-2">{children}</div>
+        <div className={`${panelClass} p-2`}>
+            <div className="w-full max-w-full">{children}</div>
         </div>
     );
 }
