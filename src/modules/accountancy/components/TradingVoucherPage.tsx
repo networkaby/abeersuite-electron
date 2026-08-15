@@ -675,8 +675,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 if (v.tenders && v.tenders.length > 0) {
                     setTenders(v.tenders
                         .filter((t) => partyAccountId == null || t.accountId !== partyAccountId)
-                        .map((t) => ({
-                            id: `tdb${t.id}`,
+                        .map((t, idx) => ({
+                            id: `tdb${idx}${Math.random().toString(36).slice(2, 6)}`,
                             accountId: t.accountId,
                             account: { id: t.account.id, name: t.account.name, code: t.account.code ?? "" } as GlAccount,
                             amount: String(Number(t.amount)),
