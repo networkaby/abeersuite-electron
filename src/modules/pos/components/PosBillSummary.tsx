@@ -227,7 +227,8 @@ export function PosBillSummary({
 
             {/* Coupon · Gift card · Shipping · Round-off — one row, split into two
                 groups by a vertical divider (offers | adjustments). */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            {/* <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"> */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-condensed">
                 {/* ── Coupon ────────────────────────────────────────
                 Code entry; the server validates + owns the ₹ value.
                 A non-stackable coupon replaces the tier discount and
