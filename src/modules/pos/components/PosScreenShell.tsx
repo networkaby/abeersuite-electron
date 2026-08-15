@@ -203,7 +203,7 @@ export function PosScreenShell({
                                         value={b.productQuery}
                                         onChange={(e) => { b.setProductQuery(e.target.value); b.setProductHighlight(0); }}
                                         onKeyDown={b.onProductKeyDown}
-                                        placeholder="Scan / type · ↑↓ ↵"
+                                        placeholder="Scan / type · ↑↓ ↵ · / = product · F2 = customer"
                                         className="h-9 rounded-md pl-9 text-sm shadow-sm focus-visible:ring-1"
                                     />
                                     {b.filteredProducts.length > 0 && (

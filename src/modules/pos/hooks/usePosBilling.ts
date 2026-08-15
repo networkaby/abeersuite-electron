@@ -212,6 +212,23 @@ export function usePosBilling(opts: {
         return () => window.removeEventListener("keydown", handler);
     }, [createDialogOpen, checkoutOpen, productSearchRef]);
 
+    // F2 from anywhere → focus the party / customer picker (skip when the user
+    // is already typing, or when a dialog is open). Standard POS convention:
+    // F2 = customer lookup, / = product scan.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "F2") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            const tag = (document.activeElement as HTMLElement | null)?.tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA" || (document.activeElement as HTMLElement | null)?.isContentEditable) return;
+            if (createDialogOpen || checkoutOpen) return;
+            e.preventDefault();
+            partySearchRef.current?.focus();
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [createDialogOpen, checkoutOpen, partySearchRef]);
+
     // Suppresses the display coordinator while the thank-you screen is holding.
     // After a successful sale, we want the green "Thank You ₹X" frame to stay
     // for thankyouDurationMs (relay-side default 4s); without this flag, the

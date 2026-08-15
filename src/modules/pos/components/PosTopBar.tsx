@@ -113,6 +113,7 @@ export function PosTopBar({
                     onPicked={onPartyPicked}
                     locked={locked}
                     onDialogOpenChange={onDialogOpenChange}
+                    placeholder="Customer name / phone · F2 to focus · ↵ to pick"
                     // POS is strictly customer-facing. The walk-in fall-back
                     // ("Walk-in Cash Customer" ledger) handles the empty-party
                     // case at checkout; here we only show / create debtors.
