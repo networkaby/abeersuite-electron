@@ -43,8 +43,10 @@ export type PosTopBarProps = {
     onClear: () => void;
     /** Open the on-the-fly new-customer dialog (partySearchRef.openNew). */
     onNewCustomer: () => void;
+    /** No party selected yet — show a warning ring to draw attention. */
+    missingParty?: boolean;
 
-    // ── Action buttons (Exp / Rcv moved to the right-edge PosActionRail) ──────
+    // ── Action buttons ──────────────────────────────────────────────────────
     onReturn: () => void;
 
     // ── Shift ⋮ menu ────────────────────────────────────────────────────────
@@ -61,7 +63,7 @@ export type PosTopBarProps = {
 export function PosTopBar({
     headerClass, active,
     partySearchRef, onPartyPicked, locked, onDialogOpenChange,
-    showClear, onClear, onNewCustomer,
+    showClear, onClear, onNewCustomer, missingParty,
     onReturn,
     activeShift, shiftLoaded, shiftOpenedAt,
     onRefreshShift, onDropToSafe, onCloseShift, onOpenShift,
@@ -101,7 +103,11 @@ export function PosTopBar({
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <div className="flex-1 max-w-2xl">
+            <div className={`flex-1 max-w-2xl rounded-md transition-all ${missingParty ? "ring-2 ring-red-500/60 focus-within:ring-red-400" : "ring-2 ring-primary/20 focus-within:ring-primary/50"}`}>
+
+                {/* "border-red-500 focus-visible:ring-red-500" */}
+
+
                 <PartySearchAndCreate
                     ref={partySearchRef}
                     onPicked={onPartyPicked}
@@ -130,9 +136,9 @@ export function PosTopBar({
                 variant="outline"
                 size="sm"
                 onClick={() => window.open("/vouchers/pos/new", "_blank", "noopener")}
-                title="Open another POS in a new tab — start a parallel bill while this one waits"
+                title="Open a new POS tab — start another bill while this one waits"
             >
-                <ExternalLink size={14} /> Parallel POS
+                <ExternalLink size={14} /> New POS
             </Button>
             <Button
                 variant="outline"

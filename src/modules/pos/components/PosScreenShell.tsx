@@ -8,7 +8,7 @@
 // its header colour, active-tab key, checkout button (`checkoutSlot`) and its
 // own dialogs (checkout / payment-link) as `children`.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Search, ShoppingCart, Plus, Minus, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,13 @@ export function PosScreenShell({
     // Counter "Task" — add an internal work item (reuses the office form).
     const [taskOpen, setTaskOpen] = useState(false);
     const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions");
+
+    // Auto-focus the party picker on mount so the cashier can start typing
+    // the customer name immediately.
+    useEffect(() => {
+        const t = setTimeout(() => partySearchRef.current?.focus(), 120);
+        return () => clearTimeout(t);
+    }, [partySearchRef]);
     return (
         <div className="flex h-full w-full flex-row">
             {/* Main column — everything except the far-right action rail. */}
@@ -125,6 +132,7 @@ export function PosScreenShell({
                     onClear={b.clearCustomer}
                     onNewCustomer={() => partySearchRef.current?.openNew()}
                     onReturn={() => b.setReturnDialogOpen(true)}
+                    missingParty={!b.snapshot}
                     activeShift={b.activeShift}
                     shiftLoaded={b.shiftLoaded}
                     shiftOpenedAt={b.shiftOpenedAt}
@@ -183,33 +191,33 @@ export function PosScreenShell({
                 )}
 
                 {/* Main grid */}
-                <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_360px]">
+                <div className="grid min-h-0 flex-1 min-w-0 grid-cols-1 lg:grid-cols-[1fr_minmax(260px,300px)]">
                     {/* Left column — product picker + cart */}
-                    <main className="flex min-h-0 flex-col border-r border-border">
-                        <div className="shrink-0 border-b border-border p-4">
-                            <div className="flex items-center gap-3">
+                    <main className="flex min-w-0 flex-1 flex-col border-r border-border">
+                        <div className="shrink-0 border-b border-border p-3">
+                            <div className="flex items-center gap-2">
                                 <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                                     <Input
                                         ref={productSearchRef}
                                         value={b.productQuery}
                                         onChange={(e) => { b.setProductQuery(e.target.value); b.setProductHighlight(0); }}
                                         onKeyDown={b.onProductKeyDown}
-                                        placeholder="Scan / type · ↑↓ to highlight · ↵ to add"
-                                        className="h-11 rounded-lg pl-11 text-base shadow-sm focus-visible:ring-2"
+                                        placeholder="Scan / type · ↑↓ ↵"
+                                        className="h-9 rounded-md pl-9 text-sm shadow-sm focus-visible:ring-1"
                                     />
                                     {b.filteredProducts.length > 0 && (
-                                        <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                        <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                                             {b.filteredProducts.map((p, i) => (
                                                 <li key={p.id}>
                                                     <button
                                                         type="button"
                                                         onClick={() => b.addToCart(p)}
                                                         onMouseEnter={() => b.setProductHighlight(i)}
-                                                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === b.productHighlight ? "bg-muted" : "hover:bg-muted"}`}
+                                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-sm ${i === b.productHighlight ? "bg-muted" : "hover:bg-muted"}`}
                                                     >
                                                         <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
-                                                        <span className="flex-1 px-3 truncate">{p.name}</span>
+                                                        <span className="flex-1 px-2 truncate">{p.name}</span>
                                                         <span className="text-xs text-muted-foreground">{p.effectiveSalePricePaise ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
                                                         <Plus size={14} className="ml-2 text-muted-foreground" />
                                                     </button>
@@ -219,8 +227,8 @@ export function PosScreenShell({
                                     )}
                                 </div>
                                 {/* Cart count — relocated off its own strip onto the search row to save a row */}
-                                <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium text-muted-foreground">
-                                    <ShoppingCart size={16} /> Cart ({b.cart.length})
+                                <div className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-muted-foreground">
+                                    <ShoppingCart size={14} /> Cart ({b.cart.length})
                                 </div>
                             </div>
                         </div>
@@ -257,10 +265,10 @@ export function PosScreenShell({
                                             const unitInclusive = l.unitPrice * (1 + (l.taxRate ?? 0) / 100);
                                             const lineTotal = l.qty * unitInclusive;
                                             return (
-                                                <li key={l.productId} className={`px-4 py-2.5 ${isService ? "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20" : ""}`}>
+                                                <li key={l.productId} className={`px-3 py-1.5 ${isService ? "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20" : ""}`}>
                                                     {/* Wide layout: name | warranty | note | mrp | qty | price | total | trash all on one line.
                                                     Narrow (<lg) stacks name above and the rest below. */}
-                                                    <div className="grid items-center gap-2 lg:grid-cols-[minmax(180px,1.4fr)_70px_minmax(160px,1fr)_130px_auto_110px_minmax(90px,auto)_auto]">
+                                                    <div className="grid items-center gap-1.5 lg:grid-cols-[minmax(140px,1.4fr)_60px_minmax(140px,1fr)_110px_auto_100px_minmax(80px,auto)_auto]">
                                                         <div className="min-w-0">
                                                             <div className="truncate text-sm font-medium">{l.name}</div>
                                                             {isService ? (
@@ -287,9 +295,9 @@ export function PosScreenShell({
                                                                     value={l.description}
                                                                     onChange={(e) => b.setLineDescription(l.productId, e.target.value)}
                                                                     onKeyDown={enterToNextProduct}
-                                                                    placeholder={l.requireSaleNote ? "Note required — serial / colour / config…" : "Note — colour, config…"}
+                                                                    placeholder={l.requireSaleNote ? "Note required" : "Note…"}
                                                                     aria-invalid={noteMissing}
-                                                                    className={`h-8 text-sm ${noteMissing ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                                                    className={`h-7 text-xs ${noteMissing ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                                                                 />
                                                             );
                                                         })()}
@@ -309,16 +317,16 @@ export function PosScreenShell({
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        <div className="flex items-center gap-1">
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => b.setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
+                                                        <div className="flex items-center gap-0.5">
+                                                            <Button variant="ghost" size="icon-xs" onClick={() => b.setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
                                                             <Input
                                                                 value={l.qty}
                                                                 onChange={(e) => b.setQty(l.productId, Number(e.target.value) || 0)}
                                                                 onKeyDown={enterToNextProduct}
-                                                                className="h-8 w-12 text-center"
+                                                                className="h-7 w-10 text-center text-xs"
                                                                 inputMode="decimal"
                                                             />
-                                                            <Button variant="ghost" size="icon-sm" onClick={() => b.setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
+                                                            <Button variant="ghost" size="icon-xs" onClick={() => b.setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
                                                         </div>
                                                         {/* Price column shows the TAX-INCLUSIVE price (matches the
                                                         price tag). Storage stays pre-tax — we back-calculate on
@@ -331,7 +339,7 @@ export function PosScreenShell({
                                                         />
                                                         {/* Line total — qty × inclusive price. */}
                                                         <div className="text-right text-sm font-semibold tabular-nums">{formatInr(lineTotal)}</div>
-                                                        <Button variant="ghost" size="icon-sm" onClick={() => b.setQty(l.productId, 0)} title="Remove">
+                                                        <Button variant="ghost" size="icon-xs" onClick={() => b.setQty(l.productId, 0)} title="Remove">
                                                             <Trash2 size={12} className="text-destructive" />
                                                         </Button>
                                                     </div>
@@ -514,8 +522,8 @@ function PriceInput({
         <Input
             value={draft}
             inputMode="decimal"
-            placeholder="₹ price"
-            className="h-8 text-right"
+            placeholder="₹"
+            className="h-7 w-16 text-right text-xs"
             onFocus={() => { setFocused(true); }}
             onBlur={() => { setFocused(false); setDraft(fmt(inclusive)); }}
             onKeyDown={onKeyDown}
