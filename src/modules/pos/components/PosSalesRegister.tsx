@@ -28,6 +28,7 @@ type PosSale = {
     reference: string;
     date: string;
     description: string;
+    customerName: string | null;
     paymentMode: string | null;
     refundMode: string | null;
     originalRef: string | null;
@@ -86,6 +87,7 @@ export function PosSalesRegister() {
     const [items, setItems] = useState<PosSale[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [refreshKey, setRefreshKey] = useState(0);
     const [q, setQ] = useState("");
     const [page, setPage] = useState(1);
     const limit = 50;
@@ -111,11 +113,11 @@ export function PosSalesRegister() {
     useEffect(() => {
         if (tab !== "cash") return;
         setMovesLoading(true);
-        axios.get<{ items: CashMove[] }>("/api/pos/cash-movements?limit=100")
+        axios.get<{ items: CashMove[] }>('/api/pos/cash-movements?limit=100')
             .then((r) => setMoves(r.data.items))
             .catch(() => toast.error("Failed to load cash movements"))
             .finally(() => setMovesLoading(false));
-    }, [tab]);
+    }, [tab, refreshKey]);
 
     // ── POS Orders / Estimates (POS_ORDER / POS_ESTIMATE vouchers) ───────────
     const [posDocs, setPosDocs] = useState<PosDoc[]>([]);
@@ -145,7 +147,7 @@ export function PosSalesRegister() {
             .then((r) => setPosDocs((Array.isArray(r.data) ? r.data : []).sort((a, b) => b.id - a.id)))
             .catch(() => toast.error(`Failed to load ${tab}`))
             .finally(() => setPosDocsLoading(false));
-    }, [tab]);
+    }, [tab, refreshKey]);
 
     // Toggle a non-GL doc between Draft (not finalised) and Issued (given to party).
     async function toggleDocStatus(d: PosDoc) {
@@ -180,7 +182,7 @@ export function PosSalesRegister() {
             .then((r) => setLedger(r.data))
             .catch(() => toast.error("Failed to load till ledger"))
             .finally(() => setLedgerLoading(false));
-    }, [tab, activeShift, rangeFrom, rangeTo, todayISO]);
+    }, [tab, activeShift, rangeFrom, rangeTo, todayISO, refreshKey]);
 
     const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
     const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string) => {
@@ -204,9 +206,13 @@ export function PosSalesRegister() {
         }
     }, []);
 
-    useEffect(() => { void load(listKind, q, page, rangeFrom, rangeTo); }, [load, listKind, q, page, rangeFrom, rangeTo]);
+    useEffect(() => { void load(listKind, q, page, rangeFrom, rangeTo); }, [load, listKind, q, page, rangeFrom, rangeTo, refreshKey]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
+    const refreshCurrentTab = () => {
+        setRefreshKey((prev) => prev + 1);
+    };
+    const anyLoading = loading || posDocsLoading || movesLoading || ledgerLoading;
 
     return (
         <div className="space-y-4 h-full">
@@ -223,7 +229,9 @@ export function PosSalesRegister() {
                         onHandoverCancelled={refreshShift}
                         rightSlot={
                             <Button asChild size="sm" className="h-7 text-xs">
-                                <Link href="/vouchers/pos/new"><Plus size={14} /> New Sale</Link>
+                                <Link href="/vouchers/pos/new" target="_blank" rel="noopener noreferrer">
+                                    <Plus size={14} /> New Sale <ExternalLink size={12} className="ml-1" />
+                                </Link>
                             </Button>
                         }
                     />
@@ -239,7 +247,9 @@ export function PosSalesRegister() {
                             </a>
                         </Button>
                         <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                            <Link href="/vouchers/pos/new"><Plus size={14} /> New Sale</Link>
+                            <Link href="/vouchers/pos/new" target="_blank" rel="noopener noreferrer">
+                                <Plus size={14} /> New Sale <ExternalLink size={12} className="ml-1" />
+                            </Link>
                         </Button>
                         <Button size="sm" className="h-7 text-xs" onClick={() => setShiftOpenOpen(true)}>
                             Open shift
@@ -255,16 +265,24 @@ export function PosSalesRegister() {
             />
 
             {/* ── Header ── */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold flex items-center gap-2">
                         <Monitor size={18} className="text-primary" />
                         POS Sales  -  {total} {tab === "returns" ? `return${total !== 1 ? "s" : ""}` : `sale${total !== 1 ? "s" : ""}`} recorded
                     </h1>
-                    {/* <p className="text-sm text-muted-foreground mt-0.5">
-                        {total} {tab === "returns" ? `return${total !== 1 ? "s" : ""}` : `sale${total !== 1 ? "s" : ""}`} recorded
-                    </p> */}
                 </div>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3"
+                    onClick={refreshCurrentTab}
+                    disabled={anyLoading}
+                >
+                    <RotateCcw size={14} className={anyLoading ? "animate-spin" : ""} />
+                    Refresh
+                </Button>
             </div>
 
             {/* ── Tabs ── */}
@@ -338,6 +356,7 @@ export function PosSalesRegister() {
                                     <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
                                         <tr>
                                             <th className="px-4 py-2.5 text-left font-medium">Reference</th>
+                                            <th className="px-4 py-2.5 text-left font-medium">Customer</th>
                                             <th className="px-4 py-2.5 text-left font-medium">Date</th>
                                             {tab === "returns" && <th className="px-4 py-2.5 text-left font-medium">Original</th>}
                                             <th className="px-4 py-2.5 text-left font-medium">Branch</th>
@@ -358,6 +377,9 @@ export function PosSalesRegister() {
                                                             {s.description}
                                                         </p>
                                                     )}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-muted-foreground">
+                                                    {s.customerName ?? "Walk-in"}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
                                                     {new Date(s.date).toLocaleDateString("en-IN", {

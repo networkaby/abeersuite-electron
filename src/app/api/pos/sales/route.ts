@@ -108,6 +108,11 @@ export async function GET(req: NextRequest) {
             (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
                 .map((u) => [u.id, u.name]),
         );
+        const partyAccountIds = [...new Set(vouchers.map((v) => v.universalVoucher?.partyAccountId).filter((x): x is number => x != null))];
+        const partyById = new Map(
+            (partyAccountIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: partyAccountIds } }, select: { id: true, name: true } }))
+                .map((a) => [a.id, a.name]),
+        );
 
         return NextResponse.json({
             total,
@@ -132,6 +137,7 @@ export async function GET(req: NextRequest) {
                     reference: v.universalVoucher?.voucherNo ?? "",
                     date: v.universalVoucher?.date,   // 5D-10: date on spine
                     description: v.universalVoucher?.description ?? "",
+                    customerName: v.universalVoucher?.partyAccountId != null ? (partyById.get(v.universalVoucher.partyAccountId) ?? "Walk-in") : "Walk-in",
                     paymentMode,
                     refundMode: kind === "returns" ? refundMode : null,
                     originalRef: kind === "returns" ? (v.refVoucher?.universalVoucher?.voucherNo ?? null) : null,
