@@ -27,38 +27,37 @@
   /* Kept in the rail's own hue family with real chroma. Greys here read as
      dirt against a saturated blue, so these lift by lightness, not by
      desaturating. */
-  --border-strong: oklch(0.690 0.125 262.8);
-  --muted: oklch(0.585 0.150 262.8);
-  --accent: oklch(0.645 0.140 262.8);
+  --border-strong: oklch(0.69 0.125 262.8);
+  --muted: oklch(0.585 0.15 262.8);
+  --accent: oklch(0.645 0.14 262.8);
 
   /* Nav rows rest at text-muted-foreground (32 uses across the sidebar and
      quick actions bar). Against this lighter rail the previous 0.855 fell to
      4.27:1 — under AA — so it climbs with the rail. */
   --foreground: oklch(0.985 0.008 255);
-  --muted-foreground: oklch(0.910 0.030 255);
+  --muted-foreground: oklch(0.91 0.03 255);
 
   /* Fallback hue for the surfaces that belong to no module (Inbox, Work Flow,
      POS). .dark's primary is a mid blue at 2.20:1 here — near-invisible on a
      blue rail — so the chrome gets a light one. */
-  --primary: oklch(0.885 0.060 258);
+  --primary: oklch(0.885 0.06 258);
 
   /* Module hues lifted to L .885. The glyph must separate from the rail, and
      the rail is now light: at the old L .845 the blue-family hues (bi 260,
      customers 230) dropped toward the rail's own colour. */
   --m-repair: oklch(0.885 0.125 20);
   --m-pos: oklch(0.885 0.115 50);
-  --m-help: oklch(0.890 0.110 80);
+  --m-help: oklch(0.89 0.11 80);
   --m-ecommerce: oklch(0.885 0.115 110);
-  --m-inventory: oklch(0.885 0.110 140);
-  --m-accountancy: oklch(0.885 0.100 170);
-  --m-orders: oklch(0.885 0.100 200);
+  --m-inventory: oklch(0.885 0.11 140);
+  --m-accountancy: oklch(0.885 0.1 170);
+  --m-orders: oklch(0.885 0.1 200);
   --m-customers: oklch(0.885 0.115 230);
-  --m-bi: oklch(0.880 0.120 260);
-  --m-crm: oklch(0.880 0.120 290);
-  --m-administration: oklch(0.880 0.120 320);
-  --m-settings: oklch(0.885 0.120 350);
+  --m-bi: oklch(0.88 0.12 260);
+  --m-crm: oklch(0.88 0.12 290);
+  --m-administration: oklch(0.88 0.12 320);
+  --m-settings: oklch(0.885 0.12 350);
 }
-
 
 @theme inline {
   /* Elevation ladder — see the --surface-* block below. Use bg-surface-frame /
@@ -72,7 +71,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
+  --font-condensed: var(--font-roboto-condensed);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

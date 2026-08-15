@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Space_Mono } from "next/font/google";
+import { DM_Sans, Space_Mono, Roboto_Condensed } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
@@ -7,7 +7,7 @@ import { CANONICAL_SITE_URL, IS_OFFICE } from "@/shared/lib/appMode";
 
 const fontSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const fontMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono" });
-
+const robotoCondensed = Roboto_Condensed({ subsets: ["latin"], variable: "--font-roboto-condensed", });
 // Derived from APP_MODE, not from the environment — see lib/appMode.ts for why.
 const SITE_URL = CANONICAL_SITE_URL;
 
@@ -60,7 +60,8 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${fontSans.variable} ${fontMono.variable} h-full antialiased`}
+      // className={`${fontSans.variable} ${fontMono.variable} h-full antialiased`}
+      className={`${fontSans.variable} ${fontMono.variable} ${robotoCondensed.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider>{children}</ThemeProvider>
