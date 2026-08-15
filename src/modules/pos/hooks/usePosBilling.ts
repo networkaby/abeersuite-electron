@@ -212,22 +212,42 @@ export function usePosBilling(opts: {
         return () => window.removeEventListener("keydown", handler);
     }, [createDialogOpen, checkoutOpen, productSearchRef]);
 
-    // F2 from anywhere → focus the party / customer picker (skip when the user
-    // is already typing, or when a dialog is open). Standard POS convention:
-    // F2 = customer lookup, / = product scan.
+    // F2 from anywhere → focus the party / customer picker.
+    // Standard POS convention: F2 = customer lookup, / = product scan.
+    // F2 is a function key — it overrides the current context and works even
+    // when focus is inside an input (product search, cart line, etc.).
+    // If a party is already selected, enters "change mode" instead: unlocks
+    // the picker, remembers the original party, and lets the cashier search
+    // for a replacement. Esc restores the original; picking a new one swaps.
+
+    // "Change customer" mode state — declared before the handlers that read it.
+    const [changingParty, setChangingParty] = useState(false);
+    const changingPartyRef = useRef(changingParty);
+    useEffect(() => { changingPartyRef.current = changingParty; }, [changingParty]);
+    const originalPartyRef = useRef<PickedParty | null>(null);
+
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "F2") return;
             if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-            const tag = (document.activeElement as HTMLElement | null)?.tagName;
-            if (tag === "INPUT" || tag === "TEXTAREA" || (document.activeElement as HTMLElement | null)?.isContentEditable) return;
             if (createDialogOpen || checkoutOpen) return;
             e.preventDefault();
+            if (snapshot?.account) {
+                originalPartyRef.current = {
+                    kind: snapshot.party.kind === "person" ? "customer" : snapshot.party.kind,
+                    id: snapshot.party.id,
+                    name: snapshot.party.name,
+                    phone: snapshot.party.phone,
+                    accountId: snapshot.account.id,
+                };
+                setChangingParty(true);
+                partySearchRef.current?.clear();
+            }
             partySearchRef.current?.focus();
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [createDialogOpen, checkoutOpen, partySearchRef]);
+    }, [createDialogOpen, checkoutOpen, snapshot?.account, partySearchRef]);
 
     // Suppresses the display coordinator while the thank-you screen is holding.
     // After a successful sale, we want the green "Thank You ₹X" frame to stay
@@ -565,6 +585,11 @@ export function usePosBilling(opts: {
     };
 
     const onPartyPicked = (p: PickedParty) => {
+        // If we were in change-customer mode, picking any party exits it.
+        if (changingPartyRef.current) {
+            setChangingParty(false);
+            originalPartyRef.current = null;
+        }
         // Manually choosing a customer means this is no longer the preloaded
         // repair-ticket bill — drop the ticket link so we don't mis-attribute it.
         setTicketId(null);
@@ -582,6 +607,19 @@ export function usePosBilling(opts: {
         partySearchRef.current?.clear();
         partySearchRef.current?.focus();
     };
+
+    // Esc during change mode → restore the original party and re-lock the picker.
+    // Wired here (after onPartyPicked) so the callback is in scope.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            if (!changingPartyRef.current || !originalPartyRef.current) return;
+            e.preventDefault();
+            onPartyPicked(originalPartyRef.current);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [onPartyPicked, changingPartyRef, originalPartyRef]);
 
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
@@ -657,19 +695,26 @@ export function usePosBilling(opts: {
 
     // ── Product dropdown keyboard nav ──────────────────────────────────────
     const onProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (filteredProducts.length === 0) return;
         if (e.key === "ArrowDown") {
             e.preventDefault();
-            setProductHighlight((i) => Math.min(i + 1, filteredProducts.length - 1));
+            if (filteredProducts.length > 0)
+                setProductHighlight((i) => Math.min(i + 1, filteredProducts.length - 1));
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            setProductHighlight((i) => Math.max(i - 1, 0));
+            if (filteredProducts.length > 0)
+                setProductHighlight((i) => Math.max(i - 1, 0));
         } else if (e.key === "Enter") {
             e.preventDefault();
             const pick = filteredProducts[productHighlight] ?? filteredProducts[0];
             if (pick) addToCart(pick);
         } else if (e.key === "Escape") {
-            setProductQuery("");
+            if (productQuery.trim()) {
+                setProductQuery("");
+            } else {
+                // Already empty — blur so F2 / / shortcuts become available.
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+            }
         }
     };
 
@@ -766,7 +811,7 @@ export function usePosBilling(opts: {
         posAccess,
         // customer
         snapshot, setSnapshot, loadingSnapshot, setCreateDialogOpen,
-        fetchSnapshot, onPartyPicked, clearCustomer,
+        fetchSnapshot, onPartyPicked, clearCustomer, changingParty,
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
         filteredProducts, cart, setCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,

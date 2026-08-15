@@ -133,6 +133,7 @@ export function PosScreenShell({
                     onNewCustomer={() => partySearchRef.current?.openNew()}
                     onReturn={() => b.setReturnDialogOpen(true)}
                     missingParty={!b.snapshot}
+                    changeMode={b.changingParty}
                     activeShift={b.activeShift}
                     shiftLoaded={b.shiftLoaded}
                     shiftOpenedAt={b.shiftOpenedAt}
@@ -193,7 +194,7 @@ export function PosScreenShell({
                 {/* Main grid */}
                 <div className="grid min-h-0 flex-1 min-w-0 grid-cols-1 lg:grid-cols-[1fr_minmax(260px,300px)]">
                     {/* Left column — product picker + cart */}
-                    <main className="flex min-w-0 flex-1 flex-col border-r border-border">
+                    <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-border">
                         <div className="shrink-0 border-b border-border p-3">
                             <div className="flex items-center gap-2">
                                 <div className="relative flex-1">
@@ -356,15 +357,15 @@ export function PosScreenShell({
                             GL-only service line (income ledger + GST). Sale mode only —
                             Order / Estimate don't carry service lines yet. */}
                             {active === "sale" && (
-                                <div className="relative shrink-0 border-t border-border px-4 py-2">
+                                <div className="relative shrink-0 border-t border-border px-3 ">
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setServiceMenuOpen((o) => !o)}
-                                        className="h-7 gap-1 px-1.5 text-primary hover:text-primary"
+                                        className="h-6 gap-1 px-1.5 text-xs text-primary hover:text-primary"
                                     >
-                                        <Wrench size={14} /> Add service charge
+                                        <Wrench size={12} /> Add service
                                     </Button>
                                     {serviceMenuOpen && (
                                         <>

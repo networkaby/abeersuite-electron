@@ -45,6 +45,9 @@ export type PosTopBarProps = {
     onNewCustomer: () => void;
     /** No party selected yet — show a warning ring to draw attention. */
     missingParty?: boolean;
+    /** F2 was pressed while a party was selected — we're in "change customer"
+        mode: the picker is unlocked, and Esc will restore the original party. */
+    changeMode?: boolean;
 
     // ── Action buttons ──────────────────────────────────────────────────────
     onReturn: () => void;
@@ -63,7 +66,7 @@ export type PosTopBarProps = {
 export function PosTopBar({
     headerClass, active,
     partySearchRef, onPartyPicked, locked, onDialogOpenChange,
-    showClear, onClear, onNewCustomer, missingParty,
+    showClear, onClear, onNewCustomer, missingParty, changeMode,
     onReturn,
     activeShift, shiftLoaded, shiftOpenedAt,
     onRefreshShift, onDropToSafe, onCloseShift, onOpenShift,
@@ -103,20 +106,22 @@ export function PosTopBar({
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <div className={`flex-1 max-w-2xl rounded-md transition-all ${missingParty ? "ring-2 ring-red-500/60 focus-within:ring-red-400" : "ring-2 ring-primary/20 focus-within:ring-primary/50"}`}>
-
-                {/* "border-red-500 focus-visible:ring-red-500" */}
-
-
+            <div className={`flex-1 max-w-2xl rounded-md transition-all ${
+                changeMode
+                    ? "ring-2 ring-blue-500/60 focus-within:ring-blue-400"
+                    : missingParty
+                        ? "ring-2 ring-red-500/60 focus-within:ring-red-400"
+                        : "ring-2 ring-primary/20 focus-within:ring-primary/50"
+            }`}>
                 <PartySearchAndCreate
                     ref={partySearchRef}
                     onPicked={onPartyPicked}
-                    locked={locked}
+                    locked={!changeMode && locked}
                     onDialogOpenChange={onDialogOpenChange}
-                    placeholder="Customer name / phone · F2 to focus · ↵ to pick"
-                    // POS is strictly customer-facing. The walk-in fall-back
-                    // ("Walk-in Cash Customer" ledger) handles the empty-party
-                    // case at checkout; here we only show / create debtors.
+                    placeholder={changeMode
+                        ? "Type to replace current customer · Esc to cancel"
+                        : "Customer name / phone · F2 to focus · ↵ to pick"
+                    }
                     partyGroup="Sundry Debtors"
                 />
             </div>

@@ -1,90 +1,84 @@
 # POS Keyboard Conventions
 
 > Single source of truth for keyboard shortcuts on the POS register
-> (/vouchers/pos/new, /vouchers/pos/order, /vouchers/pos/estimate).
+> (`/vouchers/pos/new`, `/vouchers/pos/order`, `/vouchers/pos/estimate`).
 
-These are the live conventions the code implements. If a shortcut is listed
-here, it must work on every POS screen. If it is not listed here, it does not
-exist yet.
+These are the **live** conventions the code implements. If a shortcut is listed
+here, it works on every POS screen. If it is not listed here, it does not exist
+yet.
 
 ---
 
 ## Quick reference
 
-| Key | Action | Active when |
-|-----|--------|-------------|
-| / | Focus product search | No dialog open, not typing elsewhere |
-| F2 | Focus customer / party picker | No dialog open, not typing elsewhere |
-| Ctrl + Enter | Checkout / save bill | Cart has items, customer picked, no dialog open |
-| F9 | Checkout / save bill | Same conditions as Ctrl + Enter |
-| Esc | Clear product search query + dismiss dropdown | Search box focused or dropdown open |
-| Esc twice (within 1.5 s) | Clear entire cart | Cart has items — shows confirmation dialog |
-| Numpad + | Increment qty on highlighted cart line | Cart line focused |
-| Numpad - | Decrement qty on highlighted cart line | Cart line focused |
-| F6 | Open a new POS tab | Any time |
+| Key | Action | Notes |
+|-----|--------|-------|
+| `/` | Focus product search | Works from anywhere; skips when typing in a field |
+| `F2` | Focus customer / party picker | Works from **any** context, including inside inputs. If a customer is already selected, enters "change mode": search for a replacement, `Esc` to cancel and restore the original |
+| `Ctrl + Enter` | Checkout / save bill | Cart must have items + customer selected |
+| `Esc` | Clear product search query + dismiss dropdown | If search is already empty, blurs the input so `F2` / `/` become available |
+| `F6` | Open a new POS tab | Any time — recall is done by switching tabs manually |
 
 ---
 
 ## Details
 
-### / — Product search
+### `/` — Product search
 
 Focuses the scan/type box so the cashier can immediately scan a barcode or
 start typing a product name.
 
-Bypassed when:
+**Bypassed when:**
 - A modal dialog is open (checkout, create-customer, etc.)
-- Focus is already inside an input, textarea, or content-editable element
+- Focus is already inside an `<input>`, `<textarea>`, or content-editable
+  element (the cashier is mid-edit)
 
-### F2 — Customer picker
+### `F2` — Customer picker
 
-Standard POS convention: F2 = customer lookup. Focuses the party search box
+Standard POS convention: `F2` = customer lookup. Focuses the party search box
 in the top bar.
 
-Bypassed when:
-- A modal dialog is open
-- Focus is already inside an input / textarea / content-editable element
+**F2 is a function key — it overrides the current context.** It works even
+when focus is inside the product search, a cart line input, or any other
+field. Only blocked when a modal dialog is open.
 
-### Ctrl + Enter and F9 — Checkout / save
+**Change-customer mode:**
+- If no customer is selected → F2 simply focuses the picker.
+- If a customer is already selected → F2 **unlocks** the picker, saves the
+  original party in memory, and changes the placeholder to
+  "Type to replace current customer · Esc to cancel".
+  - **Pick a new party** → replaces the current one, exits change mode.
+  - **Press `Esc`** → restores the original party, re-locks the picker, exits
+    change mode.
+  - **Click Clear (X)** → same as before: wipes the selection entirely.
 
-Both open the checkout dialog (Sale) or save the order / estimate directly.
-They share the same guard conditions:
+The mouse Clear button remains unchanged. F2 is an additive keyboard path.
+
+### `Ctrl + Enter` — Checkout / save
+
+Opens the checkout dialog (Sale) or saves the order / estimate directly.
+
+**Guard conditions:**
 - Cart is not empty
 - A customer / party is selected
 - No required sale-note is missing on any line (Sale mode only)
 - No save is already in progress
 
-Why two shortcuts: Ctrl + Enter is the primary one-hand-on-scanner combo.
-F9 is the conventional POS payment key and is easier for cashiers who prefer
-F-key clusters.
+### `Esc` — Clear product search
 
-### Esc — Clear product search
+**When the search box has text:**
+- Clears the query
+- Dismisses the product dropdown
+- Keeps focus in the search box so the cashier can immediately type the next scan
 
-Dismisses the product dropdown and clears the search query. Does NOT blur
-the search box — the cashier can immediately start typing the next scan.
+**When the search box is already empty:**
+- Blurs the input
+- This releases focus so `F2` and `/` shortcuts become active without clicking away
 
-### Esc twice — Clear cart
+### `F6` — New POS tab
 
-If Esc is pressed twice within 1.5 seconds while the cart has items, a
-confirmation dialog appears:
-  Clear the entire cart? This cannot be undone.
-Only clears on explicit confirmation. A single Esc never clears the cart
-by itself.
-
-### Numpad + / - — Qty adjust
-
-When a cart line is highlighted (via mouse click or arrow-key navigation in
-the product dropdown):
-- Numpad + increments qty by 1
-- Numpad - decrements qty by 1
-
-These are additive — they bump qty, they do not set it. They bypass the
-inline qty input so the cashier does not need to tab into it.
-
-### F6 — New POS tab
-
-Opens /vouchers/pos/new in a new browser tab. Because the POS supports
-multiple simultaneous tabs, there is NO recall shortcut — the cashier
+Opens `/vouchers/pos/new` in a new browser tab. Because the POS supports
+multiple simultaneous tabs, **there is no recall shortcut** — the cashier
 returns to a held bill by switching tabs manually.
 
 ---
@@ -93,23 +87,27 @@ returns to a held bill by switching tabs manually.
 
 | Key | Reason not bound |
 |-----|-----------------|
-| F1 | Reserved for browser / OS help; POS help is in the ? rail button |
-| F3 / F4 | Unassigned — available for future product-category shortcuts |
-| F5 | Refresh is in the shift menu; accidental browser reload is a risk |
-| F7 / F8 | Hold / recall not needed — multiple tabs replace the suspend pattern |
-| F10 | Quick-cash exact not implemented yet; parking lot |
-| F11 / F12 | Unassigned |
+| `F1` | Reserved for browser / OS help; POS help is in the `?` rail button |
+| `F3` / `F4` | Unassigned — available for future product-category shortcuts |
+| `F5` | Refresh is in the shift menu; accidental browser reload is a risk |
+| `F7` / `F8` | Hold / recall not needed — multiple tabs replace the suspend pattern |
+| `F9` | Not needed — `Ctrl+Enter` already covers checkout |
+| `F10` | Quick-cash exact not implemented yet; parking lot |
+| `F11` / `F12` | Unassigned |
 
 ---
 
 ## Implementation notes
 
-- All shortcuts live in usePosBilling.ts inside useEffect keydown listeners.
-  Each shortcut is one self-contained effect so they can be added / removed
-  independently.
-- The Esc-twice timer uses a ref (lastEscRef) so the state does not
-  re-render on every keypress.
-- Numpad + / - are wired through the product dropdown onKeyDown so they
-  only fire when a cart line is actually highlighted — they are not global.
-- partySearchRef and productSearchRef are refs owned by the screen and passed
-  into usePosBilling. The hook never creates its own refs for these.
+- All shortcuts live in `usePosBilling.ts` inside `useEffect` keydown
+  listeners. Each shortcut is one self-contained effect so they can be
+  added / removed independently.
+- The change-customer mode uses a `changingParty` boolean state plus a ref
+  (`changingPartyRef`) so the Esc listener always sees the latest value
+  without re-binding on every render.
+- The original party is stored in `originalPartyRef` (a ref, not state) so
+  switching back on Esc does not trigger an extra render.
+- `F2` deliberately has **no** "skip when focus is in an input" guard —
+  function keys must override the current context in a POS counter app.
+- `/` keeps its guard because it targets a specific input; the cashier
+  pressing `/` while mid-edit expects to keep typing, not lose focus.

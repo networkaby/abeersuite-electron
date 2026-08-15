@@ -114,7 +114,7 @@ export function PosBillSummary({
     cart, checkoutSlot,
 }: PosBillSummaryProps) {
     return (
-        <div className="shrink-0 space-y-2 border-t border-border p-4">
+        <div className="shrink-0 space-y-1.5 border-t border-border py-1 px-3">
             {/* Subtotal is the tax-INCLUSIVE cart value (price-tag-style).
                 When the operator hasn't added shipping / round-off / charges,
                 Subtotal equals Total. The CGST/SGST split underneath is
@@ -122,11 +122,11 @@ export function PosBillSummary({
                 but the math has already happened in the per-line inclusive price. */}
             {/* Subtotal — the tax (incl.) SGST/CGST breakdown rides in the
                 middle of this bar so it no longer needs its own row. */}
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-2 text-xs">
                 <span>Subtotal</span>
-                <div className="ml-auto flex items-center gap-3">
+                <div className="ml-auto flex items-center gap-2">
                     {tax > 0.005 && (
-                        <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
+                        <span className="text-[10px] font-normal tabular-nums text-muted-foreground">
                             incl. GST · SGST {formatInr(tax / 2)} + CGST {formatInr(tax / 2)} = {formatInr(tax)}
                         </span>
                     )}
@@ -206,13 +206,13 @@ export function PosBillSummary({
                 }
                 if (chips.length === 0) return null;
                 return (
-                    <div className="flex items-start justify-between gap-3 text-xs">
+                    <div className="flex items-start justify-between gap-2 text-[11px]">
                         {/* breakdown chips on the left, "+" between chips only */}
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                             {chips.flatMap((chip, i) =>
                                 i === 0
                                     ? [chip]
-                                    : [<Plus key={`sep-${i}`} size={11} className="shrink-0 text-muted-foreground/65" />, chip],
+                                    : [<Plus key={`sep-${i}`} size={10} className="shrink-0 text-muted-foreground/65" />, chip],
                             )}
                         </div>
                         {/* combined total on the right of the SAME line */}
@@ -227,7 +227,7 @@ export function PosBillSummary({
 
             {/* Coupon · Gift card · Shipping · Round-off — one row, split into two
                 groups by a vertical divider (offers | adjustments). */}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 {/* ── Coupon ────────────────────────────────────────
                 Code entry; the server validates + owns the ₹ value.
                 A non-stackable coupon replaces the tier discount and
@@ -369,14 +369,14 @@ export function PosBillSummary({
                 </div>
             )}
 
-            <div className="flex items-baseline justify-between border-t border-border pt-2.5">
+            <div className="flex items-baseline justify-between border-t border-border pt-2">
                 <div className="flex items-baseline gap-2">
-                    <span className="text-base font-semibold">Total</span>
+                    <span className="text-sm font-semibold">Total</span>
                     {cart.length > 0 && (
-                        <span className="text-[11px] text-muted-foreground">{cart.length} item{cart.length > 1 ? "s" : ""}</span>
+                        <span className="text-[10px] text-muted-foreground">{cart.length} item{cart.length > 1 ? "s" : ""}</span>
                     )}
                 </div>
-                <span className="text-xl font-bold tabular-nums">{formatInr(total)}</span>
+                <span className="text-lg font-bold tabular-nums">{formatInr(total)}</span>
             </div>
             {checkoutSlot}
         </div>
