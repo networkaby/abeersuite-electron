@@ -68,6 +68,10 @@ export function PosCustomerPanel({ snapshot, loading, tier, counterNo }: { snaps
 function CustomerPanel({ snapshot, tier, counterNo }: { snapshot: Snapshot; tier: TierResult; counterNo: string | null }) {
     const c = snapshot.party;
 
+    // Detect walk-in ledger by name — the seeded "Walk-in Cash Customer" ledger
+    // lives under Sundry Debtors and is used for anonymous counter sales.
+    const isWalkIn = c.name.toLowerCase().includes("walk-in") || c.name.toLowerCase().includes("cash-walkin");
+
     // Customer Quality — rating + staff notes, appendable right from the counter.
     const [log, setLog] = useState<QualityLogEntry[]>(snapshot.qualityLog ?? []);
     const [note, setNote] = useState("");
@@ -106,6 +110,7 @@ function CustomerPanel({ snapshot, tier, counterNo }: { snapshot: Snapshot; tier
                 <div className="flex items-center gap-2">
                     {c.kind === "company" ? <Building2 size={16} className="shrink-0 text-muted-foreground" /> : <User size={16} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-base font-semibold">{c.name}</h2>
+                    {isWalkIn && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">Walk-in</Badge>}
                     {level && <Badge className={`text-[10px] ${levelColor}`}>{level}</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">

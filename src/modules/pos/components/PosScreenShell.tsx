@@ -125,11 +125,6 @@ export function PosScreenShell({
                     onClear={b.clearCustomer}
                     onNewCustomer={() => partySearchRef.current?.openNew()}
                     onReturn={() => b.setReturnDialogOpen(true)}
-                    canSale={b.posAccess.canSale}
-                    canOrder={b.posAccess.canOrder}
-                    canEstimate={b.posAccess.canEstimate}
-                    canReturn={b.posAccess.canReturn}
-                    canDrop={b.posAccess.canDrop}
                     activeShift={b.activeShift}
                     shiftLoaded={b.shiftLoaded}
                     shiftOpenedAt={b.shiftOpenedAt}
@@ -367,7 +362,7 @@ export function PosScreenShell({
                                         <>
                                             {/* click-away backdrop */}
                                             <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
-                                            <ul className="absolute bottom-full left-4 z-20 mb-1 max-h-64 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                            <ul className="absolute left-4 top-full z-20 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                                                 {b.allServices.length === 0 ? (
                                                     <li className="px-3 py-2 text-xs text-muted-foreground">
                                                         No services yet — add them in Settings → POS Services.

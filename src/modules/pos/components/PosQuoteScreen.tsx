@@ -244,7 +244,18 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             partySearchRef={partySearchRef}
             productSearchRef={productSearchRef}
             checkoutSlot={
-                <Button onClick={isEdit ? () => void generateInvoice(false) : (mode === "estimate" ? () => void generateInvoice(true) : b.openCheckout)} disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting} className="h-12 w-full text-base" size="lg">
+                <Button 
+                    onClick={isEdit ? () => void generateInvoice(false) : (mode === "estimate" ? () => void generateInvoice(true) : b.openCheckout)} 
+                    disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting} 
+                    className="h-12 w-full text-base" 
+                    size="lg"
+                    title={
+                        b.cart.length === 0 ? "Scan an item first" :
+                        !b.snapshot?.account ? "Select a customer first" :
+                        b.submitting ? "Saving…" :
+                        mode === "estimate" ? "Save Estimate" : "Save Order"
+                    }
+                >
                     <ReceiptIndianRupee size={18} /> {isEdit ? "Update Order" : (mode === "estimate" ? "Save Estimate" : "Save Order")}
                     <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                 </Button>

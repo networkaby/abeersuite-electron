@@ -450,7 +450,19 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             partySearchRef={partySearchRef}
             productSearchRef={productSearchRef}
             checkoutSlot={
-                <Button onClick={isEdit ? () => void generateInvoice(false) : b.openCheckout} disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting || b.saleNoteMissing} className="h-12 w-full text-base" size="lg">
+                <Button 
+                    onClick={isEdit ? () => void generateInvoice(false) : b.openCheckout} 
+                    disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting || b.saleNoteMissing} 
+                    className="h-12 w-full text-base" 
+                    size="lg"
+                    title={
+                        b.cart.length === 0 ? "Scan an item first" :
+                        !b.snapshot?.account ? "Select a customer first" :
+                        b.saleNoteMissing ? "Add required note to the flagged line" :
+                        b.submitting ? "Saving…" :
+                        "Checkout"
+                    }
+                >
                     <ReceiptIndianRupee size={18} /> {isEdit ? "Update Sale" : "Checkout"}
                     <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                 </Button>

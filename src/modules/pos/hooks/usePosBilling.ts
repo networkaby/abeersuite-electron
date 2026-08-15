@@ -196,6 +196,22 @@ export function usePosBilling(opts: {
         return () => window.removeEventListener("keydown", handler);
     }, [cart.length, snapshot?.account, createDialogOpen, checkoutOpen]);
 
+    // "/" from anywhere → focus the product search box (skip when the user is
+    // already typing in an input/textarea/contenteditable, or when a dialog is open).
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "/") return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const tag = (document.activeElement as HTMLElement | null)?.tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA" || (document.activeElement as HTMLElement | null)?.isContentEditable) return;
+            if (createDialogOpen || checkoutOpen) return;
+            e.preventDefault();
+            productSearchRef.current?.focus();
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [createDialogOpen, checkoutOpen, productSearchRef]);
+
     // Suppresses the display coordinator while the thank-you screen is holding.
     // After a successful sale, we want the green "Thank You ₹X" frame to stay
     // for thankyouDurationMs (relay-side default 4s); without this flag, the
@@ -672,6 +688,10 @@ export function usePosBilling(opts: {
         setTicketId(null);
         setAdjustmentsOpen(false);
         setCheckoutOpen(false);
+        // Auto-clear customer after successful bill so the next sale starts fresh.
+        setSnapshot(null);
+        partySearchRef.current?.clear();
+        setTimeout(() => productSearchRef.current?.focus(), 50);
     };
 
     // Money math derived from pay — Cash net = tendered − return.

@@ -12,6 +12,7 @@ import Link from "next/link";
 import {
     ArrowLeft, X, UserPlus, ExternalLink, RotateCcw,
     MoreVertical, RefreshCw, Lock, ArrowRightLeft, Monitor,
+    ShoppingCart, ClipboardList, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,13 +24,12 @@ import {
     type PartySearchAndCreateHandle,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
-import { PosModeSwitch } from "@/modules/pos/components/PosModeSwitch";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 
 export type PosTopBarProps = {
     /** Colour tint for the bar — each screen passes its own (emerald/indigo/amber). */
     headerClass: string;
-    /** Which mode tab is lit in the PosModeSwitch. */
+    /** Which mode is active (shown in the mode dropdown). */
     active: "sale" | "order" | "estimate";
 
     // ── Party search ────────────────────────────────────────────────────────
@@ -47,13 +47,6 @@ export type PosTopBarProps = {
     // ── Action buttons (Exp / Rcv moved to the right-edge PosActionRail) ──────
     onReturn: () => void;
 
-    // ── Access flags (POS voucher permissions; default true = show) ──────────
-    canSale?: boolean;
-    canOrder?: boolean;
-    canEstimate?: boolean;
-    canReturn?: boolean;
-    canDrop?: boolean;
-
     // ── Shift ⋮ menu ────────────────────────────────────────────────────────
     activeShift: ActiveShift | null;
     shiftLoaded: boolean;
@@ -70,8 +63,6 @@ export function PosTopBar({
     partySearchRef, onPartyPicked, locked, onDialogOpenChange,
     showClear, onClear, onNewCustomer,
     onReturn,
-    canSale = true, canOrder = true, canEstimate = true,
-    canReturn = true, canDrop = true,
     activeShift, shiftLoaded, shiftOpenedAt,
     onRefreshShift, onDropToSafe, onCloseShift, onOpenShift,
 }: PosTopBarProps) {
@@ -80,7 +71,36 @@ export function PosTopBar({
             <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
                 <ArrowLeft size={16} />
             </Link>
-            <PosModeSwitch active={active} canSale={canSale} canOrder={canOrder} canEstimate={canEstimate} />
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                        {active === "sale" && <ShoppingCart size={14} />}
+                        {active === "order" && <ClipboardList size={14} />}
+                        {active === "estimate" && <FileText size={14} />}
+                        {active === "sale" ? "Sale" : active === "order" ? "Order" : "Estimate"}
+                        <MoreVertical size={13} className="opacity-60" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="text-xs">
+                    <DropdownMenuLabel>Voucher type</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                        <Link href="/vouchers/pos/new" className={active === "sale" ? "font-semibold" : ""}>
+                            <ShoppingCart size={12} /> Sale
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/vouchers/pos/order" className={active === "order" ? "font-semibold" : ""}>
+                            <ClipboardList size={12} /> Order
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/vouchers/pos/estimate" className={active === "estimate" ? "font-semibold" : ""}>
+                            <FileText size={12} /> Estimate
+                        </Link>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
             <div className="flex-1 max-w-2xl">
                 <PartySearchAndCreate
                     ref={partySearchRef}
@@ -112,18 +132,16 @@ export function PosTopBar({
                 onClick={() => window.open("/vouchers/pos/new", "_blank", "noopener")}
                 title="Open another POS in a new tab — start a parallel bill while this one waits"
             >
-                <ExternalLink size={14} /> New
+                <ExternalLink size={14} /> Parallel POS
             </Button>
-            {canReturn && (
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onReturn}
-                    title="Process a sale return — by invoice number, customer, or lost invoice"
-                >
-                    <RotateCcw size={14} /> Return
-                </Button>
-            )}
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={onReturn}
+                title="Process a sale return — by invoice number, customer, or lost invoice"
+            >
+                <RotateCcw size={14} /> Return
+            </Button>
             {/* Exp + Rcv + Help now live in the right-edge PosActionRail. */}
 
             {/* Shift status + actions — folds the old full-width shift bar into
@@ -152,11 +170,9 @@ export function PosTopBar({
                             <DropdownMenuItem onClick={onRefreshShift}>
                                 <RefreshCw size={12} /> Refresh
                             </DropdownMenuItem>
-                            {canDrop && (
-                                <DropdownMenuItem onClick={onDropToSafe}>
-                                    <Lock size={12} /> Drop to safe
-                                </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem onClick={onDropToSafe}>
+                                <Lock size={12} /> Drop to safe
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={onCloseShift}
                                 className="text-amber-700 focus:text-amber-700 dark:text-amber-400"
