@@ -161,29 +161,26 @@ export function PosSalesRegister() {
 
     // ── Till cash book (ledger) ──────────────────────────────────────────────
     const todayISO = todayIso();
-    const [counters, setCounters] = useState<CounterOpt[]>([]);
-    const [counterId, setCounterId] = useState<number | null>(null);
     const [ledger, setLedger] = useState<LedgerData | null>(null);
     const [ledgerLoading, setLedgerLoading] = useState(false);
 
+    // Lock to current counter from active shift
     useEffect(() => {
-        if (tab !== "ledger" || counters.length) return;
-        axios.get<CounterOpt[]>("/api/pos/counters?scope=all")
-            .then((r) => { setCounters(r.data); if (r.data[0]) setCounterId(r.data[0].id); })
-            .catch(() => toast.error("Failed to load counters"));
-    }, [tab, counters.length]);
+        if (tab !== "ledger" || !activeShift) return;
+        // No need to fetch counters; use the counter from the active shift
+    }, [tab, activeShift]);
 
     useEffect(() => {
-        if (tab !== "ledger" || counterId == null) return;
+        if (tab !== "ledger" || !activeShift) return;
         // Shared range; the cash book needs a bounded daily view, so empty ⇒ today.
         const effFrom = rangeFrom || todayISO;
         const effTo = rangeTo || todayISO;
         setLedgerLoading(true);
-        axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${counterId}&from=${effFrom}&to=${effTo}`)
+        axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${activeShift.counter.id}&from=${effFrom}&to=${effTo}`)
             .then((r) => setLedger(r.data))
             .catch(() => toast.error("Failed to load till ledger"))
             .finally(() => setLedgerLoading(false));
-    }, [tab, counterId, rangeFrom, rangeTo, todayISO]);
+    }, [tab, activeShift, rangeFrom, rangeTo, todayISO]);
 
     const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
     const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string) => {
@@ -284,20 +281,14 @@ export function PosSalesRegister() {
                 ))}
             </div>
 
-            {/* One DRY filter bar for ALL tabs. Counter → Cash Book only; search →
+            {/* One DRY filter bar for ALL tabs. Counter → Cash Book only (locked to active shift); search →
                 Sales/Orders/Estimates; pending → Orders/Estimates; date range → all. */}
             <div className="flex flex-wrap items-center gap-2">
-                {tab === "ledger" && (
-                    <select
-                        value={counterId ?? ""}
-                        onChange={(e) => setCounterId(Number(e.target.value))}
-                        className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-                        aria-label="Counter"
-                    >
-                        {counters.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name} — {c.tillAccount.name}</option>
-                        ))}
-                    </select>
+                {tab === "ledger" && activeShift && (
+                    <div className="h-9 rounded-md border border-input bg-muted/50 px-3 py-2 text-sm flex items-center">
+                        <span className="text-muted-foreground text-xs">Counter:</span>
+                        <span className="ml-2 font-medium">{activeShift.counter.name}</span>
+                    </div>
                 )}
                 <TallyDateInput value={rangeFrom} onValueChange={setRangeFrom} className="h-9 w-32" placeholder="From" />
                 <span className="text-sm text-muted-foreground">–</span>
@@ -594,12 +585,17 @@ export function PosSalesRegister() {
 
             {tab === "ledger" && (
                 <div className="space-y-3">
-                    {/* Counter + date range live in the shared filter bar above. */}
+                    {/* Counter locked to active shift; date range lives in the shared filter bar above. */}
 
-                    {ledgerLoading ? (
+                    {!activeShift ? (
+                        <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground text-sm">
+                            <Monitor size={32} className="opacity-30" />
+                            <p>Open a shift to view the cash book.</p>
+                        </div>
+                    ) : ledgerLoading ? (
                         <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-muted-foreground" /></div>
                     ) : !ledger ? (
-                        <p className="py-8 text-center text-sm text-muted-foreground">Pick a counter to view its cash book.</p>
+                        <p className="py-8 text-center text-sm text-muted-foreground">Unable to load cash book.</p>
                     ) : (
                         <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
                             <table className="w-full text-sm">
