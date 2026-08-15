@@ -212,7 +212,7 @@ export function PosSalesRegister() {
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 h-full">
             {/* ── Live shift bar ── the full status/money strip belongs here on
                 the overview page; the billing screen (/vouchers/pos/new) keeps it
                 folded into a ⋮ menu to save space. The ActiveShiftBar carries its
@@ -262,17 +262,17 @@ export function PosSalesRegister() {
                 <div>
                     <h1 className="text-xl font-semibold flex items-center gap-2">
                         <Monitor size={18} className="text-primary" />
-                        POS Sales
+                        POS Sales  -  {total} {tab === "returns" ? `return${total !== 1 ? "s" : ""}` : `sale${total !== 1 ? "s" : ""}`} recorded
                     </h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    {/* <p className="text-sm text-muted-foreground mt-0.5">
                         {total} {tab === "returns" ? `return${total !== 1 ? "s" : ""}` : `sale${total !== 1 ? "s" : ""}`} recorded
-                    </p>
+                    </p> */}
                 </div>
             </div>
 
             {/* ── Tabs ── */}
             <div className="flex gap-1 border-b border-border">
-                {([["sales", "Sales"], ["returns", "Returns"], ["orders", "Orders"], ["estimates", "Estimates"], ["cash", "Cash In / Out"], ["ledger", "Cash Book"]] as const).map(([k, label]) => (
+                {([["sales", "Sales"], ["returns", "Returns"], ["orders", "Orders"], ["estimates", "Estimates"], ["cash", "Payment/Reciept"], ["ledger", "Cash Book"]] as const).map(([k, label]) => (
                     <button
                         key={k}
                         type="button"
@@ -363,7 +363,7 @@ export function PosSalesRegister() {
                                                 <td className="px-4 py-2.5">
                                                     <span className="font-mono text-xs font-medium">{s.reference}</span>
                                                     {s.description && (
-                                                        <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                                                        <p className="text-[11px] text-muted-foreground truncate max-w-45">
                                                             {s.description}
                                                         </p>
                                                     )}
@@ -447,10 +447,10 @@ export function PosSalesRegister() {
                     )}
 
                     {/* ── Quick-access return link ── */}
-                    <p className="text-xs text-muted-foreground">
+                    {/* <p className="text-xs text-muted-foreground">
                         <RotateCcw size={11} className="inline mr-1" />
                         To process a return, open the POS Register and click the <strong>Return</strong> button in the top bar.
-                    </p>
+                    </p> */}
                 </>
             )}
 
@@ -480,9 +480,9 @@ export function PosSalesRegister() {
                         ) : filtered.length === 0 ? (
                             <p className="py-12 text-center text-sm text-muted-foreground">No {tab === "orders" ? "orders" : "estimates"} match “{docQuery}”.</p>
                         ) : (
-                            <div className="overflow-x-auto rounded-lg border border-border">
+                            <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-border">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-muted/40 text-xs text-muted-foreground">
+                                    <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
                                         <tr className="border-b border-border">
                                             <th className="px-3 py-2 text-left font-medium">Reference</th>
                                             <th className="px-3 py-2 text-left font-medium">Date</th>
@@ -565,7 +565,7 @@ export function PosSalesRegister() {
                                         </td>
                                         <td className="px-4 py-2.5">
                                             {m.party}
-                                            {m.note && <p className="max-w-[180px] truncate text-[11px] text-muted-foreground">{m.note}</p>}
+                                            {m.note && <p className="max-w-45 truncate text-[11px] text-muted-foreground">{m.note}</p>}
                                         </td>
                                         <td className="px-4 py-2.5 text-muted-foreground">{m.counter}</td>
                                         <td className="px-4 py-2.5 text-muted-foreground">{m.cashier}</td>
