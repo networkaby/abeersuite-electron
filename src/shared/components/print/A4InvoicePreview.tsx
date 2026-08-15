@@ -1207,14 +1207,15 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
     // ladder's complete total (goods + tax-bearing charges like shipping),
     // else the rate-wise table, else the invoice-level split, else the
     // single tax figure.
+    const hsnSummary = sample.hsnSummary ?? [];
     const taxTotal = sample.discounts?.taxTotal
-        ?? sample.hsnSummary?.length
+        ?? (sample.hsnSummary && sample.hsnSummary.length > 0
             ? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0)
             : sample.taxBreakdown
             ? (sample.taxBreakdown.kind === "INTRA"
                 ? sample.taxBreakdown.cgst + sample.taxBreakdown.sgst
                 : sample.taxBreakdown.igst)
-            : sample.taxAmount ?? 0;
+            : sample.taxAmount ?? 0);
     return (
         <>
             {/* 3 — Bill-To / Invoice-Details (on every sheet) */}

@@ -197,8 +197,10 @@ export async function PATCH(req: Request, { params }: Params) {
             quantity:     number;
             freeQty?:     number;
             rate?:        number;
-            /// MRP in paise — stored on the line; used to update InvProduct.mrpPaise on post.
-            mrpPaise?:    number;
+            /// MRP/barcode snapshots in paise, preserved across edits so the
+            /// customer-facing ladder still shows the original tag/struck MRP.
+            mrpPaise?: number | null;
+            savedSalePricePaise?: number | null;
             discountPct?: number;
             discountAmt?: number;
             taxRate?:     number;
@@ -224,11 +226,30 @@ export async function PATCH(req: Request, { params }: Params) {
     const isManufacturingJournal = existing.universalVoucher?.type === "MANUFACTURING_JOURNAL";
     const isBranchTransfer = existing.universalVoucher?.type === "BRANCH_TRANSFER";
 
+    // Preserve the sale's original MRP/barcode snapshots across an edit even if
+    // the client omits them on a partial save. This keeps the ladder/receipt
+    // display consistent after the voucher is rewritten.
+    const existingLineSnapshot = lines?.length
+        ? await prisma.voucherInventoryLine.findMany({
+            where: { universalVoucherId: existing.universalVoucherId ?? -1 },
+            select: { productId: true, mrpPaise: true, savedSalePricePaise: true },
+        })
+        : [];
+    const existingLineByProduct = new Map(existingLineSnapshot.map((l) => [l.productId, l]));
+    const productIds = [...new Set((lines ?? []).map((l) => l.productId))];
+    const productMeta = productIds.length > 0
+        ? await prisma.invProduct.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, mrpPaise: true, savedSalePricePaise: true },
+        })
+        : [];
+    const productMetaById = new Map(productMeta.map((p) => [p.id, p]));
+
     // Recompute totals if lines provided.
     let totals: { subtotal: number; taxAmount: number; totalAmount: number } | undefined;
     let computedLines: ({
         productId: number; description?: string; quantity: number; freeQty?: number; rate: number;
-        mrpPaise?: number; discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
+        mrpPaise?: number | null; savedSalePricePaise?: number | null; discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
         direction?: "CONSUME" | "PRODUCE";
     })[] | undefined;
     // Tax-INCLUSIVE bill discount actually applied (clamped to the bill) — what
@@ -238,11 +259,15 @@ export async function PATCH(req: Request, { params }: Params) {
     if (lines?.length) {
         computedLines = lines.map((l) => {
             const rate = l.rate ?? 0;
+            const oldLine = existingLineByProduct.get(l.productId);
+            const productLine = productMetaById.get(l.productId);
+            const mrpPaise = l.mrpPaise ?? oldLine?.mrpPaise ?? productLine?.mrpPaise ?? null;
+            const savedSalePricePaise = l.savedSalePricePaise ?? oldLine?.savedSalePricePaise ?? productLine?.savedSalePricePaise ?? null;
             if (isPhysicalStock || isBranchTransfer) {
-                return { ...l, rate: 0, discountAmt: 0, taxAmount: 0, amount: 0 };
+                return { ...l, rate: 0, mrpPaise, savedSalePricePaise, discountAmt: 0, taxAmount: 0, amount: 0 };
             }
             if (isManufacturingJournal) {
-                return { ...l, rate, discountAmt: 0, taxAmount: 0, amount: l.quantity * rate };
+                return { ...l, rate, mrpPaise, savedSalePricePaise, discountAmt: 0, taxAmount: 0, amount: l.quantity * rate };
             }
             const { discountAmt: lineDiscountAmt, taxAmount, amount } = calcLineTotals({
                 quantity:    l.quantity,
@@ -251,7 +276,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 discountAmt: l.discountAmt ?? 0,
                 taxRate:     l.taxRate    ?? 0,
             });
-            return { ...l, rate, discountAmt: lineDiscountAmt, taxAmount, amount };
+            return { ...l, rate, mrpPaise, savedSalePricePaise, discountAmt: lineDiscountAmt, taxAmount, amount };
         });
         // Tax-bearing charges (POS services) count at GROSS — net + their GST —
         // mirroring /api/pos/sale, so totalAmount still balances the re-posted JE.
@@ -407,6 +432,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         freeQty:     l.freeQty ?? null,
                         rate:        l.rate,
                         mrpPaise:    l.mrpPaise ?? null,
+                        savedSalePricePaise: l.savedSalePricePaise ?? null,
                         discountPct: l.discountPct ?? 0,
                         discountAmt: l.discountAmt,
                         taxRate:     l.taxRate    ?? 0,
