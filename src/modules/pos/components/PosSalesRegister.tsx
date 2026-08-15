@@ -142,7 +142,7 @@ export function PosSalesRegister() {
         const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
         setPosDocsLoading(true);
         axios.get<PosDoc[]>(`/api/inventory/vouchers?type=${type}`)
-            .then((r) => setPosDocs(Array.isArray(r.data) ? r.data : []))
+            .then((r) => setPosDocs((Array.isArray(r.data) ? r.data : []).sort((a, b) => b.id - a.id)))
             .catch(() => toast.error(`Failed to load ${tab}`))
             .finally(() => setPosDocsLoading(false));
     }, [tab]);

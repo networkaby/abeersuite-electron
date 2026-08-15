@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
             prisma.voucherDetail.count({ where }),
             prisma.voucherDetail.findMany({
                 where,
-                orderBy: { universalVoucher: { date: "desc" } },   // 5D-10
+                orderBy: { id: "desc" },
                 take,
                 skip,
                 select: {
