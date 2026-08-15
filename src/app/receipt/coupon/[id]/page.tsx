@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import ReceiptButtons from "@/shared/components/ReceiptButtons";
+import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { couponHeadline, couponValueText } from "@/modules/coupons/lib/couponShare";
 
@@ -18,11 +19,14 @@ export default async function CouponPrintPage({ params }: { params: Promise<{ id
     const value = couponValueText(coupon);
     const qrDataUrl = await QRCode.toDataURL(coupon.code, { width: 240, margin: 1, errorCorrectionLevel: "M" });
 
+    // Renders into the app's normal <html>/<body> (root layout) rather than
+    // mounting its own — a second <html>/<body> nested inside the first used
+    // to work by accident (browsers merge duplicate <body> tags while
+    // parsing) but made React throw a "mounting a new body" console error.
     return (
-        <html>
-            <head>
-                <title>Coupon {coupon.code}</title>
-                <style>{`
+        <>
+            <SetDocumentTitle title={`Coupon ${coupon.code}`} />
+            <style>{`
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #f1f5f9; color: #0f172a; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
           .card { width: 360px; border-radius: 22px; overflow: hidden; box-shadow: 0 18px 40px rgba(15,23,42,.25); background: #fff; }
@@ -46,37 +50,34 @@ export default async function CouponPrintPage({ params }: { params: Promise<{ id
             .card { box-shadow: none; border: 1px solid #e2e8f0; }
           }
         `}</style>
-            </head>
-            <body>
-                <div className="no-print" style={{ width: "360px" }}><ReceiptButtons /></div>
+            <div className="no-print" style={{ width: "360px" }}><ReceiptButtons /></div>
 
-                <div className="card">
-                    <div className="hero">
-                        <div className="brand">{org.brandName}</div>
-                        <div className="label">Coupon</div>
-                        <div className="headline">{headline}</div>
-                        <div className="name">{coupon.name}</div>
+            <div className="card">
+                <div className="hero">
+                    <div className="brand">{org.brandName}</div>
+                    <div className="label">Coupon</div>
+                    <div className="headline">{headline}</div>
+                    <div className="name">{coupon.name}</div>
+                </div>
+                <div className="body">
+                    <div className="qr">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- QR data-URL on a print receipt; next/image is inappropriate here */}
+                        <img src={qrDataUrl} alt={`QR for ${coupon.code}`} />
                     </div>
-                    <div className="body">
-                        <div className="qr">
-                            {/* eslint-disable-next-line @next/next/no-img-element -- QR data-URL on a print receipt; next/image is inappropriate here */}
-                            <img src={qrDataUrl} alt={`QR for ${coupon.code}`} />
+                    <div className="meta">
+                        <div className="code-cap">Code</div>
+                        <div className="code">{coupon.code}</div>
+                        <div className="sub">
+                            {value}.
+                            {coupon.minBillValue != null && Number(coupon.minBillValue) > 0 ? <><br />Min bill ₹{Number(coupon.minBillValue).toLocaleString("en-IN")}.</> : null}
+                            {coupon.endsAt ? <><br />Valid until {coupon.endsAt.toISOString().slice(0, 10)}.</> : null}
                         </div>
-                        <div className="meta">
-                            <div className="code-cap">Code</div>
-                            <div className="code">{coupon.code}</div>
-                            <div className="sub">
-                                {value}.
-                                {coupon.minBillValue != null && Number(coupon.minBillValue) > 0 ? <><br />Min bill ₹{Number(coupon.minBillValue).toLocaleString("en-IN")}.</> : null}
-                                {coupon.endsAt ? <><br />Valid until {coupon.endsAt.toISOString().slice(0, 10)}.</> : null}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="foot">
-                        {org.brandName}{org.phone ? ` · ${org.phone}` : ""}{org.whatsapp ? ` · WhatsApp ${org.whatsapp}` : ""}
                     </div>
                 </div>
-            </body>
-        </html>
+                <div className="foot">
+                    {org.brandName}{org.phone ? ` · ${org.phone}` : ""}{org.whatsapp ? ` · WhatsApp ${org.whatsapp}` : ""}
+                </div>
+            </div>
+        </>
     );
 }

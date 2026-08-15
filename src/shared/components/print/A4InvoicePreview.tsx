@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-head-element -- standalone print document; next/head doesn't apply. */
 /**
  * A4 invoice / voucher renderer. Sibling of <ThermalReceiptPreview>; shares
  * the same `template` + `sample` shape so both formats can be driven from
@@ -27,6 +26,7 @@ import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { QrSvg } from "@/shared/components/print/QrSvg";
+import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
 
@@ -1999,7 +1999,7 @@ export interface A4InvoicePreviewProps {
     previewFill?: boolean;
     /** Inserted before the sheet inside <body>. Used by the print route for the Print/Close toolbar. */
     toolbar?:    React.ReactNode;
-    /** <head><title> when not in previewMode. */
+    /** document.title when not in previewMode (applied via SetDocumentTitle). */
     docTitle?:   string;
     /** Custom middle for bespoke documents (repair ticket / shipping slip /
      *  payment slip). Replaces the invoice meta/lines/totals block; the
@@ -2028,18 +2028,18 @@ export default function A4InvoicePreview({
         );
     }
 
+    // Full-document mode still renders into the app's normal <html>/<body> (set
+    // by the root layout) — it does NOT mount its own. A second <html>/<body>
+    // nested inside the first used to work by accident (browsers merge
+    // duplicate <body> tags while parsing) but made React throw a "mounting a
+    // new body" console error. `docTitle` is applied to document.title via
+    // SetDocumentTitle instead of a hand-rolled <title> tag.
     return (
-        <html>
-            {/* Standalone print document — next/head doesn't apply.
-                eslint-disable-next-line @next/next/no-head-element */}
-            <head>
-                <title>{docTitle ?? sample.reference}</title>
-                <style>{inlineA4Styles("")}</style>
-            </head>
-            <body>
-                {toolbar}
-                <InvoiceBody template={template} sample={sample} body={body} />
-            </body>
-        </html>
+        <>
+            <SetDocumentTitle title={docTitle ?? sample.reference} />
+            <style>{inlineA4Styles("")}</style>
+            {toolbar}
+            <InvoiceBody template={template} sample={sample} body={body} />
+        </>
     );
 }

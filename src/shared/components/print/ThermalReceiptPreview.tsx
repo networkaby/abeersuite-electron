@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-head-element -- standalone print document; next/head doesn't apply. */
 /**
  * Shared thermal-receipt renderer.
  *
@@ -12,13 +11,15 @@
  *   • src/modules/settings/components/VoucherTemplatesPanel.tsx — live preview
  *
  * When `previewMode` is true, the component returns just the receipt
- * fragment (no <html>/<head>/<body>) so it can sit inside the settings
- * page. When false, it returns the full standalone HTML document for
- * the print route to ship to the browser.
+ * fragment scoped to a wrapper div, so it can sit inside the settings
+ * page. When false, it returns the print route's full page content
+ * (styles + toolbar + receipt) — rendered into the app's normal
+ * <html>/<body> from the root layout, not a standalone document.
  */
 
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { QrSvg } from "@/shared/components/print/QrSvg";
+import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
@@ -709,7 +710,7 @@ export interface ThermalReceiptPreviewProps {
     /** Inserted inside the <body> ahead of the receipt — used by the print
      *  route to drop in the Print/Close toolbar. Ignored in previewMode. */
     toolbar?:    React.ReactNode;
-    /** Title used in <head><title> when not in previewMode. */
+    /** document.title when not in previewMode (applied via SetDocumentTitle). */
     docTitle?:   string;
     /** Custom middle for bespoke documents (repair ticket / shipping slip /
      *  payment slip). When set, replaces the invoice ref/date/lines/totals
@@ -744,18 +745,18 @@ export default function ThermalReceiptPreview({
         );
     }
 
+    // Full-document mode still renders into the app's normal <html>/<body> (set
+    // by the root layout) — it does NOT mount its own. A second <html>/<body>
+    // nested inside the first used to work by accident (browsers merge
+    // duplicate <body> tags while parsing) but made React throw a "mounting a
+    // new body" console error. `docTitle` is applied to document.title via
+    // SetDocumentTitle instead of a hand-rolled <title> tag.
     return (
-        <html>
-            {/* Standalone print document, not a Next.js layout — next/head doesn't apply.
-                eslint-disable-next-line @next/next/no-head-element */}
-            <head>
-                <title>{docTitle ?? sample.reference}</title>
-                <style>{inlineStyleFromTemplate(template, "")}</style>
-            </head>
-            <body>
-                {toolbar}
-                <ReceiptBody template={template} sample={sample} body={body} />
-            </body>
-        </html>
+        <>
+            <SetDocumentTitle title={docTitle ?? sample.reference} />
+            <style>{inlineStyleFromTemplate(template, "")}</style>
+            {toolbar}
+            <ReceiptBody template={template} sample={sample} body={body} />
+        </>
     );
 }
