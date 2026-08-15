@@ -52,7 +52,10 @@ export async function GET(req: NextRequest) {
             include: {
                 universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 party + 5D-6 ref + 5D-10 date
                 // SALE_RETURN children of this voucher — for the dialog's "already returned" guard
-                refReturns: { select: { id: true, totalAmount: true, universalVoucher: { select: { voucherNo: true } } } },
+                refReturns: {
+                    where:  { universalVoucher: { status: "POSTED", deletedAt: null } },
+                    select: { id: true, totalAmount: true, universalVoucherId: true, universalVoucher: { select: { voucherNo: true } } },
+                },
             },
         });
         // 5D-4: resolve party ledger names from each row's spine partyAccountId.
@@ -75,6 +78,26 @@ export async function GET(req: NextRequest) {
         const linesFor = (v: { universalVoucherId: number | null }) =>
             v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [];
 
+        // Already-returned qty per product, across every prior POSTED SALE_RETURN
+        // of each voucher — POS merges same-product cart lines into one line per
+        // sale, so productId unambiguously identifies "the" line within a voucher.
+        const returnUvIds = [...new Set(vouchers.flatMap((v) => v.refReturns.map((r) => r.universalVoucherId).filter((id): id is number => id != null)))];
+        const returnLines = returnUvIds.length === 0 ? [] : await prisma.voucherInventoryLine.findMany({
+            where:  { universalVoucherId: { in: returnUvIds } },
+            select: { universalVoucherId: true, productId: true, quantity: true },
+        });
+        const returnedQtyByUv = new Map<number, Map<number, number>>();
+        for (const l of returnLines) {
+            const byProduct = returnedQtyByUv.get(l.universalVoucherId) ?? new Map<number, number>();
+            byProduct.set(l.productId, (byProduct.get(l.productId) ?? 0) + Number(l.quantity));
+            returnedQtyByUv.set(l.universalVoucherId, byProduct);
+        }
+        const returnedQtyFor = (v: (typeof vouchers)[number], productId: number) =>
+            v.refReturns.reduce((sum, r) => {
+                const byProduct = r.universalVoucherId != null ? returnedQtyByUv.get(r.universalVoucherId) : undefined;
+                return sum + (byProduct?.get(productId) ?? 0);
+            }, 0);
+
         return NextResponse.json(vouchers.map((v) => ({
             id:          v.id,
             number:      v.universalVoucher?.voucherNo ?? "",
@@ -83,15 +106,16 @@ export async function GET(req: NextRequest) {
             totalAmount: v.totalAmount.toString(),
             account:     v.universalVoucher?.partyAccountId != null ? (partyAcctById.get(v.universalVoucher.partyAccountId) ?? null) : null,
             lines:       linesFor(v).map((l) => ({
-                id:          l.id,
-                productId:   l.productId,
-                description: l.description ?? "",
-                quantity:    l.quantity.toString(),
-                unitPrice:   l.rate.toString(),
-                taxRate:     l.taxRate?.toString() ?? "0",
-                taxAmount:   l.taxAmount?.toString() ?? "0",
-                amount:      l.amount.toString(),
-                product:     l.product,
+                id:            l.id,
+                productId:     l.productId,
+                description:   l.description ?? "",
+                quantity:      l.quantity.toString(),
+                returnedQty:   returnedQtyFor(v, l.productId).toString(),
+                unitPrice:     l.rate.toString(),
+                taxRate:       l.taxRate?.toString() ?? "0",
+                taxAmount:     l.taxAmount?.toString() ?? "0",
+                amount:        l.amount.toString(),
+                product:       l.product,
             })),
             returns: v.refReturns.map((r) => ({
                 id:          r.id,

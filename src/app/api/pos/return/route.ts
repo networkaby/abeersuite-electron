@@ -92,14 +92,34 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Voucher has no customer account linked" }, { status: 400 });
         }
 
+        // ── Already-returned qty per product ─────────────────────────────────
+        // POS merges same-product cart lines into one line per sale, so a
+        // product appears on at most one line per original voucher — matching
+        // prior SALE_RETURNs back to this original by productId is unambiguous.
+        const priorReturns = await prisma.voucherDetail.findMany({
+            where:  { refVoucherId: original.id, universalVoucher: { status: "POSTED", deletedAt: null } },
+            select: { universalVoucherId: true },
+        });
+        const priorReturnUvIds = priorReturns.map((r) => r.universalVoucherId).filter((id): id is number => id != null);
+        const priorReturnLines = priorReturnUvIds.length === 0 ? [] : await prisma.voucherInventoryLine.findMany({
+            where:  { universalVoucherId: { in: priorReturnUvIds } },
+            select: { productId: true, quantity: true },
+        });
+        const alreadyReturnedByProduct = new Map<number, number>();
+        for (const l of priorReturnLines) {
+            alreadyReturnedByProduct.set(l.productId, (alreadyReturnedByProduct.get(l.productId) ?? 0) + Number(l.quantity));
+        }
+
         // ── Validate return lines ─────────────────────────────────────────────
         const lineMap = new Map(originalLines.map((l) => [l.id, l]));
         const returnLines: { voucherLine: typeof originalLines[number]; qty: number }[] = [];
         for (const rl of data.lines) {
             const orig = lineMap.get(rl.invoiceLineId);
             if (!orig) return NextResponse.json({ error: `Line ${rl.invoiceLineId} not found on this voucher` }, { status: 400 });
-            if (rl.qty > Number(orig.quantity)) {
-                return NextResponse.json({ error: `Return qty ${rl.qty} exceeds original qty ${orig.quantity} on line "${orig.description ?? orig.productId}"` }, { status: 400 });
+            const alreadyReturned = alreadyReturnedByProduct.get(orig.productId) ?? 0;
+            const remaining = Number(orig.quantity) - alreadyReturned;
+            if (rl.qty > remaining) {
+                return NextResponse.json({ error: `Return qty ${rl.qty} exceeds remaining returnable qty ${remaining} on line "${orig.description ?? orig.productId}" (${alreadyReturned} already returned)` }, { status: 400 });
             }
             returnLines.push({ voucherLine: orig, qty: rl.qty });
         }

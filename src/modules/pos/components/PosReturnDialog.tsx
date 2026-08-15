@@ -33,6 +33,7 @@ type ReturnLine = {
     productId:   number | null;
     description: string;
     quantity:    string;
+    returnedQty: string;
     unitPrice:   string;
     taxRate:     string;
     taxAmount:   string;
@@ -197,10 +198,12 @@ export function PosReturnDialog({
 
     // ── Shared: pick invoice + pre-fill full-qty selection ───────────────────
 
+    const remainingQty = (l: ReturnLine) => Math.max(0, Number(l.quantity) - Number(l.returnedQty));
+
     const pickInvoice = (inv: FoundInvoice) => {
         setSelected(inv);
         const sel: Selection = {};
-        for (const l of inv.lines) sel[l.id] = Number(l.quantity);
+        for (const l of inv.lines) sel[l.id] = remainingQty(l);
         setSelection(sel);
         setResults([]);
     };
@@ -388,21 +391,28 @@ export function PosReturnDialog({
                             <div className="space-y-1.5">
                                 <p className="text-xs font-medium text-muted-foreground">Items to return</p>
                                 {selected.lines.map((l) => {
-                                    const max = Number(l.quantity);
-                                    const qty = selection[l.id] ?? 0;
+                                    const origQty   = Number(l.quantity);
+                                    const returned  = Number(l.returnedQty);
+                                    const max       = remainingQty(l);
+                                    const qty       = selection[l.id] ?? 0;
                                     return (
                                         <div
                                             key={l.id}
                                             className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors ${
-                                                qty > 0
-                                                    ? "border-primary bg-primary/5"
-                                                    : "border-border opacity-50"
+                                                max === 0
+                                                    ? "border-border opacity-40"
+                                                    : qty > 0
+                                                        ? "border-primary bg-primary/5"
+                                                        : "border-border opacity-50"
                                             }`}
                                         >
                                             <div className="flex-1 min-w-0">
                                                 <p className="truncate font-medium text-xs">{l.description}</p>
                                                 <p className="text-[10px] text-muted-foreground">
-                                                    ₹{fmt(Number(l.unitPrice))} × {max} = ₹{fmt(Number(l.amount))}
+                                                    ₹{fmt(Number(l.unitPrice))} × {origQty} = ₹{fmt(Number(l.amount))}
+                                                    {returned > 0 && (
+                                                        <span className="text-amber-600"> · {returned} already returned</span>
+                                                    )}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-1 shrink-0">
