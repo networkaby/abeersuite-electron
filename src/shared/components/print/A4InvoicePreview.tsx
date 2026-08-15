@@ -1204,15 +1204,17 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
     const receipts     = sample.receipts ?? [];
     const receivedTotal = receipts.reduce((s, r) => s + r.amount, 0);
     // Total GST across the bill — drives the tax-in-words line. Prefer the
-    // rate-wise table (it is what the buyer reconciles against), else the
-    // invoice-level split, else the single tax figure.
-    const taxTotal = sample.hsnSummary?.length
-        ? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0)
-        : sample.taxBreakdown
-        ? (sample.taxBreakdown.kind === "INTRA"
-            ? sample.taxBreakdown.cgst + sample.taxBreakdown.sgst
-            : sample.taxBreakdown.igst)
-        : sample.taxAmount ?? 0;
+    // ladder's complete total (goods + tax-bearing charges like shipping),
+    // else the rate-wise table, else the invoice-level split, else the
+    // single tax figure.
+    const taxTotal = sample.discounts?.taxTotal
+        ?? sample.hsnSummary?.length
+            ? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0)
+            : sample.taxBreakdown
+            ? (sample.taxBreakdown.kind === "INTRA"
+                ? sample.taxBreakdown.cgst + sample.taxBreakdown.sgst
+                : sample.taxBreakdown.igst)
+            : sample.taxAmount ?? 0;
     return (
         <>
             {/* 3 — Bill-To / Invoice-Details (on every sheet) */}
@@ -1400,7 +1402,8 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                             The HSN/SAC table below gives the full rate-wise breakup. */}
                         {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
                             const inter = sample.taxBreakdown?.kind === "INTER";
-                            const tax = sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
+                            const tax = sample.discounts?.taxTotal
+                                ?? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
                             return tax > 0.005 ? (
                                 <div className="trow"><span className="muted">incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
                             ) : null;
@@ -1418,7 +1421,23 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                     (a, h) => ({ taxable: a.taxable + h.taxable, cgst: a.cgst + h.cgst, sgst: a.sgst + h.sgst }),
                     { taxable: 0, cgst: 0, sgst: 0 },
                 );
-                const totalTax = sum.cgst + sum.sgst;
+                const hsnTax = sum.cgst + sum.sgst;
+                const totalTaxFromSource = sample.discounts?.taxTotal
+                    ?? (sample.taxBreakdown
+                        ? (sample.taxBreakdown.kind === "INTRA"
+                            ? sample.taxBreakdown.cgst + sample.taxBreakdown.sgst
+                            : sample.taxBreakdown.igst)
+                        : sample.taxAmount ?? 0);
+                const chargeTax = Math.max(0, totalTaxFromSource - hsnTax);
+                const chargeAmount = (sample.charges ?? [])
+                    .filter((c) => (c.taxAmount ?? 0) > 0.005)
+                    .reduce((s, c) => s + c.amount, 0);
+                const chargeTaxable = chargeAmount > 0.005 ? Math.max(0, chargeAmount - chargeTax) : 0;
+                const chargeRatePct = (sample.charges ?? []).find((c) => (c.taxAmount ?? 0) > 0.005)?.taxRate ?? 0;
+                const totalTaxable = sum.taxable + (chargeTax > 0.005 && chargeAmount > 0.005 ? chargeTaxable : 0);
+                const totalCgst = inter ? 0 : sum.cgst + chargeTax / 2;
+                const totalSgst = inter ? 0 : sum.sgst + chargeTax / 2;
+                const totalTax = hsnTax + chargeTax;
                 return (
                     <table className="hsn">
                         <thead>
@@ -1456,13 +1475,28 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                                     <td className="num">{num(h.cgst + h.sgst)}</td>
                                 </tr>
                             ))}
+                            {chargeTax > 0.005 && chargeAmount > 0.005 && (
+                                <tr>
+                                    <td className="l">—</td>
+                                    <td className="num">{num(chargeTaxable)}</td>
+                                    {inter ? (
+                                        <><td>{chargeRatePct}%</td><td className="num">{num(chargeTax)}</td></>
+                                    ) : (
+                                        <>
+                                            <td>{chargeRatePct / 2}%</td><td className="num">{num(chargeTax / 2)}</td>
+                                            <td>{chargeRatePct / 2}%</td><td className="num">{num(chargeTax / 2)}</td>
+                                        </>
+                                    )}
+                                    <td className="num">{num(chargeTax)}</td>
+                                </tr>
+                            )}
                             <tr className="tot">
                                 <td>Total</td>
-                                <td className="num">{num(sum.taxable)}</td>
+                                <td className="num">{num(totalTaxable)}</td>
                                 {inter ? (
                                     <><td /><td className="num">{num(totalTax)}</td></>
                                 ) : (
-                                    <><td /><td className="num">{num(sum.cgst)}</td><td /><td className="num">{num(sum.sgst)}</td></>
+                                    <><td /><td className="num">{num(totalCgst)}</td><td /><td className="num">{num(totalSgst)}</td></>
                                 )}
                                 <td className="num">{num(totalTax)}</td>
                             </tr>

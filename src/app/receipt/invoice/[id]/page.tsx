@@ -267,9 +267,18 @@ export default async function PosReceiptPage({
                 savingsTotal: ladder.savingsTotal,
                 savingsPct:   ladder.savingsPct,
                 taxTotal:     ladder.taxTotal,
-            }
+              }
             : null,
         hsnSummary: ladder?.hsn ?? null,
+        charges: extraCharges.length > 0
+            ? extraCharges.map((c) => {
+                const amt = Number(c.amount);
+                const tax = Math.max(0, Number(c.taxAmount ?? 0));
+                const taxable = amt - tax;
+                const rate = taxable > 0.005 ? round2((tax / taxable) * 100) : 0;
+                return { label: c.label, amount: amt, taxAmount: tax, taxRate: rate };
+              })
+            : null,
     };
 
     // Relay payload for the thermal bridge (/print/pos) — same shape PosScreen

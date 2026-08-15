@@ -62,7 +62,7 @@ export interface ThermalReceiptLine {
 /// Customer-facing "Today's discount" ladder (display only). When present on the
 /// sample, the renderer shows Gross-at-tag → Today's discount → (HSN summary) →
 /// Total → "You saved ₹X (Y%)" INSTEAD of the legacy subtotal/tax/total block.
-export interface ReceiptDiscountRow { label: string; amount: number }
+export interface ReceiptDiscountRow { label: string; amount: number; taxAmount?: number; taxRate?: number }
 export interface ReceiptHsnRow {
     hsn: string; ratePct: number; taxable: number; cgst: number; sgst: number; total: number;
 }
