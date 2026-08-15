@@ -284,19 +284,21 @@ function inlineA4Styles(scope: string): string {
         /* Today's-discount itemisation parked left of the ladder; the ladder
            collapses these to one highlighted "Special Discount" row. Below it,
            the MRP saving (vs sticker) sits in its own green box. */
-        ${s}.disc-detail { flex: 1; padding: 2px 0 0 2px; font-size: 11px; color: #555; }
+        ${s}.disc-detail { flex: 1; padding: 2px 0 0 2px; font-size: 11px; color: #555; min-width: 280px; }
         ${s}.disc-detail-h {
             text-transform: uppercase; letter-spacing: 1px;
             color: #999; font-size: 10px; margin-bottom: 4px;
         }
         ${s}.disc-detail-row {
-            display: flex; justify-content: space-between;
-            max-width: 260px; padding: 1.5px 0;
+            display: flex; justify-content: space-between; gap: 12px;
+            padding: 1.5px 0;
         }
-        /* Box hugs the single-line caption (fit-content) so the "MRP … − you
+        ${s}.disc-detail-row span:first-child { flex: 1; }
+        ${s}.disc-detail-row span:last-child { white-space: nowrap; }
+        /* Box expands to fill available width so the "MRP … − you
            pay …" note stays on one row instead of wrapping. */
         ${s}.mrp-save {
-            width: fit-content; max-width: 360px; margin-top: 12px; padding: 9px 14px;
+            flex: 1; min-width: 240px; margin-top: 12px; padding: 9px 14px;
             background: #eafaf1; border: 1px solid #a7e0c4; border-radius: 3px;
         }
         ${s}.mrp-save-top {
@@ -1279,41 +1281,45 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                 <div className="banner banner-plain" style={{ fontSize: 12, letterSpacing: 2, marginTop: 4 }}>
                     Tax Analysis
                 </div>
-            ) : sample.discounts ? (
-            <table className="lines">
-                <thead>
-                    <tr>
-                        <th style={{ textAlign: "center" }}>#</th>
-                        <th>Description</th>
-                        <th style={{ textAlign: "right" }}>Qty</th>
-                        {template.showMrp && <th style={{ textAlign: "right" }}>MRP</th>}
-                        <th style={{ textAlign: "right" }}>Rate</th>
-                        <th style={{ textAlign: "right" }}>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {sample.lines.map((l, i) => {
-                        const rate = l.quantity > 0 ? l.amount / l.quantity : l.amount;
-                        return (
-                            <tr key={i}>
-                                <td className="sn">{i + 1}</td>
-                                <td>{l.description}</td>
-                                <td className="qty">{l.quantity}</td>
-                                {template.showMrp && (
-                                    <td className="rate">
-                                        {l.mrp != null && l.mrp > l.amount + 0.005
-                                            ? <s style={{ color: "#888" }}>{fmtINR(l.mrp)}</s>
-                                            : "—"}
-                                    </td>
-                                )}
-                                <td className="rate">{fmtINR(rate)}</td>
-                                <td className="amt">{fmtINR(l.amount)}</td>
+            ) : sample.discounts ? (() => {
+                const displayLines = page?.lines ?? sample.lines;
+                const startSerial = page?.startIndex ?? 0;
+                return (
+                    <table className="lines">
+                        <thead>
+                            <tr>
+                                <th style={{ textAlign: "center" }}>#</th>
+                                <th>Description</th>
+                                <th style={{ textAlign: "right" }}>Qty</th>
+                                {template.showMrp && <th style={{ textAlign: "right" }}>MRP</th>}
+                                <th style={{ textAlign: "right" }}>Rate</th>
+                                <th style={{ textAlign: "right" }}>Amount</th>
                             </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-            ) : (
+                        </thead>
+                        <tbody>
+                            {displayLines.map((l, i) => {
+                                const rate = l.quantity > 0 ? l.amount / l.quantity : l.amount;
+                                return (
+                                    <tr key={i}>
+                                        <td className="sn">{startSerial + i + 1}</td>
+                                        <td>{l.description}</td>
+                                        <td className="qty">{l.quantity}</td>
+                                        {template.showMrp && (
+                                            <td className="rate">
+                                                {l.mrp != null && l.mrp > l.amount + 0.005
+                                                    ? <s style={{ color: "#888" }}>{fmtINR(l.mrp)}</s>
+                                                    : "—"}
+                                            </td>
+                                        )}
+                                        <td className="rate">{fmtINR(rate)}</td>
+                                        <td className="amt">{fmtINR(l.amount)}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                );
+            })() : (
                 <GoodsTable
                     template={template}
                     sample={sample}
