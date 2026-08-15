@@ -7,7 +7,7 @@
 **Started:** 2026-04-17.
 **Last updated:** 2026-08-12.
 
-This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). For the authoritative history, read `git log`.
+This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). POS keyboard conventions live in [docs/pos-conventions.md](docs/pos-conventions.md). For the authoritative history, read `git log`.
 
 ---
 
@@ -403,3 +403,4 @@ Sketch discussed:
 - Supabase: `aws-1-ap-south-1.pooler.supabase.com`.
 - Next.js 16 docs: `node_modules/next/dist/docs/`.
 - NextAuth v5 docs: https://authjs.dev/.
+
