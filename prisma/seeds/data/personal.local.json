@@ -406,7 +406,7 @@
       "updatedAt": "2026-07-20T13:13:06.290Z"
     },
     "couponConfig": {
-      "maxTotalDiscountPct": "5",
+      "maxTotalDiscountPct": "20",
       "couponExpenseAccountId": {
         "code": null,
         "name": "Coupon Discounts"

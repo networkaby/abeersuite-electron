@@ -20,12 +20,13 @@ const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionD
 // (from server routes), a plain number/string (from the client), or null —
 // Number() coerces all three at runtime.
 export interface CouponValueFields {
-    type: "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO";
+    type: "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO" | "SET_PRICE";
     percentOff?: unknown;
     maxDiscountAmt?: unknown;
     flatAmt?: unknown;
     buyQty?: unknown;
     getQty?: unknown;
+    setPriceAmt?: unknown;
 }
 const num = (v: unknown) => Number(v ?? 0);
 
@@ -36,6 +37,7 @@ export function couponHeadline(c: CouponValueFields): string {
         case "FLAT":    return `${fmtINR(num(c.flatAmt))} OFF`;
         case "FREE_ITEM": return "FREE ITEM";
         case "BOGO":    return `BUY ${num(c.buyQty)} GET ${num(c.getQty)}`;
+        case "SET_PRICE": return `${fmtINR(num(c.setPriceAmt))} EACH`;
     }
 }
 
@@ -46,6 +48,7 @@ export function couponValueText(c: CouponValueFields): string {
         case "FLAT":    return `${fmtINR(num(c.flatAmt))} off the bill`;
         case "FREE_ITEM": return "Free / discounted item";
         case "BOGO":    return `Buy ${num(c.buyQty)} get ${num(c.getQty)}`;
+        case "SET_PRICE": return `${fmtINR(num(c.setPriceAmt))} each`;
     }
 }
 

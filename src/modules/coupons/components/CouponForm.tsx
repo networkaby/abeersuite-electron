@@ -40,7 +40,7 @@ export interface Coupon {
     code: string | null;
     name: string;
     description: string | null;
-    type: "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO";
+    type: "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO" | "SET_PRICE";
     channels: "POS" | "SHOP" | "BOTH";
     applyMode: "CODE" | "AUTO";
     percentOff: string | number | null;
@@ -52,6 +52,7 @@ export interface Coupon {
     buyProductId: number | null;
     buyQty: string | number | null;
     getQty: string | number | null;
+    setPriceAmt: string | number | null;
     rules?: CouponRule[];
     startsAt: string | null;
     endsAt: string | null;
@@ -61,6 +62,7 @@ export interface Coupon {
     singleUse: boolean;
     eligibility: "ANY" | "NEW" | "RETURNING";
     stackable: boolean;
+    stackScope: "BILL" | "LINE";
     isActive: boolean;
     _count?: { redemptions: number };
 }
@@ -103,6 +105,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
     const [buyProductId, setBuyProductId] = useState<number | null>(initial?.buyProductId ?? null);
     const [buyQty, setBuyQty] = useState(str(initial?.buyQty ?? (initial ? null : "1")));
     const [getQty, setGetQty] = useState(str(initial?.getQty ?? (initial ? null : "1")));
+    const [setPriceAmt, setSetPriceAmt] = useState(str(initial?.setPriceAmt));
     const [rules, setRules] = useState<CouponRule[]>(initial?.rules ?? []);
     const [startsAt, setStartsAt] = useState(toDateInput(initial?.startsAt ?? null));
     const [endsAt, setEndsAt] = useState(toDateInput(initial?.endsAt ?? null));
@@ -112,6 +115,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
     const [singleUse, setSingleUse] = useState(initial?.singleUse ?? false);
     const [eligibility, setEligibility] = useState<Coupon["eligibility"]>(initial?.eligibility ?? "ANY");
     const [stackable, setStackable] = useState(initial?.stackable ?? false);
+    const [stackScope, setStackScope] = useState<Coupon["stackScope"]>(initial?.stackScope ?? (initial?.type === "SET_PRICE" ? "LINE" : "BILL"));
     const [saving, setSaving] = useState(false);
 
     async function save() {
@@ -121,6 +125,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
         if (type === "FLAT" && optNum(flatAmt) == null) return toast.error("Enter a flat ₹ amount");
         if (type === "FREE_ITEM" && freeProductId == null) return toast.error("Pick the offer item");
         if (type === "BOGO" && freeProductId == null && buyProductId == null) return toast.error("Pick the buy and/or get item");
+        if (type === "SET_PRICE" && optNum(setPriceAmt) == null) return toast.error("Enter the set ₹ price");
 
         const payload = {
             code: applyMode === "AUTO" ? null : code.trim().toUpperCase(),
@@ -136,6 +141,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
             buyProductId: type === "BOGO" ? buyProductId : null,
             buyQty: type === "BOGO" ? optNum(buyQty) : null,
             getQty: type === "BOGO" ? optNum(getQty) : null,
+            setPriceAmt: type === "SET_PRICE" ? optNum(setPriceAmt) : null,
             rules: rules.filter((r) => r.productId != null || r.categoryId != null),
             startsAt: fromDateInput(startsAt),
             endsAt: fromDateInput(endsAt),
@@ -143,6 +149,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
             totalUsageLimit: optInt(totalUsageLimit),
             perCustomerLimit: optInt(perCustomerLimit),
             singleUse, eligibility, stackable,
+            stackScope: stackable ? "BILL" as const : stackScope,
         };
 
         setSaving(true);
@@ -211,6 +218,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
                             <SelectItem value="FLAT">Flat ₹ off</SelectItem>
                             <SelectItem value="FREE_ITEM">Free / discounted item</SelectItem>
                             <SelectItem value="BOGO">Buy X get Y</SelectItem>
+                            <SelectItem value="SET_PRICE">Set price (clearance)</SelectItem>
                         </SelectContent>
                     </Select>
                 </Field>
@@ -227,6 +235,11 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
                 {type === "FLAT" && (
                     <Field label="Flat ₹ off">
                         <RupeeInput value={flatAmt} onChange={(v) => setFlatAmt(parseDecimalInput(v))} placeholder="200" />
+                    </Field>
+                )}
+                {type === "SET_PRICE" && (
+                    <Field label="Set ₹ price (per unit)">
+                        <RupeeInput value={setPriceAmt} onChange={(v) => setSetPriceAmt(parseDecimalInput(v))} placeholder="80" />
                     </Field>
                 )}
                 {type === "FREE_ITEM" && (
@@ -283,6 +296,11 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
 
             {/* Item rules (optional) — limit the coupon to / exclude items by product, category, group or brand */}
             <RuleEditor rules={rules} setRules={setRules} masters={masters} prodOpts={prodOpts} />
+            {type === "SET_PRICE" && rules.length === 0 && (
+                <p className="-mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+                    No item rule set — this will mark down EVERY product to the same ₹ price. Add a product/category/group/brand rule to target the clearance stock.
+                </p>
+            )}
 
             {/* Constraints */}
             <div className="grid gap-3 sm:grid-cols-3">
@@ -314,9 +332,20 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
             </div>
 
             {/* Toggles */}
-            <div className="flex flex-wrap gap-5">
+            <div className="flex flex-wrap items-center gap-5">
                 <Toggle label="Single-use code" hint="One redemption total" checked={singleUse} onChange={setSingleUse} />
                 <Toggle label="Stackable" hint="Combine with tier + loyalty" checked={stackable} onChange={setStackable} />
+                {!stackable && (
+                    <Field label="When exclusive, blocks tier + loyalty on…">
+                        <Select value={stackScope} onValueChange={(v) => setStackScope(v as Coupon["stackScope"])}>
+                            <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="BILL">The whole bill</SelectItem>
+                                <SelectItem value="LINE">Only this coupon&rsquo;s own items</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                )}
             </div>
 
             <div className="flex justify-end gap-2">

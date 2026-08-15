@@ -37,11 +37,13 @@ import {
 import {
     selectCouponForCart,
     finalizeCouponAmount,
+    couponExclusionMask,
     recordCouponRedemption,
     lookupActiveGiftCard,
     redeemGiftCard,
     type CartLineLite,
     type EvalInput,
+    type CouponSelection,
 } from "@/modules/coupons/lib";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
@@ -401,39 +403,21 @@ export async function POST(req: Request) {
         };
     }
 
-    // Server owns the redemption ₹ value — never trust the client. The ceiling is
-    // cart-aware: Σ (line net × that item's redeem cap %), folding in the global
-    // cap as the per-line default. Clamp against balance, that ceiling, and floors.
-    const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
-    const redeemCeiling = loyaltyEnabled
-        ? redeemableBaseForCart(earnLines, tierDiscount, rulesIndex, taxonomyMaps, loyaltyRates.maxRedeemPctOfBill)
-        : 0;
-    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemCeiling, invoiceValueGross, loyaltyRates);
-    if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
-        return NextResponse.json({ error: redemption.reason, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
-    }
-    const redeemPoints     = redemption.points;
-    const redemptionRupees = redemption.value;
-    if (redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId == null) {
-        return NextResponse.json(
-            { error: "Loyalty redemption ledger is not configured. Re-run the bootstrap seed.", code: "LOYALTY_LEDGER_MISSING" },
-            { status: 422 },
-        );
-    }
-
-    // ── Coupon / promotion ─────────────────────────────────────────────────
+    // ── Coupon selection (moved ahead of the loyalty ceiling) ──────────────
     // The server resolves the code (or best AUTO offer) and OWNS the ₹ value. A
     // coupon discount rides the SAME negative-charge path as loyalty redemption,
     // to a dedicated "Coupon Discounts" ledger (postInvVoucherToGl untouched).
-    // Stacking: a non-stackable coupon is the ONLY discount — it drops the spend-
-    // tier discount and blocks loyalty redemption (reject so the cashier sees why).
-    let couponRupees = 0;
-    let couponId: number | null = null;
+    // Selected here (not finalized yet) so its per-line matches can shape the
+    // loyalty redeem ceiling below — LINE-scope exclusivity needs to know which
+    // lines the coupon touches BEFORE the ceiling is computed, and BILL-scope
+    // exclusivity (today's behavior) still hard-rejects points after the fact.
+    let selected: CouponSelection = { kind: "none" };
     let couponExpenseAccountId: number | null = null;
-    let effectiveTierDiscount = tierDiscount;
+    let couponConfig: { couponExpenseAccountId: number | null; maxTotalDiscountPct: Prisma.Decimal | null } | null = null;
+    let couponLines: CartLineLite[] = [];
     // noDiscountFlag: coupons (typed code AND auto-offers) are skipped silently.
     if (!noDiscountFlag && (body.couponCode || body.autoApply)) {
-        const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         // First-time buyer = no prior POSTED sale-type voucher on ANY channel
         // (SALE / POS / ONLINE_INVOICE — a webshop buyer isn't "new" at the
@@ -443,7 +427,7 @@ export async function POST(req: Request) {
             : false;
         // Coupon eligibility needs each line's taxonomy (include/exclude rules).
         const tax = await loadTaxonomy();
-        const couponLines: CartLineLite[] = body.lines.map((l) => {
+        couponLines = body.lines.map((l) => {
             const costExcl = costExclById.get(l.productId) ?? null;
             return {
                 productId: l.productId,
@@ -463,44 +447,80 @@ export async function POST(req: Request) {
             isNewCustomer,
             now: new Date(),
         };
-        const selected = await selectCouponForCart(prisma, { code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: couponInput });
+        selected = await selectCouponForCart(prisma, { code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: couponInput });
         if (selected.kind === "error") {
             return NextResponse.json({ error: selected.reason, code: "COUPON_REJECTED" }, { status: 422 });
         }
-        if (selected.kind === "ok") {
-            if (!selected.coupon.stackable && redeemPoints > 0) {
-                return NextResponse.json(
-                    { error: "This coupon can't be combined with loyalty points. Remove the points to use it.", code: "COUPON_BLOCKS_LOYALTY" },
-                    { status: 422 },
-                );
-            }
-            const fin = finalizeCouponAmount({
-                selectedDiscount:    selected.discountRupees,
-                tierRupees:          tierDiscount,
-                loyaltyRupees:       redemptionRupees,
-                goodsValue,
-                couponStackable:     selected.coupon.stackable,
-                maxTotalDiscountPct: couponConfig.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null,
-            });
-            couponRupees = fin.couponRupees;
-            couponId = selected.coupon.id;
-            effectiveTierDiscount = fin.effTier; // 0 when the coupon isn't stackable
-            if (couponRupees > 0 && couponExpenseAccountId == null) {
-                return NextResponse.json(
-                    { error: "Coupon ledger is not configured. Re-run the bootstrap seed.", code: "COUPON_LEDGER_MISSING" },
-                    { status: 422 },
-                );
-            }
+    }
+    // Per-line exclusion mask for the selected coupon (all-false when none selected).
+    const exclusionMask: boolean[] = selected.kind === "ok" ? couponExclusionMask(selected.coupon, couponLines) : body.lines.map(() => false);
+    const lineScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "LINE";
+    const billScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "BILL";
+
+    // Server owns the redemption ₹ value — never trust the client. The ceiling is
+    // cart-aware: Σ (line net × that item's redeem cap %), folding in the global
+    // cap as the per-line default. LINE-scope exclusivity drops the coupon's own
+    // matched lines out of the ceiling base entirely (they still can't earn/redeem
+    // on this bill); BILL scope leaves the base untouched and instead hard-rejects
+    // below, exactly as before.
+    const earnLinesForCeiling = lineScopeExclusive ? earnLines.filter((_, i) => !exclusionMask[i]) : earnLines;
+    const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
+    const redeemCeiling = loyaltyEnabled
+        ? redeemableBaseForCart(earnLinesForCeiling, tierDiscount, rulesIndex, taxonomyMaps, loyaltyRates.maxRedeemPctOfBill)
+        : 0;
+    const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemCeiling, invoiceValueGross, loyaltyRates);
+    if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
+        return NextResponse.json({ error: redemption.reason, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
+    }
+    const redeemPoints     = redemption.points;
+    const redemptionRupees = redemption.value;
+    if (redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId == null) {
+        return NextResponse.json(
+            { error: "Loyalty redemption ledger is not configured. Re-run the bootstrap seed.", code: "LOYALTY_LEDGER_MISSING" },
+            { status: 422 },
+        );
+    }
+    // BILL-scope exclusivity: unchanged behavior — reject outright so the cashier
+    // sees why, rather than silently zeroing the points.
+    if (billScopeExclusive && redeemPoints > 0) {
+        return NextResponse.json(
+            { error: "This coupon can't be combined with loyalty points. Remove the points to use it.", code: "COUPON_BLOCKS_LOYALTY" },
+            { status: 422 },
+        );
+    }
+
+    // ── Coupon finalize ─────────────────────────────────────────────────────
+    // Per-line tier discount with the excluded lines zeroed — mask[i] true means
+    // this line loses its tier discount to the coupon's exclusivity. Unlike the
+    // old single bill-wide scalar, this is exact per-line so LINE scope only
+    // zeroes the lines the coupon itself matches.
+    const lineTierDiscAfterCoupon = lineTierDiscExclRaw.map((v, i) => (exclusionMask[i] ? 0 : v));
+    const tierDiscountAfterCoupon = body.lines.reduce((s, l, i) => {
+        const gross = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }).amount;
+        const net   = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscAfterCoupon[i], taxRate: l.taxRate }).amount;
+        return s + (gross - net);
+    }, 0);
+    let couponRupees = 0;
+    let couponId: number | null = null;
+    if (selected.kind === "ok" && couponConfig) {
+        const fin = finalizeCouponAmount({
+            selectedDiscount:    selected.discountRupees,
+            tierRupees:          tierDiscountAfterCoupon,
+            loyaltyRupees:       redemptionRupees,
+            goodsValue,
+            maxTotalDiscountPct: couponConfig.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null,
+        });
+        couponRupees = fin.couponRupees;
+        couponId = selected.coupon.id;
+        if (couponRupees > 0 && couponExpenseAccountId == null) {
+            return NextResponse.json(
+                { error: "Coupon ledger is not configured. Re-run the bootstrap seed.", code: "COUPON_LEDGER_MISSING" },
+                { status: 422 },
+            );
         }
     }
-    // Effective per-line tier discount after the coupon interplay: a non-stackable
-    // coupon drops the tier (effectiveTierDiscount 0) or a total-discount cap scales
-    // it down. Scale the per-line pre-tax discounts by the same factor, then net them
-    // into the lines — GST recomputed on the reduced base, per each line's own rate,
-    // so mixed-rate carts stay correct and there is no separate Discount Allowed leg.
-    const tierFactor = tierDiscount > 0.005 ? Math.max(0, Math.min(1, effectiveTierDiscount / tierDiscount)) : 0;
     const computedLines = body.lines.map((l, i) => {
-        const discountAmt = round2(lineTierDiscExclRaw[i] * tierFactor);
+        const discountAmt = round2(lineTierDiscAfterCoupon[i]);
         const { taxAmount: lineTax, amount } = calcLineTotals({
             quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt, taxRate: l.taxRate,
         });
@@ -747,7 +767,7 @@ export async function POST(req: Request) {
                     // cost, pre-tax). discountPct stays the configured tier % — the
                     // receipt's tier-name lookup key when the tier actually applied.
                     discountAmt:    tierPretaxDiscount,
-                    discountPct:    effectiveTierDiscount > 0 ? body.discountPct : 0,
+                    discountPct:    tierDiscountAfterCoupon > 0 ? body.discountPct : 0,
                     roundOff:       body.roundOff,
                     subtotal,
                     taxAmount,
@@ -844,7 +864,7 @@ export async function POST(req: Request) {
                     accountId:        customerAccount.id,
                     universalVoucherId: spineId,
                     earnLines,
-                    combinedDiscount: effectiveTierDiscount + redemptionRupees + couponRupees,
+                    combinedDiscount: tierDiscountAfterCoupon + redemptionRupees + couponRupees,
                     redeemPoints,
                     invoiceValue:     invoiceValueGross,
                     rates:            loyaltyRates,

@@ -28,7 +28,7 @@ const channelLabel: Record<Coupon["channels"], string> = { BOTH: "POS+Shop", POS
 type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO";
 const TYPE_FILTERS = [
     { value: "ALL", label: "All types" }, { value: "PERCENT", label: "% off" }, { value: "FLAT", label: "Flat ₹" },
-    { value: "FREE_ITEM", label: "Free item" }, { value: "BOGO", label: "Buy X get Y" },
+    { value: "FREE_ITEM", label: "Free item" }, { value: "BOGO", label: "Buy X get Y" }, { value: "SET_PRICE", label: "Set price" },
 ] as const;
 const CHAN_FILTERS = [
     { value: "ALL", label: "All channels" }, { value: "BOTH", label: "POS + Shop" }, { value: "POS", label: "POS" }, { value: "SHOP", label: "Shop" },
@@ -207,6 +207,7 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                                         <Badge className={`${channelTone[c.channels]} border-0`}>{channelLabel[c.channels]}</Badge>
                                         {c.stackable && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">stackable</span>}
+                                        {!c.stackable && c.stackScope === "LINE" && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">exclusive · its items only</span>}
                                         {c.singleUse && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">single-use</span>}
                                         {c.eligibility !== "ANY" && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">{c.eligibility.toLowerCase()}</span>}
                                     </div>

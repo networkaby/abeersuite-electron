@@ -5,8 +5,10 @@ import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import {
     selectCouponForCart,
     finalizeCouponAmount,
+    couponExclusionMask,
     type CartLineLite,
     type EvalInput,
+    type CouponSelection,
 } from "@/modules/coupons/lib";
 import {
     ratesFromConfig,
@@ -187,6 +189,57 @@ export async function computeShopCartBenefits(
         return taxonomy;
     };
 
+    // ── Coupon selection (moved ahead of the loyalty ceiling, mirrors POS) ──
+    // Selected here, not finalized — LINE-scope exclusivity needs to know which
+    // lines the coupon touches BEFORE the loyalty ceiling is computed.
+    let coupon: ShopCartBenefits["coupon"] = null;
+    let couponError: string | null = null;
+    let selected: CouponSelection = { kind: "none" };
+    let couponConfig: { couponExpenseAccountId: number | null } | null = null;
+    let couponLines: CartLineLite[] = [];
+    let couponGoodsValue = 0;
+    const wantCoupon = !!(opts.couponCode?.trim() || opts.autoApply);
+    if (wantCoupon) {
+        couponConfig = await db.couponConfig.findUnique({ where: { id: 1 } });
+        if (opts.couponCode?.trim() && couponConfig?.couponExpenseAccountId == null) {
+            // Without the expense ledger the invoice could not post the coupon
+            // leg — refuse up front rather than freeze an unpostable discount.
+            couponError = "Coupons are not configured yet.";
+        } else if (couponConfig?.couponExpenseAccountId != null) {
+            const tax = await loadTaxonomy();
+            // POS bases: unitPrice + goodsValue are PRE-TAX; costIncl = cost incl. GST.
+            couponLines = lines.map((l) => {
+                const rate = taxRateById.get(l.productId) ?? 0;
+                const costExcl = costPaiseById.get(l.productId) ?? null;
+                return {
+                    productId: l.productId,
+                    groupId: tax.get(l.productId)?.groupId ?? null,
+                    categoryId: tax.get(l.productId)?.categoryId ?? null,
+                    brandId: tax.get(l.productId)?.brandId ?? null,
+                    qty: l.quantity,
+                    unitPrice: lineTaxableRs(l) / l.quantity,
+                    costIncl: costExcl == null ? null : (costExcl / 100) * (1 + rate / 100),
+                };
+            });
+            couponGoodsValue = couponLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+            const input: EvalInput = {
+                accountId,
+                lines: couponLines,
+                goodsValue: couponGoodsValue,
+                billBeforeCoupon: couponGoodsValue,
+                isNewCustomer: tierCtx.isNewCustomer,
+                now: new Date(),
+            };
+            selected = await selectCouponForCart(db, {
+                code: opts.couponCode, autoApply: opts.autoApply, channel: "SHOP", input,
+            });
+            if (selected.kind === "error") couponError = selected.reason;
+        }
+    }
+    const exclusionMask: boolean[] = selected.kind === "ok" ? couponExclusionMask(selected.coupon, couponLines) : lines.map(() => false);
+    const lineScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "LINE";
+    const billScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "BILL";
+
     // ── Loyalty redemption (validate + clamp; burning happens at invoice) ──
     let loyalty: ShopCartBenefits["loyalty"] = null;
     const requestedPts = Math.max(0, Math.floor(opts.redeemPoints ?? 0));
@@ -203,12 +256,16 @@ export async function computeShopCartBenefits(
             db.invCategory.findMany({ select: { id: true, parentId: true } }),
             db.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } }),
         ]);
-        const earnLines: EarnLine[] = lines.map((l) => ({
+        const earnLinesAll: EarnLine[] = lines.map((l) => ({
             productId: l.productId,
             groupId: tax.get(l.productId)?.groupId ?? null,
             categoryId: tax.get(l.productId)?.categoryId ?? null,
             goods: lineTaxableRs(l),
         }));
+        // LINE-scope exclusivity drops the coupon's own matched lines out of the
+        // ceiling base (they still can't earn/redeem on this bill); BILL scope
+        // leaves the base untouched and the block below rejects/skips instead.
+        const earnLines = lineScopeExclusive ? earnLinesAll.filter((_, i) => !exclusionMask[i]) : earnLinesAll;
         const rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
         const taxonomyMaps: TaxonomyMaps = {
             groupParent: new Map(groups.map((g) => [g.id, g.parentId])),
@@ -228,91 +285,61 @@ export async function computeShopCartBenefits(
     }
     const redeemRupees = (loyalty?.redeemPaise ?? 0) / 100;
 
-    // ── Coupon (explicit code beats auto-apply) — shared POS engine ────────
-    let coupon: ShopCartBenefits["coupon"] = null;
-    let couponError: string | null = null;
-    let tierFactor = 1;
-    const wantCoupon = !!(opts.couponCode?.trim() || opts.autoApply);
-    if (wantCoupon) {
-        const couponConfig = await db.couponConfig.findUnique({ where: { id: 1 } });
-        if (opts.couponCode?.trim() && couponConfig?.couponExpenseAccountId == null) {
-            // Without the expense ledger the invoice could not post the coupon
-            // leg — refuse up front rather than freeze an unpostable discount.
-            couponError = "Coupons are not configured yet.";
-        } else if (couponConfig?.couponExpenseAccountId != null) {
-            const tax = await loadTaxonomy();
-            // POS bases: unitPrice + goodsValue are PRE-TAX; costIncl = cost incl. GST.
-            const couponLines: CartLineLite[] = lines.map((l) => {
-                const rate = taxRateById.get(l.productId) ?? 0;
-                const costExcl = costPaiseById.get(l.productId) ?? null;
-                return {
-                    productId: l.productId,
-                    groupId: tax.get(l.productId)?.groupId ?? null,
-                    categoryId: tax.get(l.productId)?.categoryId ?? null,
-                    brandId: tax.get(l.productId)?.brandId ?? null,
-                    qty: l.quantity,
-                    unitPrice: lineTaxableRs(l) / l.quantity,
-                    costIncl: costExcl == null ? null : (costExcl / 100) * (1 + rate / 100),
-                };
-            });
-            const goodsValue = couponLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-            const input: EvalInput = {
-                accountId,
-                lines: couponLines,
-                goodsValue,
-                billBeforeCoupon: goodsValue,
-                isNewCustomer: tierCtx.isNewCustomer,
-                now: new Date(),
-            };
-            const selected = await selectCouponForCart(db, {
-                code: opts.couponCode, autoApply: opts.autoApply, channel: "SHOP", input,
-            });
-            if (selected.kind === "error") {
-                couponError = selected.reason;
-            } else if (selected.kind === "ok") {
-                const redeeming = (loyalty?.redeemPoints ?? 0) > 0;
-                if (!selected.coupon.stackable && redeeming && opts.couponCode?.trim()) {
-                    // POS counter parity: an explicit non-stackable code cannot
-                    // combine with points — surface the conflict, apply neither.
-                    couponError = "This coupon can't be combined with loyalty points. Remove the points to use it.";
-                } else if (!selected.coupon.stackable && redeeming) {
-                    // Best AUTO offer vs chosen points → the customer's points win;
-                    // the offer is silently skipped.
-                } else {
-                    const fin = finalizeCouponAmount({
-                        selectedDiscount:    selected.discountRupees,
-                        tierRupees:          rawInclEffect / 100,   // inclusive ₹, like POS
-                        loyaltyRupees:       redeemRupees,
-                        goodsValue,
-                        couponStackable:     selected.coupon.stackable,
-                        maxTotalDiscountPct: tierCtx.tierCapPct,
-                    });
-                    tierFactor = rawInclEffect > 0.5 ? Math.max(0, Math.min(1, (fin.effTier * 100) / rawInclEffect)) : 0;
-                    if (fin.couponRupees > 0) {
-                        coupon = {
-                            id: selected.coupon.id,
-                            code: selected.coupon.code,
-                            name: selected.coupon.name,
-                            discountPaise: Math.round(fin.couponRupees * 100),
-                            stackable: selected.coupon.stackable,
-                            droppedTier: fin.droppedTier,
-                            clampedByGuard: fin.clampedByGuard,
-                        };
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Tier, EFFECTIVE (scaled/dropped by the coupon interplay) ───────────
+    // ── Coupon finalize + tier, EFFECTIVE (mask-dropped, not scaled) ───────
     const lineDiscPaise = new Map<number, number>();
     let inclEffect = 0;
-    for (const [i, discExcl] of rawLineDisc) {
-        const scaled = discExcl * tierFactor;
-        if (scaled <= 0) continue;
-        const rate = taxRateById.get(lines[i].productId) ?? 0;
-        lineDiscPaise.set(i, Math.round(scaled));
-        inclEffect += scaled * (1 + rate / 100);
+    let droppedTier = false;
+    const applyTierInFull = () => {
+        for (const [i, discExcl] of rawLineDisc) {
+            const rate = taxRateById.get(lines[i].productId) ?? 0;
+            lineDiscPaise.set(i, Math.round(discExcl));
+            inclEffect += discExcl * (1 + rate / 100);
+        }
+    };
+    if (selected.kind === "ok" && couponConfig?.couponExpenseAccountId != null) {
+        const redeeming = (loyalty?.redeemPoints ?? 0) > 0;
+        if (billScopeExclusive && redeeming && opts.couponCode?.trim()) {
+            // POS counter parity: an explicit non-stackable (whole-bill) code
+            // cannot combine with points — surface the conflict, apply neither
+            // (tier stays full, matching the pre-refactor `tierFactor` default).
+            couponError = "This coupon can't be combined with loyalty points. Remove the points to use it.";
+            applyTierInFull();
+        } else if (billScopeExclusive && redeeming) {
+            // Best AUTO offer vs chosen points → the customer's points win; the
+            // offer is silently skipped. Tier still applies in full below.
+            applyTierInFull();
+        } else {
+            for (const [i, discExcl] of rawLineDisc) {
+                const scaled = exclusionMask[i] ? 0 : discExcl;
+                if (scaled <= 0) continue;
+                const rate = taxRateById.get(lines[i].productId) ?? 0;
+                lineDiscPaise.set(i, Math.round(scaled));
+                inclEffect += scaled * (1 + rate / 100);
+            }
+            droppedTier = inclEffect < rawInclEffect - 0.5;
+            const fin = finalizeCouponAmount({
+                selectedDiscount:    selected.discountRupees,
+                tierRupees:          inclEffect / 100,
+                loyaltyRupees:       redeemRupees,
+                goodsValue:          couponGoodsValue,
+                maxTotalDiscountPct: tierCtx.tierCapPct,
+            });
+            if (fin.couponRupees > 0) {
+                coupon = {
+                    id: selected.coupon.id,
+                    code: selected.coupon.code,
+                    name: selected.coupon.name,
+                    discountPaise: Math.round(fin.couponRupees * 100),
+                    stackable: selected.coupon.stackable,
+                    droppedTier,
+                    clampedByGuard: fin.clampedByGuard,
+                };
+            }
+        }
+    } else {
+        // No coupon applying (none selected, or none configured) — tier applies
+        // in full, unaffected.
+        applyTierInFull();
     }
 
     return {

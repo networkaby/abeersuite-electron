@@ -5,10 +5,12 @@
 
 import { round2 as r2 } from "@/shared/lib/format/moneyInr";
 
-export type CouponType = "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO";
+export type CouponType = "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO" | "SET_PRICE";
 export type CouponChannel = "POS" | "SHOP" | "BOTH";
 export type CouponApplyMode = "CODE" | "AUTO";
 export type CouponEligibility = "ANY" | "NEW" | "RETURNING";
+/// See CouponStackScope in the schema. Only meaningful when `stackable` is false.
+export type CouponStackScope = "BILL" | "LINE";
 
 /// One include/exclude rule on a coupon. The set taxonomy fields are ANDed
 /// together (see lineMatchesRule); rules of the same kind are ORed.
@@ -38,11 +40,13 @@ export interface CouponContext {
     buyProductId: number | null;
     buyQty: number | null;
     getQty: number | null;
+    setPriceAmt: number | null;
     startsAt: Date | null;
     endsAt: Date | null;
     minBillValue: number | null;
     eligibility: CouponEligibility;
     stackable: boolean;
+    stackScope: CouponStackScope;
     ownerAccountId: number | null;
     isActive: boolean;
     totalUsageLimit: number | null;
@@ -112,33 +116,45 @@ function lineMatchesRule(line: CartLineLite, rule: CouponRuleLite): boolean {
     return anySet;
 }
 
-/// Σ goods of the lines the coupon applies to. With no INCLUDE rules, every line
-/// is eligible except those matched by an EXCLUDE rule. With INCLUDE rules, only
-/// included lines (still minus excludes) count.
-export function eligibleSubtotal(c: CouponContext, lines: CartLineLite[]): number {
+/// Which of `lines` this coupon's own INCLUDE/EXCLUDE rules match, in order.
+/// With no INCLUDE rules, every line matches except those an EXCLUDE rule hits.
+/// With INCLUDE rules, only included lines (still minus excludes) match. Shared
+/// by eligibleSubtotal, eligibleCostBase, the SET_PRICE discount, and the
+/// per-line tier/loyalty exclusion mask (couponExclusionMask) — one place owns
+/// "does this coupon apply to this line".
+export function linesMatchedByRules(c: CouponContext, lines: CartLineLite[]): boolean[] {
     const includes = c.rules.filter((r) => r.kind === "INCLUDE");
     const excludes = c.rules.filter((r) => r.kind === "EXCLUDE");
-    let sum = 0;
-    for (const line of lines) {
-        if (excludes.some((r) => lineMatchesRule(line, r))) continue;
-        if (includes.length > 0 && !includes.some((r) => lineMatchesRule(line, r))) continue;
-        sum += lineGoods(line);
-    }
-    return r2(sum);
+    return lines.map((line) => {
+        if (excludes.some((r) => lineMatchesRule(line, r))) return false;
+        if (includes.length > 0 && !includes.some((r) => lineMatchesRule(line, r))) return false;
+        return true;
+    });
 }
 
-/// Σ COST (incl. tax) of the eligible lines — the PERCENT-coupon base. Same
-/// include/exclude filtering as eligibleSubtotal; lines with no cost basis add 0.
+/// Σ goods of the lines the coupon applies to.
+export function eligibleSubtotal(c: CouponContext, lines: CartLineLite[]): number {
+    const matched = linesMatchedByRules(c, lines);
+    return r2(lines.reduce((s, l, i) => (matched[i] ? s + lineGoods(l) : s), 0));
+}
+
+/// Σ COST (incl. tax) of the eligible lines — the PERCENT-coupon base. Lines
+/// with no cost basis add 0.
 export function eligibleCostBase(c: CouponContext, lines: CartLineLite[]): number {
-    const includes = c.rules.filter((r) => r.kind === "INCLUDE");
-    const excludes = c.rules.filter((r) => r.kind === "EXCLUDE");
-    let sum = 0;
-    for (const line of lines) {
-        if (excludes.some((r) => lineMatchesRule(line, r))) continue;
-        if (includes.length > 0 && !includes.some((r) => lineMatchesRule(line, r))) continue;
-        if (line.costIncl != null) sum += line.qty * line.costIncl;
-    }
-    return r2(sum);
+    const matched = linesMatchedByRules(c, lines);
+    return r2(lines.reduce((s, l, i) => (matched[i] && l.costIncl != null ? s + l.qty * l.costIncl : s), 0));
+}
+
+/// Per-line "should this line's tier + loyalty be excluded" decision for a
+/// SELECTED, non-null coupon (call only when a coupon is actually applying).
+/// stackable ⇒ nothing excluded. !stackable + BILL scope ⇒ every line excluded
+/// (today's whole-bill drop). !stackable + LINE scope ⇒ only the lines this
+/// coupon's own rules match are excluded — other lines in the same bill keep
+/// their tier/loyalty untouched.
+export function couponExclusionMask(c: CouponContext, lines: CartLineLite[]): boolean[] {
+    if (c.stackable) return lines.map(() => false);
+    if (c.stackScope === "LINE") return linesMatchedByRules(c, lines);
+    return lines.map(() => true);
 }
 
 /// Gate a coupon against the cart: active, window, min-bill, eligibility, owner,
@@ -224,6 +240,15 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
             raw = freeUnits * getLine.unitPrice * (pctOff / 100);
             break;
         }
+        case "SET_PRICE": {
+            // Reverse-computed ₹ discount so eligible lines net down to setPriceAmt
+            // per unit — rides the same negative-charge + print/GL path as every
+            // other coupon type (a ₹100 item set to ₹80 just prints "Coupon −₹20").
+            if (c.setPriceAmt == null) return { ok: false, reason: "Coupon misconfigured (no set price)" };
+            const matched = linesMatchedByRules(c, input.lines);
+            raw = input.lines.reduce((s, l, i) => (matched[i] ? s + l.qty * Math.max(0, l.unitPrice - c.setPriceAmt!) : s), 0);
+            break;
+        }
     }
 
     // Never drive the bill to ≤ 0 (postInvVoucherToGl skips GL when total ≤ 0).
@@ -233,41 +258,26 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
     return { ok: true, discountRupees: discount };
 }
 
-/// Stacking decision. A non-stackable coupon is the ONLY discount: it replaces
-/// the spend-tier discount and blocks loyalty redemption.
-export function resolveStacking(args: { couponStackable: boolean }): { allowTier: boolean; allowLoyalty: boolean } {
-    return args.couponStackable ? { allowTier: true, allowLoyalty: true } : { allowTier: false, allowLoyalty: false };
-}
-
 /// One-shot finalizer shared by /api/pos/sale and /api/pos/coupon-validate so the
-/// validated ₹ and the posted ₹ are identical. Applies stacking (drops tier /
-/// blocks loyalty when the coupon isn't stackable), a hard ceiling so the
-/// post-discount bill stays > 0, and the global discount-% guard.
+/// validated ₹ and the posted ₹ are identical. `tierRupees` / `loyaltyRupees` must
+/// already reflect the caller's stacking decision (see couponExclusionMask) — this
+/// only applies the hard ceiling so the post-discount bill stays > 0, and the
+/// global discount-% guard.
 export function finalizeCouponAmount(args: {
     selectedDiscount: number; // coupon-alone ₹ from computeCouponDiscount
-    tierRupees: number;
-    loyaltyRupees: number;
+    tierRupees: number; // already exclusivity-adjusted by the caller
+    loyaltyRupees: number; // already exclusivity-adjusted by the caller
     goodsValue: number;
-    couponStackable: boolean;
     maxTotalDiscountPct: number | null;
-}): { couponRupees: number; effTier: number; effLoyalty: number; droppedTier: boolean; blockedLoyalty: boolean; clampedByGuard: boolean } {
-    const { selectedDiscount, tierRupees, loyaltyRupees, goodsValue, couponStackable, maxTotalDiscountPct } = args;
-    const { allowTier, allowLoyalty } = resolveStacking({ couponStackable });
-    const effTier = allowTier ? tierRupees : 0;
-    const effLoyalty = allowLoyalty ? loyaltyRupees : 0;
+}): { couponRupees: number; clampedByGuard: boolean } {
+    const { selectedDiscount, tierRupees, loyaltyRupees, goodsValue, maxTotalDiscountPct } = args;
     // Keep goods − tier − loyalty − coupon strictly > 0.
-    const ceiling = Math.max(0, goodsValue - effTier - effLoyalty - 0.01);
+    const ceiling = Math.max(0, goodsValue - tierRupees - loyaltyRupees - 0.01);
     const guard = applyGlobalDiscountGuard({
         couponRupees: Math.min(selectedDiscount, ceiling),
-        tierRupees: effTier, loyaltyRupees: effLoyalty, billGoods: goodsValue, maxTotalDiscountPct,
+        tierRupees, loyaltyRupees, billGoods: goodsValue, maxTotalDiscountPct,
     });
-    return {
-        couponRupees: r2(guard.couponRupees),
-        effTier, effLoyalty,
-        droppedTier: !allowTier && tierRupees > 0,
-        blockedLoyalty: !allowLoyalty && loyaltyRupees > 0,
-        clampedByGuard: guard.clamped,
-    };
+    return { couponRupees: r2(guard.couponRupees), clampedByGuard: guard.clamped };
 }
 
 /// Global guard: clamp the COUPON portion so coupon + tier + loyalty never exceed

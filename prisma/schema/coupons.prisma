@@ -20,6 +20,16 @@ enum CouponType {
   FLAT // flat ₹ off the bill
   FREE_ITEM // free / discounted specific item (Phase 2)
   BOGO // buy X get Y (Phase 3)
+  SET_PRICE // fix eligible lines to a flat ₹ unit price (stock clearance)
+}
+
+/// Whether a non-stackable coupon's exclusivity blocks the WHOLE bill's tier +
+/// loyalty (today's only behavior) or just the lines the coupon itself matches.
+/// Meaningless when `stackable` is true. Applies to every coupon type, not just
+/// SET_PRICE, so BILL stays the default and existing coupons don't change.
+enum CouponStackScope {
+  BILL
+  LINE
 }
 
 enum CouponChannel {
@@ -83,6 +93,9 @@ model Coupon {
   buyProduct      InvProduct? @relation("CouponBuyProduct", fields: [buyProductId], references: [id], onDelete: SetNull)
   buyQty          Decimal?    @db.Decimal(10, 3)
   getQty          Decimal?    @db.Decimal(10, 3)
+  /// SET_PRICE: the fixed ₹ unit price eligible lines are marked down to.
+  /// discount per unit = max(0, line unit price − setPriceAmt).
+  setPriceAmt     Decimal?    @db.Decimal(14, 2)
 
   // ── Constraints ──
   startsAt         DateTime?
@@ -95,10 +108,14 @@ model Coupon {
   eligibility      CouponEligibility @default(ANY)
 
   // ── Stacking ──
-  /// OFF = coupon is the ONLY discount on the bill (replaces spend-tier discount
-  /// and blocks loyalty redemption). ON = stacks with tier + loyalty (still
-  /// subject to the global CouponConfig.maxTotalDiscountPct guard).
+  /// OFF = coupon is exclusive: it drops tier + loyalty on the lines `stackScope`
+  /// covers. ON = stacks with tier + loyalty everywhere (still subject to the
+  /// global CouponConfig.maxTotalDiscountPct guard).
   stackable Boolean @default(false)
+  /// Only meaningful when stackable = false. BILL = today's behavior (the whole
+  /// bill loses tier + loyalty). LINE = only the lines THIS coupon's own rules
+  /// match lose tier + loyalty; other lines in the same bill are unaffected.
+  stackScope CouponStackScope @default(BILL)
 
   // ── Targeting ──
   /// Bind a coupon to one customer account (customer-specific / milestone-issued).

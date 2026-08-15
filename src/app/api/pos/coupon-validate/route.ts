@@ -4,7 +4,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { selectCouponForCart, finalizeCouponAmount, type EvalInput } from "@/modules/coupons/lib";
+import { selectCouponForCart, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput } from "@/modules/coupons/lib";
+import { round2 } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 
 // POST /api/pos/coupon-validate — validate a coupon code (or pick the best auto
@@ -91,11 +92,36 @@ export async function POST(req: Request) {
         if (selected.kind === "none") return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
         if (selected.kind === "error") return NextResponse.json({ ok: false, reason: selected.reason });
 
+        // This endpoint only receives BILL-wide tierRupees/loyaltyRupees from the
+        // client (no per-line breakdown), unlike /sale which computes them line by
+        // line. For a LINE-scope coupon we estimate the exclusion by the coupon's
+        // matched-line SHARE of cost (tier's base) / goods (loyalty's base) — close
+        // enough for the on-screen preview; /sale posts the exact per-line number.
+        let tierRupeesEff = tierRupees;
+        let loyaltyRupeesEff = loyaltyRupees;
+        let droppedTier = false;
+        let blockedLoyalty = false;
+        if (!selected.coupon.stackable) {
+            if (selected.coupon.stackScope === "LINE") {
+                const totalCost = input.lines.reduce((s, l) => s + (l.costIncl != null ? l.qty * l.costIncl : 0), 0);
+                const tierFrac = totalCost > 0 ? eligibleCostBase(selected.coupon, input.lines) / totalCost : 0;
+                tierRupeesEff = round2(tierRupees * (1 - tierFrac));
+                const goodsFrac = goodsValue > 0 ? eligibleSubtotal(selected.coupon, input.lines) / goodsValue : 0;
+                loyaltyRupeesEff = round2(loyaltyRupees * (1 - goodsFrac));
+                droppedTier = tierRupeesEff < tierRupees - 0.005;
+                blockedLoyalty = loyaltyRupeesEff < loyaltyRupees - 0.005;
+            } else {
+                tierRupeesEff = 0;
+                loyaltyRupeesEff = 0;
+                droppedTier = tierRupees > 0;
+                blockedLoyalty = loyaltyRupees > 0;
+            }
+        }
+
         const config = await prisma.couponConfig.findUnique({ where: { id: 1 } });
         const fin = finalizeCouponAmount({
             selectedDiscount: selected.discountRupees,
-            tierRupees, loyaltyRupees, goodsValue,
-            couponStackable: selected.coupon.stackable,
+            tierRupees: tierRupeesEff, loyaltyRupees: loyaltyRupeesEff, goodsValue,
             maxTotalDiscountPct: config?.maxTotalDiscountPct != null ? Number(config.maxTotalDiscountPct) : null,
         });
 
@@ -107,8 +133,8 @@ export async function POST(req: Request) {
             code: selected.coupon.code,
             name: selected.coupon.name,
             discountRupees: fin.couponRupees,
-            droppedTier: fin.droppedTier,
-            blockedLoyalty: fin.blockedLoyalty,
+            droppedTier,
+            blockedLoyalty,
             clampedByGuard: fin.clampedByGuard,
         });
     } catch (e) {
