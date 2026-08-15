@@ -440,11 +440,8 @@ export function PosScreenShell({
                                 gcBusy={b.gcBusy}
                                 giftCardApplied={b.giftCardApplied}
                                 payableTotal={b.payableTotal}
-                                shippingAmt={b.shippingAmt}
                                 shippingAmtStr={b.shippingAmtStr}
                                 setShippingAmtStr={b.setShippingAmtStr}
-                                shippingGstRate={b.shippingGstRate}
-                                shippingTaxAmt={b.shippingTaxAmt}
                                 roundOff={b.roundOff}
                                 autoRoundOff={b.autoRoundOff}
                                 roundOffStr={b.roundOffStr}

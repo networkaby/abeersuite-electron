@@ -435,11 +435,11 @@ export function usePosBilling(opts: {
     // Bill-level adjustments shown on the customer ladder (print + display) so the
     // breakdown reconciles: manual charges + shipping + round-off (signed). Loyalty
     // /coupon are passed as their own discount fields, not here.
-    const posExtraCharges: { label: string; amount: number }[] = [
+    const posExtraCharges: { label: string; amount: number; taxAmount?: number }[] = [
         ...charges
             .filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005)
             .map((c) => ({ label: c.description?.trim() || "Charge", amount: parseAmt(c.amount) })),
-        ...(shippingAmt > 0.005 ? [{ label: "Shipping", amount: shippingAmt }] : []),
+        ...(shippingAmt > 0.005 ? [{ label: "Shipping", amount: shippingAmt, taxAmount: shippingTaxAmt }] : []),
         ...(Math.abs(roundOff) > 0.005 ? [{ label: "Round-off", amount: roundOff }] : []),
     ];
     // "Level Discount (Tier · synthetic%)" — the spend-tier row label. The % shown is
@@ -823,7 +823,6 @@ export function usePosBilling(opts: {
         pay, setPay, splits, setSplits, submitting, setSubmitting, openCheckout,
         // adjustments / offers
         adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,
-        shippingGstRate, shippingTaxAmt,
         redeemPointsStr, setRedeemPointsStr, redeemOn, setRedeemOn,
         couponCodeStr, setCouponCodeStr, appliedCoupon, setAppliedCoupon, autoCoupon,
         couponBusy, applyCoupon,

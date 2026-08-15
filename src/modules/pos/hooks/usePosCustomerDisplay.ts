@@ -35,7 +35,7 @@ export type PosCustomerDisplayParams = {
     effDiscountAmount: number;
     effRedemptionRupees: number;
     couponRupees: number;
-    posExtraCharges: { label: string; amount: number }[];
+    posExtraCharges: { label: string; amount: number; taxAmount?: number }[];
     posTierLabel: string | undefined;
 };
 

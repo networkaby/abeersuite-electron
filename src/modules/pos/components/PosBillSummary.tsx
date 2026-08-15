@@ -80,13 +80,12 @@ export type PosBillSummaryProps = {
 
     // Adjustments (shipping / round-off) — always visible, no toggle. Charges
     // moved out to the cart area (PosScreenShell).
-    shippingAmt: number;
+    // The typed amount is tax-INCLUSIVE, same as a product price — the GST it
+    // carries (rate inherited from the bill's goods — see resolveShippingGstRate)
+    // is staff's non-concern; it's folded in for print/customer display only
+    // (usePosBilling → posExtraCharges → priceLadder), never shown on this form.
     shippingAmtStr: string;
     setShippingAmtStr: (v: SetStateAction<string>) => void;
-    // Shipping GST hint — the typed amount is tax-inclusive; these surface the
-    // embedded rate + ₹ (dominant >50% rate, else max — see resolveShippingGstRate).
-    shippingGstRate: number;
-    shippingTaxAmt: number;
     roundOff: number;
     autoRoundOff: number;
     roundOffStr: string;
@@ -107,8 +106,7 @@ export function PosBillSummary({
     couponBlockedLoyalty, couponCodeStr, setCouponCodeStr, applyCoupon, couponBusy,
     giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, applyGiftCard, gcBusy,
     giftCardApplied, payableTotal,
-    shippingAmt, shippingAmtStr, setShippingAmtStr,
-    shippingGstRate, shippingTaxAmt,
+    shippingAmtStr, setShippingAmtStr,
     autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
     setRoundOffManuallyEdited,
     cart, checkoutSlot,
@@ -309,9 +307,9 @@ export function PosBillSummary({
                     wrap so it never dangles at the start of a wrapped line. */}
                 {snapshot && <div className="hidden h-4 w-px shrink-0 self-center bg-border sm:block" />}
 
-                {/* Shipping — typed amount is tax-INCLUSIVE; the hint shows the
-                    GST hiding inside it (rate follows the bill: dominant >50%
-                    rate, else max). Server recomputes — display only. */}
+                {/* Shipping — typed amount is tax-INCLUSIVE, same as a product
+                    price. No GST hint here: that breakdown is for print /
+                    customer display only (priceLadder), not staff entry. */}
                 <div className="flex items-center gap-2">
                     <Label htmlFor="pos-shipping" className="text-muted-foreground">Shipping</Label>
                     <Input
@@ -323,11 +321,6 @@ export function PosBillSummary({
                         placeholder="0.00"
                         className="h-7 w-24 text-right text-xs"
                     />
-                    {shippingAmt > 0.005 && shippingGstRate > 0 && (
-                        <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-                            incl. GST @{shippingGstRate}% · {formatInr(shippingTaxAmt)}
-                        </span>
-                    )}
                 </div>
                 {/* Round-off */}
                 <div className="flex items-center gap-2">

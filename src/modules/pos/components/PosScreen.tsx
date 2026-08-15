@@ -399,6 +399,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                             charges: printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
                             savings: printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
                             hsnSummary: printLadder.hsn,
+                            // Total GST embedded in the bill (goods + shipping/tax-bearing
+                            // charges) — additive field, older relays ignore it.
+                            taxTotal: printLadder.taxTotal,
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
                     // Overpayment booked a separate Receipt voucher (RV-…). On a

@@ -46,9 +46,14 @@ export type LadderInput = {
     /// Bill-level adjustments AFTER the goods discounts — shipping, round-off,
     /// manual charges. Amount is SIGNED: + adds to the bill (shipping/fee),
     /// − reduces it (manual discount). Excludes loyalty/coupon (those are the
-    /// dedicated discount fields above). Shown as their own rows; the goods
-    /// HSN/tax summary is computed on the goods total, NOT including these.
-    extraCharges?:   { label: string; amount: number }[];
+    /// dedicated discount fields above). Shown as their own rows, tax-INCLUSIVE
+    /// (same convention as a goods line) — the goods HSN/rate TABLE is computed
+    /// on the goods total only, NOT including these.
+    /// `taxAmount` — GST embedded in this charge (e.g. shipping inherits the
+    /// bill's rate — see resolveShippingGstRate). Pools into `taxTotal` /
+    /// `cgstTotal` / `sgstTotal` below, same as product tax, so the bill's
+    /// total GST figure matches what's posted to GL. Absent/0 = untaxed charge.
+    extraCharges?:   { label: string; amount: number; taxAmount?: number }[];
     /// Final amount the customer pays (rupees) — the voucher total.
     total:           number;
 };
@@ -221,8 +226,13 @@ export function computePriceLadder(
         .sort((a, b) => a.ratePct - b.ratePct || a.hsn.localeCompare(b.hsn));
 
     const taxableTotal = r2(hsn.reduce((s, g) => s + g.taxable, 0));
-    const cgstTotal    = r2(hsn.reduce((s, g) => s + g.cgst, 0));
-    const sgstTotal    = r2(hsn.reduce((s, g) => s + g.sgst, 0));
+    // GST embedded in tax-bearing charge rows (shipping) — same pool as goods
+    // tax, split CGST/SGST 50/50 like the HSN rows above (the INTRA/INTER
+    // label is a display-side decision made from the combined total, same as
+    // for goods — see ThermalReceiptPreview / computeGstSplit).
+    const chargesTax  = (input.extraCharges ?? []).reduce((s, c) => s + Math.max(0, c.taxAmount ?? 0), 0);
+    const cgstTotal    = r2(hsn.reduce((s, g) => s + g.cgst, 0) + chargesTax / 2);
+    const sgstTotal    = r2(hsn.reduce((s, g) => s + g.sgst, 0) + chargesTax / 2);
     const taxTotal     = r2(cgstTotal + sgstTotal);
 
     return {

@@ -73,6 +73,11 @@ export interface ReceiptDiscounts {
     total:        number;             // Σ rows
     savingsTotal: number;             // MRP total − paid
     savingsPct:   number;
+    /// Total GST embedded in the bill (goods + tax-bearing charges like
+    /// shipping — see priceLadder's `taxTotal`). Drives the "incl. GST" note
+    /// below the ladder total. Absent → falls back to summing `hsnSummary`
+    /// (goods-only; undercounts when a charge carries its own tax).
+    taxTotal?:    number;
 }
 
 /**
@@ -433,7 +438,11 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                         note on the total, not a column row (so the math reads correctly). */}
                     {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
                         const inter = sample.taxBreakdown?.kind === "INTER";
-                        const tax = sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
+                        // Prefer the ladder's complete total (goods + tax-bearing
+                        // charges like shipping); fall back to goods-only for
+                        // callers that haven't supplied it yet.
+                        const tax = sample.discounts?.taxTotal
+                            ?? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
                         return tax > 0.005 ? (
                             <div className="row small"><span>incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
                         ) : null;

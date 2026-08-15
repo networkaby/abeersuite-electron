@@ -155,7 +155,7 @@ export default async function PosReceiptPage({
     let loyaltyLabel: string | undefined, couponLabel: string | undefined;
     // Bill-level adjustments (everything that isn't a goods discount): shipping,
     // round-off and any manual charge. Signed: + adds, − reduces.
-    const extraCharges: { label: string; amount: number }[] = [];
+    const extraCharges: { label: string; amount: number; taxAmount?: number }[] = [];
     for (const c of charges) {
         const amt = Number(c.amount);
         if (amt < 0 && loyaltyConfig?.redeemExpenseAccountId && c.accountId === loyaltyConfig.redeemExpenseAccountId) {
@@ -165,13 +165,18 @@ export default async function PosReceiptPage({
             couponDiscount += Math.abs(amt);
             couponLabel = c.description?.trim() || "Coupon";
         } else if (Math.abs(amt) > 0.005) {
-            // Manual charge / discount — keep its sign and label.
-            extraCharges.push({ label: c.description?.trim() || c.account?.name || "Charge", amount: amt });
+            // Manual charge / discount — keep its sign and label. A tax-bearing
+            // charge (POS service) carries its own GST, same as shipping below.
+            extraCharges.push({
+                label: c.description?.trim() || c.account?.name || "Charge",
+                amount: amt,
+                taxAmount: c.taxAmount != null ? Math.max(0, Number(c.taxAmount)) : undefined,
+            });
         }
     }
     const shippingAmt = Number(voucher.shippingAmt ?? 0);
     const roundOff    = Number(voucher.roundOff ?? 0);
-    if (shippingAmt > 0.005) extraCharges.push({ label: "Shipping", amount: shippingAmt });
+    if (shippingAmt > 0.005) extraCharges.push({ label: "Shipping", amount: shippingAmt, taxAmount: Number(voucher.shippingTaxAmt ?? 0) });
     if (Math.abs(roundOff) > 0.005) extraCharges.push({ label: "Round-off", amount: roundOff });
 
     // Resolve the spend-tier NAME from the voucher's configured discount % (the record
@@ -261,6 +266,7 @@ export default async function PosReceiptPage({
                 total:        ladder.todaysDiscountTotal,
                 savingsTotal: ladder.savingsTotal,
                 savingsPct:   ladder.savingsPct,
+                taxTotal:     ladder.taxTotal,
             }
             : null,
         hsnSummary: ladder?.hsn ?? null,
