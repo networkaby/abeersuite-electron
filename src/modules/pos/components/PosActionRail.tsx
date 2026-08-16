@@ -13,6 +13,20 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { POS_RAIL_ACTIONS, type PosRailAccessKey } from "@/utils/constants";
 
+// Same pastel hue language as the header (PosTopBar's `tint`) — colored icon +
+// label with a soft hover wash, dark-mode paired. Keyed by the `tint` field each
+// rail action declares in constants.ts.
+const tint = {
+    emerald: "text-emerald-700 hover:bg-emerald-100/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30",
+    amber:   "text-amber-700 hover:bg-amber-100/60 dark:text-amber-300 dark:hover:bg-amber-950/30",
+    indigo:  "text-indigo-700 hover:bg-indigo-100/60 dark:text-indigo-300 dark:hover:bg-indigo-950/30",
+    sky:     "text-sky-700 hover:bg-sky-100/60 dark:text-sky-300 dark:hover:bg-sky-950/30",
+    violet:  "text-violet-700 hover:bg-violet-100/60 dark:text-violet-300 dark:hover:bg-violet-950/30",
+    rose:    "text-rose-700 hover:bg-rose-100/60 dark:text-rose-300 dark:hover:bg-rose-950/30",
+    cyan:    "text-cyan-700 hover:bg-cyan-100/60 dark:text-cyan-300 dark:hover:bg-cyan-950/30",
+    teal:    "text-teal-700 hover:bg-teal-100/60 dark:text-teal-300 dark:hover:bg-teal-950/30",
+} as const;
+
 export type PosActionRailProps = {
     onExp: () => void;
     onRcv: () => void;
@@ -20,12 +34,14 @@ export type PosActionRailProps = {
     onTicket: () => void;
     onEnquiry: () => void;
     onTask: () => void;
+    onDeal: () => void;
+    onLead: () => void;
     canExp?: boolean;
     canRcv?: boolean;
 };
 
-export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, canExp = true, canRcv = true }: PosActionRailProps) {
-    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask };
+export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, onDeal, onLead, canExp = true, canRcv = true }: PosActionRailProps) {
+    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask, deal: onDeal, lead: onLead };
     const flags: Record<PosRailAccessKey, boolean> = { canRcv, canExp };
 
     return (
@@ -39,7 +55,7 @@ export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTas
                 return (
                     <Fragment key={a.key}>
                         {a.divider && <div className="my-1 border-t border-border/70" />}
-                        <RailButton icon={<a.icon size={16} />} label={a.label} onClick={onClick} title={a.title} />
+                        <RailButton icon={<a.icon size={16} />} label={a.label} onClick={onClick} title={a.title} tint={a.tint ? tint[a.tint] : undefined} />
                     </Fragment>
                 );
             })}
@@ -52,11 +68,13 @@ function RailButton({
     label,
     onClick,
     title,
+    tint,
 }: {
     icon: React.ReactNode;
     label: string;
     onClick: () => void;
     title?: string;
+    tint?: string;
 }) {
     return (
         <Button
@@ -64,7 +82,7 @@ function RailButton({
             size="sm"
             onClick={onClick}
             title={title ?? label}
-            className="flex h-auto flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium"
+            className={`flex h-auto flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium ${tint ?? ""}`}
         >
             {icon}
             {label}

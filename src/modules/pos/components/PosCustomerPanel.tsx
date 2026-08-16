@@ -26,6 +26,26 @@ import { type TierResult } from "@/shared/lib/pricing";
 import { StarRating, QualityTimeline } from "@/modules/customer/components/CustomerQualityTab";
 import { latestRating, type QualityLogEntry } from "@/modules/customer/lib/customerQuality";
 
+// Pastel card + label tints — same palette language as the POS header/rail,
+// so the profile panel reads colorful instead of monochrome.
+const tintCard = {
+    emerald: "border-emerald-300/50 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-950/20",
+    rose:    "border-rose-300/50 bg-rose-50/50 dark:border-rose-500/30 dark:bg-rose-950/20",
+    amber:   "border-amber-300/50 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-950/20",
+    indigo:  "border-indigo-300/50 bg-indigo-50/50 dark:border-indigo-500/30 dark:bg-indigo-950/20",
+    sky:     "border-sky-300/50 bg-sky-50/50 dark:border-sky-500/30 dark:bg-sky-950/20",
+    violet:  "border-violet-300/50 bg-violet-50/50 dark:border-violet-500/30 dark:bg-violet-950/20",
+} as const;
+const tintText = {
+    emerald: "text-emerald-700 dark:text-emerald-300",
+    rose:    "text-rose-700 dark:text-rose-300",
+    amber:   "text-amber-700 dark:text-amber-300",
+    indigo:  "text-indigo-700 dark:text-indigo-300",
+    sky:     "text-sky-700 dark:text-sky-300",
+    violet:  "text-violet-700 dark:text-violet-300",
+} as const;
+type StatTint = keyof typeof tintCard;
+
 const since = (iso: string | null) => {
     if (!iso) return "never";
     const d = new Date(iso);
@@ -143,6 +163,7 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                     label="Avail. credit"
                     value={snapshot.availableCredit != null ? formatInr(snapshot.availableCredit) : "Unlimited"}
                     sub={snapshot.creditLimit != null ? `limit ${formatInr(snapshot.creditLimit)}` : "no limit set"}
+                    tint="emerald"
                 />
                 {/* Due — sign-aware: flips to "Advance" (green) when the ledger is
                     in credit, so it absorbs the old separate ledger-balance row. */}
@@ -156,6 +177,7 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                             value={formatInr(credit ? Math.abs(bal) : snapshot.balanceDue)}
                             sub={credit ? "in their favour" : snapshot.balanceDue > 0 ? "outstanding" : "clean"}
                             valueClass={credit ? "text-emerald-600 dark:text-emerald-400" : undefined}
+                            tint={credit ? "emerald" : "rose"}
                         />
                     );
                 })()}
@@ -164,6 +186,7 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                     label="Overdue"
                     value={formatInr(snapshot.balanceOverdue)}
                     sub={snapshot.balanceOverdue > 0 ? "past due" : "—"}
+                    tint="rose"
                 />
             </div>
 
@@ -243,16 +266,16 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
 
             {/* Value & loyalty */}
             <div className="grid grid-cols-2 gap-1">
-                <Stat icon={<TrendingUp size={12} />} label="Lifetime" value={formatInr(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
-                <Stat icon={<TrendingUp size={12} />} label="Last 12 mo" value={formatInr(snapshot.turnover.last12Months)} />
-                <Stat icon={<Award size={12} />} label="Loyalty" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${formatInr(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)}` : tier.discountPct > 0 ? `${tier.discountPct}% tier` : "No tier"} />
-                <Stat icon={<Clock size={12} />} label="Visit" value={since(snapshot.lastVisitAt)} />
+                <Stat tint="indigo" icon={<TrendingUp size={12} />} label="Lifetime" value={formatInr(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
+                <Stat tint="sky" icon={<TrendingUp size={12} />} label="Last 12 mo" value={formatInr(snapshot.turnover.last12Months)} />
+                <Stat tint="amber" icon={<Award size={12} />} label="Loyalty" value={String(snapshot.loyaltyPoints)} sub={snapshot.loyaltyRates?.enabled ? `worth ${formatInr(snapshot.loyaltyPoints * snapshot.loyaltyRates.redeemValue)}` : tier.discountPct > 0 ? `${tier.discountPct}% tier` : "No tier"} />
+                <Stat tint="violet" icon={<Clock size={12} />} label="Visit" value={since(snapshot.lastVisitAt)} />
             </div>
 
             {/* Rating (tap to rate) + favourite category */}
             <div className="grid grid-cols-2 gap-1">
-                <div className="rounded-md border border-border bg-card px-2 py-1">
-                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="rounded-md border border-amber-300/50 bg-amber-50/50 px-2 py-1 dark:border-amber-500/30 dark:bg-amber-950/20">
+                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-300">
                         <Star size={12} /> Rating
                     </div>
                     <div className="mt-0.5">
@@ -265,6 +288,7 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                     label="Favourite"
                     value={snapshot.favouriteCategory ?? "—"}
                     sub={snapshot.favouriteCategory == null ? "needs invoice link" : undefined}
+                    tint="rose"
                 />
             </div>
 
@@ -326,10 +350,10 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
     );
 }
 
-function Stat({ icon, label, value, sub, valueClass }: { icon: React.ReactNode; label: string; value: string; sub?: string; valueClass?: string }) {
+function Stat({ icon, label, value, sub, valueClass, tint }: { icon: React.ReactNode; label: string; value: string; sub?: string; valueClass?: string; tint?: StatTint }) {
     return (
-        <div className="rounded-md border border-border bg-card px-2 py-1">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className={`rounded-md border px-2 py-1 ${tint ? tintCard[tint] : "border-border bg-card"}`}>
+            <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider ${tint ? tintText[tint] : "text-muted-foreground"}`}>
                 {icon} {label}
             </div>
             <div className={`mt-0.5 text-xs font-semibold leading-tight tabular-nums ${valueClass ?? ""}`}>{value}</div>

@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Search, ShoppingCart, Plus, Minus, Trash2, Wrench } from "lucide-react";
+import { ScanLine, ShoppingCart, Plus, Minus, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,8 @@ import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import { PosUpsellDrawer } from "@/modules/pos/components/PosUpsellDrawer";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import HelpQuickForm from "@/modules/help/components/HelpQuickForm";
+import { DealFormDialog } from "@/modules/deals/components";
+import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { TaskFormDialog } from "@/modules/administration/components";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
@@ -68,6 +70,10 @@ export function PosScreenShell({
     const [enquiryOpen, setEnquiryOpen] = useState(false);
     // Counter "Task" — add an internal work item (reuses the office form).
     const [taskOpen, setTaskOpen] = useState(false);
+    // Counter "Deal" — log a CRM sales opportunity (reuses the office form).
+    const [dealOpen, setDealOpen] = useState(false);
+    // Counter "Lead" — capture a new contact on the fly (reuses the office form).
+    const [leadOpen, setLeadOpen] = useState(false);
     const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions");
 
     // Auto-focus the party picker on mount so the cashier can start typing
@@ -140,10 +146,7 @@ export function PosScreenShell({
                     changeMode={b.changingParty}
                     activeShift={b.activeShift}
                     shiftLoaded={b.shiftLoaded}
-                    shiftOpenedAt={b.shiftOpenedAt}
                     onRefreshShift={b.refreshActiveShift}
-                    onDropToSafe={() => b.setShiftDropOpen(true)}
-                    onCloseShift={() => b.setShiftCloseOpen(true)}
                     onOpenShift={() => b.setShiftOpenDialogOpen(true)}
                 />
 
@@ -202,15 +205,23 @@ export function PosScreenShell({
                         <div className="shrink-0 border-b border-border p-3">
                             <div className="flex items-center gap-2">
                                 <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                                    {/* The scan bar is THE primary control — emerald-tinted so it's
+                                        unmistakable even when it loses focus (after a coupon, a cart
+                                        edit, etc.), matching the sale header's palette. */}
+                                    <ScanLine className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-emerald-600 dark:text-emerald-400" />
                                     <Input
                                         ref={productSearchRef}
                                         value={b.productQuery}
                                         onChange={(e) => { b.setProductQuery(e.target.value); b.setProductHighlight(0); }}
                                         onKeyDown={b.onProductKeyDown}
-                                        placeholder="Scan / type · ↑↓ ↵ · / = product · F2 = customer"
-                                        className="h-9 rounded-md pl-9 text-sm shadow-sm focus-visible:ring-1"
+                                        placeholder="Scan barcode or search · ↵ add · F2 = customer"
+                                        className="h-10 rounded-md border-2 border-emerald-300/70 bg-emerald-50/40 pl-9 pr-12 text-sm shadow-sm outline-none placeholder:text-emerald-900/45 focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:placeholder:text-emerald-100/40"
                                     />
+                                    {/* "/" focuses the scan box from anywhere — a visible key chip so
+                                        the cashier can always find the way back after a coupon, etc. */}
+                                    <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-emerald-300/60 bg-background/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300">
+                                        /
+                                    </kbd>
                                     {b.filteredProducts.length > 0 && (
                                         <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                                             {b.filteredProducts.map((p, i) => (
@@ -243,8 +254,8 @@ export function PosScreenShell({
                             <div className="flex-1 overflow-y-auto">
                                 {b.cart.length === 0 ? (
                                     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-                                        <div className="rounded-full bg-muted p-3 text-muted-foreground">
-                                            <ShoppingCart size={24} className="opacity-70" />
+                                        <div className="rounded-full bg-emerald-100/70 p-3 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                            <ShoppingCart size={24} />
                                         </div>
                                         <p className="text-sm font-medium text-foreground/80">Cart is empty</p>
                                         <p className="text-xs text-muted-foreground">Scan a barcode or search above to add items.</p>
@@ -270,7 +281,9 @@ export function PosScreenShell({
                                             const unitInclusive = l.unitPrice * (1 + (l.taxRate ?? 0) / 100);
                                             const lineTotal = l.qty * unitInclusive;
                                             return (
-                                                <li key={l.productId} className={`px-3 py-1.5 ${isService ? "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20" : ""}`}>
+                                                <li key={l.productId} className={`px-3 py-1.5 ${isService
+                                                ? "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20"
+                                                : "border-l-2 border-l-emerald-300/60 bg-gradient-to-r from-emerald-50/50 to-transparent dark:border-l-emerald-500/30 dark:from-emerald-950/20"}`}>
                                                     {/* Wide layout: name | warranty | note | mrp | qty | price | total | trash all on one line.
                                                     Narrow (<lg) stacks name above and the rest below. */}
                                                     <div className="grid items-center gap-1.5 lg:grid-cols-[minmax(140px,1.4fr)_60px_minmax(140px,1fr)_110px_auto_100px_minmax(80px,auto)_auto]">
@@ -313,17 +326,17 @@ export function PosScreenShell({
                                                         ) : (
                                                             <div className="hidden lg:flex flex-col items-end gap-0.5 text-[10px] leading-tight text-muted-foreground">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span className="uppercase tracking-wider">MRP</span>
-                                                                    <span className={mrp != null && mrp !== l.unitPrice ? "line-through" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
+                                                                    <span className="uppercase tracking-wider text-rose-500/70">MRP</span>
+                                                                    <span className={mrp != null && mrp !== l.unitPrice ? "line-through text-muted-foreground" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span className="uppercase tracking-wider">Barcode</span>
-                                                                    <span>{barcode != null ? formatInr(barcode) : "—"}</span>
+                                                                    <span className="uppercase tracking-wider text-emerald-600/80 dark:text-emerald-400/80">Barcode</span>
+                                                                    <span className="font-medium text-emerald-700 dark:text-emerald-300">{barcode != null ? formatInr(barcode) : "—"}</span>
                                                                 </div>
                                                             </div>
                                                         )}
                                                         <div className="flex items-center gap-0.5">
-                                                            <Button variant="ghost" size="icon-xs" onClick={() => b.setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
+                                                            <Button variant="outline" size="icon-xs" className="border-emerald-300/50 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-950/40" onClick={() => b.setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
                                                             <Input
                                                                 value={l.qty}
                                                                 onChange={(e) => b.setQty(l.productId, Number(e.target.value) || 0)}
@@ -331,7 +344,7 @@ export function PosScreenShell({
                                                                 className="h-7 w-10 text-center text-xs"
                                                                 inputMode="decimal"
                                                             />
-                                                            <Button variant="ghost" size="icon-xs" onClick={() => b.setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
+                                                            <Button variant="outline" size="icon-xs" className="border-emerald-300/50 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-950/40" onClick={() => b.setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
                                                         </div>
                                                         {/* Price column shows the TAX-INCLUSIVE price (matches the
                                                         price tag). Storage stays pre-tax — we back-calculate on
@@ -343,7 +356,7 @@ export function PosScreenShell({
                                                             onKeyDown={enterToNextProduct}
                                                         />
                                                         {/* Line total — qty × inclusive price. */}
-                                                        <div className="text-right text-sm font-semibold tabular-nums">{formatInr(lineTotal)}</div>
+                                                        <div className="text-right text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-300">{formatInr(lineTotal)}</div>
                                                         <Button variant="ghost" size="icon-xs" onClick={() => b.setQty(l.productId, 0)} title="Remove">
                                                             <Trash2 size={12} className="text-destructive" />
                                                         </Button>
@@ -367,7 +380,7 @@ export function PosScreenShell({
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setServiceMenuOpen((o) => !o)}
-                                        className="h-6 gap-1 px-1.5 text-xs text-primary hover:text-primary"
+                                        className="h-6 gap-1 border border-sky-300/50 bg-sky-50/50 px-1.5 text-xs text-sky-700 hover:bg-sky-100/70 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
                                     >
                                         <Wrench size={12} /> Add service
                                     </Button>
@@ -481,6 +494,8 @@ export function PosScreenShell({
                 onTicket={() => { useQuickTicketStore.getState().reset(); useQuickTicketStore.getState().setOpen(true); }}
                 onEnquiry={() => setEnquiryOpen(true)}
                 onTask={() => setTaskOpen(true)}
+                onDeal={() => setDealOpen(true)}
+                onLead={() => setLeadOpen(true)}
                 canExp={b.posAccess.canExp}
                 canRcv={b.posAccess.canRcv}
             />
@@ -495,6 +510,14 @@ export function PosScreenShell({
 
             {/* Task dialog (opened from the rail's Task button). */}
             <TaskFormDialog open={taskOpen} onOpenChange={setTaskOpen} positions={taskPositions} task={null} onSaved={() => { /* counter has no list to refresh */ }} />
+
+            {/* Deal dialog (opened from the rail's Deal button) — log a CRM sales
+                opportunity at the counter. Same positions source as tasks. */}
+            <DealFormDialog open={dealOpen} onOpenChange={setDealOpen} positions={taskPositions} deal={null} onSaved={() => { /* counter has no board to refresh */ }} />
+
+            {/* Lead dialog (opened from the rail's Lead button) — capture a new
+                contact on the fly, same quick-entry form the call log uses. */}
+            <CreatePersonDialog open={leadOpen} onOpenChange={setLeadOpen} />
 
             {/* Upsell & Cross-sell drawer — opens left over the cart from the
             customer panel trigger. Live qualification offers + one-tap add-ons. */}

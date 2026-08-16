@@ -268,18 +268,22 @@ export type PosRailAction = {
     divider?: boolean;
     /** Hide the button unless this access flag is true. */
     can?: PosRailAccessKey;
+    /** Pastel hue for the icon + label + hover (same palette as the header). */
+    tint?: "emerald" | "amber" | "indigo" | "sky" | "violet" | "rose" | "cyan" | "teal";
 };
 
 // ⇩ Edit this list to add / remove / reorder POS rail buttons.
 export const POS_RAIL_ACTIONS: PosRailAction[] = [
-    { key: "rcv", label: "Rcv", icon: HandCoins, kind: "action", can: "canRcv", title: "Collect a payment from a customer into this counter's till — posts a receipt voucher" },
-    { key: "exp", label: "Exp", icon: Wallet, kind: "action", can: "canExp", title: "Record a counter expenditure (tea, sundry…) — posts a payment voucher from the counter's till" },
+    { key: "rcv", label: "Rcv", icon: HandCoins, kind: "action", can: "canRcv", tint: "emerald", title: "Collect a payment from a customer into this counter's till — posts a receipt voucher" },
+    { key: "exp", label: "Exp", icon: Wallet, kind: "action", can: "canExp", tint: "rose", title: "Record a counter expenditure (tea, sundry…) — posts a payment voucher from the counter's till" },
 
     // { key: "help", label: "Help", icon: HelpCircle, kind: "action", divider: true, title: "POS help & keyboard shortcuts" },
 
-    { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", title: "Create a repair ticket for a customer" },
-    { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
-    { key: "task", label: "Task", icon: SquareCheckBig, kind: "action", title: "Add an internal work item to the board" },
+    { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", tint: "indigo", title: "Create a repair ticket for a customer" },
+    { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", tint: "sky", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
+    { key: "task", label: "Task", icon: SquareCheckBig, kind: "action", tint: "violet", title: "Add an internal work item to the board" },
+    { key: "deal", label: "Deal", icon: Handshake, kind: "action", tint: "cyan", title: "Create a sales deal on the CRM pipeline — log the opportunity at the counter" },
+    { key: "lead", label: "Lead", icon: UserRoundPlus, kind: "action", tint: "teal", title: "Capture a new lead — create a contact (person) on the fly" },
 
 ];
 

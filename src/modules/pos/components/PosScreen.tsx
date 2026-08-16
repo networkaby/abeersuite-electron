@@ -466,7 +466,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         "Checkout"
                     }
                 >
-                    <ReceiptIndianRupee size={18} /> {isEdit ? "Update Sale" : "Checkout"}
+                    <ReceiptIndianRupee size={18} /> {isEdit ? `Update Sale · ${formatInr(b.total)}` : `Checkout · ${formatInr(b.total)}`}
                     <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                 </Button>
             }

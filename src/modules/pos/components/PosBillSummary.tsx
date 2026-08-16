@@ -99,7 +99,7 @@ export type PosBillSummaryProps = {
 };
 
 export function PosBillSummary({
-    subtotal, tax, total, totalDiscount, discountPct, synthDiscountPct, discountAmount, tier,
+    subtotal, tax, totalDiscount, discountPct, synthDiscountPct, discountAmount, tier,
     snapshot, rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
     redeemOn, setRedeemOn, redeemPointsStr, setRedeemPointsStr, effRedemptionRupees,
     appliedCoupon, setAppliedCoupon, autoCoupon, couponRupees, couponDroppedTier,
@@ -109,10 +109,10 @@ export function PosBillSummary({
     shippingAmtStr, setShippingAmtStr,
     autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
     setRoundOffManuallyEdited,
-    cart, checkoutSlot,
+    checkoutSlot,
 }: PosBillSummaryProps) {
     return (
-        <div className="shrink-0 space-y-1.5 border-t border-border py-1 px-3">
+        <div className="shrink-0 space-y-1.5 border-t border-emerald-300/30 bg-gradient-to-t from-emerald-50/60 to-transparent px-3 py-1 dark:border-emerald-500/20 dark:from-emerald-950/15">
             {/* Subtotal is the tax-INCLUSIVE cart value (price-tag-style).
                 When the operator hasn't added shipping / round-off / charges,
                 Subtotal equals Total. The CGST/SGST split underneath is
@@ -128,7 +128,7 @@ export function PosBillSummary({
                             incl. GST · SGST {formatInr(tax / 2)} + CGST {formatInr(tax / 2)} = {formatInr(tax)}
                         </span>
                     )}
-                    <span className="font-medium">{formatInr(subtotal + tax)}</span>
+                    <span className="font-medium text-emerald-800 dark:text-emerald-300">{formatInr(subtotal + tax)}</span>
                 </div>
             </div>
             {/* Discounts — each kind is its own chip, joined by a "+" since
@@ -363,16 +363,10 @@ export function PosBillSummary({
                 </div>
             )}
 
-            <div className="flex items-baseline justify-between border-t border-border pt-2">
-                <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-semibold">Total</span>
-                    {cart.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{cart.length} item{cart.length > 1 ? "s" : ""}</span>
-                    )}
-                </div>
-                <span className="text-lg font-bold tabular-nums">{formatInr(total)}</span>
-            </div>
-            {checkoutSlot}
+            {/* Total rides inside the checkout button label (each screen stamps
+                its own: "Checkout · ₹1,234") — no standalone Total row, so the
+                footer is one line shorter. */}
+            <div className="border-t border-border pt-2">{checkoutSlot}</div>
         </div>
     );
 }

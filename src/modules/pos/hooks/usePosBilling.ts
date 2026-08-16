@@ -470,7 +470,12 @@ export function usePosBilling(opts: {
         setGcBusy(true);
         try {
             const { data } = await axios.post<{ ok: boolean; reason?: string; id: number; code: string; balance: number }>("/api/pos/gift-card-lookup", { code });
-            if (data.ok) { setGiftCard({ id: data.id, code: data.code, balance: data.balance }); toast.success(`Gift card ${data.code} · ${formatInr(data.balance)} available`); }
+            if (data.ok) {
+                setGiftCard({ id: data.id, code: data.code, balance: data.balance });
+                toast.success(`Gift card ${data.code} · ${formatInr(data.balance)} available`);
+                // Done with the bill-summary section — hand focus back to the scan box.
+                setTimeout(() => productSearchRef.current?.focus(), 0);
+            }
             else { setGiftCard(null); toast.error(data.reason ?? "Gift card not usable"); }
         } catch {
             toast.error("Gift-card lookup failed");
@@ -566,6 +571,8 @@ export function usePosBilling(opts: {
             if (data?.ok) {
                 setAppliedCoupon(hit(data));
                 toast.success(`Coupon ${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)}`);
+                // Done with the coupon section — hand focus back to the scan box.
+                setTimeout(() => productSearchRef.current?.focus(), 0);
             } else {
                 setAppliedCoupon(null);
                 toast.error(data?.reason ?? "Coupon not applicable");

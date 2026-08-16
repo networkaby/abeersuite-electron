@@ -11,7 +11,7 @@
 import Link from "next/link";
 import {
     ArrowLeft, X, UserPlus, ExternalLink, RotateCcw,
-    MoreVertical, RefreshCw, Lock, ArrowRightLeft, Monitor,
+    MoreVertical, RefreshCw, LayoutDashboard, Monitor,
     ShoppingCart, ClipboardList, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,17 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
+
+// Soft pastel tints for the header action buttons — muted so they're easy on
+// the eye (no saturated rainbows), with dark-mode pairs so the bar stays calm
+// in both themes. Each action gets one hue so the cashier can find it by colour.
+const tint = {
+    emerald: "border-emerald-300/60 bg-emerald-50/40 text-emerald-800 hover:bg-emerald-100/70 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50",
+    amber:   "border-amber-300/60 bg-amber-50/40 text-amber-800 hover:bg-amber-100/70 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50",
+    indigo:  "border-indigo-300/60 bg-indigo-50/40 text-indigo-800 hover:bg-indigo-100/70 dark:border-indigo-500/40 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/50",
+    sky:     "border-sky-300/60 bg-sky-50/40 text-sky-800 hover:bg-sky-100/70 dark:border-sky-500/40 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:bg-sky-950/50",
+    violet:  "border-violet-300/60 bg-violet-50/40 text-violet-800 hover:bg-violet-100/70 dark:border-violet-500/40 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-950/50",
+} as const;
 
 export type PosTopBarProps = {
     /** Colour tint for the bar — each screen passes its own (emerald/indigo/amber). */
@@ -52,14 +63,11 @@ export type PosTopBarProps = {
     // ── Action buttons ──────────────────────────────────────────────────────
     onReturn: () => void;
 
-    // ── Shift ⋮ menu ────────────────────────────────────────────────────────
+    // ── Shift pill (refresh / open) ────────────────────────────────────────
     activeShift: ActiveShift | null;
     shiftLoaded: boolean;
-    /** Opened-at clock label (mirrors ActiveShiftBar). */
-    shiftOpenedAt: string;
+    /** Refresh the current shift; with no shift open, tapping the pill opens one. */
     onRefreshShift: () => void;
-    onDropToSafe: () => void;
-    onCloseShift: () => void;
     onOpenShift: () => void;
 };
 
@@ -68,8 +76,8 @@ export function PosTopBar({
     partySearchRef, onPartyPicked, locked, onDialogOpenChange,
     showClear, onClear, onNewCustomer, missingParty, changeMode,
     onReturn,
-    activeShift, shiftLoaded, shiftOpenedAt,
-    onRefreshShift, onDropToSafe, onCloseShift, onOpenShift,
+    activeShift, shiftLoaded,
+    onRefreshShift, onOpenShift,
 }: PosTopBarProps) {
     return (
         <header className={`flex shrink-0 items-center gap-3 border-b-2 px-4 py-3 ${headerClass}`}>
@@ -78,7 +86,7 @@ export function PosTopBar({
             </Link>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5">
+                    <Button variant="outline" size="sm" className={`gap-1.5 ${active === "sale" ? tint.emerald : active === "order" ? tint.indigo : tint.amber}`}>
                         {active === "sale" && <ShoppingCart size={14} />}
                         {active === "order" && <ClipboardList size={14} />}
                         {active === "estimate" && <FileText size={14} />}
@@ -135,6 +143,7 @@ export function PosTopBar({
                 size="sm"
                 onClick={onNewCustomer}
                 title="Walk-in customer not in the system yet — create on the fly"
+                className={tint.violet}
             >
                 <UserPlus size={14} />
             </Button>
@@ -143,6 +152,7 @@ export function PosTopBar({
                 size="sm"
                 onClick={() => window.open("/vouchers/pos/new", "_blank", "noopener")}
                 title="Open a new POS tab — start another bill while this one waits"
+                className={tint.emerald}
             >
                 <ExternalLink size={14} /> New POS
             </Button>
@@ -151,64 +161,51 @@ export function PosTopBar({
                 size="sm"
                 onClick={onReturn}
                 title="Process a sale return — by invoice number, customer, or lost invoice"
+                className={tint.amber}
             >
                 <RotateCcw size={14} /> Return
             </Button>
             {/* Exp + Rcv + Help now live in the right-edge PosActionRail. */}
 
-            {/* Shift status + actions — folds the old full-width shift bar into
-                the header. Also carries the nav link to the /vouchers/pos register
-                where the live shift overview lives. */}
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        title="Shift status & actions"
-                        className={activeShift ? "border-emerald-300/70" : "border-amber-300/70"}
-                    >
-                        <span className={`h-2 w-2 rounded-full ${!shiftLoaded ? "bg-muted-foreground/40" : activeShift ? "bg-emerald-500" : "bg-amber-500"}`} />
-                        {!shiftLoaded ? "Shift…" : activeShift ? `Shift #${activeShift.id}` : "No shift"}
-                        <MoreVertical size={13} className="opacity-60" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="text-xs">
-                    {activeShift?.status === "OPEN" ? (
-                        <>
-                            <DropdownMenuLabel className="font-normal text-muted-foreground">
-                                {activeShift.counter.name} · since {shiftOpenedAt}
-                            </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={onRefreshShift}>
-                                <RefreshCw size={12} /> Refresh
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={onDropToSafe}>
-                                <Lock size={12} /> Drop to safe
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={onCloseShift}
-                                className="text-amber-700 focus:text-amber-700 dark:text-amber-400"
-                            >
-                                <ArrowRightLeft size={12} /> Close shift
-                            </DropdownMenuItem>
-                        </>
-                    ) : activeShift?.status === "AWAITING_HANDOVER" ? (
-                        <DropdownMenuLabel className="font-normal text-amber-700 dark:text-amber-400">
-                            Awaiting handover — see the bar above
-                        </DropdownMenuLabel>
-                    ) : (
-                        <DropdownMenuItem onClick={onOpenShift}>
-                            <Lock size={12} /> Open shift
-                        </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                        <Link href="/vouchers/pos">
-                            <Monitor size={12} /> POS sales register
-                        </Link>
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Office + POS register — both open in a new tab so the bill in
+                progress is never left behind (same pattern as "New POS"). */}
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open("/office", "_blank", "noopener")}
+                title="Open the office in a new tab"
+                className={tint.indigo}
+            >
+                <LayoutDashboard size={14} /> Office<ExternalLink size={12} className="ml-1 opacity-70" />
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open("/vouchers/pos", "_blank", "noopener")}
+                title="POS sales register — live shift overview in a new tab"
+                className={tint.sky}
+            >
+                <Monitor size={14} /> Register<ExternalLink size={12} className="ml-1 opacity-70" />
+            </Button>
+
+            {/* Shift status + refresh — the old ⋮ dropdown is gone: the pill is
+                now a direct refresh button (the cashier's most-used action).
+                Drop-to-safe / close-shift / the sales register live on the POS
+                sales register page (/vouchers/pos), which keeps its own full
+                shift bar. With no shift open, tapping the pill opens one. */}
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={activeShift ? onRefreshShift : onOpenShift}
+                title={activeShift
+                    ? `Shift #${activeShift.id} — tap to refresh`
+                    : "No shift — tap to open one"}
+                className={activeShift ? tint.emerald : tint.amber}
+            >
+                <span className={`h-2 w-2 rounded-full ${!shiftLoaded ? "bg-muted-foreground/40" : activeShift ? "bg-emerald-500" : "bg-amber-500"}`} />
+                {!shiftLoaded ? "Shift…" : activeShift ? `Shift #${activeShift.id}` : "No shift"}
+                <RefreshCw size={13} className="opacity-70" />
+            </Button>
         </header>
     );
 }
