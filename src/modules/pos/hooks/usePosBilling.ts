@@ -70,6 +70,8 @@ export function usePosBilling(opts: {
 
     // ── Checkout / payment splits ───────────────────────────────────────────
     const [checkoutOpen, setCheckoutOpen] = useState(false);
+    // Mid-bill clear confirmation (Shift+Esc) — wipes the cart + adjustments.
+    const [clearCartDialogOpen, setClearCartDialogOpen] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
     const [shareVpa, setShareVpa] = useState<string | null>(null);
     const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0 });
@@ -980,6 +982,28 @@ export function usePosBilling(opts: {
         return () => window.removeEventListener("keydown", handler);
     }, [createDialogOpen, checkoutOpen, openCheckout]);
 
+    // Shift+Esc → clear the whole bill mid-way: opens a confirmation dialog
+    // (Esc / Cancel aborts, Clear confirms). Esc alone keeps its existing role
+    // (clear search query → dismiss dropdown → blur); Shift+Esc is the "clear
+    // everything" escalator. Blocked while any modal is open and when the
+    // cart is empty.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "Escape" || !e.shiftKey) return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (createDialogOpen || checkoutOpen || shareOpen || adjustmentsOpen
+                || returnDialogOpen || expenditureDialogOpen || receiptDialogOpen
+                || shiftOpenDialogOpen || shiftDropOpen || shiftCloseOpen) return;
+            if (cart.length === 0) return;
+            e.preventDefault();
+            setClearCartDialogOpen(true);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [createDialogOpen, checkoutOpen, shareOpen, adjustmentsOpen, returnDialogOpen,
+        expenditureDialogOpen, receiptDialogOpen, shiftOpenDialogOpen, shiftDropOpen,
+        shiftCloseOpen, cart.length, setClearCartDialogOpen]);
+
     // ↑ / ↓ inside the open checkout → move focus to the NEXT / PREVIOUS
     // payment line's amount box — the keyboard replacement for Tab across the
     // tender list (Cash → payment line 1 → payment line 2 → …). From the Cash
@@ -1023,6 +1047,38 @@ export function usePosBilling(opts: {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [checkoutOpen]);
+
+    // Clear the whole bill mid-way (Shift+Esc → confirm dialog). Cart, tenders,
+    // coupon / loyalty / gift card and adjustments all reset AND the customer is
+    // dropped — the cashier is starting fresh with a DIFFERENT customer (unlike
+    // resetAfterSubmit, which keeps the party for a quick re-bill). Focus
+    // returns to the scan box.
+    const clearBill = () => {
+        setCart([]);
+        setPay({ cashTendered: 0, cashReturn: 0 });
+        setSplits([]);
+        setShippingAmtStr("");
+        setRedeemPointsStr("");
+        setRedeemOn(false);
+        setCouponCodeStr("");
+        setAppliedCoupon(null);
+        setAutoCoupon(null);
+        setGiftCardCodeStr("");
+        setGiftCard(null);
+        setRoundOffStr("");
+        setRoundOffManuallyEdited(false);
+        setCharges([]);
+        setCartSelectedId(null);
+        setTicketId(null);
+        setAdjustmentsOpen(false);
+        setCheckoutOpen(false);
+        setClearCartDialogOpen(false);
+        // Drop the customer too — ready to pick a new one.
+        setSnapshot(null);
+        partySearchRef.current?.clear();
+        toast.message("Bill and customer cleared");
+        setTimeout(() => productSearchRef.current?.focus(), 50);
+    };
 
     // Post-submit reset — the identical clear-out block both screens ran after a
     // successful save.
@@ -1116,6 +1172,7 @@ export function usePosBilling(opts: {
         allServices, addServiceToCart,
         // checkout / tenders
         checkoutOpen, setCheckoutOpen, shareOpen, setShareOpen, shareVpa, setShareVpa,
+        clearCartDialogOpen, setClearCartDialogOpen, clearBill,
         pay, setPay, splits, setSplits, submitting, setSubmitting, openCheckout,
         // adjustments / offers
         adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,

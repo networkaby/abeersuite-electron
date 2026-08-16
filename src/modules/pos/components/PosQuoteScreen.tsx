@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { ReceiptIndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
+import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { usePosBilling } from "@/modules/pos/hooks/usePosBilling";
@@ -289,6 +290,13 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 submitting={b.submitting}
                 onConfirm={generateInvoice}
                 onShare={(a) => { b.setShareVpa(a.vpa); b.setShareOpen(true); }}
+            />
+
+            {/* ── Mid-bill clear confirmation (Shift+Esc) ────────────────────── */}
+            <ClearBillDialog
+                open={b.clearCartDialogOpen}
+                onOpenChange={b.setClearCartDialogOpen}
+                onConfirm={b.clearBill}
             />
 
             {/* Share a UPI QR with the customer to collect the advance remotely. */}

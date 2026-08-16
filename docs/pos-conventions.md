@@ -17,6 +17,7 @@ yet.
 | `F2` | Focus customer / party picker | Works from **any** context, including inside inputs. If a customer is already selected, enters "change mode": search for a replacement, `Esc` to cancel and restore the original |
 | `Ctrl + Enter` | Checkout / save bill | Cart must have items + customer selected |
 | `Esc` | Clear product search query + dismiss dropdown | If search is already empty, blurs the input so `F2` / `/` become available |
+| `Shift + Esc` | Clear bill + customer (with confirmation) | Mid-bill reset: wipes cart, adjustments and the customer — start fresh with someone else; needs a non-empty cart, no dialog open |
 | `F6` | Open a new POS tab | Any time — recall is done by switching tabs manually |
 | `↑` / `↓` | Move the cart-line selection — **or** jump between payment lines in checkout | `+` / `−` act on the selected line; skipped while the product dropdown is open. Inside checkout, `↑` / `↓` move focus to the previous / next payment line's amount box (line-to-line, replacing `Tab`) |
 | `+` / `−` | Bump qty of the selected line | `+` adds one, `−` removes one (line drops at zero); wins over typing in the empty search box |
@@ -164,6 +165,26 @@ covers each payment type. Same guard conditions as `F10` (cart not empty,
 customer selected, all lines priced, no dialog open). Inside the open checkout,
 `/` fills cash with the rest instead.
 
+### `Shift + Esc` — clear the whole bill
+
+Mid-bill, when the customer says "no" and a different customer is next, `Shift +
+Esc` opens a confirmation dialog with **Clear bill** already focused — `Enter`
+confirms instantly, `Esc` / **Cancel** aborts:
+
+- Clears the cart, tenders, coupon / loyalty / gift card and adjustments.
+- **Also drops the customer** — the register is completely fresh, ready to pick
+  a new party (unlike the post-sale reset, which keeps the customer for a quick
+  re-bill).
+- Returns focus to the scan box.
+
+Why `Shift + Esc`: `Esc` already means "clear" (query → dropdown → focus), so
+Shift is the natural "clear everything" escalator. `Ctrl + Esc` is the Windows
+Start-menu chord and `Alt + Esc` cycles windows, so both are out.
+
+**Guard conditions:**
+- Cart is not empty
+- No dialog is open (checkout, create-customer, adjustments, shift, share…)
+
 ### `/` inside checkout — fill the rest of the bill into the selected line
 
 While the checkout dialog is open, `/` fills the **remaining bill amount** into
@@ -256,7 +277,7 @@ shortcuts). Outside the checkout, `↑` / `↓` keep their cart-line role.
 | `F6` | Hold / suspend the current bill | Park it and start fresh | ⛔ our `F6` = new POS tab; multiple tabs replace hold |
 | `F7` | Recall a held bill | Pairs with F6; often a list | ⛔ not needed — switch tabs instead |
 | `Ctrl + H` | Hold current bill | Chord alternative when F-keys are scarce | 🚧 |
-| `Esc` twice | Cancel / clear the whole cart | Needs a confirmation dialog | 🚧 |
+| `Shift + Esc` | Clear bill + customer (with confirm) | Needs a confirmation dialog | ✅ ours — `Shift + Esc` with a confirm dialog |
 
 ### Payment shortcuts
 
@@ -311,4 +332,3 @@ The reference's top picks are F6/F7 hold-recall (already replaced by tabs), Esc
 1. `Alt + 1…9` quick tender selection in checkout
 2. `?` shortcut-help overlay
 3. `*` qty multiplier
-4. `Esc` twice to clear the cart (with confirmation)

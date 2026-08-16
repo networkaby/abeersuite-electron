@@ -15,6 +15,7 @@ import { ReceiptIndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
+import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { usePosBilling, parseAmt } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
@@ -508,6 +509,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 submitting={b.submitting}
                 onConfirm={generateInvoice}
                 onShare={(a) => { setShareProvider("upi"); b.setShareVpa(a.vpa); b.setShareOpen(true); }}
+            />
+
+            {/* ── Mid-bill clear confirmation (Shift+Esc) ────────────────────── */}
+            <ClearBillDialog
+                open={b.clearCartDialogOpen}
+                onOpenChange={b.setClearCartDialogOpen}
+                onConfirm={b.clearBill}
             />
         </PosScreenShell>
     );
