@@ -704,6 +704,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Gift Cards", icon: Gift, href: "/office/customer-retention/gift-cards", permission: "coupons:edit" },
             { label: "Loyalty", icon: Sparkles, href: "/office/customer-retention/loyalty", permission: "loyalty:edit" },
             { label: "Spend Tiers", icon: BadgePercent, href: "/office/customer-retention/customer-tiers", permission: "customers:edit" },
+            { label: "Protection", icon: ShieldCheck, href: "/office/customer-retention/protection", permission: "retention:protection:manage" },
+
 
         ],
     },

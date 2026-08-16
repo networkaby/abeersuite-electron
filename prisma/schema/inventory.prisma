@@ -391,6 +391,7 @@ model InvProduct {
   couponFreeProducts        Coupon[]                   @relation("CouponFreeProduct")
   couponBuyProducts         Coupon[]                   @relation("CouponBuyProduct")
   couponRules               CouponProductRule[]        @relation("CouponRuleProduct")
+    protection                ProductProtection?
   additionalCostAllocations AdditionalCostAllocation[]
 
   @@index([unitId])
@@ -400,6 +401,17 @@ model InvProduct {
   @@index([warrantyTermId])
   @@index([gstRateId])
   @@index([isListedInShop])
+}
+
+/// Blacklist a product from all discount engines (coupons, loyalty, tiers).
+model ProductProtection {
+  id        Int      @id @default(autoincrement())
+  productId Int      @unique
+  product   InvProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("product_protection")
 }
 
 /// Scannable product code — one row per barcode / EAN / UPC. Replaces the old

@@ -8297,6 +8297,10 @@
     },
     {
       "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:protection"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:settings:backup-restore"
     },
     {
@@ -9497,6 +9501,10 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:protection"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "ui:sidebar:settings:backup-restore"
     },
     {
@@ -10276,6 +10284,10 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:retention:spend-tiers"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:retention:protection"
     },
     {
       "departmentId": "DEP-OP",

@@ -520,18 +520,18 @@ function inlineA4Styles(scope: string): string {
 
 interface InvoiceBodyProps {
     template: VoucherTemplateDefaults;
-    sample:   ThermalReceiptSample;
+    sample: ThermalReceiptSample;
     /** Custom middle for bespoke documents (repair ticket / shipping slip /
      *  payment slip). Replaces the invoice meta/lines/totals block; the
      *  template-driven letterhead + footer chrome stay shared. */
-    body?:    React.ReactNode;
+    body?: React.ReactNode;
 }
 
 type A4ChromeProps = { template: VoucherTemplateDefaults; sample: ThermalReceiptSample };
 
 /** Template-driven letterhead (logo · brand · address · GSTIN · phone) + banner. */
 function A4Header({ template, sample }: A4ChromeProps) {
-    const brand     = template.headerLine1 || COMPANY_DETAILS.brandName;
+    const brand = template.headerLine1 || COMPANY_DETAILS.brandName;
     const addrLines = template.addressBlock.split("\n").map((l) => l.trim()).filter(Boolean);
     // The configured lines often already carry their own label ("GSTIN: 18AX…",
     // "Ph: +91 …") because that's how they read in the settings field. Strip it
@@ -542,7 +542,7 @@ function A4Header({ template, sample }: A4ChromeProps) {
     // A tax invoice must state the supplier's state and code. The GSTIN encodes
     // it in its first two characters, so no extra configuration is needed.
     const sellerStateCode = gstinDerivedStateCode(gstin);
-    const sellerState     = stateNameForCode(sellerStateCode);
+    const sellerState = stateNameForCode(sellerStateCode);
 
     return (
         <>
@@ -701,26 +701,26 @@ function MoneyReceiptMiddle({ template, sample }: A4ChromeProps) {
  *  the counterfoil below the cut line is the depositor's copy, which the
  *  teller stamps and signs and hands back as proof of deposit. */
 function DepositSlipMiddle({ sample }: A4ChromeProps) {
-    const slip  = sample.depositSlip!;
+    const slip = sample.depositSlip!;
     const voucherTotal = sample.total ?? 0;
     // Captured mode (denomJson saved on the voucher): print FILLED — only the
     // non-zero note rows plus the cheque list. Pen-fill mode (capture off):
     // notes get blank count boxes; coins/small change collapse to one row
     // (same as a real pay-in slip, which lists notes and a single coins line).
-    const counted  = slip.counted && (slip.counted.notes.length || slip.counted.cheques.length)
+    const counted = slip.counted && (slip.counted.notes.length || slip.counted.cheques.length)
         ? slip.counted : null;
     // The pay-in slip reflects only the PHYSICAL deposit — cash counted + cheques.
     // Any non-cash, non-cheque source (a wallet/UPI settlement) stays on the
     // voucher but off the slip, so the amount can be below the voucher total.
     // Blank pen-fill mode has no breakdown, so it falls back to the voucher total.
-    const cashTotal   = counted ? counted.notes.reduce((s, n) => s + n.denom * n.count, 0) : 0;
+    const cashTotal = counted ? counted.notes.reduce((s, n) => s + n.denom * n.count, 0) : 0;
     const chequeTotal = counted ? counted.cheques.reduce((s, c) => s + c.amount, 0) : 0;
     const total = counted ? cashTotal + chequeTotal : voucherTotal;
     const words = rupeesInWords(total);
-    const notes    = slip.denominations.filter((d) => d >= 10);
+    const notes = slip.denominations.filter((d) => d >= 10);
     const hasCoins = slip.denominations.some((d) => d < 10);
     const bankLine = [slip.bankName, slip.branch].filter(Boolean).join(", ");
-    const fmtNum   = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtNum = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     // "handover" = cash → cash (an internal transfer between tills/vault). No
     // bank block, no bank-acknowledgment counterfoil — just a from/to record
     // with handed-by / received-by signatures.
@@ -750,16 +750,16 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
                 {isHandover ? (
                     <>
                         {slip.fromLedger && <div className="brow"><span className="l">From Ledger</span><span className="bold">{slip.fromLedger}</span></div>}
-                        {slip.toLedger   && <div className="brow"><span className="l">To Ledger</span><span className="bold">{slip.toLedger}</span></div>}
+                        {slip.toLedger && <div className="brow"><span className="l">To Ledger</span><span className="bold">{slip.toLedger}</span></div>}
                     </>
                 ) : (
                     <>
-                        {bankLine         && <div className="brow"><span className="l">Bank</span><span className="bold">{bankLine}</span></div>}
+                        {bankLine && <div className="brow"><span className="l">Bank</span><span className="bold">{bankLine}</span></div>}
                         {slip.accountName && <div className="brow"><span className="l">A/C Name</span><span>{slip.accountName}</span></div>}
-                        {slip.accountNo   && <div className="brow"><span className="l">A/C No</span><span>{slip.accountNo}</span></div>}
-                        {slip.ifsc        && <div className="brow"><span className="l">IFSC</span><span>{slip.ifsc}</span></div>}
-                        {slip.pan         && <div className="brow"><span className="l">Depositor&rsquo;s PAN</span><span>{slip.pan}</span></div>}
-                        {slip.fromLedger  && <div className="brow"><span className="l">From Ledger</span><span>{slip.fromLedger}</span></div>}
+                        {slip.accountNo && <div className="brow"><span className="l">A/C No</span><span>{slip.accountNo}</span></div>}
+                        {slip.ifsc && <div className="brow"><span className="l">IFSC</span><span>{slip.ifsc}</span></div>}
+                        {slip.pan && <div className="brow"><span className="l">Depositor&rsquo;s PAN</span><span>{slip.pan}</span></div>}
+                        {slip.fromLedger && <div className="brow"><span className="l">From Ledger</span><span>{slip.fromLedger}</span></div>}
                     </>
                 )}
             </div>
@@ -910,7 +910,7 @@ function JournalMiddle({ sample }: A4ChromeProps) {
     // A line with no explicit side falls on the debit column.
     const totalDr = lines.filter((l) => l.entryType !== "CREDIT").reduce((s, l) => s + l.amount, 0);
     const totalCr = lines.filter((l) => l.entryType === "CREDIT").reduce((s, l) => s + l.amount, 0);
-    const grand   = sample.total ?? totalDr;
+    const grand = sample.total ?? totalDr;
     return (
         <>
             <div className="mr-meta">
@@ -983,10 +983,10 @@ function JournalMiddle({ sample }: A4ChromeProps) {
  */
 interface GoodsTableProps extends A4ChromeProps {
     /** Lines on THIS sheet. Omitted → the whole voucher (single-page bill). */
-    pageLines?:     ThermalReceiptSample["lines"];
+    pageLines?: ThermalReceiptSample["lines"];
     /** 0-based index of the first line on this sheet, so serial numbers keep
      *  running across a page break instead of restarting at 1. */
-    startIndex?:    number;
+    startIndex?: number;
     /** Running item total arriving from the previous sheet — prints as the
      *  "Brought forward" opening row. */
     broughtForward?: number | null;
@@ -1003,10 +1003,10 @@ function GoodsTable({
     // otherwise page 2 would drop a column page 1 shows and the two sheets
     // would not line up.
     const all = sample.lines;
-    const anyHsn  = all.some((l) => !!l.hsn);
+    const anyHsn = all.some((l) => !!l.hsn);
     const anyUnit = all.some((l) => !!l.unit);
     const anyDisc = all.some((l) => (l.discount ?? 0) > 0.005);
-    const anyMrp  = template.showMrp && all.some((l) => (l.mrp ?? 0) > 0);
+    const anyMrp = template.showMrp && all.some((l) => (l.mrp ?? 0) > 0);
     // Pre-tax basis → the GST ledger rows are safe to add.
     const exclusive = all.some((l) => l.taxable != null);
 
@@ -1020,11 +1020,11 @@ function GoodsTable({
     // Totals always describe the WHOLE voucher, not the page.
     const itemTotal = all.reduce((s, l) => s + value(l), 0);
     const discTotal = all.reduce((s, l) => s + (l.discount ?? 0), 0);
-    const qtyTotal  = all.reduce((s, l) => s + l.quantity, 0);
+    const qtyTotal = all.reduce((s, l) => s + l.quantity, 0);
     // Quantities only carry a unit when the whole bill shares one — mixing
     // "3 Nos" and "1 Ream" into a single figure would be a lie.
-    const units     = new Set(all.map((l) => l.unit).filter(Boolean));
-    const qtyLabel  = units.size === 1 ? `${qtyTotal} ${[...units][0]}` : String(qtyTotal);
+    const units = new Set(all.map((l) => l.unit).filter(Boolean));
+    const qtyLabel = units.size === 1 ? `${qtyTotal} ${[...units][0]}` : String(qtyTotal);
 
     // Ledger rows under the goods: bill charges first (discount / freight /
     // service income), then the GST legs, exactly as Tally stacks them.
@@ -1064,8 +1064,8 @@ function GoodsTable({
                 <tr>
                     <th className="ctr" style={{ width: 26 }}>#</th>
                     <th style={{ textAlign: "left" }}>Description of Goods</th>
-                    {anyHsn  && <th className="ctr" style={{ width: 60 }}>HSN/SAC</th>}
-                    {anyMrp  && <th className="num" style={{ width: 60 }}>MRP</th>}
+                    {anyHsn && <th className="ctr" style={{ width: 60 }}>HSN/SAC</th>}
+                    {anyMrp && <th className="num" style={{ width: 60 }}>MRP</th>}
                     <th className="num" style={{ width: 56 }}>Quantity</th>
                     {anyUnit && <th className="ctr" style={{ width: 40 }}>per</th>}
                     <th className="num" style={{ width: 74 }}>Rate</th>
@@ -1090,8 +1090,8 @@ function GoodsTable({
                             <div className="item">{l.description}</div>
                             {l.note && <div className="note">{l.note}</div>}
                         </td>
-                        {anyHsn  && <td className="ctr">{l.hsn ?? ""}</td>}
-                        {anyMrp  && <td className="num">{l.mrp ? fmtINR(l.mrp).replace("Rs. ", "") : "—"}</td>}
+                        {anyHsn && <td className="ctr">{l.hsn ?? ""}</td>}
+                        {anyMrp && <td className="num">{l.mrp ? fmtINR(l.mrp).replace("Rs. ", "") : "—"}</td>}
                         <td className="num">{l.quantity}</td>
                         {anyUnit && <td className="ctr">{l.unit ?? ""}</td>}
                         <td className="num">{fmtINR(unitRate(l)).replace("Rs. ", "")}</td>
@@ -1134,8 +1134,8 @@ function GoodsTable({
                     <tr className="grand">
                         <td />
                         <td className="num">Total</td>
-                        {anyHsn  && <td />}
-                        {anyMrp  && <td />}
+                        {anyHsn && <td />}
+                        {anyMrp && <td />}
                         <td className="num">{qtyLabel}</td>
                         {anyUnit && <td />}
                         <td />
@@ -1151,27 +1151,27 @@ function GoodsTable({
 /** One sheet's worth of a paginated tax invoice. Absent → the whole voucher
  *  on a single sheet (the common case). */
 interface PageSlice {
-    lines:          ThermalReceiptSample["lines"];
-    startIndex:     number;
+    lines: ThermalReceiptSample["lines"];
+    startIndex: number;
     broughtForward: number | null;
     carriedForward: number | null;
-    isFirst:        boolean;
-    isLast:         boolean;
+    isFirst: boolean;
+    isLast: boolean;
     /** Tax-analysis annexure sheet: letterhead + party + the rate-wise HSN
      *  table + tax in words + signatory, and nothing else. Tally splits a
      *  multi-page invoice exactly here — the goods and their totals finish on
      *  the invoice sheets, and the tax analysis becomes its own document. */
-    annexure:       boolean;
+    annexure: boolean;
     /** Whether the rate-wise tax analysis renders on THIS sheet. True inline on
      *  a single-sheet bill, and on the annexure when the bill needs one. */
-    taxAnalysis:    boolean;
+    taxAnalysis: boolean;
     /** Terms + bank block. Mandatory part of the voucher, so it rides the last
      *  voucher sheet; never the annexure. */
-    showTerms:      boolean;
+    showTerms: boolean;
     /** Signature block. On the voucher's closing sheet and on the annexure —
      *  each is a document someone must be able to act on. Omitted from mid-run
      *  continuation sheets, which are pure item table. */
-    showSignature:  boolean;
+    showSignature: boolean;
     /** Footer line ("Thank you, visit again"). Cheap filler, so it rides every
      *  sheet — a mid-run sheet ending in bare white space looks unfinished. */
     showFooterLine: boolean;
@@ -1180,9 +1180,9 @@ interface PageSlice {
      *  closing sheet and the annexure. */
     showDisclaimer: boolean;
     /** Barcode — sacrificed at rung 2, and used as filler on mid-run sheets. */
-    showBarcode:    boolean;
+    showBarcode: boolean;
     /** Scan-to-pay QR inside the bank block — sacrificed with the barcode. */
-    showQr:         boolean;
+    showQr: boolean;
 }
 
 /** Default invoice middle — bill-to meta, line items, totals, HSN, amount-in-words. */
@@ -1195,29 +1195,28 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
     // amount in words and the settlement. The tax analysis (rate-wise HSN table
     // + tax in words) moves to its own annexure sheet when there is one, which
     // is what keeps both sheets inside a single A4.
-    const annexure  = page?.annexure ?? false;
+    const annexure = page?.annexure ?? false;
     const showGoods = !annexure;
     // The tail rides the LAST goods sheet — the one with nothing carried
     // forward. The tax analysis is placed by the paginator: inline on a
     // single-sheet bill, on the annexure when the bill needs one.
     const showTails = !annexure && page?.carriedForward == null;
-    const showTax   = page ? page.taxAnalysis : true;
+    const showTax = page ? page.taxAnalysis : true;
     const grandTotal = sample.total ?? 0;
-    const receipts     = sample.receipts ?? [];
+    const receipts = sample.receipts ?? [];
     const receivedTotal = receipts.reduce((s, r) => s + r.amount, 0);
     // Total GST across the bill — drives the tax-in-words line. Prefer the
     // ladder's complete total (goods + tax-bearing charges like shipping),
     // else the rate-wise table, else the invoice-level split, else the
     // single tax figure.
-    const hsnSummary = sample.hsnSummary ?? [];
     const taxTotal = sample.discounts?.taxTotal
         ?? (sample.hsnSummary && sample.hsnSummary.length > 0
             ? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0)
             : sample.taxBreakdown
-            ? (sample.taxBreakdown.kind === "INTRA"
-                ? sample.taxBreakdown.cgst + sample.taxBreakdown.sgst
-                : sample.taxBreakdown.igst)
-            : sample.taxAmount ?? 0);
+                ? (sample.taxBreakdown.kind === "INTRA"
+                    ? sample.taxBreakdown.cgst + sample.taxBreakdown.sgst
+                    : sample.taxBreakdown.igst)
+                : sample.taxAmount ?? 0);
     return (
         <>
             {/* 3 — Bill-To / Invoice-Details (on every sheet) */}
@@ -1355,68 +1354,68 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                      special discount, so it is NOT a ladder row. ─────────────── */
                 const d = sample.discounts;
                 const grandTotal = sample.total ?? (d.grossAtTag - d.total);
-                const mrpValue   = grandTotal + d.savingsTotal;
+                const mrpValue = grandTotal + d.savingsTotal;
                 return (
-                <div className="totals">
-                    {(d.rows.length > 0 || d.savingsTotal > 0.005) && (
-                        <div className="disc-detail">
-                            {d.rows.length > 0 && (
-                                <>
-                                    <div className="disc-detail-h">Today&rsquo;s Discount</div>
-                                    {d.rows.map((r, i) => (
-                                        <div key={i} className="disc-detail-row">
-                                            <span>{r.label}</span>
-                                            <span>&minus; {fmtINR(r.amount)}</span>
+                    <div className="totals">
+                        {(d.rows.length > 0 || d.savingsTotal > 0.005) && (
+                            <div className="disc-detail">
+                                {d.rows.length > 0 && (
+                                    <>
+                                        <div className="disc-detail-h">Today&rsquo;s Discount</div>
+                                        {d.rows.map((r, i) => (
+                                            <div key={i} className="disc-detail-row">
+                                                <span>{r.label}</span>
+                                                <span>&minus; {fmtINR(r.amount)}</span>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+                                {d.savingsTotal > 0.005 && (
+                                    <div className="mrp-save">
+                                        <div className="mrp-save-top">
+                                            <span>Saving from MRP</span>
+                                            <span>{fmtINR(d.savingsTotal)}</span>
                                         </div>
-                                    ))}
-                                </>
-                            )}
-                            {d.savingsTotal > 0.005 && (
-                                <div className="mrp-save">
-                                    <div className="mrp-save-top">
-                                        <span>Saving from MRP</span>
-                                        <span>{fmtINR(d.savingsTotal)}</span>
+                                        <div className="mrp-save-note">
+                                            MRP {fmtINR(mrpValue)} &minus; you pay {fmtINR(grandTotal)} ({d.savingsPct}% off MRP)
+                                        </div>
                                     </div>
-                                    <div className="mrp-save-note">
-                                        MRP {fmtINR(mrpValue)} &minus; you pay {fmtINR(grandTotal)} ({d.savingsPct}% off MRP)
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <div className="totals-box">
-                        <div className="trow">
-                            <span className="muted">Gross</span>
-                            <span>{fmtINR(d.grossAtTag)}</span>
-                        </div>
-                        {d.total > 0.005 && (
-                            <div className="trow special">
-                                <span>Special Discount</span>
-                                <span>&minus; {fmtINR(d.total)}</span>
+                                )}
                             </div>
                         )}
-                        {(d.charges ?? []).map((c, i) => (
-                            <div key={`c${i}`} className="trow">
-                                <span className="muted">{c.label}</span>
-                                <span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span>
+                        <div className="totals-box">
+                            <div className="trow">
+                                <span className="muted">Gross</span>
+                                <span>{fmtINR(d.grossAtTag)}</span>
                             </div>
-                        ))}
-                        <div className="trow grand">
-                            <span>Grand Total</span>
-                            <span>{fmtINR(grandTotal)}</span>
-                        </div>
-                        {/* GST is included in the inclusive amounts above — note, not a row.
+                            {d.total > 0.005 && (
+                                <div className="trow special">
+                                    <span>Special Discount</span>
+                                    <span>&minus; {fmtINR(d.total)}</span>
+                                </div>
+                            )}
+                            {(d.charges ?? []).map((c, i) => (
+                                <div key={`c${i}`} className="trow">
+                                    <span className="muted">{c.label}</span>
+                                    <span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span>
+                                </div>
+                            ))}
+                            <div className="trow grand">
+                                <span>Grand Total</span>
+                                <span>{fmtINR(grandTotal)}</span>
+                            </div>
+                            {/* GST is included in the inclusive amounts above — note, not a row.
                             The HSN/SAC table below gives the full rate-wise breakup. */}
-                        {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
-                            const inter = sample.taxBreakdown?.kind === "INTER";
-                            const tax = sample.discounts?.taxTotal
-                                ?? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
-                            return tax > 0.005 ? (
-                                <div className="trow"><span className="muted">incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
-                            ) : null;
-                        })()}
+                            {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                                const inter = sample.taxBreakdown?.kind === "INTER";
+                                const tax = sample.discounts?.taxTotal
+                                    ?? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
+                                return tax > 0.005 ? (
+                                    <div className="trow"><span className="muted">incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
+                                ) : null;
+                            })()}
+                        </div>
                     </div>
-                </div>
                 );
             })() : null /* the goods table carries its own totals + ledger rows */}
 
@@ -1692,22 +1691,22 @@ function A4SignOff({ template, sample, showBank }: A4ChromeProps & { showBank?: 
 // no layout engine to measure against), so the estimates must lean pessimistic:
 // a sheet that ends slightly early costs nothing, while one that ends slightly
 // late spills its sign-off onto a page of its own.
-const SHEET_USABLE_MM   = 258;
+const SHEET_USABLE_MM = 258;
 // Every sheet carries the same chrome (letterhead + title + Bill-To band),
 // measured at 47mm after tightening; 1mm of slack keeps rounding safe.
-const PAGE_CHROME_MM    = 48;
-const TABLE_HEAD_MM     = 7;   // measured 6.9
-const PAGE_FOOT_MM      = 5;   // measured 4.9
-const ROW_MM            = 6.7; // measured 6.6 per item row
-const NOTE_MM           = 4;   // extra height when a line carries a remark
+const PAGE_CHROME_MM = 48;
+const TABLE_HEAD_MM = 7;   // measured 6.9
+const PAGE_FOOT_MM = 5;   // measured 4.9
+const ROW_MM = 6.7; // measured 6.6 per item row
+const NOTE_MM = 4;   // extra height when a line carries a remark
 // Fewer goods lines than this on a sheet reads as an overflow accident rather
 // than a deliberate second page, so the balancer refuses such a split.
 const MIN_LINES_PER_SHEET = 3;
 
 function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDefaults): PageSlice[] {
-    const lines  = sample.lines;
-    const rowMm  = (l: ThermalReceiptSample["lines"][number]) => ROW_MM + (l.note ? NOTE_MM : 0);
-    const sumMm  = (ls: typeof lines) => ls.reduce((s, l) => s + rowMm(l), 0);
+    const lines = sample.lines;
+    const rowMm = (l: ThermalReceiptSample["lines"][number]) => ROW_MM + (l.note ? NOTE_MM : 0);
+    const sumMm = (ls: typeof lines) => ls.reduce((s, l) => s + rowMm(l), 0);
 
     // Everything that must sit under the last line: ledger rows, Total, words,
     // HSN summary, tax words, settlement, then terms + bank + signature.
@@ -1742,15 +1741,15 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
     // TALLER of the two, not their sum — stacking them was over-reserving ~12mm
     // on every closing sheet.
     const footerLineMm = template.footerLine ? 5 : 0;
-    const bankBlockMm  = template.showBank && (template.bankDetails || template.bankUpiQr) ? 25 : 0;
-    const sigLabelMm   = template.showSignature ? 12 : 0;
-    const signRowMm    = Math.max(bankBlockMm, sigLabelMm);
+    const bankBlockMm = template.showBank && (template.bankDetails || template.bankUpiQr) ? 25 : 0;
+    const sigLabelMm = template.showSignature ? 12 : 0;
+    const signRowMm = Math.max(bankBlockMm, sigLabelMm);
     const sigMm = signRowMm + footerLineMm + (template.disclaimerLine ? 4 : 0);
     // Mid-run sheets carry only the barcode as filler.
     const fillerMm = template.showBarcode ? 14 : 0;
     const barcodeMm = template.showBarcode ? 14 : 0;
     // Only the amount the QR sticks out past the account lines it sits beside.
-    const qrMm      = template.showBank && template.bankUpiQr ? 6 : 0;
+    const qrMm = template.showBank && template.bankUpiQr ? 6 : 0;
     // Terms + bank TEXT, priced without the QR so the ladder can drop the QR
     // on its own.
     const termsMm = Math.max(0, footerMm - qrMm);
@@ -1770,7 +1769,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
     // scannable number is a worse document than a longer one, so those are no
     // longer currency the ladder may spend — only page count is.
     const contentMm = SHEET_USABLE_MM - PAGE_CHROME_MM - TABLE_HEAD_MM;
-    const goodsMm   = sumMm(lines);
+    const goodsMm = sumMm(lines);
 
     // Rung 0 — everything together on one sheet.
     if (goodsMm + tailMm + taxAnalysisMm + termsMm + qrMm + sigMm + barcodeMm <= contentMm) {
@@ -1822,7 +1821,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
     /** Can `count` sheets hold every line, split as evenly as possible? */
     const splitInto = (count: number): typeof lines[] | null => {
         const out: typeof lines[] = Array.from({ length: count }, () => []);
-        const caps  = Array.from({ length: count }, (_, i) => capacityFor(i === count - 1));
+        const caps = Array.from({ length: count }, (_, i) => capacityFor(i === count - 1));
         const total = sumMm(lines);
         const capSum = caps.reduce((a, b) => a + b, 0);
         if (total > capSum) return null;
@@ -1842,7 +1841,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
         for (let i = 0; i < lines.length; i++) {
             const h = rowMm(lines[i]);
             const hadShare = used + h > targets[page];
-            const wontFit  = used + h > caps[page];
+            const wontFit = used + h > caps[page];
             // Advance when this sheet has had its share or physically can't take
             // more — but only while what's left still fits on the sheets behind
             // it, and never leaving a later sheet with nothing to show.
@@ -1888,7 +1887,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
         // forwards at full capacity (an earlier version) silently overflowed the
         // closing sheet, since it never subtracted the closing dress.
         const capClosing = Math.max(0, sheetCap - closingReserve);
-        const capMid     = Math.max(0, sheetCap - fillerMm);
+        const capMid = Math.max(0, sheetCap - fillerMm);
         // If the closing dress leaves room for only a stray line or two, the
         // closing sheet takes NO goods at all. A sheet holding the totals, terms
         // and signatory is a deliberate closing page; the same sheet holding two
@@ -1928,25 +1927,25 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
         running += p.lines.reduce((s, l) => s + (l.taxable ?? l.amount), 0);
         const isClosing = i === lastGoodsIndex;
         return {
-            lines:          p.lines,
-            startIndex:     p.startIndex,
+            lines: p.lines,
+            startIndex: p.startIndex,
             broughtForward: i === 0 ? null : before,
             carriedForward: isClosing ? null : running,
-            isFirst:        i === 0,
-            isLast:         false,
-            annexure:       false,
-            taxAnalysis:    false,
+            isFirst: i === 0,
+            isLast: false,
+            annexure: false,
+            taxAnalysis: false,
             // The closing dress lands on the last voucher sheet. A mid-run
             // sheet gets the barcode ONLY: it identifies a page that got
             // separated, whereas the footer greeting and the
             // computer-generated disclaimer describe the document as a whole
             // and belong where the document actually ends.
-            showTerms:      isClosing,
-            showSignature:  isClosing,
+            showTerms: isClosing,
+            showSignature: isClosing,
             showDisclaimer: isClosing,
             showFooterLine: isClosing,
-            showBarcode:    true,
-            showQr:         isClosing,
+            showBarcode: true,
+            showQr: isClosing,
         };
     });
 
@@ -1967,10 +1966,10 @@ function InvoiceBody({ template, sample, body }: InvoiceBodyProps) {
         ?? (DEPOSIT_SLIP_KINDS.has(template.kind) && sample.depositSlip
             ? <DepositSlipMiddle template={template} sample={sample} />
             : MONEY_RECEIPT_KINDS.has(template.kind)
-            ? <MoneyReceiptMiddle template={template} sample={sample} />
-            : JOURNAL_KINDS.has(template.kind)
-            ? <JournalMiddle template={template} sample={sample} />
-            : null);
+                ? <MoneyReceiptMiddle template={template} sample={sample} />
+                : JOURNAL_KINDS.has(template.kind)
+                    ? <JournalMiddle template={template} sample={sample} />
+                    : null);
 
     if (bespoke) {
         return (
@@ -2006,12 +2005,12 @@ function InvoiceBody({ template, sample, body }: InvoiceBodyProps) {
                     <A4SignOff
                         template={{
                             ...template,
-                            showSignature:  template.showSignature && page.showSignature,
-                            footerLine:     page.showFooterLine ? template.footerLine : "",
+                            showSignature: template.showSignature && page.showSignature,
+                            footerLine: page.showFooterLine ? template.footerLine : "",
                             disclaimerLine: page.showDisclaimer ? template.disclaimerLine : "",
-                            showBarcode:    template.showBarcode && page.showBarcode,
+                            showBarcode: template.showBarcode && page.showBarcode,
                             // Rung 2 gives up the QR; the account text stays.
-                            bankUpiQr:      page.showQr ? template.bankUpiQr : "",
+                            bankUpiQr: page.showQr ? template.bankUpiQr : "",
                         }}
                         sample={sample}
                         // Bank details ride the same sheets the signature does —
@@ -2031,21 +2030,21 @@ function InvoiceBody({ template, sample, body }: InvoiceBodyProps) {
 }
 
 export interface A4InvoicePreviewProps {
-    template:    VoucherTemplateDefaults;
-    sample:      ThermalReceiptSample;
+    template: VoucherTemplateDefaults;
+    sample: ThermalReceiptSample;
     /** True → returns just the sheet (for in-page preview). False → full HTML document. */
     previewMode?: boolean;
     /** previewMode: grow to natural height (host owns the scroll) instead of
      *  scrolling inside its own maxHeight box. Prevents a nested double scroll. */
     previewFill?: boolean;
     /** Inserted before the sheet inside <body>. Used by the print route for the Print/Close toolbar. */
-    toolbar?:    React.ReactNode;
+    toolbar?: React.ReactNode;
     /** document.title when not in previewMode (applied via SetDocumentTitle). */
-    docTitle?:   string;
+    docTitle?: string;
     /** Custom middle for bespoke documents (repair ticket / shipping slip /
      *  payment slip). Replaces the invoice meta/lines/totals block; the
      *  template-driven letterhead + footer chrome stay shared. */
-    body?:       React.ReactNode;
+    body?: React.ReactNode;
 }
 
 export default function A4InvoicePreview({

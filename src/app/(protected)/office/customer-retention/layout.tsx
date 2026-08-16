@@ -16,7 +16,9 @@ export default function CustomerRetentionLayout({ children }: { children: React.
                     "gift-cards": "Gift Cards",
                     "loyalty": "Loyalty",
                     "customer-tiers": "Spend Tiers",
+                    "protection": "Protection",
                 }}
+
             />
             <div className="min-h-0 flex-1 overflow-hidden">
                 {children}

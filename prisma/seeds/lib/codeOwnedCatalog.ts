@@ -75,35 +75,35 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // cancel + edit + convert-to-draft; DELETE is the single removal (soft-delete
     // retired 2026-06-09, "hard-delete" renamed to "delete"). Source of truth for
     // the kind↔permission mapping: src/shared/lib/auth/voucherMatrix.ts.
-    { id: "finance:voucher:create:payment",      label: "Create payment voucher",      module: "finance", description: "Create a Payment voucher." },
-    { id: "finance:voucher:post:payment",        label: "Post payment voucher",        module: "finance", description: "Post a Payment voucher (applies GL)." },
-    { id: "finance:voucher:cancel:payment",      label: "Cancel / edit payment voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Payment voucher." },
-    { id: "finance:voucher:delete:payment",      label: "Delete payment voucher",      module: "finance", description: "Remove a Payment voucher (recoverable from the Recycle Bin)." },
+    { id: "finance:voucher:create:payment", label: "Create payment voucher", module: "finance", description: "Create a Payment voucher." },
+    { id: "finance:voucher:post:payment", label: "Post payment voucher", module: "finance", description: "Post a Payment voucher (applies GL)." },
+    { id: "finance:voucher:cancel:payment", label: "Cancel / edit payment voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Payment voucher." },
+    { id: "finance:voucher:delete:payment", label: "Delete payment voucher", module: "finance", description: "Remove a Payment voucher (recoverable from the Recycle Bin)." },
 
-    { id: "finance:voucher:create:receipt",      label: "Create receipt voucher",      module: "finance", description: "Create a Receipt voucher." },
-    { id: "finance:voucher:post:receipt",        label: "Post receipt voucher",        module: "finance", description: "Post a Receipt voucher (applies GL)." },
-    { id: "finance:voucher:cancel:receipt",      label: "Cancel / edit receipt voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Receipt voucher." },
-    { id: "finance:voucher:delete:receipt",      label: "Delete receipt voucher",      module: "finance", description: "Remove a Receipt voucher (recoverable from the Recycle Bin)." },
+    { id: "finance:voucher:create:receipt", label: "Create receipt voucher", module: "finance", description: "Create a Receipt voucher." },
+    { id: "finance:voucher:post:receipt", label: "Post receipt voucher", module: "finance", description: "Post a Receipt voucher (applies GL)." },
+    { id: "finance:voucher:cancel:receipt", label: "Cancel / edit receipt voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Receipt voucher." },
+    { id: "finance:voucher:delete:receipt", label: "Delete receipt voucher", module: "finance", description: "Remove a Receipt voucher (recoverable from the Recycle Bin)." },
 
-    { id: "finance:voucher:create:contra",      label: "Create contra voucher",      module: "finance", description: "Create a Contra voucher." },
-    { id: "finance:voucher:post:contra",        label: "Post contra voucher",        module: "finance", description: "Post a Contra voucher (applies GL)." },
-    { id: "finance:voucher:cancel:contra",      label: "Cancel / edit contra voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Contra voucher." },
-    { id: "finance:voucher:delete:contra",      label: "Delete contra voucher",      module: "finance", description: "Remove a Contra voucher (recoverable from the Recycle Bin)." },
+    { id: "finance:voucher:create:contra", label: "Create contra voucher", module: "finance", description: "Create a Contra voucher." },
+    { id: "finance:voucher:post:contra", label: "Post contra voucher", module: "finance", description: "Post a Contra voucher (applies GL)." },
+    { id: "finance:voucher:cancel:contra", label: "Cancel / edit contra voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Contra voucher." },
+    { id: "finance:voucher:delete:contra", label: "Delete contra voucher", module: "finance", description: "Remove a Contra voucher (recoverable from the Recycle Bin)." },
 
-    { id: "finance:voucher:create:credit-note",      label: "Create credit note",      module: "finance", description: "Create a Credit Note." },
-    { id: "finance:voucher:post:credit-note",        label: "Post credit note",        module: "finance", description: "Post a Credit Note (applies GL)." },
-    { id: "finance:voucher:cancel:credit-note",      label: "Cancel / edit credit note", module: "finance", description: "Cancel, edit, or convert-to-draft a Credit Note." },
-    { id: "finance:voucher:delete:credit-note",      label: "Delete credit note",      module: "finance", description: "Remove a Credit Note (recoverable from the Recycle Bin)." },
+    { id: "finance:voucher:create:credit-note", label: "Create credit note", module: "finance", description: "Create a Credit Note." },
+    { id: "finance:voucher:post:credit-note", label: "Post credit note", module: "finance", description: "Post a Credit Note (applies GL)." },
+    { id: "finance:voucher:cancel:credit-note", label: "Cancel / edit credit note", module: "finance", description: "Cancel, edit, or convert-to-draft a Credit Note." },
+    { id: "finance:voucher:delete:credit-note", label: "Delete credit note", module: "finance", description: "Remove a Credit Note (recoverable from the Recycle Bin)." },
 
-    { id: "finance:voucher:create:debit-note",      label: "Create debit note",      module: "finance", description: "Create a Debit Note." },
-    { id: "finance:voucher:post:debit-note",        label: "Post debit note",        module: "finance", description: "Post a Debit Note (applies GL)." },
-    { id: "finance:voucher:cancel:debit-note",      label: "Cancel / edit debit note", module: "finance", description: "Cancel, edit, or convert-to-draft a Debit Note." },
-    { id: "finance:voucher:delete:debit-note",      label: "Delete debit note",      module: "finance", description: "Remove a Debit Note (recoverable from the Recycle Bin)." },
+    { id: "finance:voucher:create:debit-note", label: "Create debit note", module: "finance", description: "Create a Debit Note." },
+    { id: "finance:voucher:post:debit-note", label: "Post debit note", module: "finance", description: "Post a Debit Note (applies GL)." },
+    { id: "finance:voucher:cancel:debit-note", label: "Cancel / edit debit note", module: "finance", description: "Cancel, edit, or convert-to-draft a Debit Note." },
+    { id: "finance:voucher:delete:debit-note", label: "Delete debit note", module: "finance", description: "Remove a Debit Note (recoverable from the Recycle Bin)." },
 
-    { id: "finance:voucher:create:journal",      label: "Create journal voucher",      module: "finance", description: "Create a Journal voucher (general GL adjustment)." },
-    { id: "finance:voucher:post:journal",        label: "Post journal voucher",        module: "finance", description: "Post a Journal voucher (applies GL)." },
-    { id: "finance:voucher:cancel:journal",      label: "Cancel / edit journal voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Journal voucher." },
-    { id: "finance:voucher:delete:journal",      label: "Delete journal voucher",      module: "finance", description: "Remove a Journal voucher (recoverable from the Recycle Bin)." },
+    { id: "finance:voucher:create:journal", label: "Create journal voucher", module: "finance", description: "Create a Journal voucher (general GL adjustment)." },
+    { id: "finance:voucher:post:journal", label: "Post journal voucher", module: "finance", description: "Post a Journal voucher (applies GL)." },
+    { id: "finance:voucher:cancel:journal", label: "Cancel / edit journal voucher", module: "finance", description: "Cancel, edit, or convert-to-draft a Journal voucher." },
+    { id: "finance:voucher:delete:journal", label: "Delete journal voucher", module: "finance", description: "Remove a Journal voucher (recoverable from the Recycle Bin)." },
 
     // inventory module pages — Products catalog + Masters (8 setup tables, gated
     // together). View rides the sidebar link; inventory:manage is the umbrella.
@@ -141,10 +141,10 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     ...posVoucherPermissionSeeds(),
 
     // pos — shift / till / handover lifecycle
-    { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },
-    { id: "pos:shift:close",       label: "Close POS shift",                module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
-    { id: "pos:shift:drop",        label: "Record mid-shift cash drop",     module: "pos", description: "Log cash dropped into the safe during an open shift." },
-    { id: "pos:shift:force-close", label: "Force-close another's shift",     module: "pos", description: "Emergency-close a stuck open shift on behalf of the operator (counts the drawer; closedBy = you)." },
+    { id: "pos:shift:open", label: "Open POS shift", module: "pos", description: "Open your own till session with an opening cash float." },
+    { id: "pos:shift:close", label: "Close POS shift", module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
+    { id: "pos:shift:drop", label: "Record mid-shift cash drop", module: "pos", description: "Log cash dropped into the safe during an open shift." },
+    { id: "pos:shift:force-close", label: "Force-close another's shift", module: "pos", description: "Emergency-close a stuck open shift on behalf of the operator (counts the drawer; closedBy = you)." },
 
     // accountancy
     { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
@@ -170,6 +170,10 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "tiers:create", label: "Create spend tiers", module: "crm", description: "Create customer spending tiers." },
     { id: "tiers:edit", label: "Edit spend tiers", module: "crm", description: "Edit customer spending tiers." },
     { id: "tiers:delete", label: "Delete spend tiers", module: "crm", description: "Delete customer spending tiers." },
+
+    // retention protection — blacklist products from discount engines.
+    { id: "retention:protection:manage", label: "Manage product protection", module: "retention", description: "Add/remove products from the discount blacklist (protection)." },
+
 
     // repair — the ticket resource (All Repair list + ticket page). View rides the
     // repair sidebar link; these gate the create / edit / delete actions on a ticket.
@@ -219,7 +223,7 @@ export async function ensureXorCheck(pool: Pool, table: "Phone" | "Email", const
 export async function applyCodeOwnedCatalog(prisma: PrismaClient, pool: Pool): Promise<{ permissions: number; pruned: number }> {
     for (const p of PERMISSION_CATALOG) {
         await prisma.permission.upsert({
-            where:  { id: p.id },
+            where: { id: p.id },
             update: { label: p.label, module: p.module, description: p.description },
             create: p,
         });

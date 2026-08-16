@@ -51,7 +51,6 @@ type CashMove = {
 };
 
 // Counter till cash book (ledger with running balance).
-type CounterOpt = { id: number; name: string; tillAccount: { name: string } };
 type LedgerRow = {
     id: number; date: string; reference: string; particulars: string;
     debit: number | null; credit: number | null; balance: number; printUrl: string | null;

@@ -109,6 +109,15 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "ui",
         description: 'Show the "GST Purchase Planning" link under Business Intelligence in the sidebar.',
     },
+    // Retention → Protection nav link. Derived automatically by
+    // sidebarPermissionSeeds() from the MODULE_SECTIONS child in utils/constants.ts;
+    // mirrored here so an existing DB gets it without a full seed.
+    {
+        id: "ui:sidebar:retention:protection",
+        label: "Retention → Protection",
+        module: "ui",
+        description: 'Show the "Protection" link under Retention in the sidebar.',
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";

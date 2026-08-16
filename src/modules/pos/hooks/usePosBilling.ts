@@ -247,7 +247,7 @@ export function usePosBilling(opts: {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [createDialogOpen, checkoutOpen, snapshot?.account, partySearchRef]);
+    }, [createDialogOpen, checkoutOpen, snapshot?.account, snapshot?.party?.id, snapshot?.party?.kind, snapshot?.party?.name, snapshot?.party?.phone, partySearchRef]);
 
     // Suppresses the display coordinator while the thank-you screen is holding.
     // After a successful sale, we want the green "Thank You ₹X" frame to stay
@@ -610,6 +610,7 @@ export function usePosBilling(opts: {
 
     // Esc during change mode → restore the original party and re-lock the picker.
     // Wired here (after onPartyPicked) so the callback is in scope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
