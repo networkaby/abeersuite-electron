@@ -656,7 +656,7 @@ export function usePosBilling(opts: {
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
-    const fetchSnapshot = async (accountId: number) => {
+    const fetchSnapshot = useCallback(async (accountId: number) => {
         setLoadingSnapshot(true);
         // Once a party is picked the search is locked; shift focus to the product
         // search so the cashier can scan/type immediately.
@@ -670,14 +670,14 @@ export function usePosBilling(opts: {
         } finally {
             setLoadingSnapshot(false);
         }
-    };
+    }, [productSearchRef, setSnapshot]);
 
     // Re-sync effective sale prices once, when a sale starts. A counter can sit
     // idle for hours; prices may have been re-frozen elsewhere meanwhile. This
     // hits the lightweight prices-only endpoint (no GST/cost cascade) and patches
     // the in-memory list by id — cart lines stay snapshotted, so it never shifts
     // a sale in progress. Failure is silent: keep the prices we already have.
-    const refreshPrices = async () => {
+    const refreshPrices = useCallback(async () => {
         try {
             const { data } = await axios.get<
                 Array<{ id: number; effectiveSalePricePaise: number | null; mrpPaise: number | null }>
@@ -692,9 +692,9 @@ export function usePosBilling(opts: {
                 }),
             );
         } catch { /* keep current prices if the refresh fails */ }
-    };
+    }, []);
 
-    const onPartyPicked = (p: PickedParty) => {
+    const onPartyPicked = useCallback((p: PickedParty) => {
         // If we were in change-customer mode, picking any party exits it.
         if (changingPartyRef.current) {
             setChangingParty(false);
@@ -709,7 +709,7 @@ export function usePosBilling(opts: {
         }
         void refreshPrices();          // billing starts — pull prices re-frozen while idle
         void fetchSnapshot(p.accountId);
-    };
+    }, [refreshPrices, fetchSnapshot, setTicketId]);
 
     const clearCustomer = () => {
         setSnapshot(null);
@@ -799,7 +799,7 @@ export function usePosBilling(opts: {
         setTimeout(() => productSearchRef.current?.focus(), 0);
     };
 
-    const setQty = (productId: number, qty: number) => {
+    const setQty = useCallback((productId: number, qty: number) => {
         if (qty <= 0) {
             setCart((p) => p.filter((l) => l.productId !== productId));
             // The removed line may have been the selection — hand the highlight
@@ -812,7 +812,7 @@ export function usePosBilling(opts: {
             return;
         }
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, qty } : l));
-    };
+    }, [setCart, setCartSelectedId, cart, cartSelectedId]);
 
     const setPrice = (productId: number, unitPrice: number) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, unitPrice } : l));
@@ -848,7 +848,7 @@ export function usePosBilling(opts: {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [cart, cartSelectedId, productQuery, createDialogOpen, checkoutOpen, setQty]);
+    }, [cart, cartSelectedId, productQuery, createDialogOpen, checkoutOpen, setQty, productSearchRef]);
 
     // Rendered cart order — products first, then services — identical to the
     // shell's display sort, so ArrowUp/Down move the highlight exactly the way
@@ -881,7 +881,7 @@ export function usePosBilling(opts: {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [renderCart, cart, cartSelectedId, productQuery, createDialogOpen, checkoutOpen]);
+    }, [renderCart, cart, cartSelectedId, productQuery, createDialogOpen, checkoutOpen, productSearchRef]);
 
     // ── Product dropdown keyboard nav ──────────────────────────────────────
     const onProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -914,7 +914,7 @@ export function usePosBilling(opts: {
     //                         when the counter has no such row.
     //   { tender: "cash" }  → option-1 — the Cash row.
     // A normal open starts at ₹0 and lets the cashier type the tendered amount.
-    const openCheckout = (prefill?: { tender: "cash" | "split" }) => {
+    const openCheckout = useCallback((prefill?: { tender: "cash" | "split" }) => {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
@@ -936,7 +936,7 @@ export function usePosBilling(opts: {
         setSplits(splits);
         setCheckoutOpen(true);
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
-    };
+    }, [snapshot, cart, payAccounts, payableTotal, cashTenderedRef]);
 
     // F10 → quick pay on option-2: opens checkout with the full payable amount
     // (total − gift card, no change) seeded on the FIRST payment-account row —
