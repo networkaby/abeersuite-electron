@@ -77,6 +77,28 @@ export async function loadAutoCoupons(tx: Tx, channel: CouponChannel): Promise<C
     return rows.map(toContext);
 }
 
+/// Every offer currently valid for the POS "Offers" panel: active, in-window
+/// (startsAt/endsAt), POS-or-both channel — CODE and AUTO alike. Window-filtered
+/// here so the panel never lists an offer that isn't actually claimable today.
+export async function loadPosOffers(tx: Tx, now: Date): Promise<CouponContext[]> {
+    const rows = await tx.coupon.findMany({
+        where: {
+            isActive: true,
+            ...channelFilter("POS"),
+            OR: [
+                { startsAt: null },
+                { startsAt: { lte: now } },
+            ],
+            AND: [
+                { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+            ],
+        },
+        include: { rules: true },
+        orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toContext);
+}
+
 /// Usage-limit + per-customer-limit gate (reads the redemption log; excludes reversed rows).
 export async function checkCouponUsage(
     tx: Tx, c: CouponContext, accountId: number | null,

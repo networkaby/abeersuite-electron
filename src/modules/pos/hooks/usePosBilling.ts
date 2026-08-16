@@ -24,7 +24,7 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { productMatchesQuery } from "@/shared/lib/inventory";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
@@ -89,6 +89,10 @@ export function usePosBilling(opts: {
     // Best auto-apply offer (no code) — used only when no manual coupon is applied.
     const [autoCoupon, setAutoCoupon] = useState<CouponHit | null>(null);
     const [couponBusy, setCouponBusy] = useState(false);
+    // Live offers panel — every claimable POS offer with qualification progress
+    // (server-computed; see /api/pos/coupon-offers). Collapse state is local to
+    // the panel component; this hook owns only the data + one-click apply.
+    const [offers, setOffers] = useState<PosOffer[] | null>(null);
     // Gift card redeemed as a payment tender (reduces cash/UPI due, not a discount).
     const [giftCardCodeStr, setGiftCardCodeStr] = useState("");
     const [giftCard, setGiftCard] = useState<{ id: number; code: string; balance: number } | null>(null);
@@ -529,8 +533,31 @@ export function usePosBilling(opts: {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [couponSig, appliedCode, snapshot?.account?.id, cart.length]);
 
-    async function applyCoupon() {
-        const code = couponCodeStr.trim().toUpperCase();
+    // Offers panel — refresh on the same beat as coupon re-validation, debounced
+    // so fast scanning doesn't hammer the route. The server owns every gate;
+    // this only renders what it returns.
+    useEffect(() => {
+        if (!snapshot?.account) { setOffers(null); return; }
+        // Capture before the debounce — the closure loses the narrowing.
+        const accountId = snapshot.account.id;
+        const isNewCustomer = snapshot.turnover.invoiceCount === 0;
+        let cancelled = false;
+        const t = setTimeout(() => {
+            axios.post<{ offers: PosOffer[] }>("/api/pos/coupon-offers", {
+                accountId,
+                isNewCustomer,
+                // Coupons evaluate the goods cart only (mirrors coupon-validate).
+                lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+            })
+                .then((r) => { if (!cancelled) setOffers(r.data.offers); })
+                .catch(() => { if (!cancelled) setOffers(null); });
+        }, 350);
+        return () => { cancelled = true; clearTimeout(t); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [couponSig, snapshot?.account?.id]);
+
+    async function applyCoupon(codeArg?: string) {
+        const code = (codeArg ?? couponCodeStr).trim().toUpperCase();
         if (!code || !snapshot?.account) return;
         setCouponBusy(true);
         try {
@@ -548,6 +575,12 @@ export function usePosBilling(opts: {
             setCouponBusy(false);
         }
     }
+
+    // One-click apply from the Offers panel — same path as typing the code.
+    const applyOffer = (code: string) => {
+        setCouponCodeStr(code);
+        void applyCoupon(code);
+    };
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -834,7 +867,7 @@ export function usePosBilling(opts: {
         adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,
         redeemPointsStr, setRedeemPointsStr, redeemOn, setRedeemOn,
         couponCodeStr, setCouponCodeStr, appliedCoupon, setAppliedCoupon, autoCoupon,
-        couponBusy, applyCoupon,
+        couponBusy, applyCoupon, applyOffer, offers,
         giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, gcBusy, applyGiftCard,
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
         charges, setCharges, resetDraft, resetAfterSubmit, ticketId,

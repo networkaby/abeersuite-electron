@@ -432,6 +432,8 @@ export function PosScreenShell({
                                 setCouponCodeStr={b.setCouponCodeStr}
                                 applyCoupon={b.applyCoupon}
                                 couponBusy={b.couponBusy}
+                                offers={b.offers}
+                                applyOffer={b.applyOffer}
                                 giftCard={b.giftCard}
                                 setGiftCard={b.setGiftCard}
                                 giftCardCodeStr={b.giftCardCodeStr}

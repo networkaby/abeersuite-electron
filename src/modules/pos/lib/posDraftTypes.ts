@@ -142,6 +142,43 @@ export type CouponHit = {
     blockedLoyalty: boolean;
 };
 
+/// One offer in the POS "Offers" upsell panel — computed server-side against the
+/// live cart (see /api/pos/coupon-offers). The client only renders.
+export type PosOffer = {
+    couponId: number;
+    code: string | null;
+    name: string;
+    type: "PERCENT" | "FLAT" | "FREE_ITEM" | "BOGO" | "SET_PRICE";
+    applyMode: "CODE" | "AUTO";
+    status: "ready" | "progress" | "unavailable";
+    /// Human-readable benefit line: "1 × Fanta FREE", "−10% off (max ₹200)" …
+    benefit: string;
+    /// Human-readable requirement line: "Min bill ₹1,000 · Eligible items only" …
+    requirement: string;
+    /// The gate the cashier can push on (buy units for BOGO, bill value otherwise).
+    progress: { current: number; target: number; unit: "₹" | "units"; pct: number } | null;
+    /// The upsell nudge: "Add ₹200 more to unlock" / "Add 1 more Coke to unlock".
+    gapText: string | null;
+    /// Supplementary guidance: "Scan Fanta to collect", "Eligible items only" …
+    note: string | null;
+    /// ₹ this offer is worth on the current cart (only when it already applies).
+    saveEstimate: number | null;
+    unavailableReason: string | null;
+    stackable: boolean;
+    stackScope: "BILL" | "LINE";
+    expiresAt: string | null;
+    usageLeft: number | null;
+    /// BOGO / FREE_ITEM mechanic (forward-looking: the free-line auto-add uses these).
+    freeProductId: number | null;
+    freeProductName: string | null;
+    buyProductId: number | null;
+    buyProductName: string | null;
+    buyQty: number | null;
+    getQty: number | null;
+    freeQty: number | null;
+    freeDiscountPct: number | null;
+};
+
 export type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
 
 export const newChargeRow = (): ChargeRow => ({
