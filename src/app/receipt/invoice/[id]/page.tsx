@@ -147,8 +147,15 @@ export default async function PosReceiptPage({
     // line amounts + the tier as a bill-level figure — the exact inputs it took when
     // the discount was voucher-level, so its reconciliation is unchanged. Reconstruct
     // the gross incl amount (qty × rate × (1 + gst)) and derive the tier = gross − net.
+    // A free-grant line stores quantity 0 + freeQty — the receipt prints the
+    // granted count ("1 × Fanta" at ₹0.00), and the gross is ₹0 either way.
+    const lineQty = (l: (typeof voucher.lines)[number]): number => {
+        const qty = Number(l.quantity);
+        const freeQty = Number(l.freeQty ?? 0);
+        return qty === 0 && freeQty > 0 ? freeQty : qty;
+    };
     const lineGrossIncl = (l: (typeof voucher.lines)[number]): number =>
-        Number(l.quantity) * Number(l.rate) * (1 + Number(l.taxRate) / 100);
+        lineQty(l) * Number(l.rate) * (1 + Number(l.taxRate) / 100);
     const grossGoodsIncl = voucher.lines.reduce((s, l) => s + lineGrossIncl(l), 0);
     const tierDiscount = voucher.lines.reduce((s, l) => s + Math.max(0, lineGrossIncl(l) - Number(l.amount)), 0);
     let loyaltyDiscount = 0, couponDiscount = 0;
@@ -202,14 +209,15 @@ export default async function PosReceiptPage({
             {
                 lines: voucher.lines.map((l) => ({
                     description: lineName(l),
-                    qty:         Number(l.quantity),
+                    qty:         lineQty(l),
                     mrpPaise:    l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
                     taxRatePct:  Number(l.taxRate),
                     taxAmount:   Number(l.taxAmount),
                     // GROSS (pre-tier) inclusive amount so the ladder breaks the tier
                     // out as its own row (goodsPaid = gross − tier − loyalty − coupon
-                    // reconciles to the net the line already stores).
+                    // reconciles to the net the line already stores). Free lines are
+                    // ₹0 by design — the ladder shows them as the given-away gift.
                     amount:      lineGrossIncl(l),
                     hsnCode:     taxByProduct.get(l.productId)?.hsnCode ?? null,
                 })),
@@ -240,14 +248,17 @@ export default async function PosReceiptPage({
         lines: voucher.lines.map((l, i) => {
             const lad = ladder?.lines[i];
             const eff = Number(l.amount);
+            const freeQty = Number(l.freeQty ?? 0);
+            const isFreeLine = Number(l.quantity) === 0 && freeQty > 0;
             return {
                 description: lineName(l),
-                quantity:    Number(l.quantity),
+                quantity:    isFreeLine ? freeQty : Number(l.quantity),
                 // Ladder mode shows the gross-at-tag (barcode) amount; falls back
-                // to the charged amount when no barcode was snapshotted.
-                amount:      lad?.barcode ?? eff,
-                mrp:         lad?.mrp ?? null,
-                barcode:     lad?.barcode ?? null,
+                // to the charged amount when no barcode was snapshotted. Free
+                // lines print the granted count at ₹0.00.
+                amount:      isFreeLine ? 0 : (lad?.barcode ?? eff),
+                mrp:         isFreeLine ? null : (lad?.mrp ?? null),
+                barcode:     isFreeLine ? null : (lad?.barcode ?? null),
             };
         }),
         subtotal:  Number(voucher.subtotal),

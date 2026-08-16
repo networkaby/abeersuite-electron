@@ -268,7 +268,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             }
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; posTemplate: VoucherTemplateDefaults; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: toDateOnly(due),   // local day, same reason as `today`
@@ -300,6 +300,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 redeemPoints: b.effRedeemPts,     // 0 when a non-stackable coupon blocks loyalty
                 couponCode: b.appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
                 autoApply: !b.appliedCoupon && !!b.autoCoupon,     // let the server pick the best auto offer
+                // Independent free-grant coupon — server derives the zero-price
+                // free lines (stock + COGS move; the bill math doesn't change).
+                freeCouponCode: b.appliedFree?.code ?? undefined,
+                // No-code AUTO free-grant offer (independent FREE_ITEM / BOGO) —
+                // the server re-selects it from the cart, so the free item lands
+                // on the invoice even if the preview went stale.
+                freeAutoApply: !b.appliedFree && !!b.autoFree,
                 giftCardCode: b.giftCard?.code ?? undefined,     // server draws min(balance, total) as a tender
                 collectSurplus: b.overpaid > 0.01,               // accept extra → Receipt voucher (clears dues FIFO, leftover = advance)
                 sourceVoucherId: convertFromRef.current ?? undefined,   // convert-to-sale link → source flips to "Converted"
@@ -315,6 +322,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     : "";
             const bonusMsg = data.milestoneBonus > 0 ? ` 🏆 +${data.milestoneBonus} milestone bonus!` : "";
             const couponMsg = data.couponDiscount > 0 ? ` · coupon − ${formatInr(data.couponDiscount)}` : "";
+            const freeMsg = data.freeItems?.length
+                ? ` · 🎁 ${data.freeItems.map((f) => `${f.freeQty}×${f.productName}`).join(", ")} FREE`
+                : "";
             const gcCouponMsg = data.milestoneCoupons?.length ? ` 🎟 coupon ${data.milestoneCoupons.join(", ")} issued!` : "";
             let surplusMsg = "";
             if (data.surplusCollected > 0) {
@@ -323,7 +333,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 if (data.advanceCredited > 0) parts.push(`advance ${formatInr(data.advanceCredited)}`);
                 surplusMsg = ` · ${data.receiptVoucherRef ?? "Receipt"} +${formatInr(data.surplusCollected)}${parts.length ? ` (${parts.join(", ")})` : ""}`;
             }
-            toast.success(`Invoice ${data.voucherRef} · ${formatInr(b.total)}${couponMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}${surplusMsg}`);
+            toast.success(`Invoice ${data.voucherRef} · ${formatInr(b.total)}${couponMsg}${freeMsg}${ptsMsg}${bonusMsg}${gcCouponMsg}${surplusMsg}`);
             // Show "Thank You ₹X" on the customer display and hold it so the
             // coordinator doesn't immediately overwrite it as state resets.
             void qrDisplay.thankyou({ amount: b.total });

@@ -242,6 +242,10 @@ export async function computeShopCartBenefits(
                 code: opts.couponCode, autoApply: opts.autoApply, channel: "SHOP", input,
             });
             if (selected.kind === "error") couponError = selected.reason;
+            // An independent FREE-GRANT coupon (FREE_ITEM / BOGO) grants free
+            // items at the counter — the shop has no free-line mechanic yet, so
+            // say so rather than silently doing nothing.
+            else if (selected.kind === "free-grant") couponError = "Free-grant coupons are available at the counter only.";
         }
     }
     const exclusionMask: boolean[] = selected.kind === "ok" ? couponExclusionMask(selected.coupon, couponLines) : lines.map(() => false);

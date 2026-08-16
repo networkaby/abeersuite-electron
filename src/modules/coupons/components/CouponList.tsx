@@ -206,6 +206,9 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                                 <div className="space-y-2 p-3">
                                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                                         <Badge className={`${channelTone[c.channels]} border-0`}>{channelLabel[c.channels]}</Badge>
+                                        {c.independent && (
+                                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">free on top</span>
+                                        )}
                                         {c.stackable && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">stackable</span>}
                                         {!c.stackable && c.stackScope === "LINE" && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">exclusive · its items only</span>}
                                         {c.singleUse && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">single-use</span>}

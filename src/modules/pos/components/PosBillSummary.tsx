@@ -11,14 +11,14 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import {
-    Award, Plus, Tag, X, Sparkles, CreditCard,
+    Award, Plus, Tag, X, Sparkles, CreditCard, Gift,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
-import { type Snapshot, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type CartLine, type CouponHit, type FreeGrantHit } from "@/modules/pos/lib/posDraftTypes";
 import { type TierResult } from "@/shared/lib/pricing";
 
 type GiftCardState = { id: number; code: string; balance: number };
@@ -67,6 +67,12 @@ export type PosBillSummaryProps = {
     setCouponCodeStr: Dispatch<SetStateAction<string>>;
     applyCoupon: () => void | Promise<void>;
     couponBusy: boolean;
+    // Independent free-grant coupon (FREE_ITEM / BOGO) — applies ON TOP of the
+    // money coupon and grants free items at zero price (FREE badge on the bill).
+    appliedFree: FreeGrantHit | null;
+    clearFreeCoupon: () => void;
+    applyFreeCoupon: (code?: string) => void | Promise<void>;
+    freeBusy: boolean;
 
     // Gift card
     giftCard: GiftCardState | null;
@@ -104,6 +110,7 @@ export function PosBillSummary({
     redeemOn, setRedeemOn, redeemPointsStr, setRedeemPointsStr, effRedemptionRupees,
     appliedCoupon, setAppliedCoupon, autoCoupon, couponRupees, couponDroppedTier,
     couponBlockedLoyalty, couponCodeStr, setCouponCodeStr, applyCoupon, couponBusy,
+    appliedFree, clearFreeCoupon,
     giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, applyGiftCard, gcBusy,
     giftCardApplied, payableTotal,
     shippingAmtStr, setShippingAmtStr,
@@ -262,6 +269,23 @@ export function PosBillSummary({
                                 />
                                 <Button size="sm" variant="outline" className="h-7" disabled={couponBusy || !couponCodeStr.trim()} onClick={() => void applyCoupon()}>
                                     Apply
+                                </Button>
+                            </div>
+                        )}
+                        {/* Independent free-grant coupon — rides ON TOP of the money
+                        coupon; grants free items (zero price + FREE badge on the bill).
+                        A free-grant code typed into the box above lands here. */}
+                        {appliedFree && appliedFree.freeLines.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <Gift size={12} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                                    {appliedFree.code ?? "FREE"}
+                                </span>
+                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                                    {appliedFree.freeLines.map((f) => `${f.freeQty}× ${f.productName}`).join(" + ")} FREE
+                                </span>
+                                <Button size="icon" variant="ghost" className="h-5 w-5" title="Remove free items" onClick={clearFreeCoupon}>
+                                    <X size={12} />
                                 </Button>
                             </div>
                         )}

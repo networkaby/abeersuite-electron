@@ -9,7 +9,10 @@ import { randomUUID } from "crypto";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import {
     checkCouponEligibility,
+    checkFreeGrantEligibility,
     computeCouponDiscount,
+    freeGrantForCoupon,
+    isFreeGrantCoupon,
     type CouponChannel,
     type CouponContext,
     type EvalInput,
@@ -45,6 +48,7 @@ function toContext(row: CouponRow): CouponContext {
         eligibility: row.eligibility,
         stackable: row.stackable,
         stackScope: row.stackScope,
+        independent: row.independent,
         ownerAccountId: row.ownerAccountId,
         isActive: row.isActive,
         totalUsageLimit: row.totalUsageLimit,
@@ -73,6 +77,7 @@ export async function loadAutoCoupons(tx: Tx, channel: CouponChannel): Promise<C
     const rows = await tx.coupon.findMany({
         where: { applyMode: "AUTO", isActive: true, ...channelFilter(channel) },
         include: { rules: true },
+        orderBy: { createdAt: "asc" },
     });
     return rows.map(toContext);
 }
@@ -118,7 +123,80 @@ export async function checkCouponUsage(
 export type CouponSelection =
     | { kind: "none" }
     | { kind: "error"; reason: string }
-    | { kind: "ok"; coupon: CouponContext; discountRupees: number };
+    | { kind: "ok"; coupon: CouponContext; discountRupees: number }
+    /// An independent FREE-GRANT coupon (FREE_ITEM / BOGO): not a ₹ discount —
+    /// it adds the grant as zero-price lines on top. `grant` is the product +
+    /// free units. The money-coupon slot hands this back and the free slot
+    /// consumes it, so one code typed in either box ends up in the right place.
+    | { kind: "free-grant"; coupon: CouponContext; grant: { productId: number; freeQty: number } };
+
+/// The free-grant pipeline shared by the money selector (when a free-grant
+/// code is typed there) and the dedicated free-coupon selector: eligibility
+/// (window / min-bill / owner / new-vs-returning — no "eligible lines" check,
+/// the grant adds its own line), usage limits, then the buy-side-unlocked grant.
+/// `protectedProductIds` is the discount-protection blacklist (loaded once by
+/// the caller); a protected grant product refuses the offer.
+async function selectFreeGrant(
+    tx: Tx,
+    args: { c: CouponContext; input: EvalInput; protectedProductIds?: Set<number> },
+): Promise<Extract<CouponSelection, { kind: "error" } | { kind: "free-grant" }>> {
+    const { c, input, protectedProductIds } = args;
+    const gate = checkFreeGrantEligibility(c, input);
+    if (!gate.ok) return { kind: "error", reason: gate.reason };
+    const usage = await checkCouponUsage(tx, c, input.accountId);
+    if (!usage.ok) return { kind: "error", reason: usage.reason };
+    const grant = freeGrantForCoupon(c, input.lines);
+    if (!grant) return { kind: "error", reason: "Buy more to unlock the offer" };
+    // Discount-protection blacklist: never give away a protected product.
+    if (protectedProductIds?.has(grant.productId)) {
+        return { kind: "error", reason: "Coupon is not applicable on this bill" };
+    }
+    // Cross-item BOGO: a protected BUY item can't unlock the offer either
+    // (the buy line is in the cart, so its line-level `protected` flag is set).
+    if (c.type === "BOGO" && c.buyProductId != null && grant.productId !== c.buyProductId) {
+        const buyLine = input.lines.find((l) => l.productId === c.buyProductId);
+        if (buyLine?.protected) return { kind: "error", reason: "Coupon is not applicable on this bill" };
+    }
+    return { kind: "free-grant", coupon: c, grant };
+}
+
+/// Dedicated selector for the free-grant coupon slot (the cashier's "Free
+/// items" affordance). Resolves a code to an independent FREE_ITEM / BOGO
+/// coupon, runs eligibility + usage + the buy-side check, and returns the
+/// grant. Mirrors selectCouponForCart's split so the validated grant and the
+/// posted grant are identical.
+export async function selectFreeGrantCoupon(
+    tx: Tx,
+    args: { code: string; channel: CouponChannel; input: EvalInput; protectedProductIds?: Set<number> },
+): Promise<Extract<CouponSelection, { kind: "error" } | { kind: "free-grant" }>> {
+    const c = await resolveCouponByCode(tx, args.code, args.channel);
+    if (!c) return { kind: "error", reason: "Invalid coupon code" };
+    if (!isFreeGrantCoupon(c)) {
+        return { kind: "error", reason: "This coupon gives a ₹ discount — apply it in the Coupon code box" };
+    }
+    return selectFreeGrant(tx, { c, input: args.input, protectedProductIds: args.protectedProductIds });
+}
+
+/// Pick the best eligible AUTO free-grant coupon (independent FREE_ITEM / BOGO)
+/// for the cart — the free-grant analogue of the money auto-apply path. Free
+/// grants have no ₹ to compare, so "best" is simply the first eligible in
+/// creation order. Runs eligibility + usage + the buy-side gate and returns the
+/// grant, so a no-code AUTO freebie fires on its own the moment the cart
+/// qualifies. Used by the POS freeAutoApply slot (coupon-validate + sale) — the
+/// sale route re-derives the grant from the cart, so a stale client state can't
+/// drop it off the invoice.
+export async function selectAutoFreeGrant(
+    tx: Tx,
+    args: { channel: CouponChannel; input: EvalInput; protectedProductIds?: Set<number> },
+): Promise<Extract<CouponSelection, { kind: "error" } | { kind: "free-grant" } | { kind: "none" }>> {
+    const candidates = await loadAutoCoupons(tx, args.channel);
+    for (const c of candidates) {
+        if (!isFreeGrantCoupon(c)) continue;
+        const sel = await selectFreeGrant(tx, { c, input: args.input, protectedProductIds: args.protectedProductIds });
+        if (sel.kind === "free-grant") return sel;
+    }
+    return { kind: "none" };
+}
 
 /// THE shared selector. Resolves a code (or picks the best AUTO coupon), runs the
 /// full eligibility + usage + value pipeline, and returns the winning coupon + ₹.
@@ -132,6 +210,10 @@ export async function selectCouponForCart(
     if (code && code.trim()) {
         const c = await resolveCouponByCode(tx, code, channel);
         if (!c) return { kind: "error", reason: "Invalid coupon code" };
+        // An independent free-grant coupon isn't a ₹ discount — hand it to the
+        // free slot (the caller routes `free-grant` there; the POS applies the
+        // free items instead of a money coupon).
+        if (isFreeGrantCoupon(c)) return selectFreeGrant(tx, { c, input });
         const usage = await checkCouponUsage(tx, c, input.accountId);
         if (!usage.ok) return { kind: "error", reason: usage.reason };
         const res = computeCouponDiscount(c, input);
@@ -140,10 +222,14 @@ export async function selectCouponForCart(
     }
 
     // Auto-apply path — silently pick the best-value usable AUTO coupon.
+    // Independent free-grant coupons are skipped here: they don't reduce the
+    // bill, so they'd never win a ₹ comparison (and silently mutating the cart
+    // with free lines would surprise the cashier).
     if (autoApply) {
         const candidates = await loadAutoCoupons(tx, channel);
         let best: { coupon: CouponContext; discountRupees: number } | null = null;
         for (const c of candidates) {
+            if (isFreeGrantCoupon(c)) continue;
             if (!checkCouponEligibility(c, input).ok) continue;
             if (!(await checkCouponUsage(tx, c, input.accountId)).ok) continue;
             const res = computeCouponDiscount(c, input);
@@ -184,6 +270,7 @@ export async function issueMilestoneCoupon(
             buyProductId: t.buyProductId, buyQty: t.buyQty, getQty: t.getQty, setPriceAmt: t.setPriceAmt,
             startsAt: t.startsAt, endsAt: t.endsAt, minBillValue: t.minBillValue,
             eligibility: t.eligibility, stackable: t.stackable, stackScope: t.stackScope,
+            independent: t.independent,
             ownerAccountId: args.accountId, singleUse: true, totalUsageLimit: 1,
             issuedByMilestoneId: args.milestoneId, isActive: true, createdById: args.createdById,
             rules: t.rules.length

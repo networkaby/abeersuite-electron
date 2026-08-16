@@ -84,15 +84,27 @@ export type ProductOption = {
     /// onto the cart line at add-to-cart (mirrors warrantyLabel).
     requireSaleNote?: boolean;
     /// Cross-sell provenance from /api/pos/coupon-offers — the drawer renders the
-    /// three sources differently:
+    /// four sources differently:
     ///   "history" — the customer bought it before (carries the last-purchase
     ///               snapshot below), "hot" — store best-seller fill,
-    ///   "shelf"   — same-category fallback.
-    crossSellSource?: "history" | "hot" | "shelf";
+    ///   "offer"   — the item an active independent FREE_ITEM / BOGO offer gives
+    ///               away (see crossSellOffer), "shelf" — same-category fallback.
+    crossSellSource?: "history" | "hot" | "offer" | "shelf";
     /// ISO date of the customer's last purchase of this product (history rows only).
     lastBoughtAt?: string | null;
     /// Unit price (paise) paid at that last purchase (history rows only).
     lastUnitPricePaise?: number | null;
+    /// When crossSellSource === "offer" — the active free-grant offer this product
+    /// is the free item of, so the drawer can badge the row "FREE with <offer>".
+    crossSellOffer?: {
+        couponId: number;
+        /// Benefit line of the offer ("Buy 1 get 1 FREE — Free Carry Bag").
+        name: string;
+        /// Units granted when the offer fires.
+        freeQty: number;
+        /// The offer already fires on this cart (auto-granted at checkout).
+        ready: boolean;
+    } | null;
 };
 
 /// One row of /api/pos/services — the active POS service catalogue. Services are
@@ -139,6 +151,11 @@ export type CartLine = {
     /// Discount-protected (ProductProtection blacklist) — the line gets no tier
     /// discount and sits outside the loyalty redeem ceiling on the POS screen.
     protected?: boolean;
+    /// FREE-GRANT line: the item an independent FREE_ITEM / BOGO coupon granted.
+    /// Display-only on the POS (zero price + FREE badge so the cashier hands it
+    /// over) — it is NOT sent in the sale payload; the server re-derives it from
+    /// the applied free coupon code.
+    free?: boolean;
 };
 
 /// A validated coupon as the coupon-validate route returns it — the server owns
@@ -150,6 +167,17 @@ export type CouponHit = {
     rupees: number;
     droppedTier: boolean;
     blockedLoyalty: boolean;
+};
+
+/// A validated independent FREE-GRANT coupon (FREE_ITEM / BOGO) — not a ₹
+/// discount: it adds `freeLines` to the bill at zero price (the POS shows the
+/// FREE badge so the counter operator doesn't forget to give the item). It
+/// rides ON TOP of the money coupon — never drops tier / blocks loyalty.
+export type FreeGrantHit = {
+    couponId: number;
+    code: string | null;
+    name: string;
+    freeLines: { productId: number; freeQty: number; productName: string }[];
 };
 
 /// One offer in the POS "Offers" upsell panel — computed server-side against the
@@ -178,6 +206,9 @@ export type PosOffer = {
     stackScope: "BILL" | "LINE";
     expiresAt: string | null;
     usageLeft: number | null;
+    /// Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — applies on top; the
+    /// apply action adds its free lines at zero price instead of a ₹ coupon.
+    independent: boolean;
     /// BOGO / FREE_ITEM mechanic (forward-looking: the free-line auto-add uses these).
     freeProductId: number | null;
     freeProductName: string | null;

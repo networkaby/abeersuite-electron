@@ -26,7 +26,7 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type FreeGrantHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { productMatchesQuery } from "@/shared/lib/inventory";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
@@ -95,6 +95,16 @@ export function usePosBilling(opts: {
     // Best auto-apply offer (no code) — used only when no manual coupon is applied.
     const [autoCoupon, setAutoCoupon] = useState<CouponHit | null>(null);
     const [couponBusy, setCouponBusy] = useState(false);
+    // Best auto-apply FREE-GRANT offer (independent FREE_ITEM / BOGO, no code) —
+    // previews the granted free lines as rows in the item list the moment the
+    // cart qualifies. The server re-selects it at checkout (freeAutoApply), so
+    // this is display + the checkout hint only.
+    const [autoFree, setAutoFree] = useState<FreeGrantHit | null>(null);
+    // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — applies ON TOP of the
+    // money coupon. It grants free items (zero-price lines with the FREE badge)
+    // instead of a ₹ discount; the server re-derives them from `freeCouponCode`.
+    const [appliedFree, setAppliedFree] = useState<FreeGrantHit | null>(null);
+    const [freeBusy, setFreeBusy] = useState(false);
     // Live offers panel — every claimable POS offer with qualification progress
     // + cross-sell suggestions (server-computed; see /api/pos/coupon-offers).
     // The upsell drawer renders these; this hook owns only data + one-click apply.
@@ -498,6 +508,19 @@ export function usePosBilling(opts: {
         chargesNet,
     );
 
+    // Tax-inclusive voucher total the customer pays — goods (incl. GST) + shipping
+    // + charges − tier discount + round-off, BEFORE the money coupon / loyalty —
+    // the min-bill qualifier for an independent FREE_ITEM / BOGO free item.
+    // Mirrors /api/pos/sale's freeBillAmountIncl so the preview and the posted
+    // grant agree (the free grant is independent, so it never uses its own ₹).
+    const billAmountIncl = calcVoucherTotals(
+        lineRows,
+        shippingAmt,
+        discountAmount,
+        roundOff,
+        manualChargesNet,
+    ).totalAmount;
+
     // Gift card is a TENDER, not a discount — it doesn't change `total`, it covers
     // part of it. The cashier collects `payableTotal` in cash/UPI; the server draws
     // the same min(balance, total) from the card and posts it as a Dr-Liability tender.
@@ -557,16 +580,20 @@ export function usePosBilling(opts: {
         [cart, discountAmount, redemptionRupees],
     );
     const appliedCode = appliedCoupon?.code ?? null;
-    type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean };
-    async function runValidate(validateOpts: { code?: string; autoApply?: boolean }): Promise<ValidateResp | null> {
+    type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean; freeLines?: { productId: number; freeQty: number; productName: string }[] };
+    async function runValidate(validateOpts: { code?: string; freeCode?: string; autoApply?: boolean; freeAutoApply?: boolean }): Promise<ValidateResp | null> {
         if (!snapshot?.account) return null;
         const { data } = await axios.post<ValidateResp>("/api/pos/coupon-validate", {
             accountId: snapshot.account.id,
             code: validateOpts.code,
+            freeCode: validateOpts.freeCode,
             autoApply: validateOpts.autoApply,
+            freeAutoApply: validateOpts.freeAutoApply,
             isNewCustomer: snapshot.turnover.invoiceCount === 0,
             tierRupees: discountAmount,
             loyaltyRupees: redemptionRupees,
+            // Free-grant min-bill qualifies on the full voucher total (all +/− in).
+            billAmountIncl,
             // taxRate rides along so the server can gross up its resolved cost to
             // cost-incl-tax — the PERCENT-coupon base. Service lines are excluded —
             // coupons evaluate the goods cart only (mirrors /api/pos/sale).
@@ -603,6 +630,48 @@ export function usePosBilling(opts: {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [couponSig, appliedCode, snapshot?.account?.id, cart.length]);
 
+    // Re-validate the applied FREE-GRANT coupon when the cart changes — its
+    // BOGO buy side can drop out of range (then the free items are no longer
+    // due). The server owns the grant; this only refreshes the badge lines.
+    const appliedFreeCode = appliedFree?.code ?? null;
+    useEffect(() => {
+        if (!appliedFreeCode || !snapshot?.account) return;
+        let cancelled = false;
+        runValidate({ freeCode: appliedFreeCode })
+            .then((data) => {
+                if (cancelled || !data) return;
+                const fl = data.freeLines;
+                if (data.ok && fl?.length) {
+                    setAppliedFree((prev) => (prev ? { ...prev, freeLines: fl } : prev));
+                } else {
+                    clearFreeCoupon();
+                    toast.message("Free offer removed — no longer applies to this cart");
+                }
+            })
+            .catch(() => { /* keep prior value; checkout re-validates */ });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [couponSig, appliedFreeCode, snapshot?.account?.id]);
+
+    // Auto free-grant: surface the best eligible independent AUTO FREE_ITEM /
+    // BOGO offer as FREE rows in the item list (the free-grant analogue of the
+    // autoCoupon effect above). A manually applied free code wins over the
+    // automatic pick; the server re-selects the grant at checkout anyway.
+    useEffect(() => {
+        if (appliedFreeCode || !snapshot?.account || cart.length === 0) { setAutoFree(null); return; }
+        let cancelled = false;
+        runValidate({ freeAutoApply: true })
+            .then((data) => {
+                if (cancelled) return;
+                setAutoFree(data?.ok && data.freeLines?.length
+                    ? { couponId: data.couponId, code: data.code, name: data.name, freeLines: data.freeLines }
+                    : null);
+            })
+            .catch(() => { if (!cancelled) setAutoFree(null); });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [couponSig, appliedFreeCode, snapshot?.account?.id, cart.length]);
+
     // Offers panel — refresh on the same beat as coupon re-validation, debounced
     // so fast scanning doesn't hammer the route. The server owns every gate;
     // this only renders what it returns.
@@ -616,6 +685,8 @@ export function usePosBilling(opts: {
             axios.post<{ offers: PosOffer[]; crossSell: ProductOption[] }>("/api/pos/coupon-offers", {
                 accountId,
                 isNewCustomer,
+                // Free-grant min-bill qualifies on the full voucher total (all +/− in).
+                billAmountIncl,
                 // Coupons evaluate the goods cart only (mirrors coupon-validate).
                 lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
             })
@@ -626,6 +697,41 @@ export function usePosBilling(opts: {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [couponSig, snapshot?.account?.id]);
 
+    // Apply an independent free-grant coupon — store it + surface the free items.
+    // The server re-derives the free lines at checkout from `freeCouponCode`, so
+    // this is purely display + the code the payload carries.
+    function applyFreeGrant(data: ValidateResp) {
+        const fl = data.freeLines;
+        if (!fl?.length) return false;
+        setAppliedFree({
+            couponId: data.couponId, code: data.code, name: data.name, freeLines: fl,
+        });
+        toast.success(`Free items on this bill: ${fl.map((f) => `${f.freeQty} × ${f.productName}`).join(", ")}`);
+        setTimeout(() => productSearchRef.current?.focus(), 0);
+        return true;
+    }
+    function clearFreeCoupon() {
+        setAppliedFree(null);
+    }
+    async function applyFreeCoupon(codeArg?: string) {
+        const code = (codeArg ?? "").trim().toUpperCase();
+        if (!code || !snapshot?.account) return;
+        setFreeBusy(true);
+        try {
+            const data = await runValidate({ freeCode: code });
+            if (data?.ok && data.freeLines?.length) {
+                applyFreeGrant(data);
+            } else {
+                clearFreeCoupon();
+                toast.error(data?.reason ?? "Free offer not applicable");
+            }
+        } catch {
+            toast.error("Free offer check failed");
+        } finally {
+            setFreeBusy(false);
+        }
+    }
+
     async function applyCoupon(codeArg?: string) {
         const code = (codeArg ?? couponCodeStr).trim().toUpperCase();
         if (!code || !snapshot?.account) return;
@@ -633,10 +739,17 @@ export function usePosBilling(opts: {
         try {
             const data = await runValidate({ code });
             if (data?.ok) {
-                setAppliedCoupon(hit(data));
-                toast.success(`Coupon ${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)}`);
-                // Done with the coupon section — hand focus back to the scan box.
-                setTimeout(() => productSearchRef.current?.focus(), 0);
+                if (data.freeLines?.length) {
+                    // An independent free-grant code (FREE_ITEM / BOGO) — it isn't
+                    // a ₹ discount; apply it as free items on top of everything.
+                    setAppliedCoupon(null);
+                    applyFreeGrant(data);
+                } else {
+                    setAppliedCoupon(hit(data));
+                    toast.success(`Coupon ${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)}`);
+                    // Done with the coupon section — hand focus back to the scan box.
+                    setTimeout(() => productSearchRef.current?.focus(), 0);
+                }
             } else {
                 setAppliedCoupon(null);
                 toast.error(data?.reason ?? "Coupon not applicable");
@@ -1085,6 +1198,8 @@ export function usePosBilling(opts: {
         setCouponCodeStr("");
         setAppliedCoupon(null);
         setAutoCoupon(null);
+        setAppliedFree(null);
+        setAutoFree(null);
         setGiftCardCodeStr("");
         setGiftCard(null);
         setRoundOffStr("");
@@ -1114,6 +1229,8 @@ export function usePosBilling(opts: {
         setCouponCodeStr("");
         setAppliedCoupon(null);
         setAutoCoupon(null);
+        setAppliedFree(null);
+        setAutoFree(null);
         setGiftCardCodeStr("");
         setGiftCard(null);
         setRoundOffStr("");
@@ -1201,6 +1318,9 @@ export function usePosBilling(opts: {
         redeemPointsStr, setRedeemPointsStr, redeemOn, setRedeemOn,
         couponCodeStr, setCouponCodeStr, appliedCoupon, setAppliedCoupon, autoCoupon,
         couponBusy, applyCoupon, applyOffer, offers, crossSell,
+        // Independent free-grant coupon (FREE_ITEM / BOGO) — applies on top.
+        appliedFree, setAppliedFree, applyFreeCoupon, clearFreeCoupon, freeBusy,
+        autoFree, setAutoFree,
         giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, gcBusy, applyGiftCard,
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
         charges, setCharges, resetDraft, resetAfterSubmit, ticketId,

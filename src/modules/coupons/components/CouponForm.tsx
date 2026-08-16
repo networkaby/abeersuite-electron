@@ -63,6 +63,9 @@ export interface Coupon {
     eligibility: "ANY" | "NEW" | "RETURNING";
     stackable: boolean;
     stackScope: "BILL" | "LINE";
+    /// FREE_ITEM / BOGO only — independent FREE-GRANT coupon: applies on top of
+    /// the money coupon and grants the item(s) as zero-price FREE lines.
+    independent?: boolean;
     isActive: boolean;
     _count?: { redemptions: number };
 }
@@ -116,6 +119,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
     const [eligibility, setEligibility] = useState<Coupon["eligibility"]>(initial?.eligibility ?? "ANY");
     const [stackable, setStackable] = useState(initial?.stackable ?? false);
     const [stackScope, setStackScope] = useState<Coupon["stackScope"]>(initial?.stackScope ?? (initial?.type === "SET_PRICE" ? "LINE" : "BILL"));
+    const [independent, setIndependent] = useState(initial?.independent ?? false);
     const [saving, setSaving] = useState(false);
 
     async function save() {
@@ -150,6 +154,9 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
             perCustomerLimit: optInt(perCustomerLimit),
             singleUse, eligibility, stackable,
             stackScope: stackable ? "BILL" as const : stackScope,
+            // Independent free-grant (FREE_ITEM / BOGO): the item rides the bill
+            // as a zero-price FREE line on top of everything — no ₹ discount.
+            independent: type === "FREE_ITEM" || type === "BOGO" ? independent : false,
         };
 
         setSaving(true);
@@ -334,6 +341,14 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
             {/* Toggles */}
             <div className="flex flex-wrap items-center gap-5">
                 <Toggle label="Single-use code" hint="One redemption total" checked={singleUse} onChange={setSingleUse} />
+                {(type === "FREE_ITEM" || type === "BOGO") && (
+                    <Toggle
+                        label="Independent — free items on top"
+                        hint="No ₹ discount: adds the item(s) as zero-price FREE lines on the bill, on top of any other coupon. Never drops tier / blocks loyalty."
+                        checked={independent}
+                        onChange={setIndependent}
+                    />
+                )}
                 <Toggle label="Stackable" hint="Combine with tier + loyalty" checked={stackable} onChange={setStackable} />
                 {!stackable && (
                     <Field label="When exclusive, blocks tier + loyalty on…">

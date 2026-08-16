@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { selectCouponForCart, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput } from "@/modules/coupons/lib";
+import { selectCouponForCart, selectFreeGrantCoupon, selectAutoFreeGrant, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput, type CouponSelection } from "@/modules/coupons/lib";
 import { round2 } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
@@ -27,6 +27,16 @@ const lineSchema = z.object({
 const bodySchema = z.object({
     accountId:     z.number().int().nullable().optional(),
     code:          z.string().trim().max(40).optional(),
+    /// Dedicated free-grant slot: an independent FREE_ITEM / BOGO coupon code.
+    /// Resolved alone (it never competes with the money coupon) and returns the
+    /// free lines to add to the bill at zero price.
+    freeCode:      z.string().trim().max(40).optional(),
+    /// Auto free-grant slot: pick the best eligible AUTO free-grant coupon (no
+    /// code) for the cart — same response shape as freeCode.
+    freeAutoApply: z.boolean().optional(),
+    /// Tax-inclusive voucher bill amount (all +/− adjustments folded in) — the
+    /// free-grant min-bill qualifier. Absent = falls back to goods.
+    billAmountIncl: z.number().min(0).optional(),
     autoApply:     z.boolean().optional(),
     isNewCustomer: z.boolean().optional(),
     tierRupees:    z.number().min(0).optional(),
@@ -86,15 +96,65 @@ export async function POST(req: Request) {
                 };
             }),
             goodsValue,
+            // Free-grant min-bill qualifies on the tax-inclusive voucher total
+            // (goods + tax + shipping + charges − tier + round-off) when provided.
+            billAmountIncl: data.billAmountIncl,
             // Coupon-alone ceiling; finalizeCouponAmount applies the stacking-aware ceiling.
             billBeforeCoupon: goodsValue,
             isNewCustomer: data.isNewCustomer ?? false,
             now: new Date(),
         };
 
-        const selected = await selectCouponForCart(prisma, { code: data.code, autoApply: data.autoApply, channel: "POS", input });
-        if (selected.kind === "none") return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
-        if (selected.kind === "error") return NextResponse.json({ ok: false, reason: selected.reason });
+        // ── Selection: the dedicated free-grant slot, or the money coupon ──
+        // A typed code that turns out to be an independent free-grant coupon is
+        // routed here too, so one code in either box lands in the right place.
+        let selected: CouponSelection = { kind: "none" };
+        let freeSelected: Extract<CouponSelection, { kind: "free-grant" }> | null = null;
+        if (data.freeCode) {
+            const sel = await selectFreeGrantCoupon(prisma, { code: data.freeCode, channel: "POS", input, protectedProductIds });
+            if (sel.kind === "error") return NextResponse.json({ ok: false, reason: sel.reason });
+            freeSelected = sel;
+        } else if (data.freeAutoApply) {
+            const sel = await selectAutoFreeGrant(prisma, { channel: "POS", input, protectedProductIds });
+            if (sel.kind === "error") return NextResponse.json({ ok: false, reason: sel.reason });
+            if (sel.kind === "free-grant") freeSelected = sel;
+        } else {
+            selected = await selectCouponForCart(prisma, { code: data.code, autoApply: data.autoApply, channel: "POS", input });
+            if (selected.kind === "free-grant") {
+                freeSelected = selected;
+            } else if (selected.kind === "none") {
+                return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
+            } else if (selected.kind === "error") {
+                return NextResponse.json({ ok: false, reason: selected.reason });
+            }
+        }
+
+        // Free-grant response: the items to add as zero-price FREE lines. No ₹,
+        // no tier/loyalty interplay — the grant rides on top of everything.
+        if (freeSelected) {
+            const names = await prisma.invProduct.findMany({
+                where: { id: { in: [freeSelected.grant.productId] } },
+                select: { id: true, name: true },
+            });
+            const nameById = new Map(names.map((p) => [p.id, p.name]));
+            return NextResponse.json({
+                ok: true,
+                couponId: freeSelected.coupon.id,
+                code: freeSelected.coupon.code,
+                name: freeSelected.coupon.name,
+                freeLines: [{
+                    productId: freeSelected.grant.productId,
+                    freeQty:   freeSelected.grant.freeQty,
+                    productName: nameById.get(freeSelected.grant.productId) ?? "Item",
+                }],
+            });
+        }
+
+        // The free-grant path returned above — the money coupon won, so the
+        // selection is narrowed to a ₹ discount here.
+        if (selected.kind !== "ok") {
+            return NextResponse.json({ ok: false, reason: "No coupon applied" });
+        }
 
         // This endpoint only receives BILL-wide tierRupees/loyaltyRupees from the
         // client (no per-line breakdown), unlike /sale which computes them line by

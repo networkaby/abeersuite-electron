@@ -117,6 +117,16 @@ model Coupon {
   /// match lose tier + loyalty; other lines in the same bill are unaffected.
   stackScope CouponStackScope @default(BILL)
 
+  // ── Free-grant (FREE_ITEM / BOGO only) ──
+  /// INDEPENDENT free-grant coupon: applies ON TOP of the money coupon (it never
+  /// drops tier, never blocks loyalty, never counts against the global guard).
+  /// Instead of a ₹ discount it GRANTS its item(s) as a zero-price "FREE" line
+  /// on the bill (quantity 0 + freeQty, so stock + COGS move but no money) —
+  /// the POS shows the FREE badge so the counter operator doesn't forget to
+  /// hand the item over. False = the legacy behavior (the item already in the
+  /// cart is discounted by freeDiscountPct as a regular coupon charge).
+  independent Boolean @default(false)
+
   // ── Targeting ──
   /// Bind a coupon to one customer account (customer-specific / milestone-issued).
   ownerAccountId      Int?

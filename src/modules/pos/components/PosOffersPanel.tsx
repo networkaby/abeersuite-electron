@@ -9,22 +9,31 @@ import { CheckCircle2, Flame, Ban, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatInr } from "@/shared/lib/format";
-import type { CouponHit, PosOffer } from "@/modules/pos/lib/posDraftTypes";
+import type { CouponHit, FreeGrantHit, PosOffer } from "@/modules/pos/lib/posDraftTypes";
 
 export function PosOfferCard({
     o,
     applied,
     auto,
+    appliedFree,
+    autoFree,
     onApply,
 }: {
     o: PosOffer;
     applied: CouponHit | null;
     auto: CouponHit | null;
+    /// Independent FREE-GRANT coupon currently on the bill — its cards read "Applied".
+    appliedFree: FreeGrantHit | null;
+    /// Auto-applied free-grant coupon — its cards read "Applied" as well.
+    autoFree: FreeGrantHit | null;
     onApply: (code: string) => void;
 }) {
     const isApplied = applied?.couponId === o.couponId;
     // An AUTO offer the engine will apply at checkout reads as applied too.
     const isActiveAuto = !isApplied && auto?.couponId === o.couponId;
+    // A free-grant offer applied on top reads as applied for its own card.
+    const isFreeApplied = o.independent && (appliedFree?.couponId === o.couponId || autoFree?.couponId === o.couponId);
+    const appliedState = isApplied || isActiveAuto || isFreeApplied;
     // One-click apply code (ready CODE offers only) — captured so the click
     // closure keeps the string narrowing.
     const readyCode = o.status === "ready" && o.applyMode === "CODE" ? o.code : null;
@@ -45,7 +54,10 @@ export function PosOfferCard({
                         ? <Flame size={13} className="shrink-0 text-amber-600 dark:text-amber-400" />
                         : <Ban size={13} className="shrink-0 text-muted-foreground" />}
                 <span className="min-w-0 flex-1 truncate font-medium">{o.benefit}</span>
-                {isApplied || isActiveAuto ? (
+                {o.independent && (
+                    <Badge className="shrink-0 border-transparent bg-emerald-600 text-[9px] text-white">FREE</Badge>
+                )}
+                {appliedState ? (
                     <Badge className="border-transparent bg-emerald-100 text-[10px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Applied</Badge>
                 ) : o.applyMode === "AUTO" ? (
                     <Badge variant="secondary" className="text-[10px]"><Sparkles size={9} className="mr-0.5" />Auto</Badge>
@@ -90,9 +102,11 @@ export function PosOfferCard({
             )}
 
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/70">
-                {o.stackable
-                    ? <span>Stackable</span>
-                    : <span>{o.stackScope === "BILL" ? "Replaces tier · blocks loyalty" : "Line-scope exclusive"}</span>}
+                {o.independent
+                    ? <span>Free items — applies on top</span>
+                    : o.stackable
+                        ? <span>Stackable</span>
+                        : <span>{o.stackScope === "BILL" ? "Replaces tier · blocks loyalty" : "Line-scope exclusive"}</span>}
                 {o.code && !isApplied && o.applyMode === "CODE" && <span className="font-mono">{o.code}</span>}
                 {o.expiresAt && <span>ends {new Date(o.expiresAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span>}
             </div>

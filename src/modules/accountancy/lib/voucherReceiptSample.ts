@@ -143,12 +143,20 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     let subtotal  = toNumber(v.subtotal);
     let taxAmount = toNumber(v.taxAmount);
     let total     = toNumber(v.totalAmount);
-    let lines = v.lines.map((l) => ({
-        description: itemName(l),
-        note:        itemNote(l),
-        quantity:    toNumber(l.quantity),
-        amount:      toNumber(l.amount),
-    }));
+    let lines = v.lines.map((l) => {
+        // FREE-grant lines (independent FREE_ITEM / BOGO coupons) store quantity
+        // 0 + freeQty — print the granted count so the receipt says "1 × Fanta"
+        // at ₹0, never a blank "0 ×". The note already carries the "FREE · …"
+        // line the sale route baked in.
+        const qty = toNumber(l.quantity);
+        const freeQty = toNumber(l.freeQty ?? 0);
+        return {
+            description: itemName(l),
+            note:        itemNote(l),
+            quantity:    qty === 0 && freeQty > 0 ? freeQty : qty,
+            amount:      toNumber(l.amount),
+        };
+    });
 
     // POS_ESTIMATE price-privacy: the customer copy prints the TAG/list price and
     // hides discounts by default (cashier negotiates from the discounted price on

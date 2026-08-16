@@ -7,7 +7,10 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     checkCouponEligibility,
+    checkFreeGrantEligibility,
     computeCouponDiscount,
+    freeGrantForCoupon,
+    isFreeGrantCoupon,
     loadPosOffers,
     type CouponContext,
     type EvalInput,
@@ -38,6 +41,9 @@ const lineSchema = z.object({
 const bodySchema = z.object({
     accountId:     z.number().int().nullable().optional(),
     isNewCustomer: z.boolean().optional(),
+    /// Tax-inclusive voucher bill amount (all +/− adjustments folded in) — the
+    /// free-grant min-bill qualifier. Absent = falls back to goods.
+    billAmountIncl: z.number().min(0).optional(),
     lines:         z.array(lineSchema).default([]),
 });
 
@@ -165,6 +171,9 @@ export async function POST(req: Request) {
                 };
             }),
             goodsValue,
+            // Free-grant min-bill qualifies on the tax-inclusive voucher total
+            // (goods + tax + shipping + charges − tier + round-off) when provided.
+            billAmountIncl: data.billAmountIncl,
             billBeforeCoupon: goodsValue,
             isNewCustomer,
             now,
@@ -195,11 +204,20 @@ export async function POST(req: Request) {
             // ── Progress: the gate the cashier can push on ─────────────
             let progress: { current: number; target: number; unit: "₹" | "units"; pct: number } | null = null;
             let gapText: string | null = null;
-            if (c.type === "BOGO" && c.buyProductId != null) {
-                const buyUnits = input.lines.find((l) => l.productId === c.buyProductId)?.qty ?? 0;
+            if (c.type === "BOGO" && (c.buyProductId != null || isFreeGrantCoupon(c))) {
+                // Buy-side gate in units — the number the cashier can push on.
+                // Every buyQty units unlock getQty free ("Buy 1 get 1" = 1 unit →
+                // 1 free, 12 units → 12 free), so the first free unit unlocks at
+                // buyQty units of the buy item — or of the WHOLE cart when no buy
+                // product is set (buy any item).
+                const buyUnits = c.buyProductId != null
+                    ? (input.lines.find((l) => l.productId === c.buyProductId)?.qty ?? 0)
+                    : input.lines.reduce((s, l) => s + l.qty, 0);
                 const buyQty = c.buyQty ?? 1;
                 progress = { current: buyUnits, target: buyQty, unit: "units", pct: Math.min(100, round2((buyUnits / buyQty) * 100)) };
-                if (buyUnits < buyQty) gapText = `Add ${buyQty - buyUnits} more ${name(c.buyProductId) ?? "item"} to unlock`;
+                if (buyUnits < buyQty) {
+                    gapText = `Add ${buyQty - buyUnits} more ${c.buyProductId != null ? (name(c.buyProductId) ?? "item") : "item"} to unlock`;
+                }
             } else if (c.minBillValue != null) {
                 progress = { current: goodsValue, target: c.minBillValue, unit: "₹", pct: Math.min(100, round2((goodsValue / c.minBillValue) * 100)) };
                 if (goodsValue < c.minBillValue) gapText = `Add ${inr(c.minBillValue - goodsValue)} more to unlock`;
@@ -210,27 +228,41 @@ export async function POST(req: Request) {
             let saveEstimate: number | null = null;
             let note: string | null = null;
             if (status !== "unavailable") {
-                const gate = checkCouponEligibility(c, input);
-                if (!gate.ok) {
-                    if (gate.reason.startsWith("Minimum bill")) {
-                        // covered by gapText
-                    } else if (gate.reason === "No eligible items in the cart") {
-                        note = "Add eligible items to cart";
-                    } else {
-                        note = gate.reason;
+                if (isFreeGrantCoupon(c)) {
+                    // Independent FREE_ITEM / BOGO — grants a free line instead of a
+                    // ₹ discount, so readiness is the free-grant gate (min bill /
+                    // window / usage / the BOGO buy side), never "item in cart".
+                    const gate = checkFreeGrantEligibility(c, input);
+                    if (!gate.ok) {
+                        if (!gate.reason.startsWith("Minimum bill")) note = gate.reason;
+                    } else if (freeGrantForCoupon(c, input.lines)) {
+                        status = "ready";
+                    } else if (gapText == null) {
+                        note = "Buy more to unlock the offer";
                     }
                 } else {
-                    const res = computeCouponDiscount(c, input);
-                    if (res.ok) {
-                        status = "ready";
-                        saveEstimate = res.discountRupees;
+                    const gate = checkCouponEligibility(c, input);
+                    if (!gate.ok) {
+                        if (gate.reason.startsWith("Minimum bill")) {
+                            // covered by gapText
+                        } else if (gate.reason === "No eligible items in the cart") {
+                            note = "Add eligible items to cart";
+                        } else {
+                            note = gate.reason;
+                        }
                     } else {
-                        const r = res.reason;
-                        if (r.startsWith("Add the offer item")) {
-                            const getProductId = c.freeProductId ?? c.buyProductId;
-                            note = `Scan ${name(getProductId ?? -1) ?? "the offer item"} to collect`;
-                        } else if (r !== "Buy more to unlock the offer") {
-                            note = r;
+                        const res = computeCouponDiscount(c, input);
+                        if (res.ok) {
+                            status = "ready";
+                            saveEstimate = res.discountRupees;
+                        } else {
+                            const r = res.reason;
+                            if (r.startsWith("Add the offer item")) {
+                                const getProductId = c.freeProductId ?? c.buyProductId;
+                                note = `Scan ${name(getProductId ?? -1) ?? "the offer item"} to collect`;
+                            } else if (r !== "Buy more to unlock the offer") {
+                                note = r;
+                            }
                         }
                     }
                 }
@@ -253,6 +285,8 @@ export async function POST(req: Request) {
                 unavailableReason,
                 stackable: c.stackable,
                 stackScope: c.stackScope,
+                /// Independent FREE-GRANT coupon — applies on top; grants a free line.
+                independent: c.independent,
                 expiresAt: c.endsAt?.toISOString() ?? null,
                 usageLeft,
                 freeProductId: c.freeProductId,
@@ -281,8 +315,37 @@ export async function POST(req: Request) {
         // intentionally omitted (client falls back to the global cap — the sale
         // route re-resolves the authoritative override anyway).
         const cartIdSet = new Set(data.lines.map((l) => l.productId));
-        const picks: Array<{ id: number; source: "history" | "hot" | "shelf"; lastBoughtAt?: string; lastUnitPricePaise?: number | null }> = [];
+        const picks: Array<
+            | { id: number; source: "history" | "hot" | "shelf"; lastBoughtAt?: string; lastUnitPricePaise?: number | null }
+            | { id: number; source: "offer"; offerCouponId: number; offerName: string; offerFreeQty: number; offerReady: boolean }
+        > = [];
         const pickIdSet = new Set<number>();
+
+        // 0) Free-grant offer products — the item an active independent FREE_ITEM /
+        //    BOGO offer gives away (badged "FREE with <offer>" in the drawer).
+        //    Surfaced FIRST so the cashier sees exactly what the offer hands over;
+        //    the free grant itself is server-derived at checkout from the coupon,
+        //    and the row stays addable as a paid line like any other add-on (e.g. a
+        //    second unit). Skipped for discount-protected products (the offer can't
+        //    grant those) and for flagged customers (offers is already empty there).
+        for (const o of offers) {
+            if (!o.independent || o.freeProductId == null) continue;
+            // An offer the customer can't get (usage limit / new-only / owner) must
+            // not badge its freebie as claimable.
+            if (o.status === "unavailable") continue;
+            if (pickIdSet.has(o.freeProductId) || cartIdSet.has(o.freeProductId)) continue;
+            if (protectedProductIds.has(o.freeProductId)) continue;
+            pickIdSet.add(o.freeProductId);
+            picks.push({
+                id: o.freeProductId,
+                source: "offer",
+                offerCouponId: o.couponId,
+                offerName: o.benefit,
+                // Units the offer hands over: BOGO grants getQty, FREE_ITEM grants freeQty.
+                offerFreeQty: o.type === "BOGO" ? (o.getQty ?? 1) : (o.freeQty ?? 1),
+                offerReady: o.status === "ready",
+            });
+        }
 
         // 1) Last-bought history — recency-ordered, deduped by product, carrying
         //    the date + unit rate of the customer's most recent purchase.
@@ -412,8 +475,13 @@ export async function POST(req: Request) {
                     /// Provenance + last-purchase snapshot — the drawer renders
                     /// "history" rows (date + last price) distinctly from "hot".
                     crossSellSource: m?.source ?? "shelf",
-                    lastBoughtAt: m?.lastBoughtAt ?? null,
-                    lastUnitPricePaise: m?.lastUnitPricePaise ?? null,
+                    lastBoughtAt: m?.source === "offer" ? null : (m?.lastBoughtAt ?? null),
+                    lastUnitPricePaise: m?.source === "offer" ? null : (m?.lastUnitPricePaise ?? null),
+                    /// The free item of an active free-grant offer (source "offer") —
+                    /// the drawer badges the row "FREE with <offer>".
+                    crossSellOffer: m?.source === "offer" && m
+                        ? { couponId: m.offerCouponId, name: m.offerName, freeQty: m.offerFreeQty, ready: m.offerReady }
+                        : null,
                 };
             }));
         }

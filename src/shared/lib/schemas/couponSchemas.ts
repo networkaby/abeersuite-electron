@@ -50,6 +50,10 @@ const baseShape = {
     eligibility:     couponEligibilityEnum.optional(),
     stackable:       z.boolean().optional(),
     stackScope:      couponStackScopeEnum.optional(),
+    // FREE_ITEM / BOGO only: an INDEPENDENT free-grant coupon applies ON TOP of
+    // the money coupon and grants its item(s) as zero-price FREE lines instead
+    // of a ₹ discount (never drops tier / blocks loyalty / hits the guard).
+    independent:     z.boolean().optional(),
     ownerAccountId:  z.number().int().positive().nullable().optional(),
     isActive:        z.boolean().optional(),
     rules:           z.array(couponRuleSchema).max(200).optional(),

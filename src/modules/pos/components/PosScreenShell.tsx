@@ -12,7 +12,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
-import { ScanLine, ShoppingCart, Plus, Minus, Trash2, Wrench } from "lucide-react";
+import { ScanLine, ShoppingCart, Plus, Minus, Trash2, Wrench, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +63,13 @@ export function PosScreenShell({
     /** Mode-specific dialogs (checkout, payment link). */
     children?: React.ReactNode;
 }) {
+    // Hoisted so narrowing survives into the JSX callbacks below. The effective
+    // free grant = a manually applied free code (appliedFree) or the best
+    // auto-apply free offer (autoFree) — both render as FREE rows in the item list.
+    const appliedFree = b.appliedFree;
+    const autoFree = b.autoFree;
+    const effectiveFree = appliedFree ?? autoFree;
+
     // Router for the help-page fallback when the browser blocks the new tab.
     const router = useRouter();
     // "+ Add service charge" dropdown (Sale mode) — pick a catalogue service.
@@ -392,6 +399,30 @@ export function PosScreenShell({
                                         })}
                                     </ul>
                                 )}
+                                {/* FREE-grant items (independent FREE_ITEM / BOGO
+                                coupon) — rendered as rows INSIDE the item list so
+                                the cashier sees the free item right where the paid
+                                items are (auto-applied offers land here the moment
+                                the cart qualifies). Zero price by design; the
+                                server re-derives the line at checkout from the
+                                coupon, so these rows are display-only. */}
+                                {effectiveFree && effectiveFree.freeLines.length > 0 && b.cart.length > 0 && (
+                                    <ul className="divide-y divide-border border-t border-emerald-300/40 bg-emerald-50/40 dark:border-emerald-500/20 dark:bg-emerald-950/10">
+                                        {effectiveFree.freeLines.map((f) => (
+                                            <li key={f.productId} className="flex items-center gap-2 border-l-2 border-l-emerald-400/70 px-3 py-1.5 text-xs">
+                                                <Gift size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate text-sm font-medium">{f.freeQty} × {f.productName}</div>
+                                                    <div className="font-mono text-[10px] text-emerald-700/80 dark:text-emerald-300/80">
+                                                        {effectiveFree.code ?? effectiveFree.name} · ₹0.00
+                                                    </div>
+                                                </div>
+                                                <Badge className="shrink-0 border-0 bg-emerald-600 text-[9px] font-bold text-white">FREE</Badge>
+                                                <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">₹0.00</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
 
                             {/* Add service charge — pick a service from the catalogue
@@ -475,6 +506,10 @@ export function PosScreenShell({
                                 setCouponCodeStr={b.setCouponCodeStr}
                                 applyCoupon={b.applyCoupon}
                                 couponBusy={b.couponBusy}
+                                appliedFree={b.appliedFree}
+                                clearFreeCoupon={b.clearFreeCoupon}
+                                applyFreeCoupon={b.applyFreeCoupon}
+                                freeBusy={b.freeBusy}
                                 giftCard={b.giftCard}
                                 setGiftCard={b.setGiftCard}
                                 giftCardCodeStr={b.giftCardCodeStr}
@@ -553,6 +588,8 @@ export function PosScreenShell({
                 offers={b.offers}
                 appliedCoupon={b.appliedCoupon}
                 autoCoupon={b.autoCoupon}
+                appliedFree={b.appliedFree}
+                autoFree={b.autoFree}
                 applyOffer={b.applyOffer}
                 crossSell={b.crossSell}
                 addToCart={b.addToCart}
