@@ -92,6 +92,39 @@ export default function ProtectionClient() {
                     </Button>
                 </div>
 
+                {/* Quick barcode scan — Add / Remove, above the manual search.
+                    Both reuse the shared scan input (exact SKU / barcode / EAN /
+                    UPC match + Enter; falls back to a server code lookup). */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+                        <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                            <Plus size={12} /> Add
+                        </label>
+                        <ProductScanInput
+                            placeholder="Scan or type SKU / barcode…"
+                            autoFocus
+                            onScan={(p) => addProtection(p.id)}
+                        />
+                    </div>
+                    <div className="rounded-lg border border-rose-200 bg-rose-50/40 p-3 dark:border-rose-900 dark:bg-rose-950/20">
+                        <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-400">
+                            <ShieldX size={12} /> Remove
+                        </label>
+                        <ProductScanInput
+                            placeholder="Scan or type SKU / barcode…"
+                            autoFocus={false}
+                            onScan={(p) => {
+                                const row = protectedProducts.find((r) => r.productId === p.id);
+                                if (!row) {
+                                    toast.error(`${p.name} is not protected`);
+                                    return;
+                                }
+                                removeProtection(row.id);
+                            }}
+                        />
+                    </div>
+                </div>
+
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -122,14 +155,17 @@ export default function ProtectionClient() {
                                     <div className="flex items-center gap-3">
                                         <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
                                             <ShieldCheck className="mr-1 h-3 w-3" />
-                                            Protected
+                                            Discount Protected
                                         </Badge>
                                         <Button
-                                            variant="ghost"
+                                            variant="outline"
                                             size="sm"
                                             onClick={() => removeProtection(p.id)}
+                                            title={`Remove ${p.product.name} from protection`}
+                                            className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-400 dark:hover:bg-rose-950/50"
                                         >
                                             <ShieldX className="h-4 w-4" />
+                                            Remove Protection
                                         </Button>
                                     </div>
                                 </CardContent>
