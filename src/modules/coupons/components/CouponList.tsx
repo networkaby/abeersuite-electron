@@ -30,13 +30,12 @@ const channelTone: Record<Coupon["channels"], string> = {
 };
 const channelLabel: Record<Coupon["channels"], string> = { BOTH: "POS+Shop", POS: "POS", SHOP: "Shop" };
 
-type TabKey = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO" | "CREATE";
-const TABS: { key: TabKey; label: string; icon?: boolean }[] = [
+type TabKey = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO";
+const TABS: { key: TabKey; label: string }[] = [
     { key: "ALL", label: "All" },
     { key: "ACTIVE", label: "Active" },
     { key: "INACTIVE", label: "Inactive" },
     { key: "AUTO", label: "Auto-apply" },
-    { key: "CREATE", label: "Create coupon", icon: true },
 ];
 const TYPE_FILTERS = [
     { value: "ALL", label: "All types" }, { value: "PERCENT", label: "% off" }, { value: "FLAT", label: "Flat ₹" },
@@ -210,53 +209,33 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                                 : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
-                            {t.icon && <Plus size={13} />}
                             {t.label}
-                            {!t.icon && (
-                                <span className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                                    {counts[t.key.toLowerCase() as "all" | "active" | "inactive" | "auto"]}
-                                </span>
-                            )}
+                            <span className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                {counts[t.key.toLowerCase() as "all" | "active" | "inactive" | "auto"]}
+                            </span>
                         </button>
                     ))}
                 </div>
-                {tab !== "CREATE" && (
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative min-w-50 flex-1 sm:w-64 sm:flex-none">
-                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search code or name…" className="h-9 pl-8" />
-                        </div>
-                        <Select value={typeFilter} onValueChange={setTypeFilter}>
-                            <SelectTrigger className="h-9 w-32.5"><SelectValue /></SelectTrigger>
-                            <SelectContent>{TYPE_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Select value={chanFilter} onValueChange={setChanFilter}>
-                            <SelectTrigger className="h-9 w-35"><SelectValue /></SelectTrigger>
-                            <SelectContent>{CHAN_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Button size="sm" onClick={openAdd}>
-                            <Plus size={14} className="mr-1" /> Add coupon
-                        </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative min-w-50 flex-1 sm:w-64 sm:flex-none">
+                        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search code or name…" className="h-9 pl-8" />
                     </div>
-                )}
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                        <SelectTrigger className="h-9 w-32.5"><SelectValue /></SelectTrigger>
+                        <SelectContent>{TYPE_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={chanFilter} onValueChange={setChanFilter}>
+                        <SelectTrigger className="h-9 w-35"><SelectValue /></SelectTrigger>
+                        <SelectContent>{CHAN_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Button size="sm" onClick={openAdd}>
+                        <Plus size={14} className="mr-1" /> Add coupon
+                    </Button>
+                </div>
             </div>
 
-            {tab === "CREATE" ? (
-                <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-border/60 bg-background">
-                    <div className="border-b border-border/60 px-4 py-3">
-                        <h2 className="text-base font-semibold tracking-tight">Create coupon</h2>
-                        <p className="mt-0.5 text-xs text-muted-foreground">Full-page editor — build the offer here; everything fits without scrolling.</p>
-                    </div>
-                    <div className="px-4 pt-4">
-                        <CouponForm
-                            fullPage
-                            masters={masters}
-                            onSaved={() => { setTab("ALL"); load(); }}
-                            onCancel={() => setTab("ALL")}
-                        />
-                    </div>
-                </div>
-            ) : loading ? (
+            {loading ? (
                 <p className="rounded-lg border border-border/60 p-8 text-center text-sm text-muted-foreground">Loading…</p>
             ) : coupons.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
