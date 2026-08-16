@@ -9,7 +9,9 @@
 // own dialogs (checkout / payment-link) as `children`.
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
 import { ScanLine, ShoppingCart, Plus, Minus, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +63,8 @@ export function PosScreenShell({
     /** Mode-specific dialogs (checkout, payment link). */
     children?: React.ReactNode;
 }) {
+    // Router for the help-page fallback when the browser blocks the new tab.
+    const router = useRouter();
     // "+ Add service charge" dropdown (Sale mode) — pick a catalogue service.
     const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
     // Upsell & Cross-sell drawer — opened from the customer panel's offer box;
@@ -512,7 +516,7 @@ export function PosScreenShell({
             <PosActionRail
                 onExp={() => b.activeShift ? b.setExpenditureDialogOpen(true) : toast.error("Open a shift first to record an expenditure")}
                 onRcv={() => b.activeShift ? b.setReceiptDialogOpen(true) : toast.error("Open a shift first to collect a payment")}
-                onHelp={() => toast.info("POS help — coming soon")}
+                onHelp={() => { if (!openPosHelpTab()) router.push(POS_HELP_URL); }}
                 onTicket={() => { useQuickTicketStore.getState().reset(); useQuickTicketStore.getState().setOpen(true); }}
                 onEnquiry={() => setEnquiryOpen(true)}
                 onTask={() => setTaskOpen(true)}

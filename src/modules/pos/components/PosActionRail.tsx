@@ -43,10 +43,14 @@ export type PosActionRailProps = {
 export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, onDeal, onLead, canExp = true, canRcv = true }: PosActionRailProps) {
     const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask, deal: onDeal, lead: onLead };
     const flags: Record<PosRailAccessKey, boolean> = { canRcv, canExp };
+    // The help ("?") action is pinned to the BOTTOM of the rail, apart from the
+    // other buttons: rendered in its own mt-auto block below the main group.
+    const helpAction = POS_RAIL_ACTIONS.find((a) => a.key === "help");
+    const mainActions = POS_RAIL_ACTIONS.filter((a) => a.key !== "help");
 
     return (
         <aside className="flex w-16 shrink-0 flex-col items-stretch gap-1 border-l border-border bg-muted/30 p-1.5">
-            {POS_RAIL_ACTIONS.map((a) => {
+            {mainActions.map((a) => {
                 if (a.can && !flags[a.can]) return null;
                 const onClick =
                     a.kind === "action"
@@ -59,6 +63,19 @@ export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTas
                     </Fragment>
                 );
             })}
+
+            {helpAction && (
+                <div className="mt-auto">
+                    {helpAction.divider && <div className="my-1 border-t border-border/70" />}
+                    <RailButton
+                        icon={<helpAction.icon size={16} />}
+                        label={helpAction.label}
+                        onClick={handlers.help ?? (() => { })}
+                        title={helpAction.title}
+                        tint={helpAction.tint ? tint[helpAction.tint] : undefined}
+                    />
+                </div>
+            )}
         </aside>
     );
 }

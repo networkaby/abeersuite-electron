@@ -14,6 +14,7 @@ yet.
 | Key | Action | Notes |
 |-----|--------|-------|
 | `/` | Focus product search — **or** fill the rest of the bill in checkout | Works from anywhere; skips when typing in a field. With the checkout dialog open, `/` fills the remaining bill amount into the focused payment line (cash by default) |
+| `F1` | Counter help — new tab | Opens the POS help & shortcuts page (`/vouchers/pos/help`) in a new tab — same as the `?` rail button; works from anywhere |
 | `F2` | Focus customer / party picker | Works from **any** context, including inside inputs. If a customer is already selected, enters "change mode": search for a replacement, `Esc` to cancel and restore the original |
 | `Ctrl + Enter` | Checkout / save bill | Cart must have items + customer selected |
 | `Esc` | Clear product search query + dismiss dropdown | If search is already empty, blurs the input so `F2` / `/` become available |
@@ -37,6 +38,16 @@ start typing a product name.
 - A modal dialog is open (checkout, create-customer, etc.)
 - Focus is already inside an `<input>`, `<textarea>`, or content-editable
   element (the cashier is mid-edit)
+
+### `F1` — Counter help (new tab)
+
+Opens `/vouchers/pos/help` — the counter-user guide (billing steps, every
+shortcut, payments) — in a **new tab**, so the register stays untouched.
+`preventDefault` stops the browser's own F1 help.
+
+Same as the **`?` rail button** (bottom of the right-edge action rail), which
+calls the same page. Function key: works from any context, blocked only while a
+modal dialog is open.
 
 ### `F2` — Customer picker
 
@@ -226,7 +237,6 @@ shortcuts). Outside the checkout, `↑` / `↓` keep their cart-line role.
 
 | Key | Reason not bound |
 |-----|-----------------|
-| `F1` | Reserved for browser / OS help; POS help is in the `?` rail button |
 | `F3` / `F4` | Unassigned — available for future product-category shortcuts |
 | `F5` | Refresh is in the shift menu; accidental browser reload is a risk |
 | `F7` / `F8` | Hold / recall not needed — multiple tabs replace the suspend pattern |
@@ -309,7 +319,7 @@ shortcuts). Outside the checkout, `↑` / `↓` keep their cart-line role.
 
 | Key | Convention | Notes | Our system |
 |-----|-----------|-------|-----------|
-| `F1` | Help / shortcuts overlay | Great for new cashiers | ⛔ reserved for browser/OS help; ours is the `?` rail |
+| `F1` | Help / shortcuts | Great for new cashiers | ✅ our `F1` opens `/vouchers/pos/help` in a new tab; the `?` rail button opens the same page |
 | `Tab` / `Shift + Tab` | Move between top bar, search, cart, checkout | Native browser | ✅ native |
 | `Ctrl + Tab` | Switch between open POS tabs | Pairs with our "New POS" | ✅ native |
 

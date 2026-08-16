@@ -10,8 +10,10 @@
 // the checkout dialog wiring.
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
 import { calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { type PartySearchAndCreateHandle, type PickedParty } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
@@ -47,6 +49,8 @@ export function usePosBilling(opts: {
     cashTenderedRef: React.RefObject<HTMLInputElement | null>;
 }) {
     const { partySearchRef, productSearchRef, cashTenderedRef } = opts;
+    // Router for the help-page fallback when the browser blocks the new tab.
+    const router = useRouter();
     // POS UI access flags (hide controls the operator lacks). UI-gating only.
     const posAccess = usePosAccess();
 
@@ -981,6 +985,24 @@ export function usePosBilling(opts: {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [createDialogOpen, checkoutOpen, openCheckout]);
+
+    // F1 → counter help: open the POS help & shortcuts page in a new tab — the
+    // same page the rail "?" button opens. preventDefault stops the browser's
+    // own F1 help. Function key, so it works from any context like F2; skipped
+    // while a dialog is open.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "F1") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            if (createDialogOpen || checkoutOpen) return;
+            e.preventDefault();
+            // New tab; if the popup is blocked (kiosk / embedded browser), fall
+            // back to in-app navigation so the guide still opens.
+            if (!openPosHelpTab()) router.push(POS_HELP_URL);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [createDialogOpen, checkoutOpen, router]);
 
     // Shift+Esc → clear the whole bill mid-way: opens a confirmation dialog
     // (Esc / Cancel aborts, Clear confirms). Esc alone keeps its existing role

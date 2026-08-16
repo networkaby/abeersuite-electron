@@ -61,6 +61,7 @@ import {
     Handshake,
     Hash,
     HeartPulse,
+    HelpCircle,
     Hourglass,
     Inbox,
     Kanban,
@@ -277,13 +278,16 @@ export const POS_RAIL_ACTIONS: PosRailAction[] = [
     { key: "rcv", label: "Rcv", icon: HandCoins, kind: "action", can: "canRcv", tint: "emerald", title: "Collect a payment from a customer into this counter's till — posts a receipt voucher" },
     { key: "exp", label: "Exp", icon: Wallet, kind: "action", can: "canExp", tint: "rose", title: "Record a counter expenditure (tea, sundry…) — posts a payment voucher from the counter's till" },
 
-    // { key: "help", label: "Help", icon: HelpCircle, kind: "action", divider: true, title: "POS help & keyboard shortcuts" },
-
     { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", tint: "indigo", title: "Create a repair ticket for a customer" },
     { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", tint: "sky", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
     { key: "task", label: "Task", icon: SquareCheckBig, kind: "action", tint: "violet", title: "Add an internal work item to the board" },
     { key: "deal", label: "Deal", icon: Handshake, kind: "action", tint: "cyan", title: "Create a sales deal on the CRM pipeline — log the opportunity at the counter" },
     { key: "lead", label: "Lead", icon: UserRoundPlus, kind: "action", tint: "teal", title: "Capture a new lead — create a contact (person) on the fly" },
+
+    // "?" — counter help, PINNED to the very bottom of the rail (PosActionRail
+    // renders this key separately, below the other buttons). Opens the POS help
+    // page in a new tab (same as F1).
+    { key: "help", label: "Help", icon: HelpCircle, kind: "action", divider: true, tint: "sky", title: "Counter help & keyboard shortcuts (F1) — opens in a new tab" },
 
 ];
 
