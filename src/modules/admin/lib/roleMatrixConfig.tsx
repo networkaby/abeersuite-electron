@@ -418,6 +418,7 @@ export const MATRIX_ROWS: {
                 deleteOwn: "tiers:delete", deleteBranch: "tiers:delete", deleteOrg: "tiers:delete",
             },
         },
+
         // Inventory — Products (catalog) and Masters (all 8 setup tables, gated
         // together). inventory:manage is the umbrella (shown in the view cells).
         {
@@ -547,7 +548,10 @@ export const SIDEBAR_LINK_MATRIX_ROW_KEY: Record<string, string> = {
     [sidebarChildPermissionId("admin", "departments")]: "departments",
     [sidebarChildPermissionId("admin", "positions")]: "positions",
     [sidebarChildPermissionId("admin", "pos-counters")]: "posCounters",
-    // Retention — create/edit/delete matrix per link.
+    // Retention — create/edit/delete matrix per link. Protection has NO matrix
+    // row: it is a single yes/no "manage" capability, so the nav-link chip alone
+    // is the grant (a create/edit/delete table where every cell resolves to the
+    // same id would just be noise).
     [sidebarChildPermissionId("retention", "coupons")]: "coupons",
     [sidebarChildPermissionId("retention", "gift-cards")]: "giftCards",
     [sidebarChildPermissionId("retention", "loyalty")]: "loyalty",

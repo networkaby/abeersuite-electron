@@ -118,6 +118,19 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
         module: "ui",
         description: 'Show the "Protection" link under Retention in the sidebar.',
     },
+    // Retention → Protection GRANULAR capability — the page/API gate behind the
+    // Protection sidebar link (the link's own `ui:sidebar:*` row was applied
+    // earlier without it, so the DB drifted from the code catalog). It is NOT
+    // offered as a create/edit/delete matrix on the Role page — Protection is a
+    // single yes/no "manage" capability, so the sidebar-link chip is the grant —
+    // but the row must exist for code/catalog parity. Mirrored from
+    // codeOwnedCatalog.ts.
+    {
+        id: "retention:protection:manage",
+        label: "Manage product protection",
+        module: "retention",
+        description: "Add/remove products from the discount blacklist (protection).",
+    },
 ];
 
 const ADMIN_ROLE_ID = "R1";

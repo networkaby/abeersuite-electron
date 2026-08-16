@@ -610,7 +610,7 @@ export function usePosBilling(opts: {
 
     // Esc during change mode → restore the original party and re-lock the picker.
     // Wired here (after onPartyPicked) so the callback is in scope.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
