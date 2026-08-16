@@ -3,12 +3,11 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Dices, Gift, IndianRupee, Percent, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
+import { Dices, Gift, IndianRupee, Percent, Plus, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { extractApiError } from "@/shared/lib/api";
@@ -89,11 +88,11 @@ function generateCode(name: string): string {
 /// Coupon type as a segmented picker — the single most important choice, so it
 /// gets visual buttons instead of a dropdown.
 const TYPE_OPTIONS: { value: Coupon["type"]; label: string; icon: LucideIcon }[] = [
-    { value: "PERCENT",   label: "% off",          icon: Percent },
-    { value: "FLAT",      label: "Flat ₹",         icon: IndianRupee },
-    { value: "FREE_ITEM", label: "Free item",      icon: Gift },
-    { value: "BOGO",      label: "Buy X get Y",    icon: Repeat },
-    { value: "SET_PRICE", label: "Set price",      icon: Tag },
+    { value: "PERCENT", label: "% off", icon: Percent },
+    { value: "FLAT", label: "Flat ₹", icon: IndianRupee },
+    { value: "FREE_ITEM", label: "Free item", icon: Gift },
+    { value: "BOGO", label: "Buy X get Y", icon: Repeat },
+    { value: "SET_PRICE", label: "Set price", icon: Tag },
 ];
 
 interface Props {
@@ -103,13 +102,15 @@ interface Props {
     onCancel: () => void;
     /// When rendered inside a dialog: drop the dashed card chrome + internal header.
     embedded?: boolean;
+    /// Full-page mode (Create tab): like embedded, but on a page instead of a dialog.
+    fullPage?: boolean;
 }
 
 /// Shared by every product picker on the form (offer item, buy/get, rules).
 const productOptions = (products: ProductOpt[]) =>
     products.map((p) => ({ value: p.id, label: `${p.sku} — ${p.name}`, leaf: p.name }));
 
-export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Props) {
+export function CouponForm({ initial, masters, onSaved, onCancel, embedded, fullPage }: Props) {
     const { products } = masters;
     const prodOpts = useMemo(() => productOptions(products), [products]);
     const editing = !!initial;
@@ -133,6 +134,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
     const [getQty, setGetQty] = useState(str(initial?.getQty ?? (initial ? null : "1")));
     const [setPriceAmt, setSetPriceAmt] = useState(str(initial?.setPriceAmt));
     const [rules, setRules] = useState<CouponRule[]>(initial?.rules ?? []);
+    const [rulesOpen, setRulesOpen] = useState((initial?.rules?.length ?? 0) > 0);
     const [startsAt, setStartsAt] = useState(toDateInput(initial?.startsAt ?? null));
     const [endsAt, setEndsAt] = useState(toDateInput(initial?.endsAt ?? null));
     const [minBillValue, setMinBillValue] = useState(str(initial?.minBillValue));
@@ -222,8 +224,8 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
     }
 
     return (
-        <div className={embedded ? "space-y-5" : "space-y-5 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4"}>
-            {!embedded && (
+        <div className={embedded || fullPage ? "space-y-1.5" : "space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4"}>
+            {!embedded && !fullPage && (
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{editing ? `Edit ${initial!.code ?? initial!.name}` : "New coupon"}</span>
                     <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCancel}><X size={14} /></Button>
@@ -231,12 +233,12 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
             )}
 
             {/* Live preview — how the offer reads on the card / at POS */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-3 py-2">
-                <Sparkles size={13} className="shrink-0 text-primary" />
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/15 bg-linear-to-r from-primary/[0.07] to-transparent px-2.5 py-0.5">
+                <Sparkles size={12} className="shrink-0 text-primary" />
                 {preview
-                    ? <span className="text-sm font-semibold">{preview}</span>
-                    : <span className="text-xs text-muted-foreground">Fill in the offer to preview how it reads.</span>}
-                {name.trim() && <span className="text-xs text-muted-foreground">{name.trim()}</span>}
+                    ? <span className="text-xs font-semibold">{preview}</span>
+                    : <span className="text-[11px] text-muted-foreground">Fill in the offer to preview.</span>}
+                {name.trim() && <span className="text-[11px] text-muted-foreground">{name.trim()}</span>}
                 <span className="hidden h-4 w-px bg-border/70 sm:block" />
                 {autoApply && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Auto-apply</span>}
                 {code.trim() && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{code.trim().toUpperCase()}</span>}
@@ -246,231 +248,267 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
                 {stackable && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">stackable</span>}
             </div>
 
-            {/* ── Basics ─────────────────────────────────────────── */}
-            <Section title="Basics">
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Code">
-                        <div className="relative">
-                            <Input
-                                value={code}
-                                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                                placeholder="DIWALI20"
-                                className="h-10 pr-9 font-mono uppercase"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setCode(generateCode(name.trim() || "COUPON"))}
-                                title="Generate a code from the name"
-                                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            >
-                                <Dices size={14} />
-                            </button>
-                        </div>
-                    </Field>
-                    <Field label="Channel">
-                        <Select value={channels} onValueChange={(v) => setChannels(v as Coupon["channels"])}>
-                            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="BOTH">POS + Online shop</SelectItem>
-                                <SelectItem value="POS">POS only</SelectItem>
-                                <SelectItem value="SHOP">Online shop only</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </Field>
-                </div>
-                <Field label="Name">
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Diwali 20% off" className="h-10" />
-                </Field>
-                <Field label="Description (optional)">
-                    <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Shown to staff" className="min-h-[44px]" />
-                </Field>
-            </Section>
-
-            {/* ── Offer ──────────────────────────────────────────── */}
-            <Section title="Offer">
-                {/* Type as a segmented picker — one tap, no dropdown. */}
-                <div className="flex flex-wrap gap-1.5">
-                    {TYPE_OPTIONS.map((t) => {
-                        const Icon = t.icon;
-                        const active = type === t.value;
-                        return (
-                            <button
-                                key={t.value}
-                                type="button"
-                                onClick={() => setType(t.value)}
-                                aria-pressed={active}
-                                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${active
-                                    ? "border-transparent bg-primary text-primary-foreground shadow-sm"
-                                    : "border-border/70 bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                                    }`}
-                            >
-                                <Icon size={14} />
-                                {t.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {type === "BOGO" ? (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <MechanicBox title="Buy (paid)">
-                            <Field label="Buy item (blank = any)">
-                                <SearchableSelect<number>
-                                    value={buyProductId}
-                                    options={prodOpts}
-                                    onChange={setBuyProductId}
-                                    placeholder="— any item —"
-                                    triggerClassName="h-10"
-                                />
-                            </Field>
-                            <Field label="Buy qty (X)">
-                                <Input inputMode="decimal" value={buyQty} onChange={(e) => setBuyQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-10 text-right" />
-                            </Field>
-                        </MechanicBox>
-                        <MechanicBox title="Get (free / discounted)">
-                            <Field label="Get item (blank = same as buy)">
-                                <SearchableSelect<number>
-                                    value={freeProductId}
-                                    options={prodOpts}
-                                    onChange={setFreeProductId}
-                                    placeholder="— same item —"
-                                    triggerClassName="h-10"
-                                />
-                            </Field>
-                            <Field label="Get qty (Y)">
-                                <Input inputMode="decimal" value={getQty} onChange={(e) => setGetQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-10 text-right" />
-                            </Field>
-                            <Field label="Discount % on get (100 = free)">
-                                <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(parseDecimalInput(e.target.value))} placeholder="100" className="h-10 text-right" />
-                            </Field>
-                        </MechanicBox>
-                    </div>
-                ) : (
-                    <div className="space-y-3 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-transparent p-3">
-                        {type === "PERCENT" && (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <Field label="% off">
-                                    <Input inputMode="decimal" value={percentOff} onChange={(e) => setPercentOff(parseDecimalInput(e.target.value))} placeholder="20" className="h-10 text-right" />
-                                </Field>
-                                <Field label="Max ₹ cap (optional)">
-                                    <RupeeInput value={maxDiscountAmt} onChange={(v) => setMaxDiscountAmt(parseDecimalInput(v))} placeholder="500" />
-                                </Field>
-                            </div>
-                        )}
-                        {type === "FLAT" && (
-                            <Field label="Flat ₹ off">
-                                <RupeeInput value={flatAmt} onChange={(v) => setFlatAmt(parseDecimalInput(v))} placeholder="200" />
-                            </Field>
-                        )}
-                        {type === "SET_PRICE" && (
-                            <Field label="Set ₹ price (per unit)">
-                                <RupeeInput value={setPriceAmt} onChange={(v) => setSetPriceAmt(parseDecimalInput(v))} placeholder="80" />
-                            </Field>
-                        )}
-                        {type === "FREE_ITEM" && (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="sm:col-span-2">
-                                    <Field label="Offer item (must be in cart)">
-                                        <SearchableSelect<number>
-                                            value={freeProductId}
-                                            options={prodOpts}
-                                            onChange={setFreeProductId}
-                                            placeholder="— pick item —"
-                                            triggerClassName="h-10"
-                                        />
-                                    </Field>
+            {/* Two columns: identity + offer on the left, gates + behaviour on the right —
+                the whole form fits the dialog without scrolling. */}
+            <div className="grid gap-x-5 gap-y-2 md:grid-cols-5">
+                {/* ── Left: Basics + Offer + item rules ──────────────── */}
+                <div className="space-y-2 md:col-span-3">
+                    <Section title="Basics">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Field label="Code">
+                                <div className="relative">
+                                    <Input
+                                        value={code}
+                                        onChange={(e) => setCode(e.target.value.toUpperCase())}
+                                        placeholder="DIWALI20"
+                                        className="h-10 pr-9 font-mono uppercase"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setCode(generateCode(name.trim() || "COUPON"))}
+                                        title="Generate a code from the name"
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    >
+                                        <Dices size={14} />
+                                    </button>
                                 </div>
-                                <Field label="Free qty">
-                                    <Input inputMode="decimal" value={freeQty} onChange={(e) => setFreeQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-10 text-right" />
-                                </Field>
-                                <Field label="Discount % on it (100 = free)">
-                                    <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(parseDecimalInput(e.target.value))} placeholder="100" className="h-10 text-right" />
-                                </Field>
+                            </Field>
+                            <Field label="Channel">
+                                <Select value={channels} onValueChange={(v) => setChannels(v as Coupon["channels"])}>
+                                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="BOTH">POS + Online shop</SelectItem>
+                                        <SelectItem value="POS">POS only</SelectItem>
+                                        <SelectItem value="SHOP">Online shop only</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+                            <div>
+                                <Label className="text-[11px] text-muted-foreground">Auto-apply</Label>
+                                <div className="flex h-10 items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-3">
+                                    <span className="truncate text-xs text-muted-foreground">At checkout when it qualifies</span>
+                                    <Switch checked={autoApply} onCheckedChange={setAutoApply} />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Name">
+                                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Diwali 20% off" className="h-10" />
+                            </Field>
+                            <Field label="Description (optional)">
+                                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Shown to staff" className="h-10" />
+                            </Field>
+                        </div>
+                    </Section>
+
+                    <Section title="Offer">
+                        {/* Type as a segmented picker — one tap, no dropdown. */}
+                        <div className="flex flex-wrap gap-1.5">
+                            {TYPE_OPTIONS.map((t) => {
+                                const Icon = t.icon;
+                                const active = type === t.value;
+                                return (
+                                    <button
+                                        key={t.value}
+                                        type="button"
+                                        onClick={() => setType(t.value)}
+                                        aria-pressed={active}
+                                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${active
+                                            ? "border-transparent bg-primary text-primary-foreground shadow-sm"
+                                            : "border-border/70 bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                            }`}
+                                    >
+                                        <Icon size={14} />
+                                        {t.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {type === "BOGO" ? (
+                            <div className="rounded-xl border border-primary/15 bg-linear-to-br from-primary/[0.06] to-transparent p-2">
+                                <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+                                            Buy (paid)
+                                        </p>
+                                        <Field label="Item — blank = any">
+                                            <SearchableSelect<number>
+                                                value={buyProductId}
+                                                options={prodOpts}
+                                                onChange={setBuyProductId}
+                                                placeholder="— any item —"
+                                                triggerClassName="h-9"
+                                            />
+                                        </Field>
+                                        <Field label="Qty (X)">
+                                            <Input inputMode="decimal" value={buyQty} onChange={(e) => setBuyQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-9 text-right" />
+                                        </Field>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/80" />
+                                            Get (free / discounted)
+                                        </p>
+                                        <Field label="Item — blank = same as buy">
+                                            <SearchableSelect<number>
+                                                value={freeProductId}
+                                                options={prodOpts}
+                                                onChange={setFreeProductId}
+                                                placeholder="— same item —"
+                                                triggerClassName="h-9"
+                                            />
+                                        </Field>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <Field label="Qty (Y)">
+                                                <Input inputMode="decimal" value={getQty} onChange={(e) => setGetQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-9 text-right" />
+                                            </Field>
+                                            <Field label="Disc %">
+                                                <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(parseDecimalInput(e.target.value))} placeholder="100" className="h-9 text-right" />
+                                            </Field>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3 rounded-xl border border-primary/15 bg-linear-to-br from-primary/[0.06] to-transparent p-2.5">
+                                {type === "PERCENT" && (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <Field label="% off">
+                                            <Input inputMode="decimal" value={percentOff} onChange={(e) => setPercentOff(parseDecimalInput(e.target.value))} placeholder="20" className="h-10 text-right" />
+                                        </Field>
+                                        <Field label="Max ₹ cap (optional)">
+                                            <RupeeInput value={maxDiscountAmt} onChange={(v) => setMaxDiscountAmt(parseDecimalInput(v))} placeholder="500" />
+                                        </Field>
+                                    </div>
+                                )}
+                                {type === "FLAT" && (
+                                    <Field label="Flat ₹ off">
+                                        <RupeeInput value={flatAmt} onChange={(v) => setFlatAmt(parseDecimalInput(v))} placeholder="200" />
+                                    </Field>
+                                )}
+                                {type === "SET_PRICE" && (
+                                    <Field label="Set ₹ price (per unit)">
+                                        <RupeeInput value={setPriceAmt} onChange={(v) => setSetPriceAmt(parseDecimalInput(v))} placeholder="80" />
+                                    </Field>
+                                )}
+                                {type === "FREE_ITEM" && (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="sm:col-span-2">
+                                            <Field label="Offer item (must be in cart)">
+                                                <SearchableSelect<number>
+                                                    value={freeProductId}
+                                                    options={prodOpts}
+                                                    onChange={setFreeProductId}
+                                                    placeholder="— pick item —"
+                                                    triggerClassName="h-10"
+                                                />
+                                            </Field>
+                                        </div>
+                                        <Field label="Free qty">
+                                            <Input inputMode="decimal" value={freeQty} onChange={(e) => setFreeQty(parseDecimalInput(e.target.value))} placeholder="1" className="h-10 text-right" />
+                                        </Field>
+                                        <Field label="Discount % on it (100 = free)">
+                                            <Input inputMode="decimal" value={freeDiscountPct} onChange={(e) => setFreeDiscountPct(parseDecimalInput(e.target.value))} placeholder="100" className="h-10 text-right" />
+                                        </Field>
+                                    </div>
+                                )}
                             </div>
                         )}
-                    </div>
-                )}
-            </Section>
+                    </Section>
 
-            {/* ── Item rules ─────────────────────────────────────── */}
-            <Section title="Item rules (optional)" hint="no rules = applies to the whole bill">
-                <RuleEditor rules={rules} setRules={setRules} masters={masters} prodOpts={prodOpts} />
-                {type === "SET_PRICE" && rules.length === 0 && (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                        No item rule set — this will mark down EVERY product to the same ₹ price. Add a product/category/group/brand rule to target the clearance stock.
-                    </p>
-                )}
-            </Section>
-
-            {/* ── Validity & limits ──────────────────────────────── */}
-            <Section title="Validity & limits">
-                <div className="grid gap-3 sm:grid-cols-3">
-                    <Field label="Valid from">
-                        <Input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="h-10" />
-                    </Field>
-                    <Field label="Valid until">
-                        <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="h-10" />
-                    </Field>
-                    <Field label="Min bill ₹ (optional)">
-                        <RupeeInput value={minBillValue} onChange={(v) => setMinBillValue(parseDecimalInput(v))} placeholder="1000" />
-                    </Field>
-                    <Field label="Total uses (optional)">
-                        <Input inputMode="numeric" value={totalUsageLimit} onChange={(e) => setTotalUsageLimit(parseDigitsInput(e.target.value))} placeholder="∞" className="h-10 text-right" />
-                    </Field>
-                    <Field label="Per-customer uses (optional)">
-                        <Input inputMode="numeric" value={perCustomerLimit} onChange={(e) => setPerCustomerLimit(parseDigitsInput(e.target.value))} placeholder="∞" className="h-10 text-right" />
-                    </Field>
-                    <Field label="Eligibility">
-                        <Select value={eligibility} onValueChange={(v) => setEligibility(v as Coupon["eligibility"])}>
-                            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ANY">Any customer</SelectItem>
-                                <SelectItem value="NEW">First-time only</SelectItem>
-                                <SelectItem value="RETURNING">Returning only</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </Field>
+                    <Section title="Item rules" hint={rules.length > 0 ? `${rules.length} set` : "optional — none = whole bill"}>
+                        {rulesOpen ? (
+                            <>
+                                <RuleEditor rules={rules} setRules={setRules} masters={masters} prodOpts={prodOpts} />
+                                {rules.length > 0 && (
+                                    <button type="button" onClick={() => setRulesOpen(false)} className="text-[11px] text-muted-foreground hover:text-foreground">
+                                        Hide item rules
+                                    </button>
+                                )}
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setRulesOpen(true)}
+                                className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                            >
+                                <Plus size={13} className="shrink-0" />
+                                {rules.length > 0 ? `Show ${rules.length} item rule${rules.length > 1 ? "s" : ""}` : "Add item rules (product, category, group, brand)"}
+                            </button>
+                        )}
+                        {type === "SET_PRICE" && rules.length === 0 && (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                                No rule set — this marks down EVERY product. Add a rule to target the clearance stock.
+                            </p>
+                        )}
+                    </Section>
                 </div>
-            </Section>
 
-            {/* ── Behaviour ──────────────────────────────────────── */}
-            <Section title="Behaviour">
-                <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-                    <Toggle
-                        label="Auto-apply"
-                        hint="Applies automatically at checkout when the bill qualifies — the code still works for manual entry."
-                        checked={autoApply}
-                        onChange={setAutoApply}
-                    />
-                    <Toggle label="Single-use code" hint="One redemption total" checked={singleUse} onChange={setSingleUse} />
-                    <Toggle label="Stackable" hint="Combine with tier + loyalty" checked={stackable} onChange={setStackable} />
-                    {(type === "FREE_ITEM" || type === "BOGO") && (
-                        <div className="sm:col-span-2">
-                            <Toggle
-                                label="Independent — free items on top"
-                                hint="Adds the item(s) as zero-price FREE lines on top of any other coupon. Never drops tier / blocks loyalty."
-                                checked={independent}
-                                onChange={setIndependent}
-                            />
+                {/* ── Right: Validity & limits + Behaviour ──────────── */}
+                <div className="space-y-2 md:col-span-2">
+                    <Section title="Validity & limits">
+                        <div className="grid gap-2.5 sm:grid-cols-2">
+                            <Field label="Valid from">
+                                <Input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="h-10" />
+                            </Field>
+                            <Field label="Valid until">
+                                <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="h-10" />
+                            </Field>
+                            <Field label="Min bill ₹">
+                                <RupeeInput value={minBillValue} onChange={(v) => setMinBillValue(parseDecimalInput(v))} placeholder="1000" />
+                            </Field>
+                            <Field label="Total uses">
+                                <Input inputMode="numeric" value={totalUsageLimit} onChange={(e) => setTotalUsageLimit(parseDigitsInput(e.target.value))} placeholder="∞" className="h-10 text-right" />
+                            </Field>
+                            <Field label="Per-customer uses">
+                                <Input inputMode="numeric" value={perCustomerLimit} onChange={(e) => setPerCustomerLimit(parseDigitsInput(e.target.value))} placeholder="∞" className="h-10 text-right" />
+                            </Field>
+                            <Field label="Eligibility">
+                                <Select value={eligibility} onValueChange={(v) => setEligibility(v as Coupon["eligibility"])}>
+                                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ANY">Any customer</SelectItem>
+                                        <SelectItem value="NEW">First-time only</SelectItem>
+                                        <SelectItem value="RETURNING">Returning only</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </Field>
                         </div>
-                    )}
+                    </Section>
+
+                    <Section title="Behaviour">
+                        <div className="space-y-2.5">
+                            <Toggle label="Single-use code" hint="One redemption total" checked={singleUse} onChange={setSingleUse} />
+                            <Toggle label="Stackable" hint="Combine with tier + loyalty" checked={stackable} onChange={setStackable} />
+                            {(type === "FREE_ITEM" || type === "BOGO") && (
+                                <Toggle
+                                    label="Independent — free items on top"
+                                    hint="Zero-price FREE lines on top of any coupon."
+                                    checked={independent}
+                                    onChange={setIndependent}
+                                />
+                            )}
+                        </div>
+                        {!stackable && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
+                                <span className="shrink-0">Exclusive — blocks tier + loyalty on</span>
+                                <Select value={stackScope} onValueChange={(v) => setStackScope(v as Coupon["stackScope"])}>
+                                    <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="BILL">The whole bill</SelectItem>
+                                        <SelectItem value="LINE">Only this coupon&rsquo;s own items</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </Section>
                 </div>
-                {!stackable && (
-                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm">
-                        <span>When exclusive, blocks tier + loyalty on</span>
-                        <Select value={stackScope} onValueChange={(v) => setStackScope(v as Coupon["stackScope"])}>
-                            <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="BILL">The whole bill</SelectItem>
-                                <SelectItem value="LINE">Only this coupon&rsquo;s own items</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-            </Section>
+            </div>
 
             {/* Sticky action bar — always reachable while scrolling */}
-            <div className="sticky bottom-0 -mx-4 -mb-4 mt-1 flex justify-end gap-2 rounded-b-xl border-t bg-muted/50 p-4">
+            <div className="sticky bottom-0 -mx-4 -mb-4 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-muted/50 px-4 py-1.5">
                 <Button variant="ghost" onClick={onCancel}>Cancel</Button>
                 <Button onClick={save} disabled={saving}><Save size={14} className="mr-1" /> {editing ? "Save" : "Create"}</Button>
             </div>
@@ -481,25 +519,12 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded }: Pr
 /// Labeled group header with a divider — keeps the long form scannable.
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-3">
+        <div className="space-y-1">
             <div className="flex items-center gap-2.5">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</span>
                 <span className="h-px flex-1 bg-border/60" />
                 {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
             </div>
-            {children}
-        </div>
-    );
-}
-
-/// Bordered panel with a mini header — used for the BOGO buy/get halves.
-function MechanicBox({ title, children }: { title: string; children: React.ReactNode }) {
-    return (
-        <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3">
-            <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
-                {title}
-            </p>
             {children}
         </div>
     );
@@ -540,14 +565,14 @@ function RuleEditor({ rules, setRules, masters, prodOpts }: {
     const addDraft = () => { setRules([...rules, draft]); setDraft({ ...EMPTY_RULE, kind: draft.kind }); };
 
     const pickers: { field: RuleField; placeholder: string; width: string; options: { value: number; label: string; leaf?: string }[] }[] = [
-        { field: "productId",  placeholder: "+ product",  width: "w-48", options: prodOpts },
+        { field: "productId", placeholder: "+ product", width: "w-48", options: prodOpts },
         { field: "categoryId", placeholder: "+ category", width: "w-44", options: categories.map((c) => ({ value: c.id, label: c.name })) },
-        { field: "groupId",    placeholder: "+ group",    width: "w-44", options: groups.map((g) => ({ value: g.id, label: g.name })) },
-        { field: "brandId",    placeholder: "+ brand",    width: "w-40", options: brands.map((b) => ({ value: b.id, label: b.name })) },
+        { field: "groupId", placeholder: "+ group", width: "w-44", options: groups.map((g) => ({ value: g.id, label: g.name })) },
+        { field: "brandId", placeholder: "+ brand", width: "w-40", options: brands.map((b) => ({ value: b.id, label: b.name })) },
     ];
 
     return (
-        <div className="space-y-2 rounded-md border border-border/60 p-3">
+        <div className="space-y-2 rounded-md border border-border/60 p-2.5">
             <div className="flex flex-wrap items-center gap-2">
                 <Select value={draft.kind} onValueChange={(v) => setDraft({ ...draft, kind: v as CouponRule["kind"] })}>
                     <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
@@ -590,7 +615,7 @@ function RuleEditor({ rules, setRules, masters, prodOpts }: {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
             <Label className="text-[11px] text-muted-foreground">{label}</Label>
             {children}
         </div>
@@ -610,9 +635,9 @@ function Toggle({ label, hint, checked, onChange }: { label: string; hint: strin
     return (
         <label className="flex items-start gap-2.5">
             <Switch className="mt-0.5" checked={checked} onCheckedChange={onChange} />
-            <span className="text-sm leading-snug">
+            <span className="text-[13px] leading-snug">
                 {label}
-                {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+                {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
             </span>
         </label>
     );

@@ -25,17 +25,18 @@ import {
 
 const channelTone: Record<Coupon["channels"], string> = {
     BOTH: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
-    POS:  "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+    POS: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
     SHOP: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
 };
 const channelLabel: Record<Coupon["channels"], string> = { BOTH: "POS+Shop", POS: "POS", SHOP: "Shop" };
 
-type TabKey = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO";
-const TABS: { key: TabKey; label: string }[] = [
+type TabKey = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO" | "CREATE";
+const TABS: { key: TabKey; label: string; icon?: boolean }[] = [
     { key: "ALL", label: "All" },
     { key: "ACTIVE", label: "Active" },
     { key: "INACTIVE", label: "Inactive" },
     { key: "AUTO", label: "Auto-apply" },
+    { key: "CREATE", label: "Create coupon", icon: true },
 ];
 const TYPE_FILTERS = [
     { value: "ALL", label: "All types" }, { value: "PERCENT", label: "% off" }, { value: "FLAT", label: "Flat ₹" },
@@ -209,33 +210,53 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                                 : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
+                            {t.icon && <Plus size={13} />}
                             {t.label}
-                            <span className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                                {counts[t.key.toLowerCase() as "all" | "active" | "inactive" | "auto"]}
-                            </span>
+                            {!t.icon && (
+                                <span className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                    {counts[t.key.toLowerCase() as "all" | "active" | "inactive" | "auto"]}
+                                </span>
+                            )}
                         </button>
                     ))}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[200px] flex-1 sm:w-64 sm:flex-none">
-                        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search code or name…" className="h-9 pl-8" />
+                {tab !== "CREATE" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative min-w-50 flex-1 sm:w-64 sm:flex-none">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search code or name…" className="h-9 pl-8" />
+                        </div>
+                        <Select value={typeFilter} onValueChange={setTypeFilter}>
+                            <SelectTrigger className="h-9 w-32.5"><SelectValue /></SelectTrigger>
+                            <SelectContent>{TYPE_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Select value={chanFilter} onValueChange={setChanFilter}>
+                            <SelectTrigger className="h-9 w-35"><SelectValue /></SelectTrigger>
+                            <SelectContent>{CHAN_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Button size="sm" onClick={openAdd}>
+                            <Plus size={14} className="mr-1" /> Add coupon
+                        </Button>
                     </div>
-                    <Select value={typeFilter} onValueChange={setTypeFilter}>
-                        <SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{TYPE_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Select value={chanFilter} onValueChange={setChanFilter}>
-                        <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{CHAN_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Button size="sm" onClick={openAdd}>
-                        <Plus size={14} className="mr-1" /> Add coupon
-                    </Button>
-                </div>
+                )}
             </div>
 
-            {loading ? (
+            {tab === "CREATE" ? (
+                <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-border/60 bg-background">
+                    <div className="border-b border-border/60 px-4 py-3">
+                        <h2 className="text-base font-semibold tracking-tight">Create coupon</h2>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Full-page editor — build the offer here; everything fits without scrolling.</p>
+                    </div>
+                    <div className="px-4 pt-4">
+                        <CouponForm
+                            fullPage
+                            masters={masters}
+                            onSaved={() => { setTab("ALL"); load(); }}
+                            onCancel={() => setTab("ALL")}
+                        />
+                    </div>
+                </div>
+            ) : loading ? (
                 <p className="rounded-lg border border-border/60 p-8 text-center text-sm text-muted-foreground">Loading…</p>
             ) : coupons.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
@@ -308,8 +329,7 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                                             <Badge className={`${channelTone[c.channels]} border-0`}>{channelLabel[c.channels]}</Badge>
                                         </TableCell>
                                         <TableCell>
-                                            <span className={`whitespace-nowrap text-xs ${
-                                                v.tone === "amber" ? "font-medium text-amber-600 dark:text-amber-400"
+                                            <span className={`whitespace-nowrap text-xs ${v.tone === "amber" ? "font-medium text-amber-600 dark:text-amber-400"
                                                     : v.tone === "rose" ? "font-medium text-rose-600 dark:text-rose-400"
                                                         : "text-muted-foreground"
                                                 }`}>
@@ -348,7 +368,7 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
 
             {/* Add / edit dialog — keeps the list in view while configuring */}
             <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
-                <DialogContent className="max-h-[calc(100vh-5rem)] overflow-y-auto sm:max-w-3xl">
+                <DialogContent className="max-h-[calc(100vh-5rem)] overflow-y-auto sm:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle>{editing ? `Edit ${editing.name}` : "New coupon"}</DialogTitle>
                         <DialogDescription>
