@@ -75,6 +75,10 @@ export function PosOfferCard({
                     <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => onApply(readyCode)}>Apply</Button>
                 ) : null}
             </div>
+            {/* The coupon's own name — so the cashier knows exactly which promotion this is. */}
+            {o.name && (
+                <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{o.name}</div>
+            )}
             {o.requirement && (
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{o.requirement}</div>
             )}
@@ -117,7 +121,8 @@ export function PosOfferCard({
                     : o.stackable
                         ? <span>Stackable</span>
                         : <span>{o.stackScope === "BILL" ? "Replaces tier · blocks loyalty" : "Line-scope exclusive"}</span>}
-                {o.code && !isApplied && o.applyMode === "CODE" && <span className="font-mono">{o.code}</span>}
+                {/* The coupon's code — shown for every offer that has one, applied or not. */}
+                {o.code && <span className="font-mono">{o.code}</span>}
                 {o.expiresAt && <span>ends {new Date(o.expiresAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span>}
             </div>
         </div>

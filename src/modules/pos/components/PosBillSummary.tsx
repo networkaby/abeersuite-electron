@@ -119,7 +119,7 @@ export function PosBillSummary({
     checkoutSlot,
 }: PosBillSummaryProps) {
     return (
-        <div className="shrink-0 space-y-1.5 border-t border-emerald-300/30 bg-gradient-to-t from-emerald-50/60 to-transparent px-3 py-1 dark:border-emerald-500/20 dark:from-emerald-950/15">
+        <div className="shrink-0 space-y-1.5 border-t border-emerald-300/30 bg-linear-to-t from-emerald-50/60 to-transparent px-3 py-1 dark:border-emerald-500/20 dark:from-emerald-950/15">
             {/* Subtotal is the tax-INCLUSIVE cart value (price-tag-style).
                 When the operator hasn't added shipping / round-off / charges,
                 Subtotal equals Total. The CGST/SGST split underneath is
@@ -257,7 +257,7 @@ export function PosBillSummary({
                             <div className="flex flex-wrap items-center gap-2">
                                 {autoCoupon && (
                                     <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                                        <Sparkles size={11} /> Auto offer{autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {formatInr(autoCoupon.rupees)}
+                                        <Sparkles size={11} /> {autoCoupon.code ? ` ${autoCoupon.code}` : ""} · − {formatInr(autoCoupon.rupees)}
                                     </span>
                                 )}
                                 <Input
@@ -343,16 +343,16 @@ export function PosBillSummary({
                         value={shippingAmtStr}
                         onChange={(e) => setShippingAmtStr(parseDecimalInput(e.target.value))}
                         placeholder="0.00"
-                        className="h-7 w-24 text-right text-xs"
+                        className="h-7 w-18 text-right text-xs"
                     />
                 </div>
                 {/* Round-off */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                     <Label htmlFor="pos-roundoff" className="text-muted-foreground">
-                        Round-off
-                        {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
+                        R-off
+                        {/* {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
                             <span className="ml-1 text-[10px] text-emerald-600">auto</span>
-                        )}
+                        )} */}
                     </Label>
                     <Input
                         id="pos-roundoff"
@@ -368,7 +368,7 @@ export function PosBillSummary({
                             setRoundOffStr(numSignedStr(e.target.value));
                         }}
                         placeholder="auto"
-                        className="h-7 w-24 text-right text-xs"
+                        className="h-7 w-16 text-right text-xs"
                         title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
                         onBlur={(e) => {
                             // Empty field → back to auto mode.

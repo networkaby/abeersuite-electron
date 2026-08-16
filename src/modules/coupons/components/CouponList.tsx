@@ -3,16 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Ticket, Share2, Printer, Image as ImageIcon, Download, MessageCircle, Mail, Copy, Search } from "lucide-react";
+import { Plus, Trash2, Pencil, Share2, Printer, Image as ImageIcon, Download, MessageCircle, Mail, Copy, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import { CouponForm, type Coupon, type RuleMasters } from "./CouponForm";
 import {
     couponHeadline, couponValueText, couponWhatsappUrl, couponWhatsappWebUrl, couponEmailUrl, type CouponShareInfo,
@@ -25,7 +30,13 @@ const channelTone: Record<Coupon["channels"], string> = {
 };
 const channelLabel: Record<Coupon["channels"], string> = { BOTH: "POS+Shop", POS: "POS", SHOP: "Shop" };
 
-type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO";
+type TabKey = "ALL" | "ACTIVE" | "INACTIVE" | "AUTO";
+const TABS: { key: TabKey; label: string }[] = [
+    { key: "ALL", label: "All" },
+    { key: "ACTIVE", label: "Active" },
+    { key: "INACTIVE", label: "Inactive" },
+    { key: "AUTO", label: "Auto-apply" },
+];
 const TYPE_FILTERS = [
     { value: "ALL", label: "All types" }, { value: "PERCENT", label: "% off" }, { value: "FLAT", label: "Flat ₹" },
     { value: "FREE_ITEM", label: "Free item" }, { value: "BOGO", label: "Buy X get Y" }, { value: "SET_PRICE", label: "Set price" },
@@ -33,9 +44,34 @@ const TYPE_FILTERS = [
 const CHAN_FILTERS = [
     { value: "ALL", label: "All channels" }, { value: "BOTH", label: "POS + Shop" }, { value: "POS", label: "POS" }, { value: "SHOP", label: "Shop" },
 ] as const;
-const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-    { value: "ALL", label: "All" }, { value: "ACTIVE", label: "Active" }, { value: "INACTIVE", label: "Inactive" }, { value: "AUTO", label: "Auto-apply" },
-];
+
+const DAY_MS = 86_400_000;
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+/// Validity read for a decision: what the date means right now, and its tone.
+function validity(c: Coupon): { label: string; tone: "muted" | "amber" | "rose" } {
+    const now = Date.now();
+    if (c.startsAt && new Date(c.startsAt).getTime() > now) return { label: `Starts ${fmtDate(c.startsAt)}`, tone: "muted" };
+    if (c.endsAt) {
+        const days = Math.ceil((new Date(c.endsAt).getTime() - now) / DAY_MS);
+        if (days < 0) return { label: `Ended ${fmtDate(c.endsAt)}`, tone: "rose" };
+        if (days <= 7) return { label: `Ends in ${days}d · ${fmtDate(c.endsAt)}`, tone: "amber" };
+        return { label: `Until ${fmtDate(c.endsAt)}`, tone: "muted" };
+    }
+    return { label: "No end date", tone: "muted" };
+}
+
+/// Compact qualifier line under the offer (only the non-default facts).
+function metaLine(c: Coupon): string[] {
+    const parts: string[] = [];
+    if (c.minBillValue != null && Number(c.minBillValue) > 0) parts.push(`Min ₹${Number(c.minBillValue).toLocaleString("en-IN")}`);
+    if (c.independent) parts.push("free on top");
+    if (c.stackable) parts.push("stackable");
+    else if (c.stackScope === "LINE") parts.push("exclusive · its items only");
+    if (c.singleUse) parts.push("single-use");
+    if (c.eligibility !== "ANY") parts.push(c.eligibility.toLowerCase());
+    return parts;
+}
 
 export function CouponList({ masters, brandName }: { masters: RuleMasters; brandName: string }) {
     const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -43,9 +79,9 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<Coupon | null>(null);
     const [search, setSearch] = useState("");
+    const [tab, setTab] = useState<TabKey>("ALL");
     const [typeFilter, setTypeFilter] = useState<string>("ALL");
     const [chanFilter, setChanFilter] = useState<string>("ALL");
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
 
     function load() {
         axios.get<Coupon[]>("/api/coupons")
@@ -55,18 +91,27 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
     }
     useEffect(load, []);
 
+    const counts = useMemo(() => {
+        let active = 0, auto = 0;
+        for (const c of coupons) {
+            if (c.isActive) active++;
+            if (c.applyMode === "AUTO") auto++;
+        }
+        return { all: coupons.length, active, inactive: coupons.length - active, auto };
+    }, [coupons]);
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return coupons.filter((c) => {
+            if (tab === "ACTIVE" && !c.isActive) return false;
+            if (tab === "INACTIVE" && c.isActive) return false;
+            if (tab === "AUTO" && c.applyMode !== "AUTO") return false;
             if (typeFilter !== "ALL" && c.type !== typeFilter) return false;
             if (chanFilter !== "ALL" && c.channels !== chanFilter) return false;
-            if (statusFilter === "ACTIVE" && !c.isActive) return false;
-            if (statusFilter === "INACTIVE" && c.isActive) return false;
-            if (statusFilter === "AUTO" && c.applyMode !== "AUTO") return false;
             if (q && !(c.code?.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))) return false;
             return true;
         });
-    }, [coupons, search, typeFilter, chanFilter, statusFilter]);
+    }, [coupons, search, tab, typeFilter, chanFilter]);
 
     async function patch(id: number, body: Partial<Coupon>) {
         try { await axios.patch(`/api/coupons/${id}`, body); load(); }
@@ -128,37 +173,51 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
         catch { toast.error("Couldn't generate the image"); }
     }
 
-    return (
-        <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-                <div className="space-y-1.5">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400"><Ticket size={15} /></span>
-                        Coupons
-                        <span className="text-xs font-normal text-muted-foreground">({filtered.length})</span>
-                    </CardTitle>
-                    <CardDescription>
-                        Promotions for POS &amp; the online shop. Non-stackable coupons replace the spend-tier discount and block loyalty redemption.
-                    </CardDescription>
-                </div>
-                <Button size="sm" variant="outline" className="shrink-0" onClick={openAdd}>
-                    <Plus size={14} className="mr-1" /> Add coupon
-                </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {/* Expandable add / edit card (no dialog) */}
-                {formOpen && (
-                    <CouponForm
-                        initial={editing ?? undefined}
-                        masters={masters}
-                        onSaved={() => { setFormOpen(false); load(); }}
-                        onCancel={() => setFormOpen(false)}
-                    />
-                )}
+    const shareMenu = (c: Coupon) => (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title="Share"><Share2 size={14} /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+                <DropdownMenuItem onSelect={() => shareCouponImage(c)}><ImageIcon size={14} className="mr-2" /> Share with image</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => shareWhatsappWebImage(c)}><MessageCircle size={14} className="mr-2" /> WhatsApp Web (image)</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => downloadImage(c)}><Download size={14} className="mr-2" /> Download image</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                    <a href={couponWhatsappUrl(shareInfo(c))} target="_blank" rel="noopener noreferrer"><MessageCircle size={14} className="mr-2" /> WhatsApp (text)</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <a href={couponEmailUrl(shareInfo(c))}><Mail size={14} className="mr-2" /> Email (text)</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => copyCode(c)}><Copy size={14} className="mr-2" /> Copy code</DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
 
-                {/* Search + filters */}
+    return (
+        <div className="space-y-4">
+            {/* Tabs + search + filters + add */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
+                    {TABS.map((t) => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setTab(t.key)}
+                            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${tab === t.key
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                                }`}
+                        >
+                            {t.label}
+                            <span className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                {counts[t.key.toLowerCase() as "all" | "active" | "inactive" | "auto"]}
+                            </span>
+                        </button>
+                    ))}
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[200px] flex-1">
+                    <div className="relative min-w-[200px] flex-1 sm:w-64 sm:flex-none">
                         <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search code or name…" className="h-9 pl-8" />
                     </div>
@@ -170,92 +229,143 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                         <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
                         <SelectContent>{CHAN_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-                        <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{STATUS_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <Button size="sm" onClick={openAdd}>
+                        <Plus size={14} className="mr-1" /> Add coupon
+                    </Button>
                 </div>
+            </div>
 
-                {loading ? (
-                    <p className="text-sm text-muted-foreground">Loading…</p>
-                ) : coupons.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
-                        No coupons yet — add one to run a promotion.
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
-                        No coupons match your search/filter.
-                    </div>
-                ) : (
-                    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {filtered.map((c) => (
-                            <li key={c.id} className={`overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm transition ${c.isActive ? "" : "opacity-60"}`}>
-                                {/* Ticket face */}
-                                <div className="relative bg-gradient-to-br from-rose-600 via-rose-700 to-rose-800 p-3 text-white">
-                                    <div className="absolute -right-7 -top-7 h-20 w-20 rounded-full bg-white/10" />
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="text-xl font-extrabold leading-tight">{couponHeadline(c)}</div>
-                                        {c.code
-                                            ? <span className="shrink-0 rounded bg-white/20 px-1.5 py-0.5 font-mono text-[11px] font-semibold backdrop-blur">{c.code}</span>
-                                            : <span className="shrink-0 rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur">AUTO</span>}
-                                    </div>
-                                    <div className="mt-1 truncate text-xs opacity-90">{c.name}</div>
-                                </div>
+            {loading ? (
+                <p className="rounded-lg border border-border/60 p-8 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : coupons.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
+                    No coupons yet — add one to run a promotion.
+                </div>
+            ) : filtered.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
+                    No coupons match your search/filter.
+                </div>
+            ) : (
+                <div className="overflow-hidden rounded-lg border border-border/60">
+                    <Table>
+                        <TableHeader className="bg-muted/50 [&_th]:bg-transparent [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead>Offer</TableHead>
+                                <TableHead className="w-28">Mode</TableHead>
+                                <TableHead className="w-24">Channel</TableHead>
+                                <TableHead className="w-40">Validity</TableHead>
+                                <TableHead className="w-28">Usage</TableHead>
+                                <TableHead className="w-20">Active</TableHead>
+                                <TableHead className="w-28 text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filtered.map((c) => {
+                                const v = validity(c);
+                                const meta = metaLine(c);
+                                const used = c._count?.redemptions ?? 0;
+                                return (
+                                    <TableRow
+                                        key={c.id}
+                                        className={`cursor-pointer ${c.isActive ? "" : "opacity-60"}`}
+                                        onClick={() => openEdit(c)}
+                                        title="Edit coupon"
+                                    >
+                                        <TableCell className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="truncate font-semibold">{couponHeadline(c)}</span>
+                                                {v.tone === "rose" && (
+                                                    <Badge variant="outline" className="shrink-0 border-rose-200 bg-rose-50 px-1.5 text-[10px] text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-400">
+                                                        Expired
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="truncate text-xs text-muted-foreground">{c.name}</div>
+                                            {meta.length > 0 && (
+                                                <div className="truncate text-[11px] text-muted-foreground/75">{meta.join(" · ")}</div>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col items-start gap-1">
+                                                {c.applyMode === "AUTO" && (
+                                                    <span className="inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Auto</span>
+                                                )}
+                                                {c.code ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); copyCode(c); }}
+                                                        title="Copy code"
+                                                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] hover:bg-muted/70"
+                                                    >
+                                                        {c.code}
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-[11px] text-muted-foreground">—</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge className={`${channelTone[c.channels]} border-0`}>{channelLabel[c.channels]}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className={`whitespace-nowrap text-xs ${
+                                                v.tone === "amber" ? "font-medium text-amber-600 dark:text-amber-400"
+                                                    : v.tone === "rose" ? "font-medium text-rose-600 dark:text-rose-400"
+                                                        : "text-muted-foreground"
+                                                }`}>
+                                                {v.label}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                                            {c.totalUsageLimit
+                                                ? `${used.toLocaleString("en-IN")} / ${c.totalUsageLimit.toLocaleString("en-IN")} used`
+                                                : used > 0 ? `${used.toLocaleString("en-IN")} used` : "Never used"}
+                                            {c.perCustomerLimit ? ` · ${c.perCustomerLimit}/cust` : ""}
+                                        </TableCell>
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-xs text-muted-foreground">{c.isActive ? "On" : "Off"}</span>
+                                                <Switch checked={c.isActive} onCheckedChange={(v) => patch(c.id, { isActive: v })} />
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-end gap-0.5">
+                                                {c.code && shareMenu(c)}
+                                                {c.code && (
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Print" onClick={() => printCoupon(c)}><Printer size={14} /></Button>
+                                                )}
+                                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Edit" onClick={() => openEdit(c)}><Pencil size={14} /></Button>
+                                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={() => remove(c)}><Trash2 size={14} className="text-destructive" /></Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
 
-                                {/* Meta + actions */}
-                                <div className="space-y-2 p-3">
-                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                                        <Badge className={`${channelTone[c.channels]} border-0`}>{channelLabel[c.channels]}</Badge>
-                                        {c.independent && (
-                                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">free on top</span>
-                                        )}
-                                        {c.stackable && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">stackable</span>}
-                                        {!c.stackable && c.stackScope === "LINE" && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">exclusive · its items only</span>}
-                                        {c.singleUse && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">single-use</span>}
-                                        {c.eligibility !== "ANY" && <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">{c.eligibility.toLowerCase()}</span>}
-                                    </div>
-                                    <div className="min-h-[15px] text-[11px] text-muted-foreground">
-                                        {c.minBillValue != null && Number(c.minBillValue) > 0 ? `Min ₹${Number(c.minBillValue).toLocaleString("en-IN")}` : "No min bill"}
-                                        {c.endsAt ? ` · ends ${c.endsAt.slice(0, 10)}` : ""}
-                                        {c._count && c._count.redemptions > 0 ? ` · ${c._count.redemptions} used` : ""}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {c.code && (
-                                            <>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button size="icon" variant="outline" className="h-7 w-7" title="Share"><Share2 size={14} /></Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="start" className="w-52">
-                                                        <DropdownMenuItem onSelect={() => shareCouponImage(c)}><ImageIcon size={14} className="mr-2" /> Share with image</DropdownMenuItem>
-                                                        <DropdownMenuItem onSelect={() => shareWhatsappWebImage(c)}><MessageCircle size={14} className="mr-2" /> WhatsApp Web (image)</DropdownMenuItem>
-                                                        <DropdownMenuItem onSelect={() => downloadImage(c)}><Download size={14} className="mr-2" /> Download image</DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem asChild>
-                                                            <a href={couponWhatsappUrl(shareInfo(c))} target="_blank" rel="noopener noreferrer"><MessageCircle size={14} className="mr-2" /> WhatsApp (text)</a>
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem asChild>
-                                                            <a href={couponEmailUrl(shareInfo(c))}><Mail size={14} className="mr-2" /> Email (text)</a>
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onSelect={() => copyCode(c)}><Copy size={14} className="mr-2" /> Copy code</DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                                <Button size="icon" variant="outline" className="h-7 w-7" title="Print" onClick={() => printCoupon(c)}><Printer size={14} /></Button>
-                                            </>
-                                        )}
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" title="Edit" onClick={() => openEdit(c)}><Pencil size={14} /></Button>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={() => remove(c)}><Trash2 size={14} className="text-destructive" /></Button>
-                                        <div className="ml-auto flex items-center gap-1.5">
-                                            <span className="text-[11px] text-muted-foreground">{c.isActive ? "On" : "Off"}</span>
-                                            <Switch checked={c.isActive} onCheckedChange={(v) => patch(c.id, { isActive: v })} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </CardContent>
-        </Card>
+            {/* Add / edit dialog — keeps the list in view while configuring */}
+            <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
+                <DialogContent className="max-h-[calc(100vh-5rem)] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>{editing ? `Edit ${editing.name}` : "New coupon"}</DialogTitle>
+                        <DialogDescription>
+                            {editing
+                                ? "Update the promotion — changes apply from the next bill."
+                                : "Create a promotion for POS and/or the online shop."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <CouponForm
+                        embedded
+                        initial={editing ?? undefined}
+                        masters={masters}
+                        onSaved={() => { setFormOpen(false); load(); }}
+                        onCancel={() => setFormOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 }
