@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
             unit:         { select: { code: true } },
             brand:        { select: { name: true } },
             warrantyTerm: { select: { name: true, durationDays: true } },
+            protection:   { select: { productId: true } },
         };
         // Deterministic resolution: an exact SKU match wins, then fall back to a
         // scannable code. Both spaces are kept disjoint by the write-time guard
@@ -91,6 +92,7 @@ export async function GET(req: NextRequest) {
             (await prisma.invProduct.findFirst({ where: { isActive: true, sku: code }, select: scanSelect }))
             ?? (await prisma.invProduct.findFirst({ where: { isActive: true, codes: { some: { value: code } } }, select: scanSelect }));
         if (!product) return NextResponse.json(null);
+        const { protection: _protection, ...productRest } = product;
         const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
         const resolved = taxByProduct.get(product.id);
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
@@ -98,7 +100,10 @@ export async function GET(req: NextRequest) {
         const costMap = await resolveEffectiveCostMap([product.id]);
         const capMap = await loadRedeemCapOverrides([{ id: product.id, groupId: product.groupId, categoryId: product.categoryId }]);
         return NextResponse.json({
-            ...product,
+            ...productRest,
+            // Discount-protection blacklist flag — POS skips tier/loyalty/coupon
+            // on protected products (the raw `protection` relation is stripped).
+            protected: _protection != null,
             // Derived primary barcode for label/display consumers (replaces the
             // old stored barcode1 column). `codes` (spread above) is the full set.
             barcode1: primaryBarcode(product.codes),
@@ -141,6 +146,7 @@ export async function GET(req: NextRequest) {
             unit:         { select: { code: true } },
             brand:        { select: { name: true } },
             warrantyTerm: { select: { name: true, durationDays: true } },
+            protection:   { select: { productId: true } },
         },
     });
 
@@ -170,8 +176,12 @@ export async function GET(req: NextRequest) {
 
     const enriched = products.map((p) => {
         const r = taxByProduct.get(p.id);
+        const { protection: _protection, ...pRest } = p;
         return {
-            ...p,
+            ...pRest,
+            // Discount-protection blacklist flag (the raw `protection` relation
+            // is stripped). POS snapshots it onto cart lines at add-to-cart.
+            protected: _protection != null,
             // Derived primary barcode for display consumers (full set is `codes`).
             barcode1: primaryBarcode(p.codes),
             // The response already carries `effectiveSalePricePaise` (selected +

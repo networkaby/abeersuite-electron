@@ -19,6 +19,7 @@ import {
     type EarnLine,
     type TaxonomyMaps,
 } from "@/modules/loyalty/lib";
+import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 
 // Customer benefits for the ONLINE shop — the POS counter engines applied to
 // storefront lines. ONE implementation shared by:
@@ -141,6 +142,10 @@ export async function computeShopCartBenefits(
         };
     }
 
+    // Discount-protection blacklist (Retention → Protection) — protected lines are
+    // excluded from the tier discount, coupon eligibility, and loyalty redemption.
+    const protectedProductIds = await loadProtectedProductIds(db);
+
     // Per-product cost + GST rate — the tier base AND the coupon's cost-incl base.
     const productIds = [...new Set(lines.map((l) => l.productId))];
     const [costPaiseById, taxRatePairs] = await Promise.all([
@@ -164,6 +169,7 @@ export async function computeShopCartBenefits(
     let rawInclEffect = 0;                          // float paise
     if (tierPct > 0) {
         lines.forEach((l, i) => {
+            if (protectedProductIds.has(l.productId)) return;
             const costExcl = costPaiseById.get(l.productId) ?? null;
             if (costExcl == null) return;
             const rate = taxRateById.get(l.productId) ?? 0;
@@ -219,6 +225,8 @@ export async function computeShopCartBenefits(
                     qty: l.quantity,
                     unitPrice: lineTaxableRs(l) / l.quantity,
                     costIncl: costExcl == null ? null : (costExcl / 100) * (1 + rate / 100),
+                    // Discount-protected lines never match a coupon (see couponMath).
+                    protected: protectedProductIds.has(l.productId),
                 };
             });
             couponGoodsValue = couponLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
@@ -265,7 +273,13 @@ export async function computeShopCartBenefits(
         // LINE-scope exclusivity drops the coupon's own matched lines out of the
         // ceiling base (they still can't earn/redeem on this bill); BILL scope
         // leaves the base untouched and the block below rejects/skips instead.
-        const earnLines = lineScopeExclusive ? earnLinesAll.filter((_, i) => !exclusionMask[i]) : earnLinesAll;
+        // Discount-protected lines are dropped from the base in EVERY case (no
+        // redemption against a protected product). earnLinesAll is index-aligned
+        // with lines.
+        const earnLines = earnLinesAll.filter((_, i) =>
+            !protectedProductIds.has(lines[i].productId)
+            && (!lineScopeExclusive || !exclusionMask[i]),
+        );
         const rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
         const taxonomyMaps: TaxonomyMaps = {
             groupParent: new Map(groups.map((g) => [g.id, g.parentId])),

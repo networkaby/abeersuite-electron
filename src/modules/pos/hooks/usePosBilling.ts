@@ -337,9 +337,13 @@ export function usePosBilling(opts: {
         const paise = l.costPaise ?? allProducts.find((p) => p.id === l.productId)?.costPaise ?? null;
         return paise == null ? null : paise / 100;
     };
+    // Discount-protection flag — snapshotted at add-to-cart, falling back to the
+    // live product list for restored/edited carts (same pattern as costPaise).
+    const lineProtected = (l: CartLine): boolean =>
+        !!l.protected || (allProducts.find((p) => p.id === l.productId)?.protected ?? false);
     const lineTierDiscExcl = cart.map((l) => {
         const c = lineCostExcl(l);
-        if (c == null || discountPct <= 0) return 0;
+        if (c == null || discountPct <= 0 || lineProtected(l)) return 0;
         return Math.min((discountPct / 100) * c * l.qty, l.qty * l.unitPrice);
     });
     // Inclusive rupee effect shown on the bill = Σ (line gross incl − line net incl),
@@ -374,8 +378,9 @@ export function usePosBilling(opts: {
     const globalCapPct = rates?.maxRedeemPctOfBill ?? null;
     // Loyalty redeems against GOODS only — service lines stay out of the base,
     // mirroring the server (earnLines / redeemableBaseForCart see body.lines,
-    // which carry products only).
-    const goodsCart = cart.filter((l) => l.kind !== "service");
+    // which carry products only). Discount-protected lines are dropped too: no
+    // redemption against a protected product (mirrors the server's blacklist).
+    const goodsCart = cart.filter((l) => l.kind !== "service" && !lineProtected(l));
     const cartGoods = goodsCart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
     const maxRedeemableRupees = cartGoods <= 0 ? 0 : goodsCart.reduce((acc, l) => {
         const lineGoods = l.qty * l.unitPrice;
@@ -653,6 +658,9 @@ export function usePosBilling(opts: {
                 warrantyLabel,
                 requireSaleNote: p.requireSaleNote ?? false,
                 redeemCapPct: p.redeemCapPct ?? null,
+                // Discount-protection blacklist flag — no tier / loyalty / coupon
+                // on this line (mirrors the server's own blacklist read).
+                protected: p.protected ?? false,
             }];
         });
         setProductQuery("");

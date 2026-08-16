@@ -69,6 +69,12 @@ export interface CartLineLite {
     /// margin. null/absent = no cost basis → the line adds nothing to a
     /// PERCENT coupon's base (same rule as the spend-tier discount).
     costIncl?: number | null;
+    /// Discount-protected (ProductProtection blacklist) — the line is excluded
+    /// from every automatic promotion: it never matches a coupon's rules
+    /// (eligible subtotal / % base / SET_PRICE) and item-targeted coupons
+    /// (FREE_ITEM / BOGO) refuse to give it away. True only when the caller
+    /// loaded the blacklist; absent/false = no protection.
+    protected?: boolean;
 }
 
 export interface EvalInput {
@@ -126,6 +132,8 @@ export function linesMatchedByRules(c: CouponContext, lines: CartLineLite[]): bo
     const includes = c.rules.filter((r) => r.kind === "INCLUDE");
     const excludes = c.rules.filter((r) => r.kind === "EXCLUDE");
     return lines.map((line) => {
+        // Discount-protected lines are never touched by any coupon.
+        if (line.protected) return false;
         if (excludes.some((r) => lineMatchesRule(line, r))) return false;
         if (includes.length > 0 && !includes.some((r) => lineMatchesRule(line, r))) return false;
         return true;
@@ -207,6 +215,7 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
             if (c.freeProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
             const line = input.lines.find((l) => l.productId === c.freeProductId);
             if (!line) return { ok: false, reason: "Add the offer item to the cart" };
+            if (line.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
             const qty = Math.min(c.freeQty ?? 1, line.qty);
             const pctOff = c.freeDiscountPct ?? 100;
             raw = qty * line.unitPrice * (pctOff / 100);
@@ -221,8 +230,15 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
             if (getProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
             const getLine = input.lines.find((l) => l.productId === getProductId);
             if (!getLine) return { ok: false, reason: "Add the offer item to the cart" };
+            if (getLine.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
             const pctOff = c.freeDiscountPct ?? 100;
             const sameItem = c.buyProductId == null || c.freeProductId == null || c.freeProductId === c.buyProductId;
+            // A protected BUY item can't unlock the offer either (same-item BOGO
+            // is already covered by the get-line check above).
+            if (!sameItem && c.buyProductId != null) {
+                const buyLine = input.lines.find((l) => l.productId === c.buyProductId);
+                if (buyLine?.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
+            }
             let freeUnits: number;
             if (sameItem) {
                 // Group of (buyQty + getQty); every full group yields getQty free.

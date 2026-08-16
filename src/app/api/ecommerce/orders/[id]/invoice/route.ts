@@ -27,6 +27,7 @@ import {
     type TaxonomyMaps,
     type MilestoneTier,
 } from "@/modules/loyalty/lib";
+import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 
 // POST /api/ecommerce/orders/[id]/invoice
 //
@@ -300,13 +301,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 prisma.loyaltyMilestone.findMany({ where: { enabled: true }, orderBy: { threshold: "asc" } }),
             ]);
             // Flagged → no earn lines (earn = 0) while the frozen redemption,
-            // if any, still burns via applyLoyaltyForSale below.
-            earnLines = noDiscountFlag ? [] : t.order.lines.map((l, i) => ({
-                productId: l.productId,
-                groupId: l.product?.groupId ?? null,
-                categoryId: l.product?.categoryId ?? null,
-                goods: computedLines[i].quantity * computedLines[i].rate,
-            }));
+            // if any, still burns via applyLoyaltyForSale below. Discount-protected
+            // lines are dropped too (POS parity — protected products neither earn
+            // nor redeem). Map first (keeps the computedLines index), then filter.
+            const protectedProductIds = await loadProtectedProductIds(prisma);
+            earnLines = noDiscountFlag ? [] : t.order.lines
+                .map((l, i) => ({
+                    productId: l.productId,
+                    groupId: l.product?.groupId ?? null,
+                    categoryId: l.product?.categoryId ?? null,
+                    goods: computedLines[i].quantity * computedLines[i].rate,
+                }))
+                .filter((line) => !protectedProductIds.has(line.productId));
             rulesIndex = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
             taxonomyMaps = {
                 groupParent: new Map(groups.map((g) => [g.id, g.parentId])),

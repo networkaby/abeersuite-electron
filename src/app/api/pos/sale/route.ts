@@ -45,6 +45,7 @@ import {
     type EvalInput,
     type CouponSelection,
 } from "@/modules/coupons/lib";
+import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -340,10 +341,13 @@ export async function POST(req: Request) {
     const costExclById = new Map<number, number | null>(
         [...costPaiseById].map(([id, paise]) => [id, paise == null ? null : paise / 100]),
     );
+    // Discount-protection blacklist (Retention → Protection) — protected lines are
+    // excluded from the tier discount, coupon eligibility, and loyalty entirely.
+    const protectedProductIds = await loadProtectedProductIds(prisma);
     // Per-line pre-tax discount IF the tier applies (before the coupon-drop decision).
     const lineTierDiscExclRaw = body.lines.map((l) => {
         const c = costExclById.get(l.productId) ?? null;
-        if (c == null || body.discountPct <= 0) return 0;
+        if (c == null || body.discountPct <= 0 || protectedProductIds.has(l.productId)) return 0;
         return Math.min((body.discountPct / 100) * c * l.quantity, l.quantity * l.unitPrice);
     });
     // Inclusive rupee effect (gross incl − net incl) — kept as the tier's voucher-level
@@ -437,6 +441,8 @@ export async function POST(req: Request) {
                 qty: l.quantity, unitPrice: l.unitPrice,
                 // Cost incl. tax — the PERCENT-coupon base (same as the tier's).
                 costIncl: costExcl == null ? null : costExcl * (1 + l.taxRate / 100),
+                // Discount-protected lines never match a coupon (see couponMath).
+                protected: protectedProductIds.has(l.productId),
             };
         });
         const couponInput: EvalInput = {
@@ -463,7 +469,15 @@ export async function POST(req: Request) {
     // matched lines out of the ceiling base entirely (they still can't earn/redeem
     // on this bill); BILL scope leaves the base untouched and instead hard-rejects
     // below, exactly as before.
-    const earnLinesForCeiling = lineScopeExclusive ? earnLines.filter((_, i) => !exclusionMask[i]) : earnLines;
+    // LINE-scope exclusivity drops the coupon's own matched lines out of the
+    // ceiling base (they still can't earn/redeem on this bill); BILL scope leaves
+    // the base untouched and hard-rejects below instead. Discount-protected lines
+    // are dropped from the base in EVERY case — no redemption against a protected
+    // product. earnLines is index-aligned with body.lines.
+    const earnLinesForCeiling = earnLines.filter((_, i) =>
+        !protectedProductIds.has(body.lines[i].productId)
+        && (!lineScopeExclusive || !exclusionMask[i]),
+    );
     const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
     const redeemCeiling = loyaltyEnabled
         ? redeemableBaseForCart(earnLinesForCeiling, tierDiscount, rulesIndex, taxonomyMaps, loyaltyRates.maxRedeemPctOfBill)
@@ -863,7 +877,9 @@ export async function POST(req: Request) {
                 loyaltyResult = await applyLoyaltyForSale(tx, {
                     accountId:        customerAccount.id,
                     universalVoucherId: spineId,
-                    earnLines,
+                    // Protected lines neither earn nor redeem — filtered out of
+                    // the earn base (index-aligned with the unfiltered array).
+                    earnLines: earnLines.filter((_, i) => !protectedProductIds.has(body.lines[i].productId)),
                     combinedDiscount: tierDiscountAfterCoupon + redemptionRupees + couponRupees,
                     redeemPoints,
                     invoiceValue:     invoiceValueGross,

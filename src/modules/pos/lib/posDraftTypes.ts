@@ -75,6 +75,9 @@ export type ProductOption = {
     /// Loyalty redeem-cap override (% of this item's value redeemable with points).
     /// null = inherit the global cap. Snapshotted onto the cart line at add time.
     redeemCapPct?: number | null;
+    /// Discount-protected (ProductProtection blacklist) — excluded from the
+    /// spend-tier discount, loyalty redemption, and coupons on the POS screen.
+    protected?: boolean;
     unit?: { code: string };
     warrantyTerm?: { name: string; durationDays: number | null } | null;
     /// When true, the cashier must fill the line note before checkout. Snapshotted
@@ -123,6 +126,9 @@ export type CartLine = {
     /// Loyalty redeem-cap override (% redeemable with points; null = global cap).
     /// Snapshotted so the redeem ceiling matches the server's at checkout.
     redeemCapPct?: number | null;
+    /// Discount-protected (ProductProtection blacklist) — the line gets no tier
+    /// discount and sits outside the loyalty redeem ceiling on the POS screen.
+    protected?: boolean;
 };
 
 /// A validated coupon as the coupon-validate route returns it — the server owns

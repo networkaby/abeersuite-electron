@@ -7,6 +7,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectCouponForCart, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput } from "@/modules/coupons/lib";
 import { round2 } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
+import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 
 // POST /api/pos/coupon-validate — validate a coupon code (or pick the best auto
 // coupon) against the current cart. Returns the SAME ₹ the sale route will post,
@@ -61,9 +62,10 @@ export async function POST(req: Request) {
         // doesn't send them) so include/exclude rules AND the PERCENT base evaluate
         // IDENTICALLY here and in /sale.
         const productIds = [...new Set(data.lines.map((l) => l.productId))];
-        const [products, costPaiseById] = await Promise.all([
+        const [products, costPaiseById, protectedProductIds] = await Promise.all([
             prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true } }),
             resolveEffectiveCostMap(productIds),
+            loadProtectedProductIds(prisma),
         ]);
         const taxById = new Map(products.map((p) => [p.id, p]));
 
@@ -79,6 +81,8 @@ export async function POST(req: Request) {
                     qty: l.qty, unitPrice: l.unitPrice,
                     // Cost incl. tax — the PERCENT-coupon base (same as the tier's).
                     costIncl: costPaise == null ? null : (costPaise / 100) * (1 + (l.taxRate ?? 0) / 100),
+                    // Discount-protected lines never match a coupon (see couponMath).
+                    protected: protectedProductIds.has(l.productId),
                 };
             }),
             goodsValue,

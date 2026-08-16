@@ -16,6 +16,7 @@ import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
+import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks, syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
@@ -89,11 +90,14 @@ export async function createPosQuoteVoucher(opts: {
     const costExclById = new Map<number, number | null>(
         [...costPaiseById].map(([id, paise]) => [id, paise == null ? null : paise / 100]),
     );
+    // Discount-protection blacklist — protected lines get no spend-tier discount
+    // on a quote/order either (they still carry the negotiated unit price).
+    const protectedProductIds = await loadProtectedProductIds(prisma);
 
     const computedLines = lines.map((l) => {
         const rate = Number(l.unitPrice) || 0;
         const cost = costExclById.get(l.productId) ?? null;
-        const lineDisc = cost == null || discountPct <= 0
+        const lineDisc = cost == null || discountPct <= 0 || protectedProductIds.has(l.productId)
             ? 0
             : Math.min((discountPct / 100) * cost * l.quantity, l.quantity * rate);
         const { discountAmt, taxAmount, amount } = calcLineTotals({
