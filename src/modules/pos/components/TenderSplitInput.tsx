@@ -97,6 +97,9 @@ export function TenderSplitInput({
                             )}
                             <Input
                                 value={s.amount || ""}
+                                data-tender-field
+                                data-tender-amount
+                                data-tender-split={s.id}
                                 onChange={(ev) => patch(s.id, { amount: Number(ev.target.value) || 0 })}
                                 onKeyDown={onEnter}
                                 placeholder="₹ amount"
@@ -117,6 +120,8 @@ export function TenderSplitInput({
                         ) : (
                             <Input
                                 value={s.reference}
+                                data-tender-field
+                                data-tender-split={s.id}
                                 onChange={(ev) => patch(s.id, { reference: ev.target.value })}
                                 onKeyDown={onEnter}
                                 placeholder="Ref / last-4"

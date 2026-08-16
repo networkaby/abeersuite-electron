@@ -82,6 +82,12 @@ export function PosScreenShell({
         const t = setTimeout(() => partySearchRef.current?.focus(), 120);
         return () => clearTimeout(t);
     }, [partySearchRef]);
+
+    // Keep the keyboard-selected cart line visible (ArrowUp/Down selection).
+    useEffect(() => {
+        if (b.cartSelectedId == null) return;
+        document.querySelector("[data-pos-selected]")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, [b.cartSelectedId]);
     return (
         <div className="flex h-full w-full flex-row">
             {/* Main column — everything except the far-right action rail. */}
@@ -265,7 +271,7 @@ export function PosScreenShell({
                                         {/* Display order: product lines first, service lines after —
                                         render-only sort; the underlying cart array is untouched
                                         so the productId-keyed setters keep working. */}
-                                        {[...b.cart.filter((l) => l.kind !== "service"), ...b.cart.filter((l) => l.kind === "service")].map((l) => {
+                                        {b.renderCart.map((l) => {
                                             // Enter on any cart-line input → refocus the product search so the
                                             // cashier can scan the next item without reaching for the mouse.
                                             const enterToNextProduct = (e: React.KeyboardEvent) => {
@@ -280,10 +286,26 @@ export function PosScreenShell({
                                             // Line total the customer pays for this row — qty × tax-inclusive price.
                                             const unitInclusive = l.unitPrice * (1 + (l.taxRate ?? 0) / 100);
                                             const lineTotal = l.qty * unitInclusive;
+                                            // Selected line — the "+"/"-" quantity keys act on it.
+                                            // Click anywhere on the row to select it directly.
+                                            // Highlight is a slightly stronger background tint ONLY —
+                                            // no ring / border change, since every line already carries
+                                            // the same tinted border treatment.
+                                            const selected = l.productId === b.cartSelectedId;
+                                            const rowBg = isService
+                                                ? selected
+                                                    ? "border-l-2 border-l-sky-400 bg-sky-100/80 dark:bg-sky-900/40"
+                                                    : "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20"
+                                                : selected
+                                                    ? "border-l-2 border-l-emerald-300/60 bg-gradient-to-r from-emerald-100/80 to-emerald-50/30 dark:from-emerald-900/40"
+                                                    : "border-l-2 border-l-emerald-300/60 bg-gradient-to-r from-emerald-50/50 to-transparent dark:from-emerald-950/20";
                                             return (
-                                                <li key={l.productId} className={`px-3 py-1.5 ${isService
-                                                ? "border-l-2 border-l-sky-400 bg-sky-50/60 dark:bg-sky-950/20"
-                                                : "border-l-2 border-l-emerald-300/60 bg-gradient-to-r from-emerald-50/50 to-transparent dark:border-l-emerald-500/30 dark:from-emerald-950/20"}`}>
+                                                <li
+                                                    key={l.productId}
+                                                    data-pos-selected={selected ? "true" : undefined}
+                                                    onClick={() => b.setCartSelectedId(l.productId)}
+                                                    className={`cursor-pointer px-3 py-1.5 ${rowBg}`}
+                                                >
                                                     {/* Wide layout: name | warranty | note | mrp | qty | price | total | trash all on one line.
                                                     Narrow (<lg) stacks name above and the rest below. */}
                                                     <div className="grid items-center gap-1.5 lg:grid-cols-[minmax(140px,1.4fr)_60px_minmax(140px,1fr)_110px_auto_100px_minmax(80px,auto)_auto]">

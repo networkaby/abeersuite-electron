@@ -201,21 +201,56 @@ export function usePosBilling(opts: {
         return () => window.removeEventListener("keydown", handler);
     }, [cart.length, snapshot?.account, createDialogOpen, checkoutOpen]);
 
-    // "/" from anywhere → focus the product search box (skip when the user is
-    // already typing in an input/textarea/contenteditable, or when a dialog is open).
+    // Latest payable total for the early-bound "/" shortcut effect below
+    // (it lives above the computed totals). A ref, so the listener never
+    // needs re-binding; the value is refreshed after every render.
+    const payableTotalRef = useRef(0);
+
+    // "/" — two roles:
+    //   • Checkout open → fill the REST of the bill into the focused payment
+    //     line (the keyboard version of each line's ✓ fill-remaining helper):
+    //     cash row / no line focused → cash gets the rest; a payment line's
+    //     amount/ref box → that line gets the rest. Works from any field in
+    //     the checkout, including the cash input itself.
+    //   • Otherwise → focus the product search box (skip when the user is
+    //     already typing in an input/textarea/contenteditable, or when a dialog
+    //     is open).
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "/") return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (checkoutOpen) {
+                e.preventDefault();
+                // "/" on ANY payment line → fill the REST of the bill into that
+                // line (the keyboard version of each line's ✓ fill-remaining
+                // helper). Cash row — or no line focused — → the rest goes to cash.
+                const active = document.activeElement as HTMLElement | null;
+                const splitId = active?.closest?.("[data-tender-split]")?.getAttribute("data-tender-split") ?? null;
+                const bill = payableTotalRef.current;
+                const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
+                const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
+                if (splitId != null) {
+                    const row = splits.find((x) => x.id === splitId);
+                    if (row) {
+                        const others = cashNet + (splitsSum - row.amount);
+                        const remaining = Math.max(0, +(bill - others).toFixed(2));
+                        setSplits((prev) => prev.map((x) => (x.id === splitId ? { ...x, amount: remaining } : x)));
+                    }
+                } else {
+                    const remaining = Math.max(0, +(bill - splitsSum).toFixed(2));
+                    setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
+                }
+                return;
+            }
+            if (createDialogOpen) return;
             const tag = (document.activeElement as HTMLElement | null)?.tagName;
             if (tag === "INPUT" || tag === "TEXTAREA" || (document.activeElement as HTMLElement | null)?.isContentEditable) return;
-            if (createDialogOpen || checkoutOpen) return;
             e.preventDefault();
             productSearchRef.current?.focus();
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [createDialogOpen, checkoutOpen, productSearchRef]);
+    }, [checkoutOpen, payableTotalRef, setPay, setSplits, createDialogOpen, productSearchRef, pay, splits]);
 
     // F2 from anywhere → focus the party / customer picker.
     // Standard POS convention: F2 = customer lookup, / = product scan.
@@ -230,11 +265,12 @@ export function usePosBilling(opts: {
     const changingPartyRef = useRef(changingParty);
     useEffect(() => { changingPartyRef.current = changingParty; }, [changingParty]);
     const originalPartyRef = useRef<PickedParty | null>(null);
-    // The product the cashier most recently scanned / added — the "+"/"-"
-    // quantity keys act on this line. NOT the cart's last array element:
-    // re-scanning an item increments its original slot in place, so array
-    // order goes stale.
-    const lastTouchedProductIdRef = useRef<number | null>(null);
+
+    // The selected cart line — the "+"/"-" quantity keys act on it. Defaults
+    // to the last item scanned / added; ArrowUp/Down move it; clicking a line
+    // selects it (see PosScreenShell). Keyed by productId (not index) so it
+    // survives the render sort (products before services).
+    const [cartSelectedId, setCartSelectedId] = useState<number | null>(null);
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -461,6 +497,8 @@ export function usePosBilling(opts: {
     // the same min(balance, total) from the card and posts it as a Dr-Liability tender.
     const giftCardApplied = giftCard ? Math.min(giftCard.balance, total) : 0;
     const payableTotal = Math.max(0, +(total - giftCardApplied).toFixed(2));
+    // Refresh the ref the "/" shortcut reads (it binds above this block).
+    useEffect(() => { payableTotalRef.current = payableTotal; });
 
     // Bill-level adjustments shown on the customer ladder (print + display) so the
     // breakdown reconciles: manual charges + shipping + round-off (signed). Loyalty
@@ -690,8 +728,8 @@ export function usePosBilling(opts: {
 
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
-        // Last-scanned marker for the "+"/"-" quantity keys.
-        lastTouchedProductIdRef.current = p.id;
+        // Last-scanned line becomes the selected one ("+" / "-" target).
+        setCartSelectedId(p.id);
         // Product's effectiveSalePricePaise is treated as TAX-INCLUSIVE (matches
         // the price tag / MRP-style retail expectations). We back-calculate the
         // pre-tax rate here so the rest of the math (calcLineTotals) — which
@@ -742,7 +780,7 @@ export function usePosBilling(opts: {
         const rate = svc.taxRate ?? 0;
         const price = rate > 0 ? inclusive / (1 + rate / 100) : inclusive;
         const lineId = -svc.id;
-        lastTouchedProductIdRef.current = lineId;
+        setCartSelectedId(lineId);
         setCart((prev) => {
             const exist = prev.find((l) => l.productId === lineId);
             if (exist) return prev.map((l) => l.productId === lineId ? { ...l, qty: l.qty + 1 } : l);
@@ -756,7 +794,17 @@ export function usePosBilling(opts: {
     };
 
     const setQty = (productId: number, qty: number) => {
-        if (qty <= 0) { setCart((p) => p.filter((l) => l.productId !== productId)); return; }
+        if (qty <= 0) {
+            setCart((p) => p.filter((l) => l.productId !== productId));
+            // The removed line may have been the selection — hand the highlight
+            // to the line that took its place (or the new last line).
+            if (cartSelectedId === productId) {
+                const idx = cart.findIndex((l) => l.productId === productId);
+                const rest = cart.filter((l) => l.productId !== productId);
+                setCartSelectedId(rest[Math.min(idx, rest.length - 1)]?.productId ?? null);
+            }
+            return;
+        }
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, qty } : l));
     };
 
@@ -766,10 +814,12 @@ export function usePosBilling(opts: {
     const setLineDescription = (productId: number, description: string) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, description } : l));
 
-    // "+" / "-" from anywhere → step the LAST item added by one qty (ECR
-    // heritage: PLUS adds, MINUS subtracts). Skipped while typing in a field
-    // or when a dialog is open; ctrl/meta/alt combos are browser/OS territory.
-    // Main-row "+" arrives with shiftKey (Shift+=), so shift is NOT a skip.
+    // "+" / "-" from anywhere → step the SELECTED line by one qty (ECR
+    // heritage: PLUS adds, MINUS subtracts). The last item added is selected
+    // by default; ArrowUp/Down or a click moves the selection. Skipped while
+    // typing in a field or when a dialog is open; ctrl/meta/alt combos are
+    // browser/OS territory. Main-row "+" arrives with shiftKey (Shift+=), so
+    // shift is NOT a skip.
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "+" && e.key !== "-") return;
@@ -779,21 +829,53 @@ export function usePosBilling(opts: {
             const inSearchBox = active === productSearchRef.current;
             // Mid-query in the search box → "+"/"-" are normal characters
             // (e.g. searching "T-Shirt"). Empty search box (the post-scan
-            // state) → act on the last item instead of opening the dropdown
+            // state) → act on the selection instead of opening the dropdown
             // with a "+"/"-" query.
             if (inSearchBox && productQuery.trim()) return;
             // Any other field → let the character type normally.
             if (!inSearchBox && (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.isContentEditable)) return;
             e.preventDefault();
-            const lastId = lastTouchedProductIdRef.current;
-            const line = (lastId != null ? cart.find((l) => l.productId === lastId) : null) ?? cart[cart.length - 1];
+            const line = (cartSelectedId != null ? cart.find((l) => l.productId === cartSelectedId) : null) ?? cart[cart.length - 1];
             if (!line) return;
             if (e.key === "+") setQty(line.productId, line.qty + 1);
             else setQty(line.productId, line.qty - 1); // ≤ 0 removes the line
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [cart, productQuery, createDialogOpen, checkoutOpen, setQty]);
+    }, [cart, cartSelectedId, productQuery, createDialogOpen, checkoutOpen, setQty]);
+
+    // Rendered cart order — products first, then services — identical to the
+    // shell's display sort, so ArrowUp/Down move the highlight exactly the way
+    // the cashier sees the list (a service added before a product would
+    // otherwise jump confusingly in array order).
+    const renderCart = useMemo(
+        () => [...cart.filter((l) => l.kind !== "service"), ...cart.filter((l) => l.kind === "service")],
+        [cart],
+    );
+
+    // ArrowUp / ArrowDown → move the cart-line selection. Skipped while the
+    // product dropdown is open (arrows there navigate the dropdown), while
+    // typing in a field (except the empty search box), or when a dialog is open.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            if (createDialogOpen || checkoutOpen) return;
+            const active = document.activeElement as HTMLElement | null;
+            const inSearchBox = active === productSearchRef.current;
+            if (inSearchBox && productQuery.trim()) return; // dropdown nav owns it
+            if (!inSearchBox && (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.isContentEditable)) return;
+            if (cart.length === 0) return;
+            e.preventDefault();
+            const order = renderCart.map((l) => l.productId);
+            const idx = cartSelectedId != null ? order.indexOf(cartSelectedId) : -1;
+            const current = idx >= 0 ? idx : order.length - 1;
+            const next = e.key === "ArrowDown" ? Math.min(current + 1, order.length - 1) : Math.max(current - 1, 0);
+            setCartSelectedId(order[next]);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [renderCart, cart, cartSelectedId, productQuery, createDialogOpen, checkoutOpen]);
 
     // ── Product dropdown keyboard nav ──────────────────────────────────────
     const onProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -820,17 +902,127 @@ export function usePosBilling(opts: {
         }
     };
 
-    const openCheckout = () => {
+    // Opens the checkout. `prefill` seeds the FULL payable amount on ONE tender:
+    //   { tender: "split" } → option-2 — the first default-visible payment-account
+    //                         row (normally UPI these days); falls back to cash
+    //                         when the counter has no such row.
+    //   { tender: "cash" }  → option-1 — the Cash row.
+    // A normal open starts at ₹0 and lets the cashier type the tendered amount.
+    const openCheckout = (prefill?: { tender: "cash" | "split" }) => {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-        setPay({ cashTendered: 0, cashReturn: 0 });
         // Pre-show the accounts flagged "default visible" as rows; the rest stay
         // behind "Add payment line".
-        setSplits(payAccounts.filter((a) => a.defaultVisible).map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" })));
+        const visible = payAccounts.filter((a) => a.defaultVisible);
+        const splits = visible.map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" }));
+        // Quick-pay prefill: the whole bill lands on one tender (payableTotal =
+        // total − gift card). F10 → option-2 (first account row, usually UPI);
+        // a counter with no default-visible non-cash row falls back to option-1
+        // (cash), as does the explicit cash prefill.
+        let cashTendered = 0;
+        if (prefill?.tender === "split" && splits.length > 0) {
+            splits[0] = { ...splits[0], amount: payableTotal };
+        } else if (prefill?.tender === "cash" || (prefill?.tender === "split" && splits.length === 0)) {
+            cashTendered = payableTotal;
+        }
+        setPay({ cashTendered, cashReturn: 0 });
+        setSplits(splits);
         setCheckoutOpen(true);
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
     };
+
+    // F10 → quick pay on option-2: opens checkout with the full payable amount
+    // (total − gift card, no change) seeded on the FIRST payment-account row —
+    // normally UPI these days — instead of cash. One key for "take the money
+    // and go" on today's default payment. With checkout already open, F10 moves
+    // the whole bill onto option-2 — the toggle partner of "/" (cash full).
+    // Function key, so it overrides the current context like F2; goes through
+    // openCheckout so the same guards + toasts fire.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "F10") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            if (createDialogOpen) return;
+            e.preventDefault();
+            if (checkoutOpen) {
+                // All on option-2 (first account row, usually UPI); adds the
+                // row when the counter has accounts but none was pre-shown.
+                setPay({ cashTendered: 0, cashReturn: 0 });
+                setSplits((prev) => {
+                    if (prev.length > 0) return prev.map((s, i) => ({ ...s, amount: i === 0 ? payableTotal : 0 }));
+                    if (payAccounts.length === 0) return prev; // cash-only counter
+                    return [{ id: crypto.randomUUID(), paymentAccountId: payAccounts[0].id, amount: payableTotal, reference: "" }];
+                });
+                return;
+            }
+            openCheckout({ tender: "split" });
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [createDialogOpen, checkoutOpen, openCheckout, payableTotal, payAccounts, setPay, setSplits]);
+
+    // F9 → quick cash: opens checkout with the full payable amount seeded on
+    // the CASH row (option-1) — the one-key "customer pays cash" flow. Kept
+    // separate from F10 (quick pay on option-2 / UPI) so one key covers each
+    // payment type. Function key, so it overrides the current context like F2;
+    // goes through openCheckout so the same guards + toasts fire. Inside the
+    // open checkout, "/" fills cash with the rest instead.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "F9") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            if (createDialogOpen || checkoutOpen) return;
+            e.preventDefault();
+            openCheckout({ tender: "cash" });
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [createDialogOpen, checkoutOpen, openCheckout]);
+
+    // ↑ / ↓ inside the open checkout → move focus to the NEXT / PREVIOUS
+    // payment line's amount box — the keyboard replacement for Tab across the
+    // tender list (Cash → payment line 1 → payment line 2 → …). From the Cash
+    // row ↓ jumps to the first line's amount; ↓ again to the next line; ↑ steps
+    // back. When focus sits on an in-between field (cash return, a line's ref
+    // box), the arrow steps to the nearest line amount in that direction.
+    // Buttons (account dropdown, Share) keep native arrow behavior (Radix opens
+    // the menu), as do arrows inside the open dropdown (Radix handles + prevents
+    // default there, so this sees defaultPrevented and stays out of the way).
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            if (!checkoutOpen) return;
+            if (e.defaultPrevented) return;
+            const active = document.activeElement as HTMLElement | null;
+            if (!active || active.tagName === "BUTTON") return;
+            e.preventDefault();
+            const dir = e.key === "ArrowDown" ? 1 : -1;
+            // All tender inputs in DOM order; `data-tender-amount` marks the
+            // per-line landing spots (Cash tendered, then each split amount).
+            const fields = Array.from(document.querySelectorAll<HTMLInputElement>("[data-tender-field]"));
+            if (fields.length === 0) return;
+            const amounts = fields.filter((f) => f.hasAttribute("data-tender-amount"));
+            let next: HTMLInputElement | null = null;
+            const idx = fields.indexOf(active as HTMLInputElement);
+            if (idx >= 0) {
+                let j = idx + dir;
+                while (j >= 0 && j < fields.length) {
+                    if (fields[j].hasAttribute("data-tender-amount")) { next = fields[j]; break; }
+                    j += dir;
+                }
+            } else {
+                // Focus elsewhere in the dialog — jump to the first (↓) / last (↑) line.
+                next = dir === 1 ? (amounts[0] ?? null) : (amounts[amounts.length - 1] ?? null);
+            }
+            if (!next) return;
+            next.focus();
+            next.select();
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [checkoutOpen]);
 
     // Post-submit reset — the identical clear-out block both screens ran after a
     // successful save.
@@ -849,7 +1041,7 @@ export function usePosBilling(opts: {
         setRoundOffStr("");
         setRoundOffManuallyEdited(false);
         setCharges([]);
-        lastTouchedProductIdRef.current = null;
+        setCartSelectedId(null);
         setTicketId(null);
         setAdjustmentsOpen(false);
         setCheckoutOpen(false);
@@ -917,7 +1109,8 @@ export function usePosBilling(opts: {
         fetchSnapshot, onPartyPicked, clearCustomer, changingParty,
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
-        filteredProducts, cart, setCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
+        filteredProducts, cart, setCart, renderCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
+        cartSelectedId, setCartSelectedId,
         saleNoteMissing,
         // POS services (added from the "+ Add service charge" button, not the search)
         allServices, addServiceToCart,

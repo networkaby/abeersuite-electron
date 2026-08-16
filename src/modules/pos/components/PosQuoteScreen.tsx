@@ -245,7 +245,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             productSearchRef={productSearchRef}
             checkoutSlot={
                 <Button 
-                    onClick={isEdit ? () => void generateInvoice(false) : (mode === "estimate" ? () => void generateInvoice(true) : b.openCheckout)} 
+                    onClick={isEdit ? () => void generateInvoice(false) : (mode === "estimate" ? () => void generateInvoice(true) : () => b.openCheckout())} 
                     disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting} 
                     className="h-12 w-full text-base" 
                     size="lg"

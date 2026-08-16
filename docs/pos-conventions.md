@@ -13,12 +13,15 @@ yet.
 
 | Key | Action | Notes |
 |-----|--------|-------|
-| `/` | Focus product search | Works from anywhere; skips when typing in a field |
+| `/` | Focus product search — **or** fill the rest of the bill in checkout | Works from anywhere; skips when typing in a field. With the checkout dialog open, `/` fills the remaining bill amount into the focused payment line (cash by default) |
 | `F2` | Focus customer / party picker | Works from **any** context, including inside inputs. If a customer is already selected, enters "change mode": search for a replacement, `Esc` to cancel and restore the original |
 | `Ctrl + Enter` | Checkout / save bill | Cart must have items + customer selected |
 | `Esc` | Clear product search query + dismiss dropdown | If search is already empty, blurs the input so `F2` / `/` become available |
 | `F6` | Open a new POS tab | Any time — recall is done by switching tabs manually |
-| `+` / `−` | Bump qty of the last item added | `+` adds one, `−` removes one (line drops at zero); wins over typing in the empty search box |
+| `↑` / `↓` | Move the cart-line selection — **or** jump between payment lines in checkout | `+` / `−` act on the selected line; skipped while the product dropdown is open. Inside checkout, `↑` / `↓` move focus to the previous / next payment line's amount box (line-to-line, replacing `Tab`) |
+| `+` / `−` | Bump qty of the selected line | `+` adds one, `−` removes one (line drops at zero); wins over typing in the empty search box |
+| `F9` | Quick cash — full bill on option-1 (Cash) | Opens checkout with cash = amount due, no change; needs cart + customer |
+| `F10` | Quick pay — full bill on option-2 (UPI) | Opens checkout with the first payment account (normally UPI) = amount due; `/` inside checkout fills the rest into any selected line; needs cart + customer |
 
 ---
 
@@ -84,27 +87,117 @@ returns to a held bill by switching tabs manually.
 
 ---
 
-### `+` / `−` — Quantity of last item added
+### Cart-line selection (`↑` / `↓`)
 
-Steps the quantity of the item the cashier most recently scanned or added:
+One cart line is always "selected" (a slightly stronger background tint — no border or ring change, since
+every line already shares the same border treatment). It decides which
+line `+` / `−` act on.
+
+- **Default:** the last item added is selected after every scan / add.
+- **`↑` / `↓`** move the selection to the previous / next line, following the
+  rendered order (products first, services after) — the same list the cashier
+  sees.
+- **Click** any line to select it directly.
+- The selected line is scrolled into view when moved by keyboard.
+- Removing the selected line (`−` to zero or the trash button) hands the
+  highlight to the line that took its place.
+
+**Bypassed when:**
+- The product dropdown is open — arrows there navigate the dropdown
+- Focus is inside an `<input>`, `<textarea>`, or content-editable element
+  (except the empty product search box)
+- A modal dialog is open
+
+---
+
+### `+` / `−` — selected line
+
+Steps the quantity of the selected line by one:
 
 - `+` → qty + 1
 - `−` → qty − 1; at zero the line is removed entirely
 
-**Which line:** the last *scanned* item, tracked by the hook — not the cart's
-last array element. Re-scanning an item increments its original slot in place,
-so array order would point at an older line.
+**Which line:** the currently **selected** line — the last item added by
+default, moved with `↑` / `↓` or by clicking a row. Selection is keyed by
+product id (not array index), so it survives the render sort (products before
+services); re-scanning an item increments its original slot in place.
 
 **Bypassed when:**
 - A modal dialog is open (checkout, create-customer, etc.)
 - Focus is inside an `<input>`, `<textarea>`, or content-editable element —
   **except** the product search box when it is **empty**: right after a scan
-  the box has focus and no text, so `+`/`−` step the last item instead of
+  the box has focus and no text, so `+`/`−` step the selected line instead of
   typing (an empty box never opens the dropdown on `+`/`−`)
 - Ctrl/Cmd/Alt is held (browser zoom / OS combos)
 
 Note: main-row `+` is `Shift+=`, so Shift is intentionally **not** a skip
 reason — the numpad `+`/`−` keys work identically.
+
+### `F10` — Quick pay (option-2 / UPI)
+
+Opens checkout with the full payable amount (`payableTotal` — the total minus any
+ gift card) already tendered on **option-2** — the first payment-account row
+(normally UPI these days) — and no change due; the cashier just confirms. One
+key for "take the money and go" on today's default payment.
+
+**Guard conditions:**
+- Cart is not empty
+- A customer / party is selected
+- All lines have a unit price
+- No create-customer dialog is already open
+
+A counter with no default-visible non-cash row falls back to option-1 (cash).
+With the checkout already open, `F10` moves the whole bill onto option-2 — the
+toggle partner of `/` below.
+
+Like `F2`, `F10` is a function key — it works from any context, including
+inside inputs, and is only blocked while a dialog is open.
+
+### `F9` — Quick cash (option-1 / Cash)
+
+Opens checkout with the full payable amount (`payableTotal` — the total minus
+any gift card) already tendered on the **Cash** row (option-1) and no change
+due; the cashier just confirms. One key for "customer pays cash".
+
+`F9` is the cash counterpart of `F10` (quick pay on option-2 / UPI) — one key
+covers each payment type. Same guard conditions as `F10` (cart not empty,
+customer selected, all lines priced, no dialog open). Inside the open checkout,
+`/` fills cash with the rest instead.
+
+### `/` inside checkout — fill the rest of the bill into the selected line
+
+While the checkout dialog is open, `/` fills the **remaining bill amount** into
+the payment line that currently has focus — one key for the mouse ✓ "fill
+remaining" helper on whichever line the cashier is on:
+
+- **Focus on a payment line's amount / ref box** → that line gets the rest
+  (`bill − cash − every other line`).
+- **Focus on the Cash row (or anywhere else)** → the Cash row gets the rest
+  (`bill − payment lines`). This is the common case right after opening
+  checkout, where focus sits on the cash input — with no other amounts entered
+  the "rest" is the full bill.
+
+Other lines are left untouched — it's a fill-the-rest action, not a
+"move everything here" one. Outside the checkout, `/` keeps its product-search
+role (focus the scan box).
+
+### `↑` / `↓` inside checkout — jump between payment lines
+
+While the checkout dialog is open, `↑` / `↓` move focus to the **previous / next
+payment line's amount box** — the keyboard replacement for `Tab` across the
+tender list (Cash → payment line 1 → payment line 2 → …):
+
+- **Focus on the Cash row**, `↓` → the first payment line's amount box; `↓`
+  again → the next line; `↑` steps back.
+- **Focus on an in-between field** (cash return, a line's ref box) → the arrow
+  steps to the nearest line amount in that direction.
+- **Focus on an account dropdown or any button** → arrows keep their native
+  behavior (the dropdown opens; its options are navigated with arrows).
+- **Focus elsewhere in the dialog** → `↓` jumps to the first line, `↑` to the
+  last.
+
+`shift` / `ctrl` / `alt` combos are left native (text selection, browser
+shortcuts). Outside the checkout, `↑` / `↓` keep their cart-line role.
 
 ---
 
@@ -116,8 +209,6 @@ reason — the numpad `+`/`−` keys work identically.
 | `F3` / `F4` | Unassigned — available for future product-category shortcuts |
 | `F5` | Refresh is in the shift menu; accidental browser reload is a risk |
 | `F7` / `F8` | Hold / recall not needed — multiple tabs replace the suspend pattern |
-| `F9` | Not needed — `Ctrl+Enter` already covers checkout |
-| `F10` | Quick-cash exact not implemented yet; parking lot |
 | `F11` / `F12` | Unassigned |
 
 ---
@@ -141,62 +232,83 @@ reason — the numpad `+`/`−` keys work identically.
 
 ## Industry norms (reference only)
 
-> Knowledge base — how other POS vendors bind their keys. **None of this is a
-> live convention here.** It exists to justify (or challenge) our choices and
-> to park ideas for future keys. Sources: official vendor docs (Lightspeed,
-> WooPOS, robotill, ACME, Shopify), Tally, and GitHub/Gmail.
+> Knowledge base — commonly seen POS keyboard conventions, grouped by purpose.
+> **None of this is a live convention here** unless a row says "implemented".
+> Sources: vendor docs (Lightspeed, WooPOS, robotill, ACME, Shopify), Tally,
+> GitHub/Gmail, and cash-register (ECR) heritage.
+>
+> Legend: ✅ implemented in our POS · 🚧 not implemented (candidate / parked) ·
+> ⛔ deliberately not bound (reason inline)
 
-### Western POS vendors
+### Product & quantity entry
 
-| Vendor | Notable bindings |
-|--------|------------------|
-| **Lightspeed X-Series** | `Alt/Option + /` shows the shortcut list · `Esc` back / exit / complete sale · `Tab` focus next item · `F5` park (hold) sale · `F6` sales history · `F7` close register · `Alt/Option + S` product search · `Alt/Option + C` customer search · `Alt/Option + 1…9` choose payment type |
-| **Lightspeed Retail (classic)** | `F2` register / POS functions · `F4` work orders · `F5` search customers · `Alt + 1` current sale · `Alt + 2` new sale · `Alt + 3` item search |
-| **WooPOS** | `F4` open till (cash drawer) · `F9` change quantity of the selected item |
-| **robotill** | `F2` customer selection · `F4` open menu · `F9` cash up · `F11` remove sale item · arrow keys move the grid selection |
-| **ACME POS** | Function keys `F2`–`F8` remappable; `F9`–`F12` reserved |
-| **Shopify POS** | Command-palette style (`Cmd+K` search), `Cmd + 1…9` jump to first nine items — no F-key culture |
+| Key | Convention | Notes | Our system |
+|-----|-----------|-------|-----------|
+| `Enter` on a cart line | Refocus the product search | Keep scanning after editing a line | ✅ |
+| `Esc` | Clear search + dismiss dropdown | Ours also blurs when already empty | ✅ |
+| Numpad `+` / `-` | Step qty of the highlighted / last line | Ours acts on the selected line (last added default) | ✅ |
+| `*` multiplier | `*3` after a barcode sets qty 3 | Universal in scanner workflows | 🚧 |
 
-### Tally (Indian de-facto standard — most relevant to this app)
+### Transaction lifecycle
 
-| Key | Action |
-|-----|--------|
-| `Ctrl + Enter` / `Ctrl + A` | Accept / save the current voucher — the same muscle memory as our `Ctrl + Enter` checkout |
-| `Esc` | Cancel / exit — matches our Esc-as-cancel philosophy |
-| `F4` | Contra voucher |
-| `F5` | Payment voucher |
-| `F6` | Receipt voucher |
-| `F7` | Journal voucher |
-| `F8` | Sales voucher |
-| `F9` | Purchase voucher |
-| `F10` | Reversing journal / other voucher |
-| `F11` / `F12` | Features / configuration |
+| Key | Convention | Notes | Our system |
+|-----|-----------|-------|-----------|
+| `F6` | Hold / suspend the current bill | Park it and start fresh | ⛔ our `F6` = new POS tab; multiple tabs replace hold |
+| `F7` | Recall a held bill | Pairs with F6; often a list | ⛔ not needed — switch tabs instead |
+| `Ctrl + H` | Hold current bill | Chord alternative when F-keys are scarce | 🚧 |
+| `Esc` twice | Cancel / clear the whole cart | Needs a confirmation dialog | 🚧 |
 
-### Web-app `?` convention
+### Payment shortcuts
 
-- GitHub and Gmail both bind `?` to "show the keyboard-shortcuts help overlay".
-- Lightspeed X-Series uses `Alt/Option + /` for the same thing.
-- `?` is `Shift + /`; it arrives as `e.key === "?"`, so binding it cannot
-  collide with our `/` search shortcut.
+| Key | Convention | Notes | Our system |
+|-----|-----------|-------|-----------|
+| `F9` | Quick cash — open checkout with cash = total | "F2 customer, F4 product, F9 pay" | ✅ our `F9` = quick cash; `F10` = quick UPI |
+| `F10` | Quick pay — tendered = total on option-2 (UPI) | One-key take-and-go on today's default payment; `/` = option-1 cash full | ✅ (Sale / Order / Estimate) |
+| `1`–`4` in checkout | Pick payment method by position | `1` Cash, `2` UPI, `3` Card, `4` Cheque | 🚧 candidate (Lightspeed uses `Alt + 1…9`) |
+| `C` in checkout | Toggle cash exact | "Customer pays exact" | 🚧 |
 
-### `+` / `-` heritage
+### Bill adjustments
 
-- Originates in ECR (electronic cash register) hardware: the `PLUS` key
-  adds/totals a line, `MINUS` voids/subtracts.
-- Modern web POS software carries this forward as numpad `+`/`-` stepping the
-  quantity of the selected / last line — which is what our `+`/`-` binding does.
-- Square / Shopify use a different, complementary pattern: type a number before
-  scanning to set the item's quantity (no key binding needed).
+| Key | Convention | Notes | Our system |
+|-----|-----------|-------|-----------|
+| `F11` | Toggle tax-in / tax-out display | For mixed-price items | ⛔ POS is tax-inclusive by design |
+| `D` on a cart line | Apply a discount to that line | Needs % or ₹ prompt | 🚧 tier / coupon only today |
+| `Ctrl + D` | Discount the whole bill | Flat % or amount | 🚧 |
+| `R` on a cart line | Return / refund qty | Negative-quantity flow | 🚧 returns are a separate dialog |
 
-### How our bindings line up
+### Shift & till
 
-- `F2` = customer lookup is the single most consistent convention across
-  vendors (robotill, ours). ✓ Aligned.
-- `Ctrl + Enter` = accept matches Tally — right muscle memory for Indian users. ✓
-- `Esc` = cancel matches Tally and Lightspeed, but ours is scoped to search /
-  change-mode rather than "exit the whole screen". Deliberate.
-- `F6` = new tab diverges from Lightspeed's `F6` = sales history. Documented
-  choice: our "recall" model is multiple tabs, so history lives in the tab bar.
-- `F5` = park / hold (Lightspeed) is intentionally skipped — multiple tabs
-  replaced the hold / recall pattern.
-- `Alt + 1…9` quick tender (Lightspeed) is a candidate for our checkout splits.
+| Key | Convention | Notes | Our system |
+|-----|-----------|-------|-----------|
+| `F5` | Refresh shift / re-sync | We expose it in the shift menu | ⛔ accidental reload risk |
+| `Ctrl + O` | Open shift (if closed) | Quick recovery | 🚧 |
+| `Ctrl + L` | Logout / handover | Safely close and pass the counter | 🚧 |
+
+### Navigation
+
+| Key | Convention | Notes | Our system |
+|-----|-----------|-------|-----------|
+| `F1` | Help / shortcuts overlay | Great for new cashiers | ⛔ reserved for browser/OS help; ours is the `?` rail |
+| `Tab` / `Shift + Tab` | Move between top bar, search, cart, checkout | Native browser | ✅ native |
+| `Ctrl + Tab` | Switch between open POS tabs | Pairs with our "New POS" | ✅ native |
+
+### Tally context (Indian de-facto standard)
+
+`Ctrl + Enter` / `Ctrl + A` accept and save a voucher — the same muscle memory
+as our `Ctrl + Enter` checkout. `Esc` cancels / exits — matches ours.
+
+### `?` web-app convention
+
+GitHub and Gmail bind `?` to "show the keyboard-shortcuts help overlay".
+`?` is `Shift + /` and arrives as `e.key === "?"`, so binding it cannot collide
+with our `/` search shortcut.
+
+### Realistic next-pass candidates for us
+
+The reference's top picks are F6/F7 hold-recall (already replaced by tabs), Esc
+(done) and F9 pay (covered by `Ctrl+Enter`). What actually remains open for us:
+
+1. `Alt + 1…9` quick tender selection in checkout
+2. `?` shortcut-help overlay
+3. `*` qty multiplier
+4. `Esc` twice to clear the cart (with confirmation)

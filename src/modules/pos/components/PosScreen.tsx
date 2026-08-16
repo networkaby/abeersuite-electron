@@ -454,7 +454,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             productSearchRef={productSearchRef}
             checkoutSlot={
                 <Button 
-                    onClick={isEdit ? () => void generateInvoice(false) : b.openCheckout} 
+                    onClick={isEdit ? () => void generateInvoice(false) : () => b.openCheckout()} 
                     disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting || b.saleNoteMissing} 
                     className="h-12 w-full text-base" 
                     size="lg"

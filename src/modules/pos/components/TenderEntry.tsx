@@ -80,6 +80,8 @@ export function TenderEntry({
                 <Input
                     ref={cashTenderedRef}
                     value={pay.cashTendered || ""}
+                    data-tender-field
+                    data-tender-amount
                     onChange={(e) => setPay((s) => ({ ...s, cashTendered: Number(e.target.value) || 0 }))}
                     onKeyDown={onEnter}
                     placeholder="₹ tendered"
@@ -89,6 +91,7 @@ export function TenderEntry({
                 <Label className="flex items-center gap-1 text-[10px] text-muted-foreground">return</Label>
                 <Input
                     value={pay.cashReturn || ""}
+                    data-tender-field
                     onChange={(e) => setPay((s) => ({ ...s, cashReturn: Number(e.target.value) || 0 }))}
                     onKeyDown={onEnter}
                     placeholder="₹ change back"
