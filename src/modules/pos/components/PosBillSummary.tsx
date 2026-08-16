@@ -18,9 +18,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
-import { type Snapshot, type CartLine, type CouponHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type CartLine, type CouponHit } from "@/modules/pos/lib/posDraftTypes";
 import { type TierResult } from "@/shared/lib/pricing";
-import { PosOffersPanel } from "@/modules/pos/components/PosOffersPanel";
 
 type GiftCardState = { id: number; code: string; balance: number };
 
@@ -68,9 +67,6 @@ export type PosBillSummaryProps = {
     setCouponCodeStr: Dispatch<SetStateAction<string>>;
     applyCoupon: () => void | Promise<void>;
     couponBusy: boolean;
-    // Offers panel (server-computed qualification; one-click apply).
-    offers: PosOffer[] | null;
-    applyOffer: (code: string) => void;
 
     // Gift card
     giftCard: GiftCardState | null;
@@ -108,7 +104,6 @@ export function PosBillSummary({
     redeemOn, setRedeemOn, redeemPointsStr, setRedeemPointsStr, effRedemptionRupees,
     appliedCoupon, setAppliedCoupon, autoCoupon, couponRupees, couponDroppedTier,
     couponBlockedLoyalty, couponCodeStr, setCouponCodeStr, applyCoupon, couponBusy,
-    offers, applyOffer,
     giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, applyGiftCard, gcBusy,
     giftCardApplied, payableTotal,
     shippingAmtStr, setShippingAmtStr,
@@ -232,16 +227,6 @@ export function PosBillSummary({
                 groups by a vertical divider (offers | adjustments). */}
             {/* <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"> */}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-condensed">
-                {/* ── Offers ─────────────────────────────────────────
-                Upsell panel — every claimable offer with live qualification
-                progress (server-computed). One-click Apply for ready codes. */}
-                <PosOffersPanel
-                    offers={offers}
-                    appliedCoupon={appliedCoupon}
-                    autoCoupon={autoCoupon}
-                    applyOffer={applyOffer}
-                />
-
                 {/* ── Coupon ────────────────────────────────────────
                 Code entry; the server validates + owns the ₹ value.
                 A non-stackable coupon replaces the tier discount and

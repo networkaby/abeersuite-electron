@@ -13,7 +13,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     User, Building2, Phone, Mail, MapPin,
-    CreditCard, Wallet, TrendingDown, AlertCircle, Sparkles,
+    CreditCard, Wallet, TrendingDown, AlertCircle, Sparkles, ChevronRight,
     TrendingUp, Award, Clock, Star, Tag, Crown, MessageSquarePlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +44,16 @@ const since = (iso: string | null) => {
  * live cart, so a CURRENT_SALE title appears as the bill grows. The snapshot's own
  * tier fields are the history-only view and would go stale here.
  */
-export function PosCustomerPanel({ snapshot, loading, tier, counterNo }: { snapshot: Snapshot | null; loading: boolean; tier: TierResult; counterNo?: string | null }) {
+export function PosCustomerPanel({ snapshot, loading, tier, counterNo, onOpenUpsell, offersReadyCount }: {
+    snapshot: Snapshot | null;
+    loading: boolean;
+    tier: TierResult;
+    counterNo?: string | null;
+    /** Open the Upsell & Cross-sell drawer (slides left over the cart). */
+    onOpenUpsell: () => void;
+    /** Live "ready" offer count — badges the drawer trigger. */
+    offersReadyCount: number;
+}) {
     return (
         <aside className="flex min-w-0 flex-col overflow-y-auto bg-muted/30 p-3">
             {!snapshot ? (
@@ -59,13 +68,19 @@ export function PosCustomerPanel({ snapshot, loading, tier, counterNo }: { snaps
                 <div className="text-sm text-muted-foreground">Loading…</div>
             ) : (
                 // Keyed by party so the quality-log local state resets on customer switch.
-                <CustomerPanel key={`${snapshot.party.kind}-${snapshot.party.id}`} snapshot={snapshot} tier={tier} counterNo={counterNo ?? null} />
+                <CustomerPanel key={`${snapshot.party.kind}-${snapshot.party.id}`} snapshot={snapshot} tier={tier} counterNo={counterNo ?? null} onOpenUpsell={onOpenUpsell} offersReadyCount={offersReadyCount} />
             )}
         </aside>
     );
 }
 
-function CustomerPanel({ snapshot, tier, counterNo }: { snapshot: Snapshot; tier: TierResult; counterNo: string | null }) {
+function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCount }: {
+    snapshot: Snapshot;
+    tier: TierResult;
+    counterNo: string | null;
+    onOpenUpsell: () => void;
+    offersReadyCount: number;
+}) {
     const c = snapshot.party;
 
     // Detect walk-in ledger by name — the seeded "Walk-in Cash Customer" ledger
@@ -152,13 +167,26 @@ function CustomerPanel({ snapshot, tier, counterNo }: { snapshot: Snapshot; tier
                 />
             </div>
 
-            {/* Offers & cross-sell — pulled up and highlighted so the cashier
-                pitches before checkout. Empty state nudges an add-on/AMC sale. */}
-            {snapshot.personalizedOffers.length > 0 ? (
-                <div className="rounded-md border border-emerald-300/50 bg-linear-to-br from-emerald-500/10 to-transparent p-2">
-                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                        <Sparkles size={11} /> Offers to pitch
-                    </div>
+            {/* Upsell & cross-sell — the whole box opens the drawer (slides left
+                over the cart). The snapshot's personalized offers stay as a teaser;
+                the live qualification list + add-ons live in the drawer. */}
+            <button
+                type="button"
+                onClick={onOpenUpsell}
+                className="w-full rounded-md border border-emerald-300/50 bg-linear-to-br from-emerald-500/10 to-transparent p-2 text-left transition-colors hover:border-emerald-400/70 hover:from-emerald-500/15"
+            >
+                <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                    <Sparkles size={11} /> Upsell &amp; cross-sell
+                    <span className="ml-auto flex items-center gap-1">
+                        {offersReadyCount > 0 && (
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                                {offersReadyCount} ready
+                            </span>
+                        )}
+                        <ChevronRight size={12} />
+                    </span>
+                </div>
+                {snapshot.personalizedOffers.length > 0 ? (
                     <ul className="space-y-1">
                         {snapshot.personalizedOffers.map((o) => (
                             <li key={o.id} className="flex items-center justify-between gap-2 rounded border border-emerald-300/40 bg-card px-2 py-1 text-xs">
@@ -167,19 +195,14 @@ function CustomerPanel({ snapshot, tier, counterNo }: { snapshot: Snapshot; tier
                             </li>
                         ))}
                     </ul>
-                </div>
-            ) : (
-                <div className="rounded-md border border-dashed border-emerald-300/40 bg-emerald-500/5 p-2 text-[10px]">
-                    <div className="mb-0.5 flex items-center gap-1 font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                        <Sparkles size={10} /> Upsell &amp; cross-sell
-                    </div>
-                    <p className="text-muted-foreground">
+                ) : (
+                    <p className="text-[10px] text-muted-foreground">
                         {snapshot.favouriteCategory
-                            ? <>No coupon yet — they favour <span className="font-medium text-foreground">{snapshot.favouriteCategory}</span>.</>
-                            : "No targeted offer yet — pitch an accessory, extended warranty, or AMC."}
+                            ? <>No offer yet — they favour <span className="font-medium text-foreground">{snapshot.favouriteCategory}</span>.</>
+                            : "Pitch an accessory, warranty, or AMC — open for live offers."}
                     </p>
-                </div>
-            )}
+                )}
+            </button>
 
             {/* Titles held — one per period whose bracket of spend cleared a level. */}
             {tier.titles.length > 0 && (

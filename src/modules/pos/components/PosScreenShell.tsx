@@ -25,6 +25,7 @@ import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
 import { PosTopBar } from "@/modules/pos/components/PosTopBar";
 import { PosActionRail } from "@/modules/pos/components/PosActionRail";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
+import { PosUpsellDrawer } from "@/modules/pos/components/PosUpsellDrawer";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import HelpQuickForm from "@/modules/help/components/HelpQuickForm";
 import { TaskFormDialog } from "@/modules/administration/components";
@@ -60,6 +61,9 @@ export function PosScreenShell({
 }) {
     // "+ Add service charge" dropdown (Sale mode) — pick a catalogue service.
     const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
+    // Upsell & Cross-sell drawer — opened from the customer panel's offer box;
+    // slides left over the cart with live offers + add-on suggestions.
+    const [upsellOpen, setUpsellOpen] = useState(false);
     // Counter "Enquiry" — log a front-desk help ticket (reuses the office form).
     const [enquiryOpen, setEnquiryOpen] = useState(false);
     // Counter "Task" — add an internal work item (reuses the office form).
@@ -432,8 +436,6 @@ export function PosScreenShell({
                                 setCouponCodeStr={b.setCouponCodeStr}
                                 applyCoupon={b.applyCoupon}
                                 couponBusy={b.couponBusy}
-                                offers={b.offers}
-                                applyOffer={b.applyOffer}
                                 giftCard={b.giftCard}
                                 setGiftCard={b.setGiftCard}
                                 giftCardCodeStr={b.giftCardCodeStr}
@@ -457,7 +459,14 @@ export function PosScreenShell({
                     </main>
 
                     {/* Right column — customer "we know you" panel (shared) */}
-                    <PosCustomerPanel snapshot={b.snapshot} loading={b.loadingSnapshot} tier={b.tier} counterNo={b.activeShift?.counter.name ?? null} />
+                    <PosCustomerPanel
+                        snapshot={b.snapshot}
+                        loading={b.loadingSnapshot}
+                        tier={b.tier}
+                        counterNo={b.activeShift?.counter.name ?? null}
+                        onOpenUpsell={() => setUpsellOpen(true)}
+                        offersReadyCount={b.offers?.filter((o) => o.status === "ready").length ?? 0}
+                    />
                 </div>
 
                 {/* Mode-specific dialogs (checkout / payment link) */}
@@ -486,6 +495,19 @@ export function PosScreenShell({
 
             {/* Task dialog (opened from the rail's Task button). */}
             <TaskFormDialog open={taskOpen} onOpenChange={setTaskOpen} positions={taskPositions} task={null} onSaved={() => { /* counter has no list to refresh */ }} />
+
+            {/* Upsell & Cross-sell drawer — opens left over the cart from the
+            customer panel trigger. Live qualification offers + one-tap add-ons. */}
+            <PosUpsellDrawer
+                open={upsellOpen}
+                onClose={() => setUpsellOpen(false)}
+                offers={b.offers}
+                appliedCoupon={b.appliedCoupon}
+                autoCoupon={b.autoCoupon}
+                applyOffer={b.applyOffer}
+                crossSell={b.crossSell}
+                addToCart={b.addToCart}
+            />
         </div>
     );
 }

@@ -83,6 +83,16 @@ export type ProductOption = {
     /// When true, the cashier must fill the line note before checkout. Snapshotted
     /// onto the cart line at add-to-cart (mirrors warrantyLabel).
     requireSaleNote?: boolean;
+    /// Cross-sell provenance from /api/pos/coupon-offers — the drawer renders the
+    /// three sources differently:
+    ///   "history" — the customer bought it before (carries the last-purchase
+    ///               snapshot below), "hot" — store best-seller fill,
+    ///   "shelf"   — same-category fallback.
+    crossSellSource?: "history" | "hot" | "shelf";
+    /// ISO date of the customer's last purchase of this product (history rows only).
+    lastBoughtAt?: string | null;
+    /// Unit price (paise) paid at that last purchase (history rows only).
+    lastUnitPricePaise?: number | null;
 };
 
 /// One row of /api/pos/services — the active POS service catalogue. Services are

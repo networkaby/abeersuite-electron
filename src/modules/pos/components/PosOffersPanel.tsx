@@ -1,22 +1,17 @@
 "use client";
 
-// ── PosOffersPanel ────────────────────────────────────────────────────────────
-// The POS "Offers" upsell panel: every claimable offer (server-computed by
-// /api/pos/coupon-offers) with its live qualification progress, so the cashier
-// can push the customer toward the next unlock ("add ₹200 more to unlock").
-//
-// Collapsed by default to keep the bill clean — the strip badge shows how many
-// offers are ready vs close, and flashes when a new one becomes ready. Ready
-// CODE offers get a one-click Apply (same path as typing the code).
+// ── PosOfferCard ──────────────────────────────────────────────────────────────
+// One offer row for the POS "Upsell & Cross-sell" drawer. The qualification
+// status + progress come from /api/pos/coupon-offers (server-owned gates);
+// this card only renders + offers one-click Apply for ready CODE offers.
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Gift, CheckCircle2, Flame, Ban, Sparkles } from "lucide-react";
+import { CheckCircle2, Flame, Ban, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatInr } from "@/shared/lib/format";
 import type { CouponHit, PosOffer } from "@/modules/pos/lib/posDraftTypes";
 
-function OfferCard({
+export function PosOfferCard({
     o,
     applied,
     auto,
@@ -28,7 +23,11 @@ function OfferCard({
     onApply: (code: string) => void;
 }) {
     const isApplied = applied?.couponId === o.couponId;
-    const isAutoApplied = !isApplied && auto?.couponId === o.couponId;
+    // An AUTO offer the engine will apply at checkout reads as applied too.
+    const isActiveAuto = !isApplied && auto?.couponId === o.couponId;
+    // One-click apply code (ready CODE offers only) — captured so the click
+    // closure keeps the string narrowing.
+    const readyCode = o.status === "ready" && o.applyMode === "CODE" ? o.code : null;
 
     const frame =
         o.status === "ready"
@@ -46,12 +45,12 @@ function OfferCard({
                         ? <Flame size={13} className="shrink-0 text-amber-600 dark:text-amber-400" />
                         : <Ban size={13} className="shrink-0 text-muted-foreground" />}
                 <span className="min-w-0 flex-1 truncate font-medium">{o.benefit}</span>
-                {isApplied ? (
+                {isApplied || isActiveAuto ? (
                     <Badge className="border-transparent bg-emerald-100 text-[10px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Applied</Badge>
                 ) : o.applyMode === "AUTO" ? (
                     <Badge variant="secondary" className="text-[10px]"><Sparkles size={9} className="mr-0.5" />Auto</Badge>
-                ) : o.status === "ready" && o.code ? (
-                    <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => onApply(o.code!)}>Apply</Button>
+                ) : readyCode ? (
+                    <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => onApply(readyCode)}>Apply</Button>
                 ) : null}
             </div>
             {o.requirement && (
@@ -97,73 +96,6 @@ function OfferCard({
                 {o.code && !isApplied && o.applyMode === "CODE" && <span className="font-mono">{o.code}</span>}
                 {o.expiresAt && <span>ends {new Date(o.expiresAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span>}
             </div>
-        </div>
-    );
-}
-
-export function PosOffersPanel({
-    offers,
-    appliedCoupon,
-    autoCoupon,
-    applyOffer,
-}: {
-    offers: PosOffer[] | null;
-    appliedCoupon: CouponHit | null;
-    autoCoupon: CouponHit | null;
-    applyOffer: (code: string) => void;
-}) {
-    const [open, setOpen] = useState(false);
-    // One-shot ring flash when a new offer flips to ready (the nudge).
-    const [flash, setFlash] = useState(false);
-    const prevReady = useRef<number>(-1);
-
-    const total = offers?.length ?? 0;
-    const readyCount = offers?.filter((o) => o.status === "ready").length ?? 0;
-    const progressCount = offers?.filter((o) => o.status === "progress").length ?? 0;
-
-    useEffect(() => {
-        if (prevReady.current >= 0 && readyCount > prevReady.current) {
-            setFlash(true);
-            const t = setTimeout(() => setFlash(false), 1500);
-            return () => clearTimeout(t);
-        }
-        prevReady.current = readyCount;
-    }, [readyCount]);
-
-    if (!offers || total === 0) return null;
-
-    return (
-        <div className="rounded-md border border-border/70 bg-card/60">
-            <button
-                type="button"
-                onClick={() => setOpen((o) => !o)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs"
-            >
-                <Gift size={13} className="shrink-0 text-primary" />
-                <span className="font-semibold">Offers ({total})</span>
-                <div className="ml-auto flex items-center gap-1.5">
-                    {readyCount > 0 && (
-                        <span
-                            className={`inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 transition-all dark:bg-emerald-500/15 dark:text-emerald-300 ${flash ? "ring-2 ring-emerald-400" : ""}`}
-                        >
-                            <CheckCircle2 size={10} /> {readyCount} ready
-                        </span>
-                    )}
-                    {progressCount > 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                            <Flame size={10} /> {progressCount} close
-                        </span>
-                    )}
-                    <ChevronDown size={13} className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-                </div>
-            </button>
-            {open && (
-                <div className="max-h-72 space-y-1.5 overflow-y-auto px-2.5 pb-2.5">
-                    {offers.map((o) => (
-                        <OfferCard key={o.couponId} o={o} applied={appliedCoupon} auto={autoCoupon} onApply={applyOffer} />
-                    ))}
-                </div>
-            )}
         </div>
     );
 }

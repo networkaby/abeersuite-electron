@@ -90,9 +90,10 @@ export function usePosBilling(opts: {
     const [autoCoupon, setAutoCoupon] = useState<CouponHit | null>(null);
     const [couponBusy, setCouponBusy] = useState(false);
     // Live offers panel — every claimable POS offer with qualification progress
-    // (server-computed; see /api/pos/coupon-offers). Collapse state is local to
-    // the panel component; this hook owns only the data + one-click apply.
+    // + cross-sell suggestions (server-computed; see /api/pos/coupon-offers).
+    // The upsell drawer renders these; this hook owns only data + one-click apply.
     const [offers, setOffers] = useState<PosOffer[] | null>(null);
+    const [crossSell, setCrossSell] = useState<ProductOption[]>([]);
     // Gift card redeemed as a payment tender (reduces cash/UPI due, not a discount).
     const [giftCardCodeStr, setGiftCardCodeStr] = useState("");
     const [giftCard, setGiftCard] = useState<{ id: number; code: string; balance: number } | null>(null);
@@ -543,14 +544,14 @@ export function usePosBilling(opts: {
         const isNewCustomer = snapshot.turnover.invoiceCount === 0;
         let cancelled = false;
         const t = setTimeout(() => {
-            axios.post<{ offers: PosOffer[] }>("/api/pos/coupon-offers", {
+            axios.post<{ offers: PosOffer[]; crossSell: ProductOption[] }>("/api/pos/coupon-offers", {
                 accountId,
                 isNewCustomer,
                 // Coupons evaluate the goods cart only (mirrors coupon-validate).
                 lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
             })
-                .then((r) => { if (!cancelled) setOffers(r.data.offers); })
-                .catch(() => { if (!cancelled) setOffers(null); });
+                .then((r) => { if (!cancelled) { setOffers(r.data.offers); setCrossSell(r.data.crossSell); } })
+                .catch(() => { if (!cancelled) { setOffers(null); setCrossSell([]); } });
         }, 350);
         return () => { cancelled = true; clearTimeout(t); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -867,7 +868,7 @@ export function usePosBilling(opts: {
         adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,
         redeemPointsStr, setRedeemPointsStr, redeemOn, setRedeemOn,
         couponCodeStr, setCouponCodeStr, appliedCoupon, setAppliedCoupon, autoCoupon,
-        couponBusy, applyCoupon, applyOffer, offers,
+        couponBusy, applyCoupon, applyOffer, offers, crossSell,
         giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, gcBusy, applyGiftCard,
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
         charges, setCharges, resetDraft, resetAfterSubmit, ticketId,

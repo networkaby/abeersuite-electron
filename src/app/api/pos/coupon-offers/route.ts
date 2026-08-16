@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -13,6 +14,7 @@ import {
 } from "@/modules/coupons/lib";
 import { round2, formatInr } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
+import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 
 // POST /api/pos/coupon-offers — list every offer currently claimable on the POS
@@ -41,6 +43,17 @@ const bodySchema = z.object({
 
 const inr = (n: number): string => formatInr(round2(n));
 const pctLabel = (p: number | null): boolean => (p ?? 100) >= 99.5;
+
+/// Select shape shared by the cross-sell product queries (history/hot + fallback).
+const crossSellSelect = {
+    id: true, sku: true, name: true, stock: true,
+    effectiveSalePricePaise: true, mrpPaise: true, requireSaleNote: true,
+    groupId: true, categoryId: true,
+    unit: { select: { code: true } },
+    warrantyTerm: { select: { name: true, durationDays: true } },
+} as const;
+
+type CrossSellProduct = Prisma.InvProductGetPayload<{ select: typeof crossSellSelect }>;
 
 /// Human-readable "what the customer gets" line for the card.
 function benefitText(c: CouponContext, name: (id: number) => string | null): string {
@@ -92,16 +105,16 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
-        // Customer Quality: no-discount flag — flagged customer gets no offers.
-        // Same deliberate silence as coupon-validate (the POS never learns why).
+        // Customer Quality: no-discount flag — flagged customer gets no OFFERS
+        // (same deliberate silence as coupon-validate; the POS never learns why),
+        // but cross-sell suggestions still apply (add-ons are full-price sales).
+        let noDiscountFlag = false;
         if (data.accountId != null) {
             const acct = await prisma.account.findUnique({
                 where:  { id: data.accountId },
                 select: { person: { select: { noDiscount: true } }, company: { select: { noDiscount: true } } },
             });
-            if ((acct?.person?.noDiscount ?? acct?.company?.noDiscount) === true) {
-                return NextResponse.json({ offers: [] });
-            }
+            noDiscountFlag = (acct?.person?.noDiscount ?? acct?.company?.noDiscount) === true;
         }
 
         const now = new Date();
@@ -166,7 +179,7 @@ export async function POST(req: Request) {
         const name = (id: number): string | null => offerNames.get(id) ?? null;
 
         const orderRank: Record<string, number> = { ready: 0, progress: 1, unavailable: 2 };
-        const offers = coupons.map((c) => {
+        const offers = noDiscountFlag ? [] : coupons.map((c) => {
             const used = usedTotal.get(c.id) ?? 0;
             const usedCust = usedByCust.get(c.id) ?? 0;
             const usageLeft = c.totalUsageLimit != null ? Math.max(0, c.totalUsageLimit - used) : null;
@@ -257,7 +270,155 @@ export async function POST(req: Request) {
             return (b.saveEstimate ?? 0) - (a.saveEstimate ?? 0);
         });
 
-        return NextResponse.json({ offers });
+        // ── Cross-sell: last-bought history, topped up with hot sellers ───
+        // Until full recommendation intelligence exists: show the customer's
+        // most recently bought products first, then fill the remainder with the
+        // store's best sellers (last 90 days). Walk-in customers (no account),
+        // or an empty history/hot pool, fall back to same-shelf products (the
+        // cart's own groups/categories). Products already in the cart are always
+        // skipped. taxRate/costPaise are enriched so the added line prices +
+        // tier-preview exactly like a scanned product; redeemCapPct is
+        // intentionally omitted (client falls back to the global cap — the sale
+        // route re-resolves the authoritative override anyway).
+        const cartIdSet = new Set(data.lines.map((l) => l.productId));
+        const picks: Array<{ id: number; source: "history" | "hot" | "shelf"; lastBoughtAt?: string; lastUnitPricePaise?: number | null }> = [];
+        const pickIdSet = new Set<number>();
+
+        // 1) Last-bought history — recency-ordered, deduped by product, carrying
+        //    the date + unit rate of the customer's most recent purchase.
+        if (accountId != null) {
+            const recentVouchers = await prisma.universalVoucher.findMany({
+                where:  { type: { in: ["POS", "SALE"] }, status: "POSTED", deletedAt: null, partyAccountId: accountId },
+                orderBy: { date: "desc" },
+                take:   12,
+                select: { id: true },
+            });
+            if (recentVouchers.length > 0) {
+                const historyLines = await prisma.voucherInventoryLine.findMany({
+                    where:  { universalVoucherId: { in: recentVouchers.map((v) => v.id) } },
+                    orderBy: { universalVoucher: { date: "desc" } },
+                    select: { productId: true, rate: true, universalVoucher: { select: { date: true } } },
+                });
+                // productId → most recent purchase (ts + unit rate of that line).
+                const lastBought = new Map<number, { ts: number; rate: number | null }>();
+                for (const l of historyLines) {
+                    const t = l.universalVoucher.date.getTime();
+                    const prev = lastBought.get(l.productId);
+                    if (prev == null || t > prev.ts) {
+                        lastBought.set(l.productId, { ts: t, rate: l.rate == null ? null : Number(l.rate) });
+                    }
+                }
+                for (const [id, m] of [...lastBought.entries()].sort((a, b) => b[1].ts - a[1].ts)) {
+                    if (pickIdSet.has(id) || cartIdSet.has(id)) continue;
+                    pickIdSet.add(id);
+                    picks.push({
+                        id,
+                        source: "history",
+                        lastBoughtAt: new Date(m.ts).toISOString(),
+                        lastUnitPricePaise: m.rate == null ? null : Math.round(m.rate * 100),
+                    });
+                    if (picks.length >= 10) break;
+                }
+            }
+        }
+
+        // 2) Hot sellers (most units sold, last 90 days) top up the list.
+        if (picks.length < 10) {
+            const hotAgg = await prisma.voucherInventoryLine.groupBy({
+                by: ["productId"],
+                where: {
+                    universalVoucher: {
+                        type:  { in: ["POS", "SALE"] },
+                        status: "POSTED",
+                        deletedAt: null,
+                        date:  { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+                    },
+                },
+                _sum:   { quantity: true },
+                orderBy: { _sum: { quantity: "desc" } },
+                take:   30,
+            });
+            for (const r of hotAgg) {
+                if (pickIdSet.has(r.productId) || cartIdSet.has(r.productId)) continue;
+                pickIdSet.add(r.productId);
+                picks.push({ id: r.productId, source: "hot" });
+                if (picks.length >= 10) break;
+            }
+        }
+
+        const crossSell: unknown[] = [];
+        let ranked: CrossSellProduct[] = [];
+        if (picks.length > 0) {
+            // 3a) Materialize the picked products (inactive ones drop out).
+            const pickedById = new Map(
+                (await prisma.invProduct.findMany({
+                    where:  { id: { in: picks.map((p) => p.id) }, isActive: true },
+                    select: crossSellSelect,
+                })).map((p) => [p.id, p]),
+            );
+            ranked = picks.map((p) => pickedById.get(p.id)).filter((p): p is CrossSellProduct => p != null);
+        } else {
+            // 3b) Fallback — same-shelf products from the cart's groups/categories.
+            const cartGroups = new Set([...taxById.values()].map((t) => t.groupId).filter((g): g is number => g != null));
+            const cartCats = new Set([...taxById.values()].map((t) => t.categoryId).filter((c): c is number => c != null));
+            if (cartGroups.size > 0 || cartCats.size > 0) {
+                const candidates = await prisma.invProduct.findMany({
+                    where: {
+                        isActive: true,
+                        id: { notIn: data.lines.map((l) => l.productId) },
+                        OR: [
+                            ...(cartGroups.size > 0 ? [{ groupId: { in: [...cartGroups] } }] : []),
+                            ...(cartCats.size > 0 ? [{ categoryId: { in: [...cartCats] } }] : []),
+                        ],
+                    },
+                    take:   30,
+                    select: crossSellSelect,
+                });
+                ranked = candidates
+                    .map((p) => ({
+                        p,
+                        rank: (cartGroups.has(p.groupId ?? -1) && cartCats.has(p.categoryId ?? -1)) ? 0 : 1,
+                        // Untracked stock (null) sinks below any real on-hand number.
+                        stock: p.stock ?? -1,
+                    }))
+                    .sort((a, b) => a.rank - b.rank || b.stock - a.stock || a.p.name.localeCompare(b.p.name))
+                    .slice(0, 10)
+                    .map(({ p }) => p);
+            }
+        }
+
+        if (ranked.length > 0) {
+            const ids = ranked.map((p) => p.id);
+            const [taxByProduct, costMap] = await Promise.all([
+                resolveProductTaxBatch({ productIds: ids }),
+                resolveEffectiveCostMap(ids),
+            ]);
+            const metaById = new Map(picks.map((p) => [p.id, p]));
+            crossSell.push(...ranked.map((p) => {
+                const m = metaById.get(p.id);
+                return {
+                    id: p.id,
+                    sku: p.sku,
+                    name: p.name,
+                    effectiveSalePricePaise: p.effectiveSalePricePaise,
+                    mrpPaise: p.mrpPaise,
+                    requireSaleNote: p.requireSaleNote,
+                    unit: p.unit,
+                    warrantyTerm: p.warrantyTerm,
+                    protected: protectedProductIds.has(p.id),
+                    taxRate: taxByProduct.products.get(p.id)?.gstRate ?? null,
+                    costPaise: costMap.get(p.id) ?? null,
+                    barcodePricePaise: null,
+                    /// Provenance + last-purchase snapshot — the drawer renders
+                    /// "history" rows (date + last price) distinctly from "hot".
+                    crossSellSource: m?.source ?? "shelf",
+                    lastBoughtAt: m?.lastBoughtAt ?? null,
+                    lastUnitPricePaise: m?.lastUnitPricePaise ?? null,
+                };
+            }));
+        }
+
+        return NextResponse.json({ offers, crossSell });
     } catch (e) {
         return handleApiError(e, "Could not load offers");
     }
