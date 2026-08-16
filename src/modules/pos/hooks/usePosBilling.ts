@@ -746,8 +746,8 @@ export function usePosBilling(opts: {
             if (data?.ok) {
                 if (data.freeLines?.length) {
                     // An independent free-grant code (FREE_ITEM / BOGO) — it isn't
-                    // a ₹ discount; apply it as free items on top of everything.
-                    setAppliedCoupon(null);
+                    // a ₹ discount; apply it as free items ON TOP of the money
+                    // coupon (independent by design — never clear the ₹ coupon).
                     applyFreeGrant(data);
                 } else {
                     setAppliedCoupon(hit(data));
@@ -780,8 +780,8 @@ export function usePosBilling(opts: {
         try {
             const data = await runValidate({ couponId });
             if (data?.ok && data.freeLines?.length) {
-                // Independent free-grant offer — rides on top as free items.
-                setAppliedCoupon(null);
+                // Independent free-grant offer — rides on top of the money
+                // coupon (never replaces it).
                 applyFreeGrant(data);
             } else if (data?.ok) {
                 setAppliedCoupon(hit(data));
