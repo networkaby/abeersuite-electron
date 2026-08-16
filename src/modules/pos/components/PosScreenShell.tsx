@@ -591,6 +591,7 @@ export function PosScreenShell({
                 appliedFree={b.appliedFree}
                 autoFree={b.autoFree}
                 applyOffer={b.applyOffer}
+                applyOfferById={b.applyOfferById}
                 crossSell={b.crossSell}
                 addToCart={b.addToCart}
             />

@@ -579,14 +579,19 @@ export function usePosBilling(opts: {
         () => `${cart.map((l) => `${l.productId}:${l.qty}:${l.unitPrice}`).join("|")}#${discountAmount}#${redemptionRupees}`,
         [cart, discountAmount, redemptionRupees],
     );
-    const appliedCode = appliedCoupon?.code ?? null;
+    // Coupon identity for re-validation: AUTO offers carry no code, so the key
+    // is the coupon id — a typed code keeps its code (and shows on the bill).
+    const appliedCouponKey = appliedCoupon ? `${appliedCoupon.couponId}:${appliedCoupon.code ?? ""}` : null;
+    const appliedFreeKey = appliedFree ? `${appliedFree.couponId}:${appliedFree.code ?? ""}` : null;
     type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean; freeLines?: { productId: number; freeQty: number; productName: string }[] };
-    async function runValidate(validateOpts: { code?: string; freeCode?: string; autoApply?: boolean; freeAutoApply?: boolean }): Promise<ValidateResp | null> {
+    async function runValidate(validateOpts: { code?: string; freeCode?: string; couponId?: number; freeCouponId?: number; autoApply?: boolean; freeAutoApply?: boolean }): Promise<ValidateResp | null> {
         if (!snapshot?.account) return null;
         const { data } = await axios.post<ValidateResp>("/api/pos/coupon-validate", {
             accountId: snapshot.account.id,
             code: validateOpts.code,
             freeCode: validateOpts.freeCode,
+            couponId: validateOpts.couponId,
+            freeCouponId: validateOpts.freeCouponId,
             autoApply: validateOpts.autoApply,
             freeAutoApply: validateOpts.freeAutoApply,
             isNewCustomer: snapshot.turnover.invoiceCount === 0,
@@ -603,11 +608,12 @@ export function usePosBilling(opts: {
     }
     const hit = (d: ValidateResp): CouponHit => ({ couponId: d.couponId, code: d.code, name: d.name, rupees: d.discountRupees, droppedTier: d.droppedTier, blockedLoyalty: d.blockedLoyalty });
 
-    // Re-validate the applied manual coupon when the cart / tier / loyalty change.
+    // Re-validate the applied coupon when the cart / tier / loyalty change — by
+    // code when it has one, by id for a force-applied AUTO offer.
     useEffect(() => {
-        if (!appliedCode || !snapshot?.account) return;
+        if (!appliedCoupon || !snapshot?.account) return;
         let cancelled = false;
-        runValidate({ code: appliedCode })
+        runValidate(appliedCoupon.code ? { code: appliedCoupon.code } : { couponId: appliedCoupon.couponId })
             .then((data) => {
                 if (cancelled || !data) return;
                 if (data.ok) setAppliedCoupon((prev) => (prev ? { ...prev, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty } : prev));
@@ -616,28 +622,27 @@ export function usePosBilling(opts: {
             .catch(() => { /* keep prior value; checkout re-validates */ });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [couponSig, appliedCode, snapshot?.account?.id]);
+    }, [couponSig, appliedCouponKey, snapshot?.account?.id]);
 
     // Auto-apply: when there's no manual coupon, surface the best eligible AUTO
     // offer. The server re-applies it at checkout via the autoApply flag.
     useEffect(() => {
-        if (appliedCode || !snapshot?.account || cart.length === 0) { setAutoCoupon(null); return; }
+        if (appliedCoupon != null || !snapshot?.account || cart.length === 0) { setAutoCoupon(null); return; }
         let cancelled = false;
         runValidate({ autoApply: true })
             .then((data) => { if (!cancelled) setAutoCoupon(data?.ok ? hit(data) : null); })
             .catch(() => { if (!cancelled) setAutoCoupon(null); });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [couponSig, appliedCode, snapshot?.account?.id, cart.length]);
+    }, [couponSig, appliedCouponKey, snapshot?.account?.id, cart.length]);
 
     // Re-validate the applied FREE-GRANT coupon when the cart changes — its
     // BOGO buy side can drop out of range (then the free items are no longer
     // due). The server owns the grant; this only refreshes the badge lines.
-    const appliedFreeCode = appliedFree?.code ?? null;
     useEffect(() => {
-        if (!appliedFreeCode || !snapshot?.account) return;
+        if (!appliedFree || !snapshot?.account) return;
         let cancelled = false;
-        runValidate({ freeCode: appliedFreeCode })
+        runValidate(appliedFree.code ? { freeCode: appliedFree.code } : { couponId: appliedFree.couponId })
             .then((data) => {
                 if (cancelled || !data) return;
                 const fl = data.freeLines;
@@ -651,14 +656,14 @@ export function usePosBilling(opts: {
             .catch(() => { /* keep prior value; checkout re-validates */ });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [couponSig, appliedFreeCode, snapshot?.account?.id]);
+    }, [couponSig, appliedFreeKey, snapshot?.account?.id]);
 
     // Auto free-grant: surface the best eligible independent AUTO FREE_ITEM /
     // BOGO offer as FREE rows in the item list (the free-grant analogue of the
-    // autoCoupon effect above). A manually applied free code wins over the
+    // autoCoupon effect above). A manually applied free offer wins over the
     // automatic pick; the server re-selects the grant at checkout anyway.
     useEffect(() => {
-        if (appliedFreeCode || !snapshot?.account || cart.length === 0) { setAutoFree(null); return; }
+        if (appliedFree != null || !snapshot?.account || cart.length === 0) { setAutoFree(null); return; }
         let cancelled = false;
         runValidate({ freeAutoApply: true })
             .then((data) => {
@@ -670,7 +675,7 @@ export function usePosBilling(opts: {
             .catch(() => { if (!cancelled) setAutoFree(null); });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [couponSig, appliedFreeCode, snapshot?.account?.id, cart.length]);
+    }, [couponSig, appliedFreeKey, snapshot?.account?.id, cart.length]);
 
     // Offers panel — refresh on the same beat as coupon re-validation, debounced
     // so fast scanning doesn't hammer the route. The server owns every gate;
@@ -766,6 +771,31 @@ export function usePosBilling(opts: {
         setCouponCodeStr(code);
         void applyCoupon(code);
     };
+
+    // Force-apply a SPECIFIC AUTO offer by id (AUTO coupons have no code to
+    // type) — the offers card's Apply button. The server resolves the coupon: a
+    // free-grant offer lands in the free slot, a money offer in the ₹ slot.
+    async function applyOfferById(couponId: number) {
+        if (!snapshot?.account) return;
+        try {
+            const data = await runValidate({ couponId });
+            if (data?.ok && data.freeLines?.length) {
+                // Independent free-grant offer — rides on top as free items.
+                setAppliedCoupon(null);
+                applyFreeGrant(data);
+            } else if (data?.ok) {
+                setAppliedCoupon(hit(data));
+                setCouponCodeStr("");
+                toast.success(`Offer ${data.name} applied · − ${formatInr(data.discountRupees)}`);
+                setTimeout(() => productSearchRef.current?.focus(), 0);
+            } else {
+                setAppliedCoupon(null);
+                toast.error(data?.reason ?? "Offer not applicable");
+            }
+        } catch {
+            toast.error("Offer check failed");
+        }
+    }
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -1317,7 +1347,7 @@ export function usePosBilling(opts: {
         adjustmentsOpen, setAdjustmentsOpen, shippingAmt, shippingAmtStr, setShippingAmtStr,
         redeemPointsStr, setRedeemPointsStr, redeemOn, setRedeemOn,
         couponCodeStr, setCouponCodeStr, appliedCoupon, setAppliedCoupon, autoCoupon,
-        couponBusy, applyCoupon, applyOffer, offers, crossSell,
+        couponBusy, applyCoupon, applyOffer, applyOfferById, offers, crossSell,
         // Independent free-grant coupon (FREE_ITEM / BOGO) — applies on top.
         appliedFree, setAppliedFree, applyFreeCoupon, clearFreeCoupon, freeBusy,
         autoFree, setAutoFree,

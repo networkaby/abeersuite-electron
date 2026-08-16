@@ -31,6 +31,7 @@ export function PosUpsellDrawer({
     appliedFree,
     autoFree,
     applyOffer,
+    applyOfferById,
     crossSell,
     addToCart,
 }: {
@@ -46,6 +47,8 @@ export function PosUpsellDrawer({
     /// (the free rows are in the item list).
     autoFree: FreeGrantHit | null;
     applyOffer: (code: string) => void;
+    /// Force-apply a specific AUTO offer by id (AUTO coupons have no code).
+    applyOfferById: (couponId: number) => void;
     crossSell: ProductOption[];
     addToCart: (p: ProductOption) => void;
 }) {
@@ -103,7 +106,7 @@ export function PosUpsellDrawer({
                         ) : (
                             <div className="space-y-1.5">
                                 {offers.map((o) => (
-                                    <PosOfferCard key={o.couponId} o={o} applied={appliedCoupon} auto={autoCoupon} appliedFree={appliedFree} autoFree={autoFree} onApply={applyOffer} />
+                                    <PosOfferCard key={o.couponId} o={o} applied={appliedCoupon} auto={autoCoupon} appliedFree={appliedFree} autoFree={autoFree} onApply={applyOffer} onApplyId={applyOfferById} />
                                 ))}
                             </div>
                         )}

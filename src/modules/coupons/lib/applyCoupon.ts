@@ -177,6 +177,28 @@ export async function selectFreeGrantCoupon(
     return selectFreeGrant(tx, { c, input: args.input, protectedProductIds: args.protectedProductIds });
 }
 
+/// Force-apply a SPECIFIC coupon by id — AUTO coupons carry no code, so the
+/// POS "Apply" button on an AUTO offer card resolves them this way. Runs the
+/// same pipeline as a typed code: channel, eligibility, usage limits, and the
+/// free-grant route when the coupon is an independent FREE_ITEM / BOGO.
+export async function selectCouponForCartById(
+    tx: Tx,
+    args: { couponId: number; channel: CouponChannel; input: EvalInput; protectedProductIds?: Set<number> },
+): Promise<CouponSelection> {
+    const row = await tx.coupon.findUnique({ where: { id: args.couponId }, include: { rules: true } });
+    if (!row || !row.isActive) return { kind: "error", reason: "Coupon not found or inactive" };
+    const c = toContext(row);
+    if (![args.channel, "BOTH"].includes(c.channels)) return { kind: "error", reason: "Coupon is not usable here" };
+    if (isFreeGrantCoupon(c)) {
+        return selectFreeGrant(tx, { c, input: args.input, protectedProductIds: args.protectedProductIds });
+    }
+    const usage = await checkCouponUsage(tx, c, args.input.accountId);
+    if (!usage.ok) return { kind: "error", reason: usage.reason };
+    const res = computeCouponDiscount(c, args.input);
+    if (!res.ok) return { kind: "error", reason: res.reason };
+    return { kind: "ok", coupon: c, discountRupees: res.discountRupees };
+}
+
 /// Pick the best eligible AUTO free-grant coupon (independent FREE_ITEM / BOGO)
 /// for the cart — the free-grant analogue of the money auto-apply path. Free
 /// grants have no ₹ to compare, so "best" is simply the first eligible in

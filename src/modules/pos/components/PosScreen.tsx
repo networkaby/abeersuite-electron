@@ -299,10 +299,14 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 discountPct: b.discountAmount > 0 ? b.discountPct : 0,  // tier % → stored so the receipt can name "Level Discount (Gold)"
                 redeemPoints: b.effRedeemPts,     // 0 when a non-stackable coupon blocks loyalty
                 couponCode: b.appliedCoupon?.code ?? undefined, // server re-resolves + owns the ₹ value
+                // A force-applied AUTO offer has no code — carry its id instead.
+                couponId: b.appliedCoupon && !b.appliedCoupon.code ? b.appliedCoupon.couponId : undefined,
                 autoApply: !b.appliedCoupon && !!b.autoCoupon,     // let the server pick the best auto offer
                 // Independent free-grant coupon — server derives the zero-price
                 // free lines (stock + COGS move; the bill math doesn't change).
                 freeCouponCode: b.appliedFree?.code ?? undefined,
+                // Force-applied AUTO free-grant — no code, carry its id.
+                freeCouponId: b.appliedFree && !b.appliedFree.code ? b.appliedFree.couponId : undefined,
                 // No-code AUTO free-grant offer (independent FREE_ITEM / BOGO) —
                 // the server re-selects it from the cart, so the free item lands
                 // on the invoice even if the preview went stale.

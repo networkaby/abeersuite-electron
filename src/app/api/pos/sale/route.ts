@@ -36,6 +36,7 @@ import {
 } from "@/modules/loyalty/lib";
 import {
     selectCouponForCart,
+    selectCouponForCartById,
     selectFreeGrantCoupon,
     selectAutoFreeGrant,
     finalizeCouponAmount,
@@ -140,6 +141,9 @@ const createSchema = z.object({
     redeemPoints: z.number().int().min(0).default(0),
     // Coupon code the cashier entered (server resolves the ₹ value + validity).
     couponCode: z.string().trim().max(40).optional(),
+    // Force-apply a SPECIFIC coupon by id — AUTO offers have no code, so the
+    // POS "Apply" button on an AUTO offer card carries its id instead.
+    couponId: z.number().int().optional(),
     // When true (and no code), the server auto-applies the best eligible offer.
     autoApply: z.boolean().default(false),
     // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — applies ON TOP of the
@@ -147,6 +151,8 @@ const createSchema = z.object({
     // freeQty, so stock + COGS move but no money) and it never drops tier,
     // blocks loyalty, or counts against the global guard.
     freeCouponCode: z.string().trim().max(40).optional(),
+    // Force-apply a specific free-grant coupon by id (AUTO — no code).
+    freeCouponId: z.number().int().optional(),
     // When true (no code), the server auto-selects the best eligible AUTO
     // free-grant coupon from the cart — a no-code AUTO FREE_ITEM / BOGO offer
     // fires on its own. Server-authoritative: re-derived here, never trusted
@@ -485,12 +491,17 @@ export async function POST(req: Request) {
     }
     // noDiscountFlag: coupons (typed code AND auto-offers, money and free-grant
     // alike) are skipped silently.
-    if (!noDiscountFlag && (body.couponCode || body.autoApply)) {
+    if (!noDiscountFlag && (body.couponCode || body.autoApply || body.couponId != null)) {
         couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
-        selected = await selectCouponForCart(prisma, {
-            code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: await buildCouponInput(),
-        });
+        selected = body.couponId != null
+            // AUTO offer force-applied by id (no code to type).
+            ? await selectCouponForCartById(prisma, {
+                couponId: body.couponId, channel: "POS", input: await buildCouponInput(), protectedProductIds,
+            })
+            : await selectCouponForCart(prisma, {
+                code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: await buildCouponInput(),
+            });
         if (selected.kind === "error") {
             return NextResponse.json({ error: selected.reason, code: "COUPON_REJECTED" }, { status: 422 });
         }
@@ -504,14 +515,23 @@ export async function POST(req: Request) {
     // Free-grant slot: an independent FREE_ITEM / BOGO coupon that applies ON
     // TOP of the money coupon. Never drops tier, never blocks loyalty, never
     // hits the guard — it just grants free lines.
-    if (!noDiscountFlag && body.freeCouponCode) {
-        const sel = await selectFreeGrantCoupon(prisma, {
-            code: body.freeCouponCode, channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
-        });
+    if (!noDiscountFlag && (body.freeCouponCode || body.freeCouponId != null)) {
+        const sel = body.freeCouponId != null
+            // AUTO free-grant offer force-applied by id.
+            ? await selectCouponForCartById(prisma, {
+                couponId: body.freeCouponId, channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
+            })
+            : await selectFreeGrantCoupon(prisma, {
+                code: body.freeCouponCode!, channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
+            });
         if (sel.kind === "error") {
             return NextResponse.json({ error: sel.reason, code: "FREE_COUPON_REJECTED" }, { status: 422 });
         }
         if (sel.kind === "free-grant") freeSelected = sel;
+        else {
+            // A money coupon id can't ride the free slot.
+            return NextResponse.json({ error: "This coupon gives a ₹ discount — apply it in the Coupon code box", code: "FREE_COUPON_REJECTED" }, { status: 422 });
+        }
     }
     // Auto free-grant: the best eligible independent AUTO FREE_ITEM / BOGO
     // offer, granted on top with no code (the client's freeAutoApply flag — the

@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { selectCouponForCart, selectFreeGrantCoupon, selectAutoFreeGrant, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput, type CouponSelection } from "@/modules/coupons/lib";
+import { selectCouponForCart, selectCouponForCartById, selectFreeGrantCoupon, selectAutoFreeGrant, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput, type CouponSelection } from "@/modules/coupons/lib";
 import { round2 } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
@@ -27,6 +27,10 @@ const lineSchema = z.object({
 const bodySchema = z.object({
     accountId:     z.number().int().nullable().optional(),
     code:          z.string().trim().max(40).optional(),
+    /// Force-apply a specific coupon by id (AUTO coupons have no code — the
+    /// POS "Apply" button on an AUTO offer card uses this). Routes money
+    /// coupons to the ₹ slot and free-grant coupons to the free slot.
+    couponId:      z.number().int().optional(),
     /// Dedicated free-grant slot: an independent FREE_ITEM / BOGO coupon code.
     /// Resolved alone (it never competes with the money coupon) and returns the
     /// free lines to add to the bill at zero price.
@@ -118,6 +122,16 @@ export async function POST(req: Request) {
             const sel = await selectAutoFreeGrant(prisma, { channel: "POS", input, protectedProductIds });
             if (sel.kind === "error") return NextResponse.json({ ok: false, reason: sel.reason });
             if (sel.kind === "free-grant") freeSelected = sel;
+        } else if (data.couponId != null) {
+            // Force-apply a specific coupon by id (AUTO — no code). A free-grant
+            // id is routed to the free slot automatically.
+            selected = await selectCouponForCartById(prisma, { couponId: data.couponId, channel: "POS", input, protectedProductIds });
+            if (selected.kind === "free-grant") {
+                freeSelected = selected;
+                selected = { kind: "none" };
+            } else if (selected.kind === "error") {
+                return NextResponse.json({ ok: false, reason: selected.reason });
+            }
         } else {
             selected = await selectCouponForCart(prisma, { code: data.code, autoApply: data.autoApply, channel: "POS", input });
             if (selected.kind === "free-grant") {

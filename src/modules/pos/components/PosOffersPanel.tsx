@@ -18,6 +18,7 @@ export function PosOfferCard({
     appliedFree,
     autoFree,
     onApply,
+    onApplyId,
 }: {
     o: PosOffer;
     applied: CouponHit | null;
@@ -27,6 +28,8 @@ export function PosOfferCard({
     /// Auto-applied free-grant coupon — its cards read "Applied" as well.
     autoFree: FreeGrantHit | null;
     onApply: (code: string) => void;
+    /// Force-apply a specific AUTO offer by id (AUTO coupons have no code).
+    onApplyId: (couponId: number) => void;
 }) {
     const isApplied = applied?.couponId === o.couponId;
     // An AUTO offer the engine will apply at checkout reads as applied too.
@@ -60,7 +63,14 @@ export function PosOfferCard({
                 {appliedState ? (
                     <Badge className="border-transparent bg-emerald-100 text-[10px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Applied</Badge>
                 ) : o.applyMode === "AUTO" ? (
-                    <Badge variant="secondary" className="text-[10px]"><Sparkles size={9} className="mr-0.5" />Auto</Badge>
+                    // Qualified AUTO offer → the cashier can FORCE it onto the bill
+                    // instead of letting the engine auto-pick (e.g. a different
+                    // AUTO offer than the one auto-applied). Not ready → just Auto.
+                    o.status === "ready" ? (
+                        <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => onApplyId(o.couponId)}>Apply</Button>
+                    ) : (
+                        <Badge variant="secondary" className="text-[10px]"><Sparkles size={9} className="mr-0.5" />Auto</Badge>
+                    )
                 ) : readyCode ? (
                     <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => onApply(readyCode)}>Apply</Button>
                 ) : null}
