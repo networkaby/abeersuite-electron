@@ -230,6 +230,11 @@ export function usePosBilling(opts: {
     const changingPartyRef = useRef(changingParty);
     useEffect(() => { changingPartyRef.current = changingParty; }, [changingParty]);
     const originalPartyRef = useRef<PickedParty | null>(null);
+    // The product the cashier most recently scanned / added — the "+"/"-"
+    // quantity keys act on this line. NOT the cart's last array element:
+    // re-scanning an item increments its original slot in place, so array
+    // order goes stale.
+    const lastTouchedProductIdRef = useRef<number | null>(null);
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -253,6 +258,21 @@ export function usePosBilling(opts: {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [createDialogOpen, checkoutOpen, snapshot?.account, snapshot?.party?.id, snapshot?.party?.kind, snapshot?.party?.name, snapshot?.party?.phone, partySearchRef]);
+
+    // F6 from anywhere → open a fresh POS tab. The POS supports multiple
+    // simultaneous tabs, so there is no recall shortcut — the cashier returns
+    // to a held bill by switching tabs manually. Mirrors the mouse "New Tab"
+    // button in PosTopBar (window.open("/vouchers/pos/new")).
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "F6") return;
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            e.preventDefault();
+            window.open("/vouchers/pos/new", "_blank", "noopener");
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, []);
 
     // Suppresses the display coordinator while the thank-you screen is holding.
     // After a successful sale, we want the green "Thank You ₹X" frame to stay
@@ -670,6 +690,8 @@ export function usePosBilling(opts: {
 
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
+        // Last-scanned marker for the "+"/"-" quantity keys.
+        lastTouchedProductIdRef.current = p.id;
         // Product's effectiveSalePricePaise is treated as TAX-INCLUSIVE (matches
         // the price tag / MRP-style retail expectations). We back-calculate the
         // pre-tax rate here so the rest of the math (calcLineTotals) — which
@@ -720,6 +742,7 @@ export function usePosBilling(opts: {
         const rate = svc.taxRate ?? 0;
         const price = rate > 0 ? inclusive / (1 + rate / 100) : inclusive;
         const lineId = -svc.id;
+        lastTouchedProductIdRef.current = lineId;
         setCart((prev) => {
             const exist = prev.find((l) => l.productId === lineId);
             if (exist) return prev.map((l) => l.productId === lineId ? { ...l, qty: l.qty + 1 } : l);
@@ -742,6 +765,35 @@ export function usePosBilling(opts: {
 
     const setLineDescription = (productId: number, description: string) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, description } : l));
+
+    // "+" / "-" from anywhere → step the LAST item added by one qty (ECR
+    // heritage: PLUS adds, MINUS subtracts). Skipped while typing in a field
+    // or when a dialog is open; ctrl/meta/alt combos are browser/OS territory.
+    // Main-row "+" arrives with shiftKey (Shift+=), so shift is NOT a skip.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "+" && e.key !== "-") return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (createDialogOpen || checkoutOpen) return;
+            const active = document.activeElement as HTMLElement | null;
+            const inSearchBox = active === productSearchRef.current;
+            // Mid-query in the search box → "+"/"-" are normal characters
+            // (e.g. searching "T-Shirt"). Empty search box (the post-scan
+            // state) → act on the last item instead of opening the dropdown
+            // with a "+"/"-" query.
+            if (inSearchBox && productQuery.trim()) return;
+            // Any other field → let the character type normally.
+            if (!inSearchBox && (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.isContentEditable)) return;
+            e.preventDefault();
+            const lastId = lastTouchedProductIdRef.current;
+            const line = (lastId != null ? cart.find((l) => l.productId === lastId) : null) ?? cart[cart.length - 1];
+            if (!line) return;
+            if (e.key === "+") setQty(line.productId, line.qty + 1);
+            else setQty(line.productId, line.qty - 1); // ≤ 0 removes the line
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [cart, productQuery, createDialogOpen, checkoutOpen, setQty]);
 
     // ── Product dropdown keyboard nav ──────────────────────────────────────
     const onProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -797,6 +849,7 @@ export function usePosBilling(opts: {
         setRoundOffStr("");
         setRoundOffManuallyEdited(false);
         setCharges([]);
+        lastTouchedProductIdRef.current = null;
         setTicketId(null);
         setAdjustmentsOpen(false);
         setCheckoutOpen(false);
