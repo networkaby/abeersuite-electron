@@ -282,8 +282,10 @@ export async function POST(req: Request) {
                 unavailableReason,
                 stackable: c.stackable,
                 stackScope: c.stackScope,
-                /// Independent FREE-GRANT coupon — applies on top; grants a free line.
-                independent: c.independent,
+                /// FREE-GRANT coupon (independent + fully free) — applies on top;
+                /// grants a free line. A partial (not 100%) free-item offer is a
+                /// money coupon instead and waits for its item to be added.
+                freeGrant: isFreeGrantCoupon(c),
                 expiresAt: c.endsAt?.toISOString() ?? null,
                 usageLeft,
                 freeProductId: c.freeProductId,
@@ -326,7 +328,7 @@ export async function POST(req: Request) {
         //    second unit). Skipped for discount-protected products (the offer can't
         //    grant those) and for flagged customers (offers is already empty there).
         for (const o of offers) {
-            if (!o.independent || o.freeProductId == null) continue;
+            if (!o.freeGrant || o.freeProductId == null) continue;
             // An offer the customer can't get (usage limit / new-only / owner) must
             // not badge its freebie as claimable.
             if (o.status === "unavailable") continue;

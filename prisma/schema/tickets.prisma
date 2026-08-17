@@ -217,6 +217,14 @@ model TicketOrder {
   couponCode          String?
   couponDiscountPaise Int      @default(0)
   couponRedemptionId  Int?
+  // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) FROZEN at checkout — the
+  // granted item rides the order as a zero-price TicketOrderLine (freeQty),
+  // like the POS counter. No ₹ discount, so couponDiscountPaise stays 0; the
+  // redemption row (amount 0) still locks the usage limits and reverses on a
+  // full return. Codeless AUTO offers freeze their display name as the code.
+  freeCouponId            Int?
+  freeCouponCode          String?
+  freeCouponRedemptionId  Int?
   // Loyalty redemption FROZEN at checkout (points + ₹ value; validated against
   // balance / floors / the cart-aware redeem ceiling — same clampRedemption as
   // POS). totalPaise is already NET of loyaltyRedeemPaise. Points are NOT
@@ -246,6 +254,10 @@ model TicketOrderLine {
   orderTicketId     Int
   productId         Int
   quantity          Int @default(1)
+  /// Independent FREE-GRANT line (FREE_ITEM / BOGO coupon): quantity 0 +
+  /// freeQty, mirroring the POS invoice line — the item rides the order as a
+  /// zero-price line (stock + COGS move at invoice, no money, no tax).
+  freeQty           Int @default(0)
   unitPricePaise    Int
   // Whole-line spend-tier discount, PRE-TAX paise, frozen at checkout
   // (tier% × costExcl × qty, clamped to the line's pre-tax value — POS

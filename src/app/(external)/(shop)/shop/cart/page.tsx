@@ -20,6 +20,9 @@ type TierPreview = {
     discountPaise: number;
     // Best AUTO offer (typed codes live on the checkout page, not the cart).
     coupon: { code: string; name: string; discountPaise: number; droppedTier: boolean } | null;
+    // Best AUTO independent free-grant (Free item / Buy X get Y) — added to the
+    // order as a zero-price line.
+    freeGrant: { code: string; productName: string; freeQty: number } | null;
 };
 
 export default function ShopCartPage() {
@@ -195,6 +198,16 @@ export default function ShopCartPage() {
                                     <span className="tabular-nums font-medium">
                                         −{formatRupeesFromPaise(couponPaise)}
                                     </span>
+                                </div>
+                            )}
+                            {tierPreview?.freeGrant && (
+                                <div className="flex justify-between gap-4 text-emerald-600 dark:text-emerald-400">
+                                    <span>
+                                        {tierPreview.freeGrant.productName}
+                                        {tierPreview.freeGrant.freeQty > 1 ? ` × ${tierPreview.freeGrant.freeQty}` : ""}{" "}
+                                        FREE
+                                    </span>
+                                    <span className="tabular-nums font-medium">FREE</span>
                                 </div>
                             )}
                             <div className="flex justify-between gap-4">

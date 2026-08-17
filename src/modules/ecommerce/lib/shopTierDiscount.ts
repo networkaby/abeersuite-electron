@@ -4,6 +4,7 @@ import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveC
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import {
     selectCouponForCart,
+    selectAutoFreeGrant,
     finalizeCouponAmount,
     couponExclusionMask,
     type CartLineLite,
@@ -39,6 +40,9 @@ import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 //     stacking rules: a non-stackable coupon DROPS the tier and cannot combine
 //     with loyalty points (explicit code → hard error, like the POS counter;
 //     an AUTO offer is skipped silently — the customer chose their points).
+//   • Free grant — an independent FREE_ITEM / BOGO coupon (typed code or the
+//     best AUTO free-grant) rides ON TOP of the money coupon as a zero-price
+//     order line (freeQty), exactly like the POS counter's FREE row.
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -65,6 +69,18 @@ export type ShopCartBenefits = {
         stackable: boolean;
         droppedTier: boolean;
         clampedByGuard: boolean;
+    } | null;
+    /** Independent FREE-GRANT coupon (FREE_ITEM / BOGO) applying ON TOP of the
+     *  money coupon — the granted item rides the order as a zero-price line
+     *  (freeQty), exactly like the POS counter. null = none. */
+    freeGrant: {
+        couponId: number;
+        /** Coupon code — null on a codeless AUTO offer (fall back to `name`). */
+        code: string | null;
+        name: string;
+        productId: number;
+        productName: string;
+        freeQty: number;
     } | null;
     /** Rejection reason when an EXPLICIT code failed (auto-apply fails silently). */
     couponError: string | null;
@@ -109,7 +125,7 @@ export async function computeShopCartBenefits(
     if ((flagAcct?.person?.noDiscount ?? flagAcct?.company?.noDiscount) === true) {
         return {
             tierPct: 0, tierLabel: null, discountInclPaise: 0, lineDiscPaise: new Map(),
-            coupon: null,
+            coupon: null, freeGrant: null,
             couponError: opts.couponCode?.trim() ? "This coupon isn't applicable on this order." : null,
             loyalty: null,
         };
@@ -138,7 +154,7 @@ export async function computeShopCartBenefits(
     if (lines.length === 0) {
         return {
             tierPct, tierLabel, discountInclPaise: 0, lineDiscPaise: new Map(),
-            coupon: null, couponError: null, loyalty: null,
+            coupon: null, freeGrant: null, couponError: null, loyalty: null,
         };
     }
 
@@ -199,19 +215,34 @@ export async function computeShopCartBenefits(
     // Selected here, not finalized — LINE-scope exclusivity needs to know which
     // lines the coupon touches BEFORE the loyalty ceiling is computed.
     let coupon: ShopCartBenefits["coupon"] = null;
+    let freeGrant: ShopCartBenefits["freeGrant"] = null;
     let couponError: string | null = null;
     let selected: CouponSelection = { kind: "none" };
     let couponConfig: { couponExpenseAccountId: number | null } | null = null;
     let couponLines: CartLineLite[] = [];
     let couponGoodsValue = 0;
+    // The granted item + name for display — the order route freezes it as a
+    // zero-price TicketOrderLine (freeQty), exactly like the POS counter.
+    const toGrant = async (sel: Extract<CouponSelection, { kind: "free-grant" }>): Promise<NonNullable<ShopCartBenefits["freeGrant"]>> => {
+        const p = await db.invProduct.findUnique({ where: { id: sel.grant.productId }, select: { name: true } });
+        return {
+            couponId: sel.coupon.id,
+            code: sel.coupon.code,
+            name: sel.coupon.name,
+            productId: sel.grant.productId,
+            productName: p?.name ?? "Item",
+            freeQty: sel.grant.freeQty,
+        };
+    };
     const wantCoupon = !!(opts.couponCode?.trim() || opts.autoApply);
     if (wantCoupon) {
         couponConfig = await db.couponConfig.findUnique({ where: { id: 1 } });
-        if (opts.couponCode?.trim() && couponConfig?.couponExpenseAccountId == null) {
+        const noExpenseLedger = couponConfig?.couponExpenseAccountId == null;
+        if (opts.couponCode?.trim() && noExpenseLedger) {
             // Without the expense ledger the invoice could not post the coupon
             // leg — refuse up front rather than freeze an unpostable discount.
             couponError = "Coupons are not configured yet.";
-        } else if (couponConfig?.couponExpenseAccountId != null) {
+        } else {
             const tax = await loadTaxonomy();
             // POS bases: unitPrice + goodsValue are PRE-TAX (coupons discount
             // the SALE value, not cost — cost must never be derivable).
@@ -230,18 +261,33 @@ export async function computeShopCartBenefits(
                 accountId,
                 lines: couponLines,
                 goodsValue: couponGoodsValue,
+                // Free-grant min-bill qualifies on the tax-inclusive bill (goods
+                // + shipping here) — POS parity; money coupons keep the goods base.
+                billAmountIncl: currentSaleValuePaise / 100,
                 billBeforeCoupon: couponGoodsValue,
                 isNewCustomer: tierCtx.isNewCustomer,
                 now: new Date(),
             };
-            selected = await selectCouponForCart(db, {
-                code: opts.couponCode, autoApply: opts.autoApply, channel: "SHOP", input,
-            });
-            if (selected.kind === "error") couponError = selected.reason;
-            // An independent FREE-GRANT coupon (FREE_ITEM / BOGO) grants free
-            // items at the counter — the shop has no free-line mechanic yet, so
-            // say so rather than silently doing nothing.
-            else if (selected.kind === "free-grant") couponError = "Free-grant coupons are available at the counter only.";
+            if (!noExpenseLedger) {
+                selected = await selectCouponForCart(db, {
+                    code: opts.couponCode, autoApply: opts.autoApply, channel: "SHOP", input,
+                });
+                if (selected.kind === "error") couponError = selected.reason;
+                // A typed independent FREE-GRANT code (FREE_ITEM / BOGO) isn't a
+                // ₹ discount — route it to the free slot: the item rides the
+                // order as a zero-price line, exactly like the POS counter.
+                else if (selected.kind === "free-grant") {
+                    freeGrant = await toGrant(selected);
+                    selected = { kind: "none" };
+                }
+            }
+            // Free-grant slot: a typed free-grant code won above; otherwise the
+            // best eligible AUTO free-grant fires on its own (POS parity). No
+            // expense ledger needed — a free grant posts no ₹ charge.
+            if (!freeGrant) {
+                const autoFree = await selectAutoFreeGrant(db, { channel: "SHOP", input, protectedProductIds });
+                if (autoFree.kind === "free-grant") freeGrant = await toGrant(autoFree);
+            }
         }
     }
     const exclusionMask: boolean[] = selected.kind === "ok" ? couponExclusionMask(selected.coupon, couponLines) : lines.map(() => false);
@@ -360,7 +406,7 @@ export async function computeShopCartBenefits(
         tierPct, tierLabel,
         discountInclPaise: Math.round(inclEffect),
         lineDiscPaise,
-        coupon, couponError,
+        coupon, freeGrant, couponError,
         loyalty,
     };
 }

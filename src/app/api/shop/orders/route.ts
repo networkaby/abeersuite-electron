@@ -189,6 +189,9 @@ export async function POST(req: Request) {
         const tierDiscountInclPaise = benefits.discountInclPaise;
         const lineTierDiscPaise = benefits.lineDiscPaise;
         const couponPaise = benefits.coupon?.discountPaise ?? 0;
+        // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — the granted item
+        // rides the order as a zero-price line; it never touches totalPaise.
+        const freeGrant = benefits.freeGrant;
         totalPaise -= tierDiscountInclPaise + couponPaise + loyaltyPaise; // gateway/COD charges the NET
 
         // Place the order on the sales-orders pipeline (P7) at its entry stage —
@@ -214,6 +217,23 @@ export async function POST(req: Request) {
                 });
                 couponRedemptionId = red.id;
             }
+            // Free-grant coupon: take its usage slot too (amount 0 — a free grant
+            // is ₹-less by design; the row still enforces total/per-customer caps
+            // and reverses on a full return, exactly like the POS counter).
+            let freeCouponRedemptionId: number | null = null;
+            if (freeGrant) {
+                const red = await tx.couponRedemption.create({
+                    data: {
+                        couponId: freeGrant.couponId,
+                        accountId,
+                        universalVoucherId: null,   // stamped by the invoice conversion
+                        amount:    0,
+                        channel:   "SHOP",
+                    },
+                    select: { id: true },
+                });
+                freeCouponRedemptionId = red.id;
+            }
             return tx.ticket.create({
             data: {
                 accountId: context.active.accountId,
@@ -235,6 +255,12 @@ export async function POST(req: Request) {
                         couponCode: benefits.coupon ? (benefits.coupon.code ?? benefits.coupon.name) : null,
                         couponDiscountPaise: couponPaise,
                         couponRedemptionId,
+                        // Independent FREE-GRANT coupon — the item rides the order
+                        // as a zero-price line (freeQty below); no ₹, so
+                        // couponDiscountPaise stays 0.
+                        freeCouponId: freeGrant?.couponId ?? null,
+                        freeCouponCode: freeGrant ? (freeGrant.code ?? freeGrant.name) : null,
+                        freeCouponRedemptionId,
                         // Frozen loyalty redemption (points burn at invoice post).
                         loyaltyRedeemPoints: loyaltyPts,
                         loyaltyRedeemPaise: loyaltyPaise,
@@ -266,14 +292,27 @@ export async function POST(req: Request) {
                             onlineProvider: isCod ? null : onlineProvider ?? null,
                         },
                         lines: {
-                            create: resolvedLines.map((r, i) => ({
-                                productId: r.productId,
-                                quantity: r.quantity,
-                                unitPricePaise: r.unitPricePaise,
-                                // Whole-line pre-tax tier discount (paise) — the invoice
-                                // conversion replays it as the line's discountAmt.
-                                tierDiscountPaise: lineTierDiscPaise.get(i) ?? 0,
-                            })),
+                            create: [
+                                ...resolvedLines.map((r, i) => ({
+                                    productId: r.productId,
+                                    quantity: r.quantity,
+                                    unitPricePaise: r.unitPricePaise,
+                                    // Whole-line pre-tax tier discount (paise) — the invoice
+                                    // conversion replays it as the line's discountAmt.
+                                    tierDiscountPaise: lineTierDiscPaise.get(i) ?? 0,
+                                })),
+                                // The granted free item as a zero-price line (quantity 0 +
+                                // freeQty) — stock + COGS move at invoice, no money.
+                                ...(freeGrant
+                                    ? [{
+                                        productId: freeGrant.productId,
+                                        quantity: 0,
+                                        freeQty: freeGrant.freeQty,
+                                        unitPricePaise: 0,
+                                        tierDiscountPaise: 0,
+                                    }]
+                                    : []),
+                            ],
                         },
                     },
                 },
@@ -300,6 +339,10 @@ export async function POST(req: Request) {
             couponDiscountPaise: t.order?.couponDiscountPaise ?? 0,
             loyaltyRedeemPoints: t.order?.loyaltyRedeemPoints ?? 0,
             loyaltyRedeemPaise: t.order?.loyaltyRedeemPaise ?? 0,
+            // Independent FREE-GRANT item (if any) — shown as a FREE row on the order page.
+            freeItems: freeGrant
+                ? [{ productId: freeGrant.productId, freeQty: freeGrant.freeQty, productName: freeGrant.productName }]
+                : [],
             paymentMethod: isCod ? "COD" : "ONLINE",
             status: t.order?.legacyStatus,
         };

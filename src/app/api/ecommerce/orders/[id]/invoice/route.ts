@@ -115,6 +115,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                         couponCode: true,
                         couponDiscountPaise: true,
                         couponRedemptionId: true,
+                        freeCouponCode: true,
+                        freeCouponRedemptionId: true,
                         loyaltyRedeemPoints: true,
                         loyaltyRedeemPaise: true,
                         shippingName: true,
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                             select: {
                                 productId: true,
                                 quantity: true,
+                                freeQty: true,
                                 unitPricePaise: true,
                                 tierDiscountPaise: true,
                                 product: { select: { name: true, mrpPaise: true, stock: true, groupId: true, categoryId: true } },
@@ -148,11 +151,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         // pre-tax discountAmt (identical math to a POS sale line).
         const computedLines: {
             productId: number; description: string; quantity: number; rate: number;
-            taxRate: number; discountAmt: number; taxAmount: number; amount: number;
+            taxRate: number; discountAmt: number; taxAmount: number; amount: number; freeQty: number;
             savedSalePricePaise: number | null; mrpPaise: number | null;
             product: { stock: number | null } | null;
         }[] = [];
         for (const l of t.order.lines) {
+            // Independent FREE-GRANT line (FREE_ITEM / BOGO): zero-price, quantity
+            // 0 + freeQty — stock + COGS move (the margin engine counts free units
+            // as real cost given away) but the bill math is untouched. POS parity.
+            if ((l.freeQty ?? 0) > 0) {
+                computedLines.push({
+                    productId: l.productId,
+                    description: `FREE · ${t.order.freeCouponCode ?? "Offer"}`,
+                    quantity: 0,
+                    rate: 0,
+                    taxRate: 0,
+                    discountAmt: 0,
+                    taxAmount: 0,
+                    amount: 0,
+                    freeQty: l.freeQty ?? 0,
+                    savedSalePricePaise: null,
+                    mrpPaise: l.product?.mrpPaise ?? null,
+                    product: l.product ? { stock: l.product.stock } : null,
+                });
+                continue;
+            }
             const tax = await resolveProductTax(l.productId);
             const taxable = tax.taxability == null || tax.taxability === "TAXABLE";
             const r = taxable ? (tax.gstRate ?? 0) : 0;
@@ -171,6 +194,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 discountAmt,
                 taxAmount,
                 amount,
+                freeQty: 0,
                 // Ladder snapshots (paise) — the storefront tag + MRP, so the
                 // printed receipt can show the same price-benefit rows as POS.
                 savedSalePricePaise: l.unitPricePaise,
@@ -383,6 +407,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     discountPct: t.order!.tierDiscountPct != null ? Number(t.order!.tierDiscountPct) : 0,
                     taxAmount:   l.taxAmount,
                     amount:      l.amount,
+                    freeQty:     l.freeQty,
                     mrpPaise:            l.mrpPaise,
                     savedSalePricePaise: l.savedSalePricePaise,
                 })),
@@ -447,6 +472,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             if (t.order!.couponRedemptionId != null) {
                 await tx.couponRedemption.updateMany({
                     where: { id: t.order!.couponRedemptionId, universalVoucherId: null },
+                    data: { universalVoucherId: spineId },
+                });
+            }
+            // Same for the free-grant coupon's usage slot (amount 0 — the row
+            // still enforces caps; reversal frees it on a full return).
+            if (t.order!.freeCouponRedemptionId != null) {
+                await tx.couponRedemption.updateMany({
+                    where: { id: t.order!.freeCouponRedemptionId, universalVoucherId: null },
                     data: { universalVoucherId: spineId },
                 });
             }

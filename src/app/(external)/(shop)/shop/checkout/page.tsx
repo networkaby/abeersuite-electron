@@ -260,6 +260,7 @@ export default function ShopCheckoutPage() {
     type BenefitPreview = {
         tierPct: number; tierLabel: string | null; discountPaise: number;
         coupon: { code: string; name: string; discountPaise: number; droppedTier: boolean } | null;
+        freeGrant: { code: string; productName: string; freeQty: number } | null;
         couponError: string | null;
         loyalty: {
             balance: number; redeemValue: number; minRedeemPoints: number;
@@ -733,6 +734,18 @@ export default function ShopCheckoutPage() {
                             <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
                                 <span>Loyalty ({tierPreview.loyalty.redeemPoints} pts)</span>
                                 <span className="tabular-nums font-medium">−{formatRupeesFromPaise(loyaltyDiscount)}</span>
+                            </div>
+                        )}
+                        {/* Independent FREE-GRANT item (Free item / Buy X get Y) —
+                            added to the order as a zero-price line; no ₹ row. */}
+                        {tierPreview?.freeGrant && (
+                            <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                                <span>
+                                    {tierPreview.freeGrant.productName}
+                                    {tierPreview.freeGrant.freeQty > 1 ? ` × ${tierPreview.freeGrant.freeQty}` : ""}{" "}
+                                    FREE
+                                </span>
+                                <span className="tabular-nums font-medium">FREE</span>
                             </div>
                         )}
                         {/* Coupon code — logged-in only (benefits need an identified

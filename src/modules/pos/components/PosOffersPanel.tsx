@@ -35,7 +35,7 @@ export function PosOfferCard({
     // An AUTO offer the engine will apply at checkout reads as applied too.
     const isActiveAuto = !isApplied && auto?.couponId === o.couponId;
     // A free-grant offer applied on top reads as applied for its own card.
-    const isFreeApplied = o.independent && (appliedFree?.couponId === o.couponId || autoFree?.couponId === o.couponId);
+    const isFreeApplied = o.freeGrant && (appliedFree?.couponId === o.couponId || autoFree?.couponId === o.couponId);
     const appliedState = isApplied || isActiveAuto || isFreeApplied;
     // One-click apply code (ready CODE offers only) — captured so the click
     // closure keeps the string narrowing.
@@ -57,7 +57,7 @@ export function PosOfferCard({
                         ? <Flame size={13} className="shrink-0 text-amber-600 dark:text-amber-400" />
                         : <Ban size={13} className="shrink-0 text-muted-foreground" />}
                 <span className="min-w-0 flex-1 truncate font-medium">{o.benefit}</span>
-                {o.independent && (
+                {o.freeGrant && (
                     <Badge className="shrink-0 border-transparent bg-emerald-600 text-[9px] text-white">FREE</Badge>
                 )}
                 {appliedState ? (
@@ -116,7 +116,7 @@ export function PosOfferCard({
             )}
 
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/70">
-                {o.independent
+                {o.freeGrant
                     ? <span>Free items — applies on top</span>
                     : o.stackable
                         ? <span>Stackable</span>

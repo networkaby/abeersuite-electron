@@ -136,9 +136,12 @@ export default async function ShopOrderConfirmationPage({
                 {order.lines.map((l) => (
                     <li key={l.id} className="flex justify-between gap-2">
                         <span>
-                            {l.product.name} × {l.quantity}
+                            {l.product.name} × {(l.freeQty ?? 0) > 0 ? l.freeQty : l.quantity}
+                            {(l.freeQty ?? 0) > 0 ? " FREE" : ""}
                         </span>
-                        <span>{formatRupeesFromPaise(l.unitPricePaise * l.quantity)}</span>
+                        <span className={(l.freeQty ?? 0) > 0 ? "text-emerald-600 dark:text-emerald-400" : ""}>
+                            {(l.freeQty ?? 0) > 0 ? "FREE" : formatRupeesFromPaise(l.unitPricePaise * l.quantity)}
+                        </span>
                     </li>
                 ))}
                 {order.tierDiscountPaise > 0 && (

@@ -89,6 +89,16 @@ export async function POST(req: Request) {
                     droppedTier: benefits.coupon.droppedTier,
                 }
                 : null,
+            // An independent FREE-GRANT coupon (typed code or best AUTO) — the
+            // item the order will add as a zero-price line (freeQty).
+            freeGrant: benefits.freeGrant
+                ? {
+                    // Codeless AUTO offers surface their display name as the "code".
+                    code: benefits.freeGrant.code ?? benefits.freeGrant.name,
+                    productName: benefits.freeGrant.productName,
+                    freeQty: benefits.freeGrant.freeQty,
+                }
+                : null,
             // Set only when the TYPED code was rejected (auto-apply fails silently)
             // — or when it conflicts with the chosen loyalty points.
             couponError: data.couponCode?.trim() ? benefits.couponError : null,

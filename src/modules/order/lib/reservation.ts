@@ -18,9 +18,11 @@ async function orderLines(ref: OrderRef): Promise<{ productId: number; quantity:
     }
     const o = await prisma.ticket.findUnique({
         where: { id: ref.id },
-        select: { order: { select: { lines: { select: { productId: true, quantity: true } } } } },
+        select: { order: { select: { lines: { select: { productId: true, quantity: true, freeQty: true } } } } },
     });
-    return (o?.order?.lines ?? []).map((l) => ({ productId: l.productId, quantity: l.quantity }));
+    // A free-grant line is quantity 0 + freeQty — reserve the granted units too,
+    // so the promised free item can't be sold out before the invoice posts.
+    return (o?.order?.lines ?? []).map((l) => ({ productId: l.productId, quantity: l.quantity + (l.freeQty ?? 0) }));
 }
 
 /** Hold stock for an order's lines (no-op if already held, or for untracked products). */

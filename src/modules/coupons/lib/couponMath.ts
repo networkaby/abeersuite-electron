@@ -222,10 +222,16 @@ export function checkFreeGrantEligibility(c: CouponContext, input: EvalInput): {
 }
 
 /// Is this coupon an independent FREE-GRANT coupon (FREE_ITEM / BOGO with the
-/// independent toggle)? Such coupons never act as a ₹ discount — they add free
-/// lines on top of the money coupon.
-export function isFreeGrantCoupon(c: Pick<CouponContext, "type" | "independent">): boolean {
-    return c.independent && (c.type === "FREE_ITEM" || c.type === "BOGO");
+/// independent toggle AND fully free)? Such coupons never act as a ₹ discount —
+/// they add free lines on top of the money coupon, and the grant fires the
+/// moment the cart qualifies (its item does NOT need to be in the cart).
+///
+/// A FREE_ITEM / BOGO that is NOT fully free (freeDiscountPct < 100) is NOT a
+/// free grant even with the independent toggle — it behaves as a money coupon:
+/// it waits in the Offers panel and applies its partial % discount only once
+/// its item is manually added to the cart ("wait for manual add of its item").
+export function isFreeGrantCoupon(c: Pick<CouponContext, "type" | "independent" | "freeDiscountPct">): boolean {
+    return c.independent && (c.type === "FREE_ITEM" || c.type === "BOGO") && (c.freeDiscountPct ?? 100) >= 99.5;
 }
 
 /// The free units an independent FREE_ITEM / BOGO coupon grants on the current

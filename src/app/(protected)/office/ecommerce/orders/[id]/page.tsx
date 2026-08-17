@@ -104,6 +104,8 @@ type OrderDetail = {
     lines: {
         id: number;
         quantity: number;
+        // Independent FREE-GRANT line (quantity 0 + freeQty) — rendered as FREE.
+        freeQty?: number;
         unitPricePaise: number;
         product: { id: number; name: string; imageUrl: string | null };
     }[];
@@ -379,9 +381,16 @@ export default function EcommerceOrderDetailPage() {
                         <ul className="space-y-2 text-sm">
                             {order.lines.map((l) => (
                                 <li key={l.id} className="flex justify-between gap-2 border-b border-border/60 pb-2 last:border-0">
-                                    <span>{l.product.name}</span>
-                                    <span className="text-muted-foreground">
-                                        ×{l.quantity} · {formatRupeesFromPaise(l.unitPricePaise * l.quantity)}
+                                    <span>
+                                        {l.product.name}
+                                        {(l.freeQty ?? 0) > 0 && (
+                                            <span className="ml-1 rounded bg-emerald-600 px-1 py-px text-[10px] font-semibold text-white">FREE</span>
+                                        )}
+                                    </span>
+                                    <span className={(l.freeQty ?? 0) > 0 ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}>
+                                        {(l.freeQty ?? 0) > 0
+                                            ? `× ${l.freeQty} · FREE`
+                                            : `×${l.quantity} · ${formatRupeesFromPaise(l.unitPricePaise * l.quantity)}`}
                                     </span>
                                 </li>
                             ))}

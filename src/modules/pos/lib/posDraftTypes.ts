@@ -206,9 +206,11 @@ export type PosOffer = {
     stackScope: "BILL" | "LINE";
     expiresAt: string | null;
     usageLeft: number | null;
-    /// Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — applies on top; the
+    /// FREE-GRANT coupon (independent + fully free) — applies on top; the
     /// apply action adds its free lines at zero price instead of a ₹ coupon.
-    independent: boolean;
+    /// A partial (not 100%) free-item offer is false here — it's a money
+    /// coupon that waits for its item to be added to the cart.
+    freeGrant: boolean;
     /// BOGO / FREE_ITEM mechanic (forward-looking: the free-line auto-add uses these).
     freeProductId: number | null;
     freeProductName: string | null;
