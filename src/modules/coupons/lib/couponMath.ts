@@ -221,17 +221,40 @@ export function checkFreeGrantEligibility(c: CouponContext, input: EvalInput): {
     return commonEligibilityGates(c, input.billAmountIncl != null ? { ...input, goodsValue: input.billAmountIncl } : input);
 }
 
-/// Is this coupon an independent FREE-GRANT coupon (FREE_ITEM / BOGO with the
-/// independent toggle AND fully free)? Such coupons never act as a ₹ discount —
-/// they add free lines on top of the money coupon, and the grant fires the
-/// moment the cart qualifies (its item does NOT need to be in the cart).
-///
-/// A FREE_ITEM / BOGO that is NOT fully free (freeDiscountPct < 100) is NOT a
-/// free grant even with the independent toggle — it behaves as a money coupon:
-/// it waits in the Offers panel and applies its partial % discount only once
-/// its item is manually added to the cart ("wait for manual add of its item").
+/// FREE_ITEM / BOGO coupon whose item is given away fully (freeDiscountPct ≥
+/// 99.5) — the "fully free" predicate, independent of the Independent toggle.
+/// A fully-free coupon GRANTS its item (zero-price lines) instead of a ₹
+/// discount, whether it rides the on-top slot (rule 1) or wins the money slot
+/// (rule 3).
+export function isFullyFreeItem(c: Pick<CouponContext, "type" | "freeDiscountPct">): boolean {
+    return (c.type === "FREE_ITEM" || c.type === "BOGO") && (c.freeDiscountPct ?? 100) >= 99.5;
+}
+
+/// An INDEPENDENT FREE_ITEM / BOGO coupon (any %): the "on-top" family. It
+/// never competes for the money slot and never drops tier / blocks loyalty /
+/// hits the guard — it rides on top of the money coupon and every other
+/// discount. Fully free → grants its item as zero-price lines (the item is
+/// auto-added). Not fully free → discounts its item by freeDiscountPct once
+/// that item is in the cart.
+export function isIndependentFreeItem(c: Pick<CouponContext, "type" | "independent">): boolean {
+    return c.independent && (c.type === "FREE_ITEM" || c.type === "BOGO");
+}
+
+/// Is this an independent FREE-GRANT coupon (independent FREE_ITEM / BOGO that
+/// is FULLY free)? Only these add free lines on top of the money coupon, and
+/// the grant fires the moment the cart qualifies (its item does NOT need to be
+/// in the cart). An independent coupon that is NOT fully free is a PARTIAL
+/// on-top discount instead — its item must be in the cart.
 export function isFreeGrantCoupon(c: Pick<CouponContext, "type" | "independent" | "freeDiscountPct">): boolean {
-    return c.independent && (c.type === "FREE_ITEM" || c.type === "BOGO") && (c.freeDiscountPct ?? 100) >= 99.5;
+    return isIndependentFreeItem(c) && isFullyFreeItem(c);
+}
+
+/// A NON-independent fully-free FREE_ITEM / BOGO coupon — rule 3. It competes
+/// for the single money slot like any money coupon; when it WINS, its item is
+/// granted as zero-price lines (auto-added, need not be in the cart) with
+/// money-slot semantics (exclusivity mask applies).
+export function isMoneyGrantCoupon(c: Pick<CouponContext, "type" | "independent" | "freeDiscountPct">): boolean {
+    return !c.independent && isFullyFreeItem(c);
 }
 
 /// The free units an independent FREE_ITEM / BOGO coupon grants on the current
@@ -289,48 +312,11 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
             raw = Math.min(c.flatAmt, elig);
             break;
         }
-        case "FREE_ITEM": {
-            // Discount a specific item already in the cart by freeDiscountPct
-            // (100 = free) for up to freeQty units. Rides the same whole-bill
-            // negative-charge path — no extra cart line is added.
-            if (c.freeProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
-            const line = input.lines.find((l) => l.productId === c.freeProductId);
-            if (!line) return { ok: false, reason: "Add the offer item to the cart" };
-            if (line.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
-            const qty = Math.min(c.freeQty ?? 1, line.qty);
-            const pctOff = c.freeDiscountPct ?? 100;
-            raw = qty * line.unitPrice * (pctOff / 100);
-            break;
-        }
+        case "FREE_ITEM":
         case "BOGO": {
-            // Buy X get Y. Get-item = freeProductId (or the buy item for same-item
-            // BOGO). The get units are discounted by freeDiscountPct (100 = free).
-            const buyQty = c.buyQty ?? 1;
-            const getQty = c.getQty ?? 1;
-            const getProductId = c.freeProductId ?? c.buyProductId;
-            if (getProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
-            const getLine = input.lines.find((l) => l.productId === getProductId);
-            if (!getLine) return { ok: false, reason: "Add the offer item to the cart" };
-            if (getLine.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
-            const pctOff = c.freeDiscountPct ?? 100;
-            const sameItem = c.buyProductId == null || c.freeProductId == null || c.freeProductId === c.buyProductId;
-            // A protected BUY item can't unlock the offer either (same-item BOGO
-            // is already covered by the get-line check above).
-            if (!sameItem && c.buyProductId != null) {
-                const buyLine = input.lines.find((l) => l.productId === c.buyProductId);
-                if (buyLine?.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
-            }
-            // Straight 1:1 compounding — every buyQty units unlock getQty free
-            // ("Buy 1 get 1 FREE" = 12 bought → 12 free). Buy-any (no buy product)
-            // counts the whole cart. Mirrors freeGrantForCoupon so the validated
-            // ₹ and the posted ₹ stay identical.
-            const units = c.buyProductId != null
-                ? (input.lines.find((l) => l.productId === c.buyProductId)?.qty ?? 0)
-                : input.lines.reduce((s, l) => s + l.qty, 0);
-            let freeUnits = Math.floor(units / buyQty) * getQty;
-            freeUnits = Math.min(freeUnits, getLine.qty);
-            if (freeUnits <= 0) return { ok: false, reason: "Buy more to unlock the offer" };
-            raw = freeUnits * getLine.unitPrice * (pctOff / 100);
+            const r = itemDiscountRaw(c, input);
+            if (!r.ok) return r;
+            raw = r.raw;
             break;
         }
         case "SET_PRICE": {
@@ -347,6 +333,74 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
     // Never drive the bill to ≤ 0 (postInvVoucherToGl skips GL when total ≤ 0).
     const ceiling = Math.max(0, input.billBeforeCoupon - 0.01);
     const discount = r2(Math.min(raw, ceiling));
+    if (discount <= 0) return { ok: false, reason: "Coupon yields no discount on this bill" };
+    return { ok: true, discountRupees: discount };
+}
+
+/// The FREE_ITEM / BOGO item-based discount — raw ₹, pre-clamp. The offer's
+/// item already in the cart, discounted by freeDiscountPct (100 = free) for up
+/// to freeQty units. Shared by the money slot (rule 4: computeCouponDiscount)
+/// and the on-top slot (rule 2: computeOnTopPartial) so both show the SAME ₹.
+function itemDiscountRaw(c: CouponContext, input: EvalInput): { ok: true; raw: number } | EvalFail {
+    if (c.type === "FREE_ITEM") {
+        // Discount a specific item already in the cart by freeDiscountPct
+        // (100 = free) for up to freeQty units. Rides the same whole-bill
+        // negative-charge path — no extra cart line is added.
+        if (c.freeProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
+        const line = input.lines.find((l) => l.productId === c.freeProductId);
+        if (!line) return { ok: false, reason: "Add the offer item to the cart" };
+        if (line.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
+        const qty = Math.min(c.freeQty ?? 1, line.qty);
+        const pctOff = c.freeDiscountPct ?? 100;
+        return { ok: true, raw: qty * line.unitPrice * (pctOff / 100) };
+    }
+    if (c.type === "BOGO") {
+        // Buy X get Y. Get-item = freeProductId (or the buy item for same-item
+        // BOGO). The get units are discounted by freeDiscountPct (100 = free).
+        const buyQty = c.buyQty ?? 1;
+        const getQty = c.getQty ?? 1;
+        const getProductId = c.freeProductId ?? c.buyProductId;
+        if (getProductId == null) return { ok: false, reason: "Coupon misconfigured (no item)" };
+        const getLine = input.lines.find((l) => l.productId === getProductId);
+        if (!getLine) return { ok: false, reason: "Add the offer item to the cart" };
+        if (getLine.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
+        const pctOff = c.freeDiscountPct ?? 100;
+        const sameItem = c.buyProductId == null || c.freeProductId == null || c.freeProductId === c.buyProductId;
+        // A protected BUY item can't unlock the offer either (same-item BOGO
+        // is already covered by the get-line check above).
+        if (!sameItem && c.buyProductId != null) {
+            const buyLine = input.lines.find((l) => l.productId === c.buyProductId);
+            if (buyLine?.protected) return { ok: false, reason: "Coupon is not applicable on this bill" };
+        }
+        // Straight 1:1 compounding — every buyQty units unlock getQty free
+        // ("Buy 1 get 1 FREE" = 12 bought → 12 free). Buy-any (no buy product)
+        // counts the whole cart. Mirrors freeGrantForCoupon so the validated
+        // ₹ and the posted ₹ stay identical.
+        const units = c.buyProductId != null
+            ? (input.lines.find((l) => l.productId === c.buyProductId)?.qty ?? 0)
+            : input.lines.reduce((s, l) => s + l.qty, 0);
+        let freeUnits = Math.floor(units / buyQty) * getQty;
+        freeUnits = Math.min(freeUnits, getLine.qty);
+        if (freeUnits <= 0) return { ok: false, reason: "Buy more to unlock the offer" };
+        return { ok: true, raw: freeUnits * getLine.unitPrice * (pctOff / 100) };
+    }
+    return { ok: false, reason: "Coupon misconfigured" };
+}
+
+/// Rule 2 — an INDEPENDENT PARTIAL (<100%) FREE_ITEM / BOGO coupon: discounts
+/// its item by freeDiscountPct ONCE that item is in the cart, ON TOP of the
+/// money coupon, tier, and loyalty. Never competes for the money slot, never
+/// drops tier / blocks loyalty, never hits the global guard. Gates are the
+/// on-top family's (common gates; min-bill on the voucher total when provided)
+/// — the item-in-cart requirement is the discount's own gate below.
+export function computeOnTopPartial(c: CouponContext, input: EvalInput): EvalResult {
+    const gate = checkFreeGrantEligibility(c, input);
+    if (!gate.ok) return gate;
+    const r = itemDiscountRaw(c, input);
+    if (!r.ok) return r;
+    // Never drive the bill to ≤ 0 (same ceiling as the money coupon).
+    const ceiling = Math.max(0, input.billBeforeCoupon - 0.01);
+    const discount = r2(Math.min(r.raw, ceiling));
     if (discount <= 0) return { ok: false, reason: "Coupon yields no discount on this bill" };
     return { ok: true, discountRupees: discount };
 }

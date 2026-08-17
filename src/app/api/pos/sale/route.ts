@@ -37,8 +37,8 @@ import {
 import {
     selectCouponForCart,
     selectCouponForCartById,
-    selectFreeGrantCoupon,
-    selectAutoFreeGrant,
+    selectOnTopCouponByCode,
+    selectAutoOnTopCoupon,
     finalizeCouponAmount,
     couponExclusionMask,
     recordCouponRedemption,
@@ -446,6 +446,9 @@ export async function POST(req: Request) {
     // exclusivity (today's behavior) still hard-rejects points after the fact.
     let selected: CouponSelection = { kind: "none" };
     let freeSelected: Extract<CouponSelection, { kind: "free-grant" }> | null = null;
+    /// Rule 2 — an independent PARTIAL FREE_ITEM / BOGO coupon: a ₹ discount ON
+    /// TOP of the money coupon (no guard, no exclusivity mask).
+    let onTopSelected: Extract<CouponSelection, { kind: "on-top" }> | null = null;
     let couponExpenseAccountId: number | null = null;
     let couponConfig: { couponExpenseAccountId: number | null; maxTotalDiscountPct: Prisma.Decimal | null } | null = null;
     let couponLines: CartLineLite[] = [];
@@ -480,6 +483,11 @@ export async function POST(req: Request) {
             accountId: isIdentified ? customerAccountId : null,
             lines: couponLines,
             goodsValue,
+            // Tax-inclusive voucher total — the min-bill qualifier for the
+            // GRANT / on-top gates (an independent free item, or a money-grant
+            // item, qualifies against what the customer actually pays). Money
+            // ₹ coupons ignore it (their min-bill stays on goods).
+            billAmountIncl: freeBillAmountIncl,
             billBeforeCoupon: goodsValue,
             isNewCustomer,
             now: new Date(),
@@ -497,53 +505,63 @@ export async function POST(req: Request) {
                 couponId: body.couponId, channel: "POS", input: await buildCouponInput(), protectedProductIds,
             })
             : await selectCouponForCart(prisma, {
-                code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: await buildCouponInput(),
+                code: body.couponCode, autoApply: body.autoApply, channel: "POS", input: await buildCouponInput(), protectedProductIds,
             });
         if (selected.kind === "error") {
             return NextResponse.json({ error: selected.reason, code: "COUPON_REJECTED" }, { status: 422 });
         }
-        // An independent free-grant code typed into the coupon box isn't a ₹
-        // discount — route it to the free slot below.
+        // An independent FREE_ITEM / BOGO code typed into the coupon box isn't a
+        // money ₹ — route it to the on-top slot (grant → free lines, partial →
+        // ₹ on top).
         if (selected.kind === "free-grant") {
             freeSelected = selected;
             selected = { kind: "none" };
+        } else if (selected.kind === "on-top") {
+            onTopSelected = selected;
+            selected = { kind: "none" };
         }
     }
-    // Free-grant slot: an independent FREE_ITEM / BOGO coupon that applies ON
-    // TOP of the money coupon. Never drops tier, never blocks loyalty, never
-    // hits the guard — it just grants free lines.
+    // On-top slot: an independent FREE_ITEM / BOGO coupon that applies ON TOP
+    // of the money coupon. Never drops tier, never blocks loyalty, never hits
+    // the guard — fully free grants free lines (rule 1), a partial adds its ₹
+    // on top (rule 2).
     if (!noDiscountFlag && (body.freeCouponCode || body.freeCouponId != null)) {
         const sel = body.freeCouponId != null
-            // AUTO free-grant offer force-applied by id.
+            // AUTO on-top offer force-applied by id.
             ? await selectCouponForCartById(prisma, {
                 couponId: body.freeCouponId, channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
             })
-            : await selectFreeGrantCoupon(prisma, {
+            : await selectOnTopCouponByCode(prisma, {
                 code: body.freeCouponCode!, channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
             });
         if (sel.kind === "error") {
             return NextResponse.json({ error: sel.reason, code: "FREE_COUPON_REJECTED" }, { status: 422 });
         }
         if (sel.kind === "free-grant") freeSelected = sel;
+        else if (sel.kind === "on-top") onTopSelected = sel;
         else {
-            // A money coupon id can't ride the free slot.
+            // A money coupon (₹ or rule-3 money-grant) can't ride the free slot.
             return NextResponse.json({ error: "This coupon gives a ₹ discount — apply it in the Coupon code box", code: "FREE_COUPON_REJECTED" }, { status: 422 });
         }
     }
-    // Auto free-grant: the best eligible independent AUTO FREE_ITEM / BOGO
-    // offer, granted on top with no code (the client's freeAutoApply flag — the
-    // server re-derives the grant from the cart, so a stale client state can't
-    // drop it off the invoice).
-    if (!noDiscountFlag && !freeSelected && body.freeAutoApply) {
-        const sel = await selectAutoFreeGrant(prisma, {
+    // Auto on-top: the best eligible independent AUTO FREE_ITEM / BOGO offer
+    // (grant or partial), applied on top with no code (the client's
+    // freeAutoApply flag — the server re-derives the grant/₹ from the cart, so
+    // a stale client state can't drop it off the invoice).
+    if (!noDiscountFlag && !freeSelected && !onTopSelected && body.freeAutoApply) {
+        const sel = await selectAutoOnTopCoupon(prisma, {
             channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
         });
         if (sel.kind === "free-grant") freeSelected = sel;
+        else if (sel.kind === "on-top") onTopSelected = sel;
     }
-    // Per-line exclusion mask for the selected coupon (all-false when none selected).
-    const exclusionMask: boolean[] = selected.kind === "ok" ? couponExclusionMask(selected.coupon, couponLines) : body.lines.map(() => false);
-    const lineScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "LINE";
-    const billScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "BILL";
+    // Per-line exclusion mask for the selected coupon (all-false when none
+    // selected). A money-grant (rule 3) is a MONEY coupon — its exclusivity
+    // mask applies too; the on-top slot (rules 1-2) never touches tier/loyalty.
+    const moneyWinner = selected.kind === "ok" || selected.kind === "money-grant" ? selected : null;
+    const exclusionMask: boolean[] = moneyWinner ? couponExclusionMask(moneyWinner.coupon, couponLines) : body.lines.map(() => false);
+    const lineScopeExclusive = moneyWinner != null && !moneyWinner.coupon.stackable && moneyWinner.coupon.stackScope === "LINE";
+    const billScopeExclusive = moneyWinner != null && !moneyWinner.coupon.stackable && moneyWinner.coupon.stackScope === "BILL";
 
     // Server owns the redemption ₹ value — never trust the client. The ceiling is
     // cart-aware: Σ (line net × that item's redeem cap %), folding in the global
@@ -596,6 +614,9 @@ export async function POST(req: Request) {
         const net   = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscAfterCoupon[i], taxRate: l.taxRate }).amount;
         return s + (gross - net);
     }, 0);
+    // Money slot: a ₹ coupon (rule 4) is guard-finalized; a money-grant (rule
+    // 3) has no ₹ (its item is granted as free lines instead). The on-top slot
+    // (rule 2) adds its ₹ on top of the money ₹ — never guard-clamped.
     let couponRupees = 0;
     let couponId: number | null = null;
     if (selected.kind === "ok" && couponConfig) {
@@ -608,12 +629,16 @@ export async function POST(req: Request) {
         });
         couponRupees = fin.couponRupees;
         couponId = selected.coupon.id;
-        if (couponRupees > 0 && couponExpenseAccountId == null) {
-            return NextResponse.json(
-                { error: "Coupon ledger is not configured. Re-run the bootstrap seed.", code: "COUPON_LEDGER_MISSING" },
-                { status: 422 },
-            );
-        }
+    } else if (selected.kind === "money-grant") {
+        couponId = selected.coupon.id;
+    }
+    const onTopRupees = onTopSelected?.discountRupees ?? 0;
+    // Any ₹ discount (money or on-top) needs the coupon expense ledger.
+    if ((couponRupees > 0 || onTopRupees > 0) && couponExpenseAccountId == null) {
+        return NextResponse.json(
+            { error: "Coupon ledger is not configured. Re-run the bootstrap seed.", code: "COUPON_LEDGER_MISSING" },
+            { status: 422 },
+        );
     }
     const computedLines: Array<{
         productId: number; description: string; quantity: number; freeQty: number;
@@ -642,20 +667,23 @@ export async function POST(req: Request) {
             savedSalePricePaise: l.savedSalePricePaise ?? null,
         };
     });
-    // Free-grant line (independent FREE_ITEM / BOGO coupon): the granted item
-    // rides the bill as a zero-price line — quantity 0 + freeQty, so stock and
-    // COGS move (the margin engine counts free units as real cost given away)
-    // but the bill math (subtotal / tax / totals) is untouched. No discount
-    // charge, no guard — the grant is independent by design.
+    // Free-grant lines (rule 1 on-top grant + rule 3 money-grant): the granted
+    // item rides the bill as a zero-price line — quantity 0 + freeQty, so stock
+    // and COGS move (the margin engine counts free units as real cost given
+    // away) but the bill math (subtotal / tax / totals) is untouched. No
+    // discount charge, no guard — grants are ₹-less by design.
     const freeLinesOut: { productId: number; freeQty: number; productName: string }[] = [];
-    if (freeSelected) {
-        const grant = freeSelected.grant;
+    const grantWinners: Array<{ grant: { productId: number; freeQty: number }; couponName: string }> = [
+        ...(freeSelected ? [{ grant: freeSelected.grant, couponName: freeSelected.coupon.name }] : []),
+        ...(selected.kind === "money-grant" ? [{ grant: selected.grant, couponName: selected.coupon.name }] : []),
+    ];
+    for (const { grant, couponName } of grantWinners) {
         const tax = await resolveProductTax(grant.productId);
         const rate = tax.taxability == null || tax.taxability === "TAXABLE" ? (tax.gstRate ?? 0) : 0;
         const freeProduct = await prisma.invProduct.findUnique({ where: { id: grant.productId }, select: { name: true } });
         computedLines.push({
             productId:   grant.productId,
-            description: `FREE · ${freeSelected.coupon.name}`,
+            description: `FREE · ${couponName}`,
             quantity:    0,
             freeQty:     grant.freeQty,
             unitPrice:   0,
@@ -672,8 +700,12 @@ export async function POST(req: Request) {
     // Net GST after the per-line tier discount — what actually posts + prints.
     const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
 
-    const couponCharge = couponRupees > 0 && couponExpenseAccountId != null
-        ? { accountId: couponExpenseAccountId, description: `Coupon: ${body.couponCode ?? "auto"}`, amount: -couponRupees }
+    // Money ₹ + on-top ₹ ride the same negative charge (one leg on the "Coupon
+    // Discounts" ledger). The on-top part is NOT guard-clamped — it is
+    // independent by design; couponRupees already went through the guard.
+    const couponDiscountTotal = couponRupees + onTopRupees;
+    const couponCharge = couponDiscountTotal > 0 && couponExpenseAccountId != null
+        ? { accountId: couponExpenseAccountId, description: `Coupon: ${body.couponCode ?? "auto"}`, amount: -couponDiscountTotal }
         : null;
 
     // Loyalty redemption as a negative charge row on the dedicated ledger. Posts
@@ -967,9 +999,11 @@ export async function POST(req: Request) {
                 data:  { universalVoucherId: gl.universalVoucherId },
             });
 
-            // ── 3a. Coupon: log the redemption (enforces usage limits + powers
-            // return reversal). Non-GL — the discount already posted as a charge.
-            if (couponId != null && couponRupees > 0) {
+            // ── 3a. Coupon: log the redemption(s) (enforces usage limits +
+            // powers return reversal). Non-GL — the discount already posted as
+            // a charge. A money-grant (rule 3) records amount 0 like a grant —
+            // its slot is the money one, but it is ₹-less.
+            if (couponId != null && (couponRupees > 0 || selected.kind === "money-grant")) {
                 await recordCouponRedemption(tx, {
                     couponId,
                     accountId: isIdentified ? customerAccount.id : null,
@@ -978,9 +1012,20 @@ export async function POST(req: Request) {
                     channel:   "POS",
                 });
             }
-            // Free-grant coupon: log its redemption too (usage limits apply —
-            // amount 0, because a free grant is ₹-less by design; the row still
-            // enforces total/per-customer caps and reverses on a full return).
+            // On-top partial (rule 2): its own redemption with its ₹.
+            if (onTopSelected && onTopRupees > 0) {
+                await recordCouponRedemption(tx, {
+                    couponId: onTopSelected.coupon.id,
+                    accountId: isIdentified ? customerAccount.id : null,
+                    universalVoucherId: spineId,
+                    amount:    onTopRupees,
+                    channel:   "POS",
+                });
+            }
+            // Free-grant coupon (rule 1): log its redemption too (usage limits
+            // apply — amount 0, because a free grant is ₹-less by design; the
+            // row still enforces total/per-customer caps and reverses on a full
+            // return).
             if (freeSelected) {
                 await recordCouponRedemption(tx, {
                     couponId: freeSelected.coupon.id,
@@ -1145,9 +1190,10 @@ export async function POST(req: Request) {
                 milestoneBonus,
                 milestoneCoupons,
                 loyaltyBalance: loyaltyResult.newBalance,
-                // Coupon outcome — surfaced on the POS success toast.
-                couponDiscount: couponRupees,
-                couponCode:     couponRupees > 0 ? (body.couponCode ?? "auto") : null,
+                // Coupon outcome — surfaced on the POS success toast (money ₹ +
+                // on-top ₹; a money-grant reports 0 and its free items below).
+                couponDiscount: couponDiscountTotal,
+                couponCode:     couponDiscountTotal > 0 ? (body.couponCode ?? "auto") : null,
                 // Free-grant outcome — the free items added to the bill (zero
                 // price; the receipt prints them with the FREE badge).
                 freeCouponId:   freeSelected?.coupon.id ?? null,

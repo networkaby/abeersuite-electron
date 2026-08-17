@@ -167,17 +167,29 @@ export type CouponHit = {
     rupees: number;
     droppedTier: boolean;
     blockedLoyalty: boolean;
+    /// Rule 3 — a non-independent fully-free FREE_ITEM / BOGO coupon WON the
+    /// money slot: its item is granted as zero-price FREE lines (display rows
+    /// with the FREE badge) while the checkout payload still rides the money
+    /// slot (exclusivity applies server-side). rupees is 0 in this case.
+    freeLines?: { productId: number; freeQty: number; productName: string }[];
 };
 
-/// A validated independent FREE-GRANT coupon (FREE_ITEM / BOGO) — not a ₹
-/// discount: it adds `freeLines` to the bill at zero price (the POS shows the
-/// FREE badge so the counter operator doesn't forget to give the item). It
-/// rides ON TOP of the money coupon — never drops tier / blocks loyalty.
-export type FreeGrantHit = {
+/// A validated hit from the ON-TOP slot — an INDEPENDENT FREE_ITEM / BOGO
+/// coupon applying ON TOP of the money coupon (never drops tier / blocks
+/// loyalty / hits the guard). Two flavours:
+///   • Rule 1 — fully free: grants `freeLines` at zero price (the POS shows
+///     the FREE badge so the counter operator doesn't forget the item).
+///   • Rule 2 — partial (<100%): a ₹ discount (`onTop` true) on its item once
+///     in the cart; `freeLines` is empty and `rupees` is the on-top ₹.
+export type OnTopHit = {
     couponId: number;
     code: string | null;
     name: string;
     freeLines: { productId: number; freeQty: number; productName: string }[];
+    /// Rule 2 — partial: true means this is an on-top ₹ discount (not a grant).
+    onTop?: boolean;
+    /// Rule 2 — the on-top ₹ off the bill.
+    rupees?: number;
 };
 
 /// One offer in the POS "Offers" upsell panel — computed server-side against the

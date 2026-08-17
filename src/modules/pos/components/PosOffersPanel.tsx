@@ -9,7 +9,7 @@ import { CheckCircle2, Flame, Ban, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatInr } from "@/shared/lib/format";
-import type { CouponHit, FreeGrantHit, PosOffer } from "@/modules/pos/lib/posDraftTypes";
+import type { CouponHit, OnTopHit, PosOffer } from "@/modules/pos/lib/posDraftTypes";
 
 export function PosOfferCard({
     o,
@@ -24,9 +24,9 @@ export function PosOfferCard({
     applied: CouponHit | null;
     auto: CouponHit | null;
     /// Independent FREE-GRANT coupon currently on the bill — its cards read "Applied".
-    appliedFree: FreeGrantHit | null;
+    appliedFree: OnTopHit | null;
     /// Auto-applied free-grant coupon — its cards read "Applied" as well.
-    autoFree: FreeGrantHit | null;
+    autoFree: OnTopHit | null;
     onApply: (code: string) => void;
     /// Force-apply a specific AUTO offer by id (AUTO coupons have no code).
     onApplyId: (couponId: number) => void;
@@ -34,8 +34,10 @@ export function PosOfferCard({
     const isApplied = applied?.couponId === o.couponId;
     // An AUTO offer the engine will apply at checkout reads as applied too.
     const isActiveAuto = !isApplied && auto?.couponId === o.couponId;
-    // A free-grant offer applied on top reads as applied for its own card.
-    const isFreeApplied = o.freeGrant && (appliedFree?.couponId === o.couponId || autoFree?.couponId === o.couponId);
+    // An on-top offer applied on top reads as applied for its own card — the
+    // on-top slot only ever holds independent FREE_ITEM / BOGO hits (grants and
+    // partials alike), so matching by couponId is safe.
+    const isFreeApplied = appliedFree?.couponId === o.couponId || autoFree?.couponId === o.couponId;
     const appliedState = isApplied || isActiveAuto || isFreeApplied;
     // One-click apply code (ready CODE offers only) — captured so the click
     // closure keeps the string narrowing.

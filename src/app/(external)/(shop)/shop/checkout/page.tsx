@@ -261,6 +261,8 @@ export default function ShopCheckoutPage() {
         tierPct: number; tierLabel: string | null; discountPaise: number;
         coupon: { code: string; name: string; discountPaise: number; droppedTier: boolean } | null;
         freeGrant: { code: string; productName: string; freeQty: number } | null;
+        moneyGrant: { code: string; productName: string; freeQty: number } | null;
+        onTop: { code: string; name: string; discountPaise: number } | null;
         couponError: string | null;
         loyalty: {
             balance: number; redeemValue: number; minRedeemPoints: number;
@@ -306,9 +308,10 @@ export default function ShopCheckoutPage() {
     const previewLive = !!activeAccountId && lines.length > 0 && !!tierPreview;
     const tierDiscount = previewLive ? tierPreview!.discountPaise : 0;
     const couponDiscount = previewLive ? (tierPreview!.coupon?.discountPaise ?? 0) : 0;
+    const onTopDiscount = previewLive ? (tierPreview!.onTop?.discountPaise ?? 0) : 0;
     const loyaltyDiscount = previewLive ? (tierPreview!.loyalty?.redeemPaise ?? 0) : 0;
 
-    const grand = Math.max(0, total - tierDiscount - couponDiscount - loyaltyDiscount) + shipping;
+    const grand = Math.max(0, total - tierDiscount - couponDiscount - onTopDiscount - loyaltyDiscount) + shipping;
 
     // The "Pay on delivery" rail shows only when active AND it serves this address.
     const podShown = !!pod && pod.active && pod.availableHere;
@@ -736,16 +739,27 @@ export default function ShopCheckoutPage() {
                                 <span className="tabular-nums font-medium">−{formatRupeesFromPaise(loyaltyDiscount)}</span>
                             </div>
                         )}
-                        {/* Independent FREE-GRANT item (Free item / Buy X get Y) —
-                            added to the order as a zero-price line; no ₹ row. */}
-                        {tierPreview?.freeGrant && (
+                        {/* Free item (Free item / Buy X get Y) — added to the
+                            order as a zero-price line; no ₹ row. An independent
+                            grant (rule 1) or a money-slot grant (rule 3). */}
+                        {(tierPreview?.freeGrant || tierPreview?.moneyGrant) && (
                             <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
                                 <span>
-                                    {tierPreview.freeGrant.productName}
-                                    {tierPreview.freeGrant.freeQty > 1 ? ` × ${tierPreview.freeGrant.freeQty}` : ""}{" "}
+                                    {tierPreview.freeGrant?.productName ?? tierPreview.moneyGrant?.productName}
+                                    {(tierPreview.freeGrant?.freeQty ?? tierPreview.moneyGrant?.freeQty ?? 0) > 1
+                                        ? ` × ${tierPreview.freeGrant?.freeQty ?? tierPreview.moneyGrant?.freeQty}`
+                                        : ""}{" "}
                                     FREE
                                 </span>
                                 <span className="tabular-nums font-medium">FREE</span>
+                            </div>
+                        )}
+                        {/* Rule 2 — an independent PARTIAL (<100%) FREE_ITEM / BOGO
+                            on top: a ₹ discount never guard-clamped. */}
+                        {tierPreview?.onTop && (
+                            <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                                <span>On top ({tierPreview.onTop.name})</span>
+                                <span className="tabular-nums font-medium">−{formatRupeesFromPaise(tierPreview.onTop.discountPaise)}</span>
                             </div>
                         )}
                         {/* Coupon code — logged-in only (benefits need an identified

@@ -189,10 +189,17 @@ export async function POST(req: Request) {
         const tierDiscountInclPaise = benefits.discountInclPaise;
         const lineTierDiscPaise = benefits.lineDiscPaise;
         const couponPaise = benefits.coupon?.discountPaise ?? 0;
+        // Rule 2 — independent PARTIAL (<100%) FREE_ITEM / BOGO on top: a ₹
+        // discount never guard-clamped, never dropping tier / blocking loyalty.
+        const onTopPaise = benefits.onTop?.discountPaise ?? 0;
         // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — the granted item
         // rides the order as a zero-price line; it never touches totalPaise.
         const freeGrant = benefits.freeGrant;
-        totalPaise -= tierDiscountInclPaise + couponPaise + loyaltyPaise; // gateway/COD charges the NET
+        // Rule 3 — a non-independent fully-free FREE_ITEM / BOGO that won the
+        // MONEY slot: its item rides the order as a zero-price line too (the
+        // coupon fields on the order carry it — exclusivity applies).
+        const moneyGrant = benefits.moneyGrant;
+        totalPaise -= tierDiscountInclPaise + couponPaise + onTopPaise + loyaltyPaise; // gateway/COD charges the NET
 
         // Place the order on the sales-orders pipeline (P7) at its entry stage —
         // it becomes a ticket on the staff orders board.
@@ -204,22 +211,27 @@ export async function POST(req: Request) {
         // invoice posts) is taken atomically with the order that spends it.
         const t = await prisma.$transaction(async (tx) => {
             let couponRedemptionId: number | null = null;
-            if (benefits.coupon) {
+            // Money slot: the ₹ coupon (rule 4) OR a money-grant (rule 3 —
+            // amount 0; the slot is still the money one, so its redemption
+            // rides the coupon fields).
+            const moneyWinner = benefits.coupon ?? (moneyGrant ? { id: moneyGrant.couponId, code: moneyGrant.code, name: moneyGrant.name, discountPaise: 0 } : null);
+            if (moneyWinner) {
                 const red = await tx.couponRedemption.create({
                     data: {
-                        couponId:  benefits.coupon.id,
+                        couponId:  moneyWinner.id,
                         accountId,
                         universalVoucherId: null,   // stamped by the invoice conversion
-                        amount:    couponPaise / 100,
+                        amount:    moneyWinner.discountPaise / 100,
                         channel:   "SHOP",
                     },
                     select: { id: true },
                 });
                 couponRedemptionId = red.id;
             }
-            // Free-grant coupon: take its usage slot too (amount 0 — a free grant
-            // is ₹-less by design; the row still enforces total/per-customer caps
-            // and reverses on a full return, exactly like the POS counter).
+            // Free-grant coupon (rule 1): take its usage slot too (amount 0 — a
+            // free grant is ₹-less by design; the row still enforces
+            // total/per-customer caps and reverses on a full return, exactly
+            // like the POS counter).
             let freeCouponRedemptionId: number | null = null;
             if (freeGrant) {
                 const red = await tx.couponRedemption.create({
@@ -233,6 +245,21 @@ export async function POST(req: Request) {
                     select: { id: true },
                 });
                 freeCouponRedemptionId = red.id;
+            }
+            // Rule 2 — on-top partial: its own usage slot with its ₹.
+            let onTopRedemptionId: number | null = null;
+            if (benefits.onTop) {
+                const red = await tx.couponRedemption.create({
+                    data: {
+                        couponId: benefits.onTop.couponId,
+                        accountId,
+                        universalVoucherId: null,   // stamped by the invoice conversion
+                        amount:    onTopPaise / 100,
+                        channel:   "SHOP",
+                    },
+                    select: { id: true },
+                });
+                onTopRedemptionId = red.id;
             }
             return tx.ticket.create({
             data: {
@@ -250,9 +277,14 @@ export async function POST(req: Request) {
                         tierDiscountPaise: tierDiscountInclPaise,
                         tierDiscountPct: benefits.tierPct > 0 && tierDiscountInclPaise > 0 ? benefits.tierPct : null,
                         tierLabel: tierDiscountInclPaise > 0 ? benefits.tierLabel : null,
-                        couponId: benefits.coupon?.id ?? null,
-                        // Codeless AUTO offers freeze their display name instead.
-                        couponCode: benefits.coupon ? (benefits.coupon.code ?? benefits.coupon.name) : null,
+                        // The money winner — a ₹ coupon (rule 4) or a money-grant
+                        // (rule 3, couponDiscountPaise 0 — its item is the free
+                        // line below). Codeless AUTO offers freeze their display
+                        // name instead.
+                        couponId: benefits.coupon?.id ?? moneyGrant?.couponId ?? null,
+                        couponCode: benefits.coupon ? (benefits.coupon.code ?? benefits.coupon.name)
+                            : moneyGrant ? (moneyGrant.code ?? moneyGrant.name)
+                            : null,
                         couponDiscountPaise: couponPaise,
                         couponRedemptionId,
                         // Independent FREE-GRANT coupon — the item rides the order
@@ -261,6 +293,11 @@ export async function POST(req: Request) {
                         freeCouponId: freeGrant?.couponId ?? null,
                         freeCouponCode: freeGrant ? (freeGrant.code ?? freeGrant.name) : null,
                         freeCouponRedemptionId,
+                        // Rule 2 — on-top partial ₹ (never guard-clamped).
+                        onTopCouponId: benefits.onTop?.couponId ?? null,
+                        onTopCouponCode: benefits.onTop ? (benefits.onTop.code ?? benefits.onTop.name) : null,
+                        onTopDiscountPaise: onTopPaise,
+                        onTopRedemptionId,
                         // Frozen loyalty redemption (points burn at invoice post).
                         loyaltyRedeemPoints: loyaltyPts,
                         loyaltyRedeemPaise: loyaltyPaise,
@@ -301,13 +338,24 @@ export async function POST(req: Request) {
                                     // conversion replays it as the line's discountAmt.
                                     tierDiscountPaise: lineTierDiscPaise.get(i) ?? 0,
                                 })),
-                                // The granted free item as a zero-price line (quantity 0 +
-                                // freeQty) — stock + COGS move at invoice, no money.
+                                // The granted free items as zero-price lines
+                                // (quantity 0 + freeQty) — stock + COGS move at
+                                // invoice, no money. Both the on-top grant (rule 1)
+                                // and a money-slot grant (rule 3) can be present.
                                 ...(freeGrant
                                     ? [{
                                         productId: freeGrant.productId,
                                         quantity: 0,
                                         freeQty: freeGrant.freeQty,
+                                        unitPricePaise: 0,
+                                        tierDiscountPaise: 0,
+                                    }]
+                                    : []),
+                                ...(moneyGrant
+                                    ? [{
+                                        productId: moneyGrant.productId,
+                                        quantity: 0,
+                                        freeQty: moneyGrant.freeQty,
                                         unitPricePaise: 0,
                                         tierDiscountPaise: 0,
                                     }]
@@ -339,10 +387,15 @@ export async function POST(req: Request) {
             couponDiscountPaise: t.order?.couponDiscountPaise ?? 0,
             loyaltyRedeemPoints: t.order?.loyaltyRedeemPoints ?? 0,
             loyaltyRedeemPaise: t.order?.loyaltyRedeemPaise ?? 0,
-            // Independent FREE-GRANT item (if any) — shown as a FREE row on the order page.
-            freeItems: freeGrant
-                ? [{ productId: freeGrant.productId, freeQty: freeGrant.freeQty, productName: freeGrant.productName }]
-                : [],
+            // Free items — an on-top grant (rule 1) and/or a money-slot grant
+            // (rule 3) — shown as FREE rows on the order page.
+            freeItems: [
+                ...(freeGrant ? [{ productId: freeGrant.productId, freeQty: freeGrant.freeQty, productName: freeGrant.productName }] : []),
+                ...(moneyGrant ? [{ productId: moneyGrant.productId, freeQty: moneyGrant.freeQty, productName: moneyGrant.productName }] : []),
+            ],
+            // Rule 2 — on-top partial ₹ row for the order page.
+            onTopDiscountPaise: onTopPaise,
+            onTopCouponCode: benefits.onTop ? (benefits.onTop.code ?? benefits.onTop.name) : null,
             paymentMethod: isCod ? "COD" : "ONLINE",
             status: t.order?.legacyStatus,
         };

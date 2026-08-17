@@ -39,6 +39,8 @@ export default async function ShopOrderConfirmationPage({
             tierLabel: true,
             couponCode: true,
             couponDiscountPaise: true,
+            onTopCouponCode: true,
+            onTopDiscountPaise: true,
             loyaltyRedeemPoints: true,
             loyaltyRedeemPaise: true,
             courier: true,
@@ -156,6 +158,12 @@ export default async function ShopOrderConfirmationPage({
                     <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-emerald-600 dark:text-emerald-400">
                         <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ""}</span>
                         <span>−{formatRupeesFromPaise(order.couponDiscountPaise)}</span>
+                    </li>
+                )}
+                {order.onTopDiscountPaise > 0 && (
+                    <li className="flex justify-between gap-2 border-t border-border pt-1 mt-1 text-emerald-600 dark:text-emerald-400">
+                        <span>On top{order.onTopCouponCode ? ` (${order.onTopCouponCode})` : ""}</span>
+                        <span>−{formatRupeesFromPaise(order.onTopDiscountPaise)}</span>
                     </li>
                 )}
                 {order.loyaltyRedeemPaise > 0 && (

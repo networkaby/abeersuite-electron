@@ -4,12 +4,13 @@ import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveC
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import {
     selectCouponForCart,
-    selectAutoFreeGrant,
+    selectAutoOnTopCoupon,
     finalizeCouponAmount,
     couponExclusionMask,
     type CartLineLite,
     type EvalInput,
     type CouponSelection,
+    type CouponContext,
 } from "@/modules/coupons/lib";
 import {
     ratesFromConfig,
@@ -82,6 +83,28 @@ export type ShopCartBenefits = {
         productName: string;
         freeQty: number;
     } | null;
+    /** Rule 2 — an independent PARTIAL (<100%) FREE_ITEM / BOGO coupon riding
+     *  ON TOP of the money coupon: a ₹ discount (never guard-clamped, never
+     *  drops tier / blocks loyalty). null = none. */
+    onTop: {
+        couponId: number;
+        /** Coupon code — null on a codeless AUTO offer (fall back to `name`). */
+        code: string | null;
+        name: string;
+        discountPaise: number;
+    } | null;
+    /** Rule 3 — a NON-independent fully-free FREE_ITEM / BOGO coupon that WON
+     *  the money slot: its item rides the order as a zero-price line too, but
+     *  with money-slot semantics (exclusivity mask applies). null = none. */
+    moneyGrant: {
+        couponId: number;
+        /** Coupon code — null on a codeless AUTO offer (fall back to `name`). */
+        code: string | null;
+        name: string;
+        productId: number;
+        productName: string;
+        freeQty: number;
+    } | null;
     /** Rejection reason when an EXPLICIT code failed (auto-apply fails silently). */
     couponError: string | null;
     /** Loyalty context + the validated redemption (null when the programme or
@@ -125,7 +148,7 @@ export async function computeShopCartBenefits(
     if ((flagAcct?.person?.noDiscount ?? flagAcct?.company?.noDiscount) === true) {
         return {
             tierPct: 0, tierLabel: null, discountInclPaise: 0, lineDiscPaise: new Map(),
-            coupon: null, freeGrant: null,
+            coupon: null, freeGrant: null, onTop: null, moneyGrant: null,
             couponError: opts.couponCode?.trim() ? "This coupon isn't applicable on this order." : null,
             loyalty: null,
         };
@@ -154,7 +177,7 @@ export async function computeShopCartBenefits(
     if (lines.length === 0) {
         return {
             tierPct, tierLabel, discountInclPaise: 0, lineDiscPaise: new Map(),
-            coupon: null, freeGrant: null, couponError: null, loyalty: null,
+            coupon: null, freeGrant: null, onTop: null, moneyGrant: null, couponError: null, loyalty: null,
         };
     }
 
@@ -216,6 +239,8 @@ export async function computeShopCartBenefits(
     // lines the coupon touches BEFORE the loyalty ceiling is computed.
     let coupon: ShopCartBenefits["coupon"] = null;
     let freeGrant: ShopCartBenefits["freeGrant"] = null;
+    let onTop: ShopCartBenefits["onTop"] = null;
+    let moneyGrant: ShopCartBenefits["moneyGrant"] = null;
     let couponError: string | null = null;
     let selected: CouponSelection = { kind: "none" };
     let couponConfig: { couponExpenseAccountId: number | null } | null = null;
@@ -223,7 +248,9 @@ export async function computeShopCartBenefits(
     let couponGoodsValue = 0;
     // The granted item + name for display — the order route freezes it as a
     // zero-price TicketOrderLine (freeQty), exactly like the POS counter.
-    const toGrant = async (sel: Extract<CouponSelection, { kind: "free-grant" }>): Promise<NonNullable<ShopCartBenefits["freeGrant"]>> => {
+    // Works for both grant flavours (rule 1 on-top and rule 3 money) — both
+    // carry the same { coupon, grant } shape.
+    const toGrant = async (sel: { coupon: CouponContext; grant: { productId: number; freeQty: number } }): Promise<NonNullable<ShopCartBenefits["freeGrant"]>> => {
         const p = await db.invProduct.findUnique({ where: { id: sel.grant.productId }, select: { name: true } });
         return {
             couponId: sel.coupon.id,
@@ -273,26 +300,47 @@ export async function computeShopCartBenefits(
                     code: opts.couponCode, autoApply: opts.autoApply, channel: "SHOP", input,
                 });
                 if (selected.kind === "error") couponError = selected.reason;
-                // A typed independent FREE-GRANT code (FREE_ITEM / BOGO) isn't a
-                // ₹ discount — route it to the free slot: the item rides the
-                // order as a zero-price line, exactly like the POS counter.
+                // A typed independent FREE_ITEM / BOGO code isn't a money ₹ —
+                // route it to the on-top slot: fully free → the grant (rule 1),
+                // partial → the on-top ₹ (rule 2).
                 else if (selected.kind === "free-grant") {
                     freeGrant = await toGrant(selected);
                     selected = { kind: "none" };
+                } else if (selected.kind === "on-top") {
+                    onTop = {
+                        couponId: selected.coupon.id,
+                        code: selected.coupon.code,
+                        name: selected.coupon.name,
+                        discountPaise: Math.round(selected.discountRupees * 100),
+                    };
+                    selected = { kind: "none" };
+                } else if (selected.kind === "money-grant") {
+                    // Rule 3 — kept as the MONEY winner (exclusivity applies);
+                    // the grant is materialized after the tier interplay below.
                 }
             }
-            // Free-grant slot: a typed free-grant code won above; otherwise the
-            // best eligible AUTO free-grant fires on its own (POS parity). No
-            // expense ledger needed — a free grant posts no ₹ charge.
-            if (!freeGrant) {
-                const autoFree = await selectAutoFreeGrant(db, { channel: "SHOP", input, protectedProductIds });
-                if (autoFree.kind === "free-grant") freeGrant = await toGrant(autoFree);
+            // On-top slot: a typed independent code won above; otherwise the
+            // best eligible AUTO on-top offer fires on its own (POS parity). No
+            // expense ledger needed for a grant — but a partial's ₹ does need it
+            // (checked in the orders route, which freezes the charge).
+            if (!freeGrant && !onTop) {
+                const autoTop = await selectAutoOnTopCoupon(db, { channel: "SHOP", input, protectedProductIds });
+                if (autoTop.kind === "free-grant") freeGrant = await toGrant(autoTop);
+                else if (autoTop.kind === "on-top") {
+                    onTop = {
+                        couponId: autoTop.coupon.id,
+                        code: autoTop.coupon.code,
+                        name: autoTop.coupon.name,
+                        discountPaise: Math.round(autoTop.discountRupees * 100),
+                    };
+                }
             }
         }
     }
-    const exclusionMask: boolean[] = selected.kind === "ok" ? couponExclusionMask(selected.coupon, couponLines) : lines.map(() => false);
-    const lineScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "LINE";
-    const billScopeExclusive = selected.kind === "ok" && !selected.coupon.stackable && selected.coupon.stackScope === "BILL";
+    const moneyWinner = selected.kind === "ok" || selected.kind === "money-grant" ? selected : null;
+    const exclusionMask: boolean[] = moneyWinner ? couponExclusionMask(moneyWinner.coupon, couponLines) : lines.map(() => false);
+    const lineScopeExclusive = moneyWinner != null && !moneyWinner.coupon.stackable && moneyWinner.coupon.stackScope === "LINE";
+    const billScopeExclusive = moneyWinner != null && !moneyWinner.coupon.stackable && moneyWinner.coupon.stackScope === "BILL";
 
     // ── Loyalty redemption (validate + clamp; burning happens at invoice) ──
     let loyalty: ShopCartBenefits["loyalty"] = null;
@@ -396,6 +444,29 @@ export async function computeShopCartBenefits(
                 };
             }
         }
+    } else if (selected.kind === "money-grant") {
+        // Rule 3 — the money slot's fully-free winner: no ₹, but the
+        // exclusivity interplay is real (a non-stackable grant still drops the
+        // tier / blocks points). Grant materializes when it actually applies.
+        const redeeming = (loyalty?.redeemPoints ?? 0) > 0;
+        if (billScopeExclusive && redeeming && opts.couponCode?.trim()) {
+            // Explicit code + points conflict — surface it, apply neither.
+            couponError = "This coupon can't be combined with loyalty points. Remove the points to use it.";
+            applyTierInFull();
+        } else if (billScopeExclusive && redeeming) {
+            // Best AUTO money-grant vs chosen points → points win; grant skipped.
+            applyTierInFull();
+        } else {
+            for (const [i, discExcl] of rawLineDisc) {
+                const scaled = exclusionMask[i] ? 0 : discExcl;
+                if (scaled <= 0) continue;
+                const rate = taxRateById.get(lines[i].productId) ?? 0;
+                lineDiscPaise.set(i, Math.round(scaled));
+                inclEffect += scaled * (1 + rate / 100);
+            }
+            droppedTier = inclEffect < rawInclEffect - 0.5;
+            moneyGrant = await toGrant(selected);
+        }
     } else {
         // No coupon applying (none selected, or none configured) — tier applies
         // in full, unaffected.
@@ -406,7 +477,7 @@ export async function computeShopCartBenefits(
         tierPct, tierLabel,
         discountInclPaise: Math.round(inclEffect),
         lineDiscPaise,
-        coupon, freeGrant, couponError,
+        coupon, freeGrant, onTop, moneyGrant, couponError,
         loyalty,
     };
 }

@@ -66,9 +66,16 @@ export function PosScreenShell({
     // Hoisted so narrowing survives into the JSX callbacks below. The effective
     // free grant = a manually applied free code (appliedFree) or the best
     // auto-apply free offer (autoFree) — both render as FREE rows in the item list.
+    // A money-grant (rule 3: a fully-free non-independent coupon that won the
+    // money slot) carries its free lines on the COUPON hit instead — rendered
+    // the same way (appliedCoupon beats autoCoupon).
     const appliedFree = b.appliedFree;
     const autoFree = b.autoFree;
     const effectiveFree = appliedFree ?? autoFree;
+    const effectiveMoneyGrant =
+        b.appliedCoupon?.freeLines?.length ? b.appliedCoupon
+        : b.autoCoupon?.freeLines?.length ? b.autoCoupon
+        : null;
 
     // Router for the help-page fallback when the browser blocks the new tab.
     const router = useRouter();
@@ -400,29 +407,43 @@ export function PosScreenShell({
                                     </ul>
                                 )}
                                 {/* FREE-grant items (independent FREE_ITEM / BOGO
-                                coupon) — rendered as rows INSIDE the item list so
-                                the cashier sees the free item right where the paid
-                                items are (auto-applied offers land here the moment
-                                the cart qualifies). Zero price by design; the
-                                server re-derives the line at checkout from the
-                                coupon, so these rows are display-only. */}
-                                {effectiveFree && effectiveFree.freeLines.length > 0 && b.cart.length > 0 && (
-                                    <ul className="divide-y divide-border border-t border-emerald-300/40 bg-emerald-50/40 dark:border-emerald-500/20 dark:bg-emerald-950/10">
-                                        {effectiveFree.freeLines.map((f) => (
-                                            <li key={f.productId} className="flex items-center gap-2 border-l-2 border-l-emerald-400/70 px-3 py-1.5 text-xs">
-                                                <Gift size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="truncate text-sm font-medium">{f.freeQty} × {f.productName}</div>
-                                                    <div className="font-mono text-[10px] text-emerald-700/80 dark:text-emerald-300/80">
-                                                        {effectiveFree.code ?? effectiveFree.name} · ₹0.00
+                                coupon, rule 1 — or a money-grant that won the
+                                money slot, rule 3) — rendered as rows INSIDE the
+                                item list so the cashier sees the free item right
+                                where the paid items are (auto-applied offers land
+                                here the moment the cart qualifies). Zero price by
+                                design; the server re-derives the line at checkout
+                                from the coupon, so these rows are display-only. */}
+                                {(() => {
+                                    const rows: Array<{ key: string; freeQty: number; productName: string; label: string }> = [
+                                        ...(effectiveFree?.freeLines ?? []).map((f) => ({
+                                            key: `free-${f.productId}`, freeQty: f.freeQty, productName: f.productName,
+                                            label: effectiveFree?.code ?? effectiveFree?.name ?? "FREE",
+                                        })),
+                                        ...(effectiveMoneyGrant?.freeLines ?? []).map((f) => ({
+                                            key: `mg-${f.productId}`, freeQty: f.freeQty, productName: f.productName,
+                                            label: effectiveMoneyGrant?.code ?? effectiveMoneyGrant?.name ?? "FREE",
+                                        })),
+                                    ];
+                                    if (rows.length === 0 || b.cart.length === 0) return null;
+                                    return (
+                                        <ul className="divide-y divide-border border-t border-emerald-300/40 bg-emerald-50/40 dark:border-emerald-500/20 dark:bg-emerald-950/10">
+                                            {rows.map((f) => (
+                                                <li key={f.key} className="flex items-center gap-2 border-l-2 border-l-emerald-400/70 px-3 py-1.5 text-xs">
+                                                    <Gift size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="truncate text-sm font-medium">{f.freeQty} × {f.productName}</div>
+                                                        <div className="font-mono text-[10px] text-emerald-700/80 dark:text-emerald-300/80">
+                                                            {f.label} · ₹0.00
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <Badge className="shrink-0 border-0 bg-emerald-600 text-[9px] font-bold text-white">FREE</Badge>
-                                                <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">₹0.00</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                                    <Badge className="shrink-0 border-0 bg-emerald-600 text-[9px] font-bold text-white">FREE</Badge>
+                                                    <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">₹0.00</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    );
+                                })()}
                             </div>
 
                             {/* Add service charge — pick a service from the catalogue
@@ -507,6 +528,7 @@ export function PosScreenShell({
                                 applyCoupon={b.applyCoupon}
                                 couponBusy={b.couponBusy}
                                 appliedFree={b.appliedFree}
+                                autoFree={b.autoFree}
                                 clearFreeCoupon={b.clearFreeCoupon}
                                 applyFreeCoupon={b.applyFreeCoupon}
                                 freeBusy={b.freeBusy}

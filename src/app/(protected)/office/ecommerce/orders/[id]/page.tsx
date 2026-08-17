@@ -78,6 +78,10 @@ type OrderDetail = {
     tierLabel: string | null;
     couponCode: string | null;
     couponDiscountPaise: number;
+    // Rule 2 — independent PARTIAL (<100%) FREE_ITEM / BOGO on top (₹ never
+    // guard-clamped).
+    onTopCouponCode: string | null;
+    onTopDiscountPaise: number;
     loyaltyRedeemPoints: number;
     loyaltyRedeemPaise: number;
     razorpayPaymentId: string | null;
@@ -406,6 +410,12 @@ export default function EcommerceOrderDetailPage() {
                                 <p className="flex justify-between text-emerald-600 dark:text-emerald-400">
                                     <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ""}</span>
                                     <span>−{formatRupeesFromPaise(order.couponDiscountPaise)}</span>
+                                </p>
+                            )}
+                            {(order.onTopDiscountPaise ?? 0) > 0 && (
+                                <p className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                                    <span>On top{order.onTopCouponCode ? ` (${order.onTopCouponCode})` : ""}</span>
+                                    <span>−{formatRupeesFromPaise(order.onTopDiscountPaise)}</span>
                                 </p>
                             )}
                             {(order.loyaltyRedeemPaise ?? 0) > 0 && (

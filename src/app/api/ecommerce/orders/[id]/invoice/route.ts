@@ -117,6 +117,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                         couponRedemptionId: true,
                         freeCouponCode: true,
                         freeCouponRedemptionId: true,
+                        onTopCouponCode: true,
+                        onTopDiscountPaise: true,
+                        onTopRedemptionId: true,
                         loyaltyRedeemPoints: true,
                         loyaltyRedeemPaise: true,
                         shippingName: true,
@@ -160,9 +163,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             // 0 + freeQty — stock + COGS move (the margin engine counts free units
             // as real cost given away) but the bill math is untouched. POS parity.
             if ((l.freeQty ?? 0) > 0) {
+                // The label falls back to the money-slot coupon (a rule-3
+                // money-grant's line is stamped with its own coupon).
                 computedLines.push({
                     productId: l.productId,
-                    description: `FREE · ${t.order.freeCouponCode ?? "Offer"}`,
+                    description: `FREE · ${t.order.freeCouponCode ?? t.order.couponCode ?? "Offer"}`,
                     quantity: 0,
                     rate: 0,
                     taxRate: 0,
@@ -212,10 +217,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const shippingTaxAmt = (shipping * shippingGstRate) / (100 + shippingGstRate);
 
         // The checkout-frozen coupon replays as a NEGATIVE charge row (Dr the
-        // coupon expense ledger — same shape as the POS sale's coupon leg).
+        // coupon expense ledger — same shape as the POS sale's coupon leg). The
+        // on-top partial (rule 2) rides the SAME leg — its ₹ is never
+        // guard-clamped, exactly as at checkout.
         const couponRupees = (t.order.couponDiscountPaise ?? 0) / 100;
+        const onTopRupees = (t.order.onTopDiscountPaise ?? 0) / 100;
+        const couponTotalRupees = couponRupees + onTopRupees;
         let couponCharge: { accountId: number; amount: number; description: string } | null = null;
-        if (couponRupees > 0.005) {
+        if (couponTotalRupees > 0.005) {
             const couponConfig = await prisma.couponConfig.findUnique({ where: { id: 1 } });
             if (couponConfig?.couponExpenseAccountId == null) {
                 return NextResponse.json(
@@ -223,10 +232,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     { status: 422 },
                 );
             }
+            const onTopTag = onTopRupees > 0.005 && t.order.onTopCouponCode
+                ? ` + ${t.order.onTopCouponCode} on top`
+                : "";
             couponCharge = {
                 accountId: couponConfig.couponExpenseAccountId,
-                amount: -couponRupees,
-                description: `Coupon ${t.order.couponCode ?? ""}`.trim(),
+                amount: -couponTotalRupees,
+                description: `Coupon ${t.order.couponCode ?? ""}${onTopTag}`.trim(),
             };
         }
 
@@ -483,6 +495,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     data: { universalVoucherId: spineId },
                 });
             }
+            // And the on-top partial's slot (amount = its ₹).
+            if (t.order!.onTopRedemptionId != null) {
+                await tx.couponRedemption.updateMany({
+                    where: { id: t.order!.onTopRedemptionId, universalVoucherId: null },
+                    data: { universalVoucherId: spineId },
+                });
+            }
 
             // ── Loyalty: burn the frozen redemption + earn on the goods + any
             // lifetime-spend milestones — one applyLoyaltyForSale, POS parity.
@@ -493,11 +512,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     accountId,
                     universalVoucherId: spineId,
                     earnLines,
-                    combinedDiscount: ((t.order!.tierDiscountPaise ?? 0) / 100) + couponRupees + redeemRupees,
+                    combinedDiscount: ((t.order!.tierDiscountPaise ?? 0) / 100) + couponTotalRupees + redeemRupees,
                     redeemPoints,
                     // Pre-redemption bill value gates minEarnInvoiceValue — the
                     // paid total plus everything discounted off it.
-                    invoiceValue: paidTotal + ((t.order!.tierDiscountPaise ?? 0) / 100) + couponRupees + redeemRupees,
+                    invoiceValue: paidTotal + ((t.order!.tierDiscountPaise ?? 0) / 100) + couponTotalRupees + redeemRupees,
                     rates: loyaltyRates,
                     rulesIndex,
                     taxonomyMaps,

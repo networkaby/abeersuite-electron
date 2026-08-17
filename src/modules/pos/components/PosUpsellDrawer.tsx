@@ -19,7 +19,7 @@ import { X, Sparkles, PackagePlus, Flame, History, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatInr } from "@/shared/lib/format";
-import type { CouponHit, FreeGrantHit, PosOffer, ProductOption } from "@/modules/pos/lib/posDraftTypes";
+import type { CouponHit, OnTopHit, PosOffer, ProductOption } from "@/modules/pos/lib/posDraftTypes";
 import { PosOfferCard } from "@/modules/pos/components/PosOffersPanel";
 
 export function PosUpsellDrawer({
@@ -42,10 +42,10 @@ export function PosUpsellDrawer({
     autoCoupon: CouponHit | null;
     /// Independent FREE-GRANT coupon currently on the bill (its cards read
     /// "Applied" too).
-    appliedFree: FreeGrantHit | null;
+    appliedFree: OnTopHit | null;
     /// Auto-applied free-grant coupon — its cards read "Applied" as well
     /// (the free rows are in the item list).
-    autoFree: FreeGrantHit | null;
+    autoFree: OnTopHit | null;
     applyOffer: (code: string) => void;
     /// Force-apply a specific AUTO offer by id (AUTO coupons have no code).
     applyOfferById: (couponId: number) => void;

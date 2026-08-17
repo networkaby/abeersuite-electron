@@ -11,6 +11,7 @@ import {
     computeCouponDiscount,
     freeGrantForCoupon,
     isFreeGrantCoupon,
+    isMoneyGrantCoupon,
     loadPosOffers,
     type CouponContext,
     type EvalInput,
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
             // ── Progress: the gate the cashier can push on ─────────────
             let progress: { current: number; target: number; unit: "₹" | "units"; pct: number } | null = null;
             let gapText: string | null = null;
-            if (c.type === "BOGO" && (c.buyProductId != null || isFreeGrantCoupon(c))) {
+            if (c.type === "BOGO" && (c.buyProductId != null || isFreeGrantCoupon(c) || isMoneyGrantCoupon(c))) {
                 // Buy-side gate in units — the number the cashier can push on.
                 // Every buyQty units unlock getQty free ("Buy 1 get 1" = 1 unit →
                 // 1 free, 12 units → 12 free), so the first free unit unlocks at
@@ -229,6 +230,19 @@ export async function POST(req: Request) {
                     // Independent FREE_ITEM / BOGO — grants a free line instead of a
                     // ₹ discount, so readiness is the free-grant gate (min bill /
                     // window / usage / the BOGO buy side), never "item in cart".
+                    const gate = checkFreeGrantEligibility(c, input);
+                    if (!gate.ok) {
+                        if (!gate.reason.startsWith("Minimum bill")) note = gate.reason;
+                    } else if (freeGrantForCoupon(c, input.lines)) {
+                        status = "ready";
+                    } else if (gapText == null) {
+                        note = "Buy more to unlock the offer";
+                    }
+                } else if (isMoneyGrantCoupon(c)) {
+                    // Rule 3 — a NON-independent fully-free FREE_ITEM / BOGO that
+                    // wins the money slot grants its item (auto-added, need not be
+                    // in the cart). Readiness is the same grant gate; it is still a
+                    // MONEY coupon (exclusivity applies), so freeGrant stays false.
                     const gate = checkFreeGrantEligibility(c, input);
                     if (!gate.ok) {
                         if (!gate.reason.startsWith("Minimum bill")) note = gate.reason;

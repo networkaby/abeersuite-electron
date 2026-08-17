@@ -225,6 +225,15 @@ model TicketOrder {
   freeCouponId            Int?
   freeCouponCode          String?
   freeCouponRedemptionId  Int?
+  // Rule 2 — independent PARTIAL (<100%) FREE_ITEM / BOGO coupon FROZEN at
+  // checkout: a ₹ discount ON TOP of the money coupon (never guard-clamped,
+  // never drops tier / blocks loyalty). totalPaise is already NET of it; the
+  // invoice conversion posts it as a negative coupon charge and stamps the
+  // redemption, exactly like the money coupon.
+  onTopCouponId           Int?
+  onTopCouponCode         String?
+  onTopDiscountPaise      Int     @default(0)
+  onTopRedemptionId       Int?
   // Loyalty redemption FROZEN at checkout (points + ₹ value; validated against
   // balance / floors / the cart-aware redeem ceiling — same clampRedemption as
   // POS). totalPaise is already NET of loyaltyRedeemPaise. Points are NOT

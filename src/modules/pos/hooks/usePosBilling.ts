@@ -26,7 +26,7 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type FreeGrantHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
+import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { productMatchesQuery } from "@/shared/lib/inventory";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
@@ -99,11 +99,11 @@ export function usePosBilling(opts: {
     // previews the granted free lines as rows in the item list the moment the
     // cart qualifies. The server re-selects it at checkout (freeAutoApply), so
     // this is display + the checkout hint only.
-    const [autoFree, setAutoFree] = useState<FreeGrantHit | null>(null);
+    const [autoFree, setAutoFree] = useState<OnTopHit | null>(null);
     // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) — applies ON TOP of the
     // money coupon. It grants free items (zero-price lines with the FREE badge)
     // instead of a ₹ discount; the server re-derives them from `freeCouponCode`.
-    const [appliedFree, setAppliedFree] = useState<FreeGrantHit | null>(null);
+    const [appliedFree, setAppliedFree] = useState<OnTopHit | null>(null);
     const [freeBusy, setFreeBusy] = useState(false);
     // Live offers panel — every claimable POS offer with qualification progress
     // + cross-sell suggestions (server-computed; see /api/pos/coupon-offers).
@@ -489,9 +489,14 @@ export function usePosBilling(opts: {
     // Combined customer-facing discount (tier + loyalty redemption + coupon).
     const totalDiscount = effDiscountAmount + effRedemptionRupees + couponRupees;
 
-    // Loyalty redemption + coupon both ride chargesNet as negative charges, exactly
-    // as the server folds them into calcVoucherTotals.
-    const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees;
+    // Rule 2 — an independent PARTIAL (<100%) FREE_ITEM / BOGO on top: its ₹ is
+    // an extra negative charge (never guard-clamped, never clears the money
+    // coupon). The free-slot hit is either the grant (rule 1, ₹-less) or this.
+    const effectiveFreeHit = appliedFree ?? autoFree;
+    const onTopRupees = effectiveFreeHit?.onTop ? (effectiveFreeHit.rupees ?? 0) : 0;
+    // Loyalty redemption + coupon + on-top all ride chargesNet as negative
+    // charges, exactly as the server folds them into calcVoucherTotals.
+    const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees - onTopRupees;
     // Auto round-off: figure out the round-off that lands Total on a whole
     // rupee by computing the pre-round total first, then deriving the delta.
     // If the cashier has manually typed a value, that override wins.
@@ -583,7 +588,7 @@ export function usePosBilling(opts: {
     // is the coupon id — a typed code keeps its code (and shows on the bill).
     const appliedCouponKey = appliedCoupon ? `${appliedCoupon.couponId}:${appliedCoupon.code ?? ""}` : null;
     const appliedFreeKey = appliedFree ? `${appliedFree.couponId}:${appliedFree.code ?? ""}` : null;
-    type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean; freeLines?: { productId: number; freeQty: number; productName: string }[] };
+    type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean; freeLines?: { productId: number; freeQty: number; productName: string }[]; onTop?: boolean; moneyGrant?: boolean };
     async function runValidate(validateOpts: { code?: string; freeCode?: string; couponId?: number; freeCouponId?: number; autoApply?: boolean; freeAutoApply?: boolean }): Promise<ValidateResp | null> {
         if (!snapshot?.account) return null;
         const { data } = await axios.post<ValidateResp>("/api/pos/coupon-validate", {
@@ -617,7 +622,7 @@ export function usePosBilling(opts: {
         runValidate(appliedCoupon.code ? { code: appliedCoupon.code } : { couponId: appliedCoupon.couponId })
             .then((data) => {
                 if (cancelled || !data) return;
-                if (data.ok) setAppliedCoupon((prev) => (prev ? { ...prev, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty } : prev));
+                if (data.ok) setAppliedCoupon((prev) => (prev ? { ...prev, rupees: data.discountRupees, droppedTier: data.droppedTier, blockedLoyalty: data.blockedLoyalty, freeLines: data.freeLines } : prev));
                 else { setAppliedCoupon(null); toast.message("Coupon removed — no longer applies to this cart"); }
             })
             .catch(() => { /* keep prior value; checkout re-validates */ });
@@ -631,7 +636,7 @@ export function usePosBilling(opts: {
         if (appliedCoupon != null || !snapshot?.account || cart.length === 0) { setAutoCoupon(null); return; }
         let cancelled = false;
         runValidate({ autoApply: true })
-            .then((data) => { if (!cancelled) setAutoCoupon(data?.ok ? hit(data) : null); })
+            .then((data) => { if (!cancelled) setAutoCoupon(data?.ok ? { ...hit(data), freeLines: data.freeLines } : null); })
             .catch(() => { if (!cancelled) setAutoCoupon(null); });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -647,8 +652,10 @@ export function usePosBilling(opts: {
             .then((data) => {
                 if (cancelled || !data) return;
                 const fl = data.freeLines;
-                if (data.ok && fl?.length) {
-                    setAppliedFree((prev) => (prev ? { ...prev, freeLines: fl } : prev));
+                if (data.ok && (fl?.length || data.onTop)) {
+                    setAppliedFree((prev) => (prev
+                        ? { ...prev, freeLines: fl ?? [], onTop: data.onTop, rupees: data.onTop ? data.discountRupees : prev.rupees }
+                        : prev));
                 } else {
                     clearFreeCoupon();
                     toast.message("Free offer removed — no longer applies to this cart");
@@ -669,8 +676,11 @@ export function usePosBilling(opts: {
         runValidate({ freeAutoApply: true })
             .then((data) => {
                 if (cancelled) return;
-                setAutoFree(data?.ok && data.freeLines?.length
-                    ? { couponId: data.couponId, code: data.code, name: data.name, freeLines: data.freeLines }
+                setAutoFree(data?.ok && (data.freeLines?.length || data.onTop)
+                    ? {
+                        couponId: data.couponId, code: data.code, name: data.name,
+                        freeLines: data.freeLines ?? [], onTop: data.onTop, rupees: data.onTop ? data.discountRupees : undefined,
+                    }
                     : null);
             })
             .catch(() => { if (!cancelled) setAutoFree(null); });
@@ -725,7 +735,12 @@ export function usePosBilling(opts: {
         setFreeBusy(true);
         try {
             const data = await runValidate({ freeCode: code });
-            if (data?.ok && data.freeLines?.length) {
+            if (data?.ok && data.onTop) {
+                // Rule 2 — independent PARTIAL code in the free box: an on-top
+                // ₹ discount (never clears the money coupon).
+                setAppliedFree({ couponId: data.couponId, code: data.code, name: data.name, freeLines: [], onTop: true, rupees: data.discountRupees });
+                toast.success(`${data.code ?? data.name} · − ${formatInr(data.discountRupees)} on top`);
+            } else if (data?.ok && data.freeLines?.length) {
                 applyFreeGrant(data);
             } else {
                 clearFreeCoupon();
@@ -745,7 +760,21 @@ export function usePosBilling(opts: {
         try {
             const data = await runValidate({ code });
             if (data?.ok) {
-                if (data.freeLines?.length) {
+                if (data.onTop) {
+                    // Rule 2 — an independent PARTIAL code (FREE_ITEM / BOGO,
+                    // <100%): a ₹ discount ON TOP of the money coupon — never
+                    // clears it, never drops tier / blocks loyalty.
+                    setAppliedFree({ couponId: data.couponId, code: data.code, name: data.name, freeLines: [], onTop: true, rupees: data.discountRupees });
+                    toast.success(`${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)} on top`);
+                    setTimeout(() => productSearchRef.current?.focus(), 0);
+                } else if (data.moneyGrant && data.freeLines?.length) {
+                    // Rule 3 — a non-independent fully-free FREE_ITEM / BOGO won
+                    // the MONEY slot: free lines REPLACE the ₹ coupon (it is a
+                    // money coupon — exclusivity applies server-side).
+                    setAppliedCoupon({ couponId: data.couponId, code: data.code, name: data.name, rupees: 0, droppedTier: false, blockedLoyalty: false, freeLines: data.freeLines });
+                    toast.success(`${data.code ?? data.name} — ${data.freeLines.map((f) => `${f.freeQty} × ${f.productName}`).join(", ")} FREE`);
+                    setTimeout(() => productSearchRef.current?.focus(), 0);
+                } else if (data.freeLines?.length) {
                     // An independent free-grant code (FREE_ITEM / BOGO) — it isn't
                     // a ₹ discount; apply it as free items ON TOP of the money
                     // coupon (independent by design — never clear the ₹ coupon).
@@ -780,7 +809,16 @@ export function usePosBilling(opts: {
         if (!snapshot?.account) return;
         try {
             const data = await runValidate({ couponId });
-            if (data?.ok && data.freeLines?.length) {
+            if (data?.ok && data.onTop) {
+                // Rule 2 — an independent PARTIAL offer: on-top ₹ (never
+                // replaces the money coupon).
+                setAppliedFree({ couponId: data.couponId, code: data.code, name: data.name, freeLines: [], onTop: true, rupees: data.discountRupees });
+                toast.success(`${data.name} · − ${formatInr(data.discountRupees)} on top`);
+            } else if (data?.ok && data.moneyGrant && data.freeLines?.length) {
+                // Rule 3 — a non-independent fully-free offer won the money slot.
+                setAppliedCoupon({ couponId: data.couponId, code: data.code, name: data.name, rupees: 0, droppedTier: false, blockedLoyalty: false, freeLines: data.freeLines });
+                toast.success(`${data.name} — ${data.freeLines.map((f) => `${f.freeQty} × ${f.productName}`).join(", ")} FREE`);
+            } else if (data?.ok && data.freeLines?.length) {
                 // Independent free-grant offer — rides on top of the money
                 // coupon (never replaces it).
                 applyFreeGrant(data);
@@ -1367,7 +1405,7 @@ export function usePosBilling(opts: {
         tier, currentSaleValue,
         rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
         effRedeemPts, effRedemptionRupees, effDiscountAmount, couponRupees,
-        couponDroppedTier, couponBlockedLoyalty,
+        couponDroppedTier, couponBlockedLoyalty, onTopRupees,
         total, giftCardApplied, payableTotal, posExtraCharges, posTierLabel,
         // tender math
         cashNet, splitsSum, upiEntered, collected, onCredit, overpaid, balanceDue,

@@ -23,6 +23,12 @@ type TierPreview = {
     // Best AUTO independent free-grant (Free item / Buy X get Y) — added to the
     // order as a zero-price line.
     freeGrant: { code: string; productName: string; freeQty: number } | null;
+    // Rule 3 — a fully-free non-independent coupon that won the money slot: its
+    // item rides the order as a zero-price line too.
+    moneyGrant: { code: string; productName: string; freeQty: number } | null;
+    // Rule 2 — an independent PARTIAL (<100%) FREE_ITEM / BOGO on top: a ₹
+    // discount never guard-clamped.
+    onTop: { code: string; name: string; discountPaise: number } | null;
 };
 
 export default function ShopCartPage() {
@@ -84,7 +90,8 @@ export default function ShopCartPage() {
     }
     const tierDiscountPaise = accountId && lines.length > 0 ? (tierPreview?.discountPaise ?? 0) : 0;
     const couponPaise = accountId && lines.length > 0 ? (tierPreview?.coupon?.discountPaise ?? 0) : 0;
-    const netTotal = Math.max(0, subtotal - tierDiscountPaise - couponPaise);
+    const onTopPaise = accountId && lines.length > 0 ? (tierPreview?.onTop?.discountPaise ?? 0) : 0;
+    const netTotal = Math.max(0, subtotal - tierDiscountPaise - couponPaise - onTopPaise);
 
     // Shipping isn't priced here — the customer's address (pincode / neighbourhood)
     // decides the courier and rate, so we quote it on the checkout page.
@@ -200,14 +207,24 @@ export default function ShopCartPage() {
                                     </span>
                                 </div>
                             )}
-                            {tierPreview?.freeGrant && (
+                            {(tierPreview?.freeGrant || tierPreview?.moneyGrant) && (
                                 <div className="flex justify-between gap-4 text-emerald-600 dark:text-emerald-400">
                                     <span>
-                                        {tierPreview.freeGrant.productName}
-                                        {tierPreview.freeGrant.freeQty > 1 ? ` × ${tierPreview.freeGrant.freeQty}` : ""}{" "}
+                                        {tierPreview.freeGrant?.productName ?? tierPreview.moneyGrant?.productName}
+                                        {(tierPreview.freeGrant?.freeQty ?? tierPreview.moneyGrant?.freeQty ?? 0) > 1
+                                            ? ` × ${tierPreview.freeGrant?.freeQty ?? tierPreview.moneyGrant?.freeQty}`
+                                            : ""}{" "}
                                         FREE
                                     </span>
                                     <span className="tabular-nums font-medium">FREE</span>
+                                </div>
+                            )}
+                            {tierPreview?.onTop && (
+                                <div className="flex justify-between gap-4 text-emerald-600 dark:text-emerald-400">
+                                    <span>On top ({tierPreview.onTop.name})</span>
+                                    <span className="tabular-nums font-medium">
+                                        −{formatRupeesFromPaise(tierPreview.onTop.discountPaise)}
+                                    </span>
                                 </div>
                             )}
                             <div className="flex justify-between gap-4">

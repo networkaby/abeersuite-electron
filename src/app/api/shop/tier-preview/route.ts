@@ -75,6 +75,7 @@ export async function POST(req: Request) {
             redeemPoints: data.redeemPoints,
         });
         const couponPaise = benefits.coupon?.discountPaise ?? 0;
+        const onTopPaise = benefits.onTop?.discountPaise ?? 0;
         const loyaltyPaise = benefits.loyalty?.redeemPaise ?? 0;
         return NextResponse.json({
             tierPct: benefits.tierPct,
@@ -99,6 +100,24 @@ export async function POST(req: Request) {
                     freeQty: benefits.freeGrant.freeQty,
                 }
                 : null,
+            // Rule 3 — a non-independent fully-free FREE_ITEM / BOGO that won the
+            // money slot: its item rides the order as a zero-price line too.
+            moneyGrant: benefits.moneyGrant
+                ? {
+                    code: benefits.moneyGrant.code ?? benefits.moneyGrant.name,
+                    productName: benefits.moneyGrant.productName,
+                    freeQty: benefits.moneyGrant.freeQty,
+                }
+                : null,
+            // Rule 2 — an independent PARTIAL (<100%) FREE_ITEM / BOGO on top:
+            // a ₹ discount never guard-clamped, never dropping tier / loyalty.
+            onTop: benefits.onTop
+                ? {
+                    code: benefits.onTop.code ?? benefits.onTop.name,
+                    name: benefits.onTop.name,
+                    discountPaise: benefits.onTop.discountPaise,
+                }
+                : null,
             // Set only when the TYPED code was rejected (auto-apply fails silently)
             // — or when it conflicts with the chosen loyalty points.
             couponError: data.couponCode?.trim() ? benefits.couponError : null,
@@ -106,7 +125,7 @@ export async function POST(req: Request) {
             // redemption for the requested points.
             loyalty: benefits.loyalty,
             goodsPaise,
-            netGoodsPaise: goodsPaise - benefits.discountInclPaise - couponPaise - loyaltyPaise,
+            netGoodsPaise: goodsPaise - benefits.discountInclPaise - couponPaise - onTopPaise - loyaltyPaise,
         });
     } catch (e) {
         return handleApiError(e, "Failed to preview the discount");

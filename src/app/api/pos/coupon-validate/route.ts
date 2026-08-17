@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { selectCouponForCart, selectCouponForCartById, selectFreeGrantCoupon, selectAutoFreeGrant, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput, type CouponSelection } from "@/modules/coupons/lib";
+import { selectCouponForCart, selectCouponForCartById, selectOnTopCouponByCode, selectAutoOnTopCoupon, finalizeCouponAmount, eligibleCostBase, eligibleSubtotal, type EvalInput, type CouponSelection } from "@/modules/coupons/lib";
 import { round2 } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
@@ -111,33 +111,45 @@ export async function POST(req: Request) {
             now: new Date(),
         };
 
-        // ── Selection: the dedicated free-grant slot, or the money coupon ──
-        // A typed code that turns out to be an independent free-grant coupon is
-        // routed here too, so one code in either box lands in the right place.
+        // ── Selection: the dedicated on-top slot (independent FREE_ITEM / BOGO),
+        // or the money coupon ──
+        // A typed code that turns out to be an independent FREE_ITEM / BOGO
+        // coupon is routed to the on-top slot here too, so one code in either
+        // box lands in the right place. The on-top slot returns a free-grant
+        // (rule 1) or an on-top ₹ (rule 2); the money slot returns a ₹ discount
+        // (rule 4) or a money-grant (rule 3).
         let selected: CouponSelection = { kind: "none" };
         let freeSelected: Extract<CouponSelection, { kind: "free-grant" }> | null = null;
+        let onTopSelected: Extract<CouponSelection, { kind: "on-top" }> | null = null;
         if (data.freeCode) {
-            const sel = await selectFreeGrantCoupon(prisma, { code: data.freeCode, channel: "POS", input, protectedProductIds });
-            if (sel.kind === "error") return NextResponse.json({ ok: false, reason: sel.reason });
-            freeSelected = sel;
-        } else if (data.freeAutoApply) {
-            const sel = await selectAutoFreeGrant(prisma, { channel: "POS", input, protectedProductIds });
+            const sel = await selectOnTopCouponByCode(prisma, { code: data.freeCode, channel: "POS", input, protectedProductIds });
             if (sel.kind === "error") return NextResponse.json({ ok: false, reason: sel.reason });
             if (sel.kind === "free-grant") freeSelected = sel;
+            else onTopSelected = sel;
+        } else if (data.freeAutoApply) {
+            const sel = await selectAutoOnTopCoupon(prisma, { channel: "POS", input, protectedProductIds });
+            if (sel.kind === "error") return NextResponse.json({ ok: false, reason: sel.reason });
+            if (sel.kind === "free-grant") freeSelected = sel;
+            else if (sel.kind === "on-top") onTopSelected = sel;
         } else if (data.couponId != null) {
-            // Force-apply a specific coupon by id (AUTO — no code). A free-grant
-            // id is routed to the free slot automatically.
+            // Force-apply a specific coupon by id (AUTO — no code). An
+            // independent coupon id is routed to the on-top slot automatically.
             selected = await selectCouponForCartById(prisma, { couponId: data.couponId, channel: "POS", input, protectedProductIds });
             if (selected.kind === "free-grant") {
                 freeSelected = selected;
+                selected = { kind: "none" };
+            } else if (selected.kind === "on-top") {
+                onTopSelected = selected;
                 selected = { kind: "none" };
             } else if (selected.kind === "error") {
                 return NextResponse.json({ ok: false, reason: selected.reason });
             }
         } else {
-            selected = await selectCouponForCart(prisma, { code: data.code, autoApply: data.autoApply, channel: "POS", input });
+            selected = await selectCouponForCart(prisma, { code: data.code, autoApply: data.autoApply, channel: "POS", input, protectedProductIds });
             if (selected.kind === "free-grant") {
                 freeSelected = selected;
+            } else if (selected.kind === "on-top") {
+                onTopSelected = selected;
             } else if (selected.kind === "none") {
                 return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
             } else if (selected.kind === "error") {
@@ -145,8 +157,9 @@ export async function POST(req: Request) {
             }
         }
 
-        // Free-grant response: the items to add as zero-price FREE lines. No ₹,
-        // no tier/loyalty interplay — the grant rides on top of everything.
+        // Rule 1 — free-grant response: the items to add as zero-price FREE
+        // lines. No ₹, no tier/loyalty interplay — the grant rides on top of
+        // everything.
         if (freeSelected) {
             const names = await prisma.invProduct.findMany({
                 where: { id: { in: [freeSelected.grant.productId] } },
@@ -166,8 +179,48 @@ export async function POST(req: Request) {
             });
         }
 
-        // The free-grant path returned above — the money coupon won, so the
-        // selection is narrowed to a ₹ discount here.
+        // Rule 2 — on-top partial response: a ₹ discount ON TOP of the money
+        // coupon (never clears it, never drops tier / blocks loyalty / hits the
+        // guard). The client keeps the money coupon and shows this as a
+        // separate on-top row.
+        if (onTopSelected) {
+            return NextResponse.json({
+                ok: true,
+                onTop: true,
+                couponId: onTopSelected.coupon.id,
+                code: onTopSelected.coupon.code,
+                name: onTopSelected.coupon.name,
+                discountRupees: onTopSelected.discountRupees,
+            });
+        }
+
+        // Rule 3 — a non-independent fully-free FREE_ITEM / BOGO won the money
+        // slot: respond with the free lines (money-grant), so the POS shows
+        // FREE rows while the checkout payload still rides the money slot
+        // (exclusivity applies).
+        if (selected.kind === "money-grant") {
+            const names = await prisma.invProduct.findMany({
+                where: { id: { in: [selected.grant.productId] } },
+                select: { id: true, name: true },
+            });
+            const nameById = new Map(names.map((p) => [p.id, p.name]));
+            return NextResponse.json({
+                ok: true,
+                moneyGrant: true,
+                couponId: selected.coupon.id,
+                code: selected.coupon.code,
+                name: selected.coupon.name,
+                discountRupees: 0,
+                freeLines: [{
+                    productId: selected.grant.productId,
+                    freeQty:   selected.grant.freeQty,
+                    productName: nameById.get(selected.grant.productId) ?? "Item",
+                }],
+            });
+        }
+
+        // The on-top / money-grant paths returned above — the money ₹ coupon
+        // won, so the selection is narrowed to a ₹ discount here.
         if (selected.kind !== "ok") {
             return NextResponse.json({ ok: false, reason: "No coupon applied" });
         }
