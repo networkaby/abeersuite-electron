@@ -145,36 +145,6 @@ export type CouponSelection =
     /// hits the guard.
     | { kind: "on-top"; coupon: CouponContext; discountRupees: number };
 
-/// The free-grant pipeline shared by the money selector (when a free-grant
-/// code is typed there) and the dedicated free-coupon selector: eligibility
-/// (window / min-bill / owner / new-vs-returning — no "eligible lines" check,
-/// the grant adds its own line), usage limits, then the buy-side-unlocked grant.
-/// `protectedProductIds` is the discount-protection blacklist (loaded once by
-/// the caller); a protected grant product refuses the offer.
-async function selectFreeGrant(
-    tx: Tx,
-    args: { c: CouponContext; input: EvalInput; protectedProductIds?: Set<number> },
-): Promise<Extract<CouponSelection, { kind: "error" } | { kind: "free-grant" }>> {
-    const { c, input, protectedProductIds } = args;
-    const gate = checkFreeGrantEligibility(c, input);
-    if (!gate.ok) return { kind: "error", reason: gate.reason };
-    const usage = await checkCouponUsage(tx, c, input.accountId);
-    if (!usage.ok) return { kind: "error", reason: usage.reason };
-    const grant = freeGrantForCoupon(c, input.lines);
-    if (!grant) return { kind: "error", reason: "Buy more to unlock the offer" };
-    // Discount-protection blacklist: never give away a protected product.
-    if (protectedProductIds?.has(grant.productId)) {
-        return { kind: "error", reason: "Coupon is not applicable on this bill" };
-    }
-    // Cross-item BOGO: a protected BUY item can't unlock the offer either
-    // (the buy line is in the cart, so its line-level `protected` flag is set).
-    if (c.type === "BOGO" && c.buyProductId != null && grant.productId !== c.buyProductId) {
-        const buyLine = input.lines.find((l) => l.productId === c.buyProductId);
-        if (buyLine?.protected) return { kind: "error", reason: "Coupon is not applicable on this bill" };
-    }
-    return { kind: "free-grant", coupon: c, grant };
-}
-
 /// The on-top slot selector — resolves a code to an INDEPENDENT FREE_ITEM /
 /// BOGO coupon and returns its on-top effect: fully free → the grant (zero-
 /// price lines, rule 1), partial → the on-top ₹ (rule 2). A non-independent
