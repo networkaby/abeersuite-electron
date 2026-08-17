@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -12,6 +12,7 @@ import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
+import { readCache, subscribeToCache, writeCache } from "@/shared/lib/browser/pollCache";
 
 
 type CashPosition = {
@@ -23,6 +24,18 @@ type CashPosition = {
     cashAccounts: { name: string; balance: number }[];
     bankAccounts: { name: string; balance: number }[];
 };
+
+type Computed<T> = (T & { computedAt: string }) | { unchanged: true; computedAt: string };
+
+// Cross-tab: each fetch is mirrored into localStorage, so a second open tab
+// paints instantly and every tab adopts fresh figures the moment ANY tab
+// fetches them — an office user with several tabs open is not running several
+// independent polls. Unscoped keys on purpose: a cash or bank balance is the
+// same figure for whoever is signed in, unlike the per-user sidebar badges.
+const CASH_CACHE_KEY = "finance-cash-cache:v1";
+const FUND_CACHE_KEY = "finance-fund-cache:v1";
+
+type FundPayload = { instantTotal: number };
 
 function Pill({
     icon,
@@ -96,8 +109,13 @@ export default function FinanceTopBar({
     permissions?: string[];
 }) {
     const canView = hasModuleNavAccess(permissions, "accountancy");
-    const [data, setData] = useState<CashPosition | null>(null);
-    const [instantFund, setInstantFund] = useState<number | null>(null);
+    // Lazy initialisers — localStorage is read once on mount, not every render.
+    const [data, setData] = useState<CashPosition | null>(
+        () => readCache<CashPosition>(CASH_CACHE_KEY)?.data ?? null,
+    );
+    const [instantFund, setInstantFund] = useState<number | null>(
+        () => readCache<FundPayload>(FUND_CACHE_KEY)?.data.instantTotal ?? null,
+    );
     const [loading, setLoading] = useState(false);
     const [recomputing, setRecomputing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -120,20 +138,64 @@ export default function FinanceTopBar({
         }
     }, []);
 
+    // Each request hands the server back the computedAt it got last time, so an
+    // unchanged poll costs one cheap existence check instead of a full recompute
+    // — the "last known good" figures live here in the browser, not on the
+    // (stateless) server, so nothing needs to be cached server-side.
+    // `useRef`'s argument is evaluated on every render, so these are seeded in
+    // the effect below instead — reading localStorage each render would be waste.
+    const cashSince = useRef<string | null>(null);
+    const fundSince = useRef<string | null>(null);
+
+    // Declared before the poll below so it seeds the timestamps first: effects
+    // run in declaration order, and the poll's first fetch should already be
+    // able to say "since". Also adopts whatever another tab fetches, live.
+    useEffect(() => {
+        cashSince.current = readCache<CashPosition>(CASH_CACHE_KEY)?.computedAt ?? null;
+        fundSince.current = readCache<FundPayload>(FUND_CACHE_KEY)?.computedAt ?? null;
+
+        const stopCash = subscribeToCache<CashPosition>(CASH_CACHE_KEY, (entry) => {
+            cashSince.current = entry.computedAt;
+            setData(entry.data);
+            setLastUpdated(new Date());
+        });
+        const stopFund = subscribeToCache<FundPayload>(FUND_CACHE_KEY, (entry) => {
+            fundSince.current = entry.computedAt;
+            setInstantFund(entry.data.instantTotal);
+        });
+        return () => { stopCash(); stopFund(); };
+    }, []);
+
     const load = useCallback(() => {
         if (!canView) return;
         setLoading(true);
         axios
-            .get<CashPosition>("/api/accountancy/reports/cash-position")
-            .then((r) => {
-                setData(r.data);
+            .get<Computed<CashPosition>>("/api/accountancy/reports/cash-position", {
+                params: cashSince.current ? { since: cashSince.current } : undefined,
+            })
+            .then(({ data: res }) => {
+                if (!res?.computedAt) return;
+                cashSince.current = res.computedAt;
+                if (!("unchanged" in res)) {
+                    setData(res);
+                    writeCache(CASH_CACHE_KEY, res, res.computedAt);
+                }
                 setLastUpdated(new Date());
             })
             .catch(() => {/* silent — non-critical UI */ })
             .finally(() => setLoading(false));
         axios
-            .get<{ instantTotal: number }>("/api/accountancy/reports/usable-fund")
-            .then((r) => setInstantFund(r.data.instantTotal))
+            .get<Computed<FundPayload>>("/api/accountancy/reports/usable-fund", {
+                params: fundSince.current ? { since: fundSince.current } : undefined,
+            })
+            .then(({ data: res }) => {
+                if (!res?.computedAt) return;
+                fundSince.current = res.computedAt;
+                if (!("unchanged" in res)) {
+                    setInstantFund(res.instantTotal);
+                    writeCache(FUND_CACHE_KEY, res, res.computedAt);
+                }
+            })
             .catch(() => {/* silent — non-critical UI */ });
     }, [canView]);
 

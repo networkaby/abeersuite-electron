@@ -137,6 +137,10 @@ model UniversalVoucher {
   @@index([deletedAt])
   @@index([partyAccountId])
   @@index([branchId])
+  // Poll-and-skip: the finance top bar asks "any voucher touched since <ts>?" on
+  // every tick. Without this the common answer (no) costs a full table scan,
+  // because proving no row matches means visiting all of them.
+  @@index([updatedAt])
 }
 
 model VoucherGlLine {

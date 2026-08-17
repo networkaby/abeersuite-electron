@@ -35,6 +35,23 @@ const getNavMasters = unstable_cache(
 );
 
 /**
+ * Cheap "did anything that could move this user's badges happen since X?" check
+ * for the poll-and-skip route below. Stateless by design — the caller (browser
+ * tab) holds the last payload and its computedAt; this just answers yes/no so a
+ * quiet tab costs one small existence check instead of the full recompute.
+ * Two sources, since either can change `new` without the other firing:
+ *   • any ticket write (new / edited / moved / snoozed), or
+ *   • this user marking a surface seen (resets that badge's `new` to zero).
+ */
+export async function hasNavCountsChangedSince(userId: number, since: Date): Promise<boolean> {
+    const [ticket, seen] = await Promise.all([
+        prisma.ticket.findFirst({ where: { updatedAt: { gt: since } }, select: { id: true } }),
+        prisma.userSurfaceSeen.findFirst({ where: { userId, seenAt: { gt: since } }, select: { surface: true } }),
+    ]);
+    return ticket !== null || seen !== null;
+}
+
+/**
  * Every sidebar count badge in one call, so the whole sidebar polls once instead
  * of once per badge.
  *

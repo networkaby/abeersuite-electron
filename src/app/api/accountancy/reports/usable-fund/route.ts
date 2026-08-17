@@ -4,7 +4,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateClosingAsOf, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { parseBank } from "@/modules/accountancy/lib/bankParticulars";
 import { parseCreditCard } from "@/modules/accountancy/lib/creditCardParticulars";
 import { parseBnpl } from "@/modules/accountancy/lib/bnplParticulars";
@@ -70,6 +70,10 @@ function noteFor(a: AccountRow): string | null {
     return null;
 }
 
+// The client sends back the server time it received on its last successful
+// fetch (`?since=`) so this route can stay stateless. Only the default "as of
+// today" call (the finance top bar's usage) honors it — a historical `?asOf=`
+// query always computes fresh.
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -80,6 +84,14 @@ export async function GET(req: Request) {
     asOf.setHours(23, 59, 59, 999);
 
     try {
+        const now = new Date();
+        // Only the default "as of today" call may skip — a historical `?asOf=`
+        // query is not what the top bar polls and always computes fresh.
+        const sinceParam = asOfParam ? null : searchParams.get("since");
+        if (await isUnchangedSince(sinceParam, now)) {
+            return NextResponse.json({ unchanged: true, computedAt: now.toISOString() });
+        }
+
         const nbMap = await loadNormalBalanceMap();
         const closingMap = await aggregateClosingAsOf(asOf, nbMap);
 
@@ -138,7 +150,7 @@ export async function GET(req: Request) {
         const accountsWithBalance = accounts.map((a) => ({ ...a, balance: closingMap.get(a.id) ?? 0 }));
         const instantTotal = netFundTotalByTier(accountsWithBalance, "INSTANT");
 
-        return NextResponse.json({ asOf: asOf.toISOString(), buckets, instantTotal });
+        return NextResponse.json({ asOf: asOf.toISOString(), computedAt: now.toISOString(), buckets, instantTotal });
     } catch (e) {
         return handleApiError(e, "Failed to load usable fund");
     }

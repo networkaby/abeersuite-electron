@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { businessToday } from "@/shared/lib/format/formatDate";
-import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateClosingAsOf, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 
 // GET /api/accountancy/reports/cash-position
@@ -29,11 +29,20 @@ function sumGroup(node: GroupNode | undefined): number {
     return node.rolledUpClosing;
 }
 
-export async function GET() {
+// The client sends back the server time it received on its last successful
+// fetch (`?since=`) so this route can stay stateless — no server-side memory
+// or storage, just "has anything changed since the timestamp you're holding".
+export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
     try {
+        const now = new Date();
+        const sinceParam = new URL(req.url).searchParams.get("since");
+        if (await isUnchangedSince(sinceParam, now)) {
+            return NextResponse.json({ unchanged: true, computedAt: now.toISOString() });
+        }
+
         const asOf = businessToday();
         asOf.setHours(23, 59, 59, 999);
 
@@ -57,6 +66,7 @@ export async function GET() {
 
         return NextResponse.json({
             asOf: asOf.toISOString(),
+            computedAt: now.toISOString(),
             cash:        sumGroup(cashGroup),
             bank:        sumGroup(bankGroup),
             receivables: sumGroup(debtorsGroup),

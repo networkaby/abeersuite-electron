@@ -108,6 +108,10 @@ model Ticket {
   @@index([createdAt])
   @@index([wakeAt])
   @@index([recurrenceId])
+  // Poll-and-skip: the sidebar asks "any ticket touched since <ts>?" on every
+  // tick. Without this the common answer (no) costs a full table scan, because
+  // proving no row matches means visiting all of them.
+  @@index([updatedAt])
 }
 
 // ── Detail: Repair (device-based service ticket) ──────────────────────────────

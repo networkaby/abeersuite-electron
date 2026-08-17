@@ -3,6 +3,7 @@
 
 import type { Prisma, VoucherStatus } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 import { balanceDelta } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 
@@ -122,6 +123,36 @@ export async function loadMasterOpeningBalances(
         out.set(a.id, balanceDelta(nb, a.openingBalanceType, Number(a.openingBalance ?? 0)));
     }
     return out;
+}
+
+/**
+ * "Can the caller keep the figures it already has?" — the server half of the
+ * poll-and-skip pattern the finance top bar uses (see `shared/lib/browser/pollCache`).
+ *
+ * `sinceParam` is the `computedAt` the client got on its last fetch. True means
+ * nothing has happened that could move a balance, so the route can skip the whole
+ * aggregation and answer `{ unchanged: true }`.
+ *
+ * Two deliberate rules:
+ *   • No status filter on the lookup — an edit or a cancellation bumps `updatedAt`
+ *     just like a new posting, and any of the three can change a closing balance.
+ *   • Only honoured within one poll interval. Balances are read "as of end of
+ *     today", so the answer can also change with nothing written at all: a
+ *     future-dated voucher becomes current, or the business day rolls over at
+ *     midnight. Capping the trust window keeps that bounded to one tick instead
+ *     of a figure that silently never refreshes.
+ */
+export async function isUnchangedSince(sinceParam: string | null, now: Date): Promise<boolean> {
+    if (!sinceParam) return false;
+    const since = new Date(sinceParam);
+    if (Number.isNaN(since.getTime())) return false;
+    if (now.getTime() - since.getTime() >= FINANCE_BAR_POLL_MS) return false;
+
+    const row = await prisma.universalVoucher.findFirst({
+        where: { updatedAt: { gt: since } },
+        select: { id: true },
+    });
+    return row === null;
 }
 
 /** Closing balances of every account as of a date.  Map<accountId, closing> in rupees. */
