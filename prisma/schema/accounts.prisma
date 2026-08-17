@@ -42,6 +42,10 @@ model Account {
   personId      Int?           @unique
   companyId     Int?           @unique
   createdAt     DateTime       @default(now())
+  // Lets the Day Book's local cache delta-sync party NAMES. Only GL vouchers
+  // read a live Account.name — inventory vouchers freeze the party into
+  // partyJson at creation, so those legitimately never drift. See Branch.updatedAt.
+  updatedAt     DateTime       @default(now()) @updatedAt
 
   // Per-customer credit limit (future use; null = no limit). Lives on Account
   // because every Person and every Company gets exactly one Account row.
@@ -154,6 +158,10 @@ model Account {
   @@index([personId])
   @@index([companyId])
   @@index([groupId])
+  // Day Book refs delta: "any party renamed since <ts>?". Every customer has an
+  // Account, so this is the one of the three name tables big enough to need it
+  // (Branch and User are small enough to ship whole).
+  @@index([updatedAt])
 }
 
 // ── AccountAlias ─────────────────────────────────────────────────────────────

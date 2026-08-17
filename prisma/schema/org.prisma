@@ -28,6 +28,10 @@ model Branch {
 
   isActive    Boolean      @default(true)
   createdAt   DateTime     @default(now())
+  // Lets the Day Book's local cache delta-sync branch NAMES. Renaming a branch
+  // touches no voucher, so without this the cached copy would show the old name
+  // forever and the only cure would be discarding the whole copy on a timer.
+  updatedAt   DateTime     @default(now()) @updatedAt
   departments Department[]
   positions   Position[]
 

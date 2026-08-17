@@ -13,6 +13,9 @@ model User {
   title                            String?
   scope                            UserScope                  @default(OWN)
   createdAt                        DateTime                   @default(now())
+  /// Lets the Day Book's local cache delta-sync creator NAMES — a rename writes
+  /// User, never the vouchers the name is shown on. See Branch.updatedAt.
+  updatedAt                        DateTime                   @default(now()) @updatedAt
   /// Server-side session revocation. Any JWT whose login time is BEFORE this
   /// instant is rejected by the auth `jwt` callback. Bumped on sign-out (= log
   /// out of every tab/device at once) and available for password-change / admin

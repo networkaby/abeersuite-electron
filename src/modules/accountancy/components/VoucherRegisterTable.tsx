@@ -25,7 +25,7 @@ import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { StatusBadge } from "@/shared/components/StatusBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
-import type { CombinedRow } from "@/modules/accountancy/hooks/useCombinedVouchers";
+import type { CombinedRow } from "@/modules/accountancy/hooks/useDayBook";
 
 // ── Line shapes ───────────────────────────────────────────────────────────
 

@@ -1,18 +1,18 @@
 "use client";
-// Unified register that lists every voucher across the three voucher tables
-// (InvVoucher / Voucher / JournalEntry).
+// Unified register that lists every voucher on the universal-voucher spine.
 //
 // All row layout / lifecycle behaviour lives in <VoucherRegisterTable>; this
-// page only owns the filter chrome.
+// page only owns the filter chrome. Rows come from the same paginated Day Book
+// endpoint, so this page pages the same way — 50 at a time, newest first.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
-import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
+import { useDayBook } from "@/modules/accountancy/hooks/useDayBook";
 import { presetRange } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 
@@ -25,27 +25,40 @@ export default function AllVouchersPage() {
     const [to, setTo] = useState("");
     const [kindQuery, setKindQuery] = useState("");
 
-    // The hook fetches a window rather than all of history, so an empty date box
-    // means "this FY" here rather than "everything ever written".
+    // An empty date box means "this FY" — the outer boundary, not a download.
     const fyRange = useMemo(() => presetRange("thisFY"), []);
-    const { rows, loading, error, reload } = useCombinedVouchers(
-        from || fyRange.from,
-        to   || fyRange.to,
-    );
+    const query = useMemo(() => ({
+        from:     from || fyRange.from,
+        to:       to   || fyRange.to,
+        statuses: status ? [status] : [],
+    }), [from, to, status, fyRange]);
 
-    const filtered = useMemo(() => {
-        return rows.filter((r) => {
-            if (status && r.status !== status) return false;
-            if (from && r.date < from) return false;
-            if (to && r.date > to) return false;
-            if (kindQuery && !r.kind.toLowerCase().includes(kindQuery.toLowerCase())) return false;
-            return true;
-        });
-    }, [rows, status, from, to, kindQuery]);
+    const { rows, loading, loadingMore, hasMore, error, loadMore, reload } = useDayBook(query);
+
+    // Kind here is a free-text "contains" rather than the Day Book's exact-kind
+    // dropdown, so it stays a filter over the rows already pulled. Fine for a
+    // testing surface; the Day Book is the one that has to be exact.
+    const filtered = useMemo(
+        () => (kindQuery
+            ? rows.filter((r) => r.kind.toLowerCase().includes(kindQuery.toLowerCase()))
+            : rows),
+        [rows, kindQuery],
+    );
 
     const totalDebit = filtered
         .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
+
+    const sentinelRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const node = sentinelRef.current;
+        if (!node || !hasMore) return;
+        const io = new IntersectionObserver((entries) => {
+            if (entries.some((e) => e.isIntersecting)) loadMore();
+        }, { rootMargin: "200px" });
+        io.observe(node);
+        return () => io.disconnect();
+    }, [hasMore, loadMore, rows.length]);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -60,7 +73,7 @@ export default function AllVouchersPage() {
                     <div>
                         <h1 className="text-2xl font-bold">All Vouchers</h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            Combined register across inventory, GL, and journal entries — sorted by date
+                            Every voucher on the spine — inventory, GL, and journals — sorted by date
                         </p>
                     </div>
                     <Button variant="outline" size="sm" onClick={reload}>Reload</Button>
@@ -99,8 +112,12 @@ export default function AllVouchersPage() {
                         </div>
                     </div>
                     <div className="ml-auto text-right">
-                        <div className="text-xs text-muted-foreground">{filtered.length} of {rows.length} rows</div>
-                        <div className="text-sm font-mono">Posted total ₹ {fmt(totalDebit)}</div>
+                        <div className="text-xs text-muted-foreground">
+                            {filtered.length} row{filtered.length === 1 ? "" : "s"}{hasMore ? " so far" : ""}
+                        </div>
+                        <div className="text-sm font-mono" title="Covers the rows loaded so far, not the whole period">
+                            Posted (loaded) ₹ {fmt(totalDebit)}
+                        </div>
                     </div>
                 </div>
 
@@ -108,17 +125,26 @@ export default function AllVouchersPage() {
                     <div className="rounded border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
                 )}
 
-                {loading ? (
+                {loading && rows.length === 0 ? (
                     <div className="flex justify-center py-12">
                         <Loader2 className="animate-spin text-muted-foreground" size={28} />
                     </div>
                 ) : (
-                    <VoucherRegisterTable
-                        rows={filtered}
-                        showSource
-                        onChanged={reload}
-                        emptyMessage="No vouchers match the current filters."
-                    />
+                    <>
+                        <VoucherRegisterTable
+                            rows={filtered}
+                            showSource
+                            onChanged={reload}
+                            emptyMessage="No vouchers match the current filters."
+                        />
+                        {hasMore && (
+                            <div ref={sentinelRef} className="flex justify-center py-6">
+                                {loadingMore
+                                    ? <Loader2 className="animate-spin text-muted-foreground" size={20} />
+                                    : <Button variant="outline" size="sm" onClick={loadMore}>Load more</Button>}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </ScrollArea>

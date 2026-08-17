@@ -54,26 +54,33 @@ export function applyRegisterFilters<T extends {
     });
 }
 
-export function useRegisterFilters(storageKey: string) {
+/**
+ * @param defaultPreset  the period a first-time visitor lands on. Registers open
+ *   on the whole FY because you go there to look something up; the Day Book opens
+ *   on TODAY because you go there to see what just happened — and because a
+ *   year-wide default invites pulling a year of rows before the user has asked
+ *   for any of it.
+ */
+export function useRegisterFilters(storageKey: string, defaultPreset: DatePreset = "thisFY") {
     const get = (k: string): string | null => {
         try { return localStorage.getItem(k); } catch { return null; }
     };
 
     const [preset, setPresetState] = useState<DatePreset>(() => {
-        return (get(`${storageKey}:preset`) as DatePreset | null) ?? "thisFY";
+        return (get(`${storageKey}:preset`) as DatePreset | null) ?? defaultPreset;
     });
 
     const [from, setFrom] = useState(() => {
-        const p = (get(`${storageKey}:preset`) as DatePreset | null) ?? "thisFY";
+        const p = (get(`${storageKey}:preset`) as DatePreset | null) ?? defaultPreset;
         return p === "custom"
-            ? (get(`${storageKey}:from`) ?? presetRange("thisFY").from)
+            ? (get(`${storageKey}:from`) ?? presetRange(defaultPreset).from)
             : presetRange(p).from;
     });
 
     const [to, setTo] = useState(() => {
-        const p = (get(`${storageKey}:preset`) as DatePreset | null) ?? "thisFY";
+        const p = (get(`${storageKey}:preset`) as DatePreset | null) ?? defaultPreset;
         return p === "custom"
-            ? (get(`${storageKey}:to`) ?? presetRange("thisFY").to)
+            ? (get(`${storageKey}:to`) ?? presetRange(defaultPreset).to)
             : presetRange(p).to;
     });
 
@@ -115,7 +122,7 @@ export function useRegisterFilters(storageKey: string) {
     useEffect(() => { try { localStorage.setItem(`${storageKey}:branch`,   branchFilter);                  } catch {} }, [storageKey, branchFilter]);
 
     const clearFilters = () => {
-        setPreset("thisFY");
+        setPreset(defaultPreset);
         setSearch("");
         setStatuses(new Set());
         setBranchFilter("__all__");
