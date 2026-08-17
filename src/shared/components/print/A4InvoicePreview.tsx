@@ -993,10 +993,13 @@ interface GoodsTableProps extends A4ChromeProps {
     /** Running item total leaving for the next sheet. When set, the sheet ends
      *  with "Carried forward" and the ledger + Total stay on the last page. */
     carriedForward?: number | null;
+    /** Blank mm to draw as a filler row before the ledger — see `PageSlice.fillerRowMm`. */
+    fillerRowMm?: number;
 }
 
 function GoodsTable({
     template, sample, pageLines, startIndex = 0, broughtForward = null, carriedForward = null,
+    fillerRowMm = 0,
 }: GoodsTableProps) {
     const lines = pageLines ?? sample.lines;
     // Column visibility is decided by the WHOLE voucher, never by the page —
@@ -1030,7 +1033,11 @@ function GoodsTable({
     // service income), then the GST legs, exactly as Tally stacks them.
     const charges = sample.charges ?? [];
     const taxRows: { label: string; amount: number }[] = [];
-    if (exclusive && template.showTaxSummary && sample.taxBreakdown) {
+    // Never toggleable: the GST legs are part of the Total's arithmetic
+    // (Sub Total + charges + GST + round off = Total) and the law wants the tax
+    // charged on the face of the bill. `showTaxSummary` only drops the separate
+    // HSN/SAC analysis table lower down.
+    if (exclusive && sample.taxBreakdown) {
         const tb = sample.taxBreakdown;
         if (tb.kind === "INTRA") {
             if (tb.cgst > 0.005) taxRows.push({ label: "Output CGST", amount: tb.cgst });
@@ -1099,6 +1106,26 @@ function GoodsTable({
                         <td className="num">{fmtINR(value(l)).replace("Rs. ", "")}</td>
                     </tr>
                 ))}
+
+                {/* Blank stretch absorbing a short voucher's leftover sheet
+                    space — see PageSlice.fillerRowMm. One empty cell per real
+                    item column (not a single span, unlike the open ledger
+                    rows below) so the column rules run straight down through
+                    it — the frame reads as unbroken from the header to
+                    Sub Total, not stopped after the last item. */}
+                {fillerRowMm > 0 && (
+                    <tr className="filler" style={{ height: `${fillerRowMm}mm` }}>
+                        <td className="ctr" />
+                        <td />
+                        {anyHsn && <td className="ctr" />}
+                        {anyMrp && <td className="num" />}
+                        <td className="num" />
+                        {anyUnit && <td className="ctr" />}
+                        <td className="num" />
+                        {anyDisc && <td className="num" />}
+                        <td className="num" />
+                    </tr>
+                )}
 
                 {/* Item subtotal — figure only, under a full-width rule, when
                     ledger rows follow it. With nothing below, the Total row
@@ -1183,6 +1210,13 @@ interface PageSlice {
     showBarcode: boolean;
     /** Scan-to-pay QR inside the bank block — sacrificed with the barcode. */
     showQr: boolean;
+    /** Blank space (mm) left on the sheet after everything else is laid out —
+     *  rendered as a single filler row inside the goods table so a short
+     *  voucher's ruled frame reaches down near the totals instead of ending
+     *  early and leaving a bare gap before the sign-off. 0 on every
+     *  multi-sheet rung; only the single self-contained sheet ever has slack
+     *  worth filling. */
+    fillerRowMm: number;
 }
 
 /** Default invoice middle — bill-to meta, line items, totals, HSN, amount-in-words. */
@@ -1326,6 +1360,7 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                     startIndex={page?.startIndex ?? 0}
                     broughtForward={page?.broughtForward ?? null}
                     carriedForward={page?.carriedForward ?? null}
+                    fillerRowMm={page?.fillerRowMm ?? 0}
                 />
             )}
 
@@ -1405,8 +1440,9 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                                 <span>{fmtINR(grandTotal)}</span>
                             </div>
                             {/* GST is included in the inclusive amounts above — note, not a row.
-                            The HSN/SAC table below gives the full rate-wise breakup. */}
-                            {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                            The HSN/SAC table below gives the full rate-wise breakup.
+                            Belongs to the total block, so it is never toggleable. */}
+                            {sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
                                 const inter = sample.taxBreakdown?.kind === "INTER";
                                 const tax = sample.discounts?.taxTotal
                                     ?? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
@@ -1699,6 +1735,13 @@ const TABLE_HEAD_MM = 7;   // measured 6.9
 const PAGE_FOOT_MM = 5;   // measured 4.9
 const ROW_MM = 6.7; // measured 6.6 per item row
 const NOTE_MM = 4;   // extra height when a line carries a remark
+// Slack below this reads as normal breathing room under the last item, not a
+// hole in the page, so no filler row is worth drawing for it.
+const FILLER_MIN_MM = 10;
+// Cap how much of a near-empty voucher's sheet the filler claims — beyond
+// this a two-line credit note would stretch the goods table across most of
+// the page, which looks as manufactured as the gap it's meant to fix.
+const FILLER_MAX_MM = 150;
 // Fewer goods lines than this on a sheet reads as an overflow accident rather
 // than a deliberate second page, so the balancer refuses such a split.
 const MIN_LINES_PER_SHEET = 3;
@@ -1772,12 +1815,20 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
     const goodsMm = sumMm(lines);
 
     // Rung 0 — everything together on one sheet.
-    if (goodsMm + tailMm + taxAnalysisMm + termsMm + qrMm + sigMm + barcodeMm <= contentMm) {
+    const rung0Used = goodsMm + tailMm + taxAnalysisMm + termsMm + qrMm + sigMm + barcodeMm;
+    if (rung0Used <= contentMm) {
+        // Slack left after the whole voucher fits — a short bill (few lines)
+        // ends the goods table early and leaves bare paper before the totals.
+        // Below FILLER_MIN_MM the gap reads as normal breathing room, not a
+        // hole, so it's left alone; above it, a filler row inside the goods
+        // table absorbs the space so the ruled frame reaches the totals.
+        const slack = contentMm - rung0Used;
+        const fillerRowMm = slack >= FILLER_MIN_MM ? Math.min(slack, FILLER_MAX_MM) : 0;
         return [{
             lines, startIndex: 0, broughtForward: null, carriedForward: null,
             isFirst: true, isLast: true, annexure: false, taxAnalysis: true,
             showTerms: true, showSignature: true, showFooterLine: true,
-            showDisclaimer: true, showBarcode: true, showQr: true,
+            showDisclaimer: true, showBarcode: true, showQr: true, fillerRowMm,
         }];
     }
 
@@ -1786,7 +1837,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
         lines: [], startIndex, broughtForward: null, carriedForward: null,
         isFirst: false, isLast: true, annexure: true, taxAnalysis: true,
         showTerms: false, showSignature: true, showFooterLine: true,
-        showDisclaimer: true, showBarcode: true, showQr: true,
+        showDisclaimer: true, showBarcode: true, showQr: true, fillerRowMm: 0,
     });
 
     // From here on every sheet also spends height on the "Page n of m" strip.
@@ -1798,7 +1849,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
             lines, startIndex: 0, broughtForward: null, carriedForward: null,
             isFirst: true, isLast: false, annexure: false, taxAnalysis: false,
             showTerms: true, showSignature: true, showFooterLine: true,
-            showDisclaimer: true, showBarcode: true, showQr: true,
+            showDisclaimer: true, showBarcode: true, showQr: true, fillerRowMm: 0,
         }, annexureSheet(lines.length)];
     }
 
@@ -1946,6 +1997,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
             showFooterLine: isClosing,
             showBarcode: true,
             showQr: isClosing,
+            fillerRowMm: 0,
         };
     });
 

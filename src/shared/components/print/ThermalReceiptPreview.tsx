@@ -138,8 +138,9 @@ export interface ThermalReceiptSample {
     /// Customer-facing price ladder (display only). When set, replaces the
     /// legacy subtotal/tax/total block with the "Today's discount" presentation.
     discounts?:  ReceiptDiscounts | null;
-    /// HSN/rate-wise net tax summary (paired with `discounts`). Gated by
-    /// `template.showTaxSummary` so it can be toggled off.
+    /// HSN/rate-wise net tax summary (paired with `discounts`). Feeds the
+    /// "incl. GST" note on the total — the slip has no rate-wise table, so
+    /// nothing here is toggleable.
     hsnSummary?: ReceiptHsnRow[] | null;
     /// Buyer GSTIN — printed on the receipt for B2B tax invoices.
     partyGstin?: string | null;
@@ -435,8 +436,9 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     <div className="hr" />
                     <div className="row total"><span>Total</span><span>{fmtINR(sample.total ?? sample.discounts.grossAtTag - sample.discounts.total)}</span></div>
                     {/* GST is INCLUDED in the inclusive line amounts above — shown as a
-                        note on the total, not a column row (so the math reads correctly). */}
-                    {template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
+                        note on the total, not a column row (so the math reads correctly).
+                        Part of the total block, so it always prints. */}
+                    {sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
                         const inter = sample.taxBreakdown?.kind === "INTER";
                         // Prefer the ladder's complete total (goods + tax-bearing
                         // charges like shipping); fall back to goods-only for
@@ -456,7 +458,8 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                 </>
             ) : (
                 <>
-                    {template.showTaxSummary && sample.subtotal !== null && (
+                    {/* Subtotal + the GST legs build the Total — never toggleable. */}
+                    {sample.subtotal !== null && (
                         <>
                             <div className="hr" />
                             <div className="row"><span>Subtotal</span><span>{fmtINR(sample.subtotal)}</span></div>

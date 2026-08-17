@@ -73,15 +73,18 @@ type BoolTemplateKey = {
 }[keyof VoucherTemplateDefaults];
 
 // One row per print element; each has an independent A4 + thermal flag so a
-// format can show something the other hides.
-const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey }[] = [
+// format can show something the other hides. `a4Only` rows describe an element
+// the thermal slip simply doesn't have, so its switch is shown as "—".
+const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey; a4Only?: boolean }[] = [
     { label: "Logo",           a4: "showLogo",          thermal: "showLogoThermal" },
     { label: "Header text",    a4: "showHeaderText",    thermal: "showHeaderTextThermal" },
     { label: "HO address",     a4: "showAddress",       thermal: "showAddressThermal" },
     { label: "Branch address", a4: "showBranchAddress", thermal: "showBranchAddressThermal" },
     { label: "Phone",          a4: "showPhone",         thermal: "showPhoneThermal" },
     { label: "GSTIN",          a4: "showGstin",         thermal: "showGstinThermal" },
-    { label: "Tax summary",    a4: "showTaxSummary",    thermal: "showTaxSummaryThermal" },
+    // Only the separate HSN/SAC rate-wise table — the tax figures inside the
+    // total block always print. The thermal slip carries no such table.
+    { label: "HSN tax analysis table", a4: "showTaxSummary", thermal: "showTaxSummaryThermal", a4Only: true },
     { label: "MRP (struck)",   a4: "showMrp",           thermal: "showMrpThermal" },
     { label: "Signature",      a4: "showSignature",     thermal: "showSignatureThermal" },
     { label: "Barcode",        a4: "showBarcode",       thermal: "showBarcodeThermal" },
@@ -438,7 +441,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             {/* One typed row shape (tl optional) so the ternary is a single
                                 array type — mapping a union of arrays would degrade el.tl to unknown. */}
                             {((isLabel ? LABEL_FIELD_ELEMENTS : visibleElements) as {
-                                label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey; tl?: BoolTemplateKey;
+                                label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey; tl?: BoolTemplateKey; a4Only?: boolean;
                             }[]).map((el) => (
                                 <div
                                     key={el.label}
@@ -450,11 +453,15 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                         checked={current[el.a4]}
                                         onCheckedChange={(v) => setField(el.a4, v)}
                                     />
-                                    <Switch
-                                        className="justify-self-center"
-                                        checked={current[el.thermal]}
-                                        onCheckedChange={(v) => setField(el.thermal, v)}
-                                    />
+                                    {el.a4Only ? (
+                                        <span className="justify-self-center text-muted-foreground">&mdash;</span>
+                                    ) : (
+                                        <Switch
+                                            className="justify-self-center"
+                                            checked={current[el.thermal]}
+                                            onCheckedChange={(v) => setField(el.thermal, v)}
+                                        />
+                                    )}
                                     {isLabel && el.tl && (
                                         <Switch
                                             className="justify-self-center"
