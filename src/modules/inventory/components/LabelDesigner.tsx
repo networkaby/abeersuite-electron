@@ -96,13 +96,6 @@ const PRESETS: Preset[] = [
     { id: "thermal-50x25", label: "Thermal 50 × 25 mm (2-up roll)", w: 50, h: 25, cols: 2, rows: 1, barHeight: 34, fontSize: 11, media: "roll", textScale: 1, doubleSided: false },
     { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, rows: 8, barHeight: 36, fontSize: 13, media: "sheet", textScale: 1.2, doubleSided: false },
     { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, rows: 10, barHeight: 26, fontSize: 10, media: "sheet", textScale: 0.95, doubleSided: false },
-    // Acrylic V-shaped desk name-plate stands (Shuban on Amazon) — DOUBLE-SIDED
-    // tent cards: each card is twice the face height (2 × 2 in), folded in half
-    // and slid into the stand's channel, so both faces show the price. 2 cards
-    // per A4 sheet, one across. The 8" is trimmed to 200 mm so it prints fully
-    // inside A4's printable area and still slides in (the channel has play).
-    { id: "a4-acrylic-6x2", label: "A4 — Acrylic stand 6 × 2 in, double-sided (2 per sheet)", w: 152.4, h: 50.8, cols: 1, rows: 2, barHeight: 52, fontSize: 18, media: "sheet", textScale: 2.1, doubleSided: true },
-    { id: "a4-acrylic-8x2", label: "A4 — Acrylic stand 8 × 2 in, double-sided (2 per sheet)", w: 200, h: 50, cols: 1, rows: 2, barHeight: 56, fontSize: 20, media: "sheet", textScale: 2.4, doubleSided: true },
     // Shelf price display card — a like-for-like recreation of the folded card
     // the old tool printed (ppdisplay_folded.pdf), measured off that PDF: cards
     // 200 × 108 mm (54 mm per face) stacked 2 per A4 portrait, rotated face on
@@ -876,7 +869,7 @@ const labelCss = `
     box-sizing: border-box;
     background: #fff;
     overflow: hidden;
-    /* A sheet preset narrower than A4's printable area (the acrylic stands)
+    /* A sheet preset narrower than A4's printable area (a4-3x8 / a4-4x10)
        sits centred on the sheet instead of hugging the left margin. Roll
        pages are exactly the printable width, so this is a no-op there. */
     margin: 0 auto;
