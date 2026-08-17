@@ -401,6 +401,10 @@ model InvProduct {
   @@index([warrantyTermId])
   @@index([gstRateId])
   @@index([isListedInShop])
+  // Catalogue delta sync: the POS asks "which products changed since <ts>?" on
+  // every till open. `stock` lives on this row and is rewritten after every
+  // sale, so this is a hot column — without the index the delta is a full scan.
+  @@index([updatedAt])
 }
 
 /// Blacklist a product from all discount engines (coupons, loyalty, tiers).

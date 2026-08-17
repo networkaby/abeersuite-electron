@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
@@ -36,145 +37,56 @@ async function loadRedeemCapOverrides(products: { id: number; groupId: number | 
     return out;
 }
 
+/** Everything a picker needs off the product row itself. One definition so list,
+ *  scan and sync modes cannot drift apart. */
+const PRODUCT_SELECT = {
+    id:                true,
+    sku:               true,
+    name:              true,
+    // Sync mode needs this to tell a deactivated product from a live one; the
+    // other modes already filter on it, so it is always true for them.
+    isActive:          true,
+    stock:             true,
+    reserved:          true,
+    lowStockThreshold: true,
+    effectiveSalePricePaise: true,
+    mrpPaise:          true,
+    savedSalePricePaise: true,
+    requireSaleNote:   true,
+    codes:        { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" as const } },
+    groupId:           true,
+    categoryId:        true,
+    unit:         { select: { code: true } },
+    brand:        { select: { name: true } },
+    warrantyTerm: { select: { name: true, durationDays: true } },
+    protection:   { select: { productId: true } },
+} as const;
+
+type ProductRow = Awaited<ReturnType<typeof loadProducts>>[number];
+function loadProducts(where: Prisma.InvProductWhereInput) {
+    return prisma.invProduct.findMany({ where, orderBy: { name: "asc" }, select: PRODUCT_SELECT });
+}
+
 /**
- * GET /api/inventory/products/lookup
+ * Attach everything that is NOT stored on the product row — resolved GST, costs,
+ * loyalty caps, derived barcode tag.
  *
- * Two modes:
- *
- * 1. **List mode (default)** — returns every active product as a lightweight
- *    list for voucher / dialog pickers. Requires only authentication so any
- *    finance user can search products when entering vouchers.
- *
- * 2. **Single-code mode** — `?code=<sku|barcode|ean|upc>` returns at most one
- *    product whose `sku` or any `InvProductCode.value` matches the given code
- *    exactly. Used by the scan-to-add inputs on PhysicalStockPage
- *    and ManufacturingJournalPage. Returns `null` (200) when there's no
- *    match — callers branch on the response without needing an exception.
+ * All four helpers are keyed by product id, so this is priced by how many rows
+ * you pass, not by catalogue size. That is what makes delta sync worth having:
+ * after a sale only the sold rows come through here, instead of every product.
  */
-export async function GET(req: NextRequest) {
-    const { response } = await requireAuth();
-    if (response) return response;
+async function enrichProducts(products: ProductRow[], barcodeBands: ReturnType<typeof normalizeBarcodeBands>) {
+    if (products.length === 0) return [];
 
-    const code = new URL(req.url).searchParams.get("code")?.trim();
+    const ids = products.map((p) => p.id);
+    const [{ products: taxByProduct }, lastInward, costMap, capMap] = await Promise.all([
+        resolveProductTaxBatch({ productIds: ids }),
+        loadLastInwardCostMap(products.map((p) => ({ id: p.id, stock: p.stock }))),
+        resolveEffectiveCostMap(ids),
+        loadRedeemCapOverrides(products.map((p) => ({ id: p.id, groupId: p.groupId, categoryId: p.categoryId }))),
+    ]);
 
-    // Printed-barcode bands (OrgDefaults.barcodeBandsJson) — used to DERIVE the
-    // tag price the customer sees on the shelf/receipt from each product's saved
-    // sale price + MRP. Same function the "Update & Print Labels" page uses, so
-    // shelf tag == receipt tag. Falls back to the seed defaults when unset.
-    const orgDefaults = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { barcodeBandsJson: true } });
-    const barcodeBands = normalizeBarcodeBands(orgDefaults?.barcodeBandsJson);
-
-    if (code) {
-        const scanSelect = {
-            id:                true,
-            sku:               true,
-            name:              true,
-            stock:             true,
-            reserved:          true,
-            lowStockThreshold: true,
-            effectiveSalePricePaise: true,
-            mrpPaise:          true,
-            savedSalePricePaise: true,
-            requireSaleNote:   true,
-            codes:        { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" as const } },
-            groupId:           true,
-            categoryId:        true,
-            unit:         { select: { code: true } },
-            brand:        { select: { name: true } },
-            warrantyTerm: { select: { name: true, durationDays: true } },
-            protection:   { select: { productId: true } },
-        };
-        // Deterministic resolution: an exact SKU match wins, then fall back to a
-        // scannable code. Both spaces are kept disjoint by the write-time guard
-        // (see findSkuCodeCollision), so this only ever matters as belt-and-braces.
-        // Each branch is a single indexed equality (replaces the old 9-column OR).
-        const product =
-            (await prisma.invProduct.findFirst({ where: { isActive: true, sku: code }, select: scanSelect }))
-            ?? (await prisma.invProduct.findFirst({ where: { isActive: true, codes: { some: { value: code } } }, select: scanSelect }));
-        if (!product) return NextResponse.json(null);
-        const { protection: _protection, ...productRest } = product;
-        const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
-        const resolved = taxByProduct.get(product.id);
-        const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
-        // GST-EXCLUSIVE effective cost — the spend-tier discount base.
-        const costMap = await resolveEffectiveCostMap([product.id]);
-        const capMap = await loadRedeemCapOverrides([{ id: product.id, groupId: product.groupId, categoryId: product.categoryId }]);
-        return NextResponse.json({
-            ...productRest,
-            // Discount-protection blacklist flag — POS skips tier/loyalty/coupon
-            // on protected products (the raw `protection` relation is stripped).
-            protected: _protection != null,
-            // Derived primary barcode for label/display consumers (replaces the
-            // old stored barcode1 column). `codes` (spread above) is the full set.
-            barcode1: primaryBarcode(product.codes),
-            // The response already carries `effectiveSalePricePaise` (selected +
-            // spread above) — POS reads that column name directly. We ALSO expose
-            // it under the legacy `pricePaise` alias for the not-yet-renamed
-            // Sale-voucher / lab / home / inventory pickers.
-            pricePaise: product.effectiveSalePricePaise,
-            taxRate: resolved?.gstRate ?? null,
-            hsnCode: resolved?.hsnCode ?? null,
-            lastPurchasePaise: lastInward.get(product.id) ?? null,
-            // GST-EXCLUSIVE resolved cost (paise) — the spend-tier discount base.
-            costPaise: costMap.get(product.id) ?? null,
-            redeemCapPct: capMap.get(product.id) ?? null,
-            // Printed barcode tag (paise) derived from saved price + MRP — the
-            // public price snapshotted on POS lines for the customer ladder.
-            barcodePricePaise: barcodeTagPaise(product.savedSalePricePaise, product.mrpPaise, barcodeBands),
-            // O2C available-to-sell = on-hand − reserved (null when untracked).
-            availableToSell: product.stock == null ? null : product.stock - (product.reserved ?? 0),
-        });
-    }
-
-    const products = await prisma.invProduct.findMany({
-        where:   { isActive: true },
-        orderBy: { name: "asc" },
-        select: {
-            id:                true,
-            sku:               true,
-            name:              true,
-            stock:             true,
-            reserved:          true,
-            lowStockThreshold: true,
-            effectiveSalePricePaise: true,
-            mrpPaise:          true,
-            savedSalePricePaise: true,
-            requireSaleNote:   true,
-            codes:        { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" } },
-            groupId:           true,
-            categoryId:        true,
-            unit:         { select: { code: true } },
-            brand:        { select: { name: true } },
-            warrantyTerm: { select: { name: true, durationDays: true } },
-            protection:   { select: { productId: true } },
-        },
-    });
-
-    // Resolve effective GST + HSN per product via the cascade (product →
-    // group chain → org defaults). Batch-resolved in 3 queries so this stays
-    // cheap even with thousands of products. Snapshot consumers (POS cart,
-    // voucher line entry) read taxRate/hsnCode to seed their per-line values.
-    const { products: taxByProduct } = await resolveProductTaxBatch({
-        productIds: products.map((p) => p.id),
-    });
-
-    // lastPurchasePaise — derived from the LAST_INWARD walk (PR 3 dropped the
-    // costPaise cache). UI cost columns + manufacturing-journal rate seeds
-    // read from here.
-    const lastInward = await loadLastInwardCostMap(
-        products.map((p) => ({ id: p.id, stock: p.stock })),
-    );
-
-    // GST-exclusive resolved cost per product (effective method) — the spend-tier
-    // discount base snapshotted onto POS cart lines. Same order of work as the
-    // lastInward walk above (batched per method).
-    const costMap = await resolveEffectiveCostMap(products.map((p) => p.id));
-
-    // Loyalty redeem-cap overrides (empty unless cap rules exist) so the POS can
-    // size the redeemable amount per cart consistently with the server.
-    const capMap = await loadRedeemCapOverrides(products.map((p) => ({ id: p.id, groupId: p.groupId, categoryId: p.categoryId })));
-
-    const enriched = products.map((p) => {
+    return products.map((p) => {
         const r = taxByProduct.get(p.id);
         const { protection: _protection, ...pRest } = p;
         return {
@@ -202,6 +114,140 @@ export async function GET(req: NextRequest) {
             availableToSell: p.stock == null ? null : p.stock - (p.reserved ?? 0),
         };
     });
+}
 
-    return NextResponse.json(enriched);
+/**
+ * Fingerprint of everything the enrichment depends on that does NOT live on a
+ * product row — the tax cascade's group/category chain and org defaults, the
+ * barcode bands, the loyalty redeem-cap rules. Edit any of those and no
+ * product's `updatedAt` moves, so a timestamp delta alone would serve stale
+ * tax or cap values; a changed stamp forces the client back to a full load.
+ *
+ * `GstRate` and `InvProductCode` have no `updatedAt`, so they contribute a row
+ * count instead: that catches rows being added or removed, but not a rate or a
+ * barcode edited in place. The client's 24h maximum cache age is the backstop
+ * for that remaining gap.
+ */
+async function catalogueStamp(): Promise<string> {
+    const [org, groups, categories, loyalty, codeCount, rateCount] = await Promise.all([
+        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { updatedAt: true } }),
+        prisma.invProductGroup.aggregate({ _max: { updatedAt: true } }),
+        prisma.invCategory.aggregate({ _max: { updatedAt: true } }),
+        prisma.loyaltyEarnRule.aggregate({ _max: { updatedAt: true } }),
+        prisma.invProductCode.count(),
+        prisma.gstRate.count(),
+    ]);
+    return [
+        org?.updatedAt?.toISOString() ?? "-",
+        groups._max.updatedAt?.toISOString() ?? "-",
+        categories._max.updatedAt?.toISOString() ?? "-",
+        loyalty._max.updatedAt?.toISOString() ?? "-",
+        codeCount,
+        rateCount,
+    ].join("|");
+}
+
+/** Past this, a delta is not worth it — just send the catalogue. */
+const MAX_DELTA_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * GET /api/inventory/products/lookup
+ *
+ * Three modes:
+ *
+ * 1. **List mode (default)** — returns every active product as a lightweight
+ *    list for voucher / dialog pickers. Requires only authentication so any
+ *    finance user can search products when entering vouchers. Returns a bare
+ *    ARRAY; several pickers depend on that shape, so it must not change.
+ *
+ * 2. **Single-code mode** — `?code=<sku|barcode|ean|upc>` returns at most one
+ *    product whose `sku` or any `InvProductCode.value` matches the given code
+ *    exactly. Used by the scan-to-add inputs on PhysicalStockPage
+ *    and ManufacturingJournalPage. Returns `null` (200) when there's no
+ *    match — callers branch on the response without needing an exception.
+ *
+ * 3. **Sync mode** — `?sync=1[&since=<iso>&stamp=<s>]`, for the POS, which
+ *    reopens its till several times a day and caches the catalogue in
+ *    IndexedDB. Returns an ENVELOPE (never a bare array) so the client can tell
+ *    a delta from a full load:
+ *      { mode: "full",  products, computedAt, stamp, count }
+ *      { mode: "delta", changed, removedIds, computedAt, stamp, count }
+ *    A delta carries only rows touched since `since`; `count` lets the client
+ *    prove it has not silently missed a hard delete, which no timestamp can
+ *    show. Falls back to "full" when the stamp moved, the window is too old, or
+ *    the client sent nothing to compare against.
+ */
+export async function GET(req: NextRequest) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const code = new URL(req.url).searchParams.get("code")?.trim();
+
+    // Printed-barcode bands (OrgDefaults.barcodeBandsJson) — used to DERIVE the
+    // tag price the customer sees on the shelf/receipt from each product's saved
+    // sale price + MRP. Same function the "Update & Print Labels" page uses, so
+    // shelf tag == receipt tag. Falls back to the seed defaults when unset.
+    const orgDefaults = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { barcodeBandsJson: true } });
+    const barcodeBands = normalizeBarcodeBands(orgDefaults?.barcodeBandsJson);
+
+    if (code) {
+        // Deterministic resolution: an exact SKU match wins, then fall back to a
+        // scannable code. Both spaces are kept disjoint by the write-time guard
+        // (see findSkuCodeCollision), so this only ever matters as belt-and-braces.
+        // Each branch is a single indexed equality (replaces the old 9-column OR).
+        const product =
+            (await prisma.invProduct.findFirst({ where: { isActive: true, sku: code }, select: PRODUCT_SELECT }))
+            ?? (await prisma.invProduct.findFirst({ where: { isActive: true, codes: { some: { value: code } } }, select: PRODUCT_SELECT }));
+        if (!product) return NextResponse.json(null);
+        const [enriched] = await enrichProducts([product], barcodeBands);
+        return NextResponse.json(enriched);
+    }
+
+    const params = new URL(req.url).searchParams;
+
+    // ── Sync mode (POS catalogue cache) ──────────────────────────────────────
+    if (params.get("sync")) {
+        // Captured BEFORE reading, so anything written mid-request still has an
+        // `updatedAt` past it and is picked up by the next delta rather than lost.
+        const now = new Date();
+        const stamp = await catalogueStamp();
+        const sinceParam = params.get("since");
+        const since = sinceParam ? new Date(sinceParam) : null;
+
+        const canDelta =
+            since != null
+            && !Number.isNaN(since.getTime())
+            && params.get("stamp") === stamp
+            && now.getTime() - since.getTime() < MAX_DELTA_WINDOW_MS;
+
+        if (canDelta) {
+            // No `isActive` filter — a product that was just deactivated must come
+            // back as a removal, and it can only be spotted by its bumped row.
+            const touched = await loadProducts({ updatedAt: { gt: since! } });
+            const [active, count] = await Promise.all([
+                enrichProducts(touched.filter((p) => p.isActive), barcodeBands),
+                prisma.invProduct.count({ where: { isActive: true } }),
+            ]);
+            return NextResponse.json({
+                mode: "delta",
+                changed: active,
+                removedIds: touched.filter((p) => !p.isActive).map((p) => p.id),
+                computedAt: now.toISOString(),
+                stamp,
+                count,
+            });
+        }
+
+        const products = await loadProducts({ isActive: true });
+        return NextResponse.json({
+            mode: "full",
+            products: await enrichProducts(products, barcodeBands),
+            computedAt: now.toISOString(),
+            stamp,
+            count: products.length,
+        });
+    }
+
+    // ── List mode — bare array, the shape every other picker expects ─────────
+    return NextResponse.json(await enrichProducts(await loadProducts({ isActive: true }), barcodeBands));
 }

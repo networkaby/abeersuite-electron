@@ -27,7 +27,7 @@ import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
-import { productMatchesQuery } from "@/shared/lib/inventory";
+import { productMatchesQuery, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -182,11 +182,22 @@ export function usePosBilling(opts: {
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
-    // Load all products once for fast typing
+    // The whole catalogue, held in memory so typing and scanning never wait on
+    // the network. It comes from the browser's cache first — the till is opened
+    // and closed all day, and re-fetching several thousand enriched rows each
+    // time was our heaviest repeated read — then a delta tops up whatever moved
+    // since, which also keeps prices fresher than the old load-once-per-mount.
     useEffect(() => {
-        axios.get<ProductOption[]>("/api/inventory/products/lookup")
-            .then((r) => setAllProducts(r.data))
-            .catch(() => { /* page is still useful without it */ });
+        let cancelled = false;
+        void (async () => {
+            const cached = await readCachedProducts<ProductOption>();
+            if (cancelled) return;
+            if (cached) setAllProducts(cached);
+            const synced = await syncProducts<ProductOption>();
+            if (cancelled || !synced) return;
+            setAllProducts(synced);
+        })();
+        return () => { cancelled = true; };
     }, []);
 
     // Load the active POS services once — added via the "+ Add service charge"
