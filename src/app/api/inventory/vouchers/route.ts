@@ -15,7 +15,6 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
-import { parseVoucherSync, windowWhere } from "@/modules/accountancy/lib/voucherSync";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
 //
@@ -67,11 +66,6 @@ export async function GET(req: NextRequest) {
         branchScopeId = branchParam;
     }
 
-    // Day Book's windowed cache. Absent these params every caller below behaves
-    // exactly as it always has — a bare array of the whole matching set.
-    const syncParams = parseVoucherSync(searchParams);
-    const computedAt = new Date();
-
     // 5D-4/8/10/11/12: type/status/deletedAt/party/branch all live on the spine.
     // (Typed so future drift is caught — the prior untyped literal silently kept
     // dropped columns via conditional spreads.)
@@ -83,26 +77,13 @@ export async function GET(req: NextRequest) {
         deletedAt: null,
         ...(accountIdParam ? { partyAccountId: Number(accountIdParam) } : {}),
         ...(branchScopeId ? { branchId: branchScopeId } : {}),
-        ...windowWhere(syncParams),
     };
     const vouchers = await prisma.voucherDetail.findMany({
         where: {
-            AND: [
-                {
-                    universalVoucher: {
-                        ...spineFilter,
-                        ...(ticketIdParam ? { links: { some: { kind: "TICKET", targetId: ticketIdParam } } } : {}),
-                    },
-                },
-                // A voucher edit can rewrite the trade detail without touching the
-                // spine (or the reverse), so a delta has to watch both rows.
-                ...(syncParams.since ? [{
-                    OR: [
-                        { updatedAt: { gt: syncParams.since } },
-                        { universalVoucher: { updatedAt: { gt: syncParams.since } } },
-                    ],
-                }] : []),
-            ],
+            universalVoucher: {
+                ...spineFilter,
+                ...(ticketIdParam ? { links: { some: { kind: "TICKET", targetId: ticketIdParam } } } : {}),
+            },
         },
         orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
         include: {
@@ -261,35 +242,7 @@ export async function GET(req: NextRequest) {
         };
     });
 
-    if (!syncParams.sync) return NextResponse.json(enriched);
-
-    // "Converted" is not a column — it is true while some OTHER voucher points
-    // back via refVoucherId. So it can flip without the source row itself being
-    // written, which a plain `since` delta would never notice: converting an
-    // estimate touches the new SALE, not the estimate.
-    //
-    // The changed rows themselves name the sources at stake (their own
-    // refVoucherId), so re-resolving just those ids — a handful, already indexed
-    // — tells the client which of its CACHED rows to correct. Both directions are
-    // covered: cancelling the sale re-opens the estimate, and that cancellation
-    // is itself a change that brings us back here.
-    const refTargetIds = [...new Set(
-        vouchers.map((v) => v.refVoucherId).filter((id): id is number => id != null),
-    )];
-    const stillConverted = refTargetIds.length === 0 ? [] : await prisma.voucherDetail.findMany({
-        where:  { refVoucherId: { in: refTargetIds }, universalVoucher: { deletedAt: null, status: { not: "CANCELLED" } } },
-        select: { refVoucherId: true },
-    });
-    const liveTargets = new Set(stillConverted.map((r) => r.refVoucherId));
-    const convertedUpdates: Record<number, boolean> = {};
-    for (const id of refTargetIds) convertedUpdates[id] = liveTargets.has(id);
-
-    return NextResponse.json({
-        mode: syncParams.since ? "delta" : "full",
-        rows: enriched,
-        convertedUpdates,
-        computedAt: computedAt.toISOString(),
-    });
+    return NextResponse.json(enriched);
 }
 
 // POST /api/inventory/vouchers
