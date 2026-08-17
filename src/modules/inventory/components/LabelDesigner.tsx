@@ -72,12 +72,47 @@ const PREVIEW_LIMIT = 60;
 type Preset = {
     id: string; label: string; w: number; h: number; cols: number; rows: number;
     barHeight: number; fontSize: number; media: "roll" | "sheet";
+    /** Typography multiplier — a bigger label reads only if its text grows too.
+     *  Scales the header/name/meta/secret point sizes via --lt-*-fs vars. */
+    textScale: number;
+    /** Double-sided tent card: each label prints TWICE on one card — upright on
+     *  the top half, rotated 180° on the bottom half, with a fold line between.
+     *  Fold with the print on the outside and both faces of a V-stand read the
+     *  label upright (the fold's rotation undoes the printed rotation). */
+    doubleSided: boolean;
+    /** Which card body to draw. "label" = the barcode label (every other preset);
+     *  "display" = the wide shelf price-display card, its own bespoke layout. */
+    body?: "label" | "display";
+    /** Print the rotated face on the TOP half instead of the bottom. Only the
+     *  order on paper changes — folded, both cards read the same. */
+    rotatedFirst?: boolean;
+    /** Push the sheet hard into one corner (zero page margin, no centring), so
+     *  the spare paper all ends up on ONE side and a single cut trims the sheet
+     *  instead of two. Only for presets narrower than the sheet. */
+    flush?: boolean;
 };
 const PRESETS: Preset[] = [
     // Matches the 4BARCODE driver stock "50 x 25 2up (100.0 mm x 25.0 mm)".
-    { id: "thermal-50x25", label: "Thermal 50 × 25 mm (2-up roll)", w: 50, h: 25, cols: 2, rows: 1, barHeight: 34, fontSize: 11, media: "roll" },
-    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, rows: 8, barHeight: 36, fontSize: 13, media: "sheet" },
-    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, rows: 10, barHeight: 26, fontSize: 10, media: "sheet" },
+    { id: "thermal-50x25", label: "Thermal 50 × 25 mm (2-up roll)", w: 50, h: 25, cols: 2, rows: 1, barHeight: 34, fontSize: 11, media: "roll", textScale: 1, doubleSided: false },
+    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, rows: 8, barHeight: 36, fontSize: 13, media: "sheet", textScale: 1.2, doubleSided: false },
+    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, rows: 10, barHeight: 26, fontSize: 10, media: "sheet", textScale: 0.95, doubleSided: false },
+    // Acrylic V-shaped desk name-plate stands (Shuban on Amazon) — DOUBLE-SIDED
+    // tent cards: each card is twice the face height (2 × 2 in), folded in half
+    // and slid into the stand's channel, so both faces show the price. 2 cards
+    // per A4 sheet, one across. The 8" is trimmed to 200 mm so it prints fully
+    // inside A4's printable area and still slides in (the channel has play).
+    { id: "a4-acrylic-6x2", label: "A4 — Acrylic stand 6 × 2 in, double-sided (2 per sheet)", w: 152.4, h: 50.8, cols: 1, rows: 2, barHeight: 52, fontSize: 18, media: "sheet", textScale: 2.1, doubleSided: true },
+    { id: "a4-acrylic-8x2", label: "A4 — Acrylic stand 8 × 2 in, double-sided (2 per sheet)", w: 200, h: 50, cols: 1, rows: 2, barHeight: 56, fontSize: 20, media: "sheet", textScale: 2.4, doubleSided: true },
+    // Shelf price display card — a like-for-like recreation of the folded card
+    // the old tool printed (ppdisplay_folded.pdf), measured off that PDF: cards
+    // 200 × 108 mm (54 mm per face) stacked 2 per A4 portrait, rotated face on
+    // top, the rest of the sheet cut away. Its own body layout — see
+    // PriceDisplayCard — not the barcode label.
+    // The 6 in card is the SAME design squeezed horizontally (every mm in the
+    // body is scaled by w / 200); the face stays 54 mm because both acrylic
+    // stands are 2 in tall.
+    { id: "a4-display-8x2", label: "A4 — Price display card 8 in (200 × 54 mm), folded (2 per sheet)", w: 200, h: 54, cols: 1, rows: 2, barHeight: 62, fontSize: 14, media: "sheet", textScale: 1, doubleSided: true, body: "display", rotatedFirst: true, flush: true },
+    { id: "a4-display-6x2", label: "A4 — Price display card 6 in (152.4 × 54 mm), folded (2 per sheet)", w: 152.4, h: 54, cols: 1, rows: 2, barHeight: 47, fontSize: 11, media: "sheet", textScale: 1, doubleSided: true, body: "display", rotatedFirst: true, flush: true },
 ];
 
 /** Labels on one printed page. A roll page is a single row (the printer feeds
@@ -329,24 +364,36 @@ export function LabelDesigner({
     /** Whole pages worth of PREVIEW_LIMIT labels — never a half-drawn page. */
     const previewPageCap = Math.max(1, Math.ceil(PREVIEW_LIMIT / perPage(preset)));
 
-    /** Geometry of one page — the physical sheet/row the printer feeds. */
+    /** Card height — the grid cell. A double-sided tent card is twice the face
+     *  height (front + back halves around the fold). */
+    const cardH = preset.doubleSided ? preset.h * 2 : preset.h;
+    /** Geometry of one page — the physical sheet/row the printer feeds. Also
+     *  carries the preset's typography scale (--lt-*-fs) so a large label reads
+     *  large; the CSS falls back to the base sizes if the var is absent. */
     const pageStyle = {
         ["--label-cols" as string]: preset.cols,
         ["--label-w" as string]: `${preset.w}mm`,
         ["--label-h" as string]: `${preset.h}mm`,
+        ["--card-h" as string]: `${cardH}mm`,
         ["--page-w" as string]: `${preset.cols * preset.w}mm`,
-        ["--page-h" as string]: `${preset.rows * preset.h}mm`,
+        ["--page-h" as string]: `${preset.rows * cardH}mm`,
+        ["--lt-header-fs" as string]: `${(7 * preset.textScale).toFixed(1)}pt`,
+        ["--lt-name-fs" as string]: `${(7 * preset.textScale).toFixed(1)}pt`,
+        ["--lt-meta-fs" as string]: `${(7 * preset.textScale).toFixed(1)}pt`,
+        ["--lt-secret-fs" as string]: `${(6 * preset.textScale).toFixed(1)}pt`,
     } as React.CSSProperties;
 
     // How far each product's name must be condensed to fit this preset. Keyed by
     // product, NOT by label, so copies cost nothing. The usable width is the label
     // minus its own 1.5mm side padding and the body's 3mm side padding (the gutter
-    // kept clear down both edges for the secret code).
+    // kept clear down both edges for the secret code). The measurement uses the
+    // preset's SCALED name size — a bigger label fits a longer name at the same
+    // point size it renders at.
     const nameScaleById = useMemo(() => {
         const availableMm = preset.w - 2 * 1.5 - 2 * 3;
-        const fontSizePt = 7; // .lt-name
+        const fontSizePt = 7 * preset.textScale; // .lt-name, scaled
         return new Map(items.map((it) => [it.id, nameFitScale(it.name, availableMm, fontSizePt)]));
-    }, [items, preset.w]);
+    }, [items, preset.w, preset.textScale]);
 
     const secretStyle: React.CSSProperties = {
         writingMode: "vertical-rl",
@@ -538,16 +585,17 @@ export function LabelDesigner({
             <div className="print-hide">
                 <div className="mb-2 text-xs font-medium text-muted-foreground">
                     Preview — {totalCopies} label{totalCopies !== 1 ? "s" : ""} from {items.length} product{items.length !== 1 ? "s" : ""}
-                    {" · "}{pages.length} page{pages.length !== 1 ? "s" : ""} of {preset.cols * preset.w}×{preset.rows * preset.h}mm
+                    {" · "}{pages.length} page{pages.length !== 1 ? "s" : ""} of {preset.cols * preset.w}×{preset.rows * cardH}mm
+                    {preset.doubleSided ? " · double-sided (fold on the dashed line)" : ""}
                     {zoom !== 1 ? ` · shown ×${zoom}` : " · actual size"}
                     {pages.length > previewPageCap ? ` · showing first ${previewPageCap}` : ""}
                 </div>
                 <div className="overflow-x-auto rounded-sm border bg-[#fafafa] p-6">
                     <div className="lt-preview" style={{ zoom }}>
                         {pages.slice(0, previewPageCap).map((pageLabels, i) => (
-                            <div key={i} className="lt-page" style={pageStyle}>
+                            <div key={i} className={cn("lt-page", preset.flush && "lt-page-cutlines")} style={pageStyle}>
                                 {pageLabels.map(({ key, item }) => (
-                                    <LabelCard key={key} preset={preset} item={item}
+                                    <LabelCell key={key} preset={preset} item={item}
                                         header={showHeader ? header : ""} showMrp={showMrp}
                                         code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle}
                                         nameScale={nameScaleById.get(item.id) ?? 1} salePriceLabel={salePriceLabel} />
@@ -561,9 +609,9 @@ export function LabelDesigner({
             {/* ── Print-only: every copy, one .lt-page per printed page ──────── */}
             <div className="label-print-area">
                 {pages.map((pageLabels, i) => (
-                    <div key={i} className="lt-page" style={pageStyle}>
+                    <div key={i} className={cn("lt-page", preset.flush && "lt-page-cutlines")} style={pageStyle}>
                         {pageLabels.map(({ key, item }) => (
-                            <LabelCard key={key} preset={preset} item={item}
+                            <LabelCell key={key} preset={preset} item={item}
                                 header={showHeader ? header : ""} showMrp={showMrp}
                                 code={showSecret ? secretDateCode(item.date) : ""} side={side} secretStyle={secretStyle}
                                 nameScale={nameScaleById.get(item.id) ?? 1} salePriceLabel={salePriceLabel} />
@@ -628,6 +676,102 @@ export function LabelDesigner({
                     </div>
                 </DialogContent>
             </Dialog>
+        </div>
+    );
+}
+
+// ── Label cell: one grid slot — a plain label, or a double-sided tent card ──
+
+function LabelCell(props: {
+    preset: Preset;
+    item: Item;
+    header: string;
+    showMrp: boolean;
+    code: string;
+    side: "left" | "right";
+    secretStyle: React.CSSProperties;
+    nameScale?: number;
+    salePriceLabel?: string;
+}) {
+    return props.preset.doubleSided ? <TentCard {...props} /> : <CardBody {...props} />;
+}
+
+/** One printed face — the barcode label, or the wide price-display card. */
+function CardBody(props: React.ComponentProps<typeof LabelCard>) {
+    return props.preset.body === "display" ? <PriceDisplayCard {...props} /> : <LabelCard {...props} />;
+}
+
+/** Double-sided tent card for V-shaped stands — the SAME label on both faces:
+ *  upright on the top half, rotated 180° on the bottom half, dashed fold line
+ *  between them. Fold on the line with the print on the outside; the fold's
+ *  half-turn undoes the printed rotation, so both faces read upright. */
+function TentCard(props: {
+    preset: Preset;
+    item: Item;
+    header: string;
+    showMrp: boolean;
+    code: string;
+    side: "left" | "right";
+    secretStyle: React.CSSProperties;
+    nameScale?: number;
+    salePriceLabel?: string;
+}) {
+    const { preset } = props;
+    // `rotatedFirst` only swaps which half carries the rotated face; the folded
+    // card is identical either way. The display card uses top-rotated so the
+    // printed sheet matches the old tool's output page-for-page.
+    const topBack = preset.rotatedFirst === true;
+    return (
+        <div className="lt-tent" style={{ ["--label-w" as string]: `${preset.w}mm`, ["--card-h" as string]: `${preset.h * 2}mm` }}>
+            <div className={cn("lt-tent-face", topBack && "lt-tent-face-back")}>
+                <CardBody {...props} />
+            </div>
+            <div className="lt-tent-fold" />
+            <div className={cn("lt-tent-face lt-tent-face-bottom", !topBack && "lt-tent-face-back")}>
+                <CardBody {...props} />
+            </div>
+        </div>
+    );
+}
+
+// ── Price display card ───────────────────────────────────────────────────────
+
+/** The wide shelf/counter price card, recreated from the old tool's folded PDF
+ *  (ppdisplay_folded.pdf). Every size below is measured off that print at 200 ×
+ *  54 mm per face, so it is written in mm, NOT in the label card's scaled points:
+ *  name across the top, barcode bottom-left with the MRP beside it, and the
+ *  offer price large on the right. No store header — the printed sample has
+ *  none. The secret date code sits beside the barcode, level with its digits —
+ *  not on the sheet edge, which a zero-margin print can clip.
+ *
+ *  Every size is written for the 8 in card and scaled by --d-scale (w / 200),
+ *  so the 6 in variant is the same drawing, squeezed. */
+function PriceDisplayCard({
+    preset, item, code, salePriceLabel = "",
+}: React.ComponentProps<typeof LabelCard>) {
+    return (
+        <div className="lt-display" style={{
+            ["--label-w" as string]: `${preset.w}mm`,
+            ["--label-h" as string]: `${preset.h}mm`,
+            ["--d-scale" as string]: preset.w / 200,
+        }}>
+            <div className="lt-d-name">{item.name}</div>
+            <div className="lt-d-row">
+                <div className="lt-d-barcode">
+                    <BarcodeSvg value={item.barcode} height={preset.barHeight} showText={false} margin={0} stretch />
+                    {item.barcode ? (
+                        <div className="lt-d-code" style={{ fontSize: `${preset.fontSize}px` }}>{item.barcode}</div>
+                    ) : null}
+                </div>
+                {code ? <div className="lt-d-secret">{code}</div> : null}
+                {item.mrp && item.mrp !== "0" ? <div className="lt-d-mrp">MRP ₹ {item.mrp}</div> : <div />}
+                {item.price ? (
+                    <div className="lt-d-offer">
+                        <div className="lt-d-offer-caption">{salePriceLabel || "Our Offer Price"}</div>
+                        <div className="lt-d-offer-price">₹{item.price}/-</div>
+                    </div>
+                ) : null}
+            </div>
         </div>
     );
 }
@@ -711,7 +855,12 @@ function Opt({ label, children }: { label: string; children: React.ReactNode }) 
  *  declares as its stock — so Chrome prints at true size with no shrink-to-fit. */
 const pageCss = (p: Preset) => p.media === "roll"
     ? `@page { size: ${p.w * p.cols}mm ${p.h}mm; margin: 0; }`
-    : `@page { size: A4; margin: 4mm; }`;
+    // A flush sheet takes no page margin and no centring: the labels sit in the
+    // top-left corner, so ALL the spare paper is on the right and the bottom —
+    // one cut down and one across, instead of trimming four edges.
+    : p.flush
+        ? `@page { size: A4; margin: 0; }\n.lt-page { margin: 0; }`
+        : `@page { size: A4; margin: 4mm; }`;
 
 const labelCss = `
 /* One printed page. Identical on screen and on paper — the preview only adds a
@@ -719,13 +868,55 @@ const labelCss = `
 .lt-page {
     display: grid;
     grid-template-columns: repeat(var(--label-cols, 2), var(--label-w, 50mm));
-    grid-auto-rows: var(--label-h, 25mm);
+    /* A double-sided preset sizes each row to the full card (2 × face). */
+    grid-auto-rows: var(--card-h, var(--label-h, 25mm));
     width: var(--page-w, 100mm);
     height: var(--page-h, 25mm);
     gap: 0;
     box-sizing: border-box;
     background: #fff;
     overflow: hidden;
+    /* A sheet preset narrower than A4's printable area (the acrylic stands)
+       sits centred on the sheet instead of hugging the left margin. Roll
+       pages are exactly the printable width, so this is a no-op there. */
+    margin: 0 auto;
+}
+/* Flush sheets (a4-display-*): the printed card sits in the top-left corner,
+   so the spare paper collects on the right and the bottom — the two edges
+   that still need trimming. These dashed guides mark exactly where, on both
+   the screen preview and the paper. Drawn with pseudo-elements (not a border)
+   so they add no layout width/height and cannot shrink the card underneath. */
+.lt-page-cutlines { position: relative; overflow: visible; }
+.lt-page-cutlines::after,
+.lt-page-cutlines::before {
+    content: ""; position: absolute; border: 0 dashed #999;
+}
+.lt-page-cutlines::after { top: 0; bottom: 0; left: 100%; border-left-width: 0.75pt; }
+.lt-page-cutlines::before { left: 0; right: 0; top: 100%; border-top-width: 0.75pt; }
+/* Double-sided tent card: two label faces + a fold line. */
+.lt-tent {
+    position: relative;
+    width: var(--label-w, 50mm);
+    height: var(--card-h, 50mm);
+    box-sizing: border-box;
+    background: #fff;
+    /* Screen + print: a light cut guide around the card. */
+    outline: 0.25pt solid #c8c8c8;
+}
+.lt-tent-face {
+    position: absolute; left: 0; top: 0;
+    width: 100%; height: 50%;
+}
+.lt-tent-face-bottom { top: 50%; }
+/* The back half is printed rotated — folding the card in half turns it
+   upright. Rotating about the face's own centre (the fold line) keeps the
+   label inside the same half-box. Which half is the back depends on the
+   preset (rotatedFirst), so this is keyed on the class, not the position. */
+.lt-tent-face-back > .lt-label,
+.lt-tent-face-back > .lt-display { transform: rotate(180deg); }
+.lt-tent-fold {
+    position: absolute; left: 0; right: 0; top: 50%;
+    border-top: 0.6pt dashed #8a8a8a;
 }
 /* Screen only: page separation + a shadow so stacked pages read as sheets. */
 .lt-preview { display: flex; flex-direction: column; gap: 4mm; align-items: flex-start; }
@@ -751,11 +942,11 @@ const labelCss = `
     padding: 0 3mm; /* room down both edges for the side code */
 }
 .lt-header {
-    font-size: 7pt; font-weight: 700; line-height: 1.1;
+    font-size: var(--lt-header-fs, 7pt); font-weight: 700; line-height: 1.1;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm;
 }
 .lt-name {
-    font-size: 7pt; font-weight: 600; line-height: 1.1;
+    font-size: var(--lt-name-fs, 7pt); font-weight: 600; line-height: 1.1;
     font-family: ${LABEL_NAME_FONT};
     overflow: hidden; margin: 0.5mm 0;
 }
@@ -774,10 +965,53 @@ const labelCss = `
 }
 .lt-meta {
     display: flex; justify-content: space-between; align-items: baseline;
-    width: 100%; gap: 1mm; font-size: 7pt; line-height: 1.1; margin-top: 0.5mm;
+    width: 100%; gap: 1mm; font-size: var(--lt-meta-fs, 7pt); line-height: 1.1; margin-top: 0.5mm;
 }
 .lt-mrp { font-weight: 600; text-align: left; }
 .lt-price { font-weight: 700; text-align: right; margin-left: auto; }
+
+/* ── Price display card (preset a4-display-8x2) ───────────────────────────
+   Sizes are the ones measured off the old tool's printed card, in mm, so the
+   recreation lands on paper exactly where the sample does. */
+.lt-display {
+    position: relative;
+    width: var(--label-w, 200mm);
+    height: var(--label-h, 54mm);
+    box-sizing: border-box;
+    padding: 10.5mm calc(7.6mm * var(--d-scale, 1)) 0 calc(10.2mm * var(--d-scale, 1));
+    color: #000;
+    background: #fff;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.lt-d-name {
+    font-size: calc(6.5mm * var(--d-scale, 1)); line-height: 1.15;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lt-d-row {
+    /* 5 mm gutters, not the sample's 8 mm: the secret code takes width the old
+       card did not spend, and the offer caption must stay on ONE line. */
+    display: flex; align-items: flex-start; gap: calc(5mm * var(--d-scale, 1));
+    margin-top: 6.3mm; padding-left: calc(4.2mm * var(--d-scale, 1));
+}
+.lt-d-barcode { flex: 0 0 calc(48.2mm * var(--d-scale, 1)); text-align: center; }
+.lt-d-barcode svg { display: block; width: 100%; height: calc(16.4mm * var(--d-scale, 1)); }
+.lt-d-code {
+    font-family: ui-monospace, "Courier New", monospace;
+    font-weight: 600; letter-spacing: calc(0.6mm * var(--d-scale, 1)); line-height: 1; margin-top: 1.9mm;
+}
+/* Staff-only price age, level with the barcode digits (align-self: flex-end
+   lands it on the bottom of the row, which the barcode column defines). */
+.lt-d-secret {
+    align-self: flex-end;
+    font-family: ui-monospace, "Courier New", monospace;
+    font-size: calc(3.2mm * var(--d-scale, 1)); font-weight: 700;
+    letter-spacing: calc(0.3mm * var(--d-scale, 1)); line-height: 1;
+    white-space: nowrap;
+}
+.lt-d-mrp { font-size: calc(5.7mm * var(--d-scale, 1)); line-height: 1.1; white-space: nowrap; }
+.lt-d-offer { margin-left: auto; text-align: right; }
+.lt-d-offer-caption { font-size: calc(9.1mm * var(--d-scale, 1)); line-height: 1.1; white-space: nowrap; }
+.lt-d-offer-price { font-size: calc(10.25mm * var(--d-scale, 1)); line-height: 1.1; margin-top: 1.5mm; white-space: nowrap; }
 
 /* The secret date code — vertical, pinned to one edge, staff-only. */
 /* Centred by transform, NOT by flex inside a top+bottom box. The old way made
@@ -789,7 +1023,7 @@ const labelCss = `
    either — that is what used to shave "075" down to "75" on feed drift. */
 .lt-secret {
     position: absolute; top: 50%; transform: translateY(-50%);
-    font-size: 6pt; font-weight: 700; letter-spacing: 1px; color: #000;
+    font-size: var(--lt-secret-fs, 6pt); font-weight: 700; letter-spacing: 1px; color: #000;
     line-height: 1;
 }
 
