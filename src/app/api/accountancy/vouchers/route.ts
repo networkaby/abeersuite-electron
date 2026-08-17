@@ -9,6 +9,7 @@ import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { parseVoucherSync } from "@/modules/accountancy/lib/voucherSync";
 
 const lineSchema = z.object({
     accountId:   z.number().int().positive(),
@@ -45,6 +46,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") as "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE" | null;
     const status = searchParams.get("status") as "DRAFT" | "POSTED" | "CANCELLED" | null;
+    // Day Book's windowed cache. Without `sync` the response stays the bare
+    // array every existing caller reads; `from`/`to` keep their old meaning.
+    const syncParams = parseVoucherSync(searchParams);
+    const computedAt = new Date();
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     // Phase 5 5E: the spine IS the financial voucher (Voucher table dropped). Filter
@@ -65,6 +70,7 @@ export async function GET(req: Request) {
                         ...(to ? { lte: new Date(to) } : {}),
                     },
                 } : {}),
+                ...(syncParams.since ? { updatedAt: { gt: syncParams.since } } : {}),
             },
             orderBy: [{ date: "desc" }, { createdAt: "desc" }],
             include: {
@@ -96,7 +102,12 @@ export async function GET(req: Request) {
             _count:       { lines: v.lines.length },
         }));
 
-        return NextResponse.json(vouchers);
+        if (!syncParams.sync) return NextResponse.json(vouchers);
+        return NextResponse.json({
+            mode: syncParams.since ? "delta" : "full",
+            rows: vouchers,
+            computedAt: computedAt.toISOString(),
+        });
     } catch (e) {
         return handleApiError(e, "Failed to fetch vouchers");
     }

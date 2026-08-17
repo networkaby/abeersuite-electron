@@ -52,11 +52,15 @@ const NON_REGULAR_KINDS = new Set([...OPTIONAL_KINDS, ...INVENTORY_KINDS]);
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function DayBookPage() {
-    const { rows, loading, error, reload } = useCombinedVouchers();
     const router = useRouter();
 
     // Shared date/period/search/status/branch filter state (localStorage-persisted).
     const filters = useRegisterFilters("daybook");
+
+    // The visible period IS the fetch window now — widening it pulls only the
+    // slice not already cached, instead of the old "download everything, then
+    // hide most of it" behaviour. Everything below still filters client-side.
+    const { rows, loading, error, reload } = useCombinedVouchers(filters.from, filters.to);
 
     // Day Book-specific filters not in the shared hook.
     const [kind, setKind] = useState(() => {

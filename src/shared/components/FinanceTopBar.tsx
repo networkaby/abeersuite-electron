@@ -109,13 +109,11 @@ export default function FinanceTopBar({
     permissions?: string[];
 }) {
     const canView = hasModuleNavAccess(permissions, "accountancy");
-    // Lazy initialisers — localStorage is read once on mount, not every render.
-    const [data, setData] = useState<CashPosition | null>(
-        () => readCache<CashPosition>(CASH_CACHE_KEY)?.data ?? null,
-    );
-    const [instantFund, setInstantFund] = useState<number | null>(
-        () => readCache<FundPayload>(FUND_CACHE_KEY)?.data.instantTotal ?? null,
-    );
+    // Seeded from localStorage only in the mount effect below — reading it here in
+    // a lazy initialiser would render different HTML on server (no window) vs
+    // client (cache hit), a hydration mismatch.
+    const [data, setData] = useState<CashPosition | null>(null);
+    const [instantFund, setInstantFund] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [recomputing, setRecomputing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -151,8 +149,14 @@ export default function FinanceTopBar({
     // run in declaration order, and the poll's first fetch should already be
     // able to say "since". Also adopts whatever another tab fetches, live.
     useEffect(() => {
-        cashSince.current = readCache<CashPosition>(CASH_CACHE_KEY)?.computedAt ?? null;
-        fundSince.current = readCache<FundPayload>(FUND_CACHE_KEY)?.computedAt ?? null;
+        // Paint the cached figures immediately (post-hydration, so this is safe),
+        // then let the poll below refresh them.
+        const cachedCash = readCache<CashPosition>(CASH_CACHE_KEY);
+        const cachedFund = readCache<FundPayload>(FUND_CACHE_KEY);
+        if (cachedCash) setData(cachedCash.data);
+        if (cachedFund) setInstantFund(cachedFund.data.instantTotal);
+        cashSince.current = cachedCash?.computedAt ?? null;
+        fundSince.current = cachedFund?.computedAt ?? null;
 
         const stopCash = subscribeToCache<CashPosition>(CASH_CACHE_KEY, (entry) => {
             cashSince.current = entry.computedAt;

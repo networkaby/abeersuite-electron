@@ -616,6 +616,13 @@ model VoucherDetail {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // The Day Book resolves the "Converted" mark by asking which vouchers point
+  // BACK at a given one — a reverse lookup on this column that ran unindexed.
+  @@index([refVoucherId])
+  // Delta sync: "which trade details changed since <ts>?". A voucher edit can
+  // touch this row without touching the spine, so both carry the same index.
+  @@index([updatedAt])
+
   // Phase 5 5D-18: physical table renamed InvVoucher → VoucherDetail to match the
   // model (the @@map bandage removed). Dev-only ALTER TABLE RENAME, data preserved.
 }

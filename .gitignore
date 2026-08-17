@@ -82,3 +82,5 @@ dbrows.local.ts
 backup.sql
 backup-*.sql
 restore-*.sql
+.freebuff/preview-0c473ed9-f97d-47aa-8ada-12ce817c5194.log.err
+.freebuff

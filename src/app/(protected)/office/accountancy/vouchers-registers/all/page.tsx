@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
+import { presetRange } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 
 type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED";
@@ -24,7 +25,13 @@ export default function AllVouchersPage() {
     const [to, setTo] = useState("");
     const [kindQuery, setKindQuery] = useState("");
 
-    const { rows, loading, error, reload } = useCombinedVouchers();
+    // The hook fetches a window rather than all of history, so an empty date box
+    // means "this FY" here rather than "everything ever written".
+    const fyRange = useMemo(() => presetRange("thisFY"), []);
+    const { rows, loading, error, reload } = useCombinedVouchers(
+        from || fyRange.from,
+        to   || fyRange.to,
+    );
 
     const filtered = useMemo(() => {
         return rows.filter((r) => {

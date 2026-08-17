@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { parseVoucherSync } from "@/modules/accountancy/lib/voucherSync";
 
 // GET /api/accountancy/journal-entries
 //
@@ -21,6 +22,9 @@ export async function GET(req: Request) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const includeEngine = searchParams.get("includeEngine") === "1";
+    // Day Book's windowed cache — without `sync` this stays the bare array.
+    const syncParams = parseVoucherSync(searchParams);
+    const computedAt = new Date();
 
     try {
         const entries = await prisma.universalVoucher.findMany({
@@ -35,6 +39,7 @@ export async function GET(req: Request) {
                     },
                 } : {}),
                 ...(includeEngine ? {} : { type: "JOURNAL" }),
+                ...(syncParams.since ? { updatedAt: { gt: syncParams.since } } : {}),
             },
             orderBy: [{ date: "desc" }, { createdAt: "desc" }],
             include: {
@@ -58,7 +63,12 @@ export async function GET(req: Request) {
             return { ...e, createdBy: creatorById.get(e.createdById) ?? null, lines: undefined, totalDebit };
         });
 
-        return NextResponse.json(result);
+        if (!syncParams.sync) return NextResponse.json(result);
+        return NextResponse.json({
+            mode: syncParams.since ? "delta" : "full",
+            rows: result,
+            computedAt: computedAt.toISOString(),
+        });
     } catch (e) {
         return handleApiError(e, "Failed to fetch journal entries");
     }
