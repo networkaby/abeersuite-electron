@@ -465,20 +465,17 @@ export async function POST(req: Request) {
             ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccountId, status: "POSTED", deletedAt: null, type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } } })) === 0
             : false;
         const tax = await loadTaxonomy();
-        couponLines = body.lines.map((l) => {
-            const costExcl = costExclById.get(l.productId) ?? null;
-            return {
-                productId: l.productId,
-                groupId: tax.get(l.productId)?.groupId ?? null,
-                categoryId: tax.get(l.productId)?.categoryId ?? null,
-                brandId: tax.get(l.productId)?.brandId ?? null,
-                qty: l.quantity, unitPrice: l.unitPrice,
-                // Cost incl. tax — the PERCENT-coupon base (same as the tier's).
-                costIncl: costExcl == null ? null : costExcl * (1 + l.taxRate / 100),
-                // Discount-protected lines never match a coupon (see couponMath).
-                protected: protectedProductIds.has(l.productId),
-            };
-        });
+        // Coupon lines carry NO cost — PERCENT coupons discount the SALE value,
+        // so cost never reaches the customer math (cost is a business secret).
+        couponLines = body.lines.map((l) => ({
+            productId: l.productId,
+            groupId: tax.get(l.productId)?.groupId ?? null,
+            categoryId: tax.get(l.productId)?.categoryId ?? null,
+            brandId: tax.get(l.productId)?.brandId ?? null,
+            qty: l.quantity, unitPrice: l.unitPrice,
+            // Discount-protected lines never match a coupon (see couponMath).
+            protected: protectedProductIds.has(l.productId),
+        }));
         couponInput = {
             accountId: isIdentified ? customerAccountId : null,
             lines: couponLines,

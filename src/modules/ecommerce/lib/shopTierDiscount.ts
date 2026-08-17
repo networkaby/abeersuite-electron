@@ -213,22 +213,18 @@ export async function computeShopCartBenefits(
             couponError = "Coupons are not configured yet.";
         } else if (couponConfig?.couponExpenseAccountId != null) {
             const tax = await loadTaxonomy();
-            // POS bases: unitPrice + goodsValue are PRE-TAX; costIncl = cost incl. GST.
-            couponLines = lines.map((l) => {
-                const rate = taxRateById.get(l.productId) ?? 0;
-                const costExcl = costPaiseById.get(l.productId) ?? null;
-                return {
-                    productId: l.productId,
-                    groupId: tax.get(l.productId)?.groupId ?? null,
-                    categoryId: tax.get(l.productId)?.categoryId ?? null,
-                    brandId: tax.get(l.productId)?.brandId ?? null,
-                    qty: l.quantity,
-                    unitPrice: lineTaxableRs(l) / l.quantity,
-                    costIncl: costExcl == null ? null : (costExcl / 100) * (1 + rate / 100),
-                    // Discount-protected lines never match a coupon (see couponMath).
-                    protected: protectedProductIds.has(l.productId),
-                };
-            });
+            // POS bases: unitPrice + goodsValue are PRE-TAX (coupons discount
+            // the SALE value, not cost — cost must never be derivable).
+            couponLines = lines.map((l) => ({
+                productId: l.productId,
+                groupId: tax.get(l.productId)?.groupId ?? null,
+                categoryId: tax.get(l.productId)?.categoryId ?? null,
+                brandId: tax.get(l.productId)?.brandId ?? null,
+                qty: l.quantity,
+                unitPrice: lineTaxableRs(l) / l.quantity,
+                // Discount-protected lines never match a coupon (see couponMath).
+                protected: protectedProductIds.has(l.productId),
+            }));
             couponGoodsValue = couponLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
             const input: EvalInput = {
                 accountId,

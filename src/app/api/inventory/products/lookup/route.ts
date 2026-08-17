@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
         const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
         const resolved = taxByProduct.get(product.id);
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
-        // GST-EXCLUSIVE effective cost — the spend-tier / %-coupon discount base.
+        // GST-EXCLUSIVE effective cost — the spend-tier discount base.
         const costMap = await resolveEffectiveCostMap([product.id]);
         const capMap = await loadRedeemCapOverrides([{ id: product.id, groupId: product.groupId, categoryId: product.categoryId }]);
         return NextResponse.json({
@@ -165,9 +165,9 @@ export async function GET(req: NextRequest) {
         products.map((p) => ({ id: p.id, stock: p.stock })),
     );
 
-    // GST-exclusive resolved cost per product (effective method) — the spend-tier /
-    // %-coupon discount base snapshotted onto POS cart lines. Same order of work as
-    // the lastInward walk above (batched per method).
+    // GST-exclusive resolved cost per product (effective method) — the spend-tier
+    // discount base snapshotted onto POS cart lines. Same order of work as the
+    // lastInward walk above (batched per method).
     const costMap = await resolveEffectiveCostMap(products.map((p) => p.id));
 
     // Loyalty redeem-cap overrides (empty unless cap rules exist) so the POS can

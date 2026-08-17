@@ -121,8 +121,9 @@ export async function resolveCostBatch(
 /// One-call effective cost per product (paise, GST-EXCLUSIVE): resolves each
 /// product's cost by its OWN effective method (product.costMethod ??
 /// OrgDefaults.valuationMethod), batched per method. The single shared basis for
-/// every "% of cost" consumer — pricing apply, POS lookup snapshot, the POS
-/// spend-tier discount, and %-type coupons — so they can never disagree.
+/// every "% of cost" consumer — pricing apply, POS lookup snapshot, and the POS
+/// spend-tier discount — so they can never disagree. (%-type coupons no longer
+/// use cost: they discount the sale value, so cost can't be derived from them.)
 export async function resolveEffectiveCostMap(productIds: number[]): Promise<Map<number, number | null>> {
     const out = new Map<number, number | null>();
     const ids = [...new Set(productIds)];

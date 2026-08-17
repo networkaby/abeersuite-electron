@@ -20,7 +20,8 @@ const lineSchema = z.object({
     qty:        z.number().min(0),
     unitPrice:  z.number().min(0),
     // Line's snapshotted GST % — used to gross up the server-resolved cost to
-    // cost-incl-tax, the PERCENT-coupon base. Same snapshot /sale receives.
+    // cost-incl-tax for the LINE-scope tier-share estimate (the tier discount
+    // is still % of cost). Same snapshot /sale receives.
     taxRate:    z.number().min(0).max(100).optional(),
 });
 
@@ -73,8 +74,8 @@ export async function POST(req: Request) {
         const loyaltyRupees = data.loyaltyRupees ?? 0;
 
         // Resolve each line's taxonomy + effective cost server-side (the POS client
-        // doesn't send them) so include/exclude rules AND the PERCENT base evaluate
-        // IDENTICALLY here and in /sale.
+        // doesn't send them) so include/exclude rules evaluate IDENTICALLY here and
+        // in /sale (cost rides along for the LINE-scope tier-share estimate below).
         const productIds = [...new Set(data.lines.map((l) => l.productId))];
         const [products, costPaiseById, protectedProductIds] = await Promise.all([
             prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true } }),
@@ -93,7 +94,8 @@ export async function POST(req: Request) {
                     categoryId: taxById.get(l.productId)?.categoryId ?? null,
                     brandId: taxById.get(l.productId)?.brandId ?? null,
                     qty: l.qty, unitPrice: l.unitPrice,
-                    // Cost incl. tax — the PERCENT-coupon base (same as the tier's).
+                    // Cost incl. tax — the LINE-scope tier-share estimate base
+                    // (the tier discount is still % of cost, not the coupon).
                     costIncl: costPaise == null ? null : (costPaise / 100) * (1 + (l.taxRate ?? 0) / 100),
                     // Discount-protected lines never match a coupon (see couponMath).
                     protected: protectedProductIds.has(l.productId),

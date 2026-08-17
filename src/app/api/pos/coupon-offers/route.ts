@@ -129,9 +129,8 @@ export async function POST(req: Request) {
         const isNewCustomer = data.isNewCustomer ?? false;
 
         const productIds = [...new Set(data.lines.map((l) => l.productId))];
-        const [products, costPaiseById, protectedProductIds, coupons] = await Promise.all([
+        const [products, protectedProductIds, coupons] = await Promise.all([
             prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true } }),
-            resolveEffectiveCostMap(productIds),
             loadProtectedProductIds(prisma),
             loadPosOffers(prisma, now),
         ]);
@@ -157,19 +156,17 @@ export async function POST(req: Request) {
 
         const input: EvalInput = {
             accountId,
-            lines: data.lines.map((l) => {
-                const costPaise = costPaiseById.get(l.productId) ?? null;
-                return {
-                    productId: l.productId,
-                    groupId: taxById.get(l.productId)?.groupId ?? null,
-                    categoryId: taxById.get(l.productId)?.categoryId ?? null,
-                    brandId: taxById.get(l.productId)?.brandId ?? null,
-                    qty: l.qty,
-                    unitPrice: l.unitPrice,
-                    costIncl: costPaise == null ? null : (costPaise / 100) * (1 + (l.taxRate ?? 0) / 100),
-                    protected: protectedProductIds.has(l.productId),
-                };
-            }),
+            // No cost — PERCENT coupons discount the SALE value (cost must
+            // never be derivable from a discount).
+            lines: data.lines.map((l) => ({
+                productId: l.productId,
+                groupId: taxById.get(l.productId)?.groupId ?? null,
+                categoryId: taxById.get(l.productId)?.categoryId ?? null,
+                brandId: taxById.get(l.productId)?.brandId ?? null,
+                qty: l.qty,
+                unitPrice: l.unitPrice,
+                protected: protectedProductIds.has(l.productId),
+            })),
             goodsValue,
             // Free-grant min-bill qualifies on the tax-inclusive voucher total
             // (goods + tax + shipping + charges − tier + round-off) when provided.

@@ -67,11 +67,11 @@ export interface CartLineLite {
     brandId: number | null;
     qty: number;
     unitPrice: number; // pre-tax unit goods price
-    /// Unit COST incl. tax (rupees) — the base for PERCENT coupons, so every
-    /// %-type discount is measured on the same base as the pricing margin
-    /// (cost+tax) and a coupon% ≤ margin% can never give away more than the
-    /// margin. null/absent = no cost basis → the line adds nothing to a
-    /// PERCENT coupon's base (same rule as the spend-tier discount).
+    /// Unit COST incl. tax (rupees) — NOT the %-coupon base anymore (PERCENT
+    /// coupons discount the eligible SALE value, so the ₹ off can never hint
+    /// at the cost — cost is a business secret). Kept only for coupon-validate's
+    /// LINE-scope tier-share estimate, because the spend-tier discount itself
+    /// is still % of cost. null/absent = no cost basis.
     costIncl?: number | null;
     /// Discount-protected (ProductProtection blacklist) — the line is excluded
     /// from every automatic promotion: it never matches a coupon's rules
@@ -157,8 +157,11 @@ export function eligibleSubtotal(c: CouponContext, lines: CartLineLite[]): numbe
     return r2(lines.reduce((s, l, i) => (matched[i] ? s + lineGoods(l) : s), 0));
 }
 
-/// Σ COST (incl. tax) of the eligible lines — the PERCENT-coupon base. Lines
-/// with no cost basis add 0.
+/// Σ COST (incl. tax) of the eligible lines — kept for coupon-validate's
+/// LINE-scope exclusivity estimate (the coupon's matched-line share of the
+/// TIER's cost base, since the tier discount is still % of cost). NOT used by
+/// the coupon discount itself — PERCENT coupons are a % of the sale value.
+/// Lines with no cost basis add 0.
 export function eligibleCostBase(c: CouponContext, lines: CartLineLite[]): number {
     const matched = linesMatchedByRules(c, lines);
     return r2(lines.reduce((s, l, i) => (matched[i] && l.costIncl != null ? s + l.qty * l.costIncl : s), 0));
@@ -267,12 +270,11 @@ export function computeCouponDiscount(c: CouponContext, input: EvalInput): EvalR
     switch (c.type) {
         case "PERCENT": {
             if (c.percentOff == null) return { ok: false, reason: "Coupon misconfigured (no %)" };
-            // % of COST (incl. tax) of the eligible lines — the same base the pricing
-            // margin uses, so coupon% and margin% at the same rate are the identical
-            // rupee amount. Lines with no cost basis contribute nothing; still
-            // clamped to the eligible SALE value so it can't exceed what those
-            // lines actually charge.
-            raw = Math.min(eligibleCostBase(c, input.lines) * (c.percentOff / 100), elig);
+            // % of the eligible SALE value (pre-tax) — the price the customer
+            // sees. Cost never enters the math, so the ₹ off can never hint at
+            // the cost / margin (a business secret). Clamped to the eligible
+            // subtotal so a line can't be discounted below zero.
+            raw = Math.min(elig * (c.percentOff / 100), elig);
             if (c.maxDiscountAmt != null) raw = Math.min(raw, c.maxDiscountAmt);
             break;
         }

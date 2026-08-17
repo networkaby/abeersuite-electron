@@ -600,8 +600,9 @@ export function usePosBilling(opts: {
             // Free-grant min-bill qualifies on the full voucher total (all +/− in).
             billAmountIncl,
             // taxRate rides along so the server can gross up its resolved cost to
-            // cost-incl-tax — the PERCENT-coupon base. Service lines are excluded —
-            // coupons evaluate the goods cart only (mirrors /api/pos/sale).
+            // cost-incl-tax — the LINE-scope tier-share estimate base. Service
+            // lines are excluded — coupons evaluate the goods cart only (mirrors
+            // /api/pos/sale).
             lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
         });
         return data;
