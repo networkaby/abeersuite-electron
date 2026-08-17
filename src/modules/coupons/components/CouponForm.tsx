@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { extractApiError } from "@/shared/lib/api";
@@ -88,11 +89,11 @@ function generateCode(name: string): string {
 /// Coupon type as a segmented picker — the single most important choice, so it
 /// gets visual buttons instead of a dropdown.
 const TYPE_OPTIONS: { value: Coupon["type"]; label: string; icon: LucideIcon }[] = [
-    { value: "PERCENT",   label: "% off",       icon: Percent },
-    { value: "FLAT",      label: "Flat ₹",      icon: IndianRupee },
-    { value: "FREE_ITEM", label: "Free item",   icon: Gift },
-    { value: "BOGO",      label: "Buy X get Y", icon: Repeat },
-    { value: "SET_PRICE", label: "Set price",   icon: Tag },
+    { value: "PERCENT", label: "% off", icon: Percent },
+    { value: "FLAT", label: "Flat ₹", icon: IndianRupee },
+    { value: "FREE_ITEM", label: "Free item", icon: Gift },
+    { value: "BOGO", label: "Buy X get Y", icon: Repeat },
+    { value: "SET_PRICE", label: "Set price", icon: Tag },
 ];
 
 interface Props {
@@ -122,8 +123,8 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     const [channels, setChannels] = useState<Coupon["channels"]>(initial?.channels ?? "BOTH");
     /// Auto-apply is just a toggle now — every coupon carries a code (auto-
     /// generated, manually overridable); the toggle decides whether it also
-    /// applies automatically at checkout.
-    const [autoApply, setAutoApply] = useState(initial?.applyMode === "AUTO");
+    /// applies automatically at checkout. New coupons start with it ON.
+    const [autoApply, setAutoApply] = useState(initial == null ? true : initial.applyMode === "AUTO");
     const [percentOff, setPercentOff] = useState(str(initial?.percentOff));
     const [maxDiscountAmt, setMaxDiscountAmt] = useState(str(initial?.maxDiscountAmt));
     const [flatAmt, setFlatAmt] = useState(str(initial?.flatAmt));
@@ -228,14 +229,14 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     //    full page into three — same fields, page-appropriate arrangement. ──
 
     const basicsSection = (
-        <Section title="Basics">
+        <Section title="Basics" tone="basics">
             <div className={fullPage ? "space-y-2" : "grid gap-3 sm:grid-cols-3"}>
                 <Field label="Code">
                     <div className="relative">
                         <Input
-                            value={code}                                        onChange={(e) => setCode(e.target.value.toUpperCase())}
-                                        placeholder="DIWALI20"
-                                        className={`${fullPage ? "h-9" : "h-10"} pr-9 font-mono uppercase`}
+                            value={code} onChange={(e) => setCode(e.target.value.toUpperCase())}
+                            placeholder="DIWALI20"
+                            className={`${fullPage ? "h-9" : "h-10"} pr-9 font-mono uppercase`}
                         />
                         <button
                             type="button"
@@ -248,14 +249,20 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                     </div>
                 </Field>
                 <Field label="Channel">
-                    <Select value={channels} onValueChange={(v) => setChannels(v as Coupon["channels"])}>
-                        <SelectTrigger className={fullPage ? "h-9" : "h-10"}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="BOTH">POS + Online shop</SelectItem>
-                            <SelectItem value="POS">POS only</SelectItem>
-                            <SelectItem value="SHOP">Online shop only</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <RadioGroup value={channels} onValueChange={(v) => setChannels(v as Coupon["channels"])} className="gap-1.5">
+                        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs transition-colors has-data-[state=checked]:border-primary/40 has-data-[state=checked]:bg-primary/5">
+                            <RadioGroupItem value="BOTH" />
+                            <span>POS + Online shop</span>
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs transition-colors has-data-[state=checked]:border-primary/40 has-data-[state=checked]:bg-primary/5">
+                            <RadioGroupItem value="POS" />
+                            <span>POS only</span>
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs transition-colors has-data-[state=checked]:border-primary/40 has-data-[state=checked]:bg-primary/5">
+                            <RadioGroupItem value="SHOP" />
+                            <span>Online shop only</span>
+                        </label>
+                    </RadioGroup>
                 </Field>
                 <div>
                     <Label className="text-[11px] text-muted-foreground">Auto-apply</Label>
@@ -277,7 +284,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     );
 
     const offerSection = (
-        <Section title="Offer">
+        <Section title="Offer" tone="offer">
             {/* Type as a segmented picker — one tap, no dropdown. */}
             <div className="flex flex-wrap gap-1.5">
                 {TYPE_OPTIONS.map((t) => {
@@ -302,7 +309,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             </div>
 
             {type === "BOGO" ? (
-                <div className="rounded-xl border border-primary/15 bg-linear-to-br from-primary/[0.06] to-transparent p-2">
+                <div className="rounded-xl border border-primary/15 bg-linear-to-br from-primary/6 to-transparent p-2">
                     <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
                         <div className="space-y-2">
                             <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -348,7 +355,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                     </div>
                 </div>
             ) : (
-                <div className="space-y-3 rounded-xl border border-primary/15 bg-linear-to-br from-primary/[0.06] to-transparent p-2.5">
+                <div className="space-y-3 rounded-xl border border-primary/15 bg-linear-to-br from-primary/6 to-transparent p-2.5">
                     {type === "PERCENT" && (
                         <div className="grid gap-3 sm:grid-cols-2">
                             <Field label="% off">
@@ -396,7 +403,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     );
 
     const rulesSection = (
-        <Section title="Item rules" hint={rules.length > 0 ? `${rules.length} set` : "optional — none = whole bill"}>
+        <Section title="Item rules" tone="rules" hint={rules.length > 0 ? `${rules.length} set` : "optional — none = whole bill"}>
             {rulesOpen ? (
                 <>
                     <RuleEditor rules={rules} setRules={setRules} masters={masters} prodOpts={prodOpts} />
@@ -425,7 +432,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     );
 
     const validitySection = (
-        <Section title="Validity & limits">
+        <Section title="Validity & limits" tone="validity">
             <div className="grid gap-2 sm:grid-cols-2">
                 <Field label="Valid from">
                     <Input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={fullPage ? "h-9" : "h-10"} />
@@ -457,7 +464,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     );
 
     const behaviourSection = (
-        <Section title="Behaviour">
+        <Section title="Behaviour" tone="behaviour">
             <div className="space-y-1.5">
                 <Toggle label="Single-use" hint="one redemption" checked={singleUse} onChange={setSingleUse} />
                 <Toggle label="Stackable" hint="with tier + loyalty" checked={stackable} onChange={setStackable} />
@@ -471,22 +478,25 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                 )}
             </div>
             {!stackable && (
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1.5">
-                    <span className="text-[11px] text-muted-foreground" title="When not stackable, the coupon blocks the spend-tier discount and loyalty redemption">Exclusive</span>
-                    <Select value={stackScope} onValueChange={(v) => setStackScope(v as Coupon["stackScope"])}>
-                        <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="BILL">The whole bill</SelectItem>
-                            <SelectItem value="LINE">Only this coupon&rsquo;s own items</SelectItem>
-                        </SelectContent>
-                    </Select>
+                <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1.5">
+                    <span className="block text-[11px] text-muted-foreground" title="When not stackable, the coupon blocks the spend-tier discount and loyalty redemption">Exclusive</span>
+                    <RadioGroup value={stackScope} onValueChange={(v) => setStackScope(v as Coupon["stackScope"])} className="grid gap-1.5">
+                        <label className="flex cursor-pointer items-center gap-2 text-xs">
+                            <RadioGroupItem value="BILL" />
+                            <span>The whole bill</span>
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 text-xs">
+                            <RadioGroupItem value="LINE" />
+                            <span>Only this coupon&rsquo;s own items</span>
+                        </label>
+                    </RadioGroup>
                 </div>
             )}
         </Section>
     );
 
     return (
-        <div className={embedded || fullPage ? "space-y-1.5" : "space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4"}>
+        <div className={(embedded || fullPage ? "space-y-1.5" : "space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4") + " [&_input]:placeholder:text-muted-foreground/60"}>
             {!embedded && !fullPage && (
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{editing ? `Edit ${initial!.code ?? initial!.name}` : "New coupon"}</span>
@@ -494,8 +504,10 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                 </div>
             )}
 
-            {/* Live preview — how the offer reads on the card / at POS */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/15 bg-linear-to-r from-primary/[0.07] to-transparent px-2.5 py-0.5">
+            {/* Live preview — how the offer reads on the card / at POS. On the
+                full page it pins to the top of the scroll area so the offer stays
+                readable while the form scrolls beneath it. */}
+            <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-primary/15 bg-linear-to-r from-primary/[0.07] to-transparent px-2.5 py-0.5 ${fullPage ? "sticky top-0 z-10 -mx-1 -mt-1 bg-background" : ""}`}>
                 <Sparkles size={12} className="shrink-0 text-primary" />
                 {preview
                     ? <span className="text-xs font-semibold">{preview}</span>
@@ -530,7 +542,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             {/* Actions — dialog gets a sticky bar; the full page gets plain buttons */}
             <div className={embedded
                 ? "sticky bottom-0 -mx-4 -mb-4 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-muted/50 px-4 py-1.5"
-                : "mt-0.5 flex justify-end gap-2"}>
+                : "sticky bottom-0 -mx-1 -mb-1 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-background px-1 py-1.5"}>
                 <Button variant="ghost" onClick={onCancel}>Cancel</Button>
                 <Button onClick={save} disabled={saving}><Save size={14} className="mr-1" /> {editing ? "Save" : "Create"}</Button>
             </div>
@@ -538,16 +550,27 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     );
 }
 
-/// Labeled group header with a divider — keeps the long form scannable.
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+/// Each section gets its own colour — a chip on the header plus a faint tint
+/// behind the fields — so the eye can jump straight to the part it wants.
+type SectionTone = "basics" | "offer" | "rules" | "validity" | "behaviour";
+
+const SECTION_TONES: Record<SectionTone, { chip: string; panel: string }> = {
+    basics: { chip: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300", panel: "border-blue-500/15 bg-blue-500/[0.04] dark:border-blue-400/10" },
+    offer: { chip: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300", panel: "border-violet-500/15 bg-violet-500/[0.04] dark:border-violet-400/10" },
+    rules: { chip: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300", panel: "border-emerald-500/15 bg-emerald-500/[0.04] dark:border-emerald-400/10" },
+    validity: { chip: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300", panel: "border-amber-500/15 bg-amber-500/[0.04] dark:border-amber-400/10" },
+    behaviour: { chip: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300", panel: "border-rose-500/15 bg-rose-500/[0.04] dark:border-rose-400/10" },
+};
+
+function Section({ title, hint, tone, children }: { title: string; hint?: string; tone: SectionTone; children: React.ReactNode }) {
     return (
         <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</span>
+            <div className="flex items-center gap-2">
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${SECTION_TONES[tone].chip}`}>{title}</span>
                 <span className="h-px flex-1 bg-border/60" />
                 {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
             </div>
-            {children}
+            <div className={`space-y-1.5 rounded-lg border p-2.5 ${SECTION_TONES[tone].panel}`}>{children}</div>
         </div>
     );
 }
@@ -587,10 +610,10 @@ function RuleEditor({ rules, setRules, masters, prodOpts }: {
     const addDraft = () => { setRules([...rules, draft]); setDraft({ ...EMPTY_RULE, kind: draft.kind }); };
 
     const pickers: { field: RuleField; placeholder: string; width: string; options: { value: number; label: string; leaf?: string }[] }[] = [
-        { field: "productId",  placeholder: "+ product",  width: "w-48", options: prodOpts },
+        { field: "productId", placeholder: "+ product", width: "w-48", options: prodOpts },
         { field: "categoryId", placeholder: "+ category", width: "w-44", options: categories.map((c) => ({ value: c.id, label: c.name })) },
-        { field: "groupId",    placeholder: "+ group",    width: "w-44", options: groups.map((g) => ({ value: g.id, label: g.name })) },
-        { field: "brandId",    placeholder: "+ brand",    width: "w-40", options: brands.map((b) => ({ value: b.id, label: b.name })) },
+        { field: "groupId", placeholder: "+ group", width: "w-44", options: groups.map((g) => ({ value: g.id, label: g.name })) },
+        { field: "brandId", placeholder: "+ brand", width: "w-40", options: brands.map((b) => ({ value: b.id, label: b.name })) },
     ];
 
     return (

@@ -195,9 +195,9 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
     );
 
     return (
-        <div className="space-y-4">
-            {/* Tabs + search + filters + add */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex h-full min-h-0 flex-col gap-4">
+            {/* Tabs + search + filters + add — stays put; only the table body scrolls */}
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
                 <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
                     {TABS.map((t) => (
                         <button
@@ -246,9 +246,9 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
                     No coupons match your search/filter.
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border/60">
+                <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/60 **:data-[slot=table-container]:overflow-x-visible">
                     <Table>
-                        <TableHeader className="bg-muted/50 [&_th]:bg-transparent [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
+                        <TableHeader className="sticky top-0 z-10 bg-muted [&_th]:bg-muted [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                             <TableRow className="hover:bg-transparent">
                                 <TableHead>Offer</TableHead>
                                 <TableHead className="w-28">Mode</TableHead>

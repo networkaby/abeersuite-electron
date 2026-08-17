@@ -13,10 +13,10 @@ export function CouponPage({ masters, brandName }: { masters: RuleMasters; brand
     const [view, setView] = useState<"LIST" | "CREATE">("LIST");
 
     return (
-        <div className="w-full space-y-2.5">
-            {/* Page header — the title follows the view; the discount guard and
-                view switcher sit on the same row so nothing pushes the form down */}
-            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="flex h-full min-h-0 w-full flex-col gap-2.5">
+            {/* Page header — sits outside the scroll area, so it never scrolls.
+                No background of its own: it stays on the page colour. */}
+            <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-3">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">{view === "CREATE" ? "Create coupon" : "Coupons"}</h1>
                     {/*                    <p className="mt-1 hidden max-w-2xl text-sm text-muted-foreground lg:block"> */}
@@ -40,16 +40,22 @@ export function CouponPage({ masters, brandName }: { masters: RuleMasters; brand
             </div>
 
             {view === "CREATE" ? (
-                <div className="rounded-xl border border-border/60 bg-background p-4">
-                    <CouponForm
-                        fullPage
-                        masters={masters}
-                        onSaved={() => setView("LIST")}
-                        onCancel={() => setView("LIST")}
-                    />
+                // The card grows to its content; the area below the fixed header
+                // scrolls — no scrollbar trapped inside the card itself.
+                <div className="min-h-0 flex-1 overflow-auto">
+                    <div className="rounded-xl bg-background p-1">
+                        <CouponForm
+                            fullPage
+                            masters={masters}
+                            onSaved={() => setView("LIST")}
+                            onCancel={() => setView("LIST")}
+                        />
+                    </div>
                 </div>
             ) : (
-                <CouponList masters={masters} brandName={brandName} />
+                <div className="min-h-0 flex-1">
+                    <CouponList masters={masters} brandName={brandName} />
+                </div>
             )}
         </div>
     );

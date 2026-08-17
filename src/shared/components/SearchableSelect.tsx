@@ -180,7 +180,7 @@ export function SearchableSelect<V extends string | number>({
                                 }
                             }}
                             placeholder="Type to search…"
-                            className="h-7 w-full rounded border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="h-7 w-full rounded border border-input bg-transparent px-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         />
                     </div>
                     <ul ref={listRef} className="max-h-56 overflow-auto py-1" role="listbox">
