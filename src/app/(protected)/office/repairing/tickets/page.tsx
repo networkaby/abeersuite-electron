@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { Eye, Search, X } from "lucide-react";
+import { Eye, Loader2, Search, X } from "lucide-react";
 import { badgeColor } from "@/shared/lib/format/entityColor";
-import { toast } from "sonner";
 import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { REPAIR_PIPELINE_NAME } from "@/modules/repairing/lib/repairPipeline";
 import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
 import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
-import { PaginationBar } from "@/shared/components/PaginationBar";
+import { useTicketsDelta, type TicketRow } from "@/modules/repairing/hooks/useTicketsDelta";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-interface Ticket {
+
+interface Ticket extends TicketRow {
     id: number;
     status: string;
     priority: string;
@@ -50,7 +50,10 @@ interface Ticket {
 type StatusOption = { id: string; label: string };
 type PriorityOption = { id: string; label: string };
 
-const PAGE_SIZE = 25;
+/** No pipeline named this can ever exist — a harmless placeholder that returns
+ *  zero rows until the real repair-pipeline id has resolved, instead of the
+ *  hook briefly fetching every pipeline's tickets on first mount. */
+const PENDING_PIPELINE = "__pending__";
 
 /** The centre a device was sent to — new shipping-slip party first, else the legacy ServiceCenter. */
 const serviceCenterName = (t: Ticket) => t.context?.shippingSlip?.partyName ?? t.serviceCenter?.name ?? null;
@@ -59,9 +62,6 @@ export default function TicketsPage() {
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
     useMarkSurfaceSeen(NAV_SURFACE.repair);
 
-    const [tickets, setTickets] = useState<Ticket[]>([]);
-    const [filtered, setFiltered] = useState<Ticket[]>([]);
-    const [loading, setLoading] = useState(true);
     const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [priorityOptions, setPriorityOptions] = useState<PriorityOption[]>([]);
     const [repairPipelineId, setRepairPipelineId] = useState<string | null>(null);
@@ -73,8 +73,6 @@ export default function TicketsPage() {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
     const [warrantyFilter, setWarrantyFilter] = useState("");
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(PAGE_SIZE);
 
     useEffect(() => {
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
@@ -95,42 +93,22 @@ export default function TicketsPage() {
         );
     }, [repairPipelineId]);
 
-    useEffect(() => {
-        if (!repairPipelineId) return;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLoading(true);
-        axios
-            .get("/api/tickets", { params: { pipelineId: repairPipelineId } })
-            .then((res) => setTickets(res.data))
-            .catch(() => toast.error("Failed to load tickets"))
-            .finally(() => setLoading(false));
-    }, [repairPipelineId]);
+    // Filters live server-side (see useTicketsDelta) except service centre, which
+    // is a JSON/relation hybrid — filtered here over whatever's loaded so far.
+    const { rows, loading, loadingMore, hasMore, error, stale, loadMore, reload } = useTicketsDelta<Ticket>({
+        pipelineId: repairPipelineId ?? PENDING_PIPELINE,
+        status:     statusFilter || undefined,
+        priority:   priorityFilter || undefined,
+        warranty:   warrantyFilter || undefined,
+        from:       dateFrom || undefined,
+        to:         dateTo || undefined,
+        search,
+    });
 
-    useEffect(() => {
-        let result = [...tickets];
-        if (search) {
-            const s = search.toLowerCase();
-            result = result.filter(
-                (t) =>
-                    (t.device.account?.name ?? "").toLowerCase().includes(s) ||
-                    (t.device.account?.phone ?? "").includes(s) ||
-                    t.device.brand.toLowerCase().includes(s) ||
-                    t.device.model.toLowerCase().includes(s) ||
-                    String(t.id).includes(s)
-            );
-        }
-        if (statusFilter) result = result.filter((t) => t.status === statusFilter);
-        if (priorityFilter) result = result.filter((t) => t.priority === priorityFilter);
-        if (serviceCenterFilter) result = result.filter((t) => serviceCenterName(t) === serviceCenterFilter);
-        if (dateFrom) result = result.filter((t) => new Date(t.createdAt) >= new Date(dateFrom));
-        if (dateTo) result = result.filter((t) => new Date(t.createdAt) <= new Date(dateTo + "T23:59:59"));
-        if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
-        if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setFiltered(result);
-         
-        setPage(1);
-    }, [tickets, search, statusFilter, priorityFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
+    const filtered = useMemo(
+        () => (serviceCenterFilter ? rows.filter((t) => serviceCenterName(t) === serviceCenterFilter) : rows),
+        [rows, serviceCenterFilter],
+    );
 
     const clearFilters = () => {
         setSearch(""); setStatusFilter(""); setPriorityFilter("");
@@ -146,10 +124,21 @@ export default function TicketsPage() {
     // A chosen filter lights up so the user can see at a glance what is applied.
     const activeCls = (v: string) => (v ? "border-primary/60 text-foreground font-medium" : "");
 
-    // Service-centre options come from the tickets themselves (either flow), not a master list.
-    const serviceCenterOptions = Array.from(new Set(tickets.map(serviceCenterName).filter(Boolean))) as string[];
+    // Service-centre options come from the tickets loaded so far (either flow),
+    // not a master list — a centre only used on older, not-yet-loaded tickets
+    // won't appear until those load in.
+    const serviceCenterOptions = Array.from(new Set(rows.map(serviceCenterName).filter(Boolean))) as string[];
 
-    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const sentinelRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const node = sentinelRef.current;
+        if (!node || !hasMore) return;
+        const io = new IntersectionObserver((entries) => {
+            if (entries.some((e) => e.isIntersecting)) loadMore();
+        }, { rootMargin: "200px" });
+        io.observe(node);
+        return () => io.disconnect();
+    }, [hasMore, loadMore, rows.length]);
 
     return (
         <div className="flex h-full flex-col overflow-hidden">
@@ -159,11 +148,6 @@ export default function TicketsPage() {
                 escapeBack
             />
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-                {/* <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold">Tickets</h1>
-                <span className="text-sm text-muted-foreground">{tickets.length} total</span>
-            </div> */}
-
                 {/* Search & Filters */}
                 <div className="mb-4 space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                     {/* Search */}
@@ -217,21 +201,30 @@ export default function TicketsPage() {
                     {/* Results count + clear */}
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                         <span>
-                            Showing <span className="font-medium text-foreground">{filtered.length}</span> of{" "}
-                            <span className="font-medium text-foreground">{tickets.length}</span> tickets
+                            <span className="font-medium text-foreground">{filtered.length}</span> ticket{filtered.length === 1 ? "" : "s"} loaded
+                            {stale && <span className="ml-2 text-amber-600">(showing saved copy — offline)</span>}
                         </span>
-                        {hasFilters && (
-                            <Button onClick={clearFilters} variant="ghost" size="xs" className="h-auto p-0 text-destructive hover:opacity-80">
-                                <X size={14} /> Clear filters
+                        <div className="flex items-center gap-3">
+                            {hasFilters && (
+                                <Button onClick={clearFilters} variant="ghost" size="xs" className="h-auto p-0 text-destructive hover:opacity-80">
+                                    <X size={14} /> Clear filters
+                                </Button>
+                            )}
+                            <Button onClick={reload} variant="ghost" size="xs" className="h-auto p-0">
+                                Reload
                             </Button>
-                        )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Table */}
                 <div className="flex-1 overflow-y-auto">
-                    {loading ? (
+                    {loading && rows.length === 0 ? (
                         <p className="text-muted-foreground">Loading...</p>
+                    ) : error ? (
+                        <div className="rounded-lg border border-destructive/40 p-12 text-center text-destructive shadow">
+                            {error}
+                        </div>
                     ) : filtered.length === 0 ? (
                         <div className="rounded-lg border border-border p-12 text-center text-muted-foreground shadow">
                             {hasFilters ? "No tickets match your filters." : "No tickets yet. Create your first one!"}
@@ -252,7 +245,7 @@ export default function TicketsPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {pageRows.map((t) => (
+                                    {filtered.map((t) => (
                                         <tr key={t.id} className="hover:bg-muted/50">
                                             <td className="px-6 py-4 text-muted-foreground">{t.id}</td>
                                             <td className="px-6 py-4">
@@ -296,21 +289,14 @@ export default function TicketsPage() {
                                     ))}
                                 </tbody>
                             </table>
+                            {hasMore && (
+                                <div ref={sentinelRef} className="flex items-center justify-center py-4 text-muted-foreground">
+                                    {loadingMore && <Loader2 size={16} className="animate-spin" />}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
-
-                {filtered.length > 0 && (
-                    <PaginationBar
-                        total={filtered.length}
-                        page={page}
-                        pageSize={pageSize}
-                        onPageChange={setPage}
-                        onPageSizeChange={setPageSize}
-                        unitLabel="ticket"
-                        className="pt-3"
-                    />
-                )}
             </div>
         </div>
     );

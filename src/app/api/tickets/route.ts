@@ -1,9 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { validateRequest } from "@/shared/lib/api";
+import { validateRequest, parseCursor } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -74,30 +75,129 @@ function flattenRepair<T extends RepairTicketRow>(t: T) {
     return { ...t, ...repair, device, serviceCenter: repair.serviceCenter ?? null };
 }
 
-// GET /api/tickets?pipelineId=P1
+const TICKET_INCLUDE = {
+    ...repairInclude,
+    ticketStatus: { select: { label: true, color: true } },
+    ticketWorker: { select: { label: true, color: true } },
+    pipeline:     { select: { id: true, label: true, color: true } },
+} as const;
+
+/**
+ * GET /api/tickets?pipelineId=P1
+ *
+ * Two modes:
+ *
+ * 1. **List mode (default)** — every matching ticket, bare array. This is what
+ *    every caller before the Repair Tickets rework expects (`UniversalHelperSearch`,
+ *    `TodaysPulse`), so it must not change shape.
+ *
+ * 2. **Sync mode** — `?sync=1[&cursor=<id>|&since=<iso>]`, for the Repair Tickets
+ *    board, which pages 25 at a time and caches its local table (see
+ *    `useTicketsDelta.ts`). Returns an ENVELOPE:
+ *      { mode: "page",  rows, nextCursor, computedAt }
+ *      { mode: "delta", rows, overflow, computedAt }
+ *    Filters (status/priority/warranty/date/search) are server-side here — with
+ *    paging, filtering the browser's array would only filter whatever page
+ *    happened to be loaded.
+ *
+ *    There is no delete tombstone for tickets (unlike vouchers' `AuditLog`), so a
+ *    hard-deleted ticket inside the client's loaded window is not chased down by
+ *    a delta — the client's own `MAX_AGE_MS` cache expiry is the backstop, same
+ *    as the POS product cache. Ticket hard-deletes are already rare and gated
+ *    (blocked by linked vouchers / child tickets), so this is an acceptable gap
+ *    rather than new tombstone plumbing.
+ */
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
         const pipelineId = searchParams.get("pipelineId");
+        const status     = searchParams.get("status");
+        const priority   = searchParams.get("priority");
+        const warranty   = searchParams.get("warranty"); // "warranty" | "non_warranty"
+        const from       = searchParams.get("from");
+        const to         = searchParams.get("to");
+        const search     = searchParams.get("search")?.trim() ?? "";
+
+        const searchOr: Prisma.TicketWhereInput[] = search ? [
+            { repair: { device: { brand: { contains: search, mode: "insensitive" } } } },
+            { repair: { device: { model: { contains: search, mode: "insensitive" } } } },
+            { repair: { device: { account: { name: { contains: search, mode: "insensitive" } } } } },
+            { repair: { device: { account: { person:  { phones: { some: { phone: { contains: search } } } } } } } },
+            { repair: { device: { account: { company: { phones: { some: { phone: { contains: search } } } } } } } },
+            ...(/^\d+$/.test(search) ? [{ id: Number(search) }] : []),
+        ] : [];
+
         // Visibility is flat — any authenticated staff sees all tickets. Per-scope
         // read filtering (own/department/branch) was retired with the repair RBAC
         // re-wire; re-introduce a scope helper here if it comes back.
-        const where = pipelineId ? { pipelineId } : {};
+        const where: Prisma.TicketWhereInput = {
+            ...(pipelineId ? { pipelineId } : {}),
+            ...(status   ? { status } : {}),
+            ...(priority ? { priority: priority as Priority } : {}),
+            ...(warranty === "warranty"     ? { repair: { isWarranty: true } } : {}),
+            ...(warranty === "non_warranty" ? { repair: { isWarranty: false } } : {}),
+            ...(from || to ? {
+                createdAt: {
+                    ...(from ? { gte: new Date(from) } : {}),
+                    ...(to ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
+                },
+            } : {}),
+            ...(searchOr.length > 0 ? { OR: searchOr } : {}),
+        };
 
-        const tickets = await prisma.ticket.findMany({
+        if (!searchParams.get("sync")) {
+            // ── List mode — bare array, unchanged for existing callers ──────────
+            const tickets = await prisma.ticket.findMany({
+                where,
+                orderBy: { createdAt: "desc" },
+                include: TICKET_INCLUDE,
+            });
+            return NextResponse.json(tickets.map(flattenRepair));
+        }
+
+        // ── Sync mode (Repair Tickets board cache) ───────────────────────────────
+        const computedAt = new Date();
+        const sinceParam = searchParams.get("since");
+        const since = sinceParam ? new Date(sinceParam) : null;
+        const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "desc" }];
+
+        if (since && !Number.isNaN(since.getTime())) {
+            const MAX_DELTA_ROWS = 500;
+            const changed = await prisma.ticket.findMany({
+                where: { ...where, updatedAt: { gt: since } },
+                orderBy,
+                take: MAX_DELTA_ROWS + 1,
+                include: TICKET_INCLUDE,
+            });
+            const overflow = changed.length > MAX_DELTA_ROWS;
+            return NextResponse.json({
+                mode: "delta",
+                rows: overflow ? [] : changed.map(flattenRepair),
+                overflow,
+                computedAt: computedAt.toISOString(),
+            });
+        }
+
+        const { cursor, take } = parseCursor(searchParams, { defaultLimit: 25, maxLimit: 25 });
+        const rowsPlusOne = await prisma.ticket.findMany({
             where,
-            orderBy: { createdAt: "desc" },
-            include: {
-                ...repairInclude,
-                ticketStatus: { select: { label: true, color: true } },
-                ticketWorker: { select: { label: true, color: true } },
-                pipeline:     { select: { id: true, label: true, color: true } },
-            },
+            orderBy,
+            take: take + 1,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            include: TICKET_INCLUDE,
         });
+        const hasMore = rowsPlusOne.length > take;
+        const found = hasMore ? rowsPlusOne.slice(0, take) : rowsPlusOne;
+        const nextCursor = hasMore && found.length > 0 ? found[found.length - 1].id : null;
 
-        return NextResponse.json(tickets.map(flattenRepair));
+        return NextResponse.json({
+            mode: "page",
+            rows: found.map(flattenRepair),
+            nextCursor,
+            computedAt: computedAt.toISOString(),
+        });
     } catch (e) {
         return handleApiError(e, "Failed to fetch tickets");
     }
