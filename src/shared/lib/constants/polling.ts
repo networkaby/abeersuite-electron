@@ -24,7 +24,13 @@ export const INBOX_ROOMS_POLL_MS = 180_000;
 export const INBOX_MESSAGES_POLL_MS = 60_000;
 
 /**
- * POS shift bar and the counter status board. Deliberately the fastest of the set:
- * this is live till money someone may be standing in front of.
+ * POS shift bar and the counter status board.
+ *
+ * Effectively dormant: both surfaces carry a manual refresh control, and the
+ * figures only move when someone opens, hands over or closes a shift — an act
+ * the person doing it already knows about. An automatic re-read every half
+ * minute was billing us for a change that had not happened. Revisit when real
+ * counters run side by side and one terminal must notice another's shift
+ * without being told.
  */
-export const POS_LIVE_POLL_MS = 30_000;
+export const POS_LIVE_POLL_MS = 5_400_000;   // 90 minutes

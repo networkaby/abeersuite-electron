@@ -3,9 +3,17 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   images: {
+    // Only the hosts we actually serve images from. A `**` wildcard here is an
+    // open image-optimization proxy: anyone may call /_next/image with any URL
+    // and spend our transformation quota on it. Most remote images (uploads,
+    // avatars) are Cloudinary and go through Cloudinary's own loader (see
+    // lib/cloudinaryImage.ts), bypassing this list entirely — but the shop's
+    // stock hero/category art (storeContent.ts) and the login backdrop are
+    // hardcoded Pexels URLs with no loader, so Pexels stays on the list too.
     remotePatterns: [
-      { protocol: "https", hostname: "**" },
-      { protocol: "http", hostname: "**" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "*.supabase.co" },
+      { protocol: "https", hostname: "images.pexels.com" },
     ],
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
