@@ -17,24 +17,24 @@ import HelpBoard from "./HelpBoard";
 import HelpFormDialog from "./HelpFormDialog";
 import HelpQuickForm from "./HelpQuickForm";
 import HelpDetailDialog from "./HelpDetailDialog";
-import { INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle, type HelpDto, type HelpDetailDto, type HelpStage, type HelpPositionOption } from "../lib/types";
+import { INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle, type HelpDto, type HelpDetailDto, type HelpStage } from "../lib/types";
+import { usePositionPicker } from "@/shared/hooks";
 
 export default function HelpWorkspace({
     stages,
-    positions,
-    myPositionIds,
     canCreate,
     canEdit,
     canDelete,
 }: {
     stages: HelpStage[];
-    positions: HelpPositionOption[];
-    myPositionIds: string[];
     canCreate: boolean;
     /** Covers the Edit button, stage/advise/close actions and drag-between-columns. */
     canEdit: boolean;
     canDelete: boolean;
 }) {
+    // Seats, and which are mine, from the browser's cached copy — see usePositionPicker.
+    const { positions, myPositionIds } = usePositionPicker();
+
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
     useMarkSurfaceSeen(NAV_SURFACE.help);
 

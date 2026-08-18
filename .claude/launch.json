@@ -2,11 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "//": "Use this when a dev server is ALREADY running (the usual case). No command — it just points the preview at the running server. `next dev` refuses to start a second instance in the same folder, so starting another one only kills itself.",
+      "name": "Attach to Dev Server",
+      "port": 3000,
+      "url": "http://localhost:3000"
+    },
+    {
+      "//": "Only when nothing is running yet. autoPort is off on purpose: a second instance on a shuffled port dies on Next's duplicate-server guard anyway, so failing loudly on a busy 3000 is the honest outcome.",
       "name": "Next.js Dev Server",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
-      "port": 3000,
-      "autoPort": true
+      "port": 3000
     }
   ]
 }

@@ -11,29 +11,29 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
+import { usePositionPicker } from "@/shared/hooks";
 import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import DealBoard from "./DealBoard";
 import DealTable from "./DealTable";
 import DealFormDialog from "./DealFormDialog";
 import DealDetailDialog from "./DealDetailDialog";
-import type { DealDto, DealDetailDto, DealStage, DealPositionOption } from "../lib/types";
+import type { DealDto, DealDetailDto, DealStage } from "../lib/types";
 
 export default function DealsWorkspace({
     stages,
-    positions,
-    myPositionIds,
     canCreate,
     canEdit,
     canDelete,
 }: {
     stages: DealStage[];
-    positions: DealPositionOption[];
-    myPositionIds: string[];
     canCreate: boolean;
     /** Covers the Edit button, the stage select and drag-between-columns. */
     canEdit: boolean;
     canDelete: boolean;
 }) {
+    // Seats, and which are mine, from the browser's cached copy — see usePositionPicker.
+    const { positions, myPositionIds } = usePositionPicker();
+
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
     useMarkSurfaceSeen(NAV_SURFACE.deals);
 

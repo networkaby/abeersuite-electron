@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useNow } from "@/shared/hooks";
+import { useNow, usePositionPicker } from "@/shared/hooks";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
@@ -49,7 +49,6 @@ interface PurchasedItem {
     qty: number; times: number; lastBoughtAt: string; amountPaise: number; warrantyEndsAt: string | null;
 }
 
-interface PositionOption { id: string; title: string; branchName: string | null }
 interface GroupOption { id: number; name: string }
 interface CategoryOption { id: number; name: string }
 interface WarrantyTermOption { id: number; name: string; durationDays: number | null }
@@ -182,14 +181,15 @@ function MoneyRange({
 }
 
 export default function ReconnectWorkspace({
-    positions, groups, categories, warrantyTerms, myPositionIds,
+    groups, categories, warrantyTerms,
 }: {
-    positions: PositionOption[];
     groups: GroupOption[];
     categories: CategoryOption[];
     warrantyTerms: WarrantyTermOption[];
-    myPositionIds: string[];
 }) {
+    // Seats, and which are mine, from the browser's cached copy — see usePositionPicker.
+    const { positions, myPositionIds } = usePositionPicker();
+
     // "now" read via a hook — calling Date.now() during render trips react-hooks/purity.
     const now = useNow();
 

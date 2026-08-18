@@ -12,3 +12,4 @@ export { useDebouncedValue } from "./useDebouncedValue";
 export { useNavCounts, useMarkSurfaceSeen, useInboxUnread, useNotificationUnread, refreshNavCounts, NAV_COUNTS_CHANGED } from "./useNavCounts";
 export { usePolling } from "./usePolling";
 export { useTableSort } from "./useTableSort";
+export { usePositionPicker, invalidatePositionPicker, type PositionPickerData } from "./usePositionPicker";

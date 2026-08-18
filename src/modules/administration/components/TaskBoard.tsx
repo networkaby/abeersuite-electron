@@ -13,25 +13,25 @@ import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import TaskCard from "./TaskCard";
 import TaskFormDialog from "./TaskFormDialog";
 import TaskDetailDialog from "./TaskDetailDialog";
-import type { TaskDto, TaskStage, TaskPositionOption } from "../lib/types";
+import type { TaskDto, TaskStage } from "../lib/types";
+import { usePositionPicker } from "@/shared/hooks";
 
 export default function TaskBoard({
     stages,
-    positions,
-    myPositionIds,
     canCreate,
     canEdit,
     canDelete,
 }: {
     stages: TaskStage[];
-    positions: TaskPositionOption[];
-    /** Positions the current user holds — drives the "My tasks" filter. */
-    myPositionIds: string[];
     canCreate: boolean;
     /** Covers the Edit button, the stage select and drag-between-columns. */
     canEdit: boolean;
     canDelete: boolean;
 }) {
+    // Seats, and which of them are mine ("My tasks"), come from the browser's
+    // cached copy rather than a query on every open — see usePositionPicker.
+    const { positions, myPositionIds } = usePositionPicker();
+
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.
     useMarkSurfaceSeen(NAV_SURFACE.administration);
 

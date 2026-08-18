@@ -13,19 +13,16 @@ export default async function ContactsPage() {
     // Covers bypass + the CRUD ladder (customers:delete implies edit).
     const canEdit = hasPermissionWithScope(permissions, PERMISSIONS.CUSTOMERS_EDIT);
 
-    const [positionRows, creditConfig] = await Promise.all([
-        prisma.position.findMany({
-            orderBy: { title: "asc" },
-            select: { id: true, title: true, branch: { select: { name: true } } },
-        }),
-        // Fail-safe: a missing table (pre-`db push`) falls back to auto OFF.
-        prisma.creditLimitConfig.findUnique({ where: { id: 1 }, select: { autoEnabled: true } }).catch(() => null),
-    ]);
-    const positions = positionRows.map((p) => ({ id: p.id, title: p.title, branchName: p.branch?.name ?? null }));
+    // Seat options are no longer read here — the workspace takes them from the
+    // browser's cached copy (usePositionPicker).
+    // Fail-safe: a missing table (pre-`db push`) falls back to auto OFF.
+    const creditConfig = await prisma.creditLimitConfig
+        .findUnique({ where: { id: 1 }, select: { autoEnabled: true } })
+        .catch(() => null);
 
     return (
         <div className="h-full px-6 py-5">
-            <ContactsWorkspace positions={positions} canEdit={canEdit} autoCredit={creditConfig?.autoEnabled ?? false} />
+            <ContactsWorkspace canEdit={canEdit} autoCredit={creditConfig?.autoEnabled ?? false} />
         </div>
     );
 }

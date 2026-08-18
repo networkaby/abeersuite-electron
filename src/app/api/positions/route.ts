@@ -6,7 +6,12 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
-import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
+import {
+    flattenPositionRoles,
+    POSITION_INCLUDE,
+    POSITION_PICKER_SELECT,
+    toPositionPickerOption,
+} from "@/shared/lib/org/positionIncludes";
 
 const createSchema = z.object({
     id:               z.string().trim().min(1, "ID is required").toUpperCase(),
@@ -16,10 +21,32 @@ const createSchema = z.object({
     roleTemplateIds:  z.array(z.string().trim().min(1)).optional().default([]),
 });
 
-export async function GET() {
-    const { response } = await requireAuth();
+export async function GET(req: Request) {
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
+        // `?picker=1` — the light list behind every position filter dropdown,
+        // bundled with the caller's own positions because the six screens that
+        // use it always need both. The browser caches this (see
+        // usePositionPicker), so a warm tab never asks again.
+        if (new URL(req.url).searchParams.get("picker")) {
+            const [rows, mine] = await Promise.all([
+                prisma.position.findMany({
+                    orderBy: { title: "asc" },
+                    select:  POSITION_PICKER_SELECT,
+                }),
+                prisma.userPosition.findMany({
+                    where:  { userId: user.id },
+                    select: { positionId: true },
+                }),
+            ]);
+            return NextResponse.json({
+                positions:     rows.map(toPositionPickerOption),
+                myPositionIds: mine.map((p) => p.positionId),
+                computedAt:    new Date().toISOString(),
+            });
+        }
+
         const positions = await prisma.position.findMany({
             orderBy: [{ branchId: "asc" }, { departmentId: "asc" }, { title: "asc" }],
             include: POSITION_INCLUDE,

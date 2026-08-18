@@ -16,9 +16,10 @@ import UserAvatar from "@/shared/components/UserAvatar";
 import { formatDate } from "@/shared/lib/format";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
+import { usePositionPicker } from "@/shared/hooks";
 import {
     LIFECYCLE_META, LIFECYCLES,
-    type ContactDto, type ContactPositionOption, type ContactsResponse,
+    type ContactDto, type ContactsResponse,
 } from "../lib/contactTypes";
 
 const ALL = "__all__";
@@ -42,15 +43,16 @@ function toCsv(rows: ContactDto[]): string {
 }
 
 export default function ContactsWorkspace({
-    positions,
     canEdit,
     autoCredit,
 }: {
-    positions: ContactPositionOption[];
     canEdit: boolean;
     /** Global auto credit-limit switch — drives the "Auto" badge for customers with no manual limit. */
     autoCredit: boolean;
 }) {
+    // Owner/seat filter options, from the browser's cached copy — see usePositionPicker.
+    const { positions } = usePositionPicker();
+
     const [items, setItems] = useState<ContactDto[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);

@@ -12,13 +12,9 @@ export default async function ReconnectPage() {
     if (!hasModuleNavAccess(permissions, "crm")) {
         redirect("/office/work-flow-inbox");
     }
-    const currentUserId = Number(sessionUser?.id ?? 0);
-
-    const [positionRows, groups, categories, warrantyTerms, myPositions] = await Promise.all([
-        prisma.position.findMany({
-            orderBy: { title: "asc" },
-            select: { id: true, title: true, branch: { select: { name: true } } },
-        }),
+    // Seats and "which are mine" come from the browser's cached copy
+    // (usePositionPicker), so they are absent from this page's reads.
+    const [groups, categories, warrantyTerms] = await Promise.all([
         prisma.customerGroup.findMany({
             where: { isActive: true },
             orderBy: { name: "asc" },
@@ -34,22 +30,14 @@ export default async function ReconnectPage() {
             orderBy: { durationDays: "asc" },
             select: { id: true, name: true, durationDays: true },
         }),
-        currentUserId
-            ? prisma.userPosition.findMany({ where: { userId: currentUserId }, select: { positionId: true } })
-            : Promise.resolve([]),
     ]);
-
-    const positions = positionRows.map((p) => ({ id: p.id, title: p.title, branchName: p.branch?.name ?? null }));
-    const myPositionIds = myPositions.map((p) => p.positionId);
 
     return (
         <div className="h-full">
             <ReconnectWorkspace
-                positions={positions}
                 groups={groups}
                 categories={categories}
                 warrantyTerms={warrantyTerms}
-                myPositionIds={myPositionIds}
             />
         </div>
     );

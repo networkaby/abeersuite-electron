@@ -9,10 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
 import { formatDate, formatRupeesFromPaise } from "@/shared/lib/format";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, usePositionPicker } from "@/shared/hooks";
 import { PRIORITY_META } from "@/utils/constants";
 import RecurringTaskFormDialog from "./RecurringTaskFormDialog";
-import type { TaskRecurrenceDto, TaskPositionOption } from "../lib/types";
+import type { TaskRecurrenceDto } from "../lib/types";
 
 const UNIT_LABEL: Record<string, [string, string]> = {
     day: ["day", "days"],
@@ -34,17 +34,18 @@ function progressLabel(r: TaskRecurrenceDto): string {
 }
 
 export default function RecurringTaskList({
-    positions,
     canCreate,
     canEdit,
     canDelete,
 }: {
-    positions: TaskPositionOption[];
     canCreate: boolean;
     /** Covers Edit, the active/paused switch and "Generate now". */
     canEdit: boolean;
     canDelete: boolean;
 }) {
+    // Seats come from the browser's cached copy, not this page's own query —
+    // see usePositionPicker for why that read is worth avoiding.
+    const { positions } = usePositionPicker();
     const [rows, setRows] = useState<TaskRecurrenceDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [running, setRunning] = useState(false);

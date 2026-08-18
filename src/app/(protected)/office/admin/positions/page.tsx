@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
+import { invalidatePositionPicker } from "@/shared/hooks";
 import Image from "next/image";
 import {
     Plus, Pencil, Trash2, X, Check, Briefcase,
@@ -440,6 +442,9 @@ export default function PositionsPage() {
     const [saving, setSaving]         = useState(false);
     const [filterBranch, setFilter]   = useState("");
 
+    const { data: session } = useSession();
+    const myUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
     const loadAll = async () => {
         try {
             const [pRes, bRes, dRes, uRes, rRes] = await Promise.all([
@@ -460,6 +465,17 @@ export default function PositionsPage() {
 
     useEffect(() => { loadAll(); }, []);
 
+    /**
+     * Reload this screen AND drop the cached picker list, so the six filter
+     * dropdowns that read it (Contacts, Reconnect, Deals, Help, Administration,
+     * Recurring) show the change straight away rather than at the cache's TTL.
+     * Only this browser is reachable from here — see usePositionPicker's note.
+     */
+    const afterMutation = () => {
+        if (myUserId) invalidatePositionPicker(myUserId);
+        loadAll();
+    };
+
     const handleCreate = async () => {
         if (!form.id.trim()) { toast.error("ID is required"); return; }
         if (!form.title.trim()) { toast.error("Title is required"); return; }
@@ -474,7 +490,7 @@ export default function PositionsPage() {
             });
             toast.success("Position created");
             setForm(EMPTY); setAddingNew(false);
-            loadAll();
+            afterMutation();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to create position");
         } finally { setSaving(false); }
@@ -484,7 +500,7 @@ export default function PositionsPage() {
         try {
             await axios.patch(`/api/positions/${id}`, data);
             toast.success("Position updated");
-            loadAll();
+            afterMutation();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to update position");
             throw e; // re-throw so PositionRow keeps edit panel open
@@ -496,7 +512,7 @@ export default function PositionsPage() {
         try {
             await axios.delete(`/api/positions/${id}`);
             toast.success("Position deleted");
-            loadAll();
+            afterMutation();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to delete position");
         }
@@ -506,7 +522,7 @@ export default function PositionsPage() {
         try {
             await axios.post(`/api/positions/${positionId}/holders`, { userId });
             toast.success("User appointed");
-            loadAll();
+            afterMutation();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to appoint user");
         }
@@ -516,7 +532,7 @@ export default function PositionsPage() {
         try {
             await axios.delete(`/api/positions/${positionId}/holders/${userId}`);
             toast.success("User removed from position");
-            loadAll();
+            afterMutation();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to remove user");
         }

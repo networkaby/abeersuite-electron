@@ -15,7 +15,6 @@ export default async function DealsPage() {
     // Nav access above decides "may you open the board"; these decide what you may
     // DO on it — the sidebar tick alone must not delete deals.
     const { canCreate, canEdit, canDelete } = crudFlags(permissions, "deals");
-    const currentUserId = Number(sessionUser?.id ?? 0);
 
     const pipeline = await getDealsPipeline(prisma);
     if (!pipeline) {
@@ -29,21 +28,8 @@ export default async function DealsPage() {
         );
     }
 
-    const [positionRows, myPositions] = await Promise.all([
-        prisma.position.findMany({
-            orderBy: { title: "asc" },
-            select: {
-                id: true,
-                title: true,
-                branch: { select: { name: true } },
-                department: { select: { name: true } },
-            },
-        }),
-        currentUserId
-            ? prisma.userPosition.findMany({ where: { userId: currentUserId }, select: { positionId: true } })
-            : Promise.resolve([]),
-    ]);
-
+    // Seats and "which are mine" come from the browser's cached copy
+    // (usePositionPicker) — this page reads only the pipeline it is named for.
     const stages = pipeline.statuses.map((s) => ({
         id: s.id,
         label: s.label,
@@ -51,20 +37,11 @@ export default async function DealsPage() {
         order: s.order,
         isTerminal: s.isTerminal,
     }));
-    const positions = positionRows.map((p) => ({
-        id: p.id,
-        title: p.title,
-        branchName: p.branch?.name ?? null,
-        departmentName: p.department?.name ?? null,
-    }));
-    const myPositionIds = myPositions.map((p) => p.positionId);
 
     return (
         <div className="h-full px-6 py-5">
             <DealsWorkspace
                 stages={stages}
-                positions={positions}
-                myPositionIds={myPositionIds}
                 canCreate={canCreate}
                 canEdit={canEdit}
                 canDelete={canDelete}

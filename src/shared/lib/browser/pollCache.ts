@@ -51,6 +51,14 @@ export function writeCache<T>(key: string, data: T, computedAt: string): void {
     } catch { /* quota / private mode — this tab just keeps polling normally */ }
 }
 
+/** Drop an entry, so the next read misses and refetches. */
+export function clearCache(key: string): void {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.removeItem(key);
+    } catch { /* best-effort, same as every other operation here */ }
+}
+
 /**
  * Run `onChange` when another tab writes `key`. Returns the unsubscribe function.
  * Note the browser only fires `storage` in OTHER tabs, never the writer, so this
