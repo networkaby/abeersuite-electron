@@ -14,10 +14,10 @@
  * Reading the list from the client is what makes skipping the trip possible at
  * all, and that is the whole point of this hook.
  *
- * localStorage rather than IndexedDB on purpose: the list is small, and
- * `idbCache` reserves itself for payloads that would blow the ~5MB quota (see
- * its header). The key is user-scoped because `myPositionIds` depends on who is
- * asking, and localStorage outlives a sign-out on a shared counter machine.
+ * localStorage rather than IndexedDB on purpose: the list is small and is read
+ * during render, where localStorage's synchronous get beats awaiting `localDb`.
+ * The key is user-scoped because `myPositionIds` depends on who is asking, and
+ * localStorage outlives a sign-out on a shared counter machine.
  *
  * Freshness: within MAX_AGE_MS nothing is requested at all. Past it, one small
  * fetch. `useSession()` is primed by the (protected) layout, so the user id is

@@ -41,6 +41,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
+import { invalidateParties } from "@/shared/lib/parties";
 
 export type PickedParty = {
     kind: "customer" | "company";
@@ -514,6 +515,12 @@ export const PartySearchAndCreate = forwardRef<
                     await axios.post(`/api/companies/${companyId}/links`, { personId });
                 } catch { /* non-fatal; both rows still exist */ }
             }
+
+            // Drop the local party replica so the next search sees who we just
+            // created. Without this a brand-new customer would be invisible to
+            // search on this machine until the copy next aged out — the one case
+            // where a delta cannot help, since the client decides when to ask.
+            void invalidateParties();
 
             // Pick: company takes precedence when both created (the bill goes to company)
             const linkedCompanies =

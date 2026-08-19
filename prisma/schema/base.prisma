@@ -21,6 +21,11 @@ model Person {
   isActive      Boolean   @default(true)
   agreedAt      DateTime?
   createdAt     DateTime  @default(now())
+  // Lets the browser's local party replica delta-sync ("what changed since?").
+  // Without it a contact edit is invisible to a timestamp query and the only
+  // correct sync is re-pulling every customer. `@default(now())` backfills the
+  // existing rows on push. Mirrors Account.updatedAt / Company.updatedAt.
+  updatedAt     DateTime  @default(now()) @updatedAt
 
   // ── CRM (contact lifecycle / ownership / tags) ───────────────────────────
   /// HubSpot-style funnel stage for working a big contact list.
@@ -89,6 +94,11 @@ model Person {
   mergedIntoPerson   Person?   @relation("PersonMergedInto", fields: [mergedIntoPersonId], references: [id])
   mergedFromPerson   Person[]  @relation("PersonMergedInto")
   mergedAt           DateTime?
+
+  // Delta sync asks "any person touched since <ts>?" on every party-replica
+  // open. Without this the common answer (none) costs a full table scan,
+  // because proving no row matches means visiting all of them.
+  @@index([updatedAt])
 }
 
 model Company {
@@ -99,6 +109,8 @@ model Company {
   taxId      String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+  /// See Person.updatedAt — same purpose, same backfill.
+  updatedAt  DateTime @default(now()) @updatedAt
 
   // ── CRM (contact lifecycle / ownership / tags) — see Person ──────────────
   lifecycleStage  ContactLifecycle @default(LEAD)
@@ -144,6 +156,9 @@ model Company {
   mergedIntoCompany   Company?  @relation("CompanyMergedInto", fields: [mergedIntoCompanyId], references: [id])
   mergedFromCompany   Company[] @relation("CompanyMergedInto")
   mergedAt            DateTime?
+
+  /// See Person's @@index([updatedAt]) — same reason.
+  @@index([updatedAt])
 }
 
 /// Marketing segment master (Corporate / School / Lawyer …) for product

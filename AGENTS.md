@@ -2,102 +2,70 @@
 
 ## 1. Before Coding
 
-- Read this file completely.
+- Read `AGENT_RULES` fully before coding.
 - Use project vocabulary and simple Indian English.
-- **Repeat back first:** when the user says something, restate it point-to-point in your own words before acting. The user's English may be unclear — confirm you understood correctly, so you don't start wrong edits on a misunderstanding.
-- Then: explain your understanding, make a plan, wait for approval before editing.
+- First **repeat the user's request point-to-point** in your own words to confirm understanding.
+- Explain understanding + plan.
+- **Wait for approval before editing.**
 
----
+## 2. Product
 
-## 2. Product Rules
+- Every printable document must be customizable through the print template.
 
-- All printable documents must be customizable in the print template.
+## 3. Current Phase: Refactor & Simplify
 
----
+- Project is nearly complete.
+- Prioritize **simple, maintainable, DRY code**.
+- Remove duplicate/unnecessary logic and abstractions.
+- Before deleting/changing a table, field, or relation, check **seeds, APIs, and UI**.
 
-## 3. Current Phase: Refactoring & Simplification
+### DB Rules
 
-Project almost complete. Focus:
+- Two DBs: **demo** and **live**.
+- `CURRENT_DB=demo` → local PostgreSQL demo data; reset allowed.
+- `CURRENT_DB=live` → production data; **never full-reset**.
+- Schema changes must include migrations committed to `origin/dev` or `main`.
+- Deployment must apply migrations without causing problems.
 
-- Refactor for simple, maintainable code. Apply DRY. Remove unnecessary complexity; drop unused/redundant tables if needed.
-- Prefer simplification over new abstractions. Remove duplicate logic, don't copy.
-- Before removing a table/field/relation, check impact on seeds, APIs, UI.
+## 4. Reuse First
 
-Databases:
-
-- Two separate DBs: **demo db** and **live DB**.
-- `CURRENT_DB = demo DB` → may reset freely. _(Change to_ `live` _on production data — then no full reset. Update when connected DB changes.) we are using [localhost](http://localhost) with local PGSQL demo data_
-- _Create migration for Live DB, running on another deployment. in origin/dev or main should contain migration. push to remote + deploment not create any problem._
-
-### Evolving concepts
-
-- Don't mix old and new concepts in one change — one model per flow, one vocabulary per surface.
-- Old→new transition almost done. Leftover old gates/rules may wrongly block the new concept. When found, flag and fix — don't build on top.
-- On conflict: ask for confirmation, or park it (note clearly, resolve later). Use a **temporary bridge** only if something must work across both models until migration. Bridges must be obvious (comment, `TODO`, `PROJECT_BRAIN.md`) and removed once new concept wins.
-- **RBAC bridge (temporary):** new RBAC controls at **page level** — role sees nav link, and Create/Edit/Delete inside page. Server-side hard-gate security is a **TODO**. Until then, relax old leftover hard gates; respect the page permission model, no extra restriction on top.
-
----
-
-## 4. Reuse Before Creating
-
-Before adding a shared helper/hook/component/formatter/schema/utility:
-
-1. Search `src/shared/`.
-2. Extend existing if possible.
-3. Else place in the right shared folder, export from its `index.ts`.
-
-Legacy locations (leave in place, don't migrate imports):
-
-- `src/utils/` — old constants/helpers pre-dating `src/shared`.
-- `src/store/` — Zustand stores.
-- `src/components/ui/` — shadcn primitives.
-
-Module code → `src/modules/<module>/{components,hooks,lib}/`
-
-Naming: Components `PascalCase.tsx` · Hooks `useSomething.ts` · Utils/schemas/constants `camelCase.ts` · Directories `kebab-case`
-
----
+Before creating shared code: check `src/shared/` → extend existing if possible → otherwise add it there and export from `index.ts`.
 
 ## 5. Seeds
 
 Read `docs/seeds.md` first.
 
-- `personal-bootstrap.ts` — runs on `pnpm prisma db seed`. Restores OUR config: `lib/codeOwnedCatalog.ts` + snapshot `data/personal.local.json`. Upsert-only, safe on live DB.
-- `bootstrap-seed.ts` — generic NEW-CLIENT installer (`pnpm seed:generic`). **Never run in normal dev** — resets config to generic.
-- `hard-clean.ts` — removes only dummy/helper data. Never delete bootstrap data.
+- `personal-bootstrap.ts` / `pnpm prisma db seed` = our config, upsert-only, safe on live.
+- `bootstrap-seed.ts` / `pnpm seed:generic` = generic new-client setup; never normal dev.
+- `hard-clean.ts` = remove dummy/helper data only.
 
-Dev loop = capture → edit → seed: configure in UI → `pnpm seed:personal:capture` → `pnpm prisma db seed`.
+Dev: `UI configure → pnpm seed:personal:capture → pnpm prisma db seed`.
 
-**THE RULE — on every change to schema/permissions/master data/config, do all three in the same commit:**
+For every schema/permission/master-data/config change, same commit must update:
 
-1. **Generic bootstrap** — `lib/codeOwnedCatalog.ts` for permission definitions (single source, both bootstraps import it); `bootstrap-seed.ts` if generic demo content changes.
-2. **Personal bootstrap** — `data/personal.local.json` for grants and real config (R1 auto-tops-up new catalog permissions, so catalog-only additions need no grant edit); `lib/personalSnapshot.ts` if a NEW config table was added.
-3. **Apply to DB with a targeted script — never a full seed** (full seed = hundreds of slow remote upserts):
+1. Generic: `lib/codeOwnedCatalog.ts`; `bootstrap-seed.ts` if needed.
+2. Personal: `data/personal.local.json`; `lib/personalSnapshot.ts` for new config tables.
+3. DB: targeted idempotent script, never full seed for a small change. Permissions: update `ADDITIONS` → `pnpm seed:apply-permissions`.
 
-- Permissions → `pnpm seed:apply-permissions` (edit its `ADDITIONS` list first).
-- Else → small idempotent one-off tsx script (same pattern as `apply-permissions.ts`), run, then delete or reuse.
+Update affected `dummy-*.ts` / `hard-clean.ts`. Full `pnpm prisma db seed` only for reset, drift recovery, or full config reassertion.
 
-Also update affected `dummy-*.ts` and `hard-clean.ts` if needed.
+Ownership: code → `codeOwnedCatalog.ts`; universal demo → `bootstrap-seed.ts`; trade → `helper-inventory-masters.ts`; real config → `personal.local.json`. Never capture passwords.
 
-Full `pnpm prisma db seed` only for: hard reset, recovering a drifted DB, or re-asserting whole config — not single changes.
-
-Keep working: `pnpm prisma db seed` · `pnpm seed:generic` · `pnpm seed:dummy-all`
-
-Master data location:
-
-- Code-owned (permissions, voucher series, CHECK constraints) → `lib/codeOwnedCatalog.ts`
-- Universal demo defaults → `bootstrap-seed.ts`
-- Trade-specific → `helper-inventory-masters.ts`
-- Our real config → `data/personal.local.json` (git-tracked; passwords never captured)
-
-If dev DB inconsistent: fix seeds first, then reset and reseed.
-
----
+DB inconsistent: **fix seeds → reset → reseed**.
 
 ## 6. Documentation
 
-- `PROJECT_BRAIN.md` is the only status doc. Others describe current implementation.
-- After changing routes, APIs, Prisma models, major components, or important behavior: sync docs in the same commit, then invoke `/sync-docs-with-code`.
-- Pure narrative changes (renamed concept, typo): just edit the doc in the same commit.
+`PROJECT_BRAIN.md` is the only status doc. After routes/APIs/Prisma/major components/important behavior changes: update docs in same commit and run `/sync-docs-with-code`. Narrative-only changes: update directly.
 
 Commands: `pnpm seed:check-docs` · `pnpm seed:fix-docs` · `pnpm precommit` · `pnpm install:git-hooks`
+
+## 7. Cost & Performance
+
+- **DB:** DB pagination, select needed columns only, avoid `SELECT *` and query-per-item.
+- **Server:** browser cache, batch mutations, defer non-critical work, ISR for store pages, short TTL for office.
+- **UX:** optimistic updates with rollback, prefetch, no blank flicker, show cached data while refreshing.
+- **Priority:** **UX → DB → Server**.
+
+### Core workflow
+
+**Understand → Repeat back → Explain plan → Wait for approval → Edit → Check impact → Update seeds/docs → Validate.**

@@ -28,11 +28,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { idbDelete, idbGet, idbSet } from "@/shared/lib/browser/idbCache";
+import { localDb } from "@/shared/lib/browser/localDb";
 import { isBridgeAvailable } from "@/shared/lib/bridge";
 
 const API = "/api/accountancy/reports/day-book";
-const CACHE_KEY = "daybook:v2";
 /** One entry per filter view. Bounded so a session of fiddling can't grow forever. */
 const MAX_CACHED_VIEWS = 4;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -119,7 +118,8 @@ const EMPTY_STORE: Store = {
     rows: [], refs: { branches: [], users: [], accounts: [] }, nextCursor: null, checkedAt: null,
 };
 
-type CacheFile = Record<string, Store & { savedAt: number }>;
+/** One Dexie row per filter view — see `localDb`'s `dayBookViews`. */
+type CachedView = Store & { savedAt: number };
 
 /**
  * Identifies a filter view. `search` is deliberately excluded — a searched view is
@@ -222,21 +222,34 @@ async function fetchDayBook(
 // ── Cache (counter machines only) ────────────────────────────────────────────
 
 async function readCachedView(key: string): Promise<Store | null> {
-    const file = await idbGet<CacheFile>(CACHE_KEY);
-    const hit = file?.[key];
+    const db = localDb();
+    if (!db) return null;
+    const row = await db.dayBookViews.get(key);
+    const hit = row?.store as CachedView | undefined;
     if (!hit?.rows?.length || !hit.checkedAt) return null;
     return { rows: hit.rows, refs: hit.refs, nextCursor: hit.nextCursor, checkedAt: hit.checkedAt };
 }
 
 async function writeCachedView(key: string, store: Store): Promise<void> {
-    const file = (await idbGet<CacheFile>(CACHE_KEY)) ?? {};
-    file[key] = { ...store, savedAt: Date.now() };
+    const db = localDb();
+    if (!db) return;
+    const savedAt = Date.now();
+    await db.transaction("rw", db.dayBookViews, async () => {
+        // One row per view, so recording this view no longer means rewriting
+        // every other cached view alongside it.
+        await db.dayBookViews.put({ key, store: { ...store, savedAt }, savedAt });
 
-    // Keep only the most recently written views.
-    const keys = Object.keys(file).sort((a, b) => file[b].savedAt - file[a].savedAt);
-    for (const stale of keys.slice(MAX_CACHED_VIEWS)) delete file[stale];
+        // Keep only the most recently written views.
+        const stale = (await db.dayBookViews.orderBy("savedAt").reverse().toArray()).slice(MAX_CACHED_VIEWS);
+        if (stale.length) await db.dayBookViews.bulkDelete(stale.map((v) => v.key));
+    });
+}
 
-    await idbSet(CACHE_KEY, file);
+/** Wipe every cached view — this machine is not allowed to keep the books. */
+async function clearCachedViews(): Promise<void> {
+    const db = localDb();
+    if (!db) return;
+    await db.dayBookViews.clear();
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -293,7 +306,7 @@ export function useDayBook(query: DayBookQuery) {
 
             // Not a counter: this machine keeps nothing, including whatever a
             // previous life left behind.
-            if (!onCounter) await idbDelete(CACHE_KEY);
+            if (!onCounter) await clearCachedViews();
 
             let cached: Store | null = null;
             if (onCounter && cacheable && !force) {

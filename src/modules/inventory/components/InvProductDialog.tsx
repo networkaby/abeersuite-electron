@@ -36,7 +36,8 @@ import {
     DEFAULT_NAMING_CONFIG,
     type NamingConfigShape,
 } from "@/modules/inventory/lib/productName";
-import type { ProductCode } from "@/shared/lib/inventory";
+import type { ProductCode, Masters } from "@/shared/lib/inventory";
+import { syncMasters, invalidateMasters } from "@/shared/lib/inventory";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -173,36 +174,46 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [saving, setSaving] = useState(false);
     const [refsLoaded, setRefsLoaded] = useState(false);
 
+    /// Fan the replicated master lists out into their four Selects. Null means
+    /// the replica could not be read AND the server could not be reached, so we
+    /// leave whatever is on screen rather than blanking the dropdowns.
+    const applyMasters = useCallback((m: Masters | null) => {
+        if (!m) return;
+        setUnits(m.units as Opt[]);
+        setCategories(m.categories as Opt[]);
+        setGroups(m.groups as Opt[]);
+        setBrands(m.brands as Opt[]);
+    }, []);
+
     /// Refreshes just the master lists (no naming-config / attribute-masters /
     /// gst-rates) — called after InventoryMasterDropdownQuickDialog creates a new row so the
     /// new option shows up in the relevant Select.
     const refreshMaster = useCallback(async (kind: MasterKind) => {
-        const url =
-            kind === "category" ? "/api/inventory/categories"
-            : kind === "brand"  ? "/api/inventory/brands"
-            : kind === "group"  ? "/api/inventory/product-groups"
-            : kind === "warranty" ? "/api/inventory/warranty-terms"
-            : "/api/inventory/units";
         try {
-            const res = await axios.get<Opt[]>(url);
-            if (kind === "category") setCategories(res.data);
-            else if (kind === "brand") setBrands(res.data);
-            else if (kind === "group") setGroups(res.data);
-            else if (kind === "warranty") setWarrantyTerms(res.data);
-            else setUnits(res.data);
+            // Warranty terms are not replicated — still a plain fetch.
+            if (kind === "warranty") {
+                const res = await axios.get<Opt[]>("/api/inventory/warranty-terms");
+                setWarrantyTerms(res.data);
+                return;
+            }
+            // The four replicated masters: drop the held copy so the row that was
+            // just created is picked up rather than waiting for a delta, then
+            // re-read all four together (one request, not one per list).
+            await invalidateMasters();
+            applyMasters(await syncMasters());
         } catch {
             toast.error(`Failed to reload ${kind}s`);
         }
-    }, []);
+    }, [applyMasters]);
 
     // Lazy-load reference data once, on first open.
     useEffect(() => {
         if (!open || refsLoaded) return;
         Promise.all([
-            axios.get<Opt[]>("/api/inventory/units").then((r) => setUnits(r.data)),
-            axios.get<Opt[]>("/api/inventory/categories").then((r) => setCategories(r.data)),
-            axios.get<Opt[]>("/api/inventory/product-groups").then((r) => setGroups(r.data)),
-            axios.get<Opt[]>("/api/inventory/brands").then((r) => setBrands(r.data)),
+            // Units / categories / groups / brands used to be four unconditional
+            // GETs here. They are replicated now, so this is one delta request
+            // that on a normal day answers "nothing changed".
+            syncMasters().then(applyMasters),
             axios.get<Opt[]>("/api/inventory/warranty-terms").then((r) => setWarrantyTerms(r.data)),
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates").then((r) => setGstRates(r.data)),
             axios.get<NamingConfigShape>("/api/inventory/naming-config").then((r) => setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
@@ -210,7 +221,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         ])
             .then(() => setRefsLoaded(true))
             .catch(() => toast.error("Failed to load reference data"));
-    }, [open, refsLoaded]);
+    }, [open, refsLoaded, applyMasters]);
 
     /// Shared master quick-add — opens from the "+ New" button next to each
     /// master picker. Returns the new row's id (or null if cancelled) so the

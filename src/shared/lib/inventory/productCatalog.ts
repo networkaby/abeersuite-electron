@@ -19,6 +19,11 @@
  *      arithmetic on a previous value, so a row can never drift out of step with
  *      the database the way an incrementally-adjusted total could.
  *
+ * Rows live as REAL ROWS in the shared Dexie database (`localDb`), so a delta
+ * writes only the products that actually moved. The previous store held the
+ * whole catalogue as one JSON blob under a single key, which meant re-writing
+ * several thousand rows to record that one price had changed.
+ *
  * Three things a naive "rows newer than X" sync would get wrong, all handled:
  *
  *   • Values that are not on the product row — resolved GST, the barcode tag,
@@ -37,9 +42,10 @@
  */
 
 import axios from "axios";
-import { idbGet, idbSet, idbDelete } from "@/shared/lib/browser/idbCache";
+import { localDb, type LocalProductRow } from "@/shared/lib/browser/localDb";
 
-const CACHE_KEY = "pos-product-catalog:v1";
+/** The single `productMeta` row holding catalogue-wide sync state. */
+const META_KEY = "catalogue";
 /** Beyond this the cache is discarded outright, whatever the stamp says. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -47,25 +53,50 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
  *  `name` is needed because the merge has to restore the server's ordering. */
 type Row = { id: number; name: string };
 
-type Cached<T> = { rows: T[]; computedAt: string; stamp: string; count: number };
-
 type SyncResponse<T> =
     | { mode: "full"; products: T[]; computedAt: string; stamp: string; count: number }
     | { mode: "delta"; changed: T[]; removedIds: number[]; computedAt: string; stamp: string; count: number };
 
-async function readCache<T extends Row>(): Promise<Cached<T> | null> {
-    const hit = await idbGet<Cached<T>>(CACHE_KEY);
-    if (!hit?.computedAt || !Array.isArray(hit.rows)) return null;
-    if (Date.now() - new Date(hit.computedAt).getTime() > MAX_AGE_MS) {
-        await idbDelete(CACHE_KEY);
+/** The server lists by name; restore that so the search dropdown's top matches
+ *  are the same rows a full load would have shown. Sorted here rather than by an
+ *  IndexedDB index because IndexedDB orders by UTF-16 code unit, which parts
+ *  company with `localeCompare` on case and non-ASCII names. */
+const byName = (a: Row, b: Row) => a.name.localeCompare(b.name);
+
+async function clearCatalogue(): Promise<void> {
+    const db = localDb();
+    if (!db) return;
+    await db.transaction("rw", db.products, db.productMeta, async () => {
+        await db.products.clear();
+        await db.productMeta.delete(META_KEY);
+    });
+}
+
+/** Catalogue sync state, or null when there is nothing usable to build on. */
+async function readMeta() {
+    const db = localDb();
+    if (!db) return null;
+    const meta = await db.productMeta.get(META_KEY);
+    if (!meta?.computedAt) return null;
+    if (Date.now() - new Date(meta.computedAt).getTime() > MAX_AGE_MS) {
+        await clearCatalogue();
         return null;
     }
-    return hit;
+    return meta;
+}
+
+async function readRows<T extends Row>(): Promise<T[]> {
+    const db = localDb();
+    if (!db) return [];
+    const rows = (await db.products.toArray()) as T[];
+    return rows.sort(byName);
 }
 
 /** Cached rows for an immediate first paint, or null when there is nothing usable. */
 export async function readCachedProducts<T extends Row>(): Promise<T[] | null> {
-    return (await readCache<T>())?.rows ?? null;
+    if (!(await readMeta())) return null;
+    const rows = await readRows<T>();
+    return rows.length > 0 ? rows : null;
 }
 
 /**
@@ -74,46 +105,41 @@ export async function readCachedProducts<T extends Row>(): Promise<T[] | null> {
  * fails outright — a till with a slightly old catalogue still sells.
  */
 export async function syncProducts<T extends Row>(): Promise<T[] | null> {
-    const cached = await readCache<T>();
+    const db = localDb();
+    const meta = await readMeta();
 
     const params: Record<string, string> = { sync: "1" };
-    if (cached) {
-        params.since = cached.computedAt;
-        params.stamp = cached.stamp;
+    if (meta) {
+        params.since = meta.computedAt;
+        params.stamp = meta.stamp;
     }
 
     const res = await request<T>(params);
-    if (!res) return cached?.rows ?? null;      // offline / server error — keep selling
-
-    let rows: T[];
-    if (res.mode === "full") {
-        rows = res.products;
-    } else if (cached) {
-        const byId = new Map(cached.rows.map((r) => [r.id, r]));
-        for (const r of res.changed) byId.set(r.id, r);
-        for (const id of res.removedIds) byId.delete(id);
-        // The server lists by name; restore that so the search dropdown's top
-        // matches are the same rows a full load would have shown.
-        rows = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-    } else {
-        return (await reload<T>()) ?? null;      // delta with nothing to apply it to
+    if (!res) {
+        // Offline / server error — keep selling on whatever is already held.
+        if (!meta) return null;
+        const held = await readRows<T>();
+        return held.length > 0 ? held : null;
     }
+
+    if (res.mode === "full") return await replaceAll<T>(res.products, res);
+    if (!meta || !db) return (await reload<T>()) ?? null;   // delta with nothing to apply it to
+
+    await db.transaction("rw", db.products, db.productMeta, async () => {
+        if (res.changed.length > 0)    await db.products.bulkPut(res.changed as LocalProductRow[]);
+        if (res.removedIds.length > 0) await db.products.bulkDelete(res.removedIds);
+        await db.productMeta.put({ key: META_KEY, computedAt: res.computedAt, stamp: res.stamp, count: res.count });
+    });
 
     // A hard-deleted product leaves no trace a timestamp could match, so the row
     // count is the only way to notice one. Disagreement means this cache has
     // silently diverged — throw it away and take the catalogue fresh.
-    if (typeof res.count === "number" && rows.length !== res.count) {
-        await idbDelete(CACHE_KEY);
-        return res.mode === "delta" ? ((await reload<T>()) ?? null) : rows;
+    if (typeof res.count === "number" && (await db.products.count()) !== res.count) {
+        await clearCatalogue();
+        return (await reload<T>()) ?? null;
     }
 
-    await idbSet<Cached<T>>(CACHE_KEY, {
-        rows,
-        computedAt: res.computedAt,
-        stamp: res.stamp,
-        count: res.count,
-    });
-    return rows;
+    return await readRows<T>();
 }
 
 async function request<T extends Row>(params: Record<string, string>): Promise<SyncResponse<T> | null> {
@@ -124,15 +150,24 @@ async function request<T extends Row>(params: Record<string, string>): Promise<S
     }
 }
 
+/** Drop whatever is held and seed the catalogue from a full server response. */
+async function replaceAll<T extends Row>(
+    products: T[],
+    meta: { computedAt: string; stamp: string; count: number },
+): Promise<T[]> {
+    const db = localDb();
+    if (!db) return [...products].sort(byName);   // no IndexedDB — serve in-memory
+    await db.transaction("rw", db.products, db.productMeta, async () => {
+        await db.products.clear();
+        await db.products.bulkPut(products as LocalProductRow[]);
+        await db.productMeta.put({ key: META_KEY, computedAt: meta.computedAt, stamp: meta.stamp, count: meta.count });
+    });
+    return await readRows<T>();
+}
+
 /** Take the whole catalogue and reseed the cache from it. */
 async function reload<T extends Row>(): Promise<T[] | null> {
     const res = await request<T>({ sync: "1" });
     if (!res || res.mode !== "full") return null;
-    await idbSet<Cached<T>>(CACHE_KEY, {
-        rows: res.products,
-        computedAt: res.computedAt,
-        stamp: res.stamp,
-        count: res.count,
-    });
-    return res.products;
+    return await replaceAll<T>(res.products, res);
 }

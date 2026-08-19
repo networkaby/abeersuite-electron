@@ -108,7 +108,7 @@ async function readCachedView<T extends TicketRow>(key: string): Promise<CachedV
     if (!view?.ids.length) return null;
     if (Date.now() - new Date(view.checkedAt).getTime() > MAX_AGE_MS) return null;
     const stored = await db.tickets.bulkGet(view.ids);
-    const rows = stored.filter((r): r is LocalTicketRow => r != null).map((r) => r.data as T);
+    const rows = stored.filter((r): r is LocalTicketRow => r != null) as T[];
     if (rows.length === 0) return null;
     return { rows, nextCursor: view.nextCursor, checkedAt: view.checkedAt };
 }
@@ -117,15 +117,9 @@ async function writeCachedView<T extends TicketRow>(key: string, rows: T[], next
     const db = localDb();
     if (!db) return;
     await db.transaction("rw", db.tickets, db.ticketViews, async () => {
-        await db.tickets.bulkPut(rows.map((r) => ({
-            id:         r.id,
-            pipelineId: r.pipelineId,
-            status:     r.status,
-            priority:   r.priority,
-            createdAt:  r.createdAt,
-            updatedAt:  r.updatedAt,
-            data:       r,
-        })));
+        // Rows are stored as the server shaped them; the indexed columns
+        // (status / priority / updatedAt) are already top-level scalars on them.
+        await db.tickets.bulkPut(rows as LocalTicketRow[]);
         await db.ticketViews.put({ key, ids: rows.map((r) => r.id), nextCursor, checkedAt, savedAt: Date.now() });
 
         // Keep only the most recently written views — the shared `tickets`
