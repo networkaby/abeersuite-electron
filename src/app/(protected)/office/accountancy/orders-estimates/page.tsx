@@ -34,9 +34,12 @@ type ListRow = {
     description:     string;
     partyName:       string | null;
     partyAccountId?: number | null;
+    partyPersonId?:  number | null;
+    partyCompanyId?: number | null;
     totalAmount:     number | string;
     status:          "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt?:    string | null;
+    createdAt:       string;
     branch?:         { id: string; name: string } | null;
     createdBy:       { name: string } | null;
     converted?:      boolean;
@@ -59,16 +62,21 @@ export default function OrdersEstimatesPage() {
                 const mapped: VoucherRegisterRow[] = (r.data ?? []).map((v) => ({
                     id:             `inv-${v.id}`,
                     rawId:          v.id,
+                    sortId:         v.id,
                     source:         "inv",
                     kind:           v.type ?? "",
                     reference:      v.reference || formatUvNo(v.id),
                     date:           v.date,
                     party:          v.partyName,
                     partyAccountId: v.partyAccountId ?? null,
+                    partyKind:      v.partyPersonId != null ? "person" : v.partyCompanyId != null ? "company" : null,
+                    partyEntityId:  v.partyPersonId ?? v.partyCompanyId ?? null,
                     narration:      v.description,
                     totalAmount:    Number(v.totalAmount),
                     status:         v.status,
                     cancelledAt:    v.cancelledAt ?? null,
+                    createdAt:      v.createdAt,
+                    createdById:    null,
                     branchId:       v.branch?.id   ?? null,
                     branchName:     v.branch?.name ?? null,
                     createdBy:      v.createdBy?.name ?? null,

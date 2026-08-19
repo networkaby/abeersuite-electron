@@ -34,8 +34,11 @@ type RawRow = {
     totalAmount:  number | string;
     status:       "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt?: string | null;
+    createdAt:    string;
+    createdById:  number;
+    branch:       { id: string; name: string } | null;
     createdBy:    { name: string };
-    partyAccount: { id: number; code: string; name: string } | null;
+    partyAccount: { id: number; code: string; name: string; personId: number | null; companyId: number | null } | null;
 };
 
 export function GlVoucherList({
@@ -63,18 +66,27 @@ export function GlVoucherList({
         axios.get<RawRow[]>(`/api/accountancy/vouchers?${params}`)
             .then((r) => {
                 const mapped: VoucherRegisterRow[] = (r.data ?? []).map((v) => ({
-                    id:          `gl-${v.id}`,
-                    rawId:       v.id,
-                    source:      "gl",
-                    kind:        v.type,
-                    reference:   v.voucherNo ?? formatUvNo(v.id),
-                    date:        v.date,
-                    party:       v.partyAccount?.name ?? null,
-                    narration:   v.narration,
-                    totalAmount: Number(v.totalAmount),
-                    status:      v.status,
-                    cancelledAt: v.cancelledAt ?? null,
-                    createdBy:   v.createdBy?.name ?? null,
+                    id:             `gl-${v.id}`,
+                    rawId:          v.id,
+                    sortId:         v.id,
+                    source:         "gl",
+                    kind:           v.type,
+                    reference:      v.voucherNo ?? formatUvNo(v.id),
+                    date:           v.date,
+                    party:          v.partyAccount?.name ?? null,
+                    partyAccountId: v.partyAccount?.id ?? null,
+                    partyKind:      v.partyAccount?.personId != null ? "person" : v.partyAccount?.companyId != null ? "company" : null,
+                    partyEntityId:  v.partyAccount?.personId ?? v.partyAccount?.companyId ?? null,
+                    narration:      v.narration,
+                    totalAmount:    Number(v.totalAmount),
+                    status:         v.status,
+                    cancelledAt:    v.cancelledAt ?? null,
+                    createdAt:      v.createdAt,
+                    createdById:    v.createdById,
+                    branchId:       v.branch?.id   ?? null,
+                    branchName:     v.branch?.name ?? null,
+                    createdBy:      v.createdBy?.name ?? null,
+                    converted:      false,
                 }));
                 setAllRows(mapped);
             })

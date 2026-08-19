@@ -40,14 +40,18 @@ type ListRow = {
     description:     string;
     partyName:       string | null;
     partyAccountId?: number | null;
+    partyPersonId?:  number | null;
+    partyCompanyId?: number | null;
     paymentMode?:    string | null;
     totalAmount:     number | string;
     amountReceived?: number | string;
     status:          "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt?:    string | null;
+    createdAt:       string;
     branch?:         { id: string; name: string } | null;
     _count:          { lines: number };
     createdBy:       { name: string };
+    converted?:      boolean;
 };
 
 /** Row shape extended with optional fields injected for caller-supplied
@@ -96,12 +100,15 @@ export function InvVoucherList({
                 const mapped: InvVoucherListRow[] = (r.data ?? []).map((v) => ({
                     id:             `inv-${v.id}`,
                     rawId:          v.id,
+                    sortId:         v.id,
                     source:         "inv",
                     kind:           v.type ?? type,
                     reference:      v.reference || formatUvNo(v.id),
                     date:           v.date,
                     party:          v.partyName,
                     partyAccountId: v.partyAccountId ?? null,
+                    partyKind:      v.partyPersonId != null ? "person" : v.partyCompanyId != null ? "company" : null,
+                    partyEntityId:  v.partyPersonId ?? v.partyCompanyId ?? null,
                     narration:      v.description,
                     totalAmount:    Number(v.totalAmount),
                     amountReceived: v.amountReceived != null ? Number(v.amountReceived) : 0,
@@ -109,9 +116,12 @@ export function InvVoucherList({
                     lineCount:      v._count?.lines ?? 0,
                     status:         v.status,
                     cancelledAt:    v.cancelledAt ?? null,
+                    createdAt:      v.createdAt,
+                    createdById:    null,
                     branchId:       v.branch?.id   ?? null,
                     branchName:     v.branch?.name ?? null,
                     createdBy:      v.createdBy?.name ?? null,
+                    converted:      v.converted ?? false,
                 }));
                 setAllRows(mapped);
             })

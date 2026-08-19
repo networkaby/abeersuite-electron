@@ -85,7 +85,6 @@ export function usePartySearch(
     useEffect(() => {
         const trimmed = query.trim();
         if (!enabled || !trimmed) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setHits([]);
             setLoading(false);
             return;

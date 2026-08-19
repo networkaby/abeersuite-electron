@@ -29,6 +29,9 @@ interface RawEntry {
     totalAmount?: number | string;
     totalDebit?:  number | string;
     cancelledAt?: string | null;
+    createdAt:    string;
+    createdById:  number;
+    branchId:     string | null;
     createdBy:    { name: string };
 }
 
@@ -50,18 +53,27 @@ export function JournalEntriesRegister() {
                     ? r.data
                     : (r.data as { rows: RawEntry[] }).rows ?? [];
                 const mapped: VoucherRegisterRow[] = arr.map((e) => ({
-                    id:          `je-${e.id}`,
-                    rawId:       Number(e.id),
-                    source:      "je",
-                    kind:        "JOURNAL",
-                    reference:   e.voucherNo ?? formatUvNo(Number(e.id)),
-                    date:        e.date,
-                    party:       null,
-                    narration:   e.description,
-                    totalAmount: Number(e.totalDebit ?? e.totalAmount ?? 0),
-                    status:      e.status,
-                    cancelledAt: e.cancelledAt ?? null,
-                    createdBy:   e.createdBy?.name ?? null,
+                    id:             `je-${e.id}`,
+                    rawId:          Number(e.id),
+                    sortId:         Number(e.id),
+                    source:         "je",
+                    kind:           "JOURNAL",
+                    reference:      e.voucherNo ?? formatUvNo(Number(e.id)),
+                    date:           e.date,
+                    party:          null,
+                    partyAccountId: null,
+                    partyKind:      null,
+                    partyEntityId:  null,
+                    narration:      e.description,
+                    totalAmount:    Number(e.totalDebit ?? e.totalAmount ?? 0),
+                    status:         e.status,
+                    cancelledAt:    e.cancelledAt ?? null,
+                    createdAt:      e.createdAt,
+                    createdById:    e.createdById,
+                    branchId:       e.branchId ?? null,
+                    branchName:     null,
+                    createdBy:      e.createdBy?.name ?? null,
+                    converted:      false,
                 }));
                 setAllRows(mapped);
             })
