@@ -55,10 +55,17 @@ export async function hasNavCountsChangedSince(userId: number, since: Date): Pro
  * Every sidebar count badge in one call, so the whole sidebar polls once instead
  * of once per badge.
  *
- * THE ONE-PLACE RULE — an open ticket is counted in exactly one badge:
+ * THE ONE-PLACE RULE — an open ticket is counted in exactly one MODULE-vs-WORK-INBOX
+ * badge:
  *   • its MODULE while it sits in a plain status, and
  *   • the WORK INBOX once it lands in a work-bearing sub-status,
  * so the count hands itself over as the ticket moves and nothing is counted twice.
+ *
+ * Overdue is the deliberate exception. A work-less overdue ticket is still counted
+ * in its MODULE — an overdue repair ticket is still an open repair ticket — and is
+ * ALSO folded into the Work Inbox as a chase-me notice. Two different lenses (how
+ * much open work do I have vs. what needs action now) legitimately show the same
+ * ticket; only the module-vs-work-inbox split is exclusive.
  *
  * `all`  — open (non-terminal) tickets in that place.
  * `new`  — of those, the ones that arrived after this user's seen marker. For a
@@ -123,11 +130,11 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
                 ticketStatus: { isTerminal: false },
             },
             notSnoozed,
-            // The one-place rule: hand the ticket over to the Work Inbox badge.
+            // The one-place rule: hand the ticket over to the Work Inbox badge —
+            // but only for tickets actually claimed into work. Overdue is not a
+            // hand-off: a work-less overdue ticket stays counted here too (see the
+            // note above), so there is deliberately no exclusion for `slaOverdue`.
             ...(visibleWorkIds.length ? [{ NOT: inMyWorkInbox }] : []),
-            // Same rule for work-less overdue rows — they now show in the Work Inbox,
-            // so they must not be double-counted in their module badge.
-            ...(slaOverdue.length ? [{ NOT: { id: { in: slaOverdue.map((t) => t.id) } } }] : []),
         ],
     };
 

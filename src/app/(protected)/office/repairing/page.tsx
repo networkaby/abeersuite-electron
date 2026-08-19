@@ -8,6 +8,7 @@ import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
 import { PRIORITY_META } from "@/utils/constants";
+import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // TODO(rbac): repairing is temporarily open to all authenticated staff and shows a
 // single shared overview. The old role/permission-keyed dashboards (Admin / Technician
@@ -119,7 +120,9 @@ export default async function RepairingDashboardPage({
     ];
 
     return (
-        <div className="space-y-6 p-4">
+        <div className="flex h-full flex-col overflow-hidden">
+            <PathBreadcrumb root={{ href: "/office/repairing", label: "Repairs" }} escapeBack />
+            <div className="space-y-6 overflow-y-auto p-4">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold mb-1">Repairs</h1>
@@ -297,6 +300,7 @@ export default async function RepairingDashboardPage({
                         })}
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );
