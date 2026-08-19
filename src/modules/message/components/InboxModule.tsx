@@ -104,9 +104,14 @@ function dmPartnerName(room: Room, currentUserId: number, teamUsers: TeamUser[])
 export default function InboxModule({
     currentUserId,
     currentUserName,
+    embedded = false,
 }: {
     currentUserId?: number;
     currentUserName?: string;
+    /** Mounted inside a panel/drawer (e.g. the POS counter) rather than as the
+     *  full /office/message/inbox page — hides the page breadcrumb, which would
+     *  otherwise duplicate the panel's own header/close control. */
+    embedded?: boolean;
 }) {
     const searchParams  = useSearchParams();
     const initialSection = searchParams.get("section") ?? "groups";
@@ -490,7 +495,7 @@ export default function InboxModule({
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background">
-            <PathBreadcrumb root={{ href: "/office/message/inbox", label: "Inbox" }} escapeBack />
+            {!embedded && <PathBreadcrumb root={{ href: "/office/message/inbox", label: "Inbox" }} escapeBack />}
 
             <div className="flex flex-1 overflow-hidden">
 

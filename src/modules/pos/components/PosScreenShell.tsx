@@ -10,8 +10,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
+import { useInboxUnread } from "@/shared/hooks/useNavCounts";
+import { PosInboxDrawer } from "@/modules/pos/components/PosInboxDrawer";
 import { ScanLine, ShoppingCart, Plus, Minus, Trash2, Wrench, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +95,13 @@ export function PosScreenShell({
     const [dealOpen, setDealOpen] = useState(false);
     // Counter "Lead" — capture a new contact on the fly (reuses the office form).
     const [leadOpen, setLeadOpen] = useState(false);
+    // Counter "Chat" — team inbox (groups/DMs/system), right from the register.
+    const [chatOpen, setChatOpen] = useState(false);
     const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions");
+    const { data: session } = useSession();
+    const sessionUser = session?.user as { id?: string | null; name?: string | null } | undefined;
+    const currentUserId = sessionUser?.id ? parseInt(sessionUser.id, 10) : undefined;
+    const chatUnread = useInboxUnread();
 
     // Auto-focus the party picker on mount so the cashier can start typing
     // the customer name immediately.
@@ -579,8 +588,10 @@ export function PosScreenShell({
                 onTask={() => setTaskOpen(true)}
                 onDeal={() => setDealOpen(true)}
                 onLead={() => setLeadOpen(true)}
+                onChat={() => setChatOpen(true)}
                 canExp={b.posAccess.canExp}
                 canRcv={b.posAccess.canRcv}
+                chatUnread={chatUnread}
             />
 
             {/* Quick-ticket dialog (opened from the rail's Ticket button). */}
@@ -616,6 +627,14 @@ export function PosScreenShell({
                 applyOfferById={b.applyOfferById}
                 crossSell={b.crossSell}
                 addToCart={b.addToCart}
+            />
+
+            {/* Team chat drawer — opens from the rail's Chat button. */}
+            <PosInboxDrawer
+                open={chatOpen}
+                onClose={() => setChatOpen(false)}
+                currentUserId={currentUserId}
+                currentUserName={sessionUser?.name ?? undefined}
             />
         </div>
     );

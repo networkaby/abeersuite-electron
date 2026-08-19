@@ -74,6 +74,7 @@ import {
     ListTree,
     MapPin,
     MessageCircleQuestion,
+    MessageSquare,
     Milestone,
     Monitor,
     MonitorSmartphone,
@@ -276,6 +277,7 @@ export const POS_RAIL_ACTIONS: PosRailAction[] = [
     { key: "rcv", label: "Rcv", icon: HandCoins, kind: "action", can: "canRcv", tint: "emerald", title: "Collect a payment from a customer into this counter's till — posts a receipt voucher" },
     { key: "exp", label: "Exp", icon: Wallet, kind: "action", can: "canExp", tint: "rose", title: "Record a counter expenditure (tea, sundry…) — posts a payment voucher from the counter's till" },
 
+    { key: "chat", label: "Chat", icon: MessageSquare, kind: "action", tint: "indigo", title: "Team chat — inbox rooms, groups and DMs, right from the counter" },
     { key: "ticket", label: "Ticket", icon: TicketPlus, kind: "action", tint: "indigo", title: "Create a repair ticket for a customer" },
     { key: "enquiry", label: "Enquiry", icon: MessageCircleQuestion, kind: "action", tint: "sky", title: "Log a customer help / enquiry ticket (price, availability, warranty…)" },
     { key: "task", label: "Task", icon: SquareCheckBig, kind: "action", tint: "violet", title: "Add an internal work item to the board" },

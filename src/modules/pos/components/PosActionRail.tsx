@@ -36,13 +36,17 @@ export type PosActionRailProps = {
     onTask: () => void;
     onDeal: () => void;
     onLead: () => void;
+    onChat: () => void;
     canExp?: boolean;
     canRcv?: boolean;
+    /** Unread chat count — badges the Chat button. */
+    chatUnread?: number;
 };
 
-export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, onDeal, onLead, canExp = true, canRcv = true }: PosActionRailProps) {
-    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask, deal: onDeal, lead: onLead };
+export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, onDeal, onLead, onChat, canExp = true, canRcv = true, chatUnread = 0 }: PosActionRailProps) {
+    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask, deal: onDeal, lead: onLead, chat: onChat };
     const flags: Record<PosRailAccessKey, boolean> = { canRcv, canExp };
+    const badges: Record<string, number> = { chat: chatUnread };
     // The help ("?") action is pinned to the BOTTOM of the rail, apart from the
     // other buttons: rendered in its own mt-auto block below the main group.
     const helpAction = POS_RAIL_ACTIONS.find((a) => a.key === "help");
@@ -59,7 +63,7 @@ export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTas
                 return (
                     <Fragment key={a.key}>
                         {a.divider && <div className="my-1 border-t border-border/70" />}
-                        <RailButton icon={<a.icon size={16} />} label={a.label} onClick={onClick} title={a.title} tint={a.tint ? tint[a.tint] : undefined} />
+                        <RailButton icon={<a.icon size={16} />} label={a.label} onClick={onClick} title={a.title} tint={a.tint ? tint[a.tint] : undefined} badge={badges[a.key]} />
                     </Fragment>
                 );
             })}
@@ -86,12 +90,14 @@ function RailButton({
     onClick,
     title,
     tint,
+    badge,
 }: {
     icon: React.ReactNode;
     label: string;
     onClick: () => void;
     title?: string;
     tint?: string;
+    badge?: number;
 }) {
     return (
         <Button
@@ -99,8 +105,13 @@ function RailButton({
             size="sm"
             onClick={onClick}
             title={title ?? label}
-            className={`flex h-auto flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium ${tint ?? ""}`}
+            className={`relative flex h-auto flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium ${tint ?? ""}`}
         >
+            {!!badge && (
+                <span className="absolute right-1.5 top-1 rounded-full bg-primary px-1 py-0.5 text-[9px] font-bold leading-none text-primary-foreground">
+                    {badge > 99 ? "99+" : badge}
+                </span>
+            )}
             {icon}
             {label}
         </Button>
