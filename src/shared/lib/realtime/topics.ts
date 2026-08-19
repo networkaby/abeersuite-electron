@@ -23,7 +23,8 @@ export type Topic =
     | "parties"     // customers: person, company, contacts, tiers
     | "catalogue"   // products, brands, categories, pricing, coupons
     | "tasks"       // admin tasks, notes, notifications, wall posts
-    | "settings";   // org config, users, roles, positions, branches
+    | "settings"    // org config, users, roles, positions, branches
+    | "chat";       // a new DM room came into existence (messages ride their own broadcast)
 
 /**
  * Path prefix → topics. First match wins per rule; ALL matching rules
@@ -64,6 +65,12 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
 
     // ── Configuration ────────────────────────────────────────────────────────
     [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart|service-centers)/, ["settings"]],
+
+    // ── Chat room discovery ──────────────────────────────────────────────────
+    // A new message riding an existing room delivers over its OWN "room:<id>"
+    // broadcast (see GlobalInboxListener) — that only needs a topic here for the
+    // FIRST message of a brand new DM, which mints the room this path creates.
+    [/^\/api\/inbox\/direct/,                       ["chat"]],
 ];
 
 /**

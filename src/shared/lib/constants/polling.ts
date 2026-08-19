@@ -9,16 +9,46 @@
  * current figure. See `usePolling`.
  */
 
-/** Sidebar badges, chat unread and the notification bell — all one request. */
-export const NAV_COUNTS_POLL_MS = 180_000;
+/**
+ * Sidebar badges, chat unread and the notification bell — all one request.
+ *
+ * A DISTANT FALLBACK now, not the mechanism: badges recount on a "tickets"
+ * change signal (see `useNavCounts.ts`), on window focus, and on returning
+ * from a hidden tab, all of which fire far more often than any interval would.
+ * Left running rather than removed — a day is cheap insurance against a signal
+ * silently failing to arrive, without costing anything close to what a 3-minute
+ * tick did. Revisit downward only if a real gap between "something changed" and
+ * "the badge noticed" is ever actually observed.
+ */
+export const NAV_COUNTS_POLL_MS = 86_400_000;   // 24 hours
+
+/**
+ * How long the server trusts a client's `?since=` cheap-check before forcing a
+ * full recompute regardless — see `hasNavCountsChangedSince`'s "since is only
+ * honored within one poll interval" note. This used to just BE
+ * `NAV_COUNTS_POLL_MS`, back when that constant was both the tick and the
+ * trust window by one and the same design. It can no longer share the number:
+ * `NAV_COUNTS_POLL_MS` now means "a day-long insurance policy," not "how
+ * fresh a since-check is allowed to be," and reusing it here would let a
+ * client's cached total go uncorrected for a full day the moment the delta
+ * check has ANY blind spot (there's always the risk of one — the whole reason
+ * this trust window exists is to bound how long a blind spot can hide).
+ */
+export const NAV_COUNTS_SINCE_TRUST_MS = 180_000;   // 3 minutes
 
 /** Cash position / usable fund in the finance top bar. */
 export const FINANCE_BAR_POLL_MS = 180_000;
 
-/** Discovery of newly created chat rooms. Existing rooms deliver over the Supabase
- *  broadcast regardless, so this only governs how soon a brand-new DM starts
- *  notifying. */
-export const INBOX_ROOMS_POLL_MS = 180_000;
+/**
+ * Discovery of newly created chat rooms.
+ *
+ * A DISTANT FALLBACK now: a new DM room announces itself on the "chat" topic
+ * (`GlobalInboxListener` picks it up via `useRealtimeTopics` the instant it's
+ * created) and existing rooms keep delivering over their own broadcast
+ * regardless. Left running, not removed, for the same reason as
+ * `NAV_COUNTS_POLL_MS` — a day-long safety net costs nothing.
+ */
+export const INBOX_ROOMS_POLL_MS = 86_400_000;   // 24 hours
 
 /** Fallback re-read of the open chat thread, in case the broadcast socket dropped. */
 export const INBOX_MESSAGES_POLL_MS = 60_000;

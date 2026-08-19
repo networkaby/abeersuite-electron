@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getNavCountsPayload, hasNavCountsChangedSince } from "@/shared/lib/nav/navCounts";
 import { handleApiError } from "@/shared/lib/api";
-import { NAV_COUNTS_POLL_MS } from "@/shared/lib/constants/polling";
+import { NAV_COUNTS_SINCE_TRUST_MS } from "@/shared/lib/constants/polling";
 
 /**
  * Every sidebar badge in one response — the per-surface { all, new } counts plus
@@ -13,9 +13,15 @@ import { NAV_COUNTS_POLL_MS } from "@/shared/lib/constants/polling";
  * last fetch (`?since=`) and, if nothing relevant changed, gets a tiny
  * `{ unchanged: true }` instead of a full recompute — no server-side cache
  * needed, since the browser tab is the one holding the last-known data.
- * `since` is only honored within one poll interval — some badge state (SLA
- * overdue, a snoozed ticket waking up) shifts purely because time passed, with
- * no row written, so it must still get picked up on the normal cadence.
+ * `since` is only honored within `NAV_COUNTS_SINCE_TRUST_MS` — some badge
+ * state (SLA overdue, a snoozed ticket waking up) shifts purely because time
+ * passed, with no row written, so a since-check that has held for a while
+ * must still fall through to the full recompute rather than being trusted
+ * indefinitely. That constant is deliberately its OWN, short number — not
+ * `NAV_COUNTS_POLL_MS` (now a day-long fallback interval) — because a client
+ * cursor is never proof its LAST answer was even right; the shorter this
+ * window, the sooner any blind spot in `hasNavCountsChangedSince` self-heals
+ * instead of being trusted for however long the tick itself has stretched to.
  */
 export async function GET(req: Request) {
     const { user, response } = await requireAuth();
@@ -25,7 +31,7 @@ export async function GET(req: Request) {
         const now = new Date();
         const sinceParam = new URL(req.url).searchParams.get("since");
         const since = sinceParam ? new Date(sinceParam) : null;
-        if (since && !Number.isNaN(since.getTime()) && now.getTime() - since.getTime() < NAV_COUNTS_POLL_MS) {
+        if (since && !Number.isNaN(since.getTime()) && now.getTime() - since.getTime() < NAV_COUNTS_SINCE_TRUST_MS) {
             if (!(await hasNavCountsChangedSince(user.id, since))) {
                 return NextResponse.json({ unchanged: true, computedAt: now.toISOString() });
             }

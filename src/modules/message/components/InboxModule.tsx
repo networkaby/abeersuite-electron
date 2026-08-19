@@ -13,6 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { INBOX_MESSAGES_POLL_MS } from "@/shared/lib/constants/polling";
+import { writeCache } from "@/shared/lib/browser/pollCache";
+
+/** Cross-tab mirror of "which room is open" — see `GlobalInboxListener.tsx`'s reader. */
+const ACTIVE_ROOM_KEY = "inbox-active-room:v1";
+/** How often the mirror re-stamps while a room is open — see the effect below. */
+const ACTIVE_ROOM_STAMP_MS = 60_000;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -124,6 +130,15 @@ export default function InboxModule({
         try {
             const res = await axios.get<Room[]>("/api/inbox/rooms");
             setRooms(res.data);
+            // This is the authoritative unread count — the sidebar's own figure
+            // is a separately-fetched, separately-cached number (`/api/nav/counts`)
+            // that only recounts on its own triggers (focus, a live "tickets"
+            // signal, its now-24h fallback poll). None of those fire just because
+            // this page navigated in, so a badge stale from before this session
+            // — say, messages that arrived while nobody was here to hear the
+            // broadcast — would sit wrong until one of them happened to. Telling
+            // it to recount against what THIS load just found closes that gap.
+            window.dispatchEvent(new CustomEvent("nav-counts:changed"));
         } catch {
             toast.error("Failed to load inbox");
         } finally {
@@ -182,16 +197,31 @@ export default function InboxModule({
         loadMessages(activeRoomId);
     }, [activeRoomId, loadMessages]);
 
-    // Tell GlobalInboxListener which room we have open so it skips it (no double-notify)
+    // Tell GlobalInboxListener which room we have open so it skips it (no double-notify).
+    // The CustomEvent covers the case where the listener lives in THIS tab; the
+    // localStorage mirror covers the leader tab being a DIFFERENT tab entirely.
+    //
+    // The mirror is re-stamped on a clock, not written once and left — a write-once
+    // "I'm viewing this room" claim can outlive the page that made it (a crashed
+    // tab, a force-closed browser, anything that skips the unmount cleanup below),
+    // and a stuck claim silently suppresses that room's notifications FOREVER,
+    // in every tab, since nothing else ever clears it. `GlobalInboxListener`
+    // only trusts a stamp younger than `ACTIVE_ROOM_TTL_MS`, so a claim nobody is
+    // renewing expires on its own within a couple of minutes — the same
+    // proof-of-life pattern as `appChannel.ts`'s `LIVE_STAMP_MS`.
     useEffect(() => {
-        window.dispatchEvent(
-            new CustomEvent("inbox:active-room", { detail: { roomId: activeRoomId || null } })
-        );
+        const roomId = activeRoomId || null;
+        const stamp = () => writeCache(ACTIVE_ROOM_KEY, { roomId }, new Date().toISOString());
+
+        window.dispatchEvent(new CustomEvent("inbox:active-room", { detail: { roomId } }));
+        stamp();
+        const ticker = roomId ? setInterval(stamp, ACTIVE_ROOM_STAMP_MS) : null;
+
         return () => {
+            if (ticker) clearInterval(ticker);
             // On unmount (user left /office/inbox), clear the active room
-            window.dispatchEvent(
-                new CustomEvent("inbox:active-room", { detail: { roomId: null } })
-            );
+            window.dispatchEvent(new CustomEvent("inbox:active-room", { detail: { roomId: null } }));
+            writeCache(ACTIVE_ROOM_KEY, { roomId: null }, new Date().toISOString());
         };
     }, [activeRoomId]);
 

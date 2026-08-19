@@ -10,10 +10,15 @@
  *
  * It keeps `usePolling`'s two habits, for the same cost reasons:
  *
- *  • NOTHING RUNS WHILE THE TAB IS HIDDEN. A signal arriving at a background tab
- *    is remembered, not acted on; the re-read happens when the tab is looked at
- *    again. Ten tabs open behind a window are ten refetches we don't pay for, and
- *    the user sees current figures the moment they look either way.
+ *  • NOTHING RUNS WHILE THE TAB IS HIDDEN, but a hidden tab ALWAYS gets one read
+ *    the instant it is looked at again — unconditionally, not only when a signal
+ *    happened to arrive while it was away. A quiet channel is ambiguous: it could
+ *    mean nothing changed, or it could mean this machine's connection was down
+ *    the whole time (the browser minimized, the leader tab's timers throttled —
+ *    see `appChannel.ts`'s `msSinceLastLive`). Silence can't be trusted to mean
+ *    "nothing to do," so the read on return isn't conditional on remembering a
+ *    signal; it is exactly `usePolling`'s own "fires once immediately on becoming
+ *    visible again," just triggered by a change channel instead of a timer.
  *
  *  • ONE READ PER BURST. Posting a voucher can announce itself more than once
  *    (post, then allocate); a settle window collapses that into a single re-read.
@@ -46,18 +51,14 @@ export function useRealtimeTopics(
         const wanted = new Set(key.split(","));
 
         let timer: ReturnType<typeof setTimeout> | null = null;
-        /** A signal arrived while hidden; owed a read when the tab comes back. */
-        let owed = false;
 
         const run = () => {
             timer = null;
-            owed  = false;
             fnRef.current();
         };
 
         const schedule = () => {
-            if (document.hidden) { owed = true; return; }
-            if (timer) return;
+            if (document.hidden || timer) return;
             timer = setTimeout(run, SETTLE_MS);
         };
 
@@ -66,10 +67,11 @@ export function useRealtimeTopics(
             schedule();
         });
 
-        const onVisibility = () => {
-            if (document.hidden || !owed) return;
-            run();
-        };
+        // A gap this tab sat hidden through is exactly what a remembered
+        // "owed" flag would try to cover — and get wrong the moment the gap
+        // held no signal at all. Reading unconditionally on return is both
+        // simpler and actually safe.
+        const onVisibility = () => { if (!document.hidden) run(); };
         document.addEventListener("visibilitychange", onVisibility);
 
         return () => {

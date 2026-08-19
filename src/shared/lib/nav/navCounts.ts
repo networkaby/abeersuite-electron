@@ -39,16 +39,30 @@ const getNavMasters = unstable_cache(
  * for the poll-and-skip route below. Stateless by design — the caller (browser
  * tab) holds the last payload and its computedAt; this just answers yes/no so a
  * quiet tab costs one small existence check instead of the full recompute.
- * Two sources, since either can change `new` without the other firing:
- *   • any ticket write (new / edited / moved / snoozed), or
- *   • this user marking a surface seen (resets that badge's `new` to zero).
+ * Three sources, since any can change `new` (or chat unread) without the others
+ * firing:
+ *   • any ticket write (new / edited / moved / snoozed),
+ *   • this user marking a surface seen (resets that badge's `new` to zero), or
+ *   • a chat message landing in a room this user belongs to.
+ *
+ * The chat leg matters more than it looks: unlike tickets, chat has its OWN
+ * live push (`GlobalInboxListener`'s broadcast → `"inbox:unread"`) — but that
+ * push only fires for a message received while a socket was actually open. A
+ * message that arrived with nobody connected (see `appChannel.ts`'s liveness
+ * gap story) leaves the sidebar's cached total wrong, and a delta check that
+ * doesn't look at chat at all would say "unchanged" forever after — the
+ * client's stale number can never self-correct. This closes that.
  */
 export async function hasNavCountsChangedSince(userId: number, since: Date): Promise<boolean> {
-    const [ticket, seen] = await Promise.all([
+    const [ticket, seen, message] = await Promise.all([
         prisma.ticket.findFirst({ where: { updatedAt: { gt: since } }, select: { id: true } }),
         prisma.userSurfaceSeen.findFirst({ where: { userId, seenAt: { gt: since } }, select: { surface: true } }),
+        prisma.chatMessage.findFirst({
+            where: { room: { members: { some: { userId } } }, createdAt: { gt: since } },
+            select: { id: true },
+        }),
     ]);
-    return ticket !== null || seen !== null;
+    return ticket !== null || seen !== null || message !== null;
 }
 
 /**

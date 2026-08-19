@@ -46,6 +46,7 @@ import {
     writeCache,
     type CachedEntry,
 } from "@/shared/lib/browser/pollCache";
+import { onChangeSignal } from "@/shared/lib/realtime/appChannel";
 
 /** Fired whenever something may have changed a count. */
 export const NAV_COUNTS_CHANGED = "nav-counts:changed";
@@ -141,6 +142,13 @@ function onVisibility() {
     }
 }
 
+/** Someone finished a ticket work / a new one arrived — badges recount instantly
+ *  instead of waiting for the poll (now a distant fallback, see NAV_COUNTS_POLL_MS).
+ *  Only the tab that becomes Realtime leader ever fires this — followers still
+ *  get it, since a badge recount is a local read, not a live push, and every
+ *  tab already recounts on its own focus/visibility. */
+let unsubscribeChangeSignal: (() => void) | null = null;
+
 /** First mounted badge wires everything up; the last one to leave tears it down. */
 function subscribe(listener: () => void) {
     listeners.add(listener);
@@ -150,6 +158,9 @@ function subscribe(listener: () => void) {
         window.addEventListener("inbox:read", onEvent);
         window.addEventListener("focus", onEvent);
         document.addEventListener("visibilitychange", onVisibility);
+        unsubscribeChangeSignal = onChangeSignal((sig) => {
+            if (sig.topics.includes("tickets")) onEvent();
+        });
         void refresh();
         startTimer();
     }
@@ -161,6 +172,8 @@ function subscribe(listener: () => void) {
             window.removeEventListener("inbox:read", onEvent);
             window.removeEventListener("focus", onEvent);
             document.removeEventListener("visibilitychange", onVisibility);
+            unsubscribeChangeSignal?.();
+            unsubscribeChangeSignal = null;
             stopTimer();
             unsubscribeCache?.();
             unsubscribeCache = null;
