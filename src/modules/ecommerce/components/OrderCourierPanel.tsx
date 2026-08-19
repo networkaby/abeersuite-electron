@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import axios from "axios";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, Truck, ExternalLink, RefreshCw, Printer, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -261,13 +260,6 @@ export default function OrderCourierPanel({
                         <a href={delivery.trackingUrl} target="_blank" rel="noreferrer">
                             <ExternalLink size={13} /> Track shipment
                         </a>
-                    </Button>
-                )}
-                {delivery && (
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href="/office/orders/delivery">
-                            <ExternalLink size={13} /> Delivery board
-                        </Link>
                     </Button>
                 )}
                 {canChange && !picking && (

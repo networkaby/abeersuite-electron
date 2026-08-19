@@ -83,7 +83,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 if (cancelled) return;
                 if (!data.editable) {
                     toast.error("This order can't be edited at its current stage.");
-                    router.push("/office/orders");
+                    router.push("/office/ecommerce/orders");
                     return;
                 }
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
@@ -103,7 +103,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, `Could not load the ${mode} to edit`));
-                router.push(mode === "order" ? "/office/orders" : "/office/accountancy/vouchers-registers/estimates");
+                router.push(mode === "order" ? "/office/ecommerce/orders" : "/office/accountancy/vouchers-registers/estimates");
             }
         })();
         return () => { cancelled = true; b.resetDraft(); };
@@ -146,7 +146,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     roundOff: mode === "order" ? b.roundOff : 0,
                 });
                 toast.success(mode === "order" ? "Order updated" : "Estimate updated");
-                router.push(mode === "order" ? "/office/orders" : "/office/accountancy/vouchers-registers/estimates");
+                router.push(mode === "order" ? "/office/ecommerce/orders" : "/office/accountancy/vouchers-registers/estimates");
             } catch (e: unknown) {
                 toast.error(extractApiError(e, `Failed to update ${mode}`));
             } finally {

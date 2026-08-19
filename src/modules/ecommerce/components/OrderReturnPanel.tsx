@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import axios from "axios";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { Loader2, Undo2, ExternalLink, IndianRupee } from "lucide-react";
+import { Loader2, Undo2, IndianRupee } from "lucide-react";
 import { ORDER_STAGE } from "@/modules/order/lib/orderPipeline";
 import { DELIVERY_STAGE } from "@/modules/delivery/lib/shiprocketStatus";
 
@@ -124,11 +123,6 @@ export default function OrderReturnPanel({
                         </p>
                         {refund.reason && <p className="text-xs text-muted-foreground mt-0.5">{refund.reason}</p>}
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href="/office/orders/refund">
-                            <ExternalLink size={13} /> Refund board
-                        </Link>
-                    </Button>
                 </div>
             )}
 

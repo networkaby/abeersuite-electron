@@ -71,7 +71,6 @@ import {
     LayoutTemplate,
     Library,
     LifeBuoy,
-    ListOrdered,
     ListTree,
     MapPin,
     MessageCircleQuestion,
@@ -98,7 +97,6 @@ import {
     Ruler,
     Scale,
     ScrollText,
-    Send,
     Settings,
     ShieldAlert,
     ShieldCheck,
@@ -579,19 +577,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
 
-    // Orders (O2C backbone — counter + online + office orders on one pipeline)
-    {
-        label: "Orders",
-        icon: ListOrdered,
-        key: "orders",
-        dashboardHref: "/office/orders",
-        pathPrefixes: ["/office/orders"],
-        children: [
-            { label: "Orders board", icon: ListOrdered, href: "/office/orders" },
-            { label: "Delivery", icon: Send, href: "/office/orders/delivery" },
-            { label: "Refunds", icon: Undo2, href: "/office/orders/refund" },
-        ],
-    },
 
 
 
@@ -640,8 +625,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //     dashboardHref: "",
     //     pathPrefixes: [""],
     //     children: [
-    //         // Live: the Delivery board (P8) is under Orders → Delivery
-    //         // (/office/orders/delivery); courier config (Shiprocket / Custom / Local
+    //         // Live: the Delivery board (P8) is under Ecommerce → Orders (order
+    //         // detail delivery panel); courier config (Shiprocket / Custom / Local
     //         // boy) is under Settings → Couriers (/office/settings/couriers).
     //         // Still roadmap:
     //         // { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
