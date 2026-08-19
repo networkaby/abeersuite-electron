@@ -14,7 +14,12 @@ export default async function ReconnectModuleLayout({ children }: { children: Re
 
     return (
         <div className="flex h-full flex-col">
-            <PathBreadcrumb root={{ href: "/office/crm/reconnect", label: "Reconnect" }} escapeBack labels={{ reconnect: "Reconnect" }} />
+            <PathBreadcrumb
+                root={{ href: "/office/crm/deals", label: "CRM" }}
+                basePath="/office/crm"
+                escapeBack
+                labels={{ reconnect: "Reconnect" }}
+            />
             <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
         </div>
     );

@@ -79,8 +79,8 @@ export default async function DeviceLocationPage() {
     return (
         <div className="flex h-full flex-col overflow-hidden">
             <PathBreadcrumb
-                root={{ href: "/office/repairing", label: "Repairs" }}
-                labels={{ "device-location": "Device Locations" }}
+                root={{ href: "/office/repairing", label: "Repair & Warranty" }}
+                labels={{ "device-location": "Device Location" }}
                 escapeBack
             />
             <div className="space-y-6 overflow-y-auto p-4">

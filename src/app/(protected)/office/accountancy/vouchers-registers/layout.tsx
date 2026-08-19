@@ -12,7 +12,7 @@ export default async function VouchersRegistersLayout({ children }: { children: 
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
                 escapeBack
                 labels={{
-                    "vouchers-registers": "Registers",
+                    "vouchers-registers": "Vouchers Register",
                     "all": "All Vouchers",
                     "sale-returns": "Sale Returns",
                     "purchase-returns": "Purchase Returns",

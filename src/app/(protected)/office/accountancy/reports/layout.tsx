@@ -11,9 +11,25 @@ export default function AccountancyReportsLayout({ children }: { children: React
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
                 // Day Book renders its own back-button header inside the
                 // page — hide the layout breadcrumb so it doesn't duplicate.
-                hideOn={["/office/accountancy/reports/day-book"]}
+                // GST pages live under this route folder for code-organization
+                // reasons only — the sidebar treats them as their own
+                // "Compliance" module, so they get their own breadcrumb via
+                // gst/layout.tsx instead of this one.
+                hideOn={[
+                    "/office/accountancy/reports/day-book",
+                    "/office/accountancy/reports/gst",
+                    "/office/accountancy/reports/gst/outward-supplies",
+                    "/office/accountancy/reports/gst/inward-supplies",
+                    "/office/accountancy/reports/gst/hsn-summary",
+                    "/office/accountancy/reports/gst/liability",
+                    "/office/accountancy/reports/gst/classification",
+                ]}
+                // "reports" is a route-folder implementation detail — the
+                // sidebar has no matching "Reports" node, so it's hidden
+                // rather than shown as a crumb (see the sidebar-follows-not-
+                // route breadcrumb rule).
+                hide={new Set(["reports"])}
                 labels={{
-                    "reports": "Reports",
                     "balance-sheet": "Balance Sheet",
                     "profit-loss": "Profit & Loss",
                     "trial-balance": "Trial Balance",
@@ -26,13 +42,7 @@ export default function AccountancyReportsLayout({ children }: { children: React
                     "bank-reconciliation": "Bank Reconciliation",
                     "ledger-outstandings": "Ledger Outstandings",
                     "optional-vouchers": "Optional Vouchers",
-                    "pending-vouchers": "Pending Vouchers",
-                    "gst": "GST",
-                    "outward-supplies": "Outward Supplies",
-                    "inward-supplies": "Inward Supplies",
-                    "hsn-summary": "HSN Summary",
-                    "liability": "Liability",
-                    "classification": "Classification",
+                    "pending-vouchers": "Pending Inventory",
                 }}
             />
             <div className="min-h-0 flex-1 overflow-hidden">

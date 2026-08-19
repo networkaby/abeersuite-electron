@@ -329,9 +329,9 @@ export default function TicketDetailPage() {
     return (
         <div className="flex h-full flex-col">
             <PathBreadcrumb
-                root={{ href: "/office/repairing/tickets", label: "Tickets" }}
+                root={{ href: "/office/repairing", label: "Repair & Warranty" }}
                 escapeBack
-                labels={{ tickets: "Tickets" }}
+                labels={{ tickets: "All Repair" }}
             />
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
 

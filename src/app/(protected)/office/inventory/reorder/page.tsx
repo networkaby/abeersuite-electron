@@ -813,7 +813,7 @@ export default function ReorderPage() {
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
                         <BreadcrumbItem>
-                            <BreadcrumbPage>Reorder Status</BreadcrumbPage>
+                            <BreadcrumbPage>Reorder</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>

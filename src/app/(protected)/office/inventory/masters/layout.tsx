@@ -13,9 +13,12 @@ export default function InventoryMastersLayout({ children }: { children: React.R
                     "masters": "Masters",
                     "gst-rates": "GST Rates",
                     "warranty-terms": "Warranty Terms",
-                    "product-groups": "Product Groups",
+                    "product-groups": "Groups",
                     "attribute-masters": "Attribute Masters",
                     "boms": "BOMs",
+                    "brands": "Brands",
+                    "units": "Units",
+                    "categories": "Categories",
                 }}
             />
             <div className="flex-none px-6">

@@ -15,7 +15,7 @@ const BASE = "/office/accountancy/masters";
 export const MASTERS_NAV_LINKS: MastersNavLink[] = [
     { label: "Account Groups", href: `${BASE}/groups`, icon: FolderTree },
     { label: "Ledgers", href: `${BASE}/ledgers`, icon: BookOpen },
-    { label: "Chart of Accounts", href: `${BASE}/chart-of-accounts`, icon: Wallet },
+    { label: "Chart of accounts", href: `${BASE}/chart-of-accounts`, icon: Wallet },
     {
         label: "Opening Balance",
         href: `${BASE}/opening-balance`,

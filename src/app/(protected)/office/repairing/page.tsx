@@ -121,7 +121,7 @@ export default async function RepairingDashboardPage({
 
     return (
         <div className="flex h-full flex-col overflow-hidden">
-            <PathBreadcrumb root={{ href: "/office/repairing", label: "Repairs" }} escapeBack />
+            <PathBreadcrumb root={{ href: "/office/repairing", label: "Repair & Warranty" }} escapeBack />
             <div className="space-y-6 overflow-y-auto p-4">
             <div className="flex items-center justify-between">
                 <div>

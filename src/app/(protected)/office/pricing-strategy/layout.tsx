@@ -20,8 +20,8 @@ export default async function PricingStrategyLayout({ children }: { children: Re
                 labels={{
                     "strategies": "Strategies",
                     "costing": "Costing",
-                    "needs-attention": "Needs Attention",
-                    "update-print-labels": "Update & Print Labels",
+                    "needs-attention": "Needs attention",
+                    "update-print-labels": "Update prices",
                     "print-labels": "Print Labels",
                 }}
             />

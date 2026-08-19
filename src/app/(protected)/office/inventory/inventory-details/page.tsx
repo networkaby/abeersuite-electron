@@ -217,11 +217,11 @@ export default function InventoryDetailsPage() {
                             {selectedId && detail ? (
                                 <BreadcrumbLink asChild>
                                     <button type="button" onClick={() => setSelectedId(null)} className="transition-colors hover:text-foreground">
-                                        Inventory Details
+                                        Item Ledger
                                     </button>
                                 </BreadcrumbLink>
                             ) : (
-                                <BreadcrumbPage>Inventory Details</BreadcrumbPage>
+                                <BreadcrumbPage>Item Ledger</BreadcrumbPage>
                             )}
                         </BreadcrumbItem>
                         {selectedId && detail && (

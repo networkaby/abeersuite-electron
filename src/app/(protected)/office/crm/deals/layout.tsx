@@ -14,7 +14,12 @@ export default async function DealsModuleLayout({ children }: { children: React.
 
     return (
         <div className="flex h-full flex-col">
-            <PathBreadcrumb root={{ href: "/office/crm/deals", label: "Deals" }} escapeBack labels={{ deals: "Deals" }} />
+            <PathBreadcrumb
+                root={{ href: "/office/crm/deals", label: "CRM" }}
+                basePath="/office/crm"
+                escapeBack
+                labels={{ deals: "Deals" }}
+            />
             <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
         </div>
     );

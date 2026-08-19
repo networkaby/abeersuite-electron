@@ -324,7 +324,7 @@ export default function StockSummaryPage() {
                     <BreadcrumbList>
                         <BreadcrumbItem>
                             <BreadcrumbLink asChild>
-                                <Link href="/office/inventory">Inventory</Link>
+                                <Link href="/office/accountancy">Accountancy</Link>
                             </BreadcrumbLink>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />

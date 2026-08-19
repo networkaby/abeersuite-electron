@@ -9,7 +9,7 @@ export default function CustomerRetentionLayout({ children }: { children: React.
     return (
         <div className="flex h-full flex-col">
             <PathBreadcrumb
-                root={{ href: "/office/customer-retention", label: "Customer Retention" }}
+                root={{ href: "/office/customer-retention", label: "Retention" }}
                 escapeBack
                 labels={{
                     "coupons": "Coupons",
