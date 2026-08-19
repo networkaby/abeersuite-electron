@@ -21,9 +21,11 @@
 
 ### DB Rules
 
+---
+
 - Two DBs: **demo** and **live**.
 - `CURRENT_DB=demo` → local PostgreSQL demo data; reset allowed.
-- `CURRENT_DB=live` → production data; **never full-reset**.
+- `live` → production data; **never full-reset**.
 - Schema changes must include migrations committed to `origin/dev` or `main`.
 - Deployment must apply migrations without causing problems.
 
@@ -61,7 +63,7 @@ Commands: `pnpm seed:check-docs` · `pnpm seed:fix-docs` · `pnpm precommit` · 
 
 ## 7. Cost & Performance
 
-- **DB:** DB pagination, select needed columns only, avoid `SELECT *` and query-per-item.
+- **DB:** DB pagination, select needed columns only, avoid `SELECT `\* and query-per-item.
 - **Server:** browser cache, batch mutations, defer non-critical work, ISR for store pages, short TTL for office.
 - **UX:** optimistic updates with rollback, prefetch, no blank flicker, show cached data while refreshing.
 - **Priority:** **UX → DB → Server**.

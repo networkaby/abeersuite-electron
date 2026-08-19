@@ -3,7 +3,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { validateRequest } from "@/shared/lib/api";
@@ -33,11 +33,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
-    const nbRows = await prisma.account.findMany({
-        where:  { id: { in: [...new Set(voucher.lines.map((l) => l.accountId))] } },
-        select: { id: true, normalBalance: true },
-    });
-    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
+    // Same nature resolution the engine used when it applied these deltas —
+    // bare `normalBalance` would skip the null-nature ledgers and drift the cache.
+    const nbById = await loadNormalBalances(prisma, voucher.lines.map((l) => l.accountId));
 
     try {
         const audit = await prisma.$transaction(async (tx) => {

@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
-import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { toNumber, balanceDelta, loadNormalBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -81,13 +81,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 if (spine && spine.status === "POSTED") {
                     // Reverse the cached Account.balance, then mark the spine CANCELLED so
                     // the truth path (Balance Sheet / ledgers) drops it. No counter-entry.
-                    const accIds = [...new Set(spine.lines.map((l) => l.accountId))];
-                    const nbById = new Map(
-                        (await tx.account.findMany({ where: { id: { in: accIds } }, select: { id: true, normalBalance: true } }))
-                            .map((a) => [a.id, a.normalBalance]),
-                    );
+                    // Nature must resolve exactly as the engine resolved it on post
+                    // (group fallback included). The old `!` here fed `null` into
+                    // balanceDelta, which fails `=== "DEBIT"` and silently reverses
+                    // a null-nature ledger on the CREDIT side — a sign flip, not a
+                    // no-op. Skip a line whose nature is genuinely unknown instead.
+                    const nbById = await loadNormalBalances(tx, spine.lines.map((l) => l.accountId));
                     for (const line of spine.lines) {
-                        const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
+                        const nb = nbById.get(line.accountId);
+                        if (!nb) continue;
+                        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
                         await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                     }
                     await setSpineLifecycle(tx, voucher.universalVoucherId, {

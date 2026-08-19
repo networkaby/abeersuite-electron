@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -30,12 +30,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Spine lines are scalar — resolve normalBalance for the reversal.
-    const nbRows = await prisma.account.findMany({
-        where:  { id: { in: [...new Set(voucher.lines.map((l) => l.accountId))] } },
-        select: { id: true, normalBalance: true },
-    });
-    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
+    // Spine lines are scalar — resolve the reversal's nature exactly as the
+    // engine resolved it when posting (group fallback included), or the
+    // null-nature ledgers never get their delta taken back out.
+    const nbById = await loadNormalBalances(prisma, voucher.lines.map((l) => l.accountId));
 
     try {
         ensureCancelable(voucher);

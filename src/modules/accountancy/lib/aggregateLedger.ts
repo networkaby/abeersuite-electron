@@ -4,7 +4,7 @@
 import type { Prisma, VoucherStatus } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
-import { balanceDelta } from "./balance";
+import { balanceDelta, toNumber } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 
 export type LedgerMode = "posted" | "provisional";
@@ -186,6 +186,69 @@ export async function aggregateClosingAsOf(
     // Accounts that have a master opening but no journal lines yet still need to appear.
     for (const [accId, openVal] of masterOpening) {
         if (!closing.has(accId)) closing.set(accId, openVal);
+    }
+    return closing;
+}
+
+/**
+ * Same shape as `aggregateClosingAsOf`, but built from the running
+ * `Account.balance` cache instead of re-summing every GL line ever posted.
+ *
+ * Why this is safe: `Account.balance` is maintained incrementally by the ONE GL
+ * writer (`engineGlArm` / `enginePostSpine`) inside the posting's own
+ * transaction; a trading edit rebuilds via `recomputeAccountBalances`, and the
+ * cancel / hard-delete routes reverse their own deltas. So a create costs a
+ * per-line increment and a removal costs a per-line decrement — neither ever
+ * needs a whole-ledger scan.
+ *
+ * That symmetry is the whole invariant, and it is load-bearing: post and
+ * reverse must resolve an account's Dr/Cr nature identically. Both sides go
+ * through `loadNormalBalances` (`normalBalance` ?? group fallback) for exactly
+ * that reason — see the note there for the drift this cost us before. The
+ * `recompute-balances` maintenance route stays the periodic drift check.
+ *
+ * Three corrections turn the cache into a true "closing as of a date":
+ *   • `Account.balance` is movement-only — the master `openingBalance` is folded
+ *     in at read time, exactly as `aggregateClosingAsOf` does.
+ *   • `Account.balance` counts every POSTED line whatever its date, but closing
+ *     means `date <= asOf`. Future-dated postings are subtracted back out. That
+ *     query is indexed on `date` and normally matches nothing.
+ *   • Accounts with neither movement nor a master opening are left out, so
+ *     callers that list sub-ledgers don't sprout empty ₹0 rows.
+ *
+ * Use for the poll-driven top-bar surfaces. Reports that must be
+ * provably-from-truth should keep calling `aggregateClosingAsOf`.
+ */
+export async function closingFromCache(
+    asOf: Date,
+    nbMap: Map<number, "DEBIT" | "CREDIT">,
+): Promise<Map<number, number>> {
+    const [accounts, futureSums, masterOpening] = await Promise.all([
+        prisma.account.findMany({ select: { id: true, balance: true } }),
+        prisma.voucherGlLine.groupBy({
+            by: ["accountId", "type"],
+            _sum: { amount: true },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { gt: asOf } } },
+        }),
+        loadMasterOpeningBalances(asOf, nbMap),
+    ]);
+
+    const closing = new Map<number, number>();
+    for (const a of accounts) {
+        if (!nbMap.has(a.id)) continue;
+        const running = toNumber(a.balance ?? 0);
+        if (running !== 0) closing.set(a.id, running);
+    }
+    // Undo anything dated after `asOf` — it is in the running cache but is not
+    // part of today's closing.
+    for (const r of futureSums) {
+        const nb = nbMap.get(r.accountId);
+        if (!nb) continue;
+        const back = balanceDelta(nb, r.type, toNumber(r._sum.amount ?? 0));
+        closing.set(r.accountId, (closing.get(r.accountId) ?? 0) - back);
+    }
+    for (const [accId, openVal] of masterOpening) {
+        closing.set(accId, (closing.get(accId) ?? 0) + openVal);
     }
     return closing;
 }

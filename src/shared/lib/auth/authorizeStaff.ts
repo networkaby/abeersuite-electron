@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
-import { timingSafeEqual } from "crypto";
+import { randomBytes, timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
 import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
@@ -61,6 +61,55 @@ function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | nu
     };
 }
 
+/**
+ * Anchor the env super admin to a REAL `User` row and return its id.
+ *
+ * `checkSuperAdminEnv` mints the sentinel id "0", which has no `User` row. That
+ * is harmless for relation-free scalars (`UniversalVoucher.createdById` is
+ * explicitly one) but every FK into `User` rejects it — `AuditLog.actorId` and
+ * `.restoredById`, `Account.reconciledById`, `PosShift.closedById`,
+ * `ChatRoom.ownerUserId`, `ChatMessage.senderUserId`. The failure is a P2003
+ * raised mid-transaction, so the whole operation rolls back: voucher
+ * hard-delete and recycle-bin restore both die for the one identity that
+ * `admin:bypass` exists to authorise. Nothing is lost, but nothing lands, and
+ * the error surfaces far from its cause.
+ *
+ * Deliberately BEST-EFFORT. The env check is run before the domain allowlist
+ * and any DB lookup precisely so the super admin can still sign into an empty
+ * or unreachable database; falling back to "0" keeps that escape hatch intact
+ * (degraded exactly as today) instead of turning a dead DB into a locked door.
+ * The upsert also means a wiped DB self-heals on the next super-admin login,
+ * with no seed step to remember.
+ *
+ * Borrowing another user's id was the alternative and is worse: `AuditLog`
+ * exists to record who destroyed a voucher — the one action with no undo — so
+ * attributing it to a real person who did not do it corrupts the trail exactly
+ * where it matters most.
+ *
+ * The stored password is a bcrypt hash of throwaway randomness, so the normal
+ * credential path can never authenticate as this row; the env vars remain the
+ * only way in. It is a valid hash (not a sentinel string) so `bcrypt.compare`
+ * fails cleanly rather than choking on a malformed digest.
+ */
+async function resolveSuperAdminId(prisma: PrismaClient, u: StaffAuthUser): Promise<string> {
+    try {
+        const row = await prisma.user.upsert({
+            where:  { email: u.email },
+            update: {},
+            create: {
+                name:     u.name,
+                email:    u.email,
+                password: bcrypt.hashSync(randomBytes(32).toString("hex"), 10),
+            },
+            select: { id: true },
+        });
+        return String(row.id);
+    } catch {
+        // DB empty / unreachable — keep the sentinel and let the login through.
+        return u.id;
+    }
+}
+
 export async function authorizeStaffCredentials(
     prisma: PrismaClient,
     email: string,
@@ -70,11 +119,14 @@ export async function authorizeStaffCredentials(
     // identifier costs nothing (no bcrypt, no DB).
     if (isLoginBlocked(email)) return null;
 
-    // Env super-admin takes priority — no DB needed.
+    // Env super-admin takes priority — credentials are verified with no DB.
+    // The DB is touched only afterwards, to swap the sentinel id for a real
+    // User row's id so FK-bearing writes (audit log, reconciliation, POS shift
+    // close) work; it degrades to "0" if that is not possible.
     const superAdmin = checkSuperAdminEnv(email, password);
     if (superAdmin) {
         clearLoginFailures(email);
-        return superAdmin;
+        return { ...superAdmin, id: await resolveSuperAdminId(prisma, superAdmin) };
     }
 
     if (!isStaffEmailDomainAllowed(email)) return null;

@@ -64,6 +64,44 @@ export function balanceDelta(
     return entryType === "CREDIT" ? amount : -amount;
 }
 
+/**
+ * Resolve each account's normal side the SAME way the posting engine does:
+ * `normalBalance`, else the group's natural side, else null (nature unknown).
+ *
+ * Use this for every reversal of a cached `Account.balance` (cancel / hard-delete).
+ * The engine (`engineGlArm`) applies its delta with the group fallback, so a
+ * reversal that reads bare `normalBalance` is NOT its mirror image: the ~25
+ * null-`normalBalance` ledgers (Payment Gateway, a Bank current a/c, Unsecured
+ * Loans, Suspense…) get incremented on post and then either skipped on reverse
+ * (`if (!nb) continue`) or — worse — sign-flipped, because `balanceDelta(null,…)`
+ * fails the `=== "DEBIT"` test and silently takes the CREDIT branch. Either way
+ * the cache drifts away from the ledger, permanently.
+ *
+ * One query, and the reverse paths already ran an `account.findMany` here, so
+ * routing them through this costs nothing extra.
+ */
+export async function loadNormalBalances(
+    tx: import("@/generated/prisma/client").Prisma.TransactionClient,
+    accountIds: number[],
+): Promise<Map<number, "DEBIT" | "CREDIT" | null>> {
+    const ids = [...new Set(accountIds)];
+    const out = new Map<number, "DEBIT" | "CREDIT" | null>();
+    if (ids.length === 0) return out;
+
+    const rows = await tx.account.findMany({
+        where:  { id: { in: ids } },
+        select: { id: true, normalBalance: true, group: { select: { type: true } } },
+    });
+    for (const r of rows) {
+        out.set(
+            r.id,
+            r.normalBalance
+                ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type) : null),
+        );
+    }
+    return out;
+}
+
 /** True when sum(debits) === sum(credits) within a rounding tolerance. */
 export function isBalanced(lines: LineForBalance[]): boolean {
     let net = 0;

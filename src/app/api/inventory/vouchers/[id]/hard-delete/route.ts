@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { toNumber, balanceDelta, loadNormalBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -91,12 +91,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // the JE is currently live (a cancelled / soft-deleted JE was already
                 // neutralised, so needsReversal is false and we never get here).
                 if (origJe && origJe.status === "POSTED" && !origJe.deletedAt) {
-                    // Spine lines are scalar — resolve normalBalance in one lookup.
-                    const nbRows = await tx.account.findMany({
-                        where:  { id: { in: [...new Set(origJe.lines.map((l) => l.accountId))] } },
-                        select: { id: true, normalBalance: true },
-                    });
-                    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
+                    // Spine lines are scalar — resolve nature in one lookup, the
+                    // same way the engine did when it applied these deltas.
+                    const nbById = await loadNormalBalances(tx, origJe.lines.map((l) => l.accountId));
                     for (const line of origJe.lines) {
                         const nb = nbById.get(line.accountId);
                         if (!nb) continue;

@@ -4,7 +4,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { aggregateClosingAsOf, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateClosingAsOf, closingFromCache, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { parseBank } from "@/modules/accountancy/lib/bankParticulars";
 import { parseCreditCard } from "@/modules/accountancy/lib/creditCardParticulars";
 import { parseBnpl } from "@/modules/accountancy/lib/bnplParticulars";
@@ -93,7 +93,14 @@ export async function GET(req: Request) {
         }
 
         const nbMap = await loadNormalBalanceMap();
-        const closingMap = await aggregateClosingAsOf(asOf, nbMap);
+        // "As of today" (what the top bar polls) reads the running
+        // Account.balance cache. A historical `?asOf=` cannot: the cache is a
+        // now-figure, and rewinding it to a past date would mean summing
+        // everything posted since — the very scan we are avoiding. So that
+        // path stays on the from-truth aggregation.
+        const closingMap = asOfParam
+            ? await aggregateClosingAsOf(asOf, nbMap)
+            : await closingFromCache(asOf, nbMap);
 
         const accounts = await prisma.account.findMany({
             where: { isActive: true, group: { name: { in: GROUP_NAMES } } },

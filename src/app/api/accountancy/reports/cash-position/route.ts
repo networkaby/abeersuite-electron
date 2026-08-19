@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { businessToday } from "@/shared/lib/format/formatDate";
-import { aggregateClosingAsOf, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { closingFromCache, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 
 // GET /api/accountancy/reports/cash-position
@@ -46,8 +46,11 @@ export async function GET(req: Request) {
         const asOf = businessToday();
         asOf.setHours(23, 59, 59, 999);
 
+        // Cache-path read: the running Account.balance, not a whole-ledger
+        // re-sum. See closingFromCache() for why that is sound and what it
+        // corrects for.
         const nbMap = await loadNormalBalanceMap();
-        const closingMap = await aggregateClosingAsOf(asOf, nbMap);
+        const closingMap = await closingFromCache(asOf, nbMap);
 
         // Wrap into AccountAggregate shape for buildGroupTree
         const aggMap = new Map(
