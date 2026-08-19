@@ -31,6 +31,7 @@ import { PosTopBar } from "@/modules/pos/components/PosTopBar";
 import { PosActionRail } from "@/modules/pos/components/PosActionRail";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import { PosUpsellDrawer } from "@/modules/pos/components/PosUpsellDrawer";
+import { PosProductExplorer } from "@/modules/pos/components/PosProductExplorer";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import HelpQuickForm from "@/modules/help/components/HelpQuickForm";
 import { DealFormDialog } from "@/modules/deals/components";
@@ -635,6 +636,15 @@ export function PosScreenShell({
                 onClose={() => setChatOpen(false)}
                 currentUserId={currentUserId}
                 currentUserName={sessionUser?.name ?? undefined}
+            />
+
+            {/* Product Explorer — thin left-edge hint strip, hover or F3 to
+            browse the catalogue visually instead of typing into the scan box. */}
+            <PosProductExplorer
+                products={b.allProducts}
+                cart={b.cart}
+                addToCart={b.addToCart}
+                onHoverProduct={b.setHoverPreviewProduct}
             />
         </div>
     );

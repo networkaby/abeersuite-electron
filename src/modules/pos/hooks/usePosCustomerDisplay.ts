@@ -11,7 +11,7 @@ import { useEffect } from "react";
 import { calcLineTotals } from "@/modules/inventory/lib/stock";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
-import type { Snapshot, CartLine } from "@/modules/pos/lib/posDraftTypes";
+import type { Snapshot, CartLine, ProductOption } from "@/modules/pos/lib/posDraftTypes";
 
 export type PosCustomerDisplayParams = {
     /** Suppresses the coordinator while the green "Thank You ₹X" frame is held. */
@@ -37,15 +37,20 @@ export type PosCustomerDisplayParams = {
     couponRupees: number;
     posExtraCharges: { label: string; amount: number; taxAmount?: number }[];
     posTierLabel: string | undefined;
+    /** Product Explorer hover — the cashier's mouse is resting on this tile, not
+     *  yet added. Shown standalone ("Add this item?") so the customer sees and
+     *  can agree to it before it lands on the bill. null = not hovering. */
+    hoverPreview: ProductOption | null;
 };
 
 // Single source of truth for what the customer-facing DQ11 shows. Priority:
 //   1. thank-you (held by displayHold after a successful sale)
 //   2. UPI QR — checkout open and UPI amount entered
 //   3. payment summary — checkout open with cash/extras entered
-//   4. cart — items in cart
-//   5. customer welcome — customer picked, cart empty
-//   6. idle slideshow — nothing else
+//   4. Explorer hover preview — cashier's mouse resting on a not-yet-added tile
+//   5. cart — items in cart
+//   6. customer welcome — customer picked, cart empty
+//   7. idle slideshow — nothing else
 // Debounced — the DQ11 takes ~3s to transmit a frame at 921600 baud, so
 // rapid keystrokes (typing/clearing UPI amount) would queue stale frames.
 // Wait 250ms after the last state change before pushing.
@@ -55,6 +60,7 @@ export function usePosCustomerDisplay({
     cashNet, splitsSum, payableTotal, collected,
     cart, snapshot, subtotal, discountAmount, total, totalDiscount,
     effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
+    hoverPreview,
 }: PosCustomerDisplayParams) {
     useEffect(() => {
         if (displayHold === "thankyou") return;
@@ -75,6 +81,18 @@ export function usePosCustomerDisplay({
                     total: payableTotal,
                     cashPaid: cashNet,
                     balance: Math.max(0, payableTotal - collected),
+                });
+            } else if (hoverPreview) {
+                // Standalone single-item view, no discount/tax ladder — this item
+                // isn't on the bill yet, it's a "does this look right?" preview.
+                const price = hoverPreview.effectiveSalePricePaise != null ? hoverPreview.effectiveSalePricePaise / 100 : 0;
+                const mrp = hoverPreview.mrpPaise != null ? hoverPreview.mrpPaise / 100 : undefined;
+                const barcode = hoverPreview.barcodePricePaise != null ? hoverPreview.barcodePricePaise / 100 : undefined;
+                void qrDisplay.cart({
+                    title: "Add this item?",
+                    items: [{ name: hoverPreview.name, qty: 1, price, mrp, barcode }],
+                    subtotal: price,
+                    total: price,
                 });
             } else if (cart.length > 0) {
                 // Customer-facing price ladder — same computed view as the receipt.
@@ -140,5 +158,6 @@ export function usePosCustomerDisplay({
         cashNet, upiEntered, upiVpa, splitsSum, collected,
         subtotal, discountAmount, total,
         totalDiscount, effDiscountAmount, effRedemptionRupees, couponRupees,
+        hoverPreview,
     ]);
 }

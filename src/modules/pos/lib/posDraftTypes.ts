@@ -80,6 +80,19 @@ export type ProductOption = {
     protected?: boolean;
     unit?: { code: string };
     warrantyTerm?: { name: string; durationDays: number | null } | null;
+    /// Merchandising hierarchy (brand / storefront group-tree / cross-cutting
+    /// category) — already selected by the lookup API, just not previously
+    /// typed here. Used by the Product Explorer's browse facets.
+    groupId?: number | null;
+    categoryId?: number | null;
+    brand?: { name: string } | null;
+    /// Shelf photo, if the product has one — shown as a small thumbnail on the
+    /// Product Explorer's tiles.
+    imageUrl?: string | null;
+    /// Free-form naming/attribute values keyed by InvAttributeMaster.key
+    /// ("colour", "storage", "os", …). Explorer reads "colour"/"color" for a
+    /// quick variant badge; nothing else here is admin-defined and unstable.
+    attrsJson?: Record<string, string> | null;
     /// When true, the cashier must fill the line note before checkout. Snapshotted
     /// onto the cart line at add-to-cart (mirrors warrantyLabel).
     requireSaleNote?: boolean;

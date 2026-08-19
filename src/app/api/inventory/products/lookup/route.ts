@@ -53,6 +53,8 @@ const PRODUCT_SELECT = {
     mrpPaise:          true,
     savedSalePricePaise: true,
     requireSaleNote:   true,
+    imageUrl:          true,
+    attrsJson:         true,
     codes:        { select: { kind: true, value: true }, orderBy: { sortOrder: "asc" as const } },
     groupId:           true,
     categoryId:        true,
@@ -116,6 +118,13 @@ async function enrichProducts(products: ProductRow[], barcodeBands: ReturnType<t
     });
 }
 
+/** Bump whenever PRODUCT_SELECT gains/loses a field — the browser's IndexedDB
+ *  cache merges delta rows by id, so an already-cached row otherwise keeps its
+ *  OLD shape (missing the new column) until it happens to get touched. This is
+ *  the one part of the stamp that isn't a DB timestamp/count, so it's a manual
+ *  version, not something to compute — bump it, don't try to make it clever. */
+const SELECT_SHAPE_VERSION = "2"; // v2: + imageUrl, attrsJson
+
 /**
  * Fingerprint of everything the enrichment depends on that does NOT live on a
  * product row — the tax cascade's group/category chain and org defaults, the
@@ -138,6 +147,7 @@ async function catalogueStamp(): Promise<string> {
         prisma.gstRate.count(),
     ]);
     return [
+        SELECT_SHAPE_VERSION,
         org?.updatedAt?.toISOString() ?? "-",
         groups._max.updatedAt?.toISOString() ?? "-",
         categories._max.updatedAt?.toISOString() ?? "-",

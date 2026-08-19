@@ -66,6 +66,11 @@ export function usePosBilling(opts: {
     const [productQuery, setProductQuery] = useState("");
     const [productHighlight, setProductHighlight] = useState(0);
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
+    // Product Explorer hover — shown standalone on the customer-facing DQ11
+    // ("Add this item?") while the cashier's mouse rests on a tile, so the
+    // customer can see and agree to it before it lands in the cart. null =
+    // not hovering (usePosCustomerDisplay falls through to the real cart).
+    const [hoverPreviewProduct, setHoverPreviewProduct] = useState<ProductOption | null>(null);
     // Active POS-service catalogue (Settings → POS Services) — surfaced in the
     // same search list AFTER product matches, added to the cart like products.
     const [allServices, setAllServices] = useState<PosServiceOption[]>([]);
@@ -1355,6 +1360,7 @@ export function usePosBilling(opts: {
         cashNet, splitsSum, payableTotal, collected,
         cart, snapshot, subtotal, discountAmount, total, totalDiscount,
         effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
+        hoverPreview: hoverPreviewProduct,
     });
 
     // Credit-limit guard — true when the on-credit portion of this sale would
@@ -1384,7 +1390,8 @@ export function usePosBilling(opts: {
         fetchSnapshot, onPartyPicked, clearCustomer, changingParty,
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
-        filteredProducts, cart, setCart, renderCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
+        filteredProducts, allProducts, hoverPreviewProduct, setHoverPreviewProduct,
+        cart, setCart, renderCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
         cartSelectedId, setCartSelectedId,
         saleNoteMissing,
         // POS services (added from the "+ Add service charge" button, not the search)
