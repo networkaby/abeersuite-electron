@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useActiveBranchStore, COMBINED_BRANCH } from "@/store/activeBranchStore";
 import { BUSINESS_DATE_HEADER } from "@/shared/lib/constants/business";
 import { todayIso } from "@/shared/lib/format/formatDate";
+import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 
 export const http = axios.create();
 
@@ -61,6 +62,10 @@ export function stampRequestContext(config: InternalAxiosRequestConfig): Interna
 }
 
 http.interceptors.request.use(stampRequestContext);
+
+// Every successful write here announces itself on the app change channel, so
+// other people's open screens re-read instead of waiting for a manual refresh.
+attachChangePublisher(http);
 
 http.interceptors.response.use(
     (res) => res,

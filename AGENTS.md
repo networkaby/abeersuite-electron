@@ -7,6 +7,7 @@
 - First **repeat the user's request point-to-point** in your own words to confirm understanding.
 - Explain understanding + plan.
 - **Wait for approval before editing.**
+- /lab in incomplete module under constraction
 
 ## 2. Product
 
@@ -28,6 +29,7 @@
 - `live` → production data; **never full-reset**.
 - Schema changes must include migrations committed to `origin/dev` or `main`.
 - Deployment must apply migrations without causing problems.
+-
 
 ## 4. Reuse First
 
@@ -63,7 +65,7 @@ Commands: `pnpm seed:check-docs` · `pnpm seed:fix-docs` · `pnpm precommit` · 
 
 ## 7. Cost & Performance
 
-- **DB:** DB pagination, select needed columns only, avoid `SELECT `\* and query-per-item.
+- **DB:** DB pagination, select needed columns only, avoid `SELECT` and query-per-item.
 - **Server:** browser cache, batch mutations, defer non-critical work, ISR for store pages, short TTL for office.
 - **UX:** optimistic updates with rollback, prefetch, no blank flicker, show cached data while refreshing.
 - **Priority:** **UX → DB → Server**.

@@ -5,6 +5,7 @@ import type { Session } from "next-auth";
 import { useEffect, useRef } from "react";
 import axios from "axios";
 import { stampRequestContext } from "@/shared/lib/http";
+import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -47,9 +48,14 @@ function SessionGuard() {
             },
         );
         const reqId = axios.interceptors.request.use(stampRequestContext);
+        // Same reason as the stamp above: bare `axios` does not inherit the
+        // `http` instance's interceptors, so writes made through it would
+        // otherwise never tell anyone else's screen that something moved.
+        const pubId = attachChangePublisher(axios);
         return () => {
             axios.interceptors.response.eject(id);
             axios.interceptors.request.eject(reqId);
+            axios.interceptors.response.eject(pubId);
         };
     }, []);
 

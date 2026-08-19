@@ -283,6 +283,15 @@ export function useDayBook(query: DayBookQuery) {
     const storeRef  = useRef(store);
     const bridgeRef = useRef(false);
     storeRef.current = store;
+    // The in-flight guard for loadMore lives in a ref, not in the state value.
+    // Reading the state there would make `loadMore` a new function every time a
+    // page finished, and the page's IntersectionObserver — which depends on it —
+    // would rebuild and re-observe. `io.observe()` fires immediately for an
+    // element that is already intersecting, so that rebuild pulled a second page
+    // nobody asked for. The spinner still reads the state.
+    const loadingMoreRef = useRef(false);
+    /** Guards `syncNow` — a second signal must not overlap the read in flight. */
+    const syncingRef = useRef(false);
 
     const reload = useCallback(() => {
         forceNext.current = true;
@@ -359,8 +368,9 @@ export function useDayBook(query: DayBookQuery) {
 
     const loadMore = useCallback(() => {
         const current = storeRef.current;
-        if (current.nextCursor == null || loadingMore) return;
+        if (current.nextCursor == null || loadingMoreRef.current) return;
 
+        loadingMoreRef.current = true;
         setLoadingMore(true);
         void (async () => {
             try {
@@ -378,11 +388,54 @@ export function useDayBook(query: DayBookQuery) {
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to load more");
             } finally {
+                loadingMoreRef.current = false;
                 setLoadingMore(false);
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [key, search, cacheable, loadingMore]);
+    }, [key, search, cacheable]);
+
+    /**
+     * Top up what is already on screen — the live path.
+     *
+     * `reload` starts over from page one, which is the right answer for a person
+     * pressing Refresh and the wrong one for a voucher posted at another counter:
+     * it would throw away every page the reader had scrolled through, dropping
+     * them from 200 rows back to 50 each time anyone saved anything.
+     *
+     * So this reads a DELTA against the copy in hand and folds it in with the
+     * same `applyDelta` the counter cache uses — rows replaced by id, tombstones
+     * applied, `nextCursor` untouched, so the loaded run stays loaded. It only
+     * falls back to a full reload when there is nothing to be delta against, or
+     * when the server says the delta has stopped being the cheap option.
+     *
+     * Deliberately does NOT touch `loading`: the table on screen is correct and
+     * complete, so a spinner would be a flicker announcing nothing.
+     */
+    const syncNow = useCallback(() => {
+        const current = storeRef.current;
+        if (!current.checkedAt || current.rows.length === 0) { reload(); return; }
+        if (syncingRef.current) return;
+
+        syncingRef.current = true;
+        void (async () => {
+            try {
+                const res = await fetchDayBook(query, search, { since: current.checkedAt });
+                if (res.overflow) { reload(); return; }
+                // Re-read: a loadMore may have landed while this was in flight.
+                const next = applyDelta(storeRef.current, res);
+                setStore(next);
+                setStale(false);
+                if (bridgeRef.current && cacheable) await writeCachedView(key, next);
+            } catch {
+                // A missed nudge is not an error worth showing — the rows on
+                // screen are still the rows we last read, and Refresh is there.
+            } finally {
+                syncingRef.current = false;
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key, search, cacheable, reload]);
 
     const rows = useMemo(() => joinRows(store.rows, store.refs), [store]);
 
@@ -395,6 +448,8 @@ export function useDayBook(query: DayBookQuery) {
         stale,
         loadMore,
         reload,
+        /** Fold in what changed elsewhere, keeping the loaded pages. */
+        syncNow,
         /** Every branch, not just those on loaded rows — the filter dropdown needs
          *  the full list, which it cannot derive from a page. */
         branches: store.refs.branches,
