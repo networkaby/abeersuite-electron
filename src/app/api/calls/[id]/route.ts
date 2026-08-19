@@ -1,25 +1,32 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 
-// PATCH /api/calls/[id] — Call Log triage actions (staff, CRM-gated).
-//   • note: add/replace the staff note on this call.
+// PATCH /api/calls/[id] — Call Log triage actions. Open to any staff (matches
+// /api/help, /api/deals — the write itself only needs an authenticated staff
+// session; the counter follow-up popup and the CRM Call Log page both land here).
+//   • note: add/replace the staff note on this call. An empty string (as opposed
+//     to null) marks the call "seen, nothing to add" — used by the counter
+//     follow-up popup's dismiss action so it doesn't re-prompt.
 //   • spam: flag/un-flag the NUMBER — applied to every call sharing this call's
 //     phone, so past + future calls from it are (un)flagged together.
+//   • ticketId: link the help ticket / deal raised from this call — see the
+//     `ticketId` doc comment on the Call model.
 
 const patchSchema = z
     .object({
         note: z.string().trim().max(2000).nullable().optional(),
         spam: z.boolean().optional(),
+        ticketId: z.number().int().positive().nullable().optional(),
     })
-    .refine((v) => v.note !== undefined || v.spam !== undefined, {
+    .refine((v) => v.note !== undefined || v.spam !== undefined || v.ticketId !== undefined, {
         message: "Nothing to update",
     });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("crm");
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { id, error: idError } = await parseIdParam(params);
@@ -34,6 +41,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         if (data.note !== undefined) {
             await prisma.call.update({ where: { id }, data: { note: data.note } });
+        }
+
+        if (data.ticketId !== undefined) {
+            await prisma.call.update({ where: { id }, data: { ticketId: data.ticketId } });
         }
 
         // Spam toggles by number. If the call has no phone key (internal/unknown),

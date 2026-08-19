@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
+import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
 
 // Shared auth wrapper for /vouchers/pos/* routes.
 // The list page (/vouchers/pos) renders inside the normal office chrome via
@@ -11,6 +12,10 @@ import GlobalInboxListener from "@/modules/message/components/GlobalInboxListene
 // GlobalInboxListener is mounted here too (not just office/layout.tsx) so a
 // counter operator gets sound/browser notification for incoming chat while on
 // the bare-chrome POS register — same as everywhere else in the app.
+//
+// CallFollowUpPopup rides the same reasoning: the register is exactly where a
+// counter takes calls, so it needs the call follow-up reminder mounted here
+// too, not just in the office chrome.
 
 export default async function PosLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
@@ -24,6 +29,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
         <SessionWrapper session={session}>
             {children}
             <GlobalInboxListener currentUserId={userId} />
+            <CallFollowUpPopup />
         </SessionWrapper>
     );
 }

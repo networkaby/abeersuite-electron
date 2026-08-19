@@ -7,6 +7,7 @@ import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import ButtonBar from "@/shared/components/ButtonBar";
 import ModuleSurface from "@/shared/components/ModuleSurface";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
+import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
 
 export default async function ProtectedLayout({
@@ -64,6 +65,7 @@ export default async function ProtectedLayout({
                 <Toaster richColors />
                 <QuickTicketButton />
                 <GlobalInboxListener currentUserId={userId} />
+                <CallFollowUpPopup />
             </div>
         </SessionWrapper>
     );

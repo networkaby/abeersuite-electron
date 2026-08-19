@@ -24,6 +24,9 @@ export type ActiveShift = {
     counter: {
         id:   number;
         name: string;
+        // EPBX/intercom extension of the phone at this counter — drives the call
+        // follow-up popup (CallFollowUpPopup) matching calls to this shift.
+        epbxExtension: string | null;
         tillAccount: { id: number; name: string };
         // The counter's payment accounts (UPI/Card/gateway…), set under
         // /office/admin/counters. Each drives a checkout payment row: `accountId`

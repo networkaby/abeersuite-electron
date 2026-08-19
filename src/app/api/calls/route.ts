@@ -229,8 +229,16 @@ export async function GET(req: Request) {
         const spam = sp.get("spam"); // "1" only spam, "0"/absent excludes spam
         const missedMode = parseMissedMode(sp.get("missed")); // all | only | exclude
         const search = sp.get("search")?.trim() ?? "";
+        // Which extension answered/dialled — the counter follow-up popup's own
+        // lookup, matching either side (an outgoing callback dials FROM the
+        // counter's extension; an incoming call is answered TO it).
+        const ext = sp.get("ext")?.trim();
+        // Never triaged: no note (not even a dismissal) and no linked ticket/deal.
+        const unhandled = sp.get("unhandled") === "1";
 
         const and: Prisma.CallWhereInput[] = [];
+        if (ext) and.push({ OR: [{ toExt: ext }, { fromExt: ext }] });
+        if (unhandled) and.push({ note: null, ticketId: null });
         if (parsedDir.success) {
             and.push({ direction: parsedDir.data });
         } else if (sp.get("direction") !== "all") {

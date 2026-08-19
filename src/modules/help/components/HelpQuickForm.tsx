@@ -37,12 +37,15 @@ export default function HelpQuickForm({
     open,
     onOpenChange,
     positions = [],
+    initialContact,
     onSaved,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     positions?: HelpPositionOption[];
-    onSaved: () => void;
+    /** Prefills the mobile/email field on open — e.g. the number from a call. */
+    initialContact?: string;
+    onSaved: (id?: number) => void;
 }) {
     const [contact, setContact] = useState("");
     const [name, setName] = useState("");
@@ -57,9 +60,9 @@ export default function HelpQuickForm({
 
     useEffect(() => {
         if (!open) return;
-        setContact(""); setName(""); setLinked(null); setNotes("");
+        setContact(initialContact ?? ""); setName(""); setLinked(null); setNotes("");
         setPriority("MEDIUM"); setAssignedPositionId(UNASSIGNED);
-    }, [open]);
+    }, [open, initialContact]);
 
     // Autofill on a strong match: exact phone digits, or a single email hit.
     useEffect(() => {
@@ -104,10 +107,10 @@ export default function HelpQuickForm({
                   notes: notes.trim() || null,
               };
         try {
-            await axios.post("/api/help", payload);
+            const { data } = await axios.post<{ id: number }>("/api/help", payload);
             toast.success("Help ticket logged");
             onOpenChange(false);
-            onSaved();
+            onSaved(data.id);
         } catch (err) {
             toast.error(extractApiError(err, "Failed to log ticket"));
         } finally {

@@ -40,13 +40,18 @@ export default function DealFormDialog({
     onOpenChange,
     positions,
     deal,
+    initialPhone,
+    initialSource,
     onSaved,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     positions: DealPositionOption[];
     deal?: DealDetailDto | null;
-    onSaved: () => void;
+    /** Prefills phone + source on open, for a create (ignored while editing) — e.g. from a call. */
+    initialPhone?: string;
+    initialSource?: string;
+    onSaved: (id?: number) => void;
 }) {
     const isEdit = Boolean(deal);
     const [title, setTitle] = useState("");
@@ -72,11 +77,11 @@ export default function DealFormDialog({
         if (!open) return;
         setTitle(deal?.title ?? "");
         setContactName(deal?.contactName ?? "");
-        setPhone(deal?.phone ?? "");
+        setPhone(deal?.phone ?? initialPhone ?? "");
         setEmail(deal?.email ?? "");
         setCompanyName(deal?.companyName ?? "");
         setValue(deal?.valuePaise != null ? String(deal.valuePaise / 100) : "");
-        setSource(deal?.source ?? "");
+        setSource(deal?.source ?? initialSource ?? "");
         setPriority(deal?.priority ?? "MEDIUM");
         setAssignedPositionId(deal?.assignedPositionId ?? UNASSIGNED);
         setNextFollowUpAt(toDateTimeLocalInput(deal?.nextFollowUpAt ?? null));
@@ -89,7 +94,7 @@ export default function DealFormDialog({
                     : null,
         );
         setLinkQuery("");
-    }, [open, deal]);
+    }, [open, deal, initialPhone, initialSource]);
 
     const handleSave = async () => {
         if (!title.trim()) {
@@ -116,12 +121,14 @@ export default function DealFormDialog({
             if (isEdit && deal) {
                 await axios.patch(`/api/deals/${deal.id}`, payload);
                 toast.success("Deal updated");
+                onOpenChange(false);
+                onSaved(deal.id);
             } else {
-                await axios.post("/api/deals", payload);
+                const { data } = await axios.post<{ id: number }>("/api/deals", payload);
                 toast.success("Deal created");
+                onOpenChange(false);
+                onSaved(data.id);
             }
-            onOpenChange(false);
-            onSaved();
         } catch (err) {
             toast.error(extractApiError(err, "Failed to save deal"));
         } finally {

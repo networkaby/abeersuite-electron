@@ -1,10 +1,11 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { createDealSchema } from "@/shared/lib/schemas/dealSchema";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { phoneMatchKey } from "@/shared/lib/format";
 
 /** Position the lead is assigned to + its current live holders. */
 const ASSIGNED_POSITION_SELECT = {
@@ -88,13 +89,21 @@ export async function GET(req: Request) {
         const q = sp.get("q")?.trim();
         const personId = sp.get("personId");
         const companyId = sp.get("companyId");
-        const dealFilter: { personId?: number; companyId?: number } = {};
-        if (personId && /^\d+$/.test(personId)) dealFilter.personId = Number(personId);
-        if (companyId && /^\d+$/.test(companyId)) dealFilter.companyId = Number(companyId);
+        const open = sp.get("open") === "1";
+        // See the matching comment in /api/help — a deal captured at the counter
+        // often carries only a raw phone, no linked person/company.
+        const phoneKey = phoneMatchKey(sp.get("phone"));
+        const personId2 = personId && /^\d+$/.test(personId) ? Number(personId) : null;
+        const companyId2 = companyId && /^\d+$/.test(companyId) ? Number(companyId) : null;
+        const dealOr: Record<string, unknown>[] = [];
+        if (personId2 != null) dealOr.push({ personId: personId2 });
+        if (companyId2 != null) dealOr.push({ companyId: companyId2 });
+        if (phoneKey) dealOr.push({ phone: { endsWith: phoneKey } });
         const leads = await prisma.ticket.findMany({
             where: {
                 pipelineId: pipeline.id,
-                ...(Object.keys(dealFilter).length ? { deal: dealFilter } : {}),
+                ...(dealOr.length ? { deal: { OR: dealOr } } : {}),
+                ...(open ? { closedAt: null } : {}),
                 ...(q
                     ? {
                           OR: [
@@ -117,7 +126,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requireModuleAccess("crm");
+    // Open to any staff — the counter (Deal rail button, call follow-up popup)
+    // and the office both create here. Visibility of the create controls is the
+    // UI gate; the write itself only needs an authenticated staff session (per
+    // the repo's "permissions are UI-only" posture — matches /api/help).
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const pipeline = await getDealsPipeline(prisma);

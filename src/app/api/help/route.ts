@@ -5,6 +5,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { createHelpSchema } from "@/shared/lib/schemas/helpSchema";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { phoneMatchKey } from "@/shared/lib/format";
 
 /** Position the ticket is assigned to + its current live holders. */
 const ASSIGNED_POSITION_SELECT = {
@@ -89,9 +90,27 @@ export async function GET(req: Request) {
 
         const sp = new URL(req.url).searchParams;
         const q = sp.get("q")?.trim();
+        const personId = sp.get("personId");
+        const companyId = sp.get("companyId");
+        const open = sp.get("open") === "1";
+        // Matches on the ticket's OWN phone field too, not just a linked
+        // person/company — most counter-captured help tickets carry only a raw
+        // phone (HelpQuickForm doesn't require a full Person record), so a
+        // customer-id filter alone would miss them. Last-10-digit match, same
+        // normalisation the Call Log's own reverse-lookup uses, so "+91 98765
+        // 43210" on one side and "098765-43210" on the other still match.
+        const phoneKey = phoneMatchKey(sp.get("phone"));
+        const personId2 = personId && /^\d+$/.test(personId) ? Number(personId) : null;
+        const companyId2 = companyId && /^\d+$/.test(companyId) ? Number(companyId) : null;
+        const helpOr: Record<string, unknown>[] = [];
+        if (personId2 != null) helpOr.push({ personId: personId2 });
+        if (companyId2 != null) helpOr.push({ companyId: companyId2 });
+        if (phoneKey) helpOr.push({ phone: { endsWith: phoneKey } });
         const tickets = await prisma.ticket.findMany({
             where: {
                 pipelineId: pipeline.id,
+                ...(helpOr.length ? { help: { OR: helpOr } } : {}),
+                ...(open ? { closedAt: null } : {}),
                 ...(q
                     ? {
                           OR: [

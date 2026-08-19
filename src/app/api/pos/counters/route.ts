@@ -125,6 +125,10 @@ export async function GET(req: NextRequest) {
             name:        c.name,
             branchId:    c.branchId,
             isActive:    c.isActive,
+            // Which extension this counter's phone sits on — the call follow-up
+            // popup uses it alongside boundDeviceId to find "my counter" without
+            // needing a shift open (see useMyCounterExtension).
+            epbxExtension: c.epbxExtension,
             tillAccount: {
                 id:      c.tillAccount.id,
                 name:    c.tillAccount.name,
