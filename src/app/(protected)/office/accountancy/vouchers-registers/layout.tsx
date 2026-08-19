@@ -10,6 +10,7 @@ export default async function VouchersRegistersLayout({ children }: { children: 
         <div className="flex h-full flex-col">
             <PathBreadcrumb
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
+                escapeBack
                 labels={{
                     "vouchers-registers": "Registers",
                     "all": "All Vouchers",

@@ -39,6 +39,7 @@
 // pattern) apply to BOTH tabs.
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -58,7 +59,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { SortHeader } from "@/shared/components/SortHeader";
-import { useTableSort } from "@/shared/hooks";
+import { useTableSort, useEscape } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api";
 import { gridRowClass } from "@/shared/lib/format";
 import { fmt } from "@/utils/constants";
@@ -232,6 +233,8 @@ function FilterBox({
 }
 
 export default function ReorderPage() {
+    const router = useRouter();
+    useEscape(() => router.back());
     const [data, setData] = useState<Report | null>(null);
     const [loading, setLoading] = useState(true);
     const [branchId, setBranchId] = useState("");

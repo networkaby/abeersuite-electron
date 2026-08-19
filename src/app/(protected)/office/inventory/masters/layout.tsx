@@ -8,6 +8,7 @@ export default function InventoryMastersLayout({ children }: { children: React.R
         <div className="flex h-full flex-col">
             <PathBreadcrumb
                 root={{ href: "/office/inventory", label: "Inventory" }}
+                escapeBack
                 labels={{
                     "masters": "Masters",
                     "gst-rates": "GST Rates",

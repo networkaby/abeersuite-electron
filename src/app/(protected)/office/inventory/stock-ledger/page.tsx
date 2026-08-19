@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, BookOpen } from "lucide-react";
@@ -15,6 +17,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+    BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { useEscape } from "@/shared/hooks";
 import { fmt } from "@/utils/constants";
 
 type Product = {
@@ -53,6 +61,8 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function StockLedgerPage() {
+    const router = useRouter();
+    useEscape(() => router.back());
     const [products, setProducts]   = useState<Product[]>([]);
     const [productId, setProductId] = useState<string>("");
     const [from, setFrom]           = useState(() => { const d = new Date(); return `${d.getFullYear()}-01-01`; });
@@ -77,6 +87,23 @@ export default function StockLedgerPage() {
 
     return (
         <div className="space-y-6 max-w-5xl">
+            {/* Breadcrumb bar — uniform with the other inventory pages */}
+            <BreadcrumbBar>
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <Link href="/office/inventory">Inventory</Link>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>Stock Ledger</BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </BreadcrumbBar>
+
             <div>
                 <h2 className="text-xl font-semibold flex items-center gap-2">
                     <BookOpen className="size-5" aria-hidden /> Stock Ledger

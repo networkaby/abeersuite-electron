@@ -279,8 +279,8 @@ export default function UsersPage() {
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border shadow">
-                    <Table>
+                <div className="overflow-x-auto rounded-lg border border-border shadow">
+                    <Table className="min-w-max">
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-12">#</TableHead>
