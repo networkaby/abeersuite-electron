@@ -225,6 +225,18 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: false, reason: "No coupon applied" });
         }
 
+        // ── Resolve product names for BOGO / FREE_ITEM cashier hints ──────────
+        const couponProductIds = [
+            selected.coupon.freeProductId,
+            selected.coupon.buyProductId,
+        ].filter((id): id is number => id != null);
+        const couponProductNames = new Map(
+            (await prisma.invProduct.findMany({
+                where: { id: { in: couponProductIds } },
+                select: { id: true, name: true },
+            })).map((p) => [p.id, p.name]),
+        );
+
         // This endpoint only receives BILL-wide tierRupees/loyaltyRupees from the
         // client (no per-line breakdown), unlike /sale which computes them line by
         // line. For a LINE-scope coupon we estimate the exclusion by the coupon's
@@ -269,6 +281,15 @@ export async function POST(req: Request) {
             droppedTier,
             blockedLoyalty,
             clampedByGuard: fin.clampedByGuard,
+            couponType: selected.coupon.type,
+            freeProductId: selected.coupon.freeProductId,
+            freeQty: selected.coupon.freeQty,
+            buyProductId: selected.coupon.buyProductId,
+            buyQty: selected.coupon.buyQty,
+            getQty: selected.coupon.getQty,
+            freeDiscountPct: selected.coupon.freeDiscountPct,
+            freeProductName: selected.coupon.freeProductId != null ? couponProductNames.get(selected.coupon.freeProductId) ?? null : null,
+            buyProductName: selected.coupon.buyProductId != null ? couponProductNames.get(selected.coupon.buyProductId) ?? null : null,
         });
     } catch (e) {
         return handleApiError(e, "Coupon validation failed");
