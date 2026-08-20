@@ -28,21 +28,24 @@ const JOIN_TIMEOUT_MS = 5_000;
  *  its own poll, so a failure here must never break the caller's request. */
 export async function publishChangeServer(topics: readonly Topic[]): Promise<void> {
     if (topics.length === 0) return;
-    const client = createClient(url, key);
-    const channel = client.channel(CHANGE_CHANNEL_NAME);
+    let client: ReturnType<typeof createClient> | undefined;
     try {
-        await new Promise<void>((resolve) => {
-            channel.subscribe((status) => { if (status === "SUBSCRIBED") resolve(); });
-            setTimeout(resolve, JOIN_TIMEOUT_MS);
-        });
-        await channel.send({
-            type: "broadcast",
-            event: CHANGE_EVENT_NAME,
-            payload: { topics, at: new Date().toISOString() },
-        });
+        client = createClient(url, key);
+        const channel = client.channel(CHANGE_CHANNEL_NAME);
+        try {
+            await new Promise<void>((resolve) => {
+                channel.subscribe((status) => { if (status === "SUBSCRIBED") resolve(); });
+                setTimeout(resolve, JOIN_TIMEOUT_MS);
+            });
+            await channel.send({
+                type: "broadcast",
+                event: CHANGE_EVENT_NAME,
+                payload: { topics, at: new Date().toISOString() },
+            });
+        } finally {
+            void client.removeChannel(channel);
+        }
     } catch {
         /* best-effort */
-    } finally {
-        void client.removeChannel(channel);
     }
 }
