@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { usePosDraftStore } from "@/store/posDraftStore";
+import { loadProductCatalog } from "@/shared/hooks";
 import { type ProductOption, type PosServiceOption, type CartLine, type Snapshot } from "@/modules/pos/lib/posDraftTypes";
 
 export interface BillProduct { productId: number; sku: string; name: string; qty: number; salePrice: number | null; }
@@ -158,9 +159,9 @@ export default function BillDetailsPanel({ ticketId, customerAccountId, canGener
         try {
             await persist(products, services);
 
-            const [{ data: snapshot }, { data: prodCatalogue }, { data: svcCatalogue }] = await Promise.all([
+            const [{ data: snapshot }, prodCatalogue, { data: svcCatalogue }] = await Promise.all([
                 axios.get<Snapshot>(`/api/pos/account-snapshot/${customerAccountId}`),
-                axios.get<ProductOption[]>(`/api/inventory/products/lookup`),
+                loadProductCatalog<ProductOption>(),
                 axios.get<PosServiceOption[]>(`/api/pos/services`),
             ]);
 

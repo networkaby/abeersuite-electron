@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
+import { useProductCatalog } from "@/shared/hooks/useProductCatalog";
 import CustomerContextPanel from "@/modules/lab/components/CustomerContextPanel";
 import QuickTicketDialog from "@/modules/lab/components/QuickTicketDialog";
 import RegisterCustomerDialog from "@/modules/lab/components/RegisterCustomerDialog";
@@ -170,26 +171,22 @@ export default function UniversalHelperSearch() {
     // address token (delhi) — see buildCandidates for the per-term scoring.
     const { hits: peopleHits, loading: peopleLoading } = usePartySearch(query, { wide: true });
 
-    // ── Data: products (load once, filter in memory) ──────────────────────
-    const [products, setProducts]         = useState<Product[]>([]);
-    const [productsLoaded, setProductsLoaded] = useState(false);
+    // ── Data: products — shared IndexedDB-backed catalogue, filtered in memory ─
+    const { products, loading: productsLoading } = useProductCatalog<Product>();
+    const productsLoaded = !productsLoading;
 
     // ── Data: tickets (load once, filter in memory by device brand/model) ─
     const [tickets, setTickets]           = useState<TicketSearchRow[]>([]);
     const [ticketsLoaded, setTicketsLoaded]   = useState(false);
 
     useEffect(() => {
-        let c1 = false, c2 = false;
-
-        axios.get<Product[]>("/api/inventory/products/lookup")
-            .then(r => { if (!c1) { setProducts(r.data); setProductsLoaded(true); } })
-            .catch(() => { if (!c1) setProductsLoaded(true); });
+        let c2 = false;
 
         axios.get<TicketSearchRow[]>("/api/tickets")
             .then(r => { if (!c2) { setTickets(r.data); setTicketsLoaded(true); } })
             .catch(() => { if (!c2) setTicketsLoaded(true); });
 
-        return () => { c1 = true; c2 = true; };
+        return () => { c2 = true; };
     }, []);
 
     // ── Derived ───────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
 import {
     Search, ShoppingBag, Wrench, PhoneCall, HeadphonesIcon, ClipboardList,
     X, Package, User, ChevronRight,
@@ -119,7 +120,10 @@ function paiseToRs(paise: number | null): string {
 
 function ProductLookup() {
     const [query, setQuery] = useState("");
-    const [products, setProducts] = useState<ProductOption[]>([]);
+    // Shared IndexedDB-backed catalogue — `eager: false` because this panel
+    // sits on every staff member's home page but most never open the product
+    // lookup, so it stays reactive without costing a fetch until asked.
+    const { products } = useProductCatalog<ProductOption>({ eager: false });
     const [loading, setLoading] = useState(false);
     const [loaded, setLoaded] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -129,8 +133,7 @@ function ProductLookup() {
         if (loaded) return;
         setLoading(true);
         try {
-            const { data } = await axios.get<ProductOption[]>("/api/inventory/products/lookup");
-            setProducts(data);
+            await loadProductCatalog<ProductOption>();
             setLoaded(true);
         } catch {
             toast.error("Could not load product catalog");

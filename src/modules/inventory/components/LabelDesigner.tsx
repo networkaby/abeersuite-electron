@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/format/utils";
+import { useProductCatalog } from "@/shared/hooks";
 import { Button } from "@/components/ui/button";
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -237,15 +238,11 @@ export function LabelDesigner({
     };
 
     // ── Pick from GRN / Purchase voucher ──────────────────────────────────────
-    // Product lookup map (resolves barcode1 + sale/MRP for voucher lines).
-    const [lookupById, setLookupById] = useState<Map<number, ProductLookupRow>>(new Map());
-    const [lookupLoaded, setLookupLoaded] = useState(false);
-    useEffect(() => {
-        axios.get<ProductLookupRow[]>("/api/inventory/products/lookup")
-            .then((r) => setLookupById(new Map(r.data.map((p) => [p.id, p]))))
-            .catch(() => { /* combobox will surface lookup issues */ })
-            .finally(() => setLookupLoaded(true));
-    }, []);
+    // Product lookup map (resolves barcode1 + sale/MRP for voucher lines),
+    // off the same shared IndexedDB-backed catalogue every picker reads.
+    const { products: lookupProducts, loading: lookupLoading } = useProductCatalog<ProductLookupRow>();
+    const lookupById = useMemo(() => new Map(lookupProducts.map((p) => [p.id, p])), [lookupProducts]);
+    const lookupLoaded = !lookupLoading;
 
     const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
     const [voucherList, setVoucherList] = useState<VoucherListRow[] | null>(null);

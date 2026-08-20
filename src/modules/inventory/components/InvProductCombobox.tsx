@@ -17,9 +17,8 @@
 
 import { useEffect, useState, useCallback, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import axios from "axios";
 import { Plus } from "lucide-react";
-import { useComboboxNav } from "@/shared/hooks";
+import { useComboboxNav, useProductCatalog } from "@/shared/hooks";
 import { primaryBarcode, productMatchesQuery } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
 import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
@@ -89,21 +88,20 @@ function toSelected(p: ProductOption): SelectedProduct {
 }
 
 export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true }: Props) {
-    const [products, setProducts] = useState<ProductOption[]>([]);
+    // Shared IndexedDB-backed catalogue — same array every picker on the page
+    // reads, kept fresh by delta sync + realtime (see useProductCatalog).
+    const { products: catalogProducts, loading } = useProductCatalog<ProductOption>();
+    // A just-created product shows up here INSTANTLY (before the realtime
+    // round trip merges it into the shared catalogue) so the cashier can
+    // select it without waiting.
+    const [justCreated, setJustCreated] = useState<ProductOption[]>([]);
+    const products = justCreated.length === 0
+        ? catalogProducts
+        : [...catalogProducts, ...justCreated.filter((jc) => !catalogProducts.some((p) => p.id === jc.id))];
     const [query, setQuery] = useState("");
-    const [loading, setLoading] = useState(true);
     const [createOpen, setCreateOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [advancedDefaults, setAdvancedDefaults] = useState<Partial<InvProductFormState> | undefined>();
-
-    // Load all products once (cached in memory for fast typing)
-    useEffect(() => {
-        setLoading(true);
-        axios.get<ProductOption[]>("/api/inventory/products/lookup")
-            .then((r) => setProducts(r.data))
-            .catch(() => { })
-            .finally(() => setLoading(false));
-    }, []);
 
     // When value changes externally, update the display text
     const selectedProduct = products.find((p) => p.id === value);
@@ -369,7 +367,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                     onOpenChange={setCreateOpen}
                     initialName={query.trim()}
                     onCreated={(np: CreatedProductOption) => {
-                        setProducts((ps) => [...ps, np]);
+                        setJustCreated((ps) => [...ps, np]);
                         setQuery(np.name);
                         onChange(toSelected(np));
                     }}
@@ -408,7 +406,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                             brand: raw.brand,
                             barcode1: primaryBarcode(raw.codes),
                         };
-                        setProducts((ps) => [...ps, np]);
+                        setJustCreated((ps) => [...ps, np]);
                         setQuery(np.name);
                         onChange(toSelected(np));
                     }}

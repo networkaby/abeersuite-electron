@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { ScanBarcode } from "lucide-react";
+import { useProductCatalog } from "@/shared/hooks";
 
 export type ScannedProduct = {
     id:        number;
@@ -56,23 +57,12 @@ export function ProductScanInput({
     const [query, setQuery] = useState("");
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(0);
-    const [products, setProducts] = useState<Option[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Shared IndexedDB-backed catalogue (same array every picker reads),
+    // carrying each product's scannable `codes` so scans match client-side.
+    const { products, loading } = useProductCatalog<Option>();
     // "Browse mode" — operator hit Space in an empty input to see the full
     // catalogue without a query. Resets the moment they start typing or pick.
     const [browseAll, setBrowseAll] = useState(false);
-
-    // Preload all active products (same pattern POS uses). The lookup
-    // endpoint without ?code= returns the full list with each product's
-    // scannable `codes` so we can match scans client-side.
-    useEffect(() => {
-        let cancelled = false;
-        axios.get<Option[]>("/api/inventory/products/lookup")
-            .then((r) => { if (!cancelled) setProducts(r.data); })
-            .catch(() => { /* leave empty */ })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
-    }, []);
 
     const matches = useMemo<Option[]>(() => {
         const q = query.trim().toLowerCase();
