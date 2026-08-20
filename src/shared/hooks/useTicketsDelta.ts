@@ -1,37 +1,49 @@
 "use client";
 
 /**
- * The Repair Tickets board's data source — same shape as the Day Book's
- * `useDayBook`, backed by the local Dexie replica instead of a single JSON blob.
+ * The shared Dexie-cached + delta-synced data source for every Ticket-flavoured
+ * board (Repair Tickets, Deals, Help Desk, Administration tasks). All four are
+ * the same `Ticket` model under a different `pipelineId` (see the "Unified
+ * Ticket merge" design), so they share one local replica instead of one Dexie
+ * table per board:
  *
- *  • PAGING. 25 rows a fetch, cursor-walked; a filter view is a boundary, not a
- *    download.
+ *  • CACHE. Rows land in the same `tickets` Dexie table (keyed by the ticket's
+ *    own globally-unique id, so a deal, a help ticket and a repair ticket never
+ *    collide) and `ticketViews` holds one row per board (`apiPath` is folded
+ *    into the view key so Deals' "whole board" view can't collide with Help's).
+ *    Reopening a board reads the local copy first — the Ticket table overall is
+ *    large, so this is what avoids a cold DB round-trip on every open/close.
  *
- *  • DELTA. Reopening the board asks the server for rows touched since the last
- *    check (`?since=`) and merges them by id — an edited or re-statused ticket
- *    replaces its old self rather than the client re-pulling everything.
+ *  • DELTA. `?since=` asks the server for rows touched since the last check and
+ *    merges them by id — an edited or re-statused ticket replaces its old self
+ *    rather than the client re-pulling the whole board.
  *
- *  • COUNTER-ONLY PERSISTENCE, same policy as Day Book: ticket rows carry
- *    customer name/phone/device, so only a machine with the counter bridge may
- *    keep a copy on disk. Anywhere else this runs live and stores nothing.
+ *  • REALTIME. Wired to the app's one shared change channel: any write that
+ *    touches the "tickets" topic (any of `/api/tickets`, `/api/deals`,
+ *    `/api/help`, `/api/admin-tasks`, …) nudges every OPEN board to re-check,
+ *    live, at zero extra connection cost — see `useRealtimeTopics`.
  *
- *  • NO DELETE TOMBSTONE. Tickets don't have an audit log the way vouchers do,
- *    so a hard-deleted ticket inside the loaded window isn't chased down by a
- *    delta — bounded by `MAX_AGE_MS` the same way the POS product cache is.
- *    Hard-deletes are already rare and gated (blocked by linked vouchers/child
- *    tickets), so this is an accepted gap, not an oversight.
+ *  • COUNTER-ONLY PERSISTENCE. Rows carry customer names/phones/amounts, so
+ *    only a machine with the counter bridge keeps a copy on disk (same policy
+ *    as the Day Book). Anywhere else this runs live and stores nothing.
+ *
+ *  • NO DELETE TOMBSTONE, same accepted gap as before: a hard-deleted ticket
+ *    inside the loaded window isn't chased down by a delta, bounded by
+ *    `MAX_AGE_MS` instead. Hard-deletes are rare and gated.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import axios from "axios";
 import { localDb, type LocalTicketRow } from "@/shared/lib/browser/localDb";
 import { isBridgeAvailable } from "@/shared/lib/bridge";
-import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
+import { useDebouncedValue } from "./useDebouncedValue";
+import { useRealtimeTopics } from "./useRealtimeTopics";
 
-const API = "/api/tickets";
-/** One entry per distinct filter combo. Bounded so a session of fiddling with
- *  filters can't grow the view list forever. */
-const MAX_CACHED_VIEWS = 4;
+const DEFAULT_API = "/api/tickets";
+/** One entry per distinct filter combo per board. Bounded so a session of
+ *  fiddling with filters (or several boards open across a session) can't grow
+ *  the view list forever. */
+const MAX_CACHED_VIEWS = 8;
 /** Past this a cached view is not trusted at all — the backstop for the missing
  *  delete tombstone (mirrors the POS product cache's own MAX_AGE_MS). */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -48,8 +60,14 @@ export type TicketsQuery = {
     search?:     string;
 };
 
-/** A row exactly as `flattenRepair` on the server sends it. */
-export type TicketRow = Record<string, unknown> & {
+/**
+ * The base shape every board's row must carry — the fields this hook itself
+ * reads (merge-by-id, cache expiry, the default age sort). Deliberately NOT
+ * intersected with `Record<string, unknown>`: the source DTOs (Ticket, DealDto,
+ * HelpDto, TaskDto) are closed interfaces with no index signature, and
+ * requiring one here would make none of them satisfy the constraint.
+ */
+export type TicketRow = {
     id:        number;
     pipelineId: string | null;
     status:    string;
@@ -63,26 +81,29 @@ type SyncResponse<T> =
     | { mode: "delta"; rows: T[]; overflow: boolean;         computedAt: string };
 
 /**
- * Identifies a filter view. `search` is excluded — a searched view is
- * transient and never cached, matching the Day Book's own reasoning: keying on
- * it would fill the cache with one-offs and evict the everyday unfiltered view.
+ * Identifies a filter view, namespaced by which board (`apiPath`) it belongs
+ * to — Deals' "whole board" view and Help's must not collide just because
+ * both pass an empty query. `search` is excluded — a searched view is
+ * transient and never cached (keying on it would fill the cache with one-offs
+ * and evict the everyday unfiltered view).
  */
-function viewKey(q: TicketsQuery): string {
-    return [q.pipelineId ?? "", q.status ?? "", q.priority ?? "", q.warranty ?? "", q.from ?? "", q.to ?? ""].join("|");
+function viewKey(apiPath: string, q: TicketsQuery): string {
+    return [apiPath, q.pipelineId ?? "", q.status ?? "", q.priority ?? "", q.warranty ?? "", q.from ?? "", q.to ?? ""].join("|");
 }
 
-/** Server order: newest created first, newest id first within the same instant. */
+/** Default order: newest created first, newest id first within the same instant. */
 const byAge = (a: TicketRow, b: TicketRow) => {
     const d = b.createdAt.localeCompare(a.createdAt);
     return d !== 0 ? d : b.id - a.id;
 };
 
 async function fetchTickets<T extends TicketRow>(
+    apiPath: string,
     q: TicketsQuery,
     search: string,
     opts: { cursor?: number | null; since?: string | null } = {},
 ): Promise<SyncResponse<T>> {
-    const { data } = await axios.get<SyncResponse<T>>(API, {
+    const { data } = await axios.get<SyncResponse<T>>(apiPath, {
         params: {
             sync: 1,
             ...(q.pipelineId ? { pipelineId: q.pipelineId } : {}),
@@ -129,8 +150,21 @@ async function writeCachedView<T extends TicketRow>(key: string, rows: T[], next
     });
 }
 
-export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery) {
-    const [rows,        setRows]        = useState<T[]>([]);
+export type UseTicketsDeltaOptions<T extends TicketRow> = {
+    /** Which board endpoint to sync against. Defaults to the Repair Tickets API. */
+    apiPath?: string;
+    /** Merge order for the combined rows. Defaults to newest-first by createdAt —
+     *  boards with their own manual drag order (Deals/Help/Administration, which
+     *  carry a server-computed `order`) should pass a comparator over that field
+     *  instead, so a delta merge doesn't scramble a hand-ordered column. */
+    sort?: (a: T, b: T) => number;
+};
+
+export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, options: UseTicketsDeltaOptions<T> = {}) {
+    const apiPath = options.apiPath ?? DEFAULT_API;
+    const sort = options.sort ?? (byAge as unknown as (a: T, b: T) => number);
+
+    const [rows,        setRows]       = useState<T[]>([]);
     const [loading,     setLoading]     = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error,       setError]       = useState<string | null>(null);
@@ -139,7 +173,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery) {
     const [tick,        setTick]        = useState(0);
 
     const search = useDebouncedValue(query.search?.trim() ?? "", SEARCH_DEBOUNCE_MS);
-    const key = viewKey(query);
+    const key = viewKey(apiPath, query);
     const cacheable = search === "";
 
     const checkedAtRef = useRef<string | null>(null);
@@ -148,8 +182,16 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery) {
     const bridgeRef  = useRef(false);
     const forceNext  = useRef(false);
 
+    /** Manual/forced refresh — bypasses the local cache entirely (the Reload
+     *  button, and right after this tab's own save). */
     const reload = useCallback(() => {
         forceNext.current = true;
+        setTick((t) => t + 1);
+    }, []);
+
+    /** A soft nudge — re-runs the normal cache→delta path, so a realtime signal
+     *  costs only what actually changed, not a full re-pull. */
+    const refresh = useCallback(() => {
         setTick((t) => t + 1);
     }, []);
 
@@ -172,7 +214,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery) {
                 cached = await readCachedView<T>(key);
                 if (cancelled) return;
                 if (cached) {
-                    setRows(cached.rows);
+                    setRows([...cached.rows].sort(sort));
                     setNextCursor(cached.nextCursor);
                     checkedAtRef.current = cached.checkedAt;
                     setLoading(false);
@@ -181,55 +223,64 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery) {
 
             try {
                 if (cached) {
-                    const res = await fetchTickets<T>(query, search, { since: cached.checkedAt });
+                    const res = await fetchTickets<T>(apiPath, query, search, { since: cached.checkedAt });
                     if (cancelled) return;
 
                     if (res.mode === "delta" && res.overflow) {
-                        const fresh = await fetchTickets<T>(query, search);
+                        const fresh = await fetchTickets<T>(apiPath, query, search);
                         if (cancelled || fresh.mode !== "page") return;
-                        setRows(fresh.rows);
+                        const sorted = [...fresh.rows].sort(sort);
+                        setRows(sorted);
                         setNextCursor(fresh.nextCursor);
                         checkedAtRef.current = fresh.computedAt;
-                        if (onCounter && cacheable) await writeCachedView(key, fresh.rows, fresh.nextCursor, fresh.computedAt);
+                        if (onCounter && cacheable) await writeCachedView(key, sorted, fresh.nextCursor, fresh.computedAt);
                     } else if (res.mode === "delta") {
                         const byId = new Map(rowsRef.current.map((r) => [r.id, r]));
                         for (const r of res.rows) byId.set(r.id, r);
-                        const merged = [...byId.values()].sort(byAge);
+                        const merged = [...byId.values()].sort(sort);
                         setRows(merged);
                         checkedAtRef.current = res.computedAt;
                         if (onCounter && cacheable) await writeCachedView(key, merged, cached.nextCursor, res.computedAt);
                     }
                 } else {
-                    const res = await fetchTickets<T>(query, search);
+                    const res = await fetchTickets<T>(apiPath, query, search);
                     if (cancelled || res.mode !== "page") return;
-                    setRows(res.rows);
+                    const sorted = [...res.rows].sort(sort);
+                    setRows(sorted);
                     setNextCursor(res.nextCursor);
                     checkedAtRef.current = res.computedAt;
-                    if (onCounter && cacheable) await writeCachedView(key, res.rows, res.nextCursor, res.computedAt);
+                    if (onCounter && cacheable) await writeCachedView(key, sorted, res.nextCursor, res.computedAt);
                 }
             } catch (e) {
                 if (cancelled) return;
                 if (cached) setStale(true);
-                else setError(e instanceof Error ? e.message : "Failed to load tickets");
+                else setError(e instanceof Error ? e.message : "Failed to load");
             } finally {
                 if (!cancelled) setLoading(false);
             }
         })();
 
         return () => { cancelled = true; };
-        // `query` is rebuilt every render by the caller; `key` + `search` are its
-        // identity as far as fetching is concerned.
+        // `query`/`sort` are rebuilt every render by the caller; `key` + `search`
+        // are `query`'s identity as far as fetching is concerned, and `sort` is
+        // only ever read inside the closure above, never used to decide whether
+        // to refetch.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key, search, cacheable, tick]);
+
+    // A change anywhere that touches this board's topic re-checks it live — see
+    // the module doc's REALTIME section. Coalesced and hidden-tab-safe already
+    // (useRealtimeTopics), so this costs nothing on a quiet board.
+    useRealtimeTopics(["tickets"], refresh);
 
     const loadMore = useCallback(() => {
         if (nextCursor == null || loadingMore) return;
         setLoadingMore(true);
         void (async () => {
             try {
-                const res = await fetchTickets<T>(query, search, { cursor: nextCursor });
+                const res = await fetchTickets<T>(apiPath, query, search, { cursor: nextCursor });
                 if (res.mode !== "page") return;
-                const merged = [...rowsRef.current, ...res.rows].sort(byAge);
+                const merged = [...rowsRef.current, ...res.rows].sort(sort);
                 setRows(merged);
                 setNextCursor(res.nextCursor);
                 if (bridgeRef.current && cacheable) {
@@ -245,7 +296,11 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery) {
     }, [key, search, cacheable, nextCursor, loadingMore]);
 
     return {
-        rows, loading, loadingMore,
+        rows,
+        /** Optimistic local patch (e.g. an instant drag-move before the server
+         *  confirms). A later delta/realtime refresh reconciles it with truth. */
+        setRows: setRows as Dispatch<SetStateAction<T[]>>,
+        loading, loadingMore,
         hasMore: nextCursor != null,
         error, stale, loadMore, reload,
     };

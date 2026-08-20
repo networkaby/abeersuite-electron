@@ -17,6 +17,7 @@ import {
 import { formatDateTime, formatCallerNumber } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
+import { useRealtimeTopics } from "@/shared/hooks";
 
 // ── Wire type (mirrors GET /api/calls) ──────────────────────────────────────────
 type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
@@ -108,22 +109,26 @@ export default function CallLogWorkspace() {
     const [noteDraft, setNoteDraft] = useState("");
     const [noteSaving, setNoteSaving] = useState(false);
 
+    const buildParams = (targetPage: number) => {
+        const params = new URLSearchParams();
+        params.set("page", String(targetPage));
+        params.set("limit", String(PAGE_SIZE));
+        if (search.trim()) params.set("search", search.trim());
+        if (missedMode !== "all") params.set("missed", missedMode);
+        if (showSpam) params.set("spam", "1");
+        if (showInternal) params.set("direction", "all");
+        if (dateFrom) params.set("from", dateFrom);
+        if (dateTo) params.set("to", dateTo);
+        if (showNoNumber) params.set("noNumber", "1");
+        return params;
+    };
+
     // Page 1 replaces the list; any later page appends to it ("Load more"), so
     // scrolling back through older calls never loses what's already on screen.
     const load = useCallback(async (targetPage: number) => {
         setLoading(true);
         try {
-            const params = new URLSearchParams();
-            params.set("page", String(targetPage));
-            params.set("limit", String(PAGE_SIZE));
-            if (search.trim()) params.set("search", search.trim());
-            if (missedMode !== "all") params.set("missed", missedMode);
-            if (showSpam) params.set("spam", "1");
-            if (showInternal) params.set("direction", "all");
-            if (dateFrom) params.set("from", dateFrom);
-            if (dateTo) params.set("to", dateTo);
-            if (showNoNumber) params.set("noNumber", "1");
-            const { data } = await axios.get<CallsResponse>(`/api/calls?${params.toString()}`);
+            const { data } = await axios.get<CallsResponse>(`/api/calls?${buildParams(targetPage).toString()}`);
             setItems((prev) => (targetPage === 1 ? data.items : [...prev, ...data.items]));
             setTotal(data.pagination.total);
             setPage(targetPage);
@@ -132,11 +137,31 @@ export default function CallLogWorkspace() {
         } finally {
             setLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
 
     // `load` changes identity whenever a filter changes, which restarts the list
     // from page 1 — no separate page-reset effect needed.
     useEffect(() => { void load(1); }, [load]);
+
+    // Realtime nudge (a new call pushed by the bridge, a note/spam edit by a
+    // colleague): merge the first page's worth of rows into whatever is already
+    // loaded instead of replacing the list outright — a live signal must not
+    // throw away pages the user reached via "Load more".
+    const refreshHead = useCallback(async () => {
+        try {
+            const { data } = await axios.get<CallsResponse>(`/api/calls?${buildParams(1).toString()}`);
+            setItems((prev) => {
+                const byId = new Map(prev.map((c) => [c.id, c]));
+                for (const c of data.items) byId.set(c.id, c);
+                return [...byId.values()].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.id - a.id);
+            });
+            setTotal(data.pagination.total);
+        } catch { /* next signal, or the manual refresh button, tries again */ }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
+
+    useRealtimeTopics(["tickets"], refreshHead);
 
     /** Apply a preset day range. Passing null clears the range (= all dates). */
     const setRange = (days: number | null, mode: "last" | "single" | "month" = "last") => {

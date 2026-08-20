@@ -19,11 +19,15 @@
  *   • `parties`       — customers and companies, keyed by [type+id]. One store
  *                       rather than two because every consumer searches them
  *                       together and shows one merged result list.
- *   • `tickets`       — repair tickets, real rows keyed by id and shared across
- *                       every filter view that references them.
- *   • `ticketViews` / — one row per FILTER VIEW: the id list + cursor + sync
- *     `dayBookViews`    watermark for that view. Splitting the index off the data
- *                       is what lets two views hold the same ticket once.
+ *   • `tickets`       — every Ticket-flavoured row (repair, deal, help, admin
+ *                       task — all the same `Ticket` model, one Dexie table),
+ *                       real rows keyed by id and shared across every board's
+ *                       filter views. See `useTicketsDelta`.
+ *   • `ticketViews` / — one row per BOARD/FILTER VIEW: the id list + cursor +
+ *     `dayBookViews`    sync watermark for that view, namespaced by which API
+ *                       it came from so Deals' view can't collide with Help's.
+ *                       Splitting the index off the data is what lets two
+ *                       views hold the same ticket once.
  *
  * COUNTER-ONLY, for the stores that hold business data. Ticket, Day Book and
  * party rows carry customer names, phones, devices and the books, so their

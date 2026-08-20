@@ -28,7 +28,7 @@ export default function TaskDetailDialog({
     onEdit,
     onChanged,
 }: {
-    taskId: string | null;
+    taskId: number | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     stages: TaskStage[];

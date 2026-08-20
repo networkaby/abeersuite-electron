@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
@@ -86,6 +87,44 @@ export async function GET(req: Request) {
         // cron — the board read IS the trigger (same compute-on-read pattern as
         // the Work Inbox snooze). Best-effort: never 500 the board.
         await runTaskRecurrences().catch(() => { });
+
+        // ── Sync mode (Task board's Dexie-cached delta — see useTicketsDelta) ──
+        if (searchParams.get("sync")) {
+            const computedAt = new Date();
+            const sinceParam = searchParams.get("since");
+            const since = sinceParam ? new Date(sinceParam) : null;
+            const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
+
+            if (since && !Number.isNaN(since.getTime())) {
+                const MAX_DELTA_ROWS = 500;
+                const changed = await prisma.ticket.findMany({
+                    where: { pipelineId, updatedAt: { gt: since } },
+                    orderBy,
+                    take: MAX_DELTA_ROWS + 1,
+                    select: TASK_TICKET_SELECT,
+                });
+                const overflow = changed.length > MAX_DELTA_ROWS;
+                return NextResponse.json({
+                    mode: "delta",
+                    rows: overflow ? [] : changed.map(flattenTask),
+                    overflow,
+                    computedAt: computedAt.toISOString(),
+                });
+            }
+
+            const all = await prisma.ticket.findMany({
+                where: { pipelineId },
+                orderBy,
+                select: TASK_TICKET_SELECT,
+            });
+            return NextResponse.json({
+                mode: "page",
+                rows: all.map(flattenTask),
+                nextCursor: null,
+                computedAt: computedAt.toISOString(),
+            });
+        }
+
         const tasks = await prisma.ticket.findMany({
             where: { pipelineId },
             orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],

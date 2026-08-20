@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ import TaskCard from "./TaskCard";
 import TaskFormDialog from "./TaskFormDialog";
 import TaskDetailDialog from "./TaskDetailDialog";
 import type { TaskDto, TaskStage } from "../lib/types";
-import { usePositionPicker } from "@/shared/hooks";
+import { usePositionPicker, useTicketsDelta } from "@/shared/hooks";
 
 export default function TaskBoard({
     stages,
@@ -37,42 +37,41 @@ export default function TaskBoard({
 
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [tasks, setTasks] = useState<TaskDto[]>([]);
-    const [loading, setLoading] = useState(true);
     const [myTasksOnly, setMyTasksOnly] = useState(false);
-    const [draggedId, setDraggedId] = useState<string | null>(null);
+    const [draggedId, setDraggedId] = useState<number | null>(null);
     const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
     // Dialog state
     const [formOpen, setFormOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<TaskDto | null>(null);
-    const [detailId, setDetailId] = useState<string | null>(null);
+    const [detailId, setDetailId] = useState<number | null>(null);
     const [detailOpen, setDetailOpen] = useState(false);
 
-    const load = useCallback(async () => {
-        try {
-            const res = await axios.get<TaskDto[]>("/api/admin-tasks");
-            setTasks(res.data);
-        } catch {
-            toast.error("Failed to load tasks");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    // Dexie-cached + delta-synced against the same Ticket replica the other
+    // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
+    const { rows: tasks, setRows: setTasks, loading, error, reload: load } = useTicketsDelta<TaskDto>({}, {
+        apiPath: "/api/admin-tasks",
+        sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
+    });
 
-    useEffect(() => {
-        load();
-    }, [load]);
+    useEffect(() => { if (error) toast.error("Failed to load tasks"); }, [error]);
 
     // Deep-link from the module button bar: /office/administration?new=1 opens the
     // create dialog, then we strip the param so a refresh doesn't reopen it.
+    // Adjusted during render against a stored "last handled" key, rather than
+    // in an effect — see the matching comment in DealsWorkspace.
+    const [handledNewParam, setHandledNewParam] = useState<string | null>(null);
+    const newParamKey = searchParams.get("new") !== null && canCreate ? searchParams.toString() : null;
+    if (newParamKey !== null && handledNewParam !== newParamKey) {
+        setHandledNewParam(newParamKey);
+        setEditingTask(null);
+        setFormOpen(true);
+    }
     useEffect(() => {
-        if (searchParams.get("new") !== null && canCreate) {
-            setEditingTask(null);
-            setFormOpen(true);
+        if (newParamKey !== null && handledNewParam === newParamKey) {
             router.replace("/office/administration");
         }
-    }, [searchParams, canCreate, router]);
+    }, [newParamKey, handledNewParam, router]);
 
     const mySet = new Set(myPositionIds);
     const visible = myTasksOnly
@@ -117,7 +116,7 @@ export default function TaskBoard({
         setEditingTask(task);
         setFormOpen(true);
     };
-    const openDetail = (id: string) => {
+    const openDetail = (id: number) => {
         setDetailId(id);
         setDetailOpen(true);
     };

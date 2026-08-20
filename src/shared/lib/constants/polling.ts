@@ -69,11 +69,13 @@ export const POS_LIVE_POLL_MS = 5_400_000;   // 90 minutes
  * The counter call follow-up popup (CallFollowUpPopup) — checks for a just-
  * finished, not-yet-logged call at this counter's extension.
  *
- * The PRIMARY mechanism here, not a fallback: the row is written by the
+ * A SAFETY NET now, not the primary mechanism: the row is written by the
  * epbx-bridge posting directly to `/api/calls` from the counter PC's own
- * process, never through this app's browser axios instance — so the "tickets"
- * realtime topic (which only fires off a browser-side write, see
- * `appChannel.ts`'s `attachChangePublisher`) essentially never announces a new
- * call. Polling is what actually notices one.
+ * process, never through this app's browser axios instance — so it can't rely
+ * on `attachChangePublisher`'s interceptor the way most writes do. Instead
+ * `/api/calls`' POST handler publishes the "tickets" signal itself, server-side
+ * (see `serverPublish.ts`), so the popup normally reacts within ~1s over the
+ * same realtime channel. This poll just covers the gap if that publish is
+ * ever missed (socket hiccup, bridge retry racing the signal, etc).
  */
 export const CALL_POPUP_POLL_MS = 20_000;   // 20 seconds

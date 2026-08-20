@@ -64,12 +64,10 @@ import { supabase } from "@/shared/lib/supabase/supabaseClient";
 import { topicsForApiPath, type Topic } from "./topics";
 import { writeCache, readCache, subscribeToCache } from "@/shared/lib/browser/pollCache";
 import { isTabLeader, onBecomeLeader } from "./tabLeader";
+import { CHANGE_CHANNEL_NAME as CHANNEL_NAME, CHANGE_EVENT_NAME as EVENT_NAME } from "./channel";
 
 /** What travels on the wire: which buckets moved, and when. Nothing else. */
 export type ChangeSignal = { topics: Topic[]; at: string };
-
-const CHANNEL_NAME = "app:changes";
-const EVENT_NAME   = "changed";
 
 /** A single save can fire several requests (post, then allocate, then print).
  *  Collect them into one announcement instead of one per request. */

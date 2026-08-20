@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
@@ -89,6 +90,45 @@ export async function GET(req: Request) {
         if (!pipeline) return NextResponse.json({ error: "Help Desk pipeline not configured" }, { status: 503 });
 
         const sp = new URL(req.url).searchParams;
+
+        // ── Sync mode (Help board's Dexie-cached delta — see useTicketsDelta) ──
+        if (sp.get("sync")) {
+            const computedAt = new Date();
+            const sinceParam = sp.get("since");
+            const since = sinceParam ? new Date(sinceParam) : null;
+            const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
+
+            if (since && !Number.isNaN(since.getTime())) {
+                const MAX_DELTA_ROWS = 500;
+                const changed = await prisma.ticket.findMany({
+                    where: { pipelineId: pipeline.id, updatedAt: { gt: since } },
+                    orderBy,
+                    take: MAX_DELTA_ROWS + 1,
+                    select: HELP_TICKET_SELECT,
+                });
+                const overflow = changed.length > MAX_DELTA_ROWS;
+                return NextResponse.json({
+                    mode: "delta",
+                    rows: overflow ? [] : changed.map(flattenHelp),
+                    overflow,
+                    computedAt: computedAt.toISOString(),
+                });
+            }
+
+            const all = await prisma.ticket.findMany({
+                where: { pipelineId: pipeline.id },
+                orderBy,
+                select: HELP_TICKET_SELECT,
+            });
+            return NextResponse.json({
+                mode: "page",
+                rows: all.map(flattenHelp),
+                nextCursor: null,
+                computedAt: computedAt.toISOString(),
+            });
+        }
+
+        // ── List mode — bare array, for existing callers (CallFollowUpPopup, etc.) ──
         const q = sp.get("q")?.trim();
         const personId = sp.get("personId");
         const companyId = sp.get("companyId");

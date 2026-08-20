@@ -56,7 +56,7 @@ export interface TaskCommentDto {
 }
 
 export interface TaskDto {
-    id: string;
+    id: number;
     title: string;
     description: string | null;
     category: string | null;

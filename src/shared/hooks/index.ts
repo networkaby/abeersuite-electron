@@ -13,3 +13,5 @@ export { useNavCounts, useMarkSurfaceSeen, useInboxUnread, useNotificationUnread
 export { usePolling } from "./usePolling";
 export { useTableSort } from "./useTableSort";
 export { usePositionPicker, invalidatePositionPicker, type PositionPickerData } from "./usePositionPicker";
+export { useTicketsDelta, type TicketRow, type TicketsQuery, type UseTicketsDeltaOptions } from "./useTicketsDelta";
+export { useRealtimeTopics } from "./useRealtimeTopics";

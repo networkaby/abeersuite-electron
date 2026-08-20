@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -18,7 +18,7 @@ import HelpFormDialog from "./HelpFormDialog";
 import HelpQuickForm from "./HelpQuickForm";
 import HelpDetailDialog from "./HelpDetailDialog";
 import { INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle, type HelpDto, type HelpDetailDto, type HelpStage } from "../lib/types";
-import { usePositionPicker } from "@/shared/hooks";
+import { usePositionPicker, useTicketsDelta } from "@/shared/hooks";
 
 export default function HelpWorkspace({
     stages,
@@ -40,8 +40,6 @@ export default function HelpWorkspace({
 
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [tickets, setTickets] = useState<HelpDto[]>([]);
-    const [loading, setLoading] = useState(true);
     const [mineOnly, setMineOnly] = useState(false);
     const [query, setQuery] = useState("");
 
@@ -51,26 +49,29 @@ export default function HelpWorkspace({
     const [detailId, setDetailId] = useState<number | null>(null);
     const [detailOpen, setDetailOpen] = useState(false);
 
-    const load = useCallback(async () => {
-        try {
-            const res = await axios.get<HelpDto[]>("/api/help");
-            setTickets(res.data);
-        } catch {
-            toast.error("Failed to load help tickets");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    // Dexie-cached + delta-synced against the same Ticket replica the other
+    // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
+    const { rows: tickets, setRows: setTickets, loading, error, reload: load } = useTicketsDelta<HelpDto>({}, {
+        apiPath: "/api/help",
+        sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
+    });
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { if (error) toast.error("Failed to load help tickets"); }, [error]);
 
-    // Deep link: /office/help?new=1 opens the quick create dialog.
+    // Deep link: /office/help?new=1 opens the quick create dialog. Adjusted
+    // during render against a stored "last handled" key, rather than in an
+    // effect — see the matching comment in DealsWorkspace.
+    const [handledNewParam, setHandledNewParam] = useState<string | null>(null);
+    const newParamKey = searchParams.get("new") !== null && canCreate ? searchParams.toString() : null;
+    if (newParamKey !== null && handledNewParam !== newParamKey) {
+        setHandledNewParam(newParamKey);
+        setQuickOpen(true);
+    }
     useEffect(() => {
-        if (searchParams.get("new") !== null && canCreate) {
-            setQuickOpen(true);
+        if (newParamKey !== null && handledNewParam === newParamKey) {
             router.replace("/office/help");
         }
-    }, [searchParams, canCreate, router]);
+    }, [newParamKey, handledNewParam, router]);
 
     const mySet = new Set(myPositionIds);
     const q = query.trim().toLowerCase();

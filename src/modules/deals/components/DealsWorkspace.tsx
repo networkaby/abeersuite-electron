@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
-import { usePositionPicker } from "@/shared/hooks";
+import { usePositionPicker, useTicketsDelta } from "@/shared/hooks";
 import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import DealBoard from "./DealBoard";
 import DealTable from "./DealTable";
@@ -39,8 +39,6 @@ export default function DealsWorkspace({
 
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [deals, setDeals] = useState<DealDto[]>([]);
-    const [loading, setLoading] = useState(true);
     const [myDealsOnly, setMyDealsOnly] = useState(false);
 
     const [formOpen, setFormOpen] = useState(false);
@@ -48,27 +46,31 @@ export default function DealsWorkspace({
     const [detailId, setDetailId] = useState<number | null>(null);
     const [detailOpen, setDetailOpen] = useState(false);
 
-    const load = useCallback(async () => {
-        try {
-            const res = await axios.get<DealDto[]>("/api/deals");
-            setDeals(res.data);
-        } catch {
-            toast.error("Failed to load deals");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    // Dexie-cached + delta-synced against the same Ticket replica the other
+    // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
+    const { rows: deals, setRows: setDeals, loading, error, reload: load } = useTicketsDelta<DealDto>({}, {
+        apiPath: "/api/deals",
+        sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
+    });
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { if (error) toast.error("Failed to load deals"); }, [error]);
 
     // Button-bar deep link: /office/crm/deals?new=1 opens the create dialog.
+    // Adjusted during render against a stored "last handled" key, rather than
+    // in an effect — the React-docs-recommended shape for "derive state from a
+    // prop that just changed" (see "You Might Not Need An Effect").
+    const [handledNewParam, setHandledNewParam] = useState<string | null>(null);
+    const newParamKey = searchParams.get("new") !== null && canCreate ? searchParams.toString() : null;
+    if (newParamKey !== null && handledNewParam !== newParamKey) {
+        setHandledNewParam(newParamKey);
+        setEditingDeal(null);
+        setFormOpen(true);
+    }
     useEffect(() => {
-        if (searchParams.get("new") !== null && canCreate) {
-            setEditingDeal(null);
-            setFormOpen(true);
+        if (newParamKey !== null && handledNewParam === newParamKey) {
             router.replace("/office/crm/deals");
         }
-    }, [searchParams, canCreate, router]);
+    }, [newParamKey, handledNewParam, router]);
 
     const mySet = new Set(myPositionIds);
     const visible = myDealsOnly

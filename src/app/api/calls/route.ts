@@ -5,6 +5,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parsePagination } from "@/shared/lib/api";
 import { phoneMatchKey, phoneKeyVariants, normalizeDialedNumber } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
 import type { CallDirection } from "@/generated/prisma/client";
 
@@ -194,6 +195,12 @@ export async function POST(req: Request) {
 
         try {
             const created = await prisma.call.create({ data: createData, select: { id: true } });
+            // This insert bypassed the browser entirely (the bridge posted straight
+            // here), so it never rides `attachChangePublisher`'s axios interceptor —
+            // publish it ourselves so the counter's call follow-up popup notices
+            // instantly instead of waiting on its fallback poll. Fire-and-forget:
+            // never hold the bridge's response up on the realtime round-trip.
+            void publishChangeServer(["tickets"]);
             return NextResponse.json({ success: true, id: created.id }, { status: 201 });
         } catch (e) {
             // Lost the race: another PC inserted the same raw line between our

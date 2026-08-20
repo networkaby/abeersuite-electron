@@ -10,7 +10,7 @@ import { REPAIR_PIPELINE_NAME } from "@/modules/repairing/lib/repairPipeline";
 import { useMarkSurfaceSeen } from "@/shared/hooks/useNavCounts";
 import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
-import { useTicketsDelta, type TicketRow } from "@/modules/repairing/hooks/useTicketsDelta";
+import { useTicketsDelta, type TicketRow } from "@/shared/hooks/useTicketsDelta";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";

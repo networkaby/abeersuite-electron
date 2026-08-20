@@ -7,11 +7,12 @@
  * not tied to any one screen.
  *
  * The epbx-bridge writes straight into `Call` (POST /api/calls) from the
- * counter PC's own process, not through this app's browser — so this can't
- * rely on the realtime "tickets" topic the way most other popups do (that
- * only fires off a browser-driven write, see `appChannel.ts`). Polling
- * (`CALL_POPUP_POLL_MS`) is the real mechanism; the topic subscription below
- * is just a bonus for the odd case a colleague's own save nudges a refresh.
+ * counter PC's own process, not through this app's browser — so it can't ride
+ * `attachChangePublisher`'s axios interceptor the way most writes do. Instead
+ * `/api/calls`' POST handler publishes the "tickets" signal itself, server-side
+ * (see `serverPublish.ts`), so the realtime subscription below is the real,
+ * near-instant mechanism. Polling (`CALL_POPUP_POLL_MS`) is now just the
+ * safety net for the rare missed publish.
  *
  * WHICH CALLS. No shift needs to be open — `useMyCounterExtension` resolves
  * this PC's counter from the bridge's device id, which stays bound long after
