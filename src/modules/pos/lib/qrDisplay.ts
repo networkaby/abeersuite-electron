@@ -83,11 +83,25 @@ export interface QrThankyou {
     message?: string;
 }
 
+/// A single item NOT yet on the bill — Product Explorer hover preview, so the
+/// customer can see the actual photo/name/price and agree before it's added.
+/// Distinct screen from QrCart (the running bill), which stays text-only.
+export interface QrProduct {
+    name:   string;
+    price:  number;
+    /// MRP (rupees, tax-inclusive tag) — struck-through when higher than price.
+    mrp?:   number;
+    /// Shelf photo URL. Missing/unreachable/unsupported falls back to a
+    /// text-only card on the relay side — never breaks the frame.
+    image?: string;
+}
+
 export const qrDisplay = {
     customer: (data: QrCustomer) => send("/pos/customer", data),
     cart:     (data: QrCart)     => send("/pos/cart",     data),
     payment:  (data: QrPayment)  => send("/pos/payment",  data),
     upi:      (data: QrUpi)      => send("/pos/upi",      data),
+    product:  (data: QrProduct)  => send("/pos/product",  data),
     thankyou: (data: QrThankyou) => send("/pos/thankyou", data),
     idle:     ()                 => send("/idle/start",   {}),
     clear:    ()                 => send("/clear",        {}),

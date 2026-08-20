@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, CheckCircle, XCircle, RefreshCw, QrCode, Play, Smile, ScanLine, Eraser } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, RefreshCw, QrCode, Play, Smile, ScanLine, Eraser, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
 import { Input } from "@/components/ui/input";
@@ -146,6 +146,15 @@ export default function QrDisplaySettingsPage() {
             caption: "Test ₹100",
         });
 
+    // Product Explorer hover preview — a real, small, publicly reachable photo
+    // so the button also proves the relay's fetch-and-composite path works,
+    // not just its text layout.
+    const testProduct = () => runTest("Test product photo", "/pos/product", {
+        name: "Wireless Mouse Pro",
+        price: 799,
+        mrp: 999,
+        image: "https://picsum.photos/seed/dq11-test/320/300",
+    });
     const testThankyou = () => runTest("Test thank-you", "/pos/thankyou", { amount: 1300 });
     const testIdle     = () => runTest("Start slideshow", "/idle/start", {});
     const testClear    = () => runTest("Clear screen",   "/clear",       {});
@@ -273,6 +282,10 @@ export default function QrDisplaySettingsPage() {
                         <Button variant="outline" size="sm" onClick={testUpi} disabled={!!testing}>
                             {testing === "Test UPI QR" ? <Loader2 size={14} className="animate-spin" /> : <QrCode size={14} />}
                             Test UPI QR
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={testProduct} disabled={!!testing}>
+                            {testing === "Test product photo" ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                            Test Product Photo
                         </Button>
                         <Button variant="outline" size="sm" onClick={testThankyou} disabled={!!testing}>
                             {testing === "Test thank-you" ? <Loader2 size={14} className="animate-spin" /> : <Smile size={14} />}

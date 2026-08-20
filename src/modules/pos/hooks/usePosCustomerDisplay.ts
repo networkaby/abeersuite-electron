@@ -83,16 +83,16 @@ export function usePosCustomerDisplay({
                     balance: Math.max(0, payableTotal - collected),
                 });
             } else if (hoverPreview) {
-                // Standalone single-item view, no discount/tax ladder — this item
-                // isn't on the bill yet, it's a "does this look right?" preview.
+                // Standalone single-item view (its own DQ11 screen, complete with
+                // the shelf photo when there is one) — not on the bill yet, just
+                // "does this look right?" before the cashier actually adds it.
                 const price = hoverPreview.effectiveSalePricePaise != null ? hoverPreview.effectiveSalePricePaise / 100 : 0;
                 const mrp = hoverPreview.mrpPaise != null ? hoverPreview.mrpPaise / 100 : undefined;
-                const barcode = hoverPreview.barcodePricePaise != null ? hoverPreview.barcodePricePaise / 100 : undefined;
-                void qrDisplay.cart({
-                    title: "Add this item?",
-                    items: [{ name: hoverPreview.name, qty: 1, price, mrp, barcode }],
-                    subtotal: price,
-                    total: price,
+                void qrDisplay.product({
+                    name: hoverPreview.name,
+                    price,
+                    mrp,
+                    image: hoverPreview.imageUrl ?? undefined,
                 });
             } else if (cart.length > 0) {
                 // Customer-facing price ladder — same computed view as the receipt.

@@ -26,36 +26,36 @@ import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog"
 import type { InvProductFormState } from "./InvProductFormFields";
 
 type ProductOption = {
-    id:         number;
-    sku:        string;
-    name:       string;
-    stock:      number | null;
+    id: number;
+    sku: string;
+    name: string;
+    stock: number | null;
     lowStockThreshold: number;
     pricePaise: number | null;   // sale price
     lastPurchasePaise: number | null;   // last inward rate (derived from ledger walk)
-    mrpPaise:   number | null;
-    unit:       { code: string };
-    brand:      { name: string } | null;
-    barcode1:   string | null;
-    codes?:     { kind: string; value: string }[];
+    mrpPaise: number | null;
+    unit: { code: string };
+    brand: { name: string } | null;
+    barcode1: string | null;
+    codes?: { kind: string; value: string }[];
 };
 
 export type SelectedProduct = {
-    id:          number;
-    sku:         string;
-    name:        string;
-    unitCode:    string;
-    stock:       number | null;
-    salePrice:   number | null;   // in ₹ (converted from paise)
-    costPrice:   number | null;
-    mrp:         number | null;
+    id: number;
+    sku: string;
+    name: string;
+    unitCode: string;
+    stock: number | null;
+    salePrice: number | null;   // in ₹ (converted from paise)
+    costPrice: number | null;
+    mrp: number | null;
 };
 
 type Props = {
     /** Currently selected product id (null = nothing selected) */
-    value:     number | null;
+    value: number | null;
     /** Called when user selects a product from the dropdown */
-    onChange:  (product: SelectedProduct | null) => void;
+    onChange: (product: SelectedProduct | null) => void;
     /** Placeholder shown in the input */
     placeholder?: string;
     className?: string;
@@ -77,21 +77,21 @@ const formatINR = (paise: number | null) =>
 
 function toSelected(p: ProductOption): SelectedProduct {
     return {
-        id:        p.id,
-        sku:       p.sku,
-        name:      p.name,
-        unitCode:  p.unit.code,
-        stock:     p.stock,
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        unitCode: p.unit.code,
+        stock: p.stock,
         salePrice: p.pricePaise != null ? p.pricePaise / 100 : null,
         costPrice: p.lastPurchasePaise != null ? p.lastPurchasePaise / 100 : null,
-        mrp:       p.mrpPaise   != null ? p.mrpPaise   / 100 : null,
+        mrp: p.mrpPaise != null ? p.mrpPaise / 100 : null,
     };
 }
 
 export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true }: Props) {
-    const [products, setProducts]   = useState<ProductOption[]>([]);
-    const [query, setQuery]         = useState("");
-    const [loading, setLoading]     = useState(true);
+    const [products, setProducts] = useState<ProductOption[]>([]);
+    const [query, setQuery] = useState("");
+    const [loading, setLoading] = useState(true);
     const [createOpen, setCreateOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [advancedDefaults, setAdvancedDefaults] = useState<Partial<InvProductFormState> | undefined>();
@@ -149,6 +149,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // space so long product lists never spill past the viewport. Flip up
     // when bottom space is cramped.
     const DROPDOWN_MAX_H = 360;
+    const DROPDOWN_RIGHT_TRIM = 38; // ~1cm — pull the right edge in from the table edge
     const VIEWPORT_MARGIN = 12;
     const [pos, setPos] = useState<{
         top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
@@ -167,13 +168,11 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             const flipUp = spaceBelow < 200 && spaceAbove > spaceBelow;
             const available = Math.max(120, flipUp ? spaceAbove : spaceBelow);
             const maxHeight = Math.min(DROPDOWN_MAX_H, available);
-            const width = Math.max(
-                420,
-                tableRect ? tableRect.right - rect.left : rect.width,
-            );
+            const naturalWidth = tableRect ? tableRect.right - rect.left : rect.width;
+            const width = Math.max(420, naturalWidth - DROPDOWN_RIGHT_TRIM);
             const anchorY = flipUp ? rect.top : rect.bottom;
             setPos({
-                top:  anchorY - target.top,
+                top: anchorY - target.top,
                 left: rect.left - target.left,
                 width,
                 maxHeight,
@@ -261,10 +260,10 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                     // TradingVoucherPage action bar (no explicit z but rendered
                     // later in DOM). overflow-hidden clips inner list to
                     // maxHeight so the dropdown never spills past viewport.
-                    className="fixed z-[60] mt-0.5 overflow-hidden rounded-lg border border-border bg-popover shadow-xl text-sm"
+                    className="fixed z-60 mt-0.5 overflow-hidden rounded-lg border border-border bg-popover shadow-xl text-sm"
                     style={{
-                        top:   pos.top,
-                        left:  pos.left,
+                        top: pos.top,
+                        left: pos.left,
                         width: pos.width,
                         maxHeight: pos.maxHeight,
                         transform: pos.flipUp ? "translateY(calc(-100% - 0.25rem))" : undefined,
@@ -312,7 +311,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                         >
                             <ul ref={listRef} className="divide-y divide-border">
                                 {filtered.map((p, i) => {
-                                    const isLow     = p.stock != null && p.stock <= p.lowStockThreshold;
+                                    const isLow = p.stock != null && p.stock <= p.lowStockThreshold;
                                     const stockZero = p.stock === 0;
                                     return (
                                         <li
@@ -323,9 +322,8 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                                 onChange(toSelected(p));
                                             }}
                                             onMouseEnter={() => cb.setHighlighted(i)}
-                                            className={`grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 cursor-pointer px-3 py-2 transition-colors ${
-                                                i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
-                                            }`}
+                                            className={`grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 cursor-pointer px-3 py-2 transition-colors ${i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
+                                                }`}
                                         >
                                             {/* Name + SKU + brand + barcode */}
                                             <div className="min-w-0 overflow-hidden">
@@ -349,9 +347,8 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                                 {formatINR(p.mrpPaise)}
                                             </span>
                                             {/* Stock */}
-                                            <span className={`text-right text-xs font-semibold tabular-nums self-center ${
-                                                stockZero ? "text-destructive" : isLow ? "text-orange-500" : "text-green-600"
-                                            }`}>
+                                            <span className={`text-right text-xs font-semibold tabular-nums self-center ${stockZero ? "text-destructive" : isLow ? "text-orange-500" : "text-green-600"
+                                                }`}>
                                                 {p.stock ?? "—"}
                                             </span>
                                         </li>
