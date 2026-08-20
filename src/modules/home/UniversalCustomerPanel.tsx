@@ -20,6 +20,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
+import { scoreProductSearch } from "@/shared/lib/inventory";
 import {
     Search, ShoppingBag, Wrench, PhoneCall, HeadphonesIcon, ClipboardList,
     X, Package, User, ChevronRight,
@@ -55,6 +56,8 @@ interface ProductOption {
     mrpPaise: number | null;
     unit: { code: string };
     brand: { name: string } | null;
+    attrsJson?: unknown;
+    codes?: readonly { value: string }[] | null;
 }
 
 interface TicketLookupResult {
@@ -142,15 +145,18 @@ function ProductLookup() {
         }
     }
 
-    const q = query.toLowerCase().trim();
+    // EXPERIMENTAL: tokenized smart search (order-independent, scores name +
+    // sku + brand + attrsJson + codes) — see scoreProductSearch. Only wired
+    // in here, not into the shared POS/ecommerce/inventory pickers.
+    const q = query.trim();
     const filtered = q.length < 2
         ? []
-        : products.filter(
-            (p) =>
-                p.name.toLowerCase().includes(q) ||
-                p.sku.toLowerCase().includes(q) ||
-                (p.brand?.name.toLowerCase().includes(q) ?? false),
-          ).slice(0, 6);
+        : products
+            .map((p) => ({ p, score: scoreProductSearch(p, q) }))
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 6)
+            .map((x) => x.p);
 
     return (
         <div className="flex-1 min-w-0">

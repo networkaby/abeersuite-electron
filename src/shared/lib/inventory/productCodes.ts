@@ -96,3 +96,46 @@ export function productMatchesQuery(
     if (p.sku && p.sku.toLowerCase().includes(needle)) return true;
     return (p.codes ?? []).some((c) => c.value.toLowerCase().includes(needle));
 }
+
+export type ProductSearchCandidate = {
+    name: string;
+    sku?: string | null;
+    brand?: { name: string } | null;
+    attrsJson?: unknown;
+    codes?: readonly { value: string }[] | null;
+};
+
+function productSearchText(p: ProductSearchCandidate): string {
+    const parts: string[] = [p.name, p.sku ?? "", p.brand?.name ?? ""];
+    if (p.attrsJson && typeof p.attrsJson === "object") {
+        for (const v of Object.values(p.attrsJson as Record<string, unknown>)) {
+            if (typeof v === "string") parts.push(v);
+        }
+    }
+    for (const c of p.codes ?? []) parts.push(c.value);
+    return parts.join(" ").toLowerCase();
+}
+
+/**
+ * EXPERIMENTAL — wired only into the office dashboard's product quick-lookup
+ * (UniversalCustomerPanel), NOT the shared {@link productMatchesQuery} used by
+ * POS/ecommerce/inventory pickers. Splits the query into whitespace tokens and
+ * requires every token to appear somewhere in name/sku/brand/attrsJson/codes
+ * (order doesn't matter), so "32 gb pendrive" matches "SanDisk Pendrive 32GB".
+ * Returns 0 for no match; higher score = closer match, for ranking results.
+ */
+export function scoreProductSearch(p: ProductSearchCandidate, query: string): number {
+    const q = query.trim().toLowerCase();
+    if (!q) return 1;
+    const text = productSearchText(p);
+    if (!text) return 0;
+
+    let score = text.includes(q) ? 100 : 0;
+
+    for (const token of q.split(/\s+/).filter(Boolean)) {
+        const idx = text.indexOf(token);
+        if (idx === -1) return 0;
+        score += idx === 0 || text[idx - 1] === " " ? 10 : 1;
+    }
+    return score;
+}
