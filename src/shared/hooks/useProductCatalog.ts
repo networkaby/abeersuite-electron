@@ -87,10 +87,14 @@ export function useProductCatalog<T extends Row = LocalProductRow>(
         if (eager) void ensureSynced();
     }, [eager]);
 
-    // A lazy (eager: false) picker still reacts to whatever an eager picker
-    // elsewhere loaded, but shouldn't itself provoke a fetch before the store
-    // has anything — so it only re-syncs on a live signal once it is warm.
-    useRealtimeTopics(["catalogue"], () => {
+    // "catalogue" = a product/price/tax/GST edit; "stock" = any voucher that
+    // moves inventory (sale, purchase, transfer, manufacturing). Both matter
+    // here — a picker showing stale stock right after someone else's sale is
+    // exactly the gap this cache exists to close. A lazy (eager: false)
+    // picker still reacts to whatever an eager picker elsewhere loaded, but
+    // shouldn't itself provoke a fetch before the store has anything — so it
+    // only re-syncs on a live signal once it is warm.
+    useRealtimeTopics(["catalogue", "stock"], () => {
         if (eager || useCatalogStore.getState().hydrated) void ensureSynced();
     });
 
