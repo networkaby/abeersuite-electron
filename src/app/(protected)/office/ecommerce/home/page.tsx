@@ -82,12 +82,14 @@ function BufferedIntField({
     onCommit,
     allowNegative,
     className,
+    disabled,
     "aria-label": ariaLabel,
 }: {
     value: number;
     onCommit: (n: number) => void;
     allowNegative?: boolean;
     className?: string;
+    disabled?: boolean;
     "aria-label"?: string;
 }) {
     const [text, setText] = useState(String(value));
@@ -106,6 +108,7 @@ function BufferedIntField({
                 if (next !== value) onCommit(next);
             }}
             className={className}
+            disabled={disabled}
             aria-label={ariaLabel}
         />
     );
@@ -229,6 +232,7 @@ function SectionRow({
     renders,
     isSelected,
     isOpen,
+    locked,
     onSelect,
     onDuplicate,
     onRemove,
@@ -241,6 +245,7 @@ function SectionRow({
     renders: boolean;
     isSelected: boolean;
     isOpen: boolean;
+    locked?: boolean;
     onSelect: () => void;
     onDuplicate: () => void;
     onRemove: () => void;
@@ -267,6 +272,7 @@ function SectionRow({
                         size="icon"
                         className="size-7"
                         onClick={onDuplicate}
+                        disabled={locked}
                         aria-label={`Duplicate ${inst.label}`}
                         title="Duplicate"
                     >
@@ -278,8 +284,9 @@ function SectionRow({
                         size="icon"
                         className="size-7 text-destructive"
                         onClick={onRemove}
+                        disabled={locked}
                         aria-label={`Delete ${inst.label}`}
-                        title="Delete"
+                        title={locked ? "Locked — fallback sections can't be deleted" : "Delete"}
                     >
                         <Trash2 className="size-3.5" aria-hidden />
                     </Button>
@@ -289,7 +296,8 @@ function SectionRow({
                     <Input
                         value={inst.label}
                         onChange={(e) => onUpdate({ label: e.target.value })}
-                        className="h-7 border-transparent bg-transparent px-1 text-sm font-medium shadow-none hover:border-border focus-visible:border-border"
+                        disabled={locked}
+                        className="h-7 border-transparent bg-transparent px-1 text-sm font-medium shadow-none hover:border-border focus-visible:border-border disabled:opacity-100"
                     />
                     <p className="px-1 text-[11px] text-muted-foreground">{def.label}</p>
                 </div>
@@ -310,6 +318,7 @@ function SectionRow({
                             onCommit={onSetSectionNo}
                             className="h-7 w-16"
                             aria-label={`${inst.label} section number`}
+                            disabled={locked}
                         />
                     </div>
                     <div className="grid gap-0.5">
@@ -320,6 +329,7 @@ function SectionRow({
                             allowNegative
                             className="h-7 w-16"
                             aria-label={`${inst.label} priority`}
+                            disabled={locked}
                         />
                     </div>
                 </div>
@@ -328,6 +338,7 @@ function SectionRow({
                     checked={inst.enabled}
                     onCheckedChange={(v) => onUpdate({ enabled: v })}
                     aria-label={`${inst.label} enabled`}
+                    disabled={locked}
                 />
 
                 <Button
@@ -350,7 +361,8 @@ function SectionRow({
                     {fallback ? (
                         <p className="text-xs text-muted-foreground">
                             This is the permanent fallback for section No. {inst.sectionNo} — it renders whenever
-                            nothing else in that slot is currently scheduled, regardless of any date range.
+                            nothing else in that slot is currently scheduled, regardless of any date range. Fallback
+                            sections are locked and shown for reference only.
                         </p>
                     ) : (
                         <div className="grid grid-cols-2 gap-2 sm:w-64">
@@ -372,7 +384,9 @@ function SectionRow({
                             </div>
                         </div>
                     )}
-                    <ContentEditor inst={inst} onChange={(content) => onUpdate({ content })} />
+                    <fieldset disabled={locked} className={cn(locked && "pointer-events-none opacity-60")}>
+                        <ContentEditor inst={inst} onChange={(content) => onUpdate({ content })} />
+                    </fieldset>
                 </div>
             ) : null}
         </div>
@@ -450,6 +464,7 @@ export default function CustomizeHomePage() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [previewData, setPreviewData] = useState<PreviewData>({ products: [], brands: [] });
     const [fullSize, setFullSize] = useState(false);
+    const [fallbackGroupOpen, setFallbackGroupOpen] = useState(false);
 
     const load = useCallback(async () => {
         setLoadError(false);
@@ -699,34 +714,52 @@ export default function CustomizeHomePage() {
                                 ))}
 
                                 <div className="pt-2">
-                                    <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                                        Fallback sections
-                                    </p>
-                                    {fallbackRows.length === 0 ? (
-                                        <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
-                                            No fallback set. Set a section&apos;s priority to -1 to make it the permanent
-                                            fallback for its section number.
-                                        </p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {fallbackRows.map((inst) => (
-                                                <SectionRow
-                                                    key={inst.id}
-                                                    inst={inst}
-                                                    renders={winnerIds.has(inst.id)}
-                                                    isSelected={selectedId === inst.id}
-                                                    isOpen={expanded.has(inst.id)}
-                                                    onSelect={() => setSelectedId(inst.id)}
-                                                    onDuplicate={() => duplicateInstance(inst.id)}
-                                                    onRemove={() => removeInstance(inst.id)}
-                                                    onUpdate={(patch) => updateInstance(inst.id, patch)}
-                                                    onSetSectionNo={(n) => setSectionNo(inst.id, n)}
-                                                    onSetPriority={(n) => setPriority(inst.id, n)}
-                                                    onToggleExpanded={() => toggleExpanded(inst.id)}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setFallbackGroupOpen((v) => !v)}
+                                        className="flex w-full items-center justify-between gap-2 rounded-md px-1 pb-2 text-left"
+                                        aria-expanded={fallbackGroupOpen}
+                                    >
+                                        <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                                            Fallback sections
+                                            <span className="ml-2 normal-case tracking-normal text-muted-foreground/70">
+                                                (locked · reference only)
+                                            </span>
+                                        </span>
+                                        {fallbackGroupOpen ? (
+                                            <ChevronUp className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                        ) : (
+                                            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                        )}
+                                    </button>
+                                    {fallbackGroupOpen ? (
+                                        fallbackRows.length === 0 ? (
+                                            <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                                                No fallback set. Set a section&apos;s priority to -1 to make it the permanent
+                                                fallback for its section number.
+                                            </p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {fallbackRows.map((inst) => (
+                                                    <SectionRow
+                                                        key={inst.id}
+                                                        inst={inst}
+                                                        renders={winnerIds.has(inst.id)}
+                                                        isSelected={selectedId === inst.id}
+                                                        isOpen={expanded.has(inst.id)}
+                                                        locked
+                                                        onSelect={() => setSelectedId(inst.id)}
+                                                        onDuplicate={() => duplicateInstance(inst.id)}
+                                                        onRemove={() => removeInstance(inst.id)}
+                                                        onUpdate={(patch) => updateInstance(inst.id, patch)}
+                                                        onSetSectionNo={(n) => setSectionNo(inst.id, n)}
+                                                        onSetPriority={(n) => setPriority(inst.id, n)}
+                                                        onToggleExpanded={() => toggleExpanded(inst.id)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )
+                                    ) : null}
                                 </div>
                             </>
                         )}
