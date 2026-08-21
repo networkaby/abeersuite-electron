@@ -169,6 +169,17 @@ const globalForPrisma = globalThis as unknown as {
     __prismaLocal?: PrismaClient;
 };
 
+/**
+ * The replica client, or null on any machine without one.
+ *
+ * Exposed so readiness can be queried directly (see replicaReadiness.ts) without
+ * going through the `prisma` Proxy, whose whole job is to decide which client to
+ * use — asking IT would be circular.
+ */
+export function getLocalClient(): PrismaClient | null {
+    return localClient;
+}
+
 /** Supabase. Always present. Use directly when a read MUST be authoritative. */
 export const prismaLive: PrismaClient = globalForPrisma.__prisma ?? createLive();
 

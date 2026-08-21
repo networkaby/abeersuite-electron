@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { counterStatus } from "@/shared/lib/prisma/counterMode";
+import { refreshReplicaReadiness } from "@/shared/lib/prisma/replicaReadiness";
 
 /**
  * GET /api/counter/status — where this machine is reading from, right now.
@@ -23,6 +24,10 @@ export async function GET() {
     if (response) return response;
 
     try {
+        // Ask the replica whether it is trustworthy before reporting. Rate-limited
+        // internally to one query per TTL, so polling this endpoint does not turn
+        // into a query per request.
+        await refreshReplicaReadiness();
         return NextResponse.json(counterStatus());
     } catch (e) {
         return handleApiError(e, "Failed to read counter status");

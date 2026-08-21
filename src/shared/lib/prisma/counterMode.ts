@@ -58,9 +58,19 @@ let liveProbe: (() => Promise<boolean>) | null = null;
  * partial still beats a dead page.
  */
 let replicaReady = false;
+let readyCheckedAt = 0;
+
+/** How long a readiness answer is trusted before asking the replica again. */
+const READY_TTL_MS = 30_000;
 
 export function setReplicaReady(ready: boolean): void {
     replicaReady = ready;
+    readyCheckedAt = Date.now();
+}
+
+/** True when the cached readiness answer is old enough to be worth refreshing. */
+export function readyIsStale(): boolean {
+    return Date.now() - readyCheckedAt > READY_TTL_MS;
 }
 
 export function isReplicaReady(): boolean {
