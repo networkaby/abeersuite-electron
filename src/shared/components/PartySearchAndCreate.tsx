@@ -516,10 +516,11 @@ export const PartySearchAndCreate = forwardRef<
                 } catch { /* non-fatal; both rows still exist */ }
             }
 
-            // Drop the local party replica so the next search sees who we just
-            // created. Without this a brand-new customer would be invisible to
-            // search on this machine until the copy next aged out — the one case
-            // where a delta cannot help, since the client decides when to ask.
+            // Drop the kept parties so the next search cannot be answered without
+            // the server. A brand-new customer is not in the cache — but a cached
+            // regular with a similar name IS, and answering from that alone would
+            // hide who we just created. Rare enough (a few parties a day) that
+            // refilling from the next few lookups costs nothing worth counting.
             void invalidateParties();
 
             // Pick: company takes precedence when both created (the bill goes to company)

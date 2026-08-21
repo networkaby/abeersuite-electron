@@ -18,7 +18,9 @@
  *                       no gain.
  *   • `parties`       — customers and companies, keyed by [type+id]. One store
  *                       rather than two because every consumer searches them
- *                       together and shows one merged result list.
+ *                       together and shows one merged result list. NOT a full
+ *                       replica, unlike `products`: only parties someone has
+ *                       actually looked up are here (see `partyCatalog.ts`).
  *   • `tickets`       — every Ticket-flavoured row (repair, deal, help, admin
  *                       task — all the same `Ticket` model, one Dexie table),
  *                       real rows keyed by id and shared across every board's
@@ -81,13 +83,13 @@ export type LocalMasterMeta = {
 /** Person / Company discriminator, as every existing consumer already spells it. */
 export type PartyType = "customer" | "company";
 
-/** A party as `/api/parties/sync` shapes it — carries every field the live
- *  lookup can match on, so a local search returns the same rows. */
+/** A party as `/api/person?lookup=…&full=1` shapes it — carries every field the
+ *  live lookup can MATCH on, not just the ones it displays, so searching the
+ *  cache finds the same rows the server would. */
 export type LocalPartyRow = {
     type: PartyType;
     id: number;
     name: string;
-    isActive: boolean;
     address: string | null;
     /** ALL phones, primary first — the live query matches any of them. */
     phones: string[];
@@ -97,15 +99,17 @@ export type LocalPartyRow = {
     accountGroup: string | null;
     aliases: string[];
     linkedCompanies: { id: number; name: string; accountId: number | null }[];
-    updatedAt: string;
+    /** When this row was last taken from the server. The backstop that retires a
+     *  row no change signal ever reached us about — a hard delete leaves nothing
+     *  behind for a timestamp query to report. */
+    cachedAt: number;
 };
 
-/** Party-wide sync state — a single row, `key: "parties"`. */
+/** Party cache state — a single row, `key: "parties"`. `checkedAt` is the server
+ *  clock the next "what changed?" call asks from. */
 export type LocalPartyMeta = {
     key: string;
-    computedAt: string;
-    /** Live ACTIVE row count per type — how a hard delete is noticed at all. */
-    counts: Record<PartyType, number>;
+    checkedAt: string;
 };
 
 /** A ticket row exactly as `/api/tickets` shapes it (repair detail flattened). */
@@ -195,6 +199,27 @@ export function localDb(): LocalDb | null {
             // itself. Rather than unwrap, drop them — they refetch on next open.
             await tx.table("tickets").clear();
             await tx.table("ticketViews").clear();
+        });
+
+    // v3 changed what a party row means: v2 held a FULL replica of every party,
+    // topped up by delta; v3 holds only the ones someone looked up, and carries
+    // `cachedAt` to retire them. The meta row changed shape with it. Neither can
+    // be migrated into the other, and both refill on demand — so drop them.
+    db.version(3)
+        .stores({
+            tickets:      "id, pipelineId, status, priority, updatedAt",
+            ticketViews:  "key, savedAt",
+            products:     "id, name",
+            productMeta:  "key",
+            masters:      "[type+id], type",
+            masterMeta:   "key",
+            parties:      "[type+id], type, name, accountId",
+            partyMeta:    "key",
+            dayBookViews: "key, savedAt",
+        })
+        .upgrade(async (tx) => {
+            await tx.table("parties").clear();
+            await tx.table("partyMeta").clear();
         });
 
     // The pre-Dexie database is dead weight the moment this one opens. Deleting

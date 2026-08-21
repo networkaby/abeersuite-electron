@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { ensurePartiesSynced, searchParties, type Party } from "@/shared/lib/parties";
+import {
+    cacheParties,
+    ensurePartiesReady,
+    MAX_HITS,
+    refreshFromChanges,
+    searchParties,
+    type Party,
+} from "@/shared/lib/parties";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 /**
  * Result row from `/api/person?lookup=…`. Shared by `PartyCombobox` and `PosScreen`.
@@ -19,7 +27,16 @@ export type PartyHit = {
     linkedCompanies?: { id: number; name: string; accountId: number | null }[];
 };
 
-/** A replica row carries every phone/email; the wire shape shows the primary,
+/** What `full=1` adds on top of a hit — the fields the server MATCHES on but
+ *  does not show, which a cached row needs to be searchable the same way. */
+type FullHit = PartyHit & {
+    phones: string[];
+    emails: string[];
+    aliases: string[];
+    accountGroup: string | null;
+};
+
+/** A cached row carries every phone/email; the wire shape shows the primary,
  *  which is the one each list is sorted to put first. */
 const toHit = (p: Party): PartyHit => ({
     id: p.id,
@@ -32,20 +49,41 @@ const toHit = (p: Party): PartyHit => ({
     linkedCompanies: p.linkedCompanies,
 });
 
+/** A `full=1` hit, as the cache stores it. `cachedAt` is stamped on write. */
+const toParty = (h: FullHit): Party => ({
+    type: h.type,
+    id: h.id,
+    name: h.name,
+    address: h.address ?? null,
+    phones: h.phones,
+    emails: h.emails,
+    accountId: h.accountId,
+    accountGroup: h.accountGroup,
+    aliases: h.aliases,
+    linkedCompanies: h.linkedCompanies ?? [],
+    cachedAt: 0,
+});
+
 /**
  * Debounced party lookup. Empty / whitespace-only queries short-circuit to an
  * empty result. Aborts and clears on unmount.
  *
- * LOCAL FIRST. On a counter machine the party list is replicated to IndexedDB
- * (see `partyCatalog`), and the search runs against that copy — no request, no
- * database read, an answer before the next keystroke. This used to be a round
- * trip PER CHARACTER TYPED, on the app's single most-repeated read.
+ * REGULARS FIRST. On a counter machine the parties someone has already looked up
+ * are kept (see `partyCatalog`), and the search runs against that copy — no
+ * request, no database read, an answer before the next keystroke. This used to
+ * be a round trip PER CHARACTER TYPED, on the app's single most-repeated read,
+ * and a shop bills the same tenth of its customer list over and over.
  *
- * Anywhere the replica is not available — no counter bridge, IndexedDB off, or a
- * copy that has aged out — `searchParties` returns null and this falls through
- * to `/api/person?lookup=` exactly as before. That fallback is the reason the
- * till behaves identically on an unbridged machine, and why `null` from the
- * replica must never be confused with "no matches".
+ * A MISS IS NOT AN ANSWER. The cache holds only who has been looked up before,
+ * so finding nothing means "not one of our regulars" — and the server is asked,
+ * exactly as it always was. What comes back is then kept, so the same customer
+ * is free next time. That is how the cache fills: by billing people, never by
+ * downloading the customer table.
+ *
+ * Where parties may not be kept at all — no counter bridge, IndexedDB off —
+ * `searchParties` returns null, nothing is cached, and every search goes live
+ * exactly as before. That fallback is the reason the till behaves identically on
+ * an unbridged machine.
  *
  * `enabled` lets callers turn the search off without unmounting (e.g. while a
  * selection is settled and the input should not refire).
@@ -77,10 +115,14 @@ export function usePartySearch(
     const [hits, setHits] = useState<PartyHit[]>([]);
     const [loading, setLoading] = useState(false);
 
-    // Warm the replica once per page load, whatever else is mounted. Deliberately
-    // not awaited by the search below: a cold first keystroke simply falls back
-    // to the live endpoint rather than waiting on a full list to arrive.
-    useEffect(() => { void ensurePartiesSynced(); }, []);
+    // Warm the cache once per page load, whatever else is mounted. Reads what is
+    // already on disk — no request, since nothing is fetched until someone types.
+    useEffect(() => { void ensurePartiesReady(); }, []);
+
+    // Someone changed a party — here, at another till, on the website. Ask which
+    // ids and forget the ones we hold; the next search for them fetches fresh.
+    // Ids we never cached are ignored, so this stays cheap however busy the shop.
+    useRealtimeTopics(["parties"], () => { void refreshFromChanges(); });
 
     useEffect(() => {
         const trimmed = query.trim();
@@ -96,17 +138,41 @@ export function usePartySearch(
                 try {
                     const local = await searchParties(trimmed, { group, wide });
                     if (cancelled) return;
-                    // null = no replica on this machine, NOT "no matches".
-                    if (local) {
-                        setHits(local.map(toHit));
-                        return;
-                    }
+                    // Paint the regulars immediately — instant, and correct as far
+                    // as it goes. What it may be missing is anyone who has never
+                    // been searched from THIS machine, which only the server knows.
+                    if (local && local.length > 0) setHits(local.map(toHit));
+
+                    // A FULL local page cannot be topped up: the server caps at the
+                    // same number, so asking it could only repeat what is already
+                    // shown. This is also how the cache converges — once a name
+                    // pattern has enough regulars behind it, it stops going live at
+                    // all, the same as a fully-warmed product catalogue.
+                    if (local && local.length >= MAX_HITS) return;
+
+                    // `local` is null where nothing may be kept; an empty array
+                    // means "kept, but not one of ours" — either way, ask the
+                    // server. Only where something IS kept is there somewhere to
+                    // put the answer, so only then is the fuller row worth asking
+                    // for.
+                    const keeping = local !== null;
                     const url = `/api/person?lookup=${encodeURIComponent(trimmed)}`
                         + (group ? `&group=${encodeURIComponent(group)}` : "")
-                        + (wide ? "&wide=1" : "");
+                        + (wide ? "&wide=1" : "")
+                        + (keeping ? "&full=1" : "");
                     const res = await axios.get<PartyHit[]>(url);
                     if (cancelled) return;
+                    // The live answer is the fuller one — it can see every customer,
+                    // not just this machine's regulars — so it replaces the local
+                    // paint rather than being appended to it.
                     setHits(res.data);
+                    // Kept after painting, not before — the till waits for the
+                    // list, never for the write that makes the next one free. This
+                    // also refreshes any already-cached row's `cachedAt`, which is
+                    // how a customer stays a regular instead of quietly expiring.
+                    if (keeping) {
+                        void cacheParties((res.data as FullHit[]).map(toParty));
+                    }
                 } catch {
                     if (!cancelled) setHits([]);
                 } finally {

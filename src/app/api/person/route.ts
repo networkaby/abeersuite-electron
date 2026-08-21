@@ -7,7 +7,6 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
-import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
@@ -32,13 +31,45 @@ type LookupResult = {
     type: "customer" | "company";
     accountId: number | null;
     linkedCompanies: { id: number; name: string; accountId: number | null }[];
+} & Partial<FullFields>;
+
+/**
+ * What `full=1` adds — the fields this lookup MATCHES on but does not normally
+ * show. A hit is displayed with its primary phone, yet found by any of them, by
+ * a ledger alias, and narrowed by account group.
+ *
+ * Only the browser's party cache asks for these, and only where it is allowed to
+ * keep parties at all (`partyCatalog.ts`, counter-only). A row cached without
+ * them would search more narrowly than the server does, so the same customer
+ * would be found by typing on one machine and missing on another. Off by default
+ * so every other caller — and every unbridged machine — keeps pulling the
+ * smaller row, with no secondary phone or email on the wire at all.
+ */
+type FullFields = {
+    phones: string[];
+    emails: string[];
+    aliases: string[];
+    accountGroup: string | null;
 };
 
 async function lookupAccounts(
     term: string,
     group?: string,
-    opts?: { wide?: boolean },
+    opts?: { wide?: boolean; full?: boolean },
 ): Promise<LookupResult[]> {
+    const full = opts?.full ?? false;
+    // Read whole — eight rows' worth of phones and aliases is not worth a second
+    // query shape to avoid. What `full` decides is what goes ON THE WIRE below.
+    const contacts = { orderBy: [{ isPrimary: "desc" as const }, { id: "asc" as const }] };
+    const accountInclude = {
+        account: {
+            select: {
+                id: true,
+                group: { select: { name: true } },
+                aliases: { select: { alias: true } },
+            },
+        },
+    };
     // When `group` is set (e.g. "Sundry Debtors" / "Sundry Creditors") we
     // restrict the hits to parties whose ledger sits under that group. Lets
     // CN / Sale pick only customers, DN / Purchase pick only suppliers.
@@ -80,9 +111,9 @@ async function lookupAccounts(
                 ...tokenFilter,
             },
             include: {
-                account: { select: { id: true } },
-                phones: selectPrimaryPhone,
-                emails: selectPrimaryEmail,
+                ...accountInclude,
+                phones: contacts,
+                emails: contacts,
                 companies: {
                     where: { unlinkedAt: null },
                     include: {
@@ -102,14 +133,28 @@ async function lookupAccounts(
                 ...tokenFilter,
             },
             include: {
-                account: { select: { id: true } },
-                phones: selectPrimaryPhone,
-                emails: selectPrimaryEmail,
+                ...accountInclude,
+                phones: contacts,
+                emails: contacts,
             },
             take: 8,
             orderBy: { createdAt: "desc" },
         }),
     ]);
+
+    /** The matched-on-but-not-shown fields, only when `full=1` asked for them. */
+    const extras = (row: {
+        phones: { phone: string }[];
+        emails: { email: string }[];
+        account: { group: { name: string } | null; aliases: { alias: string }[] } | null;
+    }): Partial<FullFields> => full
+        ? {
+            phones: row.phones.map(x => x.phone),
+            emails: row.emails.map(x => x.email),
+            aliases: row.account?.aliases.map(a => a.alias) ?? [],
+            accountGroup: row.account?.group?.name ?? null,
+        }
+        : {};
 
     return [
         ...persons.map(p => ({
@@ -125,6 +170,7 @@ async function lookupAccounts(
                 name: lc.company.name,
                 accountId: lc.company.account?.id ?? null,
             })),
+            ...extras(p),
         })),
         ...companies.map(c => ({
             id: c.id,
@@ -135,6 +181,7 @@ async function lookupAccounts(
             type: "company" as const,
             accountId: c.account?.id ?? null,
             linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],
+            ...extras(c),
         })),
     ].slice(0, 8);
 }
@@ -151,6 +198,9 @@ export async function GET(req: Request) {
     const group = searchParams.get("group")?.trim() || undefined;
     // Opt-in: also search address + email per token (Front Office helper search).
     const wide = searchParams.get("wide") === "1";
+    // Opt-in: return the fields the lookup matches on but does not show, so the
+    // browser's party cache can search its copy the way the server searches.
+    const full = searchParams.get("full") === "1";
     // Browse-only supplier filter — a role without `customers:view:creditors`
     // passes this to drop parties in the Sundry Creditors group. Applied to the
     // browse list ONLY; the lookup path below is never filtered so party pickers
@@ -161,10 +211,10 @@ export async function GET(req: Request) {
     const includeInactive = searchParams.get("includeInactive") === "1";
 
     try {
-        if (phone) return NextResponse.json(await lookupAccounts(phone, group, { wide }));
+        if (phone) return NextResponse.json(await lookupAccounts(phone, group, { wide, full }));
         // lookup !== undefined means the param was explicitly passed (even if empty),
         // allowing ?lookup=&group=... to browse the full group list on focus.
-        if (lookup !== undefined) return NextResponse.json(await lookupAccounts(lookup, group, { wide }));
+        if (lookup !== undefined) return NextResponse.json(await lookupAccounts(lookup, group, { wide, full }));
 
         const persons = await prisma.person.findMany({
             where: {
