@@ -20,6 +20,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
 
@@ -183,8 +184,9 @@ export default function BalanceSheetPage() {
     /** ORG_DEFAULT sentinel = use OrgDefaults.valuationMethod (BS API default). */
     const [valuationMethod, setValuationMethod] = useState<string>(ORG_DEFAULT);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         const qs = new URLSearchParams({ asOf });
         if (valuationMethod !== ORG_DEFAULT) qs.set("valuationMethod", valuationMethod);
         axios.get<BalanceSheetData>(`/api/accountancy/reports/balance-sheet?${qs.toString()}`)
@@ -203,6 +205,10 @@ export default function BalanceSheetPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     const toggle = (id: number) => setExpanded((prev) => {
         const next = new Set(prev);
@@ -284,7 +290,7 @@ export default function BalanceSheetPage() {
                         <Label>As at</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print">
                         <Printer size={14} />
                     </Button>

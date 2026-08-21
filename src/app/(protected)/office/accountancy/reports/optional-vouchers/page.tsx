@@ -24,6 +24,7 @@ import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type OptionalType =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -123,8 +124,9 @@ export default function OptionalVouchersPage() {
         return next;
     });
 
-    const load = useCallback((p: number, q: string, t: TypeFilter) => {
-        setLoading(true);
+    const load = useCallback((p: number, q: string, t: TypeFilter, silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         const params = new URLSearchParams({ from, to, page: String(p), limit: "50" });
         if (q)            params.set("search", q);
         if (t !== "All")  params.set("type",   t);
@@ -137,6 +139,10 @@ export default function OptionalVouchersPage() {
     const loadFirst = useCallback(() => { setPage(1); load(1, "", "All"); }, [load]);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(loadFirst, [loadFirst]);
+
+    // Refresh the view the user is actually on - page, search and filter kept.
+    // useRealtimeTopics always calls the latest closure, so these stay current.
+    useRealtimeTopics(["ledger"], () => load(page, search, typeFilter, true));
 
     const handleSearch = (v: string) => {
         setSearch(v);

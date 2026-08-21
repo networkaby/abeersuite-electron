@@ -14,6 +14,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import type { LedgerOutstanding, AgeingBucket } from "@/modules/accountancy/lib/outstandings";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 const BUCKET_LABELS: Record<AgeingBucket, string> = {
     b0_30:    "0–30",
@@ -44,8 +45,9 @@ export default function LedgerOutstandingsPage({
 
     useEscapeBack();
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<LedgerOutstanding>(`/api/accountancy/reports/ledger-outstandings/${ledgerId}?asOf=${asOf}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load ledger outstandings"))
@@ -54,6 +56,10 @@ export default function LedgerOutstandingsPage({
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     const billUrl = (kind: "voucher" | "sale" | "purchase", id: number): string => {
         switch (kind) {
@@ -83,7 +89,7 @@ export default function LedgerOutstandingsPage({
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

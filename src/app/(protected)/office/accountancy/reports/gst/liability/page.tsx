@@ -11,6 +11,7 @@ import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type Bucket = { rate: number; taxableValue: number; taxAmount: number; grossValue: number; invoiceCount: number };
 type Summary = { buckets: Bucket[]; totals: { taxableValue: number; taxAmount: number; grossValue: number; invoiceCount: number } };
@@ -23,8 +24,9 @@ export default function GstLiabilityPage() {
     const [inward,  setInward]  = useState<Summary | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         Promise.all([
             axios.get<Summary>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=OUTWARD`).then((r) => r.data),
             axios.get<Summary>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=INWARD`).then((r) => r.data),
@@ -36,6 +38,10 @@ export default function GstLiabilityPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     const outputTax = outward?.totals.taxAmount ?? 0;
     const inputTax  = inward?.totals.taxAmount ?? 0;
@@ -60,7 +66,7 @@ export default function GstLiabilityPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

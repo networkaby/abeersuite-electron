@@ -15,6 +15,7 @@ import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface LedgerNode {
     id: number; name: string; closing: number;
@@ -174,8 +175,9 @@ export default function ProfitLossPage() {
     const cameFromBalanceSheet = search.get("ref") === "balance-sheet";
     const bsHref = `/office/accountancy/reports/balance-sheet?asOf=${to}`;
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<PLData>(`/api/accountancy/reports/profit-loss?from=${from}&to=${to}`)
             .then((r) => {
                 setData(r.data);
@@ -192,6 +194,10 @@ export default function ProfitLossPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     const toggle = (id: number) => setExpanded((prev) => {
         const next = new Set(prev);
@@ -243,7 +249,7 @@ export default function ProfitLossPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print"><Printer size={14} /></Button>
                 </div>
             </div>

@@ -11,6 +11,7 @@ import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type HsnBucket = {
     hsn:          string;
@@ -38,8 +39,9 @@ export default function HsnSummaryPage() {
     const [data, setData]           = useState<HsnData | null>(null);
     const [loading, setLoading]     = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<HsnData>(`/api/accountancy/reports/gst-hsn-summary?from=${from}&to=${to}&direction=${direction}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load HSN summary"))
@@ -48,6 +50,10 @@ export default function HsnSummaryPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -84,7 +90,7 @@ export default function HsnSummaryPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

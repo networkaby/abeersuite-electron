@@ -13,6 +13,7 @@ import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type Flow = { id: number; name: string; amount: number };
 type CashFlowData = {
@@ -30,8 +31,9 @@ export default function CashFlowPage() {
     const [data, setData] = useState<CashFlowData | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<CashFlowData>(`/api/accountancy/reports/cash-flow?from=${from}&to=${to}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load cash flow"))
@@ -40,6 +42,10 @@ export default function CashFlowPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -60,7 +66,7 @@ export default function CashFlowPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

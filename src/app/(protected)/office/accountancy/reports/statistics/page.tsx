@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type Bucket = { type: string; total: number; posted: number; draft: number; cancelled: number };
 type StatsData = {
@@ -46,8 +47,9 @@ export default function StatisticsPage() {
     const [data, setData] = useState<StatsData | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<StatsData>(`/api/accountancy/reports/statistics?from=${from}&to=${to}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load statistics"))
@@ -56,6 +58,10 @@ export default function StatisticsPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -76,7 +82,7 @@ export default function StatisticsPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

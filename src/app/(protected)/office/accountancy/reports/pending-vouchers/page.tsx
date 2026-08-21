@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { fmt } from "@/utils/constants";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
 
@@ -401,8 +402,9 @@ export default function PendingVouchersPage() {
     });
 
     // ── Vouchers fetch ────────────────────────────────────────────────────────
-    const load = useCallback((p: number, q: string, t: TypeFilter, f: string, x: string, b: string) => {
-        setLoading(true);
+    const load = useCallback((p: number, q: string, t: TypeFilter, f: string, x: string, b: string, silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         const params = new URLSearchParams({ page: String(p), limit: "50" });
         if (f) params.set("from", f);
         if (x) params.set("to", x);
@@ -416,8 +418,8 @@ export default function PendingVouchersPage() {
     }, []);
 
     // ── Stock fetch ───────────────────────────────────────────────────────────
-    const loadStock = useCallback((f: string, x: string, b: string) => {
-        setStockLoading(true);
+    const loadStock = useCallback((f: string, x: string, b: string, silent = false) => {
+        if (!silent) setStockLoading(true);
         const params = new URLSearchParams();
         if (f) params.set("from", f);
         if (x) params.set("to", x);
@@ -430,6 +432,12 @@ export default function PendingVouchersPage() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(1, "", "All", "", "", "all"); }, []);
+
+    // Only the visible tab is refreshed; the other reloads when it is opened.
+    useRealtimeTopics(["ledger"], () => {
+        if (tab === "vouchers") load(page, search, typeFilter, from, to, branchId, true);
+        else                    loadStock(from, to, branchId, true);
+    });
 
     const handleSearch = (v: string) => {
         setSearch(v);

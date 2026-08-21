@@ -12,6 +12,7 @@ import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 const BUCKET_LABELS = {
     b0_30:    "0–30 days",
@@ -33,8 +34,9 @@ export default function PayablesPage() {
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<OutstandingsReport>(`/api/accountancy/reports/payables?asOf=${asOf}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load payables"))
@@ -43,6 +45,10 @@ export default function PayablesPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -59,7 +65,7 @@ export default function PayablesPage() {
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

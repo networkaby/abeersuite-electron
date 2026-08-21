@@ -14,6 +14,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type Side = "DEBIT" | "CREDIT";
@@ -202,8 +203,9 @@ export default function TrialBalancePage() {
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [showEmpty, setShowEmpty] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
         axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
             .then((r) => {
                 setData(r.data);
@@ -218,6 +220,10 @@ export default function TrialBalancePage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
 
     const viewTree = useMemo(() => {
         if (!data) return [];
@@ -261,7 +267,7 @@ export default function TrialBalancePage() {
                     <Button variant="outline" onClick={() => setShowEmpty((v) => !v)} title="Toggle visibility of groups / ledgers with no activity">
                         {showEmpty ? "Hide empty" : "Show all"}
                     </Button>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()}><Printer size={14} /></Button>
                 </div>
             </div>
