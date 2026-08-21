@@ -20,16 +20,14 @@
  *    old code discarded everything every 24h purely because a rename was invisible
  *    to it).
  *
- *  • COUNTER-ONLY PERSISTENCE. The books are only written to disk on a machine
- *    with the counter bridge installed. Anywhere else — someone's laptop, a shared
- *    browser — this runs live and stores nothing, and any copy left from a previous
- *    life is purged on sight.
+ *  • LOCAL PERSISTENCE. All trusted machines (any that can log in) keep a local
+ *    copy on disk for fast reopening. The login gate ensures only authorised
+ *    machines reach this code.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { localDb } from "@/shared/lib/browser/localDb";
-import { isBridgeAvailable } from "@/shared/lib/bridge";
 
 const API = "/api/accountancy/reports/day-book";
 /** One entry per filter view. Bounded so a session of fiddling can't grow forever. */
@@ -281,7 +279,6 @@ export function useDayBook(query: DayBookQuery) {
     const forceNext = useRef(false);
     // loadMore reads these without wanting to re-subscribe to every change.
     const storeRef  = useRef(store);
-    const bridgeRef = useRef(false);
     storeRef.current = store;
     // The in-flight guard for loadMore lives in a ref, not in the state value.
     // Reading the state there would make `loadMore` a new function every time a
@@ -309,16 +306,8 @@ export function useDayBook(query: DayBookQuery) {
         setStale(false);
 
         void (async () => {
-            const onCounter = await isBridgeAvailable();
-            if (cancelled) return;
-            bridgeRef.current = onCounter;
-
-            // Not a counter: this machine keeps nothing, including whatever a
-            // previous life left behind.
-            if (!onCounter) await clearCachedViews();
-
             let cached: Store | null = null;
-            if (onCounter && cacheable && !force) {
+            if (cacheable && !force) {
                 cached = await readCachedView(key);
                 if (cancelled) return;
                 // Paint the saved copy immediately so reopening is instant; the
@@ -339,7 +328,7 @@ export function useDayBook(query: DayBookQuery) {
                         : applyDelta(cached, res);
                     if (cancelled) return;
                     setStore(next);
-                    if (onCounter && cacheable) await writeCachedView(key, next);
+                    if (cacheable) await writeCachedView(key, next);
                 } else {
                     const res = await fetchDayBook(query, search);
                     if (cancelled) return;
@@ -347,7 +336,7 @@ export function useDayBook(query: DayBookQuery) {
                         rows: res.rows, refs: res.refs, nextCursor: res.nextCursor, checkedAt: res.computedAt,
                     };
                     setStore(next);
-                    if (onCounter && cacheable) await writeCachedView(key, next);
+                    if (cacheable) await writeCachedView(key, next);
                 }
             } catch (e) {
                 if (cancelled) return;
@@ -384,7 +373,7 @@ export function useDayBook(query: DayBookQuery) {
                     checkedAt:  current.checkedAt,
                 };
                 setStore(next);
-                if (bridgeRef.current && cacheable) await writeCachedView(key, next);
+                if (cacheable) await writeCachedView(key, next);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Failed to load more");
             } finally {
@@ -426,7 +415,7 @@ export function useDayBook(query: DayBookQuery) {
                 const next = applyDelta(storeRef.current, res);
                 setStore(next);
                 setStale(false);
-                if (bridgeRef.current && cacheable) await writeCachedView(key, next);
+                if (cacheable) await writeCachedView(key, next);
             } catch {
                 // A missed nudge is not an error worth showing — the rows on
                 // screen are still the rows we last read, and Refresh is there.

@@ -25,11 +25,9 @@
  * and ids for customers we have never seen are ignored, so a busy branch across
  * town cannot fill this machine's cache with people it will never bill.
  *
- * COUNTER-ONLY. A party row is a customer's name, phone and address — exactly
- * the business data that must not sit on someone's laptop — so nothing is
- * written unless the counter bridge answers. Everywhere else `searchParties`
- * returns null and the caller stays on the live endpoint, which is why the till
- * behaves identically on an unbridged machine.
+ * All trusted machines (any that can log in) cache parties locally. The login
+ * gate (auth:login:outside-counter) ensures only authorised machines reach this
+ * code.
  *
  * `matches` deliberately mirrors `lookupAccounts` in /api/person: same token
  * AND-ing, same fields, same 8-row cap, same ledger-group narrowing. That is
@@ -41,7 +39,6 @@
 
 import axios from "axios";
 import { localDb, type LocalPartyRow, type PartyType } from "@/shared/lib/browser/localDb";
-import { isBridgeAvailable } from "@/shared/lib/bridge";
 
 const CHANGED_API = "/api/parties/changed";
 const META_KEY = "parties";
@@ -91,19 +88,10 @@ async function wipe(): Promise<void> {
 /**
  * Load what is on disk into memory, dropping anything past its life.
  *
- * Returns false when this machine may not hold parties at all (no bridge, no
- * IndexedDB) — the caller then stays on live search and caches nothing.
+ * Returns false when IndexedDB is unavailable — the caller then stays on live
+ * search and caches nothing.
  */
 async function open(): Promise<boolean> {
-    if (!(await isBridgeAvailable())) {
-        // Not a counter: this machine keeps nothing, including anything a
-        // previous life left behind. Memoised as false for the page, so this
-        // costs one probe and one wipe rather than one of each per keystroke.
-        await wipe();
-        mem = null;
-        return false;
-    }
-
     const db = localDb();
     if (!db) return false;
 
@@ -125,8 +113,8 @@ async function open(): Promise<boolean> {
  *
  * Every party picker, the till and Quick Ticket all want the cache warm, and
  * they mount independently — without this, opening a voucher form with three
- * pickers on it would read the store three times. Mirrors how `isBridgeAvailable`
- * memoises its probe for the life of the page.
+ * pickers on it would read the store three times. The promise is memoised for
+ * the life of the page so the store is opened once.
  */
 let ready: Promise<boolean> | null = null;
 

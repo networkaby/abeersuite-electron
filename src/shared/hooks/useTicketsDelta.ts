@@ -23,9 +23,9 @@
  *    `/api/help`, `/api/admin-tasks`, …) nudges every OPEN board to re-check,
  *    live, at zero extra connection cost — see `useRealtimeTopics`.
  *
- *  • COUNTER-ONLY PERSISTENCE. Rows carry customer names/phones/amounts, so
- *    only a machine with the counter bridge keeps a copy on disk (same policy
- *    as the Day Book). Anywhere else this runs live and stores nothing.
+ *  • LOCAL PERSISTENCE. All trusted machines (any that can log in) keep a local
+ *    copy on disk for fast reopening. The login gate ensures only authorised
+ *    machines reach this code.
  *
  *  • NO DELETE TOMBSTONE, same accepted gap as before: a hard-deleted ticket
  *    inside the loaded window isn't chased down by a delta, bounded by
@@ -35,7 +35,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import axios from "axios";
 import { localDb, type LocalTicketRow } from "@/shared/lib/browser/localDb";
-import { isBridgeAvailable } from "@/shared/lib/bridge";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useRealtimeTopics } from "./useRealtimeTopics";
 
@@ -179,7 +178,6 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     const checkedAtRef = useRef<string | null>(null);
     const rowsRef       = useRef<T[]>([]);
     rowsRef.current = rows;
-    const bridgeRef  = useRef(false);
     const forceNext  = useRef(false);
 
     /** Manual/forced refresh — bypasses the local cache entirely (the Reload
@@ -205,12 +203,8 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         setStale(false);
 
         void (async () => {
-            const onCounter = await isBridgeAvailable();
-            if (cancelled) return;
-            bridgeRef.current = onCounter;
-
             let cached: CachedView<T> | null = null;
-            if (onCounter && cacheable && !force) {
+            if (cacheable && !force) {
                 cached = await readCachedView<T>(key);
                 if (cancelled) return;
                 if (cached) {
@@ -233,14 +227,14 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                         setRows(sorted);
                         setNextCursor(fresh.nextCursor);
                         checkedAtRef.current = fresh.computedAt;
-                        if (onCounter && cacheable) await writeCachedView(key, sorted, fresh.nextCursor, fresh.computedAt);
+                        if (cacheable) await writeCachedView(key, sorted, fresh.nextCursor, fresh.computedAt);
                     } else if (res.mode === "delta") {
                         const byId = new Map(rowsRef.current.map((r) => [r.id, r]));
                         for (const r of res.rows) byId.set(r.id, r);
                         const merged = [...byId.values()].sort(sort);
                         setRows(merged);
                         checkedAtRef.current = res.computedAt;
-                        if (onCounter && cacheable) await writeCachedView(key, merged, cached.nextCursor, res.computedAt);
+                        if (cacheable) await writeCachedView(key, merged, cached.nextCursor, res.computedAt);
                     }
                 } else {
                     const res = await fetchTickets<T>(apiPath, query, search);
@@ -249,7 +243,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     setRows(sorted);
                     setNextCursor(res.nextCursor);
                     checkedAtRef.current = res.computedAt;
-                    if (onCounter && cacheable) await writeCachedView(key, sorted, res.nextCursor, res.computedAt);
+                    if (cacheable) await writeCachedView(key, sorted, res.nextCursor, res.computedAt);
                 }
             } catch (e) {
                 if (cancelled) return;
@@ -283,7 +277,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 const merged = [...rowsRef.current, ...res.rows].sort(sort);
                 setRows(merged);
                 setNextCursor(res.nextCursor);
-                if (bridgeRef.current && cacheable) {
+                if (cacheable) {
                     await writeCachedView(key, merged, res.nextCursor, checkedAtRef.current ?? res.computedAt);
                 }
             } catch (e) {

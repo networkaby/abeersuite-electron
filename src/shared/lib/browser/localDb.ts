@@ -31,13 +31,11 @@
  *                       Splitting the index off the data is what lets two
  *                       views hold the same ticket once.
  *
- * COUNTER-ONLY, for the stores that hold business data. Ticket, Day Book and
- * party rows carry customer names, phones, devices and the books, so their
- * callers gate every WRITE on `isBridgeAvailable()` — a managed shop machine
- * keeps a copy, a random laptop keeps nothing. `products` and `masters` are
- * ungated: a price list and a set of brand names are configuration, not
- * business records. Opening the database is harmless anywhere; only writing is
- * gated.
+ * All trusted machines (any that can log in) may cache business data locally.
+ * The login gate (auth:login:outside-counter) ensures only authorised machines
+ * reach this code. `products` and `masters` are always available: a price list
+ * and a set of brand names are configuration, not business records. Opening
+ * the database is harmless anywhere; only writing is gated by the caller.
  *
  * Bump `version()` when a table's indexes change. Everything in here is
  * rebuildable from the server, so an upgrade may simply clear a table rather
