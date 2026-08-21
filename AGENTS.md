@@ -23,6 +23,8 @@
 
 ### DB Rules
 
+### **_`CURRENT_DB=demo`_**
+
 ---
 
 - Two DBs: **demo** and **live**.
