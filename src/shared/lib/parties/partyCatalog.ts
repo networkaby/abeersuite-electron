@@ -39,6 +39,9 @@
 
 import axios from "axios";
 import { localDb, type LocalPartyRow, type PartyType } from "@/shared/lib/browser/localDb";
+// Same token-shape tests the server uses in api/person, so the local filter in
+// `matches()` below narrows on exactly the same rules the API would.
+import { looksLikeEmail, looksLikePhone } from "@/shared/lib/parties/tokenShape";
 
 const CHANGED_API = "/api/parties/changed";
 const META_KEY = "parties";
