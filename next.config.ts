@@ -1,8 +1,24 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+// Set only when building the artifact that runs ON a shop counter PC (localhost:3000
+// against a local Postgres replica). Unset everywhere else, so the Vercel build below
+// is byte-identical to what it has always produced.
+const COUNTER_BUILD = process.env.COUNTER_BUILD === "1";
+
 const nextConfig: NextConfig = {
+  // Standalone traces the server and its deps into one folder we can copy onto the
+  // counter — no `pnpm install` on a shop machine, no node_modules to keep in sync
+  // with the build.
+  ...(COUNTER_BUILD ? { output: "standalone" as const } : {}),
   images: {
+    // On the counter the optimizer is actively harmful, not merely useless: an
+    // <Image> pointing at Cloudinary becomes a /_next/image request that makes the
+    // COUNTER'S OWN Node server fetch Cloudinary. With no internet that hangs until
+    // timeout and holds a server connection per image, so a product grid can stall
+    // the whole page. Unoptimized emits the raw URL instead — the browser fails fast
+    // and the component's onError placeholder shows.
+    unoptimized: COUNTER_BUILD,
     // Only the hosts we actually serve images from. A `**` wildcard here is an
     // open image-optimization proxy: anyone may call /_next/image with any URL
     // and spend our transformation quota on it. Most remote images (uploads,
@@ -65,7 +81,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+// The counter artifact skips Sentry's build step entirely. Source-map upload reaches
+// out to sentry.io and wants SENTRY_AUTH_TOKEN, which makes the one build we most
+// need to be reproducible depend on the network. Runtime error reporting is
+// unaffected — that is configured in sentry.*.config.ts, not here.
+export default COUNTER_BUILD ? nextConfig : withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 

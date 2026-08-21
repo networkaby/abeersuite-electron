@@ -6,6 +6,8 @@ import { useEffect, useRef } from "react";
 import axios from "axios";
 import { stampRequestContext } from "@/shared/lib/http";
 import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
+import { OFFLINE_READ_ONLY } from "@/shared/lib/prisma/offlineError";
+import { toast } from "sonner";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -44,6 +46,12 @@ function SessionGuard() {
             (r) => r,
             (err) => {
                 if (err?.response?.status === 401) goLogin();
+                // Bare `axios` does not inherit the `http` instance's interceptors,
+                // so without this a save refused for being offline would surface as a
+                // bare "request failed" on every screen that still uses global axios.
+                if ((err?.response?.data as { error?: string } | undefined)?.error === OFFLINE_READ_ONLY) {
+                    toast.error("Offline — read only. Reconnect to save.");
+                }
                 return Promise.reject(err);
             },
         );

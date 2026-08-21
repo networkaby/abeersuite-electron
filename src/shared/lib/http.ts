@@ -17,6 +17,7 @@ import { useActiveBranchStore, COMBINED_BRANCH } from "@/store/activeBranchStore
 import { BUSINESS_DATE_HEADER } from "@/shared/lib/constants/business";
 import { todayIso } from "@/shared/lib/format/formatDate";
 import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
+import { OFFLINE_READ_ONLY } from "@/shared/lib/prisma/offlineError";
 
 export const http = axios.create();
 
@@ -78,6 +79,11 @@ http.interceptors.response.use(
                 toast.error("Switch from 'My branches' to a specific branch to post this transaction.");
             } else if (code === "forbidden_branch") {
                 toast.error("You don't have access to that branch.");
+            } else if (code === OFFLINE_READ_ONLY) {
+                // The counter is serving reads from its local replica because Supabase
+                // is unreachable. Say what to DO, not what went wrong — the cashier
+                // needs to know the sale wasn't saved, not that a database is down.
+                toast.error("Offline — read only. Reconnect to save.");
             }
         }
         return Promise.reject(err);

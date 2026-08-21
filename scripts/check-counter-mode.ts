@@ -1,0 +1,130 @@
+/**
+ * Guards the two properties the counter replica's routing rests on.
+ *
+ * Runs against NO database — every assertion is about object identity or about a
+ * guard that throws before a query is issued — so it is safe in CI and on a laptop.
+ *
+ * The two modes need different env AT IMPORT TIME and Node caches modules, so each
+ * mode runs as its own process (see the package script) rather than trying to reset
+ * module state mid-run.
+ *
+ *   pnpm check:counter-mode
+ */
+
+
+type Check = [name: string, ok: boolean];
+
+/**
+ * Vercel and every ordinary laptop: no LOCAL_DATABASE_URL, therefore no replica.
+ *
+ * The point is not merely that it "still works" — it is that `prisma` must be the
+ * SAME OBJECT as `prismaLive`, with no Proxy in between. Anything else means
+ * production is paying an indirection (and a behavioural risk) for a feature only
+ * the shop counter uses.
+ */
+async function vercelMode(): Promise<Check[]> {
+    delete process.env.LOCAL_DATABASE_URL;
+    process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://u:p@live.invalid:5432/db";
+
+    const m = await import("@/shared/lib/prisma/prismaClient");
+    return [
+        ["prisma IS prismaLive (no Proxy)", m.prisma === m.prismaLive],
+        ["prismaRead IS prismaLive (no Proxy)", m.prismaRead === m.prismaLive],
+        ["model delegate reachable", typeof (m.prisma as unknown as { user?: unknown }).user === "object"],
+    ];
+}
+
+/**
+ * A shop counter: replica configured.
+ *
+ * The delegate-identity checks are the ones that matter most. The array form of
+ * `$transaction` needs genuine `PrismaPromise`s from a single client, and a Proxy
+ * that wrapped each operation would hand back native promises instead — breaking
+ * six real call sites (including a plain read report at api/accountancy/ledgers)
+ * with "Invalid $transaction invocation", at runtime, in production. Asserting that
+ * the Proxy hands back the client's OWN delegate objects is what proves nothing is
+ * being wrapped.
+ */
+async function counterMode(): Promise<Check[]> {
+    process.env.DATABASE_URL = "postgresql://u:p@live.invalid:5432/db";
+    process.env.LOCAL_DATABASE_URL = "postgresql://u:p@localhost:5432/smx";
+
+    const m = await import("@/shared/lib/prisma/prismaClient");
+    const mode = await import("@/shared/lib/prisma/counterMode");
+    const { isOfflineWriteBlocked } = await import("@/shared/lib/prisma/offlineError");
+
+    const live = m.prismaLive as unknown as Record<string, unknown>;
+    const proxy = m.prisma as unknown as Record<string, unknown>;
+
+    const out: Check[] = [
+        ["Proxy engaged when replica configured", m.prisma !== m.prismaLive],
+        ["starts in LIVE mode", mode.getMode() === "LIVE"],
+        ["READ_MODE defaults to live", mode.READ_PREFERENCE === "live"],
+        ["replica not ready until the worker says so", mode.isReplicaReady() === false],
+        // Raw passthrough, checked on the delegate OBJECT — not on its methods.
+        // Prisma builds a fresh bound function on every method access, so even on a
+        // plain unproxied client `c.user.findMany !== c.user.findMany`. Comparing
+        // methods therefore proves nothing; comparing the delegate does, because a
+        // method can only come from the delegate that produced it.
+        ["LIVE mode returns the live delegate itself", proxy.user === live.user],
+        ["…and for a second model", proxy.universalVoucher === live.universalVoucher],
+        [
+            "$transaction is unwrapped",
+            (m.prisma as unknown as { $transaction: unknown }).$transaction
+            === (m.prismaLive as unknown as { $transaction: unknown }).$transaction,
+        ],
+    ];
+
+    // Supabase goes away.
+    mode.reportLiveDown();
+    out.push(["demotes to LOCAL on live failure", mode.getMode() === "LOCAL"]);
+    out.push(["LOCAL mode swaps to a different delegate", proxy.user !== live.user]);
+
+    // The replica is a mirror: a write landing there would look like it succeeded,
+    // be invisible everywhere else, then vanish at the next sync. Refuse it instead.
+    let blocked = false;
+    try {
+        await (proxy.user as { create: (a: unknown) => Promise<unknown> })
+            .create({ data: { email: "x@y.z" } });
+    } catch (e) {
+        blocked = isOfflineWriteBlocked(e);
+    }
+    out.push(["write while LOCAL throws OfflineWriteBlockedError", blocked]);
+
+    // Raw execution bypasses $allModels entirely and needs its own guard.
+    let rawBlocked = false;
+    try {
+        await (m.prisma as unknown as { $executeRawUnsafe: (s: string) => Promise<unknown> })
+            .$executeRawUnsafe('DELETE FROM "User"');
+    } catch (e) {
+        rawBlocked = isOfflineWriteBlocked(e);
+    }
+    out.push(["$executeRawUnsafe while LOCAL is refused", rawBlocked]);
+
+    return out;
+}
+
+async function main(): Promise<void> {
+    const which = process.argv[2];
+    if (which !== "vercel" && which !== "counter") {
+        console.error("usage: tsx scripts/check-counter-mode.ts <vercel|counter>");
+        console.error("       (run both via `pnpm check:counter-mode`)");
+        process.exit(2);
+    }
+
+    console.log(`[counter-mode] ${which}:`);
+    const checks = which === "vercel" ? await vercelMode() : await counterMode();
+
+    let failed = 0;
+    for (const [name, ok] of checks) {
+        if (!ok) failed++;
+        console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
+    }
+    if (failed) {
+        console.error(`[counter-mode] ${which}: ${failed} check(s) failed.`);
+        process.exit(1);
+    }
+    process.exit(0);
+}
+
+void main();
