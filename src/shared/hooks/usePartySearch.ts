@@ -34,6 +34,7 @@ type FullHit = PartyHit & {
     emails: string[];
     aliases: string[];
     accountGroup: string | null;
+    accountGroupType: Party["accountGroupType"];
 };
 
 /** A cached row carries every phone/email; the wire shape shows the primary,
@@ -59,6 +60,7 @@ const toParty = (h: FullHit): Party => ({
     emails: h.emails,
     accountId: h.accountId,
     accountGroup: h.accountGroup,
+    accountGroupType: h.accountGroupType,
     aliases: h.aliases,
     linkedCompanies: h.linkedCompanies ?? [],
     cachedAt: 0,

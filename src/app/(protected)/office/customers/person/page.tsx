@@ -18,7 +18,8 @@ import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
-import { useDebouncedValue } from "@/shared/hooks";
+import { useDebouncedValue, usePartyBrowseList, type BrowseListRow } from "@/shared/hooks";
+import type { Party } from "@/shared/lib/parties";
 import { PRIORITY_META } from "@/utils/constants";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -57,14 +58,14 @@ import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 
-interface CustomerListItem {
-    id: number;
-    name: string;
+interface CustomerListItem extends BrowseListRow {
     phone: string | null;
     email: string | null;
-    isActive: boolean;
     _count: { companies: number; devices: number };
-    account: { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
+    /** `balance`/`normalBalance` are null ONLY on a `fromCache` placeholder row —
+     *  the cache carries identity, never money — and the row renders them as
+     *  pending rather than as a number. A live row always has both. */
+    account: { id: number; balance: number | null; normalBalance: "DEBIT" | "CREDIT" | null } | null;
 }
 
 interface CustomerDetail {
@@ -91,11 +92,27 @@ interface CustomerDetail {
     emails: { id: number; email: string; label: string | null; isPrimary: boolean }[];
 }
 
+/** A cached party as a list row, for the instant paint before the first live
+ *  page lands. Money is left null on purpose — see `CustomerListItem.account`.
+ *  Module scope so its identity is stable across renders. */
+const placeholderFromCache = (p: Party): CustomerListItem => ({
+    id: p.id,
+    name: p.name,
+    // The cache only ever holds active parties.
+    isActive: true,
+    phone: p.phones[0] ?? null,
+    email: p.emails[0] ?? null,
+    account: p.accountId ? { id: p.accountId, balance: null, normalBalance: null } : null,
+    // Counts are a live-only join; 0 renders as "no badge", which is the same
+    // thing this row shows while it is still a placeholder.
+    _count: { companies: 0, devices: 0 },
+    fromCache: true,
+});
+
 type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
 
 export default function CustomersPage() {
     const { data: session } = useSession();
-    const [customers, setCustomers] = useState<CustomerListItem[]>([]);
     const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
     const [showInactive, setShowInactive] = useState(false);
     const [search, setSearch] = useState("");
@@ -126,26 +143,21 @@ export default function CustomersPage() {
     const router = useRouter();
 
     // Server-side search: the list holds only what the API returns for the
-    // current query. Empty query → newest page. Filtering in the browser used to
-    // hide matches that lived beyond the first page, so we let the DB search.
+    // current query. Empty query → newest page, 50 at a time, growing as the
+    // panel is scrolled — see `usePartyBrowseList`. Every page fetched, browsed
+    // or searched, also tops up the same cache the till reads.
     const debouncedSearch = useDebouncedValue(search, 300);
 
-    const loadList = useCallback(async (q: string) => {
-        try {
-            const response = await axios.get<CustomerListItem[]>("/api/person", {
-                params: {
-                    ...(q ? { q } : {}),
-                    ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
-                    ...(showInactive ? { includeInactive: 1 } : {}),
-                },
-            });
-            setCustomers(response.data);
-        } catch {
-            toast.error("Failed to load customers");
-        }
-    }, [canSeeCreditors, showInactive]);
-
-    useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
+    const { items: customers, loadingMore, loadMore, refresh, updateItem } = usePartyBrowseList<CustomerListItem>({
+        type: "customer",
+        apiPath: "/api/person",
+        search: debouncedSearch.trim(),
+        sort,
+        hideCreditors: !canSeeCreditors,
+        includeInactive: showInactive,
+        errorMessage: "Failed to load customers",
+        cachePlaceholder: placeholderFromCache,
+    });
 
     useEffect(() => {
         if (!selectedId) {
@@ -188,26 +200,31 @@ export default function CustomersPage() {
             .catch(() => { });
     }, [selectedId]);
 
-    // Re-fetch after profile edits (name/address/phones/emails saved).
+    // Re-fetch after profile edits (name/address/phones/emails saved). Patches
+    // the loaded row's name in place — the rest of a rename doesn't change
+    // which page it belongs on, so a full reload would be wasted work.
     const refetchDetail = useCallback(() => {
         if (!selectedId) return;
         axios.get<CustomerDetail>(`/api/person/${selectedId}`)
-            .then((res) => setDetail(res.data))
+            .then((res) => {
+                setDetail(res.data);
+                updateItem(selectedId, { name: res.data.name } as Partial<CustomerListItem>);
+            })
             .catch(() => { });
-    }, [selectedId]);
+    }, [selectedId, updateItem]);
 
     // Deleted (hard) or deactivated — either way it drops out of the isActive
     // list, so close the detail and reload.
     const handleDeleted = useCallback(() => {
         setSelectedId(null);
-        loadList(search.trim());
-    }, [loadList, search]);
+        void refresh();
+    }, [refresh]);
 
     // Reactivated — refresh both the open detail and the list (badge/row updates).
     const handleReactivated = useCallback(() => {
         refetchDetail();
-        loadList(search.trim());
-    }, [refetchDetail, loadList, search]);
+        void refresh();
+    }, [refetchDetail, refresh]);
 
     // Load (or reload) transactions for the current customer + period.
     const loadTransactions = useCallback((f: string, t: string) => {
@@ -247,7 +264,7 @@ export default function CustomersPage() {
             toast.success("Customer created");
             setShowCreate(false);
             setForm({ name: "", phone: "", email: "", address: "" });
-            await loadList(search.trim());
+            await refresh();
             setSelectedId(response.data.id);
         } catch {
             toast.error("Failed to create customer");
@@ -295,6 +312,7 @@ export default function CustomersPage() {
                     }
                     isEmpty={customers.length === 0}
                     emptyMessage={search ? "No matches" : "No customers yet"}
+                    onScrollNearBottom={loadMore}
                 >
                     {sortedCustomers.map((customer) => (
                         <Button
@@ -324,18 +342,25 @@ export default function CustomersPage() {
                                         <div className="mt-0.5 flex items-center justify-between gap-2">
                                             <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
                                             {customer.account && (
-                                                <span
-                                                    className={cn(
-                                                        "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
-                                                        customer.account.balance === 0
-                                                            ? "bg-muted text-muted-foreground"
-                                                            : customer.account.balance < 0
-                                                                ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                                : "bg-muted text-foreground",
-                                                    )}
-                                                >
-                                                    {formatDrCr(customer.account.balance, customer.account.normalBalance)}
-                                                </span>
+                                                customer.account.balance === null || customer.account.normalBalance === null ? (
+                                                    // Held from the cache; the real figure is on its way.
+                                                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
+                                                        ···
+                                                    </span>
+                                                ) : (
+                                                    <span
+                                                        className={cn(
+                                                            "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                                            customer.account.balance === 0
+                                                                ? "bg-muted text-muted-foreground"
+                                                                : customer.account.balance < 0
+                                                                    ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                                                                    : "bg-muted text-foreground",
+                                                        )}
+                                                    >
+                                                        {formatDrCr(customer.account.balance, customer.account.normalBalance)}
+                                                    </span>
+                                                )
                                             )}
                                         </div>
                                     </div>
@@ -351,6 +376,9 @@ export default function CustomersPage() {
                             </Link>
                         </Button>
                     ))}
+                    {loadingMore && (
+                        <p className="py-3 text-center text-xs text-muted-foreground">Loading more…</p>
+                    )}
                 </EntityListPanel>
 
                 <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">

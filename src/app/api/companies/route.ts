@@ -9,6 +9,7 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { afterCursor, BROWSE_PAGE_SIZE, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
 
 const createSchema = phoneEmailSchema.merge(gstSchema).extend({
     name: z.string().trim().min(1, "Company name is required"),
@@ -30,6 +31,9 @@ export async function GET(req: Request) {
     const hideCreditors = searchParams.get("hideCreditors") === "1";
     // Browse-only "Show inactive" toggle — see /api/person for the mirror.
     const includeInactive = searchParams.get("includeInactive") === "1";
+    // See /api/person for why only Name-ascending paginates, opt-in.
+    const paginate = searchParams.get("paginate") === "1";
+    const cursor = paginate ? parseBrowseCursor(searchParams) : null;
 
     try {
         const companies = await prisma.company.findMany({
@@ -54,9 +58,11 @@ export async function GET(req: Request) {
                             { companyReg: { contains: q, mode: "insensitive" as const } },
                         ],
                     }] : []),
+                    ...(paginate ? [afterCursor(cursor)] : []),
                 ],
             },
-            orderBy: { createdAt: "desc" },
+            orderBy: paginate ? NAME_ORDER : { createdAt: "desc" },
+            ...(paginate ? { take: BROWSE_PAGE_SIZE } : {}),
             include: {
                 _count: { select: { persons: true } },
                 phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
@@ -69,7 +75,11 @@ export async function GET(req: Request) {
                         openingBalance: true,
                         openingBalanceType: true,
                         openingBalanceDate: true,
-                        group: { select: { type: true } },
+                        // `name` + `aliases` cost nothing extra — same relation already
+                        // joined for `type` — but let a search hit here also fill the
+                        // till's party cache (see `aliases`/`accountGroup` below).
+                        group: { select: { type: true, name: true } },
+                        aliases: { select: { alias: true } },
                         _count: { select: { devices: true } },
                     },
                 },
@@ -90,8 +100,17 @@ export async function GET(req: Request) {
                 normalBalance: c.account.normalBalance
                     ?? (c.account.group?.type ? defaultNormalBalanceForGroupType(c.account.group.type) : "DEBIT"),
             } : null,
+            // Cache-fill fields — not shown by this page, only what a search hit
+            // here can hand the till's cache for free.
+            aliases: c.account?.aliases.map(a => a.alias) ?? [],
+            accountGroup: c.account?.group?.name ?? null,
+            accountGroupType: c.account?.group?.type ?? null,
         }));
-        return NextResponse.json(normalised);
+        // Opt-in envelope — see /api/person for why every other caller keeps
+        // getting the plain array unchanged.
+        return NextResponse.json(
+            paginate ? { items: normalised, nextCursor: nextBrowseCursor(companies, BROWSE_PAGE_SIZE) } : normalised,
+        );
     } catch (error) {
         return handleApiError(error, "Failed to fetch companies");
     }

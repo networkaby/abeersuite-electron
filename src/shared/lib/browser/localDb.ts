@@ -95,6 +95,11 @@ export type LocalPartyRow = {
     accountId: number | null;
     /** Ledger group name, e.g. "Sundry Debtors" — what party pickers narrow by. */
     accountGroup: string | null;
+    /** The group's broader nature — ASSET / LIABILITY / INCOME / EXPENSE.
+     *  `accountGroup` narrows to one exact ledger group; this narrows to
+     *  everything of that NATURE, for a restriction not tied to one group name
+     *  (e.g. "no liability-side parties here", vs "no Sundry Creditors here"). */
+    accountGroupType: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null;
     aliases: string[];
     linkedCompanies: { id: number; name: string; accountId: number | null }[];
     /** When this row was last taken from the server. The backstop that retires a
@@ -204,6 +209,28 @@ export function localDb(): LocalDb | null {
     // `cachedAt` to retire them. The meta row changed shape with it. Neither can
     // be migrated into the other, and both refill on demand — so drop them.
     db.version(3)
+        .stores({
+            tickets:      "id, pipelineId, status, priority, updatedAt",
+            ticketViews:  "key, savedAt",
+            products:     "id, name",
+            productMeta:  "key",
+            masters:      "[type+id], type",
+            masterMeta:   "key",
+            parties:      "[type+id], type, name, accountId",
+            partyMeta:    "key",
+            dayBookViews: "key, savedAt",
+        })
+        .upgrade(async (tx) => {
+            await tx.table("parties").clear();
+            await tx.table("partyMeta").clear();
+        });
+
+    // v4 added `accountGroupType` to the party row. A row cached before this
+    // simply lacks the field rather than carrying a wrong value, which is
+    // harmless for search but WRONG for anything filtering by it — clear rather
+    // than let a type-restricted picker silently under-filter until every row
+    // happens to get re-cached.
+    db.version(4)
         .stores({
             tickets:      "id, pipelineId, status, priority, updatedAt",
             ticketViews:  "key, savedAt",

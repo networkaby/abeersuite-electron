@@ -8,6 +8,7 @@
 - Explain understanding + plan.
 - **Wait for approval before editing.**
 - /lab in incomplete module under constraction
+- anything coming from supabase/DB must be cached to save reading cost.
 
 ## 2. Product
 

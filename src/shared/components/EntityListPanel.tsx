@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Search, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,15 @@ interface EntityListPanelProps {
     isEmpty: boolean;
     className?: string;
     children: React.ReactNode;
+    /** Called once when the list is scrolled near its bottom — the "grow on
+     *  scroll" hook for a paginated list. Omit for a panel that loads everything
+     *  up front. */
+    onScrollNearBottom?: () => void;
 }
+
+/** How close to the bottom, in pixels, before the next page is asked for —
+ *  loose enough that it fires before the user hits a dead stop. */
+const NEAR_BOTTOM_PX = 200;
 
 /** Reusable centre column used by list-detail pages (Customers, Inventory Details, …).
  *  Header (icon + title + count + optional Add) → search → scrollable list of rows.
@@ -45,9 +54,31 @@ export function EntityListPanel({
     isEmpty,
     className,
     children,
+    onScrollNearBottom,
 }: EntityListPanelProps) {
+    // `ScrollArea`'s own props land on its Root, not the Viewport that actually
+    // scrolls (Radix splits them) — so the listener is attached imperatively to
+    // whichever element is really scrolling, rather than changing a primitive
+    // every other list-detail page also renders through.
+    const rootRef = useRef<HTMLElement>(null);
+    const onScrollRef = useRef(onScrollNearBottom);
+    useEffect(() => { onScrollRef.current = onScrollNearBottom; });
+
+    useEffect(() => {
+        const viewport = rootRef.current?.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]');
+        if (!viewport || !onScrollNearBottom) return;
+        const onScroll = () => {
+            if (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < NEAR_BOTTOM_PX) {
+                onScrollRef.current?.();
+            }
+        };
+        viewport.addEventListener("scroll", onScroll);
+        return () => viewport.removeEventListener("scroll", onScroll);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-bind when going from off to on
+    }, [!!onScrollNearBottom]);
+
     return (
-        <aside className={cn("flex w-80 shrink-0 flex-col border-r bg-card", className)}>
+        <aside ref={rootRef} className={cn("flex w-80 shrink-0 flex-col border-r bg-card", className)}>
             <div className="flex items-center justify-between border-b px-4 py-3">
                 <div className="flex items-center gap-2">
                     {icon}

@@ -18,7 +18,8 @@ import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
-import { useDebouncedValue } from "@/shared/hooks";
+import { useDebouncedValue, usePartyBrowseList, type BrowseListRow } from "@/shared/hooks";
+import type { Party } from "@/shared/lib/parties";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { initials } from "@/modules/customer/lib/initials";
@@ -56,15 +57,32 @@ import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 
-interface CompanyListItem {
-    id: number;
-    name: string;
+interface CompanyListItem extends BrowseListRow {
     phone: string | null;
     companyReg: string | null;
-    isActive: boolean;
     _count: { customers: number; devices: number };
-    account: { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
+    /** `balance`/`normalBalance` are null ONLY on a `fromCache` placeholder row —
+     *  the cache carries identity, never money — and the row renders them as
+     *  pending rather than as a number. A live row always has both. */
+    account: { id: number; balance: number | null; normalBalance: "DEBIT" | "CREDIT" | null } | null;
 }
+
+/** A cached party as a list row, for the instant paint before the first live
+ *  page lands. Money is left null on purpose — see `CompanyListItem.account`.
+ *  Module scope so its identity is stable across renders. */
+const placeholderFromCache = (p: Party): CompanyListItem => ({
+    id: p.id,
+    name: p.name,
+    // The cache only ever holds active parties.
+    isActive: true,
+    phone: p.phones[0] ?? null,
+    companyReg: null,
+    account: p.accountId ? { id: p.accountId, balance: null, normalBalance: null } : null,
+    // Counts are a live-only join; 0 renders as "no badge", which is the same
+    // thing this row shows while it is still a placeholder.
+    _count: { customers: 0, devices: 0 },
+    fromCache: true,
+});
 
 interface CompanyDetail {
     id: number;
@@ -108,7 +126,6 @@ export default function CompaniesPage() {
     const canDeleteCompany = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_DELETE);
     // Without this grant the list hides suppliers (Sundry Creditors) — customers only.
     const canSeeCreditors = hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
-    const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
     const [showInactive, setShowInactive] = useState(false);
     const [search, setSearch] = useState("");
@@ -127,25 +144,22 @@ export default function CompaniesPage() {
     const [saving, setSaving] = useState(false);
 
     // Server-side search — let the DB match name / phone / reg across the whole
-    // table instead of filtering the loaded page in the browser.
+    // table instead of filtering the loaded page in the browser. Empty query →
+    // newest page, 50 at a time, growing as the panel is scrolled — see
+    // `usePartyBrowseList`. Every page fetched, browsed or searched, also tops
+    // up the same cache the till reads.
     const debouncedSearch = useDebouncedValue(search, 300);
 
-    const loadList = useCallback(async (q: string) => {
-        try {
-            const response = await axios.get<CompanyListItem[]>("/api/companies", {
-                params: {
-                    ...(q ? { q } : {}),
-                    ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
-                    ...(showInactive ? { includeInactive: 1 } : {}),
-                },
-            });
-            setCompanies(response.data);
-        } catch {
-            toast.error("Failed to load companies");
-        }
-    }, [canSeeCreditors, showInactive]);
-
-    useEffect(() => { loadList(debouncedSearch.trim()); }, [loadList, debouncedSearch]);
+    const { items: companies, loadingMore, loadMore, refresh, updateItem } = usePartyBrowseList<CompanyListItem>({
+        type: "company",
+        apiPath: "/api/companies",
+        search: debouncedSearch.trim(),
+        sort,
+        hideCreditors: !canSeeCreditors,
+        includeInactive: showInactive,
+        errorMessage: "Failed to load companies",
+        cachePlaceholder: placeholderFromCache,
+    });
 
     useEffect(() => {
         if (!selectedId) {
@@ -204,30 +218,31 @@ export default function CompaniesPage() {
             .catch(() => {});
     }, [selectedId]);
 
-    // Re-fetch after profile edits saved (CompanyProfileEdit).
+    // Re-fetch after profile edits saved (CompanyProfileEdit). Patches the
+    // loaded row's name in place — a rename doesn't change which page it
+    // belongs on, so a full reload would be wasted work.
     const refetchDetail = useCallback(() => {
         if (!selectedId) return;
         axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
             .then((res) => {
                 setDetail(res.data);
-                // Also refresh the list item name in sidebar
-                setCompanies(prev => prev.map(c => c.id === selectedId && res.data ? { ...c, name: res.data.name } : c));
+                updateItem(selectedId, { name: res.data.name } as Partial<CompanyListItem>);
             })
             .catch(() => {});
-    }, [selectedId]);
+    }, [selectedId, updateItem]);
 
     // Deleted (hard) or deactivated — either way it drops out of the isActive
     // list, so close the detail and reload.
     const handleDeleted = useCallback(() => {
         setSelectedId(null);
-        loadList(search.trim());
-    }, [loadList, search]);
+        void refresh();
+    }, [refresh]);
 
     // Reactivated — refresh both the open detail and the list (badge/row updates).
     const handleReactivated = useCallback(() => {
         refetchDetail();
-        loadList(search.trim());
-    }, [refetchDetail, loadList, search]);
+        void refresh();
+    }, [refetchDetail, refresh]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -253,7 +268,7 @@ export default function CompaniesPage() {
             toast.success("Company created");
             setShowCreate(false);
             setForm({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
-            await loadList(search.trim());
+            await refresh();
             setSelectedId(response.data.id);
         } catch {
             toast.error("Failed to create company");
@@ -297,6 +312,7 @@ export default function CompaniesPage() {
                     }
                     isEmpty={companies.length === 0}
                     emptyMessage={search ? "No matches" : "No companies yet"}
+                    onScrollNearBottom={loadMore}
                 >
                     {sortedCompanies.map((company) => (
                         <Button
@@ -319,18 +335,25 @@ export default function CompaniesPage() {
                                     <div className="mt-0.5 flex items-center justify-between gap-2">
                                         <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
                                         {company.account && (
-                                            <span
-                                                className={cn(
-                                                    "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
-                                                    company.account.balance === 0
-                                                        ? "bg-muted text-muted-foreground"
-                                                        : company.account.balance < 0
-                                                            ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                            : "bg-muted text-foreground",
-                                                )}
-                                            >
-                                                {formatDrCr(company.account.balance, company.account.normalBalance)}
-                                            </span>
+                                            company.account.balance === null || company.account.normalBalance === null ? (
+                                                // Held from the cache; the real figure is on its way.
+                                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
+                                                    ···
+                                                </span>
+                                            ) : (
+                                                <span
+                                                    className={cn(
+                                                        "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                                        company.account.balance === 0
+                                                            ? "bg-muted text-muted-foreground"
+                                                            : company.account.balance < 0
+                                                                ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                                                                : "bg-muted text-foreground",
+                                                    )}
+                                                >
+                                                    {formatDrCr(company.account.balance, company.account.normalBalance)}
+                                                </span>
+                                            )
                                         )}
                                     </div>
                                 </div>
@@ -340,6 +363,9 @@ export default function CompaniesPage() {
                             </div>
                         </Button>
                     ))}
+                    {loadingMore && (
+                        <p className="py-3 text-center text-xs text-muted-foreground">Loading more…</p>
+                    )}
                 </EntityListPanel>
 
                 <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">

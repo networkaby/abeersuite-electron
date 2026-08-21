@@ -223,17 +223,21 @@ async function check(): Promise<void> {
 /**
  * Does this party match every token? Mirrors `lookupAccounts`'s `tokenOr`:
  * name / any phone / any ledger alias, plus address + any email when `wide`.
+ *
+ * Phone and email are only checked when the token is shaped like one — the same
+ * gate the server applies, kept in step so the cache finds the same rows a live
+ * search would.
  */
 function matches(p: Party, token: string, wide: boolean): boolean {
     const t = token.toLowerCase();
     if (p.name.toLowerCase().includes(t)) return true;
     // Phone is matched case-sensitively server-side (digits), but lowercasing a
     // digit string is a no-op, so one comparison covers both.
-    if (p.phones.some((x) => x.includes(token))) return true;
+    if (looksLikePhone(token) && p.phones.some((x) => x.includes(token))) return true;
     if (p.aliases.some((x) => x.toLowerCase().includes(t))) return true;
     if (wide) {
         if ((p.address ?? "").toLowerCase().includes(t)) return true;
-        if (p.emails.some((x) => x.toLowerCase().includes(t))) return true;
+        if (looksLikeEmail(token) && p.emails.some((x) => x.toLowerCase().includes(t))) return true;
     }
     return false;
 }
@@ -271,6 +275,34 @@ export async function searchParties(
     // an autoincrement id, so id order and creation order agree.
     hits.sort((a, b) => b.id - a.id);
     return hits.slice(0, MAX_HITS);
+}
+
+/**
+ * The cache's answer to "what's on the list", not "who matches this text" —
+ * what a directory panel (Contacts, Companies) paints BEFORE its own live page
+ * arrives, so opening the list is never a blank wait.
+ *
+ * Name-sorted only: it is the one order the cache and the server agree on
+ * without disagreement risk (both alphabetise plainly), and it is this list's
+ * default view. A caller sorting by ledger balance has nothing to gain here —
+ * the cache carries no balance, on purpose (never guess a number that funds a
+ * decision) — and should skip straight to its live fetch instead.
+ *
+ * Always an array, never null: unlike `searchParties`, an empty result is a
+ * genuine, resolvable answer here ("nothing cached yet") rather than a signal
+ * to fall back to anything — the live page is coming either way.
+ */
+export async function browseParties(
+    opts: { type: PartyType; excludeAccountGroup?: string; limit: number },
+): Promise<Party[]> {
+    if (!(await ensurePartiesReady()) || !mem) return [];
+
+    const hits = [...mem.values()].filter((p) =>
+        p.type === opts.type
+        && (!opts.excludeAccountGroup || p.accountGroup !== opts.excludeAccountGroup),
+    );
+    hits.sort((a, b) => a.name.localeCompare(b.name));
+    return hits.slice(0, opts.limit);
 }
 
 /** Drop the whole cache — call after creating or editing a party, so the next

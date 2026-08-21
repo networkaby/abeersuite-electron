@@ -8,6 +8,8 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
+import { looksLikeEmail, looksLikePhone } from "@/shared/lib/parties/tokenShape";
+import { afterCursor, BROWSE_PAGE_SIZE, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 
@@ -50,6 +52,7 @@ type FullFields = {
     emails: string[];
     aliases: string[];
     accountGroup: string | null;
+    accountGroupType: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null;
 };
 
 async function lookupAccounts(
@@ -65,7 +68,7 @@ async function lookupAccounts(
         account: {
             select: {
                 id: true,
-                group: { select: { name: true } },
+                group: { select: { name: true, type: true } },
                 aliases: { select: { alias: true } },
             },
         },
@@ -85,12 +88,20 @@ async function lookupAccounts(
     const tokenOr = (t: string) => ({
         OR: [
             { name: { contains: t, mode: "insensitive" as const } },
-            { phones: { some: { phone: { contains: t } } } },
+            // Phone and email only enter the query when the token is actually
+            // shaped like one — the UI already knows what it's typing, so this is
+            // the same saving as the exact-match version without the cost of a
+            // narrower match: a name token never asks Postgres to scan the
+            // phone/email columns, and a real phone/email still finds a partial
+            // typed prefix.
+            ...(looksLikePhone(t) ? [{ phones: { some: { phone: { contains: t } } } }] : []),
             { account: { is: { aliases: { some: { alias: { contains: t, mode: "insensitive" as const } } } } } },
             ...(wide
                 ? [
                     { address: { contains: t, mode: "insensitive" as const } },
-                    { emails: { some: { email: { contains: t, mode: "insensitive" as const } } } },
+                    ...(looksLikeEmail(t)
+                        ? [{ emails: { some: { email: { contains: t, mode: "insensitive" as const } } } }]
+                        : []),
                   ]
                 : []),
         ],
@@ -146,13 +157,17 @@ async function lookupAccounts(
     const extras = (row: {
         phones: { phone: string }[];
         emails: { email: string }[];
-        account: { group: { name: string } | null; aliases: { alias: string }[] } | null;
+        account: {
+            group: { name: string; type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" } | null;
+            aliases: { alias: string }[];
+        } | null;
     }): Partial<FullFields> => full
         ? {
             phones: row.phones.map(x => x.phone),
             emails: row.emails.map(x => x.email),
             aliases: row.account?.aliases.map(a => a.alias) ?? [],
             accountGroup: row.account?.group?.name ?? null,
+            accountGroupType: row.account?.group?.type ?? null,
         }
         : {};
 
@@ -209,6 +224,15 @@ export async function GET(req: Request) {
     // Browse-only "Show inactive" toggle — Trash-lite: lets a customers:delete
     // holder find and reactivate a previously deactivated party.
     const includeInactive = searchParams.get("includeInactive") === "1";
+    // Explicit opt-in, sent only for the one view this paginates — name
+    // ascending. Everything else (name descending, amount either way) falls
+    // through to a single unbounded, client-sorted fetch exactly as before; see
+    // browsePage.ts for why a computed balance has no cursor to walk, and
+    // browsePage.ts's alphabetical-only contract for why descending doesn't
+    // either (a forward cursor can't walk backward without becoming a second
+    // code path for a rarer view).
+    const paginate = searchParams.get("paginate") === "1";
+    const cursor = paginate ? parseBrowseCursor(searchParams) : null;
 
     try {
         if (phone) return NextResponse.json(await lookupAccounts(phone, group, { wide, full }));
@@ -239,9 +263,11 @@ export async function GET(req: Request) {
                             { emails: { some: { email: { contains: q, mode: "insensitive" as const } } } },
                         ],
                     }] : []),
+                    ...(paginate ? [afterCursor(cursor)] : []),
                 ],
             },
-            orderBy: { createdAt: "desc" },
+            orderBy: paginate ? NAME_ORDER : { createdAt: "desc" },
+            ...(paginate ? { take: BROWSE_PAGE_SIZE } : {}),
             include: {
                 _count: { select: { companies: true } },
                 phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
@@ -254,7 +280,12 @@ export async function GET(req: Request) {
                         openingBalance: true,
                         openingBalanceType: true,
                         openingBalanceDate: true,
-                        group: { select: { type: true } },
+                        // `name` + `aliases` cost nothing extra here — same relation
+                        // already joined for `type` — but let a search HIT on this
+                        // page double as a fill for the till's party cache (see
+                        // `aliases`/`accountGroup` on the response below).
+                        group: { select: { type: true, name: true } },
+                        aliases: { select: { alias: true } },
                         _count: { select: { devices: true } },
                     },
                 },
@@ -275,8 +306,19 @@ export async function GET(req: Request) {
                 normalBalance: p.account.normalBalance
                     ?? (p.account.group?.type ? defaultNormalBalanceForGroupType(p.account.group.type) : "DEBIT"),
             } : null,
+            // Cache-fill fields, same shape `full=1` sends from the lookup. Not
+            // part of what this page displays — only what a search HIT here can
+            // hand the till's cache for free.
+            aliases: p.account?.aliases.map(a => a.alias) ?? [],
+            accountGroup: p.account?.group?.name ?? null,
+            accountGroupType: p.account?.group?.type ?? null,
         }));
-        return NextResponse.json(normalised);
+        // The envelope is opt-in, sent only to a caller that asked to paginate —
+        // every existing caller (the "All" parties page, referenceStore) still
+        // gets the plain array it always has, unchanged.
+        return NextResponse.json(
+            paginate ? { items: normalised, nextCursor: nextBrowseCursor(persons, BROWSE_PAGE_SIZE) } : normalised,
+        );
     } catch (error) {
         return handleApiError(error, "Failed to fetch people");
     }
