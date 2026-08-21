@@ -1,0 +1,77 @@
+name: Type check
+
+# Catches the one class of error nothing else in this repo catches.
+#
+# ESLint deliberately leaves `no-undef` off (typescript-eslint's default —
+# TypeScript owns undefined-identifier checking), and `pnpm precommit` runs only
+# the doc-sync and nav-icon checks. So a file that uses a helper without importing
+# it lints clean, commits clean, and only fails at `next build`. That is exactly how
+# the missing `looksLikePhone` / `looksLikeEmail` import in partyCatalog.ts reached
+# the dev branch.
+#
+# This runs on push instead of in a pre-commit hook on purpose: a full tsc takes
+# minutes, and a pre-commit hook that slow gets bypassed with `--no-verify`, which
+# would leave us worse off than no check at all. Blocking the merge costs nobody's
+# local loop.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+# A newer push supersedes an in-flight run on the same ref — no point finishing a
+# type check for a commit that has already been replaced.
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tsc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The generated client is gitignored, and ~500 files import types from it.
+      # Without this every one of them is an error and the run is meaningless.
+      #
+      # `generate` reads the schema and never opens a connection, but prisma.config.ts
+      # still resolves `DIRECT_URL ?? DATABASE_URL` when it loads — and on a runner
+      # there is no .env to fall back on. A syntactically valid dummy satisfies that
+      # without granting CI any access to a real database, which is the point: this
+      # job must never be able to reach production.
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+
+      # Same 8 GB heap the build script uses; the default heap OOMs on this project.
+      - name: Type check
+        run: pnpm exec tsc --noEmit -p tsconfig.json
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      # Cheap, no database, and guards the counter replica's routing invariants —
+      # notably that `prisma` is the untouched live client when no replica is
+      # configured, which is what keeps production identical.
+      - name: Counter mode invariants
+        run: pnpm check:counter-mode
+
+      - name: Sync table registry up to date
+        run: pnpm sync:tables:check
