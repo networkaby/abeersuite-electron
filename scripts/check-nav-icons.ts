@@ -28,7 +28,8 @@ const ALLOWED: string[][] = [
     ["Account Ledger", "Ledgers"],
     ["Bank Book", "Loans Book"],
     ["Masters", "Groups"],
-    ["Deals", "New Deal +"],
+    ["Deals", "New Deal +", "Deal"],
+    ["Task", "New Task +"],
 ];
 
 const canonical = new Map<string, string>();
