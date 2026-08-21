@@ -39,6 +39,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // Permission table so FK lookups don't break, but the `systemOnly` flag keeps
     // it out of role grants and off the Role Matrix UI.
     { id: "admin:bypass", label: "Bypass all permission checks", module: "core", description: "Grants full access. Only usable by the env super admin — never grant this to a role.", systemOnly: true },
+    { id: "auth:login:outside-counter", label: "Can login outside counter", module: "core", description: "Allow login from a non-counter machine (without bridge). Without this permission, login is restricted to counter machines only." },
 
     // customers — Contacts (Person + Company) share ONE flat set. Contacts carry no
     // branch, so there is no radius to enforce: any branch may CRUD (gated only by
@@ -47,7 +48,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "customers:create", label: "Create customers", module: "customers", description: "Create Person / Company records." },
     { id: "customers:edit", label: "Edit customers", module: "customers", description: "Edit any Person / Company record (no branch limit)." },
     { id: "customers:delete", label: "Delete customers", module: "customers", description: "Delete any Person / Company record (no branch limit)." },
-    { id: "customers:view:creditors", label: "Show suppliers (creditors)", module: "customers", description: "See parties in the Sundry Creditors group in the Contacts lists. Absent → the role browses customers (Sundry Debtors) only. UI-only filter; the party-lookup path is never filtered." },
+    { id: "customers:view:creditors", label: "Show suppliers (creditors)", module: "customers", description: "Show suppliers (Sundry Creditors) in Contacts lists and voucher party dropdowns. Absent → browses customers (Sundry Debtors) only; suppliers filtered from both surfaces." },
 
     // admin
     { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Organisation-wide settings — org defaults, payment methods, printer/QR/voucher templates, backups, downloads, imports." },

@@ -1,6 +1,7 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { signIn, signOut, getSession } from "next-auth/react";
+import { isBridgeAvailable } from "@/shared/lib/bridge";
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -33,6 +34,22 @@ function StaffLoginForm() {
             setError("Invalid email or password");
             setLoading(false);
         } else {
+            // Counter-machine gate: non-counter machines may only log in
+            // when the user holds auth:login:outside-counter.
+            const bridgePresent = await isBridgeAvailable();
+            if (!bridgePresent) {
+                const session = await getSession();
+                const perms = (session?.user as { permissions?: string[] })?.permissions ?? [];
+                if (!perms.includes("auth:login:outside-counter")) {
+                    await signOut({ redirect: false });
+                    setError(
+                        "This machine is not a counter. " +
+                        "Contact admin to grant 'Can login outside counter' permission."
+                    );
+                    setLoading(false);
+                    return;
+                }
+            }
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
             router.push(dest);
         }

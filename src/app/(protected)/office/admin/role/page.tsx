@@ -38,6 +38,7 @@ import {
     QuickActionsSection,
     WorkAccessSection,
     SidebarVisibilitySection,
+    GlobalPermissionsSection,
 } from "@/modules/admin/components/RolePageSections";
 
 export default function RolePage() {
@@ -514,6 +515,13 @@ export default function RolePage() {
                                     posShiftChipsAvailable={posShiftChipsAvailable}
                                 />
 
+
+                                <GlobalPermissionsSection
+                                    selected={selected}
+                                    original={original}
+                                    inLens={inLens}
+                                    onTogglePerm={togglePerm}
+                                />
 
                                 <SidebarVisibilitySection
                                     selected={selected}

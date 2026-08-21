@@ -20,6 +20,7 @@ import {
     ShoppingCart,
     Trash2,
     Users,
+    Globe,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -958,7 +959,7 @@ export function SidebarVisibilitySection({
                         // renders on its own row after the links, once ANY of its trigger
                         // links is ticked — so it reads as spanning the module, not one link.
                         const modToggle = MODULE_EXTRA_TOGGLE[mod.key];
-                        const showModToggle = !!modToggle && modToggle.showWhenAnyLinkId.some((id) => selected.has(id));
+                        const showModToggle = !!modToggle && !modToggle.global && modToggle.showWhenAnyLinkId.some((id) => selected.has(id));
                         return (
                             <div key={mod.key} className="overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5">
                                 <div className="mb-1.5 flex items-center gap-2">
@@ -981,4 +982,86 @@ export function SidebarVisibilitySection({
     );
 }
 
+// Cross-section permissions — toggles that affect behaviour OUTSIDE their native
+// module (e.g. Contacts → show suppliers also filters voucher party dropdowns).
+// Rendered as a standalone card so the admin sees them at a glance, not buried
+// inside the Sidebar links section.
+export function GlobalPermissionsSection({
+    selected,
+    original,
+    inLens,
+    onTogglePerm,
+}: {
+    selected: Set<string>;
+    original: Set<string>;
+    inLens: (id: string) => boolean;
+    onTogglePerm: (id: string) => void;
+}) {
+    // Collect every MODULE_EXTRA_TOGGLE entry marked global.
+    const globalToggles = Object.values(MODULE_EXTRA_TOGGLE).filter((t) => t.global);
 
+    // Show if the permission itself passes the department lens (pool-exempt permissions
+    // like customers:view:creditors are always visible, regardless of trigger links).
+    const visible = globalToggles.filter((t) => inLens(t.id));
+
+    if (visible.length === 0) return null;
+
+    return (
+        <Card className="border-amber-200 dark:border-amber-900">
+            <CardContent className="space-y-3 pt-4">
+                <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
+                        <Globe size={15} className="text-amber-700 dark:text-amber-400" /> Global
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Cross-section permissions that affect behaviour outside their native module.
+                    </p>
+                </div>
+                <div className="space-y-2">
+                    {visible.map((toggle) => {
+                        const on = selected.has(toggle.id);
+                        const changed = on !== original.has(toggle.id);
+                        return (
+                            <div
+                                key={toggle.id}
+                                className="flex items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5"
+                            >
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onTogglePerm(toggle.id)}
+                                    title={toggle.id}
+                                    className={
+                                        ["h-auto shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                                        on
+                                            ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
+                                            : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                        changed ? "ring-2 ring-primary/20" : "",
+                                    ].join(" ")
+                                }
+                                >
+                                    <span
+                                        className={
+                                            ["flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                            on ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                        ].join(" ")
+                                    }
+                                    >
+                                        {on && <Check size={10} strokeWidth={3} />}
+                                    </span>
+                                    <span className="text-[11px] font-medium leading-tight">{toggle.label}</span>
+                                </Button>
+                                {toggle.globalDescription && (
+                                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                                        {toggle.globalDescription}
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}

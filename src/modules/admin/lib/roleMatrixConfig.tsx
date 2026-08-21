@@ -75,6 +75,7 @@ export const QUICK_ACTION_OPTIONS: { permission: string; label: string; icon: Lu
 // NOT here — those stay pool-gated to the departments that carry their module.
 export const POOL_EXEMPT_PERMISSION_IDS = new Set<string>([
     "quick-actions:more",
+    "auth:login:outside-counter",
 ]);
 
 export interface Permission {
@@ -655,10 +656,17 @@ export function extraTogglesFor(linkPermissionId: string): ExtraToggle[] {
 // (not tucked beside one chip). Shown once ANY of its `showWhenAnyLinkId` links
 // is ticked. Contacts → "Show suppliers (creditors)" filters BOTH the Person and
 // Companies lists, so it belongs to neither link alone.
+//
+// `global: true` marks a toggle that affects behaviour OUTSIDE its native module
+// (e.g. voucher party dropdowns). Global toggles render in the dedicated Global
+// section instead of inside SidebarVisibilitySection.
 export const MODULE_EXTRA_TOGGLE: Record<string, {
     id: string;
     label: string;
     showWhenAnyLinkId: string[];
+    global?: boolean;
+    /** Shown in the Global section to explain where this permission applies. */
+    globalDescription?: string;
 }> = {
     customers: {
         id: "customers:view:creditors",
@@ -667,6 +675,15 @@ export const MODULE_EXTRA_TOGGLE: Record<string, {
             sidebarChildPermissionId("customers", "person"),
             sidebarChildPermissionId("customers", "companies"),
         ],
+        global: true,
+        globalDescription: "Filters suppliers (Sundry Creditors) from Contacts lists and voucher party dropdowns. Absent → browses customers only.",
+    },
+    auth: {
+        id: "auth:login:outside-counter",
+        label: "Can login outside counter",
+        showWhenAnyLinkId: [],
+        global: true,
+        globalDescription: "When granted, this user can log in from any machine. Without it, login is restricted to counter machines (with bridge) only.",
     },
 };
 

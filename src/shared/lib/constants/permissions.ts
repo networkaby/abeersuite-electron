@@ -12,6 +12,11 @@ export const PERMISSIONS = {
     // ever hold this. Never add "admin:bypass" to bootstrap-seed.ts.
     ADMIN_BYPASS: "admin:bypass",
 
+    // Auth — login location control.
+    // When granted, the user may log in from any machine. Without it, login is
+    // restricted to counter machines (where the bridge runs on localhost:9191).
+    AUTH_LOGIN_OUTSIDE_COUNTER: "auth:login:outside-counter",
+
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
     // of Accounts), gated together. Read access rides the accountancy sidebar nav.
     ACCOUNTANCY_MASTERS_CREATE: "accountancy:masters:create",
@@ -24,10 +29,9 @@ export const PERMISSIONS = {
     CUSTOMERS_CREATE: "customers:create",
     CUSTOMERS_EDIT: "customers:edit",
     CUSTOMERS_DELETE: "customers:delete",
-    // Show suppliers (Sundry Creditors) in the Contacts lists. Absent → a role
-    // browses customers (Sundry Debtors) only; suppliers are filtered out of the
-    // Person / Companies lists. UI-only filter — the party-lookup path (repair
-    // service slips, vouchers) is never filtered.
+    // Show suppliers (Sundry Creditors) in Contacts lists AND voucher party dropdowns.
+    // Absent → browses customers (Sundry Debtors) only; suppliers are filtered from
+    // both surfaces (Contacts pages + party pickers in vouchers / repair slips).
     CUSTOMERS_VIEW_CREDITORS: "customers:view:creditors",
 
     // Finance — per-kind GL voucher gates: finance:voucher:<action>:<kind>.

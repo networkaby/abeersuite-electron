@@ -31,6 +31,14 @@ dotenv.config({ path: ".env" });
 // The permissions to add for the CURRENT change. Keep these identical to the rows
 // added in bootstrap-seed.ts. `systemOnly` rows are upserted but NOT granted to R1.
 const ADDITIONS: { id: string; label: string; module: string; description: string; systemOnly?: boolean }[] = [
+    // Login location control — when granted, the user may log in from any machine.
+    // Without it, login is restricted to counter machines (bridge-present).
+    {
+        id: "auth:login:outside-counter",
+        label: "Can login outside counter",
+        module: "core",
+        description: "Allow login from a non-counter machine (without bridge).",
+    },
     // Recurring Tasks nav link (Administration). Derived automatically by
     // sidebarPermissionSeeds() from the MODULE_SECTIONS child in utils/constants.ts —
     // the row below just mirrors it so an existing DB gets it without a full seed.
