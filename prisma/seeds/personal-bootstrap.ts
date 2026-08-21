@@ -40,6 +40,7 @@ import { existsSync, readFileSync } from "fs";
 import { importPersonal, type PersonalSnapshot } from "./lib/personalSnapshot";
 import { PERSONAL_SNAPSHOT_PATH } from "./lib/personalSnapshotPath";
 import { applyCodeOwnedCatalog, PERMISSION_CATALOG } from "./lib/codeOwnedCatalog";
+import { assertNotCounterReplica } from "./lib/assertNotCounter";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -56,6 +57,10 @@ const prisma = new PrismaClient({ adapter });
 const ADMIN_ROLE_ID = "R1";
 
 async function main() {
+    // A counter PC's database is a replica; seeding it mints ids that collide with
+    // real Supabase rows. Checked before anything is written.
+    assertNotCounterReplica("personal-bootstrap");
+
     // ── Step 1: code-owned catalog (permissions + XOR constraints + voucher series) ──
     if (!overlayOnly) {
         console.log("━━━ Step 1/3 — code-owned catalog (permissions · constraints · series) ━━");

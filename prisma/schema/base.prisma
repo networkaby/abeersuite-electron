@@ -191,8 +191,15 @@ model PersonCompany {
   person     Person    @relation(fields: [personId], references: [id])
   company    Company   @relation(fields: [companyId], references: [id])
 
+  // The counter's Postgres replica delta-syncs on "what changed since <ts>?".
+  // `linkedAt` never moves, so unlinking someone from a company would not reach
+  // the replica and the counter would keep showing a contact as employed there.
+  // `@default(now())` backfills existing rows on push. See Person.updatedAt above.
+  updatedAt  DateTime  @default(now()) @updatedAt
+
   @@index([personId])
   @@index([companyId])
+  @@index([updatedAt])
 }
 
 // ── Shared polymorphic contact tables ─────────────────────────────────────────

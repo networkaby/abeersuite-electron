@@ -459,7 +459,17 @@ model Device {
   account   Account?       @relation(fields: [accountId], references: [id])
   repairs   TicketRepair[]
 
+  // The counter's Postgres replica delta-syncs on "what changed since <ts>?".
+  // Device had no timestamp at all — not even createdAt — and no cascade parent to
+  // be pulled along with, so an edit at repair intake was invisible to every sync
+  // strategy and the only correct option was re-copying the table forever.
+  // `@default(now())` backfills existing rows on push. See Person.updatedAt.
+  updatedAt DateTime       @default(now()) @updatedAt
+
   @@index([accountId])
+  // Without this, "any device touched since <ts>?" scans every row to answer
+  // "none" — which is the answer almost every cycle.
+  @@index([updatedAt])
 }
 
 model ServiceCenter {

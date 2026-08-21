@@ -200,9 +200,17 @@ model CouponRedemption {
   reversedAt         DateTime?
   redeemedAt         DateTime          @default(now())
 
+  // The counter's Postgres replica delta-syncs on "what changed since <ts>?".
+  // `redeemedAt` is fixed at redemption, so a reversal on a full return — which
+  // frees the coupon's usage slot — would be invisible to the replica, and the
+  // counter would keep refusing a coupon the shop has already given back.
+  // `@default(now())` backfills on push. See Person.updatedAt.
+  updatedAt          DateTime          @default(now()) @updatedAt
+
   @@index([couponId])
   @@index([accountId])
   @@index([universalVoucherId])
+  @@index([updatedAt])
 }
 
 /// Prepaid gift card / store credit. Lifecycle: DRAFT (generated in the UI, no

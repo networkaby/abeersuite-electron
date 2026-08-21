@@ -221,9 +221,17 @@ model PosShift {
   expenditures PosExpenditure[]
   receipts     PosReceipt[]
 
+  // The counter's Postgres replica delta-syncs on "what changed since <ts>?".
+  // `openedAt` cannot serve: a shift is written once at open and then mutated at
+  // close and reconcile, so every figure that actually matters (declared cash,
+  // variance, sweep to vault) lands long after the only timestamp we had.
+  // `@default(now())` backfills existing rows on push. See Person.updatedAt.
+  updatedAt DateTime @default(now()) @updatedAt
+
   @@index([userId, status])
   @@index([branchId, openedAt])
   @@index([counterId, status])
+  @@index([updatedAt])
   @@map("pos_shifts")
 }
 
@@ -328,6 +336,13 @@ model PosHandover {
   initiatedAt DateTime  @default(now())
   acceptedAt  DateTime?
 
+  // The counter's Postgres replica delta-syncs on "what changed since <ts>?".
+  // `initiatedAt` is stamped when A hands over; B's acceptance — the counted cash
+  // and the whole reason the record exists — mutates the row later and would never
+  // reach the replica. `@default(now())` backfills on push. See Person.updatedAt.
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@index([updatedAt])
   @@map("pos_handovers")
 }
 

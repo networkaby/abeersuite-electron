@@ -61,6 +61,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
+import { assertNotCounterReplica } from "./lib/assertNotCounter";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -594,6 +595,10 @@ const ensureXorCheck = (table: "Phone" | "Email", constraintName: string) => ens
 // ════════════════════════════════════════════════════════════════════════════
 
 async function main() {
+    // A counter PC's database is a replica; seeding it mints ids that collide with
+    // real Supabase rows. Checked before anything is written.
+    assertNotCounterReplica("bootstrap-seed");
+
     console.log("\n━━━ BOOTSTRAP SEED ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("  Run: pnpm prisma db seed\n");
 
