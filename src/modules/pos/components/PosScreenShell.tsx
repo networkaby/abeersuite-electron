@@ -78,8 +78,8 @@ export function PosScreenShell({
     const effectiveFree = appliedFree ?? autoFree;
     const effectiveMoneyGrant =
         b.appliedCoupon?.freeLines?.length ? b.appliedCoupon
-        : b.autoCoupon?.freeLines?.length ? b.autoCoupon
-        : null;
+            : b.autoCoupon?.freeLines?.length ? b.autoCoupon
+                : null;
 
     // Router for the help-page fallback when the browser blocks the new tab.
     const router = useRouter();
@@ -242,11 +242,11 @@ export function PosScreenShell({
                                     {/* The scan bar is THE primary control — emerald-tinted so it's
                                         unmistakable even when it loses focus (after a coupon, a cart
                                         edit, etc.), matching the sale header's palette. */}
-                                    <ScanLine className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-emerald-600 dark:text-emerald-400" />
+                                    <ScanLine className="pointer-events-none absolute left-3 top-1/2 size-4.5 -translate-y-1/2 text-emerald-600 dark:text-emerald-400" />
                                     <Input
                                         ref={productSearchRef}
                                         value={b.productQuery}
-                                        onChange={(e) => { b.setProductQuery(e.target.value); b.setProductHighlight(0); }}
+                                        onChange={(e) => { b.setProductQuery(e.target.value.replaceAll("/", "")); b.setProductHighlight(0); }}
                                         onKeyDown={b.onProductKeyDown}
                                         placeholder="Scan barcode or search · ↵ add · F2 = customer"
                                         className="h-10 rounded-md border-2 border-emerald-300/70 bg-emerald-50/40 pl-9 pr-12 text-sm shadow-sm outline-none placeholder:text-emerald-900/45 focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:placeholder:text-emerald-100/40"
