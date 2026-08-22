@@ -14,12 +14,36 @@
 // on Esc, a click outside, or F3 again. Fully self-contained: no open state
 // lives in the parent screen.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useExplorerStore } from "@/store/explorerStore";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
 import { productMatchesQuery, readCachedMasters, syncMasters } from "@/shared/lib/inventory";
 import type { ProductOption, CartLine } from "@/modules/pos/lib/posDraftTypes";
+
+/** Number of products to show in the grid before the next scroll-triggered batch. */
+const PAGE_SIZE = 50;
+
+/**
+ * Best-effort thumbnail cache via the browser Cache API. Each product image URL
+ * is fetched once, stored in a named cache, and served from there on subsequent
+ * mounts. Falls back silently when the API is unavailable (private browsing, etc.).
+ */
+const IMAGE_CACHE = typeof caches !== "undefined" ? caches.open("pos-product-thumbs") : null;
+
+async function cacheThumbnail(url: string): Promise<void> {
+    try {
+        const cache = await IMAGE_CACHE;
+        if (!cache) return;
+        const hit = await cache.match(url);
+        if (hit) return; // already cached
+        const res = await fetch(url, { mode: "cors", credentials: "omit" });
+        if (res.ok) await cache.put(url, res);
+    } catch {
+        // Non-critical — image still loads via normal HTTP cache.
+    }
+}
 
 /** Loose shape shared by the cached brand/category/group master rows —
  *  matching the `Opt`-style cast other master consumers already use. */
@@ -103,7 +127,7 @@ function GroupTree({ nodes, depth, selectedId, onSelect }: {
     );
 }
 
-export function PosProductExplorer({
+export const PosProductExplorer = memo(function PosProductExplorer({
     products,
     cart,
     addToCart,
@@ -117,7 +141,9 @@ export function PosProductExplorer({
      *  null clears the preview back to the real cart/idle view. */
     onHoverProduct: (p: ProductOption | null) => void;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpenRaw] = useState(false);
+    const explorerSetOpen = useExplorerStore((s) => s.setOpen);
+    const setOpen = (v: boolean) => { setOpenRaw(v); explorerSetOpen(v); };
     const [pinned, setPinned] = useState(false);
     const [query, setQuery] = useState("");
     const [groupTree, setGroupTree] = useState<GroupNode[]>([]);
@@ -127,6 +153,8 @@ export function PosProductExplorer({
     const [selectedCategoryId, setSelectedCategoryId] = useState<number | "">("");
     const [selectedBrand, setSelectedBrand] = useState("");
     const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const sentinelRef = useRef<HTMLDivElement | null>(null);
 
     // Brand / group / category — same cached-then-synced masters every product
     // form already reads, so opening the explorer never waits on a fresh fetch.
@@ -228,6 +256,31 @@ export function PosProductExplorer({
         [brands, availableBrandNames],
     );
 
+    // Reset the visible window whenever the filtered count changes (new query,
+    // facet selection, or products array update).
+    const prevFilteredLen = useRef(filtered.length);
+    if (filtered.length !== prevFilteredLen.current) {
+        prevFilteredLen.current = filtered.length;
+        setVisibleCount(PAGE_SIZE);
+    }
+
+    const visibleProducts = filtered.slice(0, visibleCount);
+    const hasMore = visibleCount < filtered.length;
+
+    // Infinite scroll — when the sentinel div enters the viewport, load the
+    // next page.  Uses the same IntersectionObserver pattern as day-book and
+    // tickets registers.
+    useEffect(() => {
+        const node = sentinelRef.current;
+        if (!node) return;
+        const io = new IntersectionObserver(
+            (entries) => { if (entries.some((e) => e.isIntersecting)) setVisibleCount((c) => c + PAGE_SIZE); },
+            { root: node.closest("[class*='overflow-y-auto']"), threshold: 0.1 },
+        );
+        io.observe(node);
+        return () => io.disconnect();
+    }, [filtered.length, visibleCount]);
+
     const facetsActive = !!selectedGroup || selectedCategoryId !== "" || !!selectedBrand;
 
     return (
@@ -239,7 +292,7 @@ export function PosProductExplorer({
                 onMouseLeave={scheduleClose}
                 onClick={() => { setOpen(true); setPinned(true); }}
                 title="Browse products (F3)"
-                className="fixed left-0 top-1/2 z-30 flex h-24 w-3 -translate-y-1/2 cursor-pointer items-center justify-center rounded-r-md bg-gradient-to-b from-violet-500 to-fuchsia-500 shadow-md shadow-violet-500/30 transition-all hover:w-4 hover:shadow-lg hover:shadow-violet-500/40"
+                className="fixed left-0 top-1/2 z-30 flex h-24 w-3 -translate-y-1/2 cursor-pointer items-center justify-center rounded-r-md bg-linear-to-b from-violet-500 to-fuchsia-500 shadow-md shadow-violet-500/30 transition-all hover:w-4 hover:shadow-lg hover:shadow-violet-500/40"
             >
                 <PackageSearch size={11} className="rotate-90 text-white" />
             </div>
@@ -253,13 +306,13 @@ export function PosProductExplorer({
             <aside
                 onMouseEnter={() => { cancelClose(); setPinned(true); }}
                 onMouseLeave={scheduleClose}
-                className={`fixed inset-y-0 left-0 z-50 flex w-[980px] max-w-[97vw] border-r-2 border-violet-400/60 bg-background shadow-2xl shadow-violet-950/20 transition-transform duration-200 ease-out dark:border-violet-500/40 ${open ? "translate-x-0" : "-translate-x-full"}`}
+                className={`fixed inset-y-0 left-0 z-50 flex w-245 max-w-[97vw] border-r-2 border-violet-400/60 bg-background shadow-2xl shadow-violet-950/20 transition-transform duration-200 ease-out dark:border-violet-500/40 ${open ? "translate-x-0" : "-translate-x-full"}`}
                 aria-hidden={!open}
                 inert={!open}
             >
                 {/* Narrow mini-cart — this panel covers the real cart list, so keep
                 a compact reminder of what's already been added. */}
-                <div className="flex w-[150px] shrink-0 flex-col border-r border-border bg-gradient-to-b from-emerald-50/70 to-transparent dark:from-emerald-950/20">
+                <div className="flex w-37.5 shrink-0 flex-col border-r border-border bg-linear-to-b from-emerald-50/70 to-transparent dark:from-emerald-950/20">
                     <div className="shrink-0 border-b border-border px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                         In cart ({cart.length})
                     </div>
@@ -280,7 +333,7 @@ export function PosProductExplorer({
                 {/* Group tree — the storefront navigation hierarchy (self-referential
                 InvProductGroup). Selecting a node also matches its descendants.
                 Empties out to whatever the Brand/Category picks still allow. */}
-                <div className="flex w-[160px] shrink-0 flex-col border-r border-border">
+                <div className="flex w-40 shrink-0 flex-col border-r border-border">
                     <div className="shrink-0 border-b border-border bg-violet-50/70 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                         Groups
                     </div>
@@ -300,7 +353,7 @@ export function PosProductExplorer({
                 whichever brands still have a product under the current
                 Group/Category pick, and vice versa (both read the same
                 available-id sets computed above). */}
-                <div className="flex w-[150px] shrink-0 flex-col border-r border-border">
+                <div className="flex w-37.5 shrink-0 flex-col border-r border-border">
                     <div className="shrink-0 border-b border-border bg-fuchsia-50/70 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300">
                         Brands
                     </div>
@@ -327,7 +380,7 @@ export function PosProductExplorer({
 
                 {/* Product grid */}
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                    <div className="flex shrink-0 items-center gap-2 border-b-2 border-violet-300/50 bg-gradient-to-r from-violet-50/70 via-fuchsia-50/40 to-transparent px-3 py-2 dark:border-violet-500/30 dark:from-violet-500/10 dark:via-fuchsia-500/5">
+                    <div className="flex shrink-0 items-center gap-2 border-b-2 border-violet-300/50 bg-linear-to-r from-violet-50/70 via-fuchsia-50/40 to-transparent px-3 py-2 dark:border-violet-500/30 dark:from-violet-500/10 dark:via-fuchsia-500/5">
                         <PackageSearch size={14} className="shrink-0 text-violet-600 dark:text-violet-300" />
                         <Input
                             value={query}
@@ -361,15 +414,22 @@ export function PosProductExplorer({
                             </button>
                         )}
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-violet-50/30 via-transparent to-fuchsia-50/20 p-2 dark:from-violet-500/5 dark:to-fuchsia-500/5">
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-linear-to-br from-violet-50/30 via-transparent to-fuchsia-50/20 p-2 dark:from-violet-500/5 dark:to-fuchsia-500/5">
                         {filtered.length === 0 ? (
                             <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                                 <PackageSearch size={22} className="text-violet-300 dark:text-violet-500/50" />
                                 <span className="text-xs text-muted-foreground">No products match these filters.</span>
                             </div>
                         ) : (
+                            <>
+                            {/* Item count indicator */}
+                            {hasMore && (
+                                <div className="mb-1.5 text-center text-[10px] text-muted-foreground">
+                                    Showing {visibleCount} of {filtered.length}
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                                {filtered.map((p) => {
+                                {visibleProducts.map((p) => {
                                     const inCartQty = cart.find((l) => l.productId === p.id)?.qty ?? 0;
                                     const price = p.effectiveSalePricePaise != null ? p.effectiveSalePricePaise / 100 : null;
                                     // Free-form attribute key — admin-named ("colour" is the naming
@@ -386,7 +446,7 @@ export function PosProductExplorer({
                                         >
                                             {p.imageUrl ? (
                                                 // eslint-disable-next-line @next/next/no-img-element -- small, arbitrary-host catalogue photo; not worth next/image's remote-pattern config here
-                                                <img src={p.imageUrl} alt="" loading="lazy" className="h-8 w-8 shrink-0 rounded border border-violet-200/70 object-cover dark:border-violet-500/30" />
+                                                <img src={p.imageUrl} alt="" loading="lazy" decoding="async" onLoad={() => { void cacheThumbnail(p.imageUrl!); }} className="h-8 w-8 shrink-0 rounded border border-violet-200/70 object-cover dark:border-violet-500/30" />
                                             ) : (
                                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-dashed border-violet-300/60 bg-violet-50/50 text-violet-400 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-400/70">
                                                     <PackageSearch size={12} />
@@ -418,10 +478,13 @@ export function PosProductExplorer({
                                     );
                                 })}
                             </div>
+                            {/* Infinite-scroll sentinel */}
+                            {hasMore && <div ref={sentinelRef} className="flex justify-center py-2"><span className="text-[10px] text-muted-foreground">Loading…</span></div>}
+                            </>
                         )}
                     </div>
                 </div>
             </aside>
         </>
     );
-}
+});

@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { useExplorerStore } from "@/store/explorerStore";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
 import { useInboxUnread } from "@/shared/hooks/useNavCounts";
 import { PosInboxDrawer } from "@/modules/pos/components/PosInboxDrawer";
@@ -38,6 +39,11 @@ import { DealFormDialog } from "@/modules/deals/components";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { TaskFormDialog } from "@/modules/administration/components";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
+
+// Stable empty references for when the explorer is closed — avoid new refs each render.
+const EMPTY_PRODUCTS: never[] = [];
+const EMPTY_CART: never[] = [];
+const NOOP = () => {};
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
 import { formatInr } from "@/shared/lib/format";
 import { useApiResource } from "@/shared/hooks";
@@ -98,6 +104,7 @@ export function PosScreenShell({
     const [leadOpen, setLeadOpen] = useState(false);
     // Counter "Chat" — team inbox (groups/DMs/system), right from the register.
     const [chatOpen, setChatOpen] = useState(false);
+    const explorerOpen = useExplorerStore((s) => s.open);
     const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions");
     const { data: session } = useSession();
     const sessionUser = session?.user as { id?: string | null; name?: string | null } | undefined;
@@ -670,12 +677,12 @@ export function PosScreenShell({
             {/* Product Explorer — thin left-edge hint strip, hover or F3 to
             browse the catalogue visually instead of typing into the scan box. */}
             {/* TODO , its lagging the original product dropdown */}
-            {/* <PosProductExplorer
-                products={b.allProducts}
-                cart={b.cart}
-                addToCart={b.addToCart}
-                onHoverProduct={b.setHoverPreviewProduct}
-            /> */}
+            <PosProductExplorer
+                products={explorerOpen ? b.allProducts : EMPTY_PRODUCTS}
+                cart={explorerOpen ? b.cart : EMPTY_CART}
+                addToCart={explorerOpen ? b.addToCart : NOOP}
+                onHoverProduct={explorerOpen ? b.setHoverPreviewProduct : NOOP}
+            />
         </div>
     );
 }
