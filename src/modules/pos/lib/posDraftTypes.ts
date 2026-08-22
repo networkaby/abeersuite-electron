@@ -86,6 +86,8 @@ export type ProductOption = {
     groupId?: number | null;
     categoryId?: number | null;
     brand?: { name: string } | null;
+    /// Available-to-sell = on-hand minus reserved. null when stock is untracked.
+    availableToSell?: number | null;
     /// Shelf photo, if the product has one — shown as a small thumbnail on the
     /// Product Explorer's tiles.
     imageUrl?: string | null;

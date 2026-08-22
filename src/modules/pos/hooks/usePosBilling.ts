@@ -365,7 +365,7 @@ export function usePosBilling(opts: {
             .map((p) => ({ p, score: scoreProductSearch(p, q) }))
             .filter(({ score }) => score > 0)
             .sort((a, b) => b.score - a.score)
-            .slice(0, 8)
+            .slice(0, 12)
             .map(({ p }) => p);
     }, [productQuery, allProducts]);
 

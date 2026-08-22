@@ -257,19 +257,48 @@ export function PosScreenShell({
                                         /
                                     </kbd>
                                     {b.filteredProducts.length > 0 && (
-                                        <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                        <ul className="absolute left-0 right-0 top-full z-20 mt-1max-h-[28rem] overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                                             {b.filteredProducts.map((p, i) => (
                                                 <li key={p.id}>
                                                     <button
                                                         type="button"
                                                         onClick={() => b.addToCart(p)}
                                                         onMouseEnter={() => b.setProductHighlight(i)}
-                                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-sm ${i === b.productHighlight ? "bg-muted" : "hover:bg-muted"}`}
+                                                        className={`grid w-full grid-cols-[60px_minmax(0,1fr)_45px_80px_20px] items-center gap-x-1 px-2.5 py-1.5 text-left text-sm ${i === b.productHighlight ? "bg-muted" : "hover:bg-muted"
+                                                            }`}
                                                     >
-                                                        <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
-                                                        <span className="flex-1 px-2 truncate">{p.name}</span>
-                                                        <span className="text-xs text-muted-foreground">{p.effectiveSalePricePaise ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
-                                                        <Plus size={14} className="ml-2 text-muted-foreground" />
+                                                        {/* SKU */}
+                                                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                                                            {p.sku}
+                                                        </span>
+
+                                                        {/* Product Name */}
+                                                        <span className="min-w-0 truncate px-1 text-sm leading-snug">
+                                                            {p.name}
+                                                        </span>
+
+                                                        {/* Available Qty */}
+                                                        <span
+                                                            className={`border-r border-border pr-2 text-right text-xs ${p.availableToSell != null && p.availableToSell <= 0
+                                                                ? "font-semibold text-red-500"
+                                                                : "text-muted-foreground"
+                                                                }`}
+                                                        >
+                                                            {p.availableToSell ?? "—"}
+                                                        </span>
+
+                                                        {/* Price */}
+                                                        <span className="whitespace-nowrap text-right text-xs text-muted-foreground">
+                                                            {p.effectiveSalePricePaise != null
+                                                                ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}`
+                                                                : "—"}
+                                                        </span>
+
+                                                        {/* Add to Cart */}
+                                                        <Plus
+                                                            size={14}
+                                                            className="justify-self-end text-muted-foreground"
+                                                        />
                                                     </button>
                                                 </li>
                                             ))}
@@ -640,12 +669,13 @@ export function PosScreenShell({
 
             {/* Product Explorer — thin left-edge hint strip, hover or F3 to
             browse the catalogue visually instead of typing into the scan box. */}
-            <PosProductExplorer
+            {/* TODO , its lagging the original product dropdown */}
+            {/* <PosProductExplorer
                 products={b.allProducts}
                 cart={b.cart}
                 addToCart={b.addToCart}
                 onHoverProduct={b.setHoverPreviewProduct}
-            />
+            /> */}
         </div>
     );
 }
