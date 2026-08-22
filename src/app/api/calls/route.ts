@@ -240,11 +240,14 @@ export async function GET(req: Request) {
         // lookup, matching either side (an outgoing callback dials FROM the
         // counter's extension; an incoming call is answered TO it).
         const ext = sp.get("ext")?.trim();
+        // Filter by normalized phone key (for showing an unknown caller's call log).
+        const phoneKey = sp.get("phone")?.trim();
         // Never triaged: no note (not even a dismissal) and no linked ticket/deal.
         const unhandled = sp.get("unhandled") === "1";
 
         const and: Prisma.CallWhereInput[] = [];
-        if (ext) and.push({ OR: [{ toExt: ext }, { fromExt: ext }] });
+        if (phoneKey) and.push({ phone: phoneKey });
+        else if (ext) and.push({ OR: [{ toExt: ext }, { fromExt: ext }] });
         if (unhandled) and.push({ note: null, ticketId: null });
         if (parsedDir.success) {
             and.push({ direction: parsedDir.data });

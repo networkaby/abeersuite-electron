@@ -129,6 +129,9 @@ export const reconnectFilterSchema = z.object({
     groupId: z.coerce.number().int().positive().optional(),
     ownerPositionId: z.string().trim().min(1).optional(),
     kind: z.enum(["person", "company", "all"]).default("all"),
+    // Include unsaved callers from the Call table (people who called but aren't
+    // a Person/Company yet) so staff can triage them into leads.
+    includeUnsaved: z.coerce.boolean().default(false),
     q: z.string().trim().max(200).optional(),
 
     // How the middle-pane list is ordered.

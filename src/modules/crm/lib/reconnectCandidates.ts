@@ -32,7 +32,7 @@ const MAX_UNIVERSE = 5000;
 const DAY = 86_400_000;
 
 export interface ReconnectCandidate {
-    kind: "person" | "company";
+    kind: "person" | "company" | "caller";
     id: number;
     name: string;
     phone: string | null;
@@ -183,6 +183,14 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
         return { kind: c.kind, id: c.id, name: c.name, phone: c.phone, lifecycleStage: c.lifecycleStage, ownerPositionId: c.ownerPositionId, lastActivityAt: iso, dormantDays: iso ? daysSince(iso) : null };
     });
 
+    // ── 4b. Unknown callers from the Call table ────────────────────────────────
+    // People who called but aren't saved as Person/Company yet. Only included
+    // when the "Include unsaved" filter is ticked and kind includes "all".
+    if (filter.includeUnsaved && (kind === "all" || kind === "person")) {
+        const unknowns = await unknownCallers(idx, q);
+        rows.push(...unknowns);
+    }
+
     if (activity === "quiet") rows = rows.filter((r) => r.lastActivityAt != null);
     else if (activity === "never") rows = rows.filter((r) => r.lastActivityAt == null);
 
@@ -218,6 +226,67 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
  * sets: account-keyed (purchase / warranty / value) and customer-keyed (activity
  * type). null = that dimension imposes no constraint.
  */
+/**
+ * Unknown callers — phones in the Call table that don't match any saved
+ * Person/Company. These surface so staff can triage them into leads.
+ * Only called when no segment filters are active (stage/group/owner).
+ */
+async function unknownCallers(idx: UniverseIndex, q: string | undefined): Promise<ReconnectCandidate[]> {
+    const { personIds, companyIds } = idx;
+    // Collect all phones already belonging to saved contacts.
+    const savedPhones = new Set<string>();
+    if (personIds.length || companyIds.length) {
+        const rows = await prisma.phone.findMany({
+            where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
+            select: { phone: true },
+        });
+        for (const r of rows) {
+            const k = phoneMatchKey(r.phone);
+            if (k) savedPhones.add(k);
+        }
+    }
+
+    // Find distinct caller phones that are NOT in the saved set.
+    // Exclude spam and internal calls (phone = null).
+    const callerRows = await prisma.call.groupBy({
+        by: ["phone"],
+        where: { phone: { not: null }, spam: false },
+        _max: { occurredAt: true },
+        _count: { id: true },
+        having: { phone: { _count: { gt: 0 } } },
+    });
+
+    const results: ReconnectCandidate[] = [];
+    for (const row of callerRows) {
+        if (!row.phone || savedPhones.has(row.phone)) continue;
+        // If the search box is active, match against the raw phone number.
+        // We don't have the raw number here, so skip the q filter for unknowns
+        // when q is active — they'll appear when q is cleared.
+        if (q) continue;
+        const lastAt = row._max.occurredAt;
+        const iso = lastAt ? lastAt.toISOString() : null;
+        results.push({
+            kind: "caller",
+            // Use a large offset + hash of phone to avoid ID conflicts with real records.
+            id: MAX_UNIVERSE + Math.abs(hashStr(row.phone)),
+            name: row.phone, // phone number as name — staff sees it and decides
+            phone: row.phone,
+            lifecycleStage: "LEAD",
+            ownerPositionId: null,
+            lastActivityAt: iso,
+            dormantDays: iso ? daysSince(iso) : null,
+        });
+    }
+    return results;
+}
+
+/** Simple string hash for deterministic synthetic IDs. */
+function hashStr(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return h;
+}
+
 async function computeRestrictions(
     idx: UniverseIndex, loaded: Loaded[], filter: ReconnectFilterInput,
 ): Promise<{ accountKeep: Set<number> | null; keyKeep: Set<string> | null }> {
@@ -467,7 +536,7 @@ async function oneTypeKeys(idx: UniverseIndex, type: ConcreteActivityType, win: 
         const rows = await prisma.ticketDeal.findMany({ where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }], ...(dr ? { ticket: { createdAt: dr } } : {}) }, select: { personId: true, companyId: true } });
         for (const r of rows) { if (r.personId) keys.add(keyOf("person", r.personId)); else if (r.companyId) keys.add(keyOf("company", r.companyId)); }
     } else if (type === "note") {
-        const rows = await prisma.ticketLog.findMany({ where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }], ...(dr ? { createdAt: dr } : {}) }, select: { personId: true, companyId: true } });
+        const rows = await prisma.ticketLog.findMany({ where: { kind: { in: ["CALL", "NOTE"] }, OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }], ...(dr ? { createdAt: dr } : {}) }, select: { personId: true, companyId: true } });
         for (const r of rows) { if (r.personId) keys.add(keyOf("person", r.personId)); else if (r.companyId) keys.add(keyOf("company", r.companyId)); }
     }
     return keys;

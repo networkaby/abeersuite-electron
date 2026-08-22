@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { useNow, usePositionPicker } from "@/shared/hooks";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
@@ -21,7 +22,7 @@ import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { LIFECYCLE_META, LIFECYCLES, type ContactLifecycle } from "@/modules/customer/lib/contactTypes";
 
 // ── Wire types (mirror the reconnect APIs) ──────────────────────────────────────
-type Kind = "person" | "company";
+type Kind = "person" | "company" | "caller";
 interface Candidate {
     kind: Kind;
     id: number;
@@ -49,6 +50,17 @@ interface PurchasedItem {
     qty: number; times: number; lastBoughtAt: string; amountPaise: number; warrantyEndsAt: string | null;
 }
 
+interface CallerCall {
+    id: number;
+    direction: string;
+    rawNumber: string | null;
+    durationSec: number;
+    speechSec: number;
+    missed: boolean;
+    note: string | null;
+    occurredAt: string;
+}
+
 interface GroupOption { id: number; name: string }
 interface CategoryOption { id: number; name: string }
 interface WarrantyTermOption { id: number; name: string; durationDays: number | null }
@@ -62,7 +74,7 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
     { value: "deal", label: "Deal" },
     { value: "note", label: "Call / note" },
 ];
-const FILTER_KEYS = ["activity", "activityType", "callLog", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type"] as const;
+const FILTER_KEYS = ["activity", "activityType", "callLog", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type", "includeUnsaved"] as const;
 type FilterKey = typeof FILTER_KEYS[number];
 const noFilters = (): Record<FilterKey, boolean> => Object.fromEntries(FILTER_KEYS.map((k) => [k, false])) as Record<FilterKey, boolean>;
 
@@ -107,14 +119,14 @@ function agoShort(iso: string | null, now: number): string {
 // ── One filter row — always visible by name; tick to activate, controls drop in ─
 // Untick keeps the values in state (retick restores) — the clean "switch off one".
 function FilterRow({
-    label, checked, onToggle, summary, children,
+    label, checked, onToggle, summary, children, disabled,
 }: {
-    label: string; checked: boolean; onToggle: (v: boolean) => void; summary?: string; children?: React.ReactNode;
+    label: string; checked: boolean; onToggle: (v: boolean) => void; summary?: string; children?: React.ReactNode; disabled?: boolean;
 }) {
     return (
-        <div className="border-b py-1.5 last:border-b-0">
+        <div className={`border-b py-1.5 last:border-b-0 ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
             <label className="flex cursor-pointer items-center gap-2">
-                <Checkbox checked={checked} onCheckedChange={(v) => onToggle(v === true)} />
+                <Checkbox checked={checked} onCheckedChange={(v) => onToggle(v === true)} disabled={disabled} />
                 <span className="flex-1 text-sm font-medium">{label}</span>
                 {checked && summary && <span className="max-w-[95px] truncate text-[11px] text-primary">{summary}</span>}
             </label>
@@ -247,6 +259,9 @@ export default function ReconnectWorkspace({
 
     // ── Selection + right pane ──
     const [selected, setSelected] = useState<Candidate | null>(null);
+    const [leadPhone, setLeadPhone] = useState<string | null>(null);
+    const [callerCalls, setCallerCalls] = useState<CallerCall[] | null>(null);
+    const [loadingCallerCalls, setLoadingCallerCalls] = useState(false);
     const [rightTab, setRightTab] = useState<"timeline" | "items">("timeline");
     const [timeline, setTimeline] = useState<Timeline | null>(null);
     const [loadingTimeline, setLoadingTimeline] = useState(false);
@@ -261,6 +276,10 @@ export default function ReconnectWorkspace({
     const [creatingDeal, setCreatingDeal] = useState(false);
     const [showDealForm, setShowDealForm] = useState(false);
 
+    // ── Inline note editing for unsaved caller calls ──
+    const [editingCallNoteId, setEditingCallNoteId] = useState<number | null>(null);
+    const [callNoteDraft, setCallNoteDraft] = useState("");
+    const [savingCallNote, setSavingCallNote] = useState(false);
     const buildQuery = useCallback(() => {
         const p = new URLSearchParams();
         // Activity mode: unticked → show everyone (the base view).
@@ -309,6 +328,7 @@ export default function ReconnectWorkspace({
         if (enabled.group && groupId) p.set("groupId", groupId);
         if (enabled.owner && ownerPositionId) p.set("ownerPositionId", ownerPositionId);
         if (enabled.type && kind !== "all") p.set("kind", kind);
+        if (enabled.includeUnsaved) p.set("includeUnsaved", "true");
         if (q.trim()) p.set("q", q.trim());
         p.set("sort", sort);
         return p;
@@ -364,6 +384,7 @@ export default function ReconnectWorkspace({
         setStage((p.stage as ContactLifecycle | "") ?? "");
         setGroupId(s(p.groupId)); setOwnerPositionId(s(p.ownerPositionId));
         setKind((p.kind as typeof kind) ?? "all");
+
         setSort((p.sort as typeof sort) ?? "quietest");
     };
 
@@ -457,12 +478,30 @@ export default function ReconnectWorkspace({
         }
     }, []);
 
+    const loadCallerCalls = useCallback(async (phone: string) => {
+        setLoadingCallerCalls(true);
+        setCallerCalls(null);
+        try {
+            const res = await axios.get<{ items: CallerCall[] }>(`/api/calls?phone=${encodeURIComponent(phone)}&direction=all`);
+            setCallerCalls(res.data.items);
+        } catch {
+            toast.error("Failed to load call log");
+        } finally {
+            setLoadingCallerCalls(false);
+        }
+    }, []);
+
     const select = (c: Candidate) => {
         setSelected(c);
         setRightTab("timeline");
         setItems(null);
+        setCallerCalls(null);
         setShowDealForm(false); setDealTitle(""); setBody(""); setComposerKind("CALL");
-        loadTimeline(c);
+        if (c.kind === "caller" && c.phone) {
+            void loadCallerCalls(c.phone);
+        } else {
+            loadTimeline(c);
+        }
     };
 
     // Lazily load the Items tab the first time it's opened for a customer.
@@ -624,6 +663,8 @@ export default function ReconnectWorkspace({
                     <button type="button" onClick={clearAll} className="text-[11px] text-muted-foreground hover:text-foreground">Clear all</button>
                 </div>
                 <div className="px-3">
+                    <FilterRow label="Include unsaved" checked={enabled.includeUnsaved} onToggle={toggle("includeUnsaved")} />
+
                     <FilterRow label="Activity" checked={enabled.activity} onToggle={toggle("activity")} summary={ACTIVITY_MODES.find((m) => m.value === activity)?.label}>
                         <div className="flex flex-col gap-1">
                             {ACTIVITY_MODES.map((m) => (
@@ -811,11 +852,15 @@ export default function ReconnectWorkspace({
                                 onClick={() => select(c)}
                                 className={`flex w-full items-center gap-2 border-b px-3 py-2 text-left hover:bg-muted/60 ${active ? "bg-muted" : ""}`}
                             >
-                                {c.kind === "company" ? <Building2 className="size-4 shrink-0 text-muted-foreground" /> : <User className="size-4 shrink-0 text-muted-foreground" />}
+                                {c.kind === "company" ? <Building2 className="size-4 shrink-0 text-muted-foreground" /> : c.kind === "caller" ? <Phone className="size-4 shrink-0 text-amber-500" /> : <User className="size-4 shrink-0 text-muted-foreground" />}
                                 <div className="min-w-0 flex-1">
                                     <div className="truncate text-sm font-medium">{c.name}</div>
                                     <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                        <Badge variant="secondary" className={`${meta.color} px-1 py-0 text-[10px]`}>{meta.label}</Badge>
+                                        {c.kind === "caller" ? (
+                                            <Badge variant="secondary" className="border-amber-300 bg-amber-50 text-amber-700 px-1 py-0 text-[10px] dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-300">Unsaved</Badge>
+                                        ) : (
+                                            <Badge variant="secondary" className={`${meta.color} px-1 py-0 text-[10px]`}>{meta.label}</Badge>
+                                        )}
                                         {c.phone && <span className="truncate">{c.phone}</span>}
                                     </div>
                                 </div>
@@ -848,27 +893,41 @@ export default function ReconnectWorkspace({
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                        {selected.kind === "company" ? <Building2 className="size-4 text-muted-foreground" /> : <User className="size-4 text-muted-foreground" />}
-                                        <h2 className="truncate text-lg font-semibold">{selected.name}</h2>
+                                        {selected.kind === "company" ? <Building2 className="size-4 text-muted-foreground" /> : selected.kind === "caller" ? <Phone className="size-4 text-amber-500" /> : <User className="size-4 text-muted-foreground" />}
+                                        <h2 className="truncate text-lg font-semibold">{selected.kind === "caller" ? selected.phone : selected.name}</h2>
                                     </div>
                                     <div className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
-                                        {selected.phone ? <span className="inline-flex items-center gap-1"><Phone className="size-3.5" /> {selected.phone}</span> : <span className="italic">No phone on file</span>}
-                                        <span>· quiet {agoShort(selected.lastActivityAt, now)}</span>
+                                        {selected.kind === "caller" ? (
+                                            <span className="inline-flex items-center gap-1 text-amber-600"><Phone className="size-3.5" /> Unknown caller · {agoShort(selected.lastActivityAt, now)}</span>
+                                        ) : (
+                                            <>
+                                                {selected.phone ? <span className="inline-flex items-center gap-1"><Phone className="size-3.5" /> {selected.phone}</span> : <span className="italic">No phone on file</span>}
+                                                <span>· quiet {agoShort(selected.lastActivityAt, now)}</span>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">
-                                    <Select value={selected.lifecycleStage} onValueChange={(v) => changeStage(v as ContactLifecycle)}>
-                                        <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {LIFECYCLES.map((s) => <SelectItem key={s} value={s}>{LIFECYCLE_META[s].label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Button size="sm" variant="outline" onClick={() => refreshStage()} disabled={refreshingStage} title="Check for a repair/sale and auto-update the stage">
-                                        <RefreshCw className={`size-4 ${refreshingStage ? "animate-spin" : ""}`} />
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => setShowDealForm((v) => !v)}>
-                                        <PlusCircle className="size-4" /> Deal
-                                    </Button>
+                                    {selected.kind === "caller" ? (
+                                        <Button size="sm" onClick={() => setLeadPhone(selected.phone ?? "")}>
+                                            <PlusCircle className="size-4" /> Add as lead
+                                        </Button>
+                                    ) : (
+                                        <>
+                                            <Select value={selected.lifecycleStage} onValueChange={(v) => changeStage(v as ContactLifecycle)}>
+                                                <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {LIFECYCLES.map((s) => <SelectItem key={s} value={s}>{LIFECYCLE_META[s].label}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <Button size="sm" variant="outline" onClick={() => refreshStage()} disabled={refreshingStage} title="Check for a repair/sale and auto-update the stage">
+                                                <RefreshCw className={`size-4 ${refreshingStage ? "animate-spin" : ""}`} />
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => setShowDealForm((v) => !v)}>
+                                                <PlusCircle className="size-4" /> Deal
+                                            </Button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -879,7 +938,8 @@ export default function ReconnectWorkspace({
                                 </div>
                             )}
 
-                            {/* Tabs */}
+                            {/* Tabs — hidden for unknown callers */}
+                            {selected.kind !== "caller" && (
                             <div className="mt-3 flex gap-1">
                                 {(["timeline", "items"] as const).map((t) => (
                                     <button
@@ -892,10 +952,91 @@ export default function ReconnectWorkspace({
                                     </button>
                                 ))}
                             </div>
+                            )}
                         </div>
 
                         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                            {rightTab === "timeline" ? (
+                            {selected.kind === "caller" ? (
+                                /* Unknown caller — call log + create lead */
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-500/30 dark:bg-amber-950/20">
+                                        <div className="flex items-center gap-2">
+                                            <Phone className="size-4 text-amber-600 dark:text-amber-300" />
+                                            <div>
+                                                <p className="text-sm font-medium">{selected.phone}</p>
+                                                <p className="text-[11px] text-muted-foreground">Called {agoShort(selected.lastActivityAt, now)}</p>
+                                            </div>
+                                        </div>
+                                        <Button size="sm" onClick={() => setLeadPhone(selected.phone ?? "")}>
+                                            <PlusCircle className="size-4 mr-1" /> Add as lead
+                                        </Button>
+                                    </div>
+
+                                    {/* Call log entries */}
+                                    {loadingCallerCalls && <p className="text-sm text-muted-foreground">Loading calls…</p>}
+                                    {callerCalls && callerCalls.length === 0 && !loadingCallerCalls && (
+                                        <p className="text-sm text-muted-foreground">No calls on record.</p>
+                                    )}
+                                    {callerCalls?.map((c) => (
+                                        <div key={c.id} className="flex items-start gap-2.5 rounded-lg border p-2.5">
+                                            <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted ${c.missed ? (c.direction === "INCOMING" ? "text-red-600" : "text-amber-600") : "text-sky-600"}`}>
+                                                {c.direction === "INCOMING" ? <PhoneIncoming className="size-3.5" /> : <PhoneOutgoing className="size-3.5" />}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-baseline justify-between gap-2">
+                                                    <span className="text-sm font-medium">
+                                                        {c.direction === "INCOMING" ? "Incoming" : "Outgoing"}
+                                                        {c.missed && <span className="ml-1 text-red-600">· missed</span>}
+                                                    </span>
+                                                    <span className="shrink-0 text-[11px] text-muted-foreground">{formatDateTime(c.occurredAt)}</span>
+                                                </div>
+                                                <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                                                    <span>{c.speechSec || c.durationSec ? `${Math.round((c.speechSec || c.durationSec) / 60)}m ${c.speechSec || c.durationSec}s` : "—"}</span>
+                                                    {c.rawNumber && <span className="truncate">{c.rawNumber}</span>}
+                                                </div>
+                                                {editingCallNoteId === c.id ? (
+                                                    <div className="mt-1 space-y-1.5">
+                                                        <Textarea
+                                                            value={callNoteDraft}
+                                                            onChange={(e) => setCallNoteDraft(e.target.value)}
+                                                            placeholder="Add a note…"
+                                                            rows={2}
+                                                            className="text-sm"
+                                                        />
+                                                        <div className="flex justify-end gap-1.5">
+                                                            <Button size="sm" variant="ghost" onClick={() => setEditingCallNoteId(null)} disabled={savingCallNote}>Cancel</Button>
+                                                            <Button size="sm" onClick={async () => {
+                                                                setSavingCallNote(true);
+                                                                try {
+                                                                    await axios.patch(`/api/calls/${c.id}`, { note: callNoteDraft.trim() || null });
+                                                                    setCallerCalls((prev) => prev?.map((x) => x.id === c.id ? { ...x, note: callNoteDraft.trim() || null } : x) ?? null);
+                                                                    setEditingCallNoteId(null);
+                                                                    toast.success("Note saved");
+                                                                } catch {
+                                                                    toast.error("Failed to save note");
+                                                                } finally {
+                                                                    setSavingCallNote(false);
+                                                                }
+                                                            }} disabled={savingCallNote}>{savingCallNote ? "Saving…" : "Save"}</Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-1 flex items-start gap-1.5">
+                                                        {c.note && <p className="flex-1 whitespace-pre-wrap text-sm text-muted-foreground">{c.note}</p>}
+                                                        <Button
+                                                            variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+                                                            title="Add / edit note"
+                                                            onClick={() => { setEditingCallNoteId(c.id); setCallNoteDraft(c.note ?? ""); }}
+                                                        >
+                                                            <StickyNote className="size-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : rightTab === "timeline" ? (
                                 <>
                                     {loadingTimeline && <p className="text-sm text-muted-foreground">Loading timeline…</p>}
 
@@ -1029,6 +1170,13 @@ export default function ReconnectWorkspace({
                     </div>
                 )}
             </div>
+
+            {/* Create-lead dialog for unknown callers */}
+            <CreatePersonDialog
+                open={leadPhone !== null}
+                onOpenChange={(o) => { if (!o) { setLeadPhone(null); void loadList(); } }}
+                initialPhone={leadPhone ?? undefined}
+            />
         </div>
     );
 }
