@@ -27,7 +27,7 @@ import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
-import { productMatchesQuery, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
+import { scoreProductSearch, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -362,8 +362,11 @@ export function usePosBilling(opts: {
         const q = productQuery.trim();
         if (!q) return [] as ProductOption[];
         return allProducts
-            .filter((p) => productMatchesQuery(p, q))
-            .slice(0, 8);
+            .map((p) => ({ p, score: scoreProductSearch(p, q) }))
+            .filter(({ score }) => score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8)
+            .map(({ p }) => p);
     }, [productQuery, allProducts]);
 
     // Per-line tax via the same calcLineTotals helper office SALE uses, so

@@ -116,13 +116,38 @@ function productSearchText(p: ProductSearchCandidate): string {
     return parts.join(" ").toLowerCase();
 }
 
+/** Split product text into individual words for fuzzy matching. */
+function productWords(p: ProductSearchCandidate): string[] {
+    return productSearchText(p).split(/\s+/).filter(Boolean);
+}
+
 /**
- * EXPERIMENTAL — wired only into the office dashboard's product quick-lookup
- * (UniversalCustomerPanel), NOT the shared {@link productMatchesQuery} used by
- * POS/ecommerce/inventory pickers. Splits the query into whitespace tokens and
+ * Fast Levenshtein distance check — returns true if edit distance ≤ 1.
+ * Optimised for short strings (product tokens); avoids full matrix allocation.
+ */
+function editDistance1(a: string, b: string): boolean {
+    const al = a.length, bl = b.length;
+    if (Math.abs(al - bl) > 1) return false;
+    // Ensure a is the shorter one
+    if (al > bl) return editDistance1(b, a);
+    // al <= bl, difference is 0 or 1
+    let i = 0;
+    while (i < al && a[i] === b[i]) i++;
+    // Skip exactly one mismatch in the longer string, then compare rest
+    let j = i + 1; // skip the extra char in b
+    while (i < al && a[i] === b[j]) { i++; j++; }
+    return i === al;
+}
+
+/**
+ * Tokenized product search — splits the query into whitespace tokens and
  * requires every token to appear somewhere in name/sku/brand/attrsJson/codes
  * (order doesn't matter), so "32 gb pendrive" matches "SanDisk Pendrive 32GB".
  * Returns 0 for no match; higher score = closer match, for ranking results.
+ * Falls back to fuzzy matching (Levenshtein ≤ 1) when exact/prefix match fails,
+ * so typos like "sadisk" still find "sandisk".
+ * Used by POS product picker and the office dashboard's product quick-lookup
+ * (UniversalCustomerPanel).
  */
 export function scoreProductSearch(p: ProductSearchCandidate, query: string): number {
     const q = query.trim().toLowerCase();
@@ -130,12 +155,37 @@ export function scoreProductSearch(p: ProductSearchCandidate, query: string): nu
     const text = productSearchText(p);
     if (!text) return 0;
 
-    let score = text.includes(q) ? 100 : 0;
+    // Bonus when the full query appears as a contiguous substring
+    const fullBonus = text.includes(q) ? 100 : 0;
+
+    const words = productWords(p);
+    let tier = 0; // worst tier across all tokens (lower = worse)
 
     for (const token of q.split(/\s+/).filter(Boolean)) {
+        // 1) Exact substring match in full text
         const idx = text.indexOf(token);
-        if (idx === -1) return 0;
-        score += idx === 0 || text[idx - 1] === " " ? 10 : 1;
+        if (idx !== -1) {
+            // Word-start bonus (token aligns with a word boundary)
+            tier = Math.max(tier, idx === 0 || text[idx - 1] === " " ? 400 : 300);
+            continue;
+        }
+        // 2) Starts-with — token is a prefix of any product word
+        if (words.some((w) => w.startsWith(token))) {
+            tier = Math.max(tier, 200);
+            continue;
+        }
+        // 3) Contains — token appears inside any product word
+        if (words.some((w) => w.includes(token))) {
+            tier = Math.max(tier, 100);
+            continue;
+        }
+        // 4) Fuzzy — Levenshtein ≤ 1 (single typo)
+        if (words.some((w) => editDistance1(token, w))) {
+            tier = Math.max(tier, 10);
+            continue;
+        }
+        // Token not found at all
+        return 0;
     }
-    return score;
+    return tier + fullBonus;
 }
