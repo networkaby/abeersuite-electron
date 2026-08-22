@@ -75,7 +75,9 @@ export const READ_OPS = new Set([
 
 function isTransientConnError(e: unknown): boolean {
     const msg = e instanceof Error ? e.message : String(e ?? "");
-    return /Connection terminated|connection timeout|Closed the connection|server closed the connection|ECONNRESET|ETIMEDOUT/i.test(msg);
+    // P1001 "Can't reach database server" fires when the network is down — a
+    // counter PC going offline hits this before any TCP-level error appears.
+    return /Connection terminated|connection timeout|Closed the connection|server closed the connection|ECONNRESET|ETIMEDOUT|Can't reach database/i.test(msg);
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

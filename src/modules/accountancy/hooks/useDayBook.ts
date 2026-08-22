@@ -243,13 +243,6 @@ async function writeCachedView(key: string, store: Store): Promise<void> {
     });
 }
 
-/** Wipe every cached view — this machine is not allowed to keep the books. */
-async function clearCachedViews(): Promise<void> {
-    const db = localDb();
-    if (!db) return;
-    await db.dayBookViews.clear();
-}
-
 function useDebounced<T>(value: T, ms: number): T {
     const [settled, setSettled] = useState(value);
     useEffect(() => {

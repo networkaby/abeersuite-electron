@@ -127,7 +127,6 @@ import {
     TrendingUp,
     Truck,
     Umbrella,
-    Undo2,
     Upload,
     UserCog,
     UserMinus,
