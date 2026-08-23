@@ -67,7 +67,7 @@ export function fyClosingDate(fyStartYear: number, restartMonth: number, restart
 }
 
 /**
- * Assemble the reference string from a series + optional userId.
+ * Assemble the reference string from a series + optional userId and optional counterCode.
  * `nextSeq` on the series shape should already be the post-increment value.
  *
  * partOrder is a CSV. Reserved tokens (type/user/year/number) expand to
@@ -76,7 +76,7 @@ export function fyClosingDate(fyStartYear: number, restartMonth: number, restart
  * nothing (their token is dropped). Disabled tokens still preserve any
  * adjacent literals as-is, so be mindful when toggling.
  */
-export function assembleReference(s: SeriesShape, userId?: number | null): string {
+export function assembleReference(s: SeriesShape, userId?: number | null, counterCode?: string | null): string {
     const fyStart = s.fyStartYear ?? indianFyStartYear();
     const num = s.startFrom + s.nextSeq - 1;
 
@@ -113,5 +113,11 @@ export function assembleReference(s: SeriesShape, userId?: number | null): strin
         }
     }
 
-    return out.join("");
+    const baseRef = out.join("");
+    if (counterCode && counterCode.trim()) {
+        const cleanCounter = counterCode.trim().padStart(2, "0");
+        return `${cleanCounter}/${baseRef}`;
+    }
+
+    return baseRef;
 }

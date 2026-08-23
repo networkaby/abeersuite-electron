@@ -1,9 +1,18 @@
 {
   "name": "abeersuite-electron",
   "version": "0.1.0",
-  "private": true,
+  "description": "AbeerSuite Desktop Operating System",
+  "author": "AbeerSuite",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev",
+    "electron:dev": "concurrently -k -n \"NEXT,ELECTRON\" -c \"yellow,cyan\" \"cross-env PORT=3000 NODE_OPTIONS=--max-http-header-size=65536 next dev\" \"wait-on http-get://127.0.0.1:3000/staff/login && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:build": "cross-env COUNTER_BUILD=1 pnpm build && tsx scripts/prepare-standalone.ts && pnpm electron:compile",
+    "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
+    "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",
+    "verify:package": "tsx scripts/verify-package.ts",
+    "icon:build": "electron scripts/make-icon.js",
     "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
@@ -62,6 +71,7 @@
     "cmdk": "^1.1.1",
     "dexie": "^4.4.5",
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.9",
     "firebase": "^12.16.0",
     "jose": "^6.2.2",
     "jsbarcode": "^3.12.3",
@@ -94,14 +104,74 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.1.0"
   },
-  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f"
+  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f",
+  "build": {
+    "appId": "com.abeersuite.desktop",
+    "productName": "AbeerSuite",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist-app"
+    },
+    "files": [
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "standalone",
+        "filter": [
+          "**/*",
+          "!.env",
+          "!.env.*"
+        ]
+      },
+      {
+        "from": ".next/standalone/node_modules",
+        "to": "standalone/node_modules",
+        "filter": [
+          "**/*",
+          "!**/.env",
+          "!**/.env.*"
+        ]
+      },
+      {
+        "from": "resources/pgsql",
+        "to": "pgsql",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AbeerSuite"
+    }
+  }
 }
