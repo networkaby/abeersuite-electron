@@ -155,9 +155,40 @@ electron_1.ipcMain.handle("sync:trigger", async (_event, tableNumber) => {
     // In dev / production, trigger sync worker delta pull
     return { success: true, tableNumber };
 });
+// ── Auto Updater ─────────────────────────────────────────────────────────────
+function setupAutoUpdater() {
+    if (isDev)
+        return;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { autoUpdater } = require("electron-updater");
+        autoUpdater.autoDownload = true;
+        autoUpdater.autoInstallOnAppQuit = true;
+        autoUpdater.on("update-available", () => {
+            console.log("[AutoUpdater] Update available. Downloading in background...");
+        });
+        autoUpdater.on("update-downloaded", () => {
+            console.log("[AutoUpdater] Update downloaded. Ready to install.");
+            if (mainWindow) {
+                mainWindow.webContents.send("app:update-ready");
+            }
+        });
+        autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+            console.warn("[AutoUpdater] Update check failed:", err);
+        });
+        // Check for updates every 30 minutes in background
+        setInterval(() => {
+            autoUpdater.checkForUpdatesAndNotify().catch(() => { });
+        }, 30 * 60 * 1000);
+    }
+    catch (err) {
+        console.warn("[AutoUpdater] Failed to initialize auto-updater:", err);
+    }
+}
 // ── App Lifecycle ────────────────────────────────────────────────────────────
 electron_1.app.whenReady().then(() => {
     createWindow();
+    setupAutoUpdater();
     electron_1.app.on("activate", () => {
         if (electron_1.BrowserWindow.getAllWindows().length === 0) {
             createWindow();

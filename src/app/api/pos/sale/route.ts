@@ -204,7 +204,9 @@ export async function POST(req: Request) {
                 id: true, branchId: true,
                 counter: {
                     select: {
+                        id: true,
                         name: true,
+                        epbxExtension: true,
                         tillAccountId: true,
                         paymentAccounts: {
                             where:  { isActive: true },
@@ -863,7 +865,8 @@ export async function POST(req: Request) {
             // tender for any unsettled balance). postInvVoucherToGl posts
             // a single balanced JE per voucher; no separate Receipt
             // voucher / VoucherAllocation needed.
-            const voucherRef = await invNextRef(tx, "POS");
+            const counterCode = (shift.counter.epbxExtension?.trim() || String(shift.counter.id)).padStart(2, "0");
+            const voucherRef = await invNextRef(tx, "POS", user!.id, counterCode);
             // POS today enforces paymentTotal == totalAmount, so onCredit
             // is always 0 and no AR tender is needed. Kept as a future-
             // facing branch in case partial POS sales get enabled.

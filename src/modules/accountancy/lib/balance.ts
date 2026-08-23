@@ -143,6 +143,7 @@ export async function nextRefFromSeries(
     tx: import("@/generated/prisma/client").Prisma.TransactionClient,
     kind: string,
     userId?: number | null,
+    counterCode?: string | null,
 ): Promise<string> {
     const { assembleReference, fyClosingDate } = await import("./voucherRef");
 
@@ -187,6 +188,6 @@ export async function nextRefFromSeries(
         data: { nextSeq: { increment: 1 } },
     });
 
-    return assembleReference(series, userId);
+    return assembleReference(series, userId, counterCode);
 }
 
