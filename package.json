@@ -1,9 +1,14 @@
 {
   "name": "abeersuite-electron",
   "version": "0.1.0",
-  "private": true,
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev",
+    "electron:dev": "concurrently -k -n \"NEXT,ELECTRON\" -c \"yellow,cyan\" \"cross-env PORT=3000 NODE_OPTIONS=--max-http-header-size=65536 next dev\" \"wait-on http-get://127.0.0.1:3000/staff/login && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:build": "pnpm build && pnpm electron:compile",
+    "electron:pack": "pnpm electron:build && electron-builder --dir",
+    "electron:dist": "pnpm electron:build && electron-builder",
     "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
@@ -94,14 +99,36 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.1.0"
   },
-  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f"
+  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f",
+  "build": {
+    "appId": "com.abeersuite.desktop",
+    "productName": "AbeerSuite",
+    "directories": {
+      "output": "dist-package"
+    },
+    "files": [
+      "dist-electron/**/*",
+      ".next/standalone/**/*",
+      ".next/static/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
 }

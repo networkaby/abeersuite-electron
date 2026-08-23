@@ -93,26 +93,46 @@ function createLive(): PrismaClient {
         name: "retry-reads-on-conn-drop",
         query: {
             $allModels: {
-                async $allOperations({ operation, args, query }) {
+                async $allOperations({ model, operation, args, query }) {
                     if (!READ_OPS.has(operation)) return query(args);
+
+                    // ── Local-First Zero-Egress Reads ──────────────────────────────────────
+                    // When local replica is ready and configured, serve reads locally with 0ms
+                    // latency and 0 Supabase bandwidth/egress cost.
+                    if (localClient && shouldReadLocal()) {
+                        try {
+                            const delegate = (localClient as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
+                            if (delegate && typeof delegate[operation] === "function") {
+                                return await delegate[operation](args);
+                            }
+                        } catch (localErr) {
+                            console.warn("[prismaClient] local read error, falling back to live:", localErr);
+                        }
+                    }
+
                     let lastErr: unknown;
                     for (let attempt = 0; attempt < 3; attempt++) {
                         try {
                             const out = await query(args);
-                            // A success proves the live database is reachable. Only
-                            // meaningful on a counter that had demoted itself; a no-op
-                            // everywhere else.
                             if (localClient) reportLiveUp();
                             return out;
                         } catch (e) {
                             lastErr = e;
                             if (!isTransientConnError(e)) throw e;
+                            if (localClient) {
+                                reportLiveDown();
+                                try {
+                                    const delegate = (localClient as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
+                                    if (delegate && typeof delegate[operation] === "function") {
+                                        return await delegate[operation](args);
+                                    }
+                                } catch (fallbackErr) {
+                                    console.warn("[prismaClient] local fallback read failed:", fallbackErr);
+                                }
+                            }
                             await sleep(120 * (attempt + 1));
                         }
                     }
-                    // Retries exhausted on a transient fault. On a counter this is the
-                    // signal to stop paying the timeout on every later request; the
-                    // caller still sees the error, but the NEXT read is served locally.
                     if (localClient) reportLiveDown();
                     throw lastErr;
                 },
@@ -121,18 +141,59 @@ function createLive(): PrismaClient {
     }) as unknown as PrismaClient;
 }
 
+const MASTER_AND_BRANCH_MODELS = new Set([
+    // Products & Inventory Masters
+    "InvProduct",
+    "InvProductVariant",
+    "InvProductBranch",
+    "InvProductPrice",
+    "InvUnit",
+    "InvBrand",
+    "InvCategory",
+    "InvSubCategory",
+    "InvRack",
+    "InvStockLedger",
+    // Contacts & Customers
+    "Person",
+    "Company",
+    "PersonCompany",
+    "Address",
+    // Accounts & Ledgers
+    "Account",
+    "AccountGroup",
+    // POS & Shifts
+    "PosShift",
+    "PosShiftCashCount",
+    "PosCounter",
+    "PosService",
+    // Universal Voucher Spine & Details
+    "UniversalVoucher",
+    "VoucherDetail",
+    "VoucherInventoryLine",
+    "VoucherGlLine",
+    "VoucherLink",
+    "VoucherSeries",
+    "BooksConfig",
+    // Loyalty & Retention
+    "LoyaltyLedger",
+    "LoyaltyConfig",
+    "LoyaltyMilestone",
+    "CouponRedemption",
+    "GiftCardRedemption",
+    // Tickets & CRM
+    "Ticket",
+    "TicketDetailRepair",
+    "TicketDetailHelp",
+    "TicketDetailDeal",
+    "TicketDetailTask",
+    "TicketLog",
+    "AuditLog",
+]);
+
 /**
- * The replica client. Physically incapable of accepting a write.
- *
- * The replica is a mirror of Supabase, and the sync worker will overwrite anything
- * it finds there. A write that landed here would therefore look like it succeeded,
- * be invisible to every other machine, and then vanish at the next sync — the worst
- * possible failure shape, because nothing reports it. So writes are refused loudly
- * instead.
- *
- * This extension is belt; the braces are the `SELECT`-only Postgres role the app
- * connects as. Either alone would do; both means a mistake in one is caught by
- * the other.
+ * The replica client.
+ * Serves local reads and allows safe offline master data creation/editing and branch-owned transactions.
+ * Strictly blocks all deletions across all models while offline.
  */
 function createLocal(): PrismaClient {
     const basePrisma = new PrismaClient({ adapter: new PrismaPg(createPool(localUrl)) });
@@ -142,13 +203,24 @@ function createLocal(): PrismaClient {
             $allModels: {
                 async $allOperations({ model, operation, args, query }) {
                     if (!READ_OPS.has(operation)) {
+                        // 1. Strict Invariant: NO DELETIONS ALLOWED OFFLINE
+                        if (operation === "delete" || operation === "deleteMany") {
+                            throw new OfflineWriteBlockedError(
+                                model ?? "unknown",
+                                operation,
+                                `Offline: deleting records from ${model} is disabled while offline to prevent data loss.`
+                            );
+                        }
+
+                        // 2. Allow safe Master creation & editing, and branch-owned POS transactions
+                        if (MASTER_AND_BRANCH_MODELS.has(model ?? "")) {
+                            return query(args);
+                        }
                         throw new OfflineWriteBlockedError(model ?? "unknown", operation);
                     }
                     return query(args);
                 },
             },
-            // Raw escape hatches bypass $allModels entirely, so they need their own
-            // guards. $queryRaw is a read and passes through; $executeRaw is not.
             async $executeRaw({ args, query }) {
                 void args; void query;
                 throw new OfflineWriteBlockedError("$executeRaw", "executeRaw");

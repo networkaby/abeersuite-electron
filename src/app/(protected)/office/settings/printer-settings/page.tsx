@@ -65,7 +65,15 @@ export default function PrinterSettingsPage() {
     const [comPorts, setComPorts] = useState<string[]>([]);
     const [portsLoading, setPortsLoading] = useState(false);
 
+    const isElectron = typeof window !== "undefined" && Boolean(window.electronAPI?.isElectron);
+
     const checkRelay = useCallback(async () => {
+        if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
+            setRelayUp(true);
+            setBridgeVersion("Electron Desktop Native");
+            setLoading(false);
+            return;
+        }
         try {
             const r = await fetch(`${RELAY}/config`, { signal: AbortSignal.timeout(3000) });
             if (!r.ok) throw new Error();
@@ -114,10 +122,15 @@ export default function PrinterSettingsPage() {
     const fetchWinPrinters = async () => {
         setPortsLoading(true);
         try {
+            if (typeof window !== "undefined" && window.electronAPI?.getPrinters) {
+                const list = await window.electronAPI.getPrinters();
+                setWinPrinters(list.map((p) => p.name));
+                return;
+            }
             const list: string[] = await (await fetch(`${RELAY}/printers`)).json();
             setWinPrinters(list);
         } catch {
-            toast.error("Could not fetch printer list from relay");
+            toast.error("Could not fetch printer list");
         } finally {
             setPortsLoading(false);
         }
@@ -179,6 +192,13 @@ export default function PrinterSettingsPage() {
     const handleTest = async () => {
         setTesting(true);
         try {
+            if (typeof window !== "undefined" && window.electronAPI?.printSilent) {
+                const ok = await window.electronAPI.printSilent({ printerName: config.windowsPrinterName });
+                if (ok) {
+                    toast.success("Test printed via Electron native driver");
+                    return;
+                }
+            }
             const r = await fetch(`${RELAY}/print`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
