@@ -1,8 +1,8 @@
 /**
  * Build gate: refuses to let an unshippable package leave this machine.
  *
- * It checks the *packaged* tree, not the build inputs. Both problems it guards against
- * were invisible in the source tree and only appeared after electron-builder ran:
+ * It checks the *packaged* tree, not the build inputs. Every problem it guards against
+ * was invisible in the source tree and only appeared after electron-builder ran:
  *
  *   A. The 0.1.0 package had no `resources/standalone/node_modules` at all, so
  *      `server.js`'s `require('next')` failed, the Next server never booted, and the
@@ -14,10 +14,21 @@
  *      package.json — as its own root, none of its children hit that rule. A rule that
  *      subtle can regress on any electron-builder upgrade, so it is asserted here.
  *
+ *   A2. The next package still shipped five absolute symlinks into this machine's pnpm
+ *      store, under `resources/standalone/.next/node_modules` — the directory Next
+ *      writes server-externalised packages to, which the original hoist never walked.
+ *      This gate passed them, because it only ever lstat'd the named canaries in
+ *      `standalone/node_modules`. Worse, one of the linked packages was missing its own
+ *      dependency (`@prisma/client` needs `@prisma/client-runtime-utils`, kept by pnpm
+ *      as a sibling), so the server started and then answered `Internal Server Error`
+ *      on every page. Hence checks A2 (no symlink anywhere) and A3 (every declared
+ *      dependency resolves) — both catch that class offline, with no database.
+ *
  *   B. The 0.1.0 package shipped `resources/standalone/.env` — ~60 plaintext keys
  *      including production Supabase, Razorpay, Cashfree, Dropbox and Firebase
  *      credentials — outside the asar where any customer could open it. Counters read
- *      their config from %APPDATA%/AbeerSuite/.env instead (see `.env.counter.example`).
+ *      their config from %APPDATA%/abeersuite-electron/.env instead (see
+ *      `.env.counter.example`).
  *
  * The secret scan has two halves, because either alone can be fooled:
  *   1. No `.env*` file anywhere in the package, including inside `app.asar`.
@@ -73,6 +84,11 @@ const SCANNABLE_EXTENSIONS = new Set([
  * copy. `@next/env` and `styled-jsx` are reachable only through next's own dependency
  * list, and `@next/swc-win32-x64-msvc` is the native binary — they are the canaries that
  * prove the whole transitive tree came across, not just the first level.
+ *
+ * `@prisma/client-runtime-utils` is the canary for the second tree: it is reachable ONLY
+ * as a pnpm sibling of the server-externalised `@prisma/client`, so its absence means
+ * `prepare-standalone.ts` did not seed the hoist from `.next/node_modules` and the server
+ * will answer `Internal Server Error` on every page.
  */
 const REQUIRED_STANDALONE_PACKAGES = [
     "next",
@@ -81,15 +97,30 @@ const REQUIRED_STANDALONE_PACKAGES = [
     "@next/env",
     "styled-jsx",
     "@next/swc-win32-x64-msvc",
+    "@prisma/client-runtime-utils",
 ];
 
 function isEnvFileName(name: string): boolean {
     return name === ".env" || name.startsWith(".env.");
 }
 
-/** Every file under `dir`, recursively. Returns absolute paths. */
-function walkFiles(dir: string): string[] {
-    const out: string[] = [];
+/** Result of one walk of the packaged tree. Paths are absolute. */
+interface PackageTree {
+    files: string[];
+    /** Symlinks, of any target type — see check A2 for why these are fatal. */
+    symlinks: string[];
+}
+
+/**
+ * Everything under `dir`, recursively, in one pass.
+ *
+ * Symlinks are collected rather than followed. A Dirent does not stat its target, so a
+ * symlinked *directory* reports neither `isDirectory()` nor `isFile()` — which is exactly
+ * how the earlier version of this walk stepped over five dangling store links and let the
+ * gate pass a broken package. Following them would also risk looping through pnpm's
+ * cyclic store.
+ */
+function walkTree(dir: string, out: PackageTree = { files: [], symlinks: [] }): PackageTree {
     let entries: fs.Dirent[];
     try {
         entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -98,13 +129,86 @@ function walkFiles(dir: string): string[] {
     }
     for (const entry of entries) {
         const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            out.push(...walkFiles(full));
+        if (entry.isSymbolicLink()) {
+            out.symlinks.push(full);
+        } else if (entry.isDirectory()) {
+            walkTree(full, out);
         } else if (entry.isFile()) {
-            out.push(full);
+            out.files.push(full);
         }
     }
     return out;
+}
+
+/**
+ * Package directories directly inside a `node_modules`-style folder, expanding `@scope`
+ * one level so the returned path is a real package root.
+ */
+function listPackageDirs(dir: string): string[] {
+    const out: string[] = [];
+    let entries: fs.Dirent[];
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return out;
+    }
+    for (const entry of entries) {
+        if (entry.name.startsWith(".")) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.name.startsWith("@")) {
+            for (const scoped of fs.readdirSync(full, { withFileTypes: true })) {
+                if (scoped.name.startsWith(".")) continue;
+                out.push(path.join(full, scoped.name));
+            }
+            continue;
+        }
+        out.push(full);
+    }
+    return out;
+}
+
+function readJson(file: string): Record<string, unknown> | null {
+    try {
+        return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+    } catch {
+        return null;
+    }
+}
+
+/** A symlink's raw target, for the failure message. Never throws — this is diagnostics. */
+function readLinkTarget(link: string): string {
+    try {
+        return fs.readlinkSync(link);
+    } catch {
+        return "<unreadable>";
+    }
+}
+
+/**
+ * Resolves a package name the way Node does — walking up the `node_modules` folders above
+ * `fromDir` — and returns the directory it lands in, or null.
+ *
+ * The walk stops at `boundary` (the package root). That limit is the point: the packaged
+ * tree sits inside this repository, so an unbounded walk would happily resolve a
+ * dependency out of the dev machine's own `node_modules` and pass a package that has
+ * nothing above the install directory on a customer PC.
+ *
+ * Hand-rolled rather than `createRequire().resolve()`, which needs a loadable entry point:
+ * it throws for a package that has no `main` and no `index.js`, and it honours `exports`
+ * maps that can hide a perfectly present package. "Is this package on disk where Node
+ * would look for it" is the whole question here, and `package.json` answers it.
+ */
+function resolvePackageDir(name: string, fromDir: string, boundary: string): string | null {
+    let dir = path.resolve(fromDir);
+    const stopAt = path.resolve(boundary);
+    for (;;) {
+        const candidate = path.join(dir, "node_modules", name);
+        if (fs.existsSync(path.join(candidate, "package.json"))) return candidate;
+        if (dir === stopAt) return null;
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+    }
 }
 
 /**
@@ -192,6 +296,67 @@ function checkStandaloneComplete(packageDir: string, failures: string[]): void {
     }
 }
 
+/**
+ * Check A3: every dependency the server-externalised packages declare can actually be
+ * resolved from where they sit.
+ *
+ * A package can be fully present and still unusable. `@prisma/client` declares exactly one
+ * dependency, `@prisma/client-runtime-utils`, and pnpm keeps it as a SIBLING in the store
+ * rather than inside the package — so materialising the package alone shipped something
+ * whose very first require threw "Cannot find module", from instrumentation.js, at server
+ * start. Every page answered `Internal Server Error` while this gate reported PASS.
+ *
+ * Rooted at `.next/node_modules` and followed transitively, resolving each name from the
+ * requiring package's own directory (Node's upward walk, so the flat
+ * `standalone/node_modules` counts). Optional and peer dependencies are skipped: they are
+ * declared precisely because the code guards their absence — `pg` lists `pg-native` that
+ * way, and it is not bundled.
+ *
+ * Deliberately NOT rooted at the whole flat tree. Next traces per-file, so a package there
+ * can legitimately arrive without a declared dependency no reachable code path requires
+ * (`next` declares `postcss`, a build-time-only need). Failing on those would be noise, and
+ * a gate that cries wolf gets bypassed.
+ */
+function checkDependencyClosure(packageDir: string, failures: string[]): void {
+    const standaloneDir = path.join(packageDir, "resources", "standalone");
+    const externalsDir = path.join(standaloneDir, ".next", "node_modules");
+    if (!fs.existsSync(externalsDir)) return;
+
+    const visited = new Set<string>();
+    const queue = listPackageDirs(externalsDir);
+    let checked = 0;
+
+    while (queue.length > 0) {
+        const dir = queue.shift()!;
+        if (visited.has(dir)) continue;
+        visited.add(dir);
+
+        const manifest = readJson(path.join(dir, "package.json"));
+        if (!manifest) continue;
+        checked++;
+
+        const deps = Object.keys((manifest.dependencies as Record<string, string>) ?? {});
+        const optional = new Set(Object.keys((manifest.optionalDependencies as Record<string, string>) ?? {}));
+        const name = (manifest.name as string) ?? path.basename(dir);
+
+        for (const dep of deps) {
+            if (optional.has(dep)) continue;
+            const resolved = resolvePackageDir(dep, dir, packageDir);
+            if (resolved) {
+                queue.push(resolved);
+            } else {
+                failures.push(
+                    `${name} (${path.relative(packageDir, dir)}) declares "${dep}", which cannot be ` +
+                    "resolved from there — the server will throw \"Cannot find module\" at startup " +
+                    "and answer Internal Server Error on every page"
+                );
+            }
+        }
+    }
+
+    console.log(`[verify-package] Checked the dependency closure of ${checked} packages.`);
+}
+
 function main(): void {
     const rootDir = process.cwd();
     const packageDir = path.resolve(rootDir, process.argv[2] || path.join("dist-app", "win-unpacked"));
@@ -208,7 +373,31 @@ function main(): void {
     // ── Check A: the standalone server is runnable ───────────────────────────
     checkStandaloneComplete(packageDir, failures);
 
-    const allFiles = walkFiles(packageDir);
+    const tree = walkTree(packageDir);
+    const allFiles = tree.files;
+
+    // ── Check A2: no symlinks anywhere in the package ────────────────────────
+    // Every symlink pnpm creates is an ABSOLUTE path into this machine's store, so it
+    // dangles on a customer PC. The named canaries above only cover packages we thought
+    // of; both packaging bugs so far were links in a directory nobody was looking at
+    // (`standalone/.next/node_modules`, which Next invented for server-externalised
+    // packages). This covers the next such directory too.
+    //
+    // It also explains why the bug hid: electron-builder ships the links as links, but the
+    // NSIS installer dereferences them on install — so the `--dir` package was broken
+    // while the installed app looked fine, and only the customer's machine showed it.
+    for (const link of tree.symlinks.slice(0, 20)) {
+        failures.push(
+            `symlink shipped: ${path.relative(packageDir, link)} -> ${readLinkTarget(link)} ` +
+            "(points into this machine's pnpm store and will dangle elsewhere)"
+        );
+    }
+    if (tree.symlinks.length > 20) {
+        failures.push(`...and ${tree.symlinks.length - 20} more symlink(s) in the package`);
+    }
+
+    // ── Check A3: the externalised packages' dependencies resolve ────────────
+    checkDependencyClosure(packageDir, failures);
 
     // ── Check B1: no .env files on disk ──────────────────────────────────────
     for (const file of allFiles) {
@@ -281,13 +470,16 @@ function main(): void {
         console.error("\n[verify-package] FATAL: this package must not be distributed.\n");
         for (const failure of failures) console.error(`  - ${failure}`);
         console.error(
-            "\n  Counters read their config from %APPDATA%/AbeerSuite/.env — see .env.counter.example.\n" +
+            "\n  Counters read their config from %APPDATA%/abeersuite-electron/.env — see .env.counter.example.\n" +
             "  Fix the build, then package again.\n"
         );
         process.exit(1);
     }
 
-    console.log("[verify-package] PASS — standalone server is complete and no credentials are bundled.");
+    console.log(
+        "[verify-package] PASS — standalone server is complete and self-contained, " +
+        "and no credentials are bundled."
+    );
 }
 
 main();

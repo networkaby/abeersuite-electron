@@ -6,8 +6,9 @@ import * as dotenv from "dotenv";
 
 // ── Load environment variables ──────────────────────────────────────────────
 // In a packaged Electron app `.env` is not loaded automatically. Each counter PC
-// gets its own hand-placed file at %APPDATA%/AbeerSuite/.env — see
-// `.env.counter.example` for the required keys.
+// gets its own hand-placed file at %APPDATA%/abeersuite-electron/.env — see
+// `.env.counter.example` for the required keys. (The folder name comes from
+// app.getName(), which reads package.json "name", not the "AbeerSuite" productName.)
 //
 // There is deliberately NO bundled fallback: the installer ships no `.env` at all,
 // because the build-machine copy carries production Supabase and payment-gateway
@@ -16,10 +17,76 @@ import * as dotenv from "dotenv";
 //
 // The forked Next server inherits this process's env (see serverManager.ts), so
 // loading it once here is enough to configure the whole app.
+
+/**
+ * Keys the app cannot work without, each with the symptom its absence produces.
+ *
+ * Inner arrays are alternatives — any one of them satisfies the entry.
+ *
+ * Why this exists: a half-filled `.env` used to give the worst failure of all. The
+ * app started, the login page rendered, and every sign-in was refused with
+ * "Invalid email or password" — because the staff domain allowlist fails closed
+ * when `INTERNAL_STAFF_EMAIL_DOMAINS` is unset (see
+ * src/shared/lib/auth/staffEmailAllowlist.ts), and it is checked before the
+ * password is. Nothing in the UI or the server log said which key was missing.
+ * Naming it at startup turns a day of guessing into one line of config.
+ */
+const REQUIRED_ENV: Array<{ keys: string[]; why: string }> = [
+    {
+        keys: ["DATABASE_URL"],
+        why: "no database connection — every page fails",
+    },
+    {
+        keys: ["AUTH_SECRET", "NEXTAUTH_SECRET"],
+        why: "sessions cannot be signed, so no one can stay logged in",
+    },
+    {
+        keys: ["INTERNAL_STAFF_EMAIL_DOMAINS", "COMPANY_DOMAIN"],
+        why: "staff login refuses every address — the domain allowlist fails closed",
+    },
+];
+
+/**
+ * Example values that are present but worthless, so they count as missing.
+ *
+ * A copied-verbatim `AUTH_SECRET` is worse than an absent one: it looks configured
+ * and it signs real session cookies with a string published in this repository.
+ */
+const PLACEHOLDER_ENV_VALUES = new Set([
+    "replace-me-with-a-generated-secret",
+    "your-auth-secret-here",
+]);
+
+function findMissingEnv(): string[] {
+    const missing: string[] = [];
+    for (const entry of REQUIRED_ENV) {
+        const satisfied = entry.keys.some((key) => {
+            const value = process.env[key]?.trim();
+            return !!value && !PLACEHOLDER_ENV_VALUES.has(value);
+        });
+        if (!satisfied) missing.push(`${entry.keys.join(" or ")} — ${entry.why}`);
+    }
+    return missing;
+}
+
 if (app.isPackaged) {
     const userEnv = path.join(app.getPath("userData"), ".env");
     if (fs.existsSync(userEnv)) {
         dotenv.config({ path: userEnv });
+
+        const missing = findMissingEnv();
+        if (missing.length > 0) {
+            dialog.showErrorBox(
+                "AbeerSuite — configuration incomplete",
+                `AbeerSuite loaded its configuration file:\n\n${userEnv}\n\n` +
+                "but these settings are missing or still hold an example value:\n\n" +
+                missing.map((line) => `  • ${line}`).join("\n") +
+                "\n\nAdd them to that file (see '.env.counter.example' for the format) " +
+                "and start AbeerSuite again.\n\n" +
+                "Starting without them would give a working-looking app that no one can log into."
+            );
+            app.exit(1);
+        }
     } else {
         dialog.showErrorBox(
             "AbeerSuite — configuration file missing",

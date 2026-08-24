@@ -26,8 +26,12 @@ const SKIP_EXTENSIONS = new Set([".exe", ".zip"]);
  * every package's requires. Flattening also sidesteps pnpm's cyclic store (A's deps
  * link to B, B's link back to A) — a naive dereferencing copy of that graph never
  * terminates. We instead walk the graph once with a `visited` set of resolved paths.
+ *
+ * `extraSeeds` are additional `node_modules` directories to start the walk from — see
+ * `dereferenceServerExternals`, which supplies the store folders behind Next's
+ * server-externalised packages so their dependencies land here too.
  */
-function hoistStandaloneDeps(standaloneDir: string): void {
+function hoistStandaloneDeps(standaloneDir: string, extraSeeds: string[] = []): void {
     const nodeModulesDir = path.join(standaloneDir, "node_modules");
     if (!fs.existsSync(nodeModulesDir)) {
         console.warn("[prepare-standalone] No standalone/node_modules to hoist — skipping.");
@@ -44,7 +48,7 @@ function hoistStandaloneDeps(standaloneDir: string): void {
     /** Package name -> realpath it was copied from, for conflict reporting. */
     const placed = new Map<string, string>();
     /** `node_modules` directories still to scan. */
-    const queue: string[] = [nodeModulesDir];
+    const queue: string[] = [nodeModulesDir, ...extraSeeds];
 
     while (queue.length > 0) {
         const dir = queue.shift()!;
@@ -92,6 +96,98 @@ function hoistStandaloneDeps(standaloneDir: string): void {
     fs.rmSync(nodeModulesDir, { recursive: true, force: true });
     fs.renameSync(outDir, nodeModulesDir);
     console.log(`[prepare-standalone] Hoisted ${placed.size} packages into standalone/node_modules.`);
+}
+
+/**
+ * Materialises Next's server-externalised packages, and reports where their
+ * dependencies live.
+ *
+ * ── Why this exists ─────────────────────────────────────────────────────────
+ * `standalone/node_modules` is not the only place `next build` puts dependencies.
+ * Packages it externalises for the server go to a second directory:
+ *
+ *   .next/standalone/.next/node_modules/@prisma/client-403e33a7f81c97d6
+ *   .next/standalone/.next/node_modules/pg-63e85fc611dc39f8
+ *
+ * (the suffix is a content hash) and under pnpm those are absolute symlinks into the
+ * store, exactly like the ones `hoistStandaloneDeps` was written for — in a directory
+ * it never walked. electron-builder copies them as links, so `--dir` output carries
+ * five paths that dangle on any machine without this pnpm store. The NSIS installer
+ * happens to dereference them on install, which is why the bug hid: the packaged tree
+ * was broken while the installed tree looked fine.
+ *
+ * The return value matters as much as the copy. `@prisma/client` declares exactly one
+ * dependency, `@prisma/client-runtime-utils`, and pnpm keeps it as a SIBLING of the
+ * real package rather than inside it — so materialising the link alone ships a package
+ * whose very first require fails. That threw
+ * "Cannot find module '@prisma/client-runtime-utils'" out of instrumentation.js at
+ * server start, which the browser showed as `Internal Server Error` on every page.
+ * Returning each link's containing store folder lets the hoist walk pull those
+ * siblings into the flat tree, where Node's upward resolution finds them.
+ */
+function dereferenceServerExternals(standaloneDir: string): string[] {
+    const externalsDir = path.join(standaloneDir, ".next", "node_modules");
+    if (!isDirectory(externalsDir)) return [];
+
+    const seeds: string[] = [];
+    let materialised = 0;
+
+    for (const pkg of listPackages(externalsDir)) {
+        let real: string;
+        try {
+            real = fs.realpathSync(pkg.path);
+        } catch {
+            // Dangling link into a store that no longer exists — nothing to copy.
+            continue;
+        }
+
+        // Collect the dependency folder BEFORE replacing the link: once the package is
+        // a real directory here, its container is this externals folder, not the store.
+        const sibling = containingNodeModules(real);
+        if (sibling) seeds.push(sibling);
+
+        if (!fs.lstatSync(pkg.path).isSymbolicLink()) continue;
+
+        // rmSync does not follow symlinks — it unlinks this entry and leaves the store
+        // untouched. (unlinkSync would be clearer but fails on Windows junctions, which
+        // is what pnpm creates here.)
+        fs.rmSync(pkg.path, { recursive: true, force: true });
+        fs.cpSync(real, pkg.path, {
+            recursive: true,
+            dereference: true,
+            // Its dependencies come from the flat standalone/node_modules instead:
+            // Node's resolution walks up from here and finds them there.
+            filter: (src) => path.basename(src) !== "node_modules",
+        });
+        materialised++;
+    }
+
+    if (materialised > 0) {
+        console.log(
+            `[prepare-standalone] Materialised ${materialised} server-externalised packages in standalone/.next/node_modules.`
+        );
+    }
+    return seeds;
+}
+
+/** Every symlink under `dir`, recursively. Returns paths relative to `dir`. */
+function findSymlinks(dir: string, base = dir): string[] {
+    const out: string[] = [];
+    let entries: fs.Dirent[];
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return out;
+    }
+    for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isSymbolicLink()) {
+            out.push(path.relative(base, full));
+        } else if (entry.isDirectory()) {
+            out.push(...findSymlinks(full, base));
+        }
+    }
+    return out;
 }
 
 /**
@@ -191,14 +287,17 @@ async function main() {
     console.log("[prepare-standalone] Copying public into .next/standalone/public (skipping .exe/.zip)...");
     copyFolderSync(publicDir, path.join(standaloneDir, "public"));
 
+    console.log("[prepare-standalone] Materialising Next's server-externalised packages...");
+    const externalSeeds = dereferenceServerExternals(standaloneDir);
+
     console.log("[prepare-standalone] Hoisting pnpm-symlinked dependencies into real directories...");
-    hoistStandaloneDeps(standaloneDir);
+    hoistStandaloneDeps(standaloneDir, externalSeeds);
 
     // `next build` copies the build-machine .env into the standalone output. That file
     // holds production Supabase, payment-gateway and Dropbox credentials, so it must
     // never reach a shop PC. electron-builder's extraResources filter also excludes it;
     // deleting it here means a later edit to that filter cannot silently leak it.
-    // Counters get their credentials from %APPDATA%/AbeerSuite/.env instead.
+    // Counters get their credentials from %APPDATA%/abeersuite-electron/.env instead.
     for (const entry of fs.readdirSync(standaloneDir)) {
         if (entry === ".env" || entry.startsWith(".env.")) {
             fs.rmSync(path.join(standaloneDir, entry), { force: true });
@@ -219,7 +318,11 @@ async function main() {
     // `next` and `react` are top-level entries, so they survive even a shallow hoist.
     // `@next/env` and `styled-jsx` are reachable only through next's own dependency
     // list — they are the canaries that prove the transitive walk actually ran.
-    const required = ["next", "react", "react-dom", "@next/env", "styled-jsx"];
+    // `@prisma/client-runtime-utils` is the canary for `dereferenceServerExternals`:
+    // it is reachable ONLY as a pnpm sibling of the externalised `@prisma/client`, so
+    // its absence means the externals seeding did not run and the packaged server will
+    // answer `Internal Server Error` on every page.
+    const required = ["next", "react", "react-dom", "@next/env", "styled-jsx", "@prisma/client-runtime-utils"];
     const nodeModulesDir = path.join(standaloneDir, "node_modules");
     for (const name of required) {
         const pkgJson = path.join(nodeModulesDir, name, "package.json");
@@ -238,6 +341,21 @@ async function main() {
             );
             process.exit(1);
         }
+    }
+
+    // Generic backstop for the two checks above: ANY symlink left in this tree points
+    // into this machine's pnpm store and will dangle on a shop PC. The named canaries
+    // only cover the packages we thought of; this covers the next directory Next
+    // invents. Both bugs so far were symlinks in a folder nobody was looking at.
+    const leftoverLinks = findSymlinks(standaloneDir);
+    if (leftoverLinks.length > 0) {
+        console.error(
+            `[prepare-standalone] FATAL: ${leftoverLinks.length} symlink(s) remain under .next/standalone.\n` +
+            "  Each one points into this machine's pnpm store and will dangle elsewhere:\n" +
+            leftoverLinks.slice(0, 20).map((p) => `    ${p}`).join("\n") +
+            (leftoverLinks.length > 20 ? `\n    ...and ${leftoverLinks.length - 20} more` : "")
+        );
+        process.exit(1);
     }
 
     console.log("[prepare-standalone] Standalone directory prepared successfully!");

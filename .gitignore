@@ -44,6 +44,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Counter-PC template. Tracked on purpose: electron/main.ts points operators at this
+# file by name, so a fresh clone must have it. Contains dummy values only — never
+# paste a real credential into it.
+!.env.counter.example
+
 # Local env templates with real credentials — keep on disk only
 experiment.env.example
 demo.env.example
