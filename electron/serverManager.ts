@@ -52,10 +52,11 @@ export async function startNextServer(port = 3000): Promise<string> {
         env: {
             ...process.env,
             PORT: String(port),
-            // Loopback only. "0.0.0.0" would publish the POS on the shop wifi, letting
-            // anyone on the network open http://<counter-ip>:3000 unauthenticated at the
-            // network layer. Only this Electron window needs to reach the server.
-            HOSTNAME: "127.0.0.1",
+            // LAN-exposed on purpose: staff need to open a counter from another PC's
+            // browser (http://<counter-ip>:<port>), and each counter's port is unique
+            // (3000 + its EPBX extension, see main.ts resolvePort()) so counters on the
+            // same shop LAN never collide. Login is still required at the app layer.
+            HOSTNAME: "0.0.0.0",
             NODE_ENV: "production",
             ELECTRON_RUN_AS_NODE: "1",
         },

@@ -195,7 +195,21 @@ if (app.isPackaged) {
 }
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
-const PORT = process.env.PORT || "3000";
+
+/**
+ * Each counter serves itself on its own port — 3000 plus its two-digit EPBX extension
+ * (e.g. extension "04" -> 3004) — so the same shop LAN can reach any counter's browser
+ * directly by port number without a reverse proxy. COUNTER_EPBX_EXT is set per machine
+ * in %APPDATA%/abeersuite-electron/.env (see .env.counter.example); it is never baked
+ * into the shared counter.env because every counter's value is different.
+ */
+function resolvePort(): string {
+    if (process.env.PORT) return process.env.PORT;
+    const ext = (process.env.COUNTER_EPBX_EXT || "").trim();
+    if (/^\d{1,2}$/.test(ext)) return String(3000 + Number(ext));
+    return "3000";
+}
+const PORT = resolvePort();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -314,6 +328,24 @@ function setupAutoUpdater(): void {
         const { autoUpdater } = require("electron-updater");
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
+
+        // The releases repo is private, so the app-baked app-update.yml (from
+        // build.publish in package.json) has no credentials of its own. GH_UPDATE_TOKEN
+        // is a fine-grained PAT scoped to "contents: read" on this repo only — set it
+        // per counter the same way as every other credential (see .env.counter.example).
+        // No token, no update checks; the app just runs the version it has.
+        const updateToken = process.env.GH_UPDATE_TOKEN;
+        if (!updateToken) {
+            console.warn("[AutoUpdater] GH_UPDATE_TOKEN not set — skipping update checks.");
+            return;
+        }
+        autoUpdater.setFeedURL({
+            provider: "github",
+            owner: "devloperakramul",
+            repo: "abeersuite-electron",
+            private: true,
+            token: updateToken,
+        });
 
         autoUpdater.on("update-available", () => {
             console.log("[AutoUpdater] Update available. Downloading in background...");

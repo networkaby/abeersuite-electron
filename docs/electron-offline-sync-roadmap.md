@@ -61,6 +61,15 @@ These fix the direction that was previously unstated.
 4. **Local database readiness is lazy.** The app starts in live mode and is immediately usable;
    the replica is prepared in the background the first time the machine is online. It never
    blocks a cashier.
+5. **Port and LAN — implemented 2026-08-24.** Each counter now serves itself on **3000 + its
+   EPBX extension** (extension "04" -> port 3004), and the server is **bound to the LAN**
+   (`0.0.0.0`, not just loopback), on purpose — so any PC on the shop wifi can open a counter
+   directly in a browser at `http://<counter-ip>:<port>`, staff login still required. This
+   **reopens the LAN-exposure fix** from the 2026-08-24 distribution-hardening pass (which
+   bound to `127.0.0.1` specifically to stop that). Per-counter EPBX extension goes in
+   `COUNTER_EPBX_EXT`, set per machine in the existing `%APPDATA%/abeersuite-electron/.env`
+   override file — see `.env.counter.example`. Also added: GitHub Releases auto-update, via a
+   `GH_UPDATE_TOKEN` fine-grained PAT (contents:read only) since the releases repo is private.
 
 ### Counter identity — corrected
 
@@ -159,7 +168,7 @@ Two facts that were previously glossed over:
 | COM port enumeration | Bridge `/ports` | Electron IPC |
 | Counter/device identity | Bridge `/config` deviceId, minted by the renderer | Electron installation id + stored counter extension |
 | Cash drawer kick | Not implemented | Electron main process |
-| Auto-update | Built (`electron-updater`), but **silent** — `app:update-ready` has no renderer listener | Visible prompt |
+| Auto-update | Built — `electron-updater` against GitHub Releases (private repo, `GH_UPDATE_TOKEN`), but **silent** — `app:update-ready` has no renderer listener | Visible prompt |
 
 ---
 
@@ -172,8 +181,9 @@ Summary of phase order:
 - **Phase 0** — make these docs honest. *(this rewrite)*
 - **Phase 0.5** — build and install the current code on a clean second machine to surface unknown
   errors early. This install is the baseline every later phase is compared against.
-- **Phase 1** — move off port 3000 to a dedicated high port; delete the adopt-existing-listener
-  branch; add a splash screen, progress text, and a real error page so a cold start is never blank.
+- **Phase 1** — port and LAN scheme **done** (3000 + EPBX extension, LAN-bound, see decision 5
+  above); still to do: delete the adopt-existing-listener branch in `serverManager.ts`, add a
+  splash screen, progress text, and a real error page so a cold start is never blank.
 - **Phase 2** — counter identity into Electron, with a rebind path so machines already bound to a
   bridge deviceId are not locked out. Printing and QR untouched.
 - **Phase 3** — installer size and speed: stop shipping `node_modules` twice, prune dev packages
