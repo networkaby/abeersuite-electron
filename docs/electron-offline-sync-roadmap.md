@@ -181,9 +181,12 @@ Summary of phase order:
 - **Phase 0** — make these docs honest. *(this rewrite)*
 - **Phase 0.5** — build and install the current code on a clean second machine to surface unknown
   errors early. This install is the baseline every later phase is compared against.
-- **Phase 1** — port and LAN scheme **done** (3000 + EPBX extension, LAN-bound, see decision 5
-  above); still to do: delete the adopt-existing-listener branch in `serverManager.ts`, add a
-  splash screen, progress text, and a real error page so a cold start is never blank.
+- **Phase 1 — done.** Port and LAN scheme (3000 + EPBX extension, LAN-bound, see decision 5
+  above); the adopt-existing-listener branch in `serverManager.ts` is deleted; the app shows a
+  local splash immediately (`show: false` + `backgroundColor` + `ready-to-show`, no blank white
+  frame), pushes boot progress to it over IPC, and falls through to a real error page naming the
+  session's log file (`%APPDATA%/abeersuite-electron/logs/main.log`) instead of silently loading
+  a dead window when the server never becomes ready.
 - **Phase 2** — counter identity into Electron, with a rebind path so machines already bound to a
   bridge deviceId are not locked out. Printing and QR untouched.
 - **Phase 3** — installer size and speed: stop shipping `node_modules` twice, prune dev packages

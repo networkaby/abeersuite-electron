@@ -4,6 +4,28 @@ import * as fs from "fs";
 import * as crypto from "crypto";
 import * as dotenv from "dotenv";
 
+// ── File log ─────────────────────────────────────────────────────────────────
+// A fresh log per run (not appended) — this exists to answer "why didn't it boot this
+// time", not as an audit trail, so it stays small on a counter that runs for weeks.
+// A boot failure shows this exact path so it is never just a silent blank window.
+export const LOG_FILE = path.join(app.getPath("userData"), "logs", "main.log");
+try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    const logStream = fs.createWriteStream(LOG_FILE, { flags: "w" });
+    const writeLine = (level: string, args: unknown[]) => {
+        const msg = args.map((a) => (a instanceof Error ? (a.stack ?? a.message) : String(a))).join(" ");
+        logStream.write(`[${new Date().toISOString()}] [${level}] ${msg}\n`);
+    };
+    const origLog = console.log.bind(console);
+    const origWarn = console.warn.bind(console);
+    const origError = console.error.bind(console);
+    console.log = (...args: unknown[]) => { origLog(...args); writeLine("INFO", args); };
+    console.warn = (...args: unknown[]) => { origWarn(...args); writeLine("WARN", args); };
+    console.error = (...args: unknown[]) => { origError(...args); writeLine("ERROR", args); };
+} catch (err) {
+    console.error("[main] Could not open log file:", err);
+}
+
 // ── Load environment variables ──────────────────────────────────────────────
 // In a packaged Electron app `.env` is not loaded automatically. Two sources feed it,
 // in precedence order:
@@ -372,16 +394,85 @@ function setupAutoUpdater(): void {
 }
 
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
-import { startNextServer, stopNextServer } from "./serverManager";
+import { startNextServer, stopNextServer, type ServerStartResult } from "./serverManager";
 
-async function createWindow(baseUrl?: string): Promise<void> {
-    mainWindow = new BrowserWindow({
+// ── Splash / cold-start / boot-failure screens ───────────────────────────────
+// All three are self-authored data: URLs, not files under resources/ — nothing here is
+// remote or user-controlled, so there is no template injection surface. This avoids
+// needing a new build step just to copy static assets into dist-electron.
+const SPLASH_BG = "#0f172a";
+
+function escapeHtml(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function dataUrl(html: string): string {
+    return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function splashHtml(): string {
+    return `<!doctype html><html><head><meta charset="utf-8"><title>AbeerSuite</title>
+<style>
+  html,body{height:100%;margin:0;background:${SPLASH_BG};color:#e2e8f0;
+    font-family:"Segoe UI",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+  .box{text-align:center}
+  h1{font-size:20px;font-weight:600;margin:0 0 12px}
+  p{font-size:13px;color:#94a3b8;margin:0}
+  .spin{width:28px;height:28px;margin:0 auto 16px;border:3px solid #334155;border-top-color:#38bdf8;
+    border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style></head>
+<body><div class="box"><div class="spin"></div><h1>AbeerSuite</h1><p id="msg">Starting…</p></div>
+<script>
+  if (window.electronAPI && window.electronAPI.onBootProgress) {
+    window.electronAPI.onBootProgress(function (message) {
+      var el = document.getElementById("msg");
+      if (el) el.textContent = message;
+    });
+  }
+</script></body></html>`;
+}
+
+function bootErrorHtml(triedUrl: string): string {
+    return `<!doctype html><html><head><meta charset="utf-8"><title>AbeerSuite — could not start</title>
+<style>
+  html,body{height:100%;margin:0;background:${SPLASH_BG};color:#e2e8f0;
+    font-family:"Segoe UI",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+  .box{max-width:520px;text-align:center;padding:24px}
+  h1{font-size:18px;margin:0 0 12px;color:#f87171}
+  p{font-size:13px;color:#94a3b8;line-height:1.6;margin:0 0 8px}
+  code{background:#1e293b;padding:2px 6px;border-radius:4px;font-size:12px;word-break:break-all}
+</style></head>
+<body><div class="box">
+  <h1>AbeerSuite could not start</h1>
+  <p>The local server did not respond at <code>${escapeHtml(triedUrl)}</code>.</p>
+  <p>Log file: <code>${escapeHtml(LOG_FILE)}</code></p>
+  <p>Close this window and try again. If it keeps happening, send the log file above.</p>
+</div></body></html>`;
+}
+
+function sendBootProgress(message: string): void {
+    console.log(`[Boot] ${message}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("app:boot-progress", message);
+    }
+}
+
+/**
+ * Creates the single app window and shows the local splash immediately — the OS paints
+ * this window's `backgroundColor` behind it, so there is never a blank white frame while
+ * Postgres and the server are still starting.
+ */
+function createShellWindow(): BrowserWindow {
+    const win = new BrowserWindow({
         width: 1366,
         height: 860,
         minWidth: 1024,
         minHeight: 700,
         title: "AbeerSuite",
         autoHideMenuBar: true,
+        show: false,
+        backgroundColor: SPLASH_BG,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             nodeIntegration: false,
@@ -396,41 +487,86 @@ async function createWindow(baseUrl?: string): Promise<void> {
     // The POS is a single-window app. Anything that tries to open a popup — an injected
     // script, a stray target="_blank" — is denied rather than given a frameless window
     // with this preload attached.
-    mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-
-    const root = baseUrl || (process.env.ELECTRON_START_URL ? process.env.ELECTRON_START_URL.replace(/\/staff\/login$/, "") : `http://127.0.0.1:${PORT}`);
-    const startUrl = `${root}/staff/login`;
-
-    mainWindow.loadURL(startUrl).catch((err) => {
-        console.error("Failed to load start URL:", err);
+    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    win.once("ready-to-show", () => win.show());
+    win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
+    win.loadURL(dataUrl(splashHtml())).catch((err) => {
+        // ERR_ABORTED here is the routine case: loadApp() below already navigated on to
+        // the real page before this promise settled. That is a race won, not a failure.
+        if (err?.code !== "ERR_ABORTED") console.error("[Boot] Failed to load splash:", err);
     });
 
-    mainWindow.on("closed", () => {
-        mainWindow = null;
+    return win;
+}
+
+/**
+ * Navigates the shell window to the real app. `loadURL`'s promise rejects on a failed
+ * load (a `did-fail-load`), so a few retries here catch a server that answered the
+ * readiness poll but is still settling, without ever leaving the window on the splash.
+ */
+async function loadApp(baseUrl: string): Promise<void> {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const startUrl = `${baseUrl}/staff/login`;
+    const attempts = 3;
+    for (let i = 1; i <= attempts; i++) {
+        try {
+            await mainWindow.loadURL(startUrl);
+            return;
+        } catch (err) {
+            console.warn(`[Boot] loadURL attempt ${i}/${attempts} failed:`, err);
+            if (i === attempts) {
+                console.error("[Boot] Giving up after repeated load failures.");
+                showBootError(startUrl);
+                return;
+            }
+            await new Promise((r) => setTimeout(r, 500));
+        }
+    }
+}
+
+function showBootError(triedUrl: string): void {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.loadURL(dataUrl(bootErrorHtml(triedUrl))).catch((err) => {
+        console.error("[Boot] Failed to load the error page itself:", err);
     });
 }
 
 // ── App Lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+    mainWindow = createShellWindow();
+
+    sendBootProgress("Starting database…");
     try {
         await ensurePostgresRunning();
     } catch (err) {
         console.error("[Main] Error during postgres initialization:", err);
     }
 
-    let baseUrl = `http://127.0.0.1:${PORT}`;
+    sendBootProgress("Starting server…");
+    let result: ServerStartResult = { url: `http://127.0.0.1:${PORT}`, ready: false };
     try {
-        baseUrl = await startNextServer(Number(PORT));
+        result = await startNextServer(Number(PORT));
     } catch (err) {
         console.error("[Main] Error starting Next.js server:", err);
     }
 
-    await createWindow(baseUrl);
+    if (result.ready) {
+        sendBootProgress("Almost there…");
+        await loadApp(result.url);
+    } else {
+        showBootError(result.url);
+    }
+
     setupAutoUpdater();
 
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow(baseUrl);
+            mainWindow = createShellWindow();
+            if (result.ready) {
+                loadApp(result.url);
+            } else {
+                showBootError(result.url);
+            }
         }
     });
 });

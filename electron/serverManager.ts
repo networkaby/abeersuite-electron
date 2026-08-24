@@ -5,6 +5,12 @@ import { fork, type ChildProcess } from "child_process";
 
 let nextProcess: ChildProcess | null = null;
 
+/** Result of a boot attempt. `ready: false` means the caller must not treat `url` as live. */
+export interface ServerStartResult {
+    url: string;
+    ready: boolean;
+}
+
 /**
  * Checks whether a given TCP port is actively listening on localhost.
  * Re-exported here so postgresManager can keep importing from this module.
@@ -27,17 +33,21 @@ function isPortListeningLocal(port: number, timeoutMs = 1000): Promise<boolean> 
  * In dev mode (NODE_ENV=development or unpackaged) the dev server is expected
  * to already be running — we just return the URL and skip spawning.
  */
-export async function startNextServer(port = 3000): Promise<string> {
+export async function startNextServer(port = 3000): Promise<ServerStartResult> {
     const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
     if (isDev) {
-        return `http://localhost:${port}`;
+        // package.json's electron:dev script runs `wait-on` before launching Electron,
+        // so the dev server is already confirmed reachable by the time we get here.
+        return { url: `http://127.0.0.1:${port}`, ready: true };
     }
 
-    // If something is already listening (e.g. previous instance), reuse it.
-    if (await isPortListeningLocal(port, 300)) {
-        console.log(`[NextServer] Detected server already listening on port ${port}.`);
-        return `http://localhost:${port}`;
-    }
+    // No "reuse an existing listener" path here on purpose: it used to adopt *any*
+    // process already on the port, including a stray `next dev` left running from
+    // this same machine, and load a foreign app into the POS window. Single-instance
+    // locking (main.ts) already stops two copies of this app from racing each other;
+    // if the port is genuinely stuck (an orphaned process from an unclean exit), the
+    // fork below fails to bind and the readiness poll times out below, which the
+    // caller turns into a visible error instead of a silent wrong-app load.
 
     // The standalone directory is placed into extraResources by electron-builder.
     // `scripts/prepare-standalone.ts` hoists its node_modules into real directories at
@@ -81,16 +91,17 @@ export async function startNextServer(port = 3000): Promise<string> {
     });
 
     // Wait up to 15 seconds for the server to become ready.
+    const url = `http://127.0.0.1:${port}`;
     for (let i = 0; i < 75; i++) {
         await new Promise((r) => setTimeout(r, 200));
         if (await isPortListeningLocal(port, 200)) {
-            console.log(`[NextServer] Standalone server is ready on http://localhost:${port}`);
-            return `http://localhost:${port}`;
+            console.log(`[NextServer] Standalone server is ready on ${url}`);
+            return { url, ready: true };
         }
     }
 
-    console.warn("[NextServer] Server did not become ready within timeout. Continuing anyway.");
-    return `http://localhost:${port}`;
+    console.error("[NextServer] Server did not become ready within timeout.");
+    return { url, ready: false };
 }
 
 /**
