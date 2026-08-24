@@ -146,6 +146,14 @@ export function counterStatus(): {
     preference: ReadPreference;
     replicaReady: boolean;
     isCounter: boolean;
+    /** Which PostgreSQL the replica is running against, set by electron/postgresManager.ts
+     *  and forwarded into this process's env when the Next server was forked — null when
+     *  there is no replica at all (the ship state today). */
+    replicaSource: "installed" | "embedded" | null;
 } {
-    return { mode, preference: READ_PREFERENCE, replicaReady, isCounter: IS_COUNTER_PC };
+    const source = process.env.LOCAL_DATABASE_SOURCE;
+    return {
+        mode, preference: READ_PREFERENCE, replicaReady, isCounter: IS_COUNTER_PC,
+        replicaSource: source === "installed" || source === "embedded" ? source : null,
+    };
 }

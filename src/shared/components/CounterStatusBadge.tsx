@@ -33,10 +33,15 @@ export default function CounterStatusBadge() {
     // Serving local reads while online: correct, but worth surfacing because any
     // staleness a user notices is explained by it.
     if (status.preference !== "live" && status.replicaReady) {
+        const sourceNote = status.replicaSource === "installed"
+            ? " Running against the PostgreSQL already installed on this PC."
+            : status.replicaSource === "embedded"
+                ? " Running against this app's own embedded PostgreSQL."
+                : "";
         return (
             <span
                 className="inline-flex items-center gap-1.5 rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200"
-                title="Reading from this machine's local copy, which syncs continuously. Saving works normally."
+                title={`Reading from this machine's local copy, which syncs continuously. Saving works normally.${sourceNote}`}
             >
                 <RefreshCw className="size-3.5" aria-hidden />
                 Local copy

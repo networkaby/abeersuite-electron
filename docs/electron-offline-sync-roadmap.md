@@ -41,7 +41,10 @@
   blank white window with no message.
 - **The installer ships `node_modules` twice** — ~646 MB extracted loose via `asarUnpack` that
   nothing at runtime ever loads.
-- **`refreshReplicaReadiness()` has zero callers**, so `replicaReady` is permanently `false`.
+- ~~`refreshReplicaReadiness()` has zero callers~~ — **correction:** it is called from
+  `GET /api/counter/status`. It still leaves `replicaReady` permanently `false` today,
+  though, because it reads `_sync_status`, a table only the (still-scaffold) sync worker
+  writes — see Phase 5.
 - **`schemaCheck.ts` has zero callers.**
 
 ---
@@ -210,8 +213,24 @@ Summary of phase order:
   `/staff/login` 200, and clean shutdown with no orphan process.
   **Not done:** the `nsis-web` target needs a hosting decision for `appPackageUrl` (GitHub Releases
   is the candidate) — still open, see below.
-- **Phase 4** — local PostgreSQL: real detection, database creation, programmatic schema apply,
-  lazy background readiness, and a UI that names which server was chosen.
+- **Phase 4 — detection half done; provisioning deferred.** `electron/postgresManager.ts`:
+  the `COUNTER_PC=1` hard gate is now a persisted per-machine setting (`userData/replica.json`,
+  defaults enabled, env override kept for testing); detecting an existing install on 5432 no
+  longer requires the embedded binaries to be bundled at all; both the installed and embedded
+  paths now do a real `SELECT 1` (via `pg`, added to `prepare-electron-deps.ts`'s hoisted
+  set) instead of trusting a listening port. `electron/main.ts` sets `COUNTER_PC=1`
+  dynamically, from the actual detection result, before forking the Next server — the
+  read-routing in `prismaClient.ts`/`counterMode.ts` gates on that flag, not on
+  `LOCAL_DATABASE_URL`'s mere presence, so without this the rest of the plumbing would never
+  activate even with a real database found. `counterStatus()` and the shell badge
+  ([`CounterStatusBadge.tsx`](../src/shared/components/CounterStatusBadge.tsx)) now report
+  `replicaSource: "installed" | "embedded" | null`.
+  **Deferred, not implemented:** downloading the embedded PostgreSQL binary and applying the
+  schema (`createdb` + `prisma db push`) programmatically. Both need real infrastructure this
+  environment does not have — internet access to fetch a ~90 MB binary, and a real PostgreSQL
+  instance to push a schema into and verify against — so writing that code now would be
+  untested guesswork shipped as if it worked. `resources/pgsql` stays empty; a counter with no
+  installed PostgreSQL stays in live mode, exactly as today.
 - **Phase 5** — a real sync engine: durable outbox table, an actual `syncTableByNumber()`
   implementation per strategy, worker startup, schema-drift precondition.
 - **Phase 6** — make Dropbox/GitHub backup dormant per release by dropping its keys from the

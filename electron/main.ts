@@ -537,7 +537,14 @@ app.whenReady().then(async () => {
 
     sendBootProgress("Starting database…");
     try {
-        await ensurePostgresRunning();
+        const localDbUrl = await ensurePostgresRunning();
+        if (localDbUrl) {
+            // Read-routing (prismaClient.ts / counterMode.ts) gates on COUNTER_PC, not on
+            // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
+            // result, rather than requiring it baked into the installer. serverManager.ts
+            // forks the Next server with `env: {...process.env}`, so this is inherited.
+            process.env.COUNTER_PC = "1";
+        }
     } catch (err) {
         console.error("[Main] Error during postgres initialization:", err);
     }
