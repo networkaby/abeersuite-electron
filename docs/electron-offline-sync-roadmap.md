@@ -72,12 +72,14 @@ These fix the direction that was previously unstated.
    bound to `127.0.0.1` specifically to stop that). Per-counter EPBX extension goes in
    `COUNTER_EPBX_EXT`, set per machine in the existing `%APPDATA%/abeersuite-electron/.env`
    override file — see `.env.counter.example`. Also added: GitHub Releases auto-update, via a
-   `GH_UPDATE_TOKEN` fine-grained PAT (contents:read only) since the releases repo is private.
-6. **Auto-update repo split off the source repo — implemented 2026-08-24.** Updates now point
-   at a **separate private repo**, `devloperakramul/abeersuite-networkservice-update` — release
-   artifacts only, no source. `GH_UPDATE_TOKEN` is baked into every counter's `counter.env`
-   (`scripts/counterEnv.ts`), scoped to only that repo — a leaked installer therefore exposes at
-   most the release artifacts every counter already has on disk, never the private codebase.
+   fine-grained PAT (contents:read only) since the releases repo is private.
+6. **Auto-update repo split off the source repo, and made configurable — implemented
+   2026-08-24.** Updates point at a **separate private repo**,
+   `devloperakramul/abeersuite-networkservice-update` — release artifacts only, no source.
+   Both `PAT_TOKEN` and `GITHUB_UPDATE_REPO` (`"owner/repo"`) are baked into every counter's
+   `counter.env` (`scripts/counterEnv.ts`) rather than the repo being hard-coded in
+   `electron/main.ts` — a leaked installer therefore exposes at most the release artifacts
+   every counter already has on disk, never the private codebase.
    The publish-side token (write access, for `electron-builder --publish`) is a separate,
    more powerful credential that stays on the build machine only and must never be added to
    `COUNTER_ENV_COPIED`.
@@ -179,7 +181,7 @@ Two facts that were previously glossed over:
 | COM port enumeration | Bridge `/ports` | Electron IPC |
 | Counter/device identity | Bridge `/config` deviceId, minted by the renderer | Electron installation id + stored counter extension |
 | Cash drawer kick | Not implemented | Electron main process |
-| Auto-update | Built — `electron-updater` against a separate private releases-only repo (`GH_UPDATE_TOKEN`, baked, scoped to that repo alone), but **silent** — `app:update-ready` has no renderer listener | Visible prompt |
+| Auto-update | Built — `electron-updater` against a separate private releases-only repo (`PAT_TOKEN` + `GITHUB_UPDATE_REPO`, both baked, configurable per counter), but **silent** — `app:update-ready` has no renderer listener | Visible prompt |
 
 ---
 

@@ -351,21 +351,23 @@ function setupAutoUpdater(): void {
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
 
-        // Deliberately NOT the source repo. abeersuite-networkservice-update holds only
-        // release artifacts, no code — GH_UPDATE_TOKEN (a fine-grained PAT, "Contents:
-        // Read-only", scoped to only that repo) is baked into every installer via
-        // counter.env, so a leaked installer exposes at most the artifacts every counter
-        // already has on disk, never the private codebase. No token, no update checks;
-        // the app just runs the version it has.
-        const updateToken = process.env.GH_UPDATE_TOKEN;
-        if (!updateToken) {
-            console.warn("[AutoUpdater] GH_UPDATE_TOKEN not set — skipping update checks.");
+        // GITHUB_UPDATE_REPO ("owner/repo") deliberately points at a repo separate from
+        // the source — abeersuite-networkservice-update holds only release artifacts, no
+        // code. PAT_TOKEN (a fine-grained PAT, "Contents: Read-only", scoped to only that
+        // repo) is baked into every installer via counter.env, so a leaked installer
+        // exposes at most the artifacts every counter already has on disk, never the
+        // private codebase. Either missing, or a malformed repo string — skip update
+        // checks rather than block boot; the app just runs the version it has.
+        const updateToken = process.env.PAT_TOKEN;
+        const [updateOwner, updateRepo] = (process.env.GITHUB_UPDATE_REPO || "").split("/");
+        if (!updateToken || !updateOwner || !updateRepo) {
+            console.warn("[AutoUpdater] PAT_TOKEN or GITHUB_UPDATE_REPO not set — skipping update checks.");
             return;
         }
         autoUpdater.setFeedURL({
             provider: "github",
-            owner: "devloperakramul",
-            repo: "abeersuite-networkservice-update",
+            owner: updateOwner,
+            repo: updateRepo,
             private: true,
             token: updateToken,
         });
