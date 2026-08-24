@@ -231,8 +231,20 @@ Summary of phase order:
   instance to push a schema into and verify against — so writing that code now would be
   untested guesswork shipped as if it worked. `resources/pgsql` stays empty; a counter with no
   installed PostgreSQL stays in live mode, exactly as today.
-- **Phase 5** — a real sync engine: durable outbox table, an actual `syncTableByNumber()`
-  implementation per strategy, worker startup, schema-drift precondition.
+- **Phase 5 — deliberately not attempted this pass.** Same reasoning as Phase 4's deferred
+  binary/schema work, more acute here: syncing data *into* a local database cannot be built
+  responsibly without one to sync into and diff against, and none exists in this environment
+  or on any counter today (Phase 4 left `resources/pgsql` empty on purpose). Writing
+  `syncTableByNumber()`'s delta-pull/upsert logic, a durable outbox, or worker startup with
+  no way to run a real cycle and confirm rows actually land correctly would be exactly the
+  untested-guesswork risk this pass has avoided everywhere else. One specific finding worth
+  recording: fixing `useRealtimeTopics.ts`'s over-fire (Check A3 in the original audit — it
+  reacts to *any* sync event, ignoring the topic filter the app-channel path applies) turned
+  out to need a table-number -> `Topic` mapping that does not exist anywhere yet; that mapping
+  is itself sync-engine design work, not a standalone bug fix, so it stays open here rather
+  than being hacked in blind. In practice this has near-zero effect today: `broadcastTableMutation`
+  is only ever called from the outbox's stub flush, which nothing populates. Do this phase
+  once Phase 4's local database actually exists to test against.
 - **Phase 6 — done.** [`scripts/counterEnv.ts`](../scripts/counterEnv.ts)'s `COUNTER_ENV_COPIED`
   no longer includes the 4 `DROPBOX_*` / 3 `GITHUB_*` keys (commented out, not deleted, so
   re-enabling for a specific release is a one-line uncomment). `resources/counter.env` now
