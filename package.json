@@ -167,7 +167,7 @@
     "publish": {
       "provider": "github",
       "owner": "devloperakramul",
-      "repo": "abeersuite-electron",
+      "repo": "abeersuite-networkservice-update",
       "private": true,
       "releaseType": "release"
     },

@@ -63,6 +63,15 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     "APP_MODE",
     "READ_MODE",
 
+    // ── Auto-update ──────────────────────────────────────────────────────────
+    // A fine-grained PAT, "Contents: Read-only", scoped to ONLY
+    // abeersuite-networkservice-update — a separate, private, release-artifacts-only
+    // repo, deliberately not the source repo. A leaked installer therefore exposes at
+    // most the release artifacts every counter already has on disk, never the private
+    // codebase. Optional: absent here, setupAutoUpdater() logs and skips update checks
+    // rather than failing the boot (electron/main.ts).
+    "GH_UPDATE_TOKEN",
+
     // ── Backup and restore: dormant in this build, on purpose ─────────────────
     // Owner decision (2026-08-24): keep Dropbox/GitHub-triggered backup and restore
     // dormant for now. `backupAvailability()` (src/shared/lib/backup/availability.ts)

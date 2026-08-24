@@ -351,11 +351,12 @@ function setupAutoUpdater(): void {
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
 
-        // The releases repo is private, so the app-baked app-update.yml (from
-        // build.publish in package.json) has no credentials of its own. GH_UPDATE_TOKEN
-        // is a fine-grained PAT scoped to "contents: read" on this repo only — set it
-        // per counter the same way as every other credential (see .env.counter.example).
-        // No token, no update checks; the app just runs the version it has.
+        // Deliberately NOT the source repo. abeersuite-networkservice-update holds only
+        // release artifacts, no code — GH_UPDATE_TOKEN (a fine-grained PAT, "Contents:
+        // Read-only", scoped to only that repo) is baked into every installer via
+        // counter.env, so a leaked installer exposes at most the artifacts every counter
+        // already has on disk, never the private codebase. No token, no update checks;
+        // the app just runs the version it has.
         const updateToken = process.env.GH_UPDATE_TOKEN;
         if (!updateToken) {
             console.warn("[AutoUpdater] GH_UPDATE_TOKEN not set — skipping update checks.");
@@ -364,7 +365,7 @@ function setupAutoUpdater(): void {
         autoUpdater.setFeedURL({
             provider: "github",
             owner: "devloperakramul",
-            repo: "abeersuite-electron",
+            repo: "abeersuite-networkservice-update",
             private: true,
             token: updateToken,
         });
