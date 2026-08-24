@@ -187,8 +187,13 @@ Summary of phase order:
   frame), pushes boot progress to it over IPC, and falls through to a real error page naming the
   session's log file (`%APPDATA%/abeersuite-electron/logs/main.log`) instead of silently loading
   a dead window when the server never becomes ready.
-- **Phase 2** — counter identity into Electron, with a rebind path so machines already bound to a
-  bridge deviceId are not locked out. Printing and QR untouched.
+- **Phase 2 — done.** `src/shared/lib/counter/identity.ts` resolves this PC's identity —
+  Electron's installation id when available, else the bridge's deviceId — and
+  `ShiftOpenDialog`, `useMyCounterExtension`, and printer-settings' parked "Counter lock"
+  card all match against it. The server (`POST /api/pos/shifts`) accepts an optional
+  `legacyDeviceId` alongside `deviceId`: a counter bound under the old bridge id is
+  recognised and silently rebound to the canonical Electron id rather than refused.
+  `epbxExtension` and the voucher prefix are untouched. Printing and QR still use `:9191`.
 - **Phase 3** — installer size and speed: stop shipping `node_modules` twice, prune dev packages
   from the standalone tree, max compression, trim locales, add the `nsis-web` target.
 - **Phase 4** — local PostgreSQL: real detection, database creation, programmatic schema apply,

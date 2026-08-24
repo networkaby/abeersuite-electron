@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { resolveMachineIdentity, matchesThisMachine, type MachineIdentity } from "@/shared/lib/counter/identity";
 
 const RELAY = "http://localhost:9191";
 
@@ -54,10 +55,14 @@ export default function PrinterSettingsPage() {
     const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config, setConfig] = useState<RelayConfig>(DEFAULT);
-    // The counter this PC is bound to (server-side, keyed by config.deviceId).
+    // The counter this PC is bound to (server-side, keyed by this PC's identity).
     // Read only inside the parked "Counter lock" card below (currently commented out).
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [boundCounter, setBoundCounter] = useState<{ id: number; name: string } | null>(null);
+    // Electron installation id (or bridge id off-Electron) — checkRelay() below
+    // short-circuits for Electron without hitting the bridge's /config, so this is
+    // resolved independently rather than piggybacking on `config.deviceId`.
+    const [identity, setIdentity] = useState<MachineIdentity | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -103,21 +108,25 @@ export default function PrinterSettingsPage() {
             .catch(() => { /* manifest optional — no warning if unavailable */ });
     }, []);
 
-    // Which counter is this PC bound to? Match the bridge deviceId against the
+    useEffect(() => {
+        resolveMachineIdentity().then(setIdentity);
+    }, []);
+
+    // Which counter is this PC bound to? Match this PC's identity against the
     // server's counter locks so the Forget card knows what it's releasing.
     useEffect(() => {
-        if (!config.deviceId) { setBoundCounter(null); return; }
+        if (!identity || (!identity.machineId && !identity.legacyDeviceId)) { setBoundCounter(null); return; }
         let cancelled = false;
         fetch(`/api/pos/counters`)
             .then((r) => r.ok ? r.json() : [])
             .then((list: { id: number; name: string; boundDeviceId: string | null }[]) => {
                 if (cancelled) return;
-                const mine = Array.isArray(list) ? list.find((c) => c.boundDeviceId === config.deviceId) : null;
+                const mine = Array.isArray(list) ? list.find((c) => matchesThisMachine(c.boundDeviceId, identity)) : null;
                 setBoundCounter(mine ? { id: mine.id, name: mine.name } : null);
             })
             .catch(() => { /* ignore — card just won't show */ });
         return () => { cancelled = true; };
-    }, [config.deviceId]);
+    }, [identity]);
 
     const fetchWinPrinters = async () => {
         setPortsLoading(true);
@@ -174,12 +183,13 @@ export default function PrinterSettingsPage() {
     // Bound to the parked "Counter lock" card below (currently commented out).
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const forgetCounter = async () => {
-        if (!config.deviceId) return;
+        const releaseId = identity?.machineId ?? identity?.legacyDeviceId;
+        if (!releaseId) return;
         try {
             const r = await fetch(`/api/pos/counters/release-mine`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ deviceId: config.deviceId }),
+                body: JSON.stringify({ deviceId: releaseId }),
             });
             if (!r.ok) throw new Error();
             toast.success("Counter lock cleared for this PC");

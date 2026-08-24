@@ -24,10 +24,15 @@ const openSchema = z.object({
     counterId:       z.number().int().positive(),
     vaultTopUpPaise: z.number().int().min(0).default(0), // fresh cash drawn from vault
     notes:           z.string().trim().max(500).optional(),
-    // Stable per-PC id from the local bridge. On first open the counter is bound
-    // to it; a later open from a different PC is refused (device lock). Absent
-    // when no bridge is running — then the lock can't be enforced (open is free).
+    // This PC's identity — Electron's installation id when available, else the
+    // local bridge's id. On first open the counter is bound to it; a later open
+    // from a different PC is refused (device lock). Absent when neither Electron
+    // nor the bridge is present — then the lock can't be enforced (open is free).
     deviceId:        z.string().trim().min(1).max(100).optional(),
+    // The bridge's older id for this same PC, sent alongside deviceId only during
+    // the bridge->Electron migration — lets a counter already bound to it be
+    // recognised and silently rebound to the canonical id instead of refused.
+    legacyDeviceId:  z.string().trim().min(1).max(100).optional(),
     deviceLabel:     z.string().trim().max(100).optional(), // friendly name for the admin list
 });
 
@@ -142,8 +147,11 @@ export async function POST(req: NextRequest) {
     // Device lock — a counter remembers the first PC that opened it. Opening from
     // a different PC is refused until an admin (Admin → POS Counters) or that PC
     // (Settings → Thermal Printer → Forget) releases the lock. When the caller
-    // sends no deviceId (no bridge running) the lock can't be checked — open free.
-    if (counter.boundDeviceId && body.deviceId && counter.boundDeviceId !== body.deviceId) {
+    // sends no id at all (neither Electron nor the bridge present) the lock can't
+    // be checked — open free. A match on legacyDeviceId (the pre-Electron bridge
+    // id) counts as this PC too — see the rebind below.
+    const candidateIds = [body.deviceId, body.legacyDeviceId].filter((id): id is string => !!id);
+    if (counter.boundDeviceId && candidateIds.length > 0 && !candidateIds.includes(counter.boundDeviceId)) {
         return NextResponse.json(
             { error: "This counter is locked to another computer. Ask an admin to release it (Admin → POS Counters)." },
             { status: 409 },
@@ -234,9 +242,13 @@ export async function POST(req: NextRequest) {
                 openingContraId = contra.voucherId;
             }
 
-            // Bind the counter to this PC on first open (device lock). Later opens
-            // from the same PC pass the boundDeviceId check above unchanged.
-            if (!counter.boundDeviceId && body.deviceId) {
+            // Bind the counter to this PC on first open, or migrate it when it was
+            // bound under the old legacyDeviceId and this open presents the
+            // canonical one instead. The lock check above already guarantees that
+            // if counter.boundDeviceId is set, it equals one of candidateIds — so
+            // reaching here with a mismatch against body.deviceId only ever means
+            // "unbound" or "bound via legacy id", both of which should (re)bind.
+            if (body.deviceId && counter.boundDeviceId !== body.deviceId) {
                 await tx.posCounter.update({
                     where: { id: counter.id },
                     data:  { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date() },
