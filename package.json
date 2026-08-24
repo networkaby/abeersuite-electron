@@ -11,6 +11,7 @@
     "electron:build": "cross-env COUNTER_BUILD=1 pnpm build && tsx scripts/prepare-standalone.ts && tsx scripts/generate-counter-env.ts && pnpm electron:compile && tsx scripts/prepare-electron-deps.ts",
     "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
     "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",
+    "electron:release": "pnpm electron:pack && tsx scripts/release-electron.ts",
     "verify:package": "tsx scripts/verify-package.ts",
     "icon:build": "electron scripts/make-icon.js",
     "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",

@@ -80,9 +80,13 @@ These fix the direction that was previously unstated.
    `counter.env` (`scripts/counterEnv.ts`) rather than the repo being hard-coded in
    `electron/main.ts` — a leaked installer therefore exposes at most the release artifacts
    every counter already has on disk, never the private codebase.
-   The publish-side token (write access, for `electron-builder --publish`) is a separate,
-   more powerful credential that stays on the build machine only and must never be added to
-   `COUNTER_ENV_COPIED`.
+   The publish-side token (`GH_TOKEN`, write access) is a separate, more powerful credential
+   that stays in the build machine's own `.env` only and must never be added to
+   `COUNTER_ENV_COPIED`. `pnpm electron:release` runs it: `electron:pack` (build,
+   `electron-builder --dir`, `verify:package`) must pass first, and only then does
+   [`scripts/release-electron.ts`](../scripts/release-electron.ts) pack and publish that
+   *exact* verified `dist-app/win-unpacked` tree via `--prepackaged` — never a fresh rebuild,
+   so there is no window where an unverified build could reach the public release.
 
 ### Counter identity — corrected
 
