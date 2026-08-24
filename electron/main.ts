@@ -5,15 +5,24 @@ import * as crypto from "crypto";
 import * as dotenv from "dotenv";
 
 // ── Load environment variables ──────────────────────────────────────────────
-// In a packaged Electron app `.env` is not loaded automatically. Each counter PC
-// gets its own hand-placed file at %APPDATA%/abeersuite-electron/.env — see
-// `.env.counter.example` for the required keys. (The folder name comes from
-// app.getName(), which reads package.json "name", not the "AbeerSuite" productName.)
+// In a packaged Electron app `.env` is not loaded automatically. Two sources feed it,
+// in precedence order:
 //
-// There is deliberately NO bundled fallback: the installer ships no `.env` at all,
-// because the build-machine copy carries production Supabase and payment-gateway
-// credentials. If the file is missing we stop with a dialog naming the exact path,
-// rather than booting against whatever environment happens to be present.
+//   1. %APPDATA%/abeersuite-electron/.env — optional, per-machine override
+//   2. resources/counter.env              — baked into the installer at build time
+//
+// (2) is what makes installation unattended. This variant is internal only, so the
+// company's own credentials travel inside the installer rather than being copied onto
+// each counter by hand. `scripts/counterEnv.ts` fixes exactly which keys go in and
+// `scripts/verify-package.ts` fails the build if anything else does — the 0.1.0 build
+// shipped the build machine's whole ~60-key `.env`, payment salts included, by accident.
+//
+// dotenv never overwrites a variable that is already set, so loading (1) first is what
+// makes it win: a single counter can be pointed at a test database without a rebuild.
+//
+// AUTH_SECRET is in neither file — it is generated per machine on first run, see
+// `ensureAuthSecret`. (The `%APPDATA%` folder is named from app.getName(), which reads
+// package.json "name", not the "AbeerSuite" productName.)
 //
 // The forked Next server inherits this process's env (see serverManager.ts), so
 // loading it once here is enough to configure the whole app.
@@ -23,22 +32,24 @@ import * as dotenv from "dotenv";
  *
  * Inner arrays are alternatives — any one of them satisfies the entry.
  *
- * Why this exists: a half-filled `.env` used to give the worst failure of all. The
- * app started, the login page rendered, and every sign-in was refused with
- * "Invalid email or password" — because the staff domain allowlist fails closed
- * when `INTERNAL_STAFF_EMAIL_DOMAINS` is unset (see
- * src/shared/lib/auth/staffEmailAllowlist.ts), and it is checked before the
- * password is. Nothing in the UI or the server log said which key was missing.
- * Naming it at startup turns a day of guessing into one line of config.
+ * Why this exists: a half-filled config used to give the worst failure of all. The app
+ * started, the login page rendered, and every sign-in was refused with "Invalid email or
+ * password" — because the staff domain allowlist fails closed when
+ * `INTERNAL_STAFF_EMAIL_DOMAINS` is unset (see
+ * src/shared/lib/auth/staffEmailAllowlist.ts), and it is checked before the password is.
+ * Nothing in the UI or the server log said which key was missing.
+ *
+ * `generate-counter-env.ts` already refuses to build without these, so on a normal
+ * installer this check never fires. It stays because it covers what that one cannot: a
+ * hand-written per-machine override that shadows a good baked value with a blank or
+ * placeholder one.
+ *
+ * AUTH_SECRET is absent from this list on purpose — `ensureAuthSecret` guarantees it.
  */
 const REQUIRED_ENV: Array<{ keys: string[]; why: string }> = [
     {
         keys: ["DATABASE_URL"],
         why: "no database connection — every page fails",
-    },
-    {
-        keys: ["AUTH_SECRET", "NEXTAUTH_SECRET"],
-        why: "sessions cannot be signed, so no one can stay logged in",
     },
     {
         keys: ["INTERNAL_STAFF_EMAIL_DOMAINS", "COMPANY_DOMAIN"],
@@ -69,31 +80,115 @@ function findMissingEnv(): string[] {
     return missing;
 }
 
-if (app.isPackaged) {
+/**
+ * Name of the baked file, written by `scripts/generate-counter-env.ts`.
+ *
+ * Repeated rather than imported: this file is compiled by `electron/tsconfig.json`, whose
+ * output path assumes `electron/` is the only root. Importing from `scripts/` would emit
+ * `dist-electron/electron/main.js` and break the `main` entry in package.json. Change it in
+ * `scripts/counterEnv.ts`, here, and in `build.extraResources` — which already spells it
+ * out the same way.
+ */
+const COUNTER_ENV_FILE = "counter.env";
+
+/**
+ * Loads the baked configuration, letting a per-machine file override it.
+ *
+ * Order is the mechanism, not a detail: dotenv skips any variable already present, so the
+ * override has to be read first to win.
+ */
+function loadCounterEnv(): void {
     const userEnv = path.join(app.getPath("userData"), ".env");
     if (fs.existsSync(userEnv)) {
         dotenv.config({ path: userEnv });
+        console.log(`[main] Applied per-machine override: ${userEnv}`);
+    }
 
-        const missing = findMissingEnv();
-        if (missing.length > 0) {
-            dialog.showErrorBox(
-                "AbeerSuite — configuration incomplete",
-                `AbeerSuite loaded its configuration file:\n\n${userEnv}\n\n` +
-                "but these settings are missing or still hold an example value:\n\n" +
-                missing.map((line) => `  • ${line}`).join("\n") +
-                "\n\nAdd them to that file (see '.env.counter.example' for the format) " +
-                "and start AbeerSuite again.\n\n" +
-                "Starting without them would give a working-looking app that no one can log into."
-            );
-            app.exit(1);
+    const bakedEnv = path.join(process.resourcesPath, COUNTER_ENV_FILE);
+    if (fs.existsSync(bakedEnv)) {
+        dotenv.config({ path: bakedEnv });
+        return;
+    }
+
+    // Only reachable if the installer was built without scripts/generate-counter-env.ts
+    // having run, or with the extraResources entry for it removed. `verify-package.ts`
+    // fails the build for exactly this, so it should never ship — but if it does, the
+    // symptom otherwise arrives as an unexplained "every page fails" on the shop floor.
+    dialog.showErrorBox(
+        "AbeerSuite — installation incomplete",
+        `AbeerSuite could not find its bundled configuration:\n\n${bakedEnv}\n\n` +
+        "This installer was built incorrectly — the file is generated during packaging " +
+        "and should always be present.\n\n" +
+        "Report this to whoever built the installer. As a stop-gap, a configuration file " +
+        `placed at\n\n${userEnv}\n\nis loaded instead (see '.env.counter.example').`
+    );
+    app.exit(1);
+}
+
+/**
+ * Session signing key, generated once per machine.
+ *
+ * Neither baked into the installer nor asked of an operator. Every counter runs its own
+ * Next server and the window loads http://127.0.0.1:3000, so session cookies never cross
+ * machines and there is nothing for counters to share. One random secret per PC is
+ * therefore strictly better than a shipped constant at no operational cost: a secret read
+ * off one counter forges nothing on another.
+ *
+ * Stored beside counter-installation-id.json, which survives upgrades, so an update does
+ * not sign everybody out. Both names are set because next-auth v5 reads AUTH_SECRET while
+ * older call sites still look for NEXTAUTH_SECRET.
+ */
+function ensureAuthSecret(): void {
+    if (process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim()) return;
+
+    const file = path.join(app.getPath("userData"), "auth-secret.json");
+    let secret = "";
+    try {
+        if (fs.existsSync(file)) {
+            const parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as { authSecret?: unknown };
+            if (typeof parsed.authSecret === "string" && parsed.authSecret.length >= 32) {
+                secret = parsed.authSecret;
+            }
         }
-    } else {
+    } catch {
+        // Corrupt or unreadable — replaced below rather than failing the launch.
+    }
+
+    if (!secret) {
+        secret = crypto.randomBytes(32).toString("base64");
+        try {
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            fs.writeFileSync(file, JSON.stringify({ authSecret: secret }, null, 2), "utf-8");
+            console.log(`[main] Generated this machine's session signing key: ${file}`);
+        } catch (err) {
+            // Not fatal — the app runs. But a fresh secret on every launch signs everyone
+            // out at each restart, which looks like a login bug, so name the real cause.
+            console.error(
+                `[main] Could not save ${file} — staff will be signed out on every restart:`,
+                err
+            );
+        }
+    }
+
+    process.env.AUTH_SECRET = secret;
+    process.env.NEXTAUTH_SECRET = secret;
+}
+
+if (app.isPackaged) {
+    loadCounterEnv();
+    ensureAuthSecret();
+
+    const missing = findMissingEnv();
+    if (missing.length > 0) {
+        const userEnv = path.join(app.getPath("userData"), ".env");
         dialog.showErrorBox(
-            "AbeerSuite — configuration file missing",
-            `AbeerSuite could not find its configuration file:\n\n${userEnv}\n\n` +
-            "Ask your administrator to copy '.env.counter.example' to that path and fill " +
-            "in this counter's credentials, then start AbeerSuite again.\n\n" +
-            "The application cannot run without it."
+            "AbeerSuite — configuration incomplete",
+            "These settings are missing or still hold an example value:\n\n" +
+            missing.map((line) => `  • ${line}`).join("\n") +
+            "\n\nAbeerSuite ships its own configuration, so this normally means the file\n\n" +
+            `${userEnv}\n\nis overriding it with a blank or placeholder value. Correct or ` +
+            "delete that file and start AbeerSuite again.\n\n" +
+            "Starting without them would give a working-looking app that no one can log into."
         );
         app.exit(1);
     }

@@ -26,16 +26,24 @@
  *
  *   B. The 0.1.0 package shipped `resources/standalone/.env` — ~60 plaintext keys
  *      including production Supabase, Razorpay, Cashfree, Dropbox and Firebase
- *      credentials — outside the asar where any customer could open it. Counters read
- *      their config from %APPDATA%/abeersuite-electron/.env instead (see
- *      `.env.counter.example`).
+ *      credentials — outside the asar where anyone could open it.
  *
- * The secret scan has two halves, because either alone can be fooled:
- *   1. No `.env*` file anywhere in the package, including inside `app.asar`.
- *   2. No value from the developer's local `.env` appears anywhere in the app's own
+ *      A counter build now ships credentials ON PURPOSE, because this variant is internal
+ *      only and has to install unattended (see `counterEnv.ts`). So the rule is no longer
+ *      "no credentials": it is "exactly the reviewed list, in exactly one file". That is a
+ *      stronger gate than the old one, not a weaker one — it fails on the mistake that
+ *      actually happened, which was a *wider* set of keys riding along unnoticed.
+ *
+ * The secret scan has three parts, because any one alone can be fooled:
+ *   1. No `.env*` file anywhere in the package, including inside `app.asar`. (Note
+ *      `counter.env` is deliberately not named `.env`, so it does not collide with this.)
+ *   2. `resources/counter.env` exists, holds every key a counter cannot start without, and
+ *      holds NOTHING outside the allowlist. This is the half that catches a payment salt
+ *      or a Sentry token creeping back in.
+ *   3. No value from the developer's local `.env` appears anywhere else in the app's own
  *      build output. Reading the real values (rather than hardcoding key names) catches
- *      leaks through paths nobody thought to list — an inlined constant, a stray copy,
- *      a config file baked at build time.
+ *      leaks through paths nobody thought to list — an inlined constant, a stray copy, a
+ *      config file baked at build time.
  *
  * Only KEY names are ever printed. Values are never written to the log.
  *
@@ -44,6 +52,12 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import {
+    COUNTER_ENV_ALLOWED,
+    COUNTER_ENV_FILE,
+    COUNTER_ENV_REQUIRED,
+    parseEnvFile,
+} from "./counterEnv";
 
 /** Values shorter than this are too generic to search for without false hits. */
 const MIN_SECRET_LENGTH = 12;
@@ -245,25 +259,55 @@ function listAsarPaths(asarPath: string): string[] {
     }
 }
 
-/** Parses `.env` into key/value pairs. Deliberately simple — it only feeds the scan. */
-function parseEnv(file: string): Map<string, string> {
-    const out = new Map<string, string>();
-    for (const rawLine of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-        const line = rawLine.trim();
-        if (!line || line.startsWith("#")) continue;
-        const eq = line.indexOf("=");
-        if (eq <= 0) continue;
-        const key = line.slice(0, eq).trim();
-        let value = line.slice(eq + 1).trim();
-        if (
-            (value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))
-        ) {
-            value = value.slice(1, -1);
-        }
-        if (value) out.set(key, value);
+/**
+ * Check B2: the baked configuration is present, sufficient, and no wider than agreed.
+ *
+ * Two failure directions, and they cost differently:
+ *   - too narrow → the installer is unattended, so there is no later step where an
+ *     operator supplies the missing key. It reaches a counter and fails there.
+ *   - too wide → a credential no counter uses is now installed on every shop PC and
+ *     cannot be un-shipped. This is what happened in 0.1.0.
+ *
+ * An allowlist is used rather than a denylist of known-bad key names because the failure
+ * to catch was a key nobody had thought about. Adding a service to `.env` must not silently
+ * add it to every counter; it has to be a deliberate edit to `counterEnv.ts`.
+ *
+ * Only KEY names are printed.
+ */
+function checkCounterEnv(packageDir: string, failures: string[]): void {
+    const file = path.join(packageDir, "resources", COUNTER_ENV_FILE);
+    if (!fs.existsSync(file)) {
+        failures.push(
+            `resources/${COUNTER_ENV_FILE} is missing — the app has no configuration, so every ` +
+            "page fails and no one can log in. Check that generate-counter-env.ts ran and that " +
+            "package.json still has its extraResources entry"
+        );
+        return;
     }
-    return out;
+
+    const shipped = parseEnvFile(file);
+
+    const missing = COUNTER_ENV_REQUIRED.filter((key) => !shipped.has(key));
+    if (missing.length > 0) {
+        failures.push(
+            `resources/${COUNTER_ENV_FILE} is missing required key(s): ${missing.join(", ")} — ` +
+            "installation is unattended, so nothing supplies them later"
+        );
+    }
+
+    const extra = [...shipped.keys()].filter((key) => !COUNTER_ENV_ALLOWED.has(key));
+    if (extra.length > 0) {
+        failures.push(
+            `resources/${COUNTER_ENV_FILE} ships key(s) outside the allowlist: ${extra.join(", ")} — ` +
+            "each one installs a credential on every counter permanently. Either add it to " +
+            "COUNTER_ENV_COPIED in scripts/counterEnv.ts on purpose, or find what put it there"
+        );
+    }
+
+    console.log(
+        `[verify-package] resources/${COUNTER_ENV_FILE} ships ${shipped.size} key(s): ` +
+        `${[...shipped.keys()].join(", ")}`
+    );
 }
 
 /** Check A: the packaged standalone server has everything it needs to boot. */
@@ -423,13 +467,16 @@ function main(): void {
         }
     }
 
-    // ── Check B2: no local .env value appears in the app's own build output ──
+    // ── Check B2: the baked configuration is exactly the agreed set ──────────
+    checkCounterEnv(packageDir, failures);
+
+    // ── Check B3: no local .env value appears elsewhere in the build output ───
     const localEnv = path.join(rootDir, ".env");
     if (!fs.existsSync(localEnv)) {
         console.warn("[verify-package] No local .env to compare against — value scan skipped.");
     } else {
         const secrets = new Map<string, string>();
-        for (const [key, value] of parseEnv(localEnv)) {
+        for (const [key, value] of parseEnvFile(localEnv)) {
             if (key.startsWith(PUBLIC_PREFIX)) continue;
             if (NON_SECRET_KEYS.has(key)) continue;
             if (value.length < MIN_SECRET_LENGTH) continue;
@@ -440,8 +487,15 @@ function main(): void {
         // Scoped to the app's own output. Third-party node_modules inside the asar are
         // not scanned: they cannot contain this project's credentials, and skipping
         // ~646 MB keeps the gate fast enough to run on every build.
+        //
+        // `resources/counter.env` is excluded because its whole purpose is to hold these
+        // values — check B2 validates it by key instead. Excluding the one file rather than
+        // relaxing the rule keeps this check catching the same values leaking anywhere else,
+        // which is how the 0.1.0 leak would have been found.
+        const bakedEnvRel = path.join("resources", COUNTER_ENV_FILE);
         const scanTargets = allFiles.filter((file) => {
             const rel = path.relative(packageDir, file);
+            if (rel === bakedEnvRel) return false;
             if (rel.split(path.sep).includes("node_modules")) return false;
             if (!SCANNABLE_EXTENSIONS.has(path.extname(file))) return false;
             return true;
@@ -470,15 +524,16 @@ function main(): void {
         console.error("\n[verify-package] FATAL: this package must not be distributed.\n");
         for (const failure of failures) console.error(`  - ${failure}`);
         console.error(
-            "\n  Counters read their config from %APPDATA%/abeersuite-electron/.env — see .env.counter.example.\n" +
+            `\n  A counter's configuration lives in resources/${COUNTER_ENV_FILE}, written at build\n` +
+            "  time from the allowlist in scripts/counterEnv.ts. Nothing else may carry credentials.\n" +
             "  Fix the build, then package again.\n"
         );
         process.exit(1);
     }
 
     console.log(
-        "[verify-package] PASS — standalone server is complete and self-contained, " +
-        "and no credentials are bundled."
+        "[verify-package] PASS — standalone server is complete and self-contained, and the only " +
+        `bundled credentials are the allowlisted ones in resources/${COUNTER_ENV_FILE}.`
     );
 }
 

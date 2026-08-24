@@ -53,6 +53,13 @@ yarn-error.log*
 experiment.env.example
 demo.env.example
 
+# Generated at build time by scripts/generate-counter-env.ts — the live credentials
+# baked into a counter installer. Listed explicitly because `.env*` above does NOT
+# match it: that pattern needs the basename to start with `.env`, and this file is
+# named `counter.env` precisely so it does not collide with the packaging gate's
+# "no .env anywhere in the package" check.
+resources/counter.env
+
 # vercel
 .vercel
 
