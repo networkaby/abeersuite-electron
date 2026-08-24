@@ -233,8 +233,13 @@ Summary of phase order:
   installed PostgreSQL stays in live mode, exactly as today.
 - **Phase 5** — a real sync engine: durable outbox table, an actual `syncTableByNumber()`
   implementation per strategy, worker startup, schema-drift precondition.
-- **Phase 6** — make Dropbox/GitHub backup dormant per release by dropping its keys from the
-  baked env allowlist.
+- **Phase 6 — done.** [`scripts/counterEnv.ts`](../scripts/counterEnv.ts)'s `COUNTER_ENV_COPIED`
+  no longer includes the 4 `DROPBOX_*` / 3 `GITHUB_*` keys (commented out, not deleted, so
+  re-enabling for a specific release is a one-line uncomment). `resources/counter.env` now
+  ships **8 keys**, down from 15. Zero other code change: `backupAvailability()` already
+  reported `canBackup`/`canRestore` from key presence alone, and every backup/restore route
+  already rendered the counter-only 503 shape — verified via `verify-package.ts`, which
+  derives its allowlist from the same source and passed against the already-packaged tree.
 
 **UX guarantee applied throughout:** the web app stays the default path, and every desktop
 capability degrades to today's behaviour when it is absent or fails.

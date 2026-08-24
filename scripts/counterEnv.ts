@@ -63,19 +63,21 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     "APP_MODE",
     "READ_MODE",
 
-    // ── Backup and restore ───────────────────────────────────────────────────
-    // The dump itself is made and applied by a GitHub Actions runner, which is the only
-    // place pg_dump/pg_restore exist; Dropbox is the file store. So the counter needs
-    // both halves: GitHub to trigger the run, Dropbox to list what can be restored.
-    // The Dropbox app is App-folder scoped and the PAT is limited to the one repo, so
-    // neither credential reaches anything beyond the backup folder and that repo.
-    "DROPBOX_APP_KEY",
-    "DROPBOX_APP_SECRET",
-    "DROPBOX_REFRESH_TOKEN",
-    "DROPBOX_FOLDER",
-    "GITHUB_DISPATCH_TOKEN",
-    "GITHUB_REPO",
-    "GITHUB_WORKFLOW_REF",
+    // ── Backup and restore: dormant in this build, on purpose ─────────────────
+    // Owner decision (2026-08-24): keep Dropbox/GitHub-triggered backup and restore
+    // dormant for now. `backupAvailability()` (src/shared/lib/backup/availability.ts)
+    // already reports `canBackup`/`canRestore` from key PRESENCE alone, and every route
+    // already renders the counter-only 503 shape — so simply not copying these seven
+    // keys turns the feature off everywhere with zero code change. To re-enable for a
+    // specific release, uncomment the block below; nothing else needs to change.
+    //
+    // "DROPBOX_APP_KEY",
+    // "DROPBOX_APP_SECRET",
+    // "DROPBOX_REFRESH_TOKEN",
+    // "DROPBOX_FOLDER",
+    // "GITHUB_DISPATCH_TOKEN",
+    // "GITHUB_REPO",
+    // "GITHUB_WORKFLOW_REF",
 ];
 
 /**
