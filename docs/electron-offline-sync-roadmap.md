@@ -194,8 +194,22 @@ Summary of phase order:
   `legacyDeviceId` alongside `deviceId`: a counter bound under the old bridge id is
   recognised and silently rebound to the canonical Electron id rather than refused.
   `epbxExtension` and the voucher prefix are untouched. Printing and QR still use `:9191`.
-- **Phase 3** — installer size and speed: stop shipping `node_modules` twice, prune dev packages
-  from the standalone tree, max compression, trim locales, add the `nsis-web` target.
+- **Phase 3 — mostly done.** `resources/` measured **467.9 MB, verified**, down from 1,436.0 MB
+  (67% smaller) — `scripts/lib/hoistNodeModules.ts` (factored out of `prepare-standalone.ts` for
+  reuse) added a `denylist` that prunes `prisma`/`typescript`/`playwright`/`playwright-core`/
+  `fast-check`/`@babel/*` (build-only tools reachable through the pnpm store walk but never
+  `require()`d at runtime) and strips `.d.ts`/`.map` from everything else. The real fix for the
+  duplication: `dist-electron/main.js` has exactly two runtime `require`s outside Node builtins
+  (`dotenv`, `electron-updater`) — `scripts/prepare-electron-deps.ts` hoists just those two (+ 15
+  transitive deps) into `dist-electron/node_modules`, letting `package.json`'s `files` exclude the
+  top-level `node_modules` entirely instead of electron-builder bundling the *whole* project's
+  "dependencies" (which mixes the Next app's deps with the Electron shell's) a second time.
+  `compression: "maximum"` and `electronLanguages: ["en-US"]` added; `verify-package.ts` gained a
+  size-ceiling check (800 MB) so this cannot regress silently. Verified live: rebuilt, launched the
+  packaged app on the baked `counter.env` alone (no `%APPDATA%` override), confirmed boot,
+  `/staff/login` 200, and clean shutdown with no orphan process.
+  **Not done:** the `nsis-web` target needs a hosting decision for `appPackageUrl` (GitHub Releases
+  is the candidate) — still open, see below.
 - **Phase 4** — local PostgreSQL: real detection, database creation, programmatic schema apply,
   lazy background readiness, and a UI that names which server was chosen.
 - **Phase 5** — a real sync engine: durable outbox table, an actual `syncTableByNumber()`

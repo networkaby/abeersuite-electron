@@ -401,6 +401,42 @@ function checkDependencyClosure(packageDir: string, failures: string[]): void {
     console.log(`[verify-package] Checked the dependency closure of ${checked} packages.`);
 }
 
+/**
+ * 2026-08-24 size audit measured `resources/` at 1,436.0 MB, of which 646.4 MB was
+ * `app.asar.unpacked/node_modules` — the whole project's node_modules, duplicated,
+ * because electron-builder's default packaging computes the closure of ALL of
+ * package.json's "dependencies" (which mixes the Next app's deps with the Electron
+ * shell's two real runtime deps) rather than what `dist-electron/main.js` actually
+ * requires. That fix plus pruning build-only tools from the standalone tree should
+ * land comfortably under this ceiling; a regression back toward 1.4 GB means the
+ * duplication crept back in.
+ */
+const RESOURCES_SIZE_CEILING_MB = 800;
+
+function dirSizeSync(dir: string): number {
+    let total = 0;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isSymbolicLink()) continue; // counted by the symlink check, not by size
+        if (entry.isDirectory()) total += dirSizeSync(full);
+        else total += fs.statSync(full).size;
+    }
+    return total;
+}
+
+function checkResourcesSize(packageDir: string, failures: string[]): void {
+    const resourcesDir = path.join(packageDir, "resources");
+    if (!fs.existsSync(resourcesDir)) return;
+    const sizeMb = dirSizeSync(resourcesDir) / (1024 * 1024);
+    console.log(`[verify-package] resources/ is ${sizeMb.toFixed(1)} MB.`);
+    if (sizeMb > RESOURCES_SIZE_CEILING_MB) {
+        failures.push(
+            `resources/ is ${sizeMb.toFixed(1)} MB, over the ${RESOURCES_SIZE_CEILING_MB} MB ceiling — ` +
+            "check for a duplicated node_modules payload (see the 2026-08-24 size audit in PROJECT_BRAIN.md)"
+        );
+    }
+}
+
 function main(): void {
     const rootDir = process.cwd();
     const packageDir = path.resolve(rootDir, process.argv[2] || path.join("dist-app", "win-unpacked"));
@@ -442,6 +478,9 @@ function main(): void {
 
     // ── Check A3: the externalised packages' dependencies resolve ────────────
     checkDependencyClosure(packageDir, failures);
+
+    // ── Check A4: resources/ has not regressed back toward its old duplicated size ──
+    checkResourcesSize(packageDir, failures);
 
     // ── Check B1: no .env files on disk ──────────────────────────────────────
     for (const file of allFiles) {

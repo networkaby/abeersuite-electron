@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { hoistNodeModules, findSymlinks, listPackages, containingNodeModules, isDirectory } from "./lib/hoistNodeModules";
 
 /** Extensions to skip when copying public/ — large binaries that bloat the app. */
 const SKIP_EXTENSIONS = new Set([".exe", ".zip"]);
@@ -31,71 +32,28 @@ const SKIP_EXTENSIONS = new Set([".exe", ".zip"]);
  * `dereferenceServerExternals`, which supplies the store folders behind Next's
  * server-externalised packages so their dependencies land here too.
  */
+/**
+ * Build-only tools that end up reachable through the pnpm store walk despite never
+ * being `require()`d by `server.js` at runtime — measured at ~130 MB combined in the
+ * 2026-08-24 size audit (`prisma` CLI 40 MB, `typescript` 22.5 MB, `playwright`/
+ * `playwright-core` 16.6 MB, `@babel/*` and `fast-check` the rest). Keeping this list
+ * small and explicit (rather than "prune everything not in package.json dependencies")
+ * means a genuine runtime need only ever has to be un-denied, never silently dropped.
+ */
+const STANDALONE_DENYLIST_NAMES = new Set(["prisma", "typescript", "playwright", "playwright-core", "fast-check"]);
+const isStandaloneDenied = (name: string) => STANDALONE_DENYLIST_NAMES.has(name) || name.startsWith("@babel/");
+
 function hoistStandaloneDeps(standaloneDir: string, extraSeeds: string[] = []): void {
     const nodeModulesDir = path.join(standaloneDir, "node_modules");
     if (!fs.existsSync(nodeModulesDir)) {
         console.warn("[prepare-standalone] No standalone/node_modules to hoist — skipping.");
         return;
     }
-
-    // Build alongside the original: the real packages we are reading live inside the
-    // very folder we are replacing, so we cannot write into it as we go.
-    const outDir = path.join(standaloneDir, "node_modules.hoisted");
-    fs.rmSync(outDir, { recursive: true, force: true });
-
-    /** Resolved realpaths already walked — the cycle guard. */
-    const visited = new Set<string>();
-    /** Package name -> realpath it was copied from, for conflict reporting. */
-    const placed = new Map<string, string>();
-    /** `node_modules` directories still to scan. */
-    const queue: string[] = [nodeModulesDir, ...extraSeeds];
-
-    while (queue.length > 0) {
-        const dir = queue.shift()!;
-        for (const pkg of listPackages(dir)) {
-            let real: string;
-            try {
-                real = fs.realpathSync(pkg.path);
-            } catch {
-                // Dangling link into a store that no longer exists — nothing to copy.
-                continue;
-            }
-            if (visited.has(real)) continue;
-            visited.add(real);
-
-            const existing = placed.get(pkg.name);
-            if (existing && existing !== real) {
-                // Two versions of one package. A traced production set rarely has these;
-                // log rather than fail so the build still produces something testable.
-                console.warn(
-                    `[prepare-standalone] Version conflict for "${pkg.name}" — keeping ${existing}, ignoring ${real}`
-                );
-            } else if (!existing) {
-                placed.set(pkg.name, real);
-                const dest = path.join(outDir, pkg.name);
-                fs.mkdirSync(path.dirname(dest), { recursive: true });
-                fs.cpSync(real, dest, {
-                    recursive: true,
-                    dereference: true,
-                    // Nested dep trees are hoisted separately via the queue below.
-                    filter: (src) => path.basename(src) !== "node_modules",
-                });
-            }
-
-            const nested = path.join(real, "node_modules");
-            if (isDirectory(nested)) queue.push(nested);
-
-            // pnpm puts a package's dependencies as SIBLINGS of the real package rather
-            // than inside it:  .pnpm/pg@8.20.0/node_modules/{pg, pg-pool -> ..., pgpass -> ...}
-            // so the dep list of `real` is the node_modules folder that CONTAINS it.
-            const sibling = containingNodeModules(real);
-            if (sibling) queue.push(sibling);
-        }
-    }
-
-    fs.rmSync(nodeModulesDir, { recursive: true, force: true });
-    fs.renameSync(outDir, nodeModulesDir);
-    console.log(`[prepare-standalone] Hoisted ${placed.size} packages into standalone/node_modules.`);
+    const count = hoistNodeModules(nodeModulesDir, [nodeModulesDir, ...extraSeeds], {
+        denylist: isStandaloneDenied,
+        stripSuffixes: [".d.ts", ".map"],
+    });
+    console.log(`[prepare-standalone] Hoisted ${count} packages into standalone/node_modules.`);
 }
 
 /**
@@ -168,84 +126,6 @@ function dereferenceServerExternals(standaloneDir: string): string[] {
         );
     }
     return seeds;
-}
-
-/** Every symlink under `dir`, recursively. Returns paths relative to `dir`. */
-function findSymlinks(dir: string, base = dir): string[] {
-    const out: string[] = [];
-    let entries: fs.Dirent[];
-    try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-        return out;
-    }
-    for (const entry of entries) {
-        const full = path.join(dir, entry.name);
-        if (entry.isSymbolicLink()) {
-            out.push(path.relative(base, full));
-        } else if (entry.isDirectory()) {
-            out.push(...findSymlinks(full, base));
-        }
-    }
-    return out;
-}
-
-/**
- * Lists the package entries directly inside a `node_modules` directory, expanding
- * `@scope` folders one level so the returned name is the real package name.
- *
- * Skips `.pnpm` and `.bin`: `.pnpm` entry names are store keys
- * (`next@16.2.6_<hash>`), not package names, and everything inside it is reachable by
- * following the symlinks we already walk.
- */
-function listPackages(dir: string): Array<{ name: string; path: string }> {
-    const out: Array<{ name: string; path: string }> = [];
-    let entries: fs.Dirent[];
-    try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-        return out;
-    }
-    for (const entry of entries) {
-        if (entry.name.startsWith(".")) continue;
-        if (entry.name.startsWith("@")) {
-            const scopeDir = path.join(dir, entry.name);
-            for (const scoped of fs.readdirSync(scopeDir, { withFileTypes: true })) {
-                if (scoped.name.startsWith(".")) continue;
-                out.push({ name: `${entry.name}/${scoped.name}`, path: path.join(scopeDir, scoped.name) });
-            }
-            continue;
-        }
-        out.push({ name: entry.name, path: path.join(dir, entry.name) });
-    }
-    return out;
-}
-
-/**
- * Returns the `node_modules` directory that CONTAINS the given real package path,
- * or null if the path does not sit inside one.
- *
- * In the pnpm store a package's dependency list is its own containing folder:
- *
- *   .pnpm/pg@8.20.0/node_modules/pg          <- the real package
- *   .pnpm/pg@8.20.0/node_modules/pg-pool     <- symlink, a dependency OF pg
- *
- * so scanning `<real>/node_modules` alone finds nothing and the walk stops at depth 1.
- */
-function containingNodeModules(real: string): string | null {
-    let dir = path.dirname(real);
-    // For `@scope/name` the immediate parent is the scope folder, not node_modules.
-    if (path.basename(dir).startsWith("@")) dir = path.dirname(dir);
-    return path.basename(dir) === "node_modules" ? dir : null;
-}
-
-/** True when the path exists and is a directory, following symlinks. */
-function isDirectory(p: string): boolean {
-    try {
-        return fs.statSync(p).isDirectory();
-    } catch {
-        return false;
-    }
 }
 
 function copyFolderSync(from: string, to: string): void {

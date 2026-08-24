@@ -8,7 +8,7 @@
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev",
     "electron:dev": "concurrently -k -n \"NEXT,ELECTRON\" -c \"yellow,cyan\" \"cross-env PORT=3000 NODE_OPTIONS=--max-http-header-size=65536 next dev\" \"wait-on http-get://127.0.0.1:3000/staff/login && tsc -p electron/tsconfig.json && electron .\"",
     "electron:compile": "tsc -p electron/tsconfig.json",
-    "electron:build": "cross-env COUNTER_BUILD=1 pnpm build && tsx scripts/prepare-standalone.ts && tsx scripts/generate-counter-env.ts && pnpm electron:compile",
+    "electron:build": "cross-env COUNTER_BUILD=1 pnpm build && tsx scripts/prepare-standalone.ts && tsx scripts/generate-counter-env.ts && pnpm electron:compile && tsx scripts/prepare-electron-deps.ts",
     "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
     "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",
     "verify:package": "tsx scripts/verify-package.ts",
@@ -122,14 +122,16 @@
     "appId": "com.abeersuite.desktop",
     "productName": "AbeerSuite",
     "asar": true,
-    "asarUnpack": [
-      "node_modules/**/*"
-    ],
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
     "directories": {
       "output": "dist-app"
     },
     "files": [
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "!node_modules/**/*",
+      "!**/node_modules/**/*",
+      "dist-electron/node_modules/**/*"
     ],
     "extraResources": [
       {
@@ -182,7 +184,8 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AbeerSuite"
+      "shortcutName": "AbeerSuite",
+      "differentialPackage": true
     }
   }
 }
