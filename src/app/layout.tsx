@@ -3,7 +3,7 @@ import { DM_Sans, Space_Mono, Roboto_Condensed } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { CANONICAL_SITE_URL, IS_OFFICE } from "@/shared/lib/appMode";
+import { CANONICAL_SITE_URL, IS_FULL } from "@/shared/lib/appMode";
 
 const fontSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const fontMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono" });
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   // "don't crawl", and a page saying "index me" in the same breath contradicts
   // it. Belt and braces with the X-Robots-Tag header in next.config.ts, which
   // also covers the sign-in redirects that carry no HTML at all.
-  robots: IS_OFFICE ? { index: false, follow: false } : { index: true, follow: true },
+  robots: IS_FULL ? { index: false, follow: false } : { index: true, follow: true },
   openGraph: {
     type: "website",
     siteName: COMPANY_DETAILS.brandName,

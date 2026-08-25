@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { IS_OFFICE } from "@/shared/lib/appMode";
+import { IS_FULL } from "@/shared/lib/appMode";
 
 /**
  * One robots.txt, two answers — which one depends on APP_MODE.
@@ -34,7 +34,7 @@ const PRIVATE_PATHS = [
 ];
 
 export default function robots(): MetadataRoute.Robots {
-    if (IS_OFFICE) {
+    if (IS_FULL) {
         return {
             rules: { userAgent: "*", disallow: "/" },
         };

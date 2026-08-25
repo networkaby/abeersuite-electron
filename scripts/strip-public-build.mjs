@@ -37,10 +37,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: join(ROOT, ".env.local") });
 dotenv.config({ path: join(ROOT, ".env") });
 
-const APP_MODE = process.env.APP_MODE === "public" ? "public" : "office";
+const APP_MODE = process.env.APP_MODE === "public" ? "public" : "full";
 
 if (APP_MODE !== "public") {
-    console.log("[strip-public-build] APP_MODE is not \"public\" — office build, nothing stripped.");
+    console.log("[strip-public-build] APP_MODE is not \"public\" — full (office) build, nothing stripped.");
     process.exit(0);
 }
 

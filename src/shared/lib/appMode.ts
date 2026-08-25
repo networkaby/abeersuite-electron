@@ -4,19 +4,19 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
  * Which half of the app this deployment is serving.
  *
  * One branch, two Vercel projects:
- *   office = internal build (staff). Everything. Hidden from search engines.
+ *   full   = internal build (staff). Everything. Hidden from search engines.
  *   public = external build (shop + customer portal). Indexed.
  *
  * This is the only module that reads APP_MODE. Everything else imports from
  * here, so the mode cannot be interpreted two different ways in two places.
  *
  * Local dev keeps the full app, so anything other than an explicit "public"
- * means office — matching the note in .env.local.
+ * means full — matching the note in .env.
  */
-export const APP_MODE: "office" | "public" =
-    process.env.APP_MODE === "public" ? "public" : "office";
+export const APP_MODE: "full" | "public" =
+    process.env.APP_MODE === "public" ? "public" : "full";
 
-export const IS_OFFICE = APP_MODE === "office";
+export const IS_FULL = APP_MODE === "full";
 export const IS_PUBLIC = APP_MODE === "public";
 
 /**
@@ -39,6 +39,6 @@ export const IS_PUBLIC = APP_MODE === "public";
 export const CANONICAL_SITE_URL: string =
     process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SITE_URL
         ? process.env.NEXT_PUBLIC_SITE_URL
-        : IS_OFFICE
+        : IS_FULL
           ? COMPANY_DETAILS.sites.office
           : COMPANY_DETAILS.sites.shop;
