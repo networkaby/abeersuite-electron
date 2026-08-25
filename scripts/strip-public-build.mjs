@@ -30,10 +30,10 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const APP_MODE = process.env.APP_MODE === "public" ? "public" : "office";
+const APP_MODE = process.env.APP_MODE === "public" ? "public" : "full";
 
 if (APP_MODE !== "public") {
-    console.log("[strip-public-build] APP_MODE is not \"public\" — office build, nothing stripped.");
+    console.log("[strip-public-build] APP_MODE is not \"public\" — full (office) build, nothing stripped.");
     process.exit(0);
 }
 

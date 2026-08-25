@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
   //
   // Reads APP_MODE directly rather than importing lib/appMode: next.config runs
   // outside the app's module graph, and appMode pulls in the company constants.
-  // The default-to-office fallback is deliberately the same as appMode's.
+  // The default-to-full fallback is deliberately the same as appMode's.
   async headers() {
     if (process.env.APP_MODE === "public") return [];
     return [

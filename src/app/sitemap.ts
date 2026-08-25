@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { LEGAL_SLUGS } from "@/shared/lib/legal/legalPaths";
-import { IS_OFFICE } from "@/shared/lib/appMode";
+import { IS_FULL } from "@/shared/lib/appMode";
 
 /**
  * One sitemap for the whole business.
@@ -24,7 +24,7 @@ const { company, shop } = COMPANY_DETAILS.sites;
 export default function sitemap(): MetadataRoute.Sitemap {
     // The internal build disallows all crawling (see robots.ts), so offering it
     // a list of pages to crawl would contradict itself.
-    if (IS_OFFICE) return [];
+    if (IS_FULL) return [];
 
     const now = new Date();
 
