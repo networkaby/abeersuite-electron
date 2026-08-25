@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
@@ -234,6 +234,129 @@ function resolvePort(): string {
 const PORT = resolvePort();
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
+
+const isHiddenLaunch = process.argv.includes("--hidden") || process.argv.includes("--autostart");
+
+/**
+ * Returns the path to the app icon file, checking packaged extraResources, dev build dir, and dist.
+ */
+function getAppIconPath(): string {
+    const candidatePaths = [
+        path.join(process.resourcesPath, "icon.png"),
+        path.join(process.cwd(), "build", "icon.png"),
+        path.join(__dirname, "..", "build", "icon.png"),
+        path.join(__dirname, "icon.png"),
+    ];
+    for (const p of candidatePaths) {
+        if (fs.existsSync(p)) return p;
+    }
+    return "";
+}
+
+function isAutoStartEnabled(): boolean {
+    if (!app.isPackaged) return false;
+    try {
+        const settings = app.getLoginItemSettings({
+            path: process.execPath,
+            args: ["--hidden"],
+        });
+        return settings.openAtLogin;
+    } catch (err) {
+        console.error("[main] Failed to get login item settings:", err);
+        return false;
+    }
+}
+
+function setAutoStart(enabled: boolean): void {
+    if (!app.isPackaged) return;
+    try {
+        app.setLoginItemSettings({
+            openAtLogin: enabled,
+            openAsHidden: true,
+            path: process.execPath,
+            args: ["--hidden"],
+        });
+        console.log(`[main] Auto-start on boot set to: ${enabled}`);
+    } catch (err) {
+        console.error("[main] Failed to set login item settings:", err);
+    }
+}
+
+function showMainWindow(): void {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        mainWindow = createShellWindow(false);
+        return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+}
+
+function createSystemTray(): void {
+    if (tray) return;
+
+    const iconPath = getAppIconPath();
+    const icon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+
+    tray = new Tray(icon);
+    tray.setToolTip(`AbeerSuite POS (Port ${PORT})`);
+
+    const updateContextMenu = () => {
+        const autoStart = isAutoStartEnabled();
+        const contextMenu = Menu.buildFromTemplate([
+            {
+                label: "Open AbeerSuite",
+                click: () => showMainWindow(),
+            },
+            {
+                label: `Open in Browser (Port ${PORT})`,
+                click: () => {
+                    shell.openExternal(`http://127.0.0.1:${PORT}`);
+                },
+            },
+            { type: "separator" },
+            {
+                label: "Start with Windows",
+                type: "checkbox",
+                checked: autoStart,
+                enabled: app.isPackaged,
+                click: (menuItem) => {
+                    setAutoStart(menuItem.checked);
+                    updateContextMenu();
+                },
+            },
+            { type: "separator" },
+            {
+                label: "Quit AbeerSuite",
+                click: () => {
+                    isQuitting = true;
+                    app.quit();
+                },
+            },
+        ]);
+        tray?.setContextMenu(contextMenu);
+    };
+
+    updateContextMenu();
+
+    tray.on("click", () => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+            showMainWindow();
+            return;
+        }
+        if (mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) {
+            mainWindow.hide();
+        } else {
+            showMainWindow();
+        }
+    });
+
+    tray.on("double-click", () => {
+        showMainWindow();
+    });
+}
 
 // ── Single instance ─────────────────────────────────────────────────────────
 // A second launch (double-clicked shortcut, or the updater relaunching) would
@@ -244,9 +367,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("second-instance", () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
+    showMainWindow();
 });
 
 // ── Persistent Unique Installation ID ──────────────────────────────────────────
@@ -466,7 +587,7 @@ function sendBootProgress(message: string): void {
  * this window's `backgroundColor` behind it, so there is never a blank white frame while
  * Postgres and the server are still starting.
  */
-function createShellWindow(): BrowserWindow {
+function createShellWindow(initiallyHidden = false): BrowserWindow {
     const win = new BrowserWindow({
         width: 1366,
         height: 860,
@@ -491,7 +612,15 @@ function createShellWindow(): BrowserWindow {
     // script, a stray target="_blank" — is denied rather than given a frameless window
     // with this preload attached.
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    win.once("ready-to-show", () => win.show());
+    if (!initiallyHidden) {
+        win.once("ready-to-show", () => win.show());
+    }
+    win.on("close", (event) => {
+        if (!isQuitting) {
+            event.preventDefault();
+            win.hide();
+        }
+    });
     win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
     win.loadURL(dataUrl(splashHtml())).catch((err) => {
         // ERR_ABORTED here is the routine case: loadApp() below already navigated on to
@@ -502,17 +631,13 @@ function createShellWindow(): BrowserWindow {
     return win;
 }
 
-/**
- * Navigates the shell window to the real app. `loadURL`'s promise rejects on a failed
- * load (a `did-fail-load`), so a few retries here catch a server that answered the
- * readiness poll but is still settling, without ever leaving the window on the splash.
- */
 async function loadApp(baseUrl: string): Promise<void> {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const startUrl = `${baseUrl}/staff/login`;
-    const attempts = 3;
+    const attempts = 10;
     for (let i = 1; i <= attempts; i++) {
         try {
+            console.log(`[Boot] Navigating to ${startUrl} (attempt ${i}/${attempts})...`);
             await mainWindow.loadURL(startUrl);
             return;
         } catch (err) {
@@ -522,7 +647,7 @@ async function loadApp(baseUrl: string): Promise<void> {
                 showBootError(startUrl);
                 return;
             }
-            await new Promise((r) => setTimeout(r, 500));
+            await new Promise((r) => setTimeout(r, 1000));
         }
     }
 }
@@ -536,7 +661,21 @@ function showBootError(triedUrl: string): void {
 
 // ── App Lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-    mainWindow = createShellWindow();
+    createSystemTray();
+
+    if (app.isPackaged) {
+        const autostartFile = path.join(app.getPath("userData"), "autostart-initialized.json");
+        if (!fs.existsSync(autostartFile)) {
+            try {
+                setAutoStart(true);
+                fs.writeFileSync(autostartFile, JSON.stringify({ initialized: true, date: new Date().toISOString() }));
+            } catch (err) {
+                console.warn("[main] Could not save autostart-initialized.json:", err);
+            }
+        }
+    }
+
+    mainWindow = createShellWindow(isHiddenLaunch);
 
     sendBootProgress("Starting database…");
     try {
@@ -564,30 +703,35 @@ app.whenReady().then(async () => {
         sendBootProgress("Almost there…");
         await loadApp(result.url);
     } else {
-        showBootError(result.url);
+        if (!isHiddenLaunch) {
+            showBootError(result.url);
+        }
     }
 
     setupAutoUpdater();
 
     app.on("activate", () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            mainWindow = createShellWindow();
-            if (result.ready) {
-                loadApp(result.url);
-            } else {
-                showBootError(result.url);
-            }
-        }
+        showMainWindow();
     });
+});
+
+app.on("before-quit", () => {
+    isQuitting = true;
 });
 
 app.on("will-quit", () => {
     stopNextServer();
     stopEmbeddedPostgres();
+    if (tray && !tray.isDestroyed()) {
+        tray.destroy();
+        tray = null;
+    }
 });
 
 app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-        app.quit();
+    if (isQuitting || process.platform === "darwin") {
+        if (process.platform !== "darwin") {
+            app.quit();
+        }
     }
 });

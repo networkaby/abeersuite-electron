@@ -27,6 +27,12 @@ Replace paper/spreadsheets across the whole business with one app:
 
 ## 🔄 In flight
 
+- **2026-08-25 — System Tray background mode & Windows autostart for instant app opening**.
+  - **System Tray lifecycle added.** [`electron/main.ts`](electron/main.ts) now initializes a `Tray` icon with tooltip ("AbeerSuite POS (Port <PORT>)") and context menu ("Open AbeerSuite", "Open in Browser", "Start with Windows" toggle, "Quit AbeerSuite").
+  - **Close-to-tray & warm reopening.** Closing the window now hides it (`event.preventDefault(); win.hide()`) rather than killing the server. Double-clicking desktop shortcut or start menu triggers `second-instance`, which shows and focuses the existing window instantly with 0 cold-start delay. Full exit is cleanly triggered from Tray -> "Quit AbeerSuite".
+  - **Windows startup autostart support (`--hidden`).** Supports `app.setLoginItemSettings()` to auto-boot with Windows in the background on counter PCs, with pre-warming of local server and database connections.
+  - **Asset inclusion.** [`package.json`](package.json) `extraResources` now includes `build/icon.png` so the tray icon is available in production packaged builds.
+
 - **2026-08-25 — Auto-update: repo made configurable, verified live end to end, one action item found**. Small follow-up on Phase 7, committing work that was staged but never landed.
   - **`GH_UPDATE_TOKEN` renamed and the repo made configurable.** [`electron/main.ts`](electron/main.ts)'s `setupAutoUpdater()` no longer hard-codes `owner`/`repo` — both come from a new `GITHUB_UPDATE_REPO` (`"owner/repo"`) env var, alongside the renamed `PAT_TOKEN`. Both baked into `counter.env` via [`scripts/counterEnv.ts`](scripts/counterEnv.ts), same as before, just no longer requiring a rebuild to point a counter's updates at a different repo.
   - **Verified live end to end, for real this time.** Full `pnpm exec electron-builder --dir` + `verify:package` — **PASS**, `resources/` 468.3 MB, 10 keys in `counter.env`. Launched the packaged app on the baked env alone: the "PAT_TOKEN or GITHUB_UPDATE_REPO not set" skip message is **gone** — the updater made a real HTTPS request to `api.github.com` using the baked token.

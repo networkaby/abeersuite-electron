@@ -259,7 +259,8 @@
       "Bash(gh api *)",
       "Bash(gh run *)",
       "Bash(gh workflow *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(taskkill //F //IM AbeerSuite.exe)"
     ]
   }
 }

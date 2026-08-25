@@ -3,6 +3,8 @@ import * as net from "net";
 import { app } from "electron";
 import { fork, type ChildProcess } from "child_process";
 
+import * as http from "http";
+
 let nextProcess: ChildProcess | null = null;
 
 /** Result of a boot attempt. `ready: false` means the caller must not treat `url` as live. */
@@ -15,7 +17,7 @@ export interface ServerStartResult {
  * Checks whether a given TCP port is actively listening on localhost.
  * Re-exported here so postgresManager can keep importing from this module.
  */
-function isPortListeningLocal(port: number, timeoutMs = 1000): Promise<boolean> {
+export function isPortListeningLocal(port: number, timeoutMs = 1000): Promise<boolean> {
     return new Promise((resolve) => {
         const socket = new net.Socket();
         socket.setTimeout(timeoutMs);
@@ -23,6 +25,23 @@ function isPortListeningLocal(port: number, timeoutMs = 1000): Promise<boolean> 
         socket.on("timeout", () => { socket.destroy(); resolve(false); });
         socket.on("error", () => { socket.destroy(); resolve(false); });
         socket.connect(port, "127.0.0.1");
+    });
+}
+
+/**
+ * Probes an HTTP endpoint on localhost to verify the Next.js server is not just
+ * TCP listening, but actively ready to handle and serve HTTP web requests.
+ */
+function isHttpReady(url: string, timeoutMs = 1000): Promise<boolean> {
+    return new Promise((resolve) => {
+        const req = http.get(url, { timeout: timeoutMs }, (res) => {
+            res.resume(); // Drain stream to free memory
+            const code = res.statusCode ?? 500;
+            // Any response code below 500 means Next.js router is handling requests
+            resolve(code < 500);
+        });
+        req.on("timeout", () => { req.destroy(); resolve(false); });
+        req.on("error", () => { req.destroy(); resolve(false); });
     });
 }
 
@@ -90,17 +109,33 @@ export async function startNextServer(port = 3000): Promise<ServerStartResult> {
         nextProcess = null;
     });
 
-    // Wait up to 15 seconds for the server to become ready.
+    // 1. Wait up to 30s for the TCP port to open.
     const url = `http://127.0.0.1:${port}`;
-    for (let i = 0; i < 75; i++) {
+    let tcpReady = false;
+    for (let i = 0; i < 150; i++) {
         await new Promise((r) => setTimeout(r, 200));
         if (await isPortListeningLocal(port, 200)) {
-            console.log(`[NextServer] Standalone server is ready on ${url}`);
-            return { url, ready: true };
+            tcpReady = true;
+            break;
         }
     }
 
-    console.error("[NextServer] Server did not become ready within timeout.");
+    if (!tcpReady) {
+        console.error("[NextServer] TCP port did not open within timeout.");
+        return { url, ready: false };
+    }
+
+    // 2. Ensure Next.js is actually answering HTTP requests without abort flooding.
+    const probeUrl = `${url}/staff/login`;
+    for (let attempt = 1; attempt <= 15; attempt++) {
+        if (await isHttpReady(probeUrl, 4000)) {
+            console.log(`[NextServer] Standalone server is HTTP ready on ${url}`);
+            return { url, ready: true };
+        }
+        await new Promise((r) => setTimeout(r, 400));
+    }
+
+    console.error("[NextServer] Server did not become HTTP ready within timeout.");
     return { url, ready: false };
 }
 

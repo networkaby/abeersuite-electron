@@ -30,6 +30,7 @@
 # Electron icon. Everything else in build/ stays ignored.
 /build/*
 !/build/icon.png
+!/build/installer.nsh
 
 # misc
 .DS_Store
