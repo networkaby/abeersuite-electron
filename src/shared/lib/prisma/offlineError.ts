@@ -16,16 +16,16 @@
 /** Wire code shared by the server (response body) and the client (interceptor). */
 export const OFFLINE_READ_ONLY = "offline_read_only";
 
-/** Thrown when a write is attempted while reads are being served from the replica. */
+/** Thrown when a write or deletion is attempted while operating offline. */
 export class OfflineWriteBlockedError extends Error {
     readonly code = OFFLINE_READ_ONLY;
     /** Prisma model the write targeted, when known — "$executeRaw" for raw writes. */
     readonly model: string;
-    /** Prisma operation (`create`, `updateMany`, …) that was refused. */
+    /** Prisma operation (`create`, `updateMany`, `delete`, …) that was refused. */
     readonly operation: string;
 
-    constructor(model: string, operation: string) {
-        super(`Offline: refused ${operation} on ${model} — the counter replica is read-only.`);
+    constructor(model: string, operation: string, customMessage?: string) {
+        super(customMessage || `Offline: refused ${operation} on ${model} — the counter replica is read-only.`);
         this.name = "OfflineWriteBlockedError";
         this.model = model;
         this.operation = operation;

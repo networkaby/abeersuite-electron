@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Download, Upload, AlertTriangle, RefreshCw } from "lucide-react";
+import { Download, Upload, AlertTriangle, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,17 @@ interface DropboxBackup {
     path: string;
     size: number;
     modified: string;
+}
+
+/**
+ * Mirrors `BackupAvailability` from shared/lib/backup/availability.ts, declared locally so
+ * this client component never imports the server module (same reason `DropboxBackup` is
+ * repeated here). `missing` holds KEY names only — no values ever cross the wire.
+ */
+interface Availability {
+    canBackup: boolean;
+    canRestore: boolean;
+    missing: string[];
 }
 
 function formatSize(bytes: number) {
@@ -40,16 +51,24 @@ export function BackupRestorePanel() {
     const [selectedPath, setSelectedPath] = useState("");
     const [confirmText, setConfirmText] = useState("");
     const [restoring, setRestoring] = useState(false);
+    const [availability, setAvailability] = useState<Availability | null>(null);
 
     const loadBackups = useCallback(async () => {
         setLoadingList(true);
         try {
             const res = await fetch("/api/settings/restore/list");
             const json = (await res.json().catch(() => null)) as
-                | { backups?: DropboxBackup[]; error?: string }
+                | { backups?: DropboxBackup[]; canBackup?: boolean; canRestore?: boolean; missing?: string[]; error?: string }
                 | null;
             if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
             setBackups(json?.backups ?? []);
+            if (typeof json?.canBackup === "boolean" && typeof json?.canRestore === "boolean") {
+                setAvailability({
+                    canBackup: json.canBackup,
+                    canRestore: json.canRestore,
+                    missing: json.missing ?? [],
+                });
+            }
         } catch (err) {
             toast.error(err instanceof Error ? `Couldn't load Dropbox backups: ${err.message}` : "Couldn't load backups");
         } finally {
@@ -61,7 +80,16 @@ export function BackupRestorePanel() {
         void loadBackups();
     }, [loadBackups]);
 
+    // Optimistic until the status arrives: a transient network error must not label a
+    // properly configured machine "counter-only". If it really is one, the routes still
+    // refuse with 503 and the same message.
+    const canBackup = availability?.canBackup ?? true;
+    const canRestore = availability?.canRestore ?? true;
+    const counterOnly = availability != null && (!canBackup || !canRestore);
+    const missing = availability?.missing ?? [];
+
     async function handleBackup() {
+        if (!canBackup) return;
         setBackingUp(true);
         const progress = toast.loading("Starting backup…");
         try {
@@ -81,7 +109,7 @@ export function BackupRestorePanel() {
     }
 
     async function handleRestore() {
-        if (!selectedPath || confirmText !== "RESTORE") return;
+        if (!canRestore || !selectedPath || confirmText !== "RESTORE") return;
         if (
             !window.confirm(
                 "Last chance: this will REPLACE the entire current database with the selected Dropbox backup. Continue?",
@@ -114,6 +142,29 @@ export function BackupRestorePanel() {
 
     return (
         <div className="space-y-6">
+            {/* Counter-only build — the keys this needs were not shipped in the installer */}
+            {counterOnly && (
+                <section className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                    <div className="flex items-start gap-2">
+                        <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                        <div className="space-y-1">
+                            <h2 className="text-sm font-semibold">Counter-only machine</h2>
+                            <p className="text-xs text-muted-foreground">
+                                {canBackup
+                                    ? "Restore is not available on this machine — it has no Dropbox keys, so it cannot list the backups to pick from."
+                                    : "Backup and restore are not available on this machine. It was installed without the Dropbox and GitHub keys."}{" "}
+                                Use the office app instead.
+                            </p>
+                            {missing.length > 0 && (
+                                <p className="text-[11px] text-muted-foreground/80">
+                                    Not configured here: <span className="font-mono">{missing.join(", ")}</span>
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </section>
+            )}
+
             {/* Backup */}
             <section className="rounded-lg border bg-card p-4 space-y-4">
                 <div>
@@ -123,9 +174,9 @@ export function BackupRestorePanel() {
                         this page; the file appears in Dropbox in a few minutes. Safe anytime, does not change live data.
                     </p>
                 </div>
-                <Button onClick={handleBackup} disabled={backingUp} size="sm">
+                <Button onClick={handleBackup} disabled={backingUp || !canBackup} size="sm">
                     <Download className="mr-1.5 size-3.5" />
-                    {backingUp ? "Starting…" : "Back up now"}
+                    {!canBackup ? "Not available here" : backingUp ? "Starting…" : "Back up now"}
                 </Button>
             </section>
 
@@ -152,21 +203,23 @@ export function BackupRestorePanel() {
                             size="sm"
                             className="h-6 px-2 text-[11px]"
                             onClick={() => void loadBackups()}
-                            disabled={loadingList}
+                            disabled={loadingList || !canRestore}
                         >
                             <RefreshCw className={`mr-1 size-3 ${loadingList ? "animate-spin" : ""}`} />
                             Refresh
                         </Button>
                     </div>
-                    <Select value={selectedPath} onValueChange={setSelectedPath} disabled={loadingList || backups.length === 0}>
+                    <Select value={selectedPath} onValueChange={setSelectedPath} disabled={loadingList || !canRestore || backups.length === 0}>
                         <SelectTrigger className="h-9 w-full">
                             <SelectValue
                                 placeholder={
-                                    loadingList
-                                        ? "Loading backups…"
-                                        : backups.length === 0
-                                          ? "No backups found in Dropbox yet"
-                                          : "Select a backup"
+                                    !canRestore
+                                        ? "Not available on this machine"
+                                        : loadingList
+                                          ? "Loading backups…"
+                                          : backups.length === 0
+                                            ? "No backups found in Dropbox yet"
+                                            : "Select a backup"
                                 }
                             />
                         </SelectTrigger>
@@ -191,6 +244,7 @@ export function BackupRestorePanel() {
                         onChange={(e) => setConfirmText(e.target.value)}
                         placeholder="RESTORE"
                         autoComplete="off"
+                        disabled={!canRestore}
                     />
                 </div>
 
@@ -198,10 +252,10 @@ export function BackupRestorePanel() {
                     variant="destructive"
                     size="sm"
                     onClick={handleRestore}
-                    disabled={restoring || !selectedPath || confirmText !== "RESTORE"}
+                    disabled={restoring || !canRestore || !selectedPath || confirmText !== "RESTORE"}
                 >
                     <Upload className="mr-1.5 size-3.5" />
-                    {restoring ? "Starting…" : "Restore database"}
+                    {!canRestore ? "Not available here" : restoring ? "Starting…" : "Restore database"}
                 </Button>
             </section>
         </div>

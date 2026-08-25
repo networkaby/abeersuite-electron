@@ -24,7 +24,13 @@ function isPublicPath(pathname: string): boolean {
 }
 
 function wantsStaffSignIn(pathname: string): boolean {
-    return pathname.startsWith("/office") || pathname.startsWith("/receipt");
+    return (
+        pathname.startsWith("/office") ||
+        pathname.startsWith("/vouchers") ||
+        pathname.startsWith("/lab") ||
+        pathname.startsWith("/receipt") ||
+        pathname.startsWith("/shipping-")
+    );
 }
 
 export default auth((req) => {
@@ -77,11 +83,13 @@ export default auth((req) => {
 
 export const config = {
     matcher: [
-        // Skip API, Next internals, print surfaces, and any static file in /public
+        // Skip API, Next internals, and any static file in /public
         // (anything with a file extension). Without the extension escape, /logo.svg
         // and friends get auth-redirected to /login and serve HTML instead of the asset.
-        // `receipt` is NOT excluded — each page under it calls requireStaffPage()
-        // itself, but proxy coverage is defense in depth against a page that forgets.
-        "/((?!api|_next/static|_next/image|favicon.ico|shipping-slip|shipping-label|.*\\.[\\w]+$).*)",
+        // The staff print surfaces (`receipt`, `shipping-slip`, `shipping-label`) are
+        // deliberately NOT excluded any more — each page under them calls
+        // requireStaffPage() itself, but proxy coverage is defense in depth against a
+        // page that forgets. They render for a signed-in staff session as before.
+        "/((?!api|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
     ],
 };

@@ -1,10 +1,21 @@
 {
-  "name": "service-mgmt",
-  "version": "0.1.0",
-  "private": true,
+  "name": "abeersuite-electron",
+  "version": "0.3.0",
+  "description": "AbeerSuite Desktop Operating System",
+  "author": "AbeerSuite",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev",
-    "build": "node scripts/strip-public-build.mjs && prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
+    "electron:dev": "concurrently -k -n \"NEXT,ELECTRON\" -c \"yellow,cyan\" \"cross-env PORT=3000 NODE_OPTIONS=--max-http-header-size=65536 next dev\" \"wait-on http-get://127.0.0.1:3000/staff/login && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:build": "cross-env COUNTER_BUILD=1 pnpm build && tsx scripts/prepare-standalone.ts && tsx scripts/generate-counter-env.ts && pnpm electron:compile && tsx scripts/prepare-electron-deps.ts",
+    "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
+    "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",
+    "electron:release": "pnpm electron:pack && tsx scripts/release-electron.ts",
+    "verify:package": "tsx scripts/verify-package.ts",
+    "icon:build": "electron scripts/make-icon.js",
+    "build:downloader": "tsx scripts/build-downloader.ts",
+    "build": "node scripts/strip-public-build.mjs && prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/counter-build.ts",
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
@@ -45,7 +56,8 @@
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
-    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter",
+    "check:guard-lint": "tsx scripts/check-guard-lint.ts",
+    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-guard-lint.ts",
     "install:git-hooks": "tsx scripts/install-git-hooks.ts"
   },
   "dependencies": {
@@ -62,6 +74,7 @@
     "cmdk": "^1.1.1",
     "dexie": "^4.4.5",
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.9",
     "firebase": "^12.16.0",
     "jose": "^6.2.2",
     "jsbarcode": "^3.12.3",
@@ -94,14 +107,96 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.1.0"
   },
-  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f"
+  "packageManager": "pnpm@11.4.0+sha512.f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f",
+  "build": {
+    "appId": "com.abeersuite.desktop",
+    "productName": "AbeerSuite",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
+    "directories": {
+      "output": "dist-app"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "!node_modules/**/*",
+      "!**/node_modules/**/*",
+      "dist-electron/node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "standalone",
+        "filter": [
+          "**/*",
+          "!.env",
+          "!.env.*"
+        ]
+      },
+      {
+        "from": ".next/standalone/node_modules",
+        "to": "standalone/node_modules",
+        "filter": [
+          "**/*",
+          "!**/.env",
+          "!**/.env.*"
+        ]
+      },
+      {
+        "from": "resources/counter.env",
+        "to": "counter.env"
+      },
+      {
+        "from": "resources/pgsql",
+        "to": "pgsql",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "devloperakramul",
+      "repo": "abeersuite-networkservice-update",
+      "private": true,
+      "releaseType": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "runAfterFinish": false,
+      "installerHeaderIcon": "build/icon.png",
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AbeerSuite",
+      "differentialPackage": true,
+      "include": "build/installer.nsh"
+    }
+  }
 }

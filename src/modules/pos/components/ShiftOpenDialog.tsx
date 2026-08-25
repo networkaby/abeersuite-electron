@@ -24,11 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
 import { extractApiError } from "@/shared/lib/api";
-
-// The local bridge's config.json is the per-machine store that survives
-// incognito / cache-clear, so the counter lock lives there (set once on first
-// shift open, cleared via Printer Settings → Forget).
-const BRIDGE = "http://localhost:9191";
+import { resolveMachineIdentity, matchesThisMachine } from "@/shared/lib/counter/identity";
 
 type Counter = {
     id: number;
@@ -59,9 +55,11 @@ export function ShiftOpenDialog({
     const [counters, setCounters]         = useState<Counter[]>([]);
     const [loadingCounters, setLoadingCounters] = useState(false);
     const [selectedCounterId, setSelectedCounterId] = useState<number | null>(null);
-    // Stable per-PC id from the local bridge (minted once, persisted there). The
-    // counter this device is bound to server-side forces + disables the picker.
+    // This PC's identity — Electron's installation id when available, else the local
+    // bridge's id. The counter this device is bound to server-side forces + disables
+    // the picker. legacyDeviceId only matters during the bridge->Electron migration.
     const [deviceId, setDeviceId]         = useState<string | null>(null);
+    const [legacyDeviceId, setLegacyDeviceId] = useState<string | null>(null);
     const [deviceLabel, setDeviceLabel]   = useState<string | null>(null);
     const [vaultTopUp, setVaultTopUp]     = useState("0");            // rupees
     const [notes, setNotes]               = useState("");
@@ -81,30 +79,22 @@ export function ShiftOpenDialog({
             .catch(() => toast.error("Failed to load counters"))
             .finally(() => setLoadingCounters(false));
 
-        // Device id from the local bridge (stable per PC). The server binds the
-        // counter to this id on first open; a later open elsewhere is refused.
-        // Best-effort — no bridge → no device lock this session (free picker).
-        fetch(`${BRIDGE}/config`, { signal: AbortSignal.timeout(2000) })
-            .then((r) => r.ok ? r.json() : null)
-            .then((cfg: { deviceId?: string | null; companyName?: string | null } | null) => {
-                if (!cfg) return;
-                setDeviceLabel(cfg.companyName ?? null);
-                if (cfg.deviceId) { setDeviceId(cfg.deviceId); return; }
-                // First time on this PC — mint an id and persist it in the bridge.
-                const id = crypto.randomUUID();
-                setDeviceId(id);
-                fetch(`${BRIDGE}/config`, {
-                    method:  "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body:    JSON.stringify({ deviceId: id }),
-                }).catch(() => { /* offline — id just won't persist */ });
-            })
-            .catch(() => { /* bridge offline — leave picker free */ });
+        // This PC's identity. The server binds the counter to it on first open; a
+        // later open elsewhere is refused. Best-effort — if neither Electron nor the
+        // bridge answers, no device lock this session (free picker).
+        resolveMachineIdentity().then(({ machineId, legacyDeviceId: legacy, deviceLabel: label }) => {
+            setDeviceId(machineId);
+            setLegacyDeviceId(legacy);
+            setDeviceLabel(label);
+        });
     }, [open]);
 
     // The counter this PC is bound to (server-side). When set, the picker is
-    // forced to it and locked. Derived from the loaded counters + this deviceId.
-    const lockedCounter = deviceId ? counters.find((c) => c.boundDeviceId === deviceId) ?? null : null;
+    // forced to it and locked. Matches either the canonical id or, during the
+    // bridge->Electron migration, the older bridge-minted one.
+    const lockedCounter = (deviceId || legacyDeviceId)
+        ? counters.find((c) => matchesThisMachine(c.boundDeviceId, { machineId: deviceId, legacyDeviceId })) ?? null
+        : null;
     useEffect(() => {
         if (lockedCounter) setSelectedCounterId(lockedCounter.id);
     }, [lockedCounter]);
@@ -124,7 +114,10 @@ export function ShiftOpenDialog({
                 vaultTopUpPaise: Math.round(topUpRupees * 100),
                 notes:           notes.trim() || undefined,
                 // The server binds this counter to the PC on first open (device lock).
-                deviceId:        deviceId ?? undefined,
+                // legacyDeviceId lets it recognise + migrate a counter still bound
+                // under the pre-Electron bridge id.
+                deviceId:        deviceId ?? legacyDeviceId ?? undefined,
+                legacyDeviceId:  (legacyDeviceId && legacyDeviceId !== deviceId) ? legacyDeviceId : undefined,
                 deviceLabel:     deviceLabel ?? undefined,
             });
             if (data.resumed) {
@@ -172,9 +165,12 @@ export function ShiftOpenDialog({
                                 <SelectContent>
                                     {counters.map((c) => {
                                         // A counter bound to a *different* PC can't be opened here.
-                                        // Only enforced when this PC has a deviceId (bridge running);
-                                        // with no bridge the server can't check either, so leave it free.
-                                        const boundElsewhere = !!deviceId && !!c.boundDeviceId && c.boundDeviceId !== deviceId;
+                                        // Only enforced when this PC has an identity (Electron or
+                                        // bridge); with neither the server can't check either, so
+                                        // leave it free.
+                                        const boundElsewhere = !!c.boundDeviceId
+                                            && (!!deviceId || !!legacyDeviceId)
+                                            && !matchesThisMachine(c.boundDeviceId, { machineId: deviceId, legacyDeviceId });
                                         return (
                                             <SelectItem
                                                 key={c.id}

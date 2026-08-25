@@ -9,6 +9,7 @@ export type CounterStatus = {
     preference: "live" | "shadow" | "local";
     replicaReady: boolean;
     isCounter: boolean;
+    replicaSource: "installed" | "embedded" | null;
 };
 
 /**

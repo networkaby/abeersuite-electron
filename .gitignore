@@ -25,7 +25,12 @@
 /out/
 
 # production
-/build
+# `build/` is also electron-builder's buildResources directory. The app icon there must
+# be committed, or an installer built on any other machine falls back to the default
+# Electron icon. Everything else in build/ stays ignored.
+/build/*
+!/build/icon.png
+!/build/installer.nsh
 
 # misc
 .DS_Store
@@ -40,9 +45,21 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Counter-PC template. Tracked on purpose: electron/main.ts points operators at this
+# file by name, so a fresh clone must have it. Contains dummy values only — never
+# paste a real credential into it.
+!.env.counter.example
+
 # Local env templates with real credentials — keep on disk only
 experiment.env.example
 demo.env.example
+
+# Generated at build time by scripts/generate-counter-env.ts — the live credentials
+# baked into a counter installer. Listed explicitly because `.env*` above does NOT
+# match it: that pattern needs the basename to start with `.env`, and this file is
+# named `counter.env` precisely so it does not collide with the packaging gate's
+# "no .env anywhere in the package" check.
+resources/counter.env
 
 # vercel
 .vercel
@@ -76,6 +93,7 @@ src/generated/
 
 # Local scratch / debug scripts and restore dumps — personal tooling, not app
 # code. Never commit these.
+scratch/
 _tmp_t.ts
 _tmp_*.ts
 dbrows.local.ts
@@ -84,3 +102,86 @@ backup-*.sql
 restore-*.sql
 .freebuff/preview-0c473ed9-f97d-47aa-8ada-12ce817c5194.log.err
 .freebuff
+
+
+# =========================
+# Dependencies
+# =========================
+node_modules/
+
+# =========================
+# Next.js
+# =========================
+.next/
+out/
+
+# =========================
+# Electron build output
+# =========================
+dist-app/
+dist-app-*/
+release/
+
+# If Electron TypeScript/JS compilation outputs here
+dist-electron/
+
+# =========================
+# Electron Builder artifacts
+# =========================
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.blockmap
+latest.yml
+latest-mac.yml
+latest-linux.yml
+
+# =========================
+# Logs
+# =========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =========================
+# IDE
+# =========================
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# =========================
+# Electron build output
+# =========================
+dist-package/
+dist-app/
+dist-app-*/
+release/

@@ -17,8 +17,15 @@
 // Think about that before you add one.
 
 import { existsSync, rmSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as dotenv from "dotenv";
+
+// Anchored to this file, not to cwd: the electron build chain invokes the
+// script from wrappers that don't always run at the repo root, and a ROOT that
+// silently pointed somewhere else would make the strip a no-op (or, worse,
+// resolve the office paths against the wrong tree).
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // This runs as a bare `node` process, first in the `build` chain — before
 // Next.js or Prisma have loaded anything. On Vercel that's fine: APP_MODE is
@@ -27,8 +34,8 @@ import * as dotenv from "dotenv";
 // this, APP_MODE=public in .env.local would be invisible here and the script
 // would silently no-op on a local `pnpm build`. Real process.env (Vercel)
 // still wins — dotenv.config() never overwrites a variable that's already set.
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+dotenv.config({ path: join(ROOT, ".env.local") });
+dotenv.config({ path: join(ROOT, ".env") });
 
 const APP_MODE = process.env.APP_MODE === "public" ? "public" : "office";
 
@@ -52,7 +59,6 @@ if (!process.env.VERCEL && process.env.ALLOW_LOCAL_PUBLIC_STRIP !== "1") {
     process.exit(1);
 }
 
-const ROOT = process.cwd();
 const APP_DIR = join(ROOT, "src", "app");
 const API_DIR = join(APP_DIR, "api");
 

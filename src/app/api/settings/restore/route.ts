@@ -1,6 +1,8 @@
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requirePermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { isUnderBackupFolder } from "@/shared/lib/backup/dropbox";
+import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,9 +12,23 @@ export const dynamic = "force-dynamic";
 // picks a file already in Dropbox (see /api/settings/restore/list), so nothing
 // is uploaded through the browser and the page can be closed after triggering.
 // Requires confirm === "RESTORE".
+//
+// This is the most destructive call in the app — it rolls the shared production database
+// back to an older dump for every branch at once. `confirm: "RESTORE"` guards a misclick,
+// not a caller, so the permission is what actually limits who can do it. Counter builds
+// ship a working GitHub token, so any till could otherwise trigger it straight from
+// devtools without the settings panel ever opening.
 export async function POST(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
+
+    // Checked before the confirm text: on a machine that cannot restore at all, asking the
+    // operator to type RESTORE is noise, and the failure would otherwise arrive as
+    // "DROPBOX_APP_KEY is not set." after they had already typed it.
+    const { canRestore, missing } = backupAvailability();
+    if (!canRestore) {
+        return Response.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
+    }
 
     const body = (await req.json().catch(() => null)) as { path?: string; confirm?: string } | null;
     if (!body || body.confirm !== "RESTORE") {

@@ -113,9 +113,20 @@ export default function PrintToolbar({
         }
     };
 
-    // Thermal path: try the bridge; on failure fall back to a browser print.
+    // Thermal path: try Electron native silent print first, then bridge relay, then browser fallback.
     const runThermal = async () => {
         setStatus("trying");
+        if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
+            try {
+                const printed = await window.electronAPI.printSilent();
+                if (printed) {
+                    setStatus("thermal");
+                    return;
+                }
+            } catch (err) {
+                console.warn("[PrintToolbar] Electron silent print failed, falling back:", err);
+            }
+        }
         if (await sendToRelay()) {
             setStatus("thermal");
         } else {

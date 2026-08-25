@@ -22,6 +22,7 @@ const SETTINGS_CRUMB_LABELS: Record<string, string> = {
     "item-import": "Item Import",
     "customer-import": "Customer Import",
     "customer-tools": "Customer Tools",
+    "offline-policies": "Offline Policies",
 };
 
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
