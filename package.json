@@ -15,7 +15,7 @@
     "verify:package": "tsx scripts/verify-package.ts",
     "icon:build": "electron scripts/make-icon.js",
     "build:downloader": "tsx scripts/build-downloader.ts",
-    "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/counter-build.ts",
+    "build": "node scripts/strip-public-build.mjs && prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/counter-build.ts",
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
@@ -56,7 +56,8 @@
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
-    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter",
+    "check:guard-lint": "tsx scripts/check-guard-lint.ts",
+    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-guard-lint.ts",
     "install:git-hooks": "tsx scripts/install-git-hooks.ts"
   },
   "dependencies": {

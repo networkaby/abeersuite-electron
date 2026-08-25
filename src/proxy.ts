@@ -24,7 +24,13 @@ function isPublicPath(pathname: string): boolean {
 }
 
 function wantsStaffSignIn(pathname: string): boolean {
-    return pathname.startsWith("/office");
+    return (
+        pathname.startsWith("/office") ||
+        pathname.startsWith("/vouchers") ||
+        pathname.startsWith("/lab") ||
+        pathname.startsWith("/receipt") ||
+        pathname.startsWith("/shipping-")
+    );
 }
 
 export default auth((req) => {
@@ -77,9 +83,9 @@ export default auth((req) => {
 
 export const config = {
     matcher: [
-        // Skip API, Next internals, print surfaces, and any static file in /public
+        // Skip API, Next internals, and any static file in /public
         // (anything with a file extension). Without the extension escape, /logo.svg
         // and friends get auth-redirected to /login and serve HTML instead of the asset.
-        "/((?!api|_next/static|_next/image|favicon.ico|receipt|shipping-slip|shipping-label|.*\\.[\\w]+$).*)",
+        "/((?!api|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
     ],
 };

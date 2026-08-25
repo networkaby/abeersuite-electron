@@ -104,11 +104,6 @@ export default function ShopFooter() {
                                 Service portal
                             </Link>
                         </li>
-                        <li>
-                            <Link href="/staff/login" className="hover:text-foreground">
-                                Staff sign in
-                            </Link>
-                        </li>
                     </ul>
                 </div>
                 <div>

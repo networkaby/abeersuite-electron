@@ -27,6 +27,12 @@ Replace paper/spreadsheets across the whole business with one app:
 
 ## 🔄 In flight
 
+- **2026-08-25 — Shop / Office deployment separation (Phase 0 fixes + Phase 1 build strip script + Guard-lint)**.
+  - **Prerequisite fixes completed (Phase 0):** Added staff session authentication (`auth()`) to all 6 receipt pages (`src/app/receipt/*`) and shipping pages (`src/app/shipping-label/*`, `src/app/shipping-slip/*`). Updated `src/proxy.ts` matcher to include receipt and shipping pages and route unauthorized hits to `/staff/login`. Created customer portal bill view at `src/app/(external)/portal/orders/[id]/bill/page.tsx` verifying customer party ownership before rendering printable online invoice. Repointed `PortalOrderCard.tsx` invoice link to the portal bill view. Removed `/staff/login` links from `ShopFooter.tsx` and `src/app/(external)/portal/page.tsx`.
+  - **Prebuild strip script built (Phase 1):** Created `scripts/strip-public-build.mjs`. In `APP_MODE=public`, strips `src/app/(protected)/`, `src/app/staff/`, `src/app/receipt/`, `src/app/shipping-label/`, `src/app/shipping-slip/`, and all `src/app/api/*` subdirectories except the public allowlist `{auth, portal, shop, upload-signature, legal}`. Wired into `package.json` build command.
+  - **Config hardening:** Guarded legacy `/office/*` redirects in `next.config.ts` and `credentials-staff` credentials provider in `src/auth.ts` when `APP_MODE=public`.
+  - **Guard-lint added:** Built `scripts/check-guard-lint.ts` asserting all office API route handlers import authentication guards; wired into `pnpm precommit`.
+
 - **2026-08-25 — Lightweight Web Setup Downloader (`AbeerSuite-WebSetup.exe`, ~33 KB) built**.
   - **Standalone bootstrapper installer.** Built [`scripts/downloader/AbeerSuiteDownloader.cs`](scripts/downloader/AbeerSuiteDownloader.cs) and [`scripts/build-downloader.ts`](scripts/build-downloader.ts) (`pnpm build:downloader`).
   - **Size & Performance.** Compiles natively with .NET 4.8 `csc.exe` into a single standalone ~33 KB executable with zero external runtime dependencies on Windows 10/11.

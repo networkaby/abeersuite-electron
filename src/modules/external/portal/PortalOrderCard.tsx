@@ -78,9 +78,7 @@ export default function PortalOrderCard({ order }: { order: PortalOrderDto }) {
     const reached = order.statusId ? STAGE_ORDER.indexOf(order.statusId) : 0;
 
     const invoiceHref = order.invoice
-        ? `/receipt/invoice/${order.invoice.detailId}?kind=ONLINE_INVOICE&paper=A4${
-              order.invoice.placeOfSupply ? `&placeOfSupply=${order.invoice.placeOfSupply}` : ""
-          }`
+        ? `/portal/orders/${order.id}/bill?paper=A4`
         : null;
 
     const show = (v: "details" | "timeline") => {

@@ -73,6 +73,7 @@ const nextConfig: NextConfig = {
   // restructure. Catches stored notification links and stale bookmarks while the
   // source-code refs are migrated.
   async redirects() {
+    if (process.env.APP_MODE === "public") return [];
     return [
       { source: "/office/tickets", destination: "/office/repairing/tickets", permanent: false },
       { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },
