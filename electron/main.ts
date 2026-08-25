@@ -441,24 +441,28 @@ ipcMain.handle("printer:print-silent", async (event, options?: { printerName?: s
     });
 });
 
-ipcMain.handle("window:control", (_event, action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => {
-    if (!mainWindow) return;
+// Acts on the window that actually sent the request, the same way the printer handlers
+// above do. Resolving to `mainWindow` instead would mean a titlebar button in any
+// secondary window minimised or closed the main one.
+ipcMain.handle("window:control", (event, action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
     switch (action) {
         case "minimize":
-            mainWindow.minimize();
+            win.minimize();
             break;
         case "maximize":
-            if (mainWindow.isMaximized()) {
-                mainWindow.unmaximize();
+            if (win.isMaximized()) {
+                win.unmaximize();
             } else {
-                mainWindow.maximize();
+                win.maximize();
             }
             break;
         case "close":
-            mainWindow.close();
+            win.close();
             break;
         case "toggle-fullscreen":
-            mainWindow.setFullScreen(!mainWindow.isFullScreen());
+            win.setFullScreen(!win.isFullScreen());
             break;
     }
 });
@@ -582,8 +586,82 @@ function sendBootProgress(message: string): void {
     }
 }
 
+// ── Window-open policy ──────────────────────────────────────────────────────
+// This app is multi-tab by design on the web: the 21 entries in
+// AllCreateActionsDialog, ButtonBar, Sidebar, every receipt/print page and the
+// repairing auto-advance `openTabs` all reach for window.open(url, "_blank").
+// A blanket deny here (what shipped before) made every one of those clicks do
+// nothing — that was the "POS does not open" symptom, not a boot failure.
+//
+// The original concern behind the deny was real and is still enforced: a popup
+// must never get a foreign origin loaded with this preload attached. So the
+// split is by origin, not by allow/deny wholesale — our own pages open as real
+// windows, everything else is handed to the user's browser.
+const APP_ORIGIN = `http://127.0.0.1:${PORT}`;
+
+// Resolved against APP_ORIGIN as base, so a relative target ("/vouchers/pos/help" — the
+// form most callers in the app use) is correctly judged same-origin. An absolute URL
+// ignores the base, so external links are still classified on their own origin.
+function classifyTarget(rawUrl: string): { internal: boolean; href: string; protocol: string } | null {
+    try {
+        const u = new URL(rawUrl, APP_ORIGIN);
+        return { internal: u.origin === APP_ORIGIN, href: u.href, protocol: u.protocol };
+    } catch {
+        return null;
+    }
+}
+
 /**
- * Creates the single app window and shows the local splash immediately — the OS paints
+ * Applies the origin split to `win`, and to any window `win` itself opens — a receipt
+ * window that opens a further link must not fall back to Electron's permissive default.
+ */
+function attachWindowOpenPolicy(win: BrowserWindow): void {
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        const target = classifyTarget(url);
+        if (!target) return { action: "deny" };
+
+        if (target.internal) {
+            return {
+                action: "allow",
+                // Inherit the parent's hardening explicitly rather than trusting the
+                // defaults a child window would otherwise be created with.
+                overrideBrowserWindowOptions: {
+                    width: 1280,
+                    height: 820,
+                    minWidth: 900,
+                    minHeight: 600,
+                    title: "AbeerSuite",
+                    autoHideMenuBar: true,
+                    backgroundColor: SPLASH_BG,
+                    webPreferences: {
+                        preload: path.join(__dirname, "preload.js"),
+                        nodeIntegration: false,
+                        contextIsolation: true,
+                        sandbox: true,
+                    },
+                },
+            };
+        }
+
+        // WhatsApp share links and courier tracking URLs were dead too. Send them to the
+        // real browser. Restricted to http/https so nothing hands the OS shell an
+        // arbitrary protocol handler.
+        if (target.protocol === "http:" || target.protocol === "https:") {
+            shell.openExternal(target.href);
+        }
+        return { action: "deny" };
+    });
+
+    win.webContents.on("did-create-window", (child) => {
+        // Child windows are ordinary windows: closing one closes it. Only the tray-backed
+        // main window gets the hide-on-close treatment, so a closed report window is not
+        // left invisible in memory with nothing able to bring it back.
+        attachWindowOpenPolicy(child);
+    });
+}
+
+/**
+ * Creates the main app window and shows the local splash immediately — the OS paints
  * this window's `backgroundColor` behind it, so there is never a blank white frame while
  * Postgres and the server are still starting.
  */
@@ -608,10 +686,7 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
         },
     });
 
-    // The POS is a single-window app. Anything that tries to open a popup — an injected
-    // script, a stray target="_blank" — is denied rather than given a frameless window
-    // with this preload attached.
-    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    attachWindowOpenPolicy(win);
     if (!initiallyHidden) {
         win.once("ready-to-show", () => win.show());
     }
