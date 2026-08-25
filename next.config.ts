@@ -59,6 +59,9 @@ const nextConfig: NextConfig = {
   // restructure. Catches stored notification links and stale bookmarks while the
   // source-code refs are migrated.
   async redirects() {
+    // These all target /office/* — dead weight on the public build, which has
+    // no /office routes to redirect into.
+    if (process.env.APP_MODE === "public") return [];
     return [
       { source: "/office/tickets", destination: "/office/repairing/tickets", permanent: false },
       { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },

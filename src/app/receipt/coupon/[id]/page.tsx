@@ -5,10 +5,13 @@ import ReceiptButtons from "@/shared/components/ReceiptButtons";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { couponHeadline, couponValueText } from "@/modules/coupons/lib/couponShare";
+import { requireStaffPage } from "@/shared/lib/auth/permissions";
 
 // Standalone, print-friendly coupon design. Opened from the Coupons admin page;
 // ReceiptButtons auto-prints on mount. Carries a scannable QR of the code.
 export default async function CouponPrintPage({ params }: { params: Promise<{ id: string }> }) {
+    await requireStaffPage();
+
     const { id } = await params;
 
     const coupon = await prisma.coupon.findUnique({ where: { id: Number(id) } });

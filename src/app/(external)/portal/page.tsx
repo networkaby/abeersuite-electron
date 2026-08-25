@@ -90,9 +90,6 @@ export default async function PortalHomePage() {
                     </Card>
                 </section>
             ) : null}
-            <p className="text-xs text-muted-foreground px-1 pb-2">
-                Staff sign-in: <Link className="underline" href="/staff/login">/staff/login</Link>
-            </p>
         </main>
     );
 }

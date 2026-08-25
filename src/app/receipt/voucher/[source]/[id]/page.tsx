@@ -7,6 +7,7 @@ import {
     buildVoucherReceiptSample,
     type VoucherReceiptSource,
 } from "@/modules/accountancy/lib/voucherReceiptSample";
+import { requireStaffPage } from "@/shared/lib/auth/permissions";
 
 // ── Generic voucher print page ──────────────────────────────────────────────
 //
@@ -35,6 +36,8 @@ export default async function VoucherReceiptPage({
     params:        Promise<{ source: string; id: string }>;
     searchParams?: Promise<{ paper?: string; width?: string; autoprint?: string; mode?: string }>;
 }) {
+    await requireStaffPage();
+
     const { source, id } = await params;
     const sp = (await searchParams) ?? {};
 

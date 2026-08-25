@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
+import { IS_PUBLIC } from "@/shared/lib/appMode";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
@@ -141,22 +142,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
     },
     providers: [
-        Credentials({
-            id: "credentials-staff",
-            name: "Staff",
-            credentials: {
-                email: { label: "Email", type: "email" },
-                password: { label: "Password", type: "password" },
-            },
-            async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
-                return authorizeStaffCredentials(
-                    prisma,
-                    credentials.email as string,
-                    credentials.password as string
-                );
-            },
-        }),
+        // The staff provider is left off the public (shop) build entirely —
+        // office pages are already stripped there, so shipping a staff auth
+        // path alongside them would be a door with no room behind it.
+        ...(IS_PUBLIC ? [] : [
+            Credentials({
+                id: "credentials-staff",
+                name: "Staff",
+                credentials: {
+                    email: { label: "Email", type: "email" },
+                    password: { label: "Password", type: "password" },
+                },
+                async authorize(credentials) {
+                    if (!credentials?.email || !credentials?.password) return null;
+                    return authorizeStaffCredentials(
+                        prisma,
+                        credentials.email as string,
+                        credentials.password as string
+                    );
+                },
+            }),
+        ]),
         Credentials({
             id: "credentials-portal",
             name: "Portal",

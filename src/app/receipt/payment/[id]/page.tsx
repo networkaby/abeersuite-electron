@@ -10,6 +10,7 @@ import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { requireStaffPage } from "@/shared/lib/auth/permissions";
 
 // Payment slip for a GL cash voucher — a RECEIPT (money collected from a party
 // at the counter, the POS "Rcv" flow) or a PAYMENT (cash paid out, the "Exp"
@@ -23,6 +24,8 @@ export default async function PaymentReceiptPage({
     params:        Promise<{ id: string }>;
     searchParams?: Promise<{ paper?: string; autoprint?: string }>;
 }) {
+    await requireStaffPage();
+
     const { id } = await params;
     const sp = (await searchParams) ?? {};
 

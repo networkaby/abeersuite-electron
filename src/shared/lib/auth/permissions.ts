@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -129,6 +130,17 @@ export async function requireAuth(): Promise<GuardResult> {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return { user: resolveFromSession(session.user as SessionUserShape), response: null };
+}
+
+/**
+ * Staff page gate — redirects to staff login if signed out, or `/office` if
+ * the session belongs to a portal customer. For Server Components, which
+ * can't return the NextResponse `requireAuth` uses for API routes.
+ */
+export async function requireStaffPage(): Promise<void> {
+    const session = await auth();
+    if (!session?.user) redirect("/staff/login");
+    if ((session.user as { kind?: string }).kind === "customer") redirect("/office");
 }
 
 /** Restrict by primary role label (e.g. `"R1"`, `"R2"`). */

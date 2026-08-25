@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev",
-    "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
+    "build": "node scripts/strip-public-build.mjs && prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",

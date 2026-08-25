@@ -77,10 +77,10 @@ export default function PortalOrderCard({ order }: { order: PortalOrderDto }) {
         order.statusId === "S48" ? "Cancelled" : order.statusId === "S49" ? "Returned" : null;
     const reached = order.statusId ? STAGE_ORDER.indexOf(order.statusId) : 0;
 
+    // `/receipt/invoice` is the staff print surface (staff login required).
+    // Customers get their own ownership-checked bill view instead.
     const invoiceHref = order.invoice
-        ? `/receipt/invoice/${order.invoice.detailId}?kind=ONLINE_INVOICE&paper=A4${
-              order.invoice.placeOfSupply ? `&placeOfSupply=${order.invoice.placeOfSupply}` : ""
-          }`
+        ? `/portal/orders/${order.invoice.detailId}/bill`
         : null;
 
     const show = (v: "details" | "timeline") => {

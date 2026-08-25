@@ -8,6 +8,7 @@ import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/frag
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { RepairTicketBody, type RepairTicketBodyData } from "@/shared/components/print/RepairTicketBody";
+import { requireStaffPage } from "@/shared/lib/auth/permissions";
 
 // Repair ticket / job receipt. Prints through the shared template-driven
 // renderer (REPAIR_TICKET kind) following the house print rule: thermal fires
@@ -24,6 +25,8 @@ export default async function ReceiptPage({
     params:        Promise<{ id: string }>;
     searchParams?: Promise<{ paper?: string; autoprint?: string }>;
 }) {
+    await requireStaffPage();
+
     const { id } = await params;
     const sp = (await searchParams) ?? {};
 

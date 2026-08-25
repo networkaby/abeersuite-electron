@@ -4,11 +4,14 @@ import QRCode from "qrcode";
 import ReceiptButtons from "@/shared/components/ReceiptButtons";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { requireStaffPage } from "@/shared/lib/auth/permissions";
 
 // Standalone, print-friendly "beautiful" gift-card design. Opened in a new tab
 // from the Gift Cards admin page; ReceiptButtons auto-prints on mount. Carries a
 // scannable QR of the code plus the human-readable code for POS redemption.
 export default async function GiftCardPrintPage({ params }: { params: Promise<{ id: string }> }) {
+    await requireStaffPage();
+
     const { id } = await params;
 
     const card = await prisma.giftCard.findUnique({

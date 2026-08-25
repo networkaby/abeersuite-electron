@@ -24,7 +24,7 @@ function isPublicPath(pathname: string): boolean {
 }
 
 function wantsStaffSignIn(pathname: string): boolean {
-    return pathname.startsWith("/office");
+    return pathname.startsWith("/office") || pathname.startsWith("/receipt");
 }
 
 export default auth((req) => {
@@ -80,6 +80,8 @@ export const config = {
         // Skip API, Next internals, print surfaces, and any static file in /public
         // (anything with a file extension). Without the extension escape, /logo.svg
         // and friends get auth-redirected to /login and serve HTML instead of the asset.
-        "/((?!api|_next/static|_next/image|favicon.ico|receipt|shipping-slip|shipping-label|.*\\.[\\w]+$).*)",
+        // `receipt` is NOT excluded — each page under it calls requireStaffPage()
+        // itself, but proxy coverage is defense in depth against a page that forgets.
+        "/((?!api|_next/static|_next/image|favicon.ico|shipping-slip|shipping-label|.*\\.[\\w]+$).*)",
     ],
 };
