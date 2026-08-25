@@ -9,7 +9,7 @@
  */
 
 import { barcodePrice, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
-import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 
 /** One label, as rendered by the designer (all display strings, in ₹). */
 export type Item = {

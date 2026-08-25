@@ -54,7 +54,7 @@ import {
     type ConditionProduct,
 } from "@/modules/pricing-strategy/components/MatchConditions";
 import { PaginationBar } from "@/shared/components/PaginationBar";
-import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
 import { sumGroupPointsWithAncestors } from "@/modules/pricing-strategy/lib/groupPointsHierarchy";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";

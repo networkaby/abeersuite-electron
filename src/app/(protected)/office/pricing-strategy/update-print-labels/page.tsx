@@ -33,7 +33,7 @@ import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from 
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { gridRowClass } from "@/shared/lib/format";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { productMatchesQuery } from "@/shared/lib/inventory";

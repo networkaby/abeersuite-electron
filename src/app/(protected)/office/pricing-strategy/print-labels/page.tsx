@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { normalizeBarcodeBands, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { LabelDesigner } from "@/modules/inventory/components/LabelDesigner";
 import {
