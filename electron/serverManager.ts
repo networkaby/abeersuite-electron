@@ -52,7 +52,7 @@ function isHttpReady(url: string, timeoutMs = 1000): Promise<boolean> {
  * In dev mode (NODE_ENV=development or unpackaged) the dev server is expected
  * to already be running — we just return the URL and skip spawning.
  */
-export async function startNextServer(port = 3000): Promise<ServerStartResult> {
+export async function startNextServer(port = 3000, compileCacheDir?: string): Promise<ServerStartResult> {
     const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
     if (isDev) {
         // package.json's electron:dev script runs `wait-on` before launching Electron,
@@ -88,16 +88,25 @@ export async function startNextServer(port = 3000): Promise<ServerStartResult> {
             HOSTNAME: "0.0.0.0",
             NODE_ENV: "production",
             ELECTRON_RUN_AS_NODE: "1",
+            // Persists V8's compiled-bytecode cache across launches (Node 22+). Doesn't
+            // touch the dominant cost (executing module top-level code, e.g. building the
+            // Prisma client) but skips recompiling the same ~23MB of server chunks every
+            // boot — measured ~0.7s off a real packaged build. Lives in userData, not the
+            // app install dir, since electron-builder ships that dir read-only-ish and it
+            // must survive updates that replace the standalone folder.
+            ...(compileCacheDir ? { NODE_COMPILE_CACHE: compileCacheDir } : {}),
         },
         stdio: "pipe",
     });
 
-    // Pipe child stdout/stderr to the main process console for debugging.
+    // Pipe child stdout/stderr through console logger so it is recorded in main.log.
     nextProcess.stdout?.on("data", (chunk: Buffer) => {
-        process.stdout.write(`[NextServer] ${chunk.toString()}`);
+        const text = chunk.toString().trimEnd();
+        if (text) console.log(`[NextServer] ${text}`);
     });
     nextProcess.stderr?.on("data", (chunk: Buffer) => {
-        process.stderr.write(`[NextServer:err] ${chunk.toString()}`);
+        const text = chunk.toString().trimEnd();
+        if (text) console.error(`[NextServer:err] ${text}`);
     });
 
     nextProcess.on("error", (err) => {
@@ -109,11 +118,14 @@ export async function startNextServer(port = 3000): Promise<ServerStartResult> {
         nextProcess = null;
     });
 
-    // 1. Wait up to 30s for the TCP port to open.
+    // 1. Wait up to 30s for the TCP port to open. Polled at 50ms (was 200ms) — with
+    //    preloadEntriesOnStart off (next.config.ts), the port now opens almost as soon
+    //    as the process starts, so the old 200ms granularity was itself adding up to
+    //    ~150ms of pure poll-interval slop to every boot for no reason.
     const url = `http://127.0.0.1:${port}`;
     let tcpReady = false;
-    for (let i = 0; i < 150; i++) {
-        await new Promise((r) => setTimeout(r, 200));
+    for (let i = 0; i < 600; i++) {
+        await new Promise((r) => setTimeout(r, 50));
         if (await isPortListeningLocal(port, 200)) {
             tcpReady = true;
             break;
@@ -126,17 +138,50 @@ export async function startNextServer(port = 3000): Promise<ServerStartResult> {
     }
 
     // 2. Ensure Next.js is actually answering HTTP requests without abort flooding.
-    const probeUrl = `${url}/staff/login`;
-    for (let attempt = 1; attempt <= 15; attempt++) {
-        if (await isHttpReady(probeUrl, 4000)) {
-            console.log(`[NextServer] Standalone server is HTTP ready on ${url}`);
-            return { url, ready: true };
+    //    150ms between rounds (was 500ms): once the TCP port is open, a probe either
+    //    answers or is refused almost immediately, so the old fixed 500ms mostly just
+    //    sat idle between rounds instead of catching readiness sooner.
+    const probeEndpoints = [`${url}/api/health`, `${url}/`];
+    for (let attempt = 1; attempt <= 60; attempt++) {
+        for (const probeUrl of probeEndpoints) {
+            if (await isHttpReady(probeUrl, 3000)) {
+                console.log(`[NextServer] Standalone server is HTTP ready on ${url} (verified via ${probeUrl})`);
+                return { url, ready: true };
+            }
         }
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 150));
     }
 
     console.error("[NextServer] Server did not become HTTP ready within timeout.");
     return { url, ready: false };
+}
+
+/**
+ * Fires background GET requests at a list of route paths so their entries compile
+ * before staff actually navigate there.
+ *
+ * Only useful because next.config.ts turns off `preloadEntriesOnStart` for the
+ * counter build: that flag used to eagerly compile all ~1300 route entries (pos,
+ * office, vouchers, every api/* handler) before the server answered its first
+ * request — measured ~7s of the app's ~15s cold start. Off, boot is fast but every
+ * route pays its compile cost on its own first hit instead. Calling this right
+ * after the login page has loaded (electron/main.ts) moves that cost into the few
+ * seconds staff spend looking at / typing into the login screen — the compiles run
+ * in that idle time and never end up in front of a spinner.
+ *
+ * Fire-and-forget: a warm miss just means that route compiles on its real first
+ * visit instead, same as it would have without this at all.
+ */
+export function warmRoutes(baseUrl: string, routePaths: readonly string[]): void {
+    for (const routePath of routePaths) {
+        const target = `${baseUrl}${routePath}`;
+        http.get(target, { timeout: 15000 }, (res) => {
+            res.resume();
+            console.log(`[NextServer] Warmed ${routePath} (${res.statusCode})`);
+        }).on("error", (err) => {
+            console.warn(`[NextServer] Warm request failed for ${routePath}:`, (err as Error).message);
+        });
+    }
 }
 
 /**

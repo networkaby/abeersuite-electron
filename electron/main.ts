@@ -522,7 +522,61 @@ function setupAutoUpdater(): void {
 }
 
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
-import { startNextServer, stopNextServer, type ServerStartResult } from "./serverManager";
+import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
+
+// ── Route warming ─────────────────────────────────────────────────────────────
+// See serverManager.ts's warmRoutes() for why this exists: preloadEntriesOnStart
+// is off, so route entries compile on first hit. These are the routes to hit
+// pre-emptively, in the idle seconds between the login page loading and staff
+// actually signing in.
+//
+// A small fixed seed (the areas asked for: POS, office, the day book report) plus
+// whatever this specific counter has actually opened before, learned at runtime —
+// a manager's PC and a till open different modules, and this adapts to each
+// without a config file per machine.
+const DEFAULT_WARM_ROUTES = ["/office/pos", "/vouchers/pos", "/office", "/office/accountancy/reports/day-book"];
+const WARM_ROUTES_MAX = 40;
+const visitedRoutes = new Set<string>();
+
+function warmRoutesFilePath(): string {
+    return path.join(app.getPath("userData"), "warm-routes.json");
+}
+
+function recordVisitedRoute(rawUrl: string): void {
+    try {
+        const { pathname } = new URL(rawUrl);
+        // /api/* and the login page itself add no value to pre-warm: the login page is
+        // already the first thing loaded, and API routes are hit incidentally by every
+        // page so warming them separately is redundant.
+        if (pathname && pathname !== "/" && !pathname.startsWith("/api/") && pathname !== "/staff/login") {
+            visitedRoutes.add(pathname);
+        }
+    } catch {
+        // Non-http(s) URLs (data:, about:blank from the splash/error screens) — ignore.
+    }
+}
+
+function persistVisitedRoutes(): void {
+    if (visitedRoutes.size === 0) return;
+    try {
+        const routes = Array.from(visitedRoutes).slice(-WARM_ROUTES_MAX);
+        fs.writeFileSync(warmRoutesFilePath(), JSON.stringify({ routes, updatedAt: new Date().toISOString() }));
+    } catch (err) {
+        console.warn("[main] Could not persist warm-routes.json:", err);
+    }
+}
+
+function loadPersistedWarmRoutes(): string[] {
+    try {
+        const parsed = JSON.parse(fs.readFileSync(warmRoutesFilePath(), "utf-8")) as { routes?: unknown };
+        if (Array.isArray(parsed.routes)) {
+            return parsed.routes.filter((r): r is string => typeof r === "string");
+        }
+    } catch {
+        // No file yet on first run, or it's unreadable — fall through to the seed list.
+    }
+    return [];
+}
 
 // ── Splash / cold-start / boot-failure screens ───────────────────────────────
 // All three are self-authored data: URLs, not files under resources/ — nothing here is
@@ -697,6 +751,11 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
     });
 
     attachWindowOpenPolicy(win);
+    // did-navigate covers full loads; did-navigate-in-page covers Next's client-side
+    // router (pushState) — staff move between office/pos/vouchers screens without a
+    // full reload, so only the latter fires for most in-app navigation.
+    win.webContents.on("did-navigate", (_e, url) => recordVisitedRoute(url));
+    win.webContents.on("did-navigate-in-page", (_e, url) => recordVisitedRoute(url));
     if (!initiallyHidden) {
         win.once("ready-to-show", () => win.show());
     }
@@ -779,19 +838,37 @@ app.whenReady().then(async () => {
     sendBootProgress("Starting server…");
     let result: ServerStartResult = { url: `http://127.0.0.1:${PORT}`, ready: false };
     try {
-        result = await startNextServer(Number(PORT));
+        result = await startNextServer(Number(PORT), path.join(app.getPath("userData"), "v8-compile-cache"));
     } catch (err) {
         console.error("[Main] Error starting Next.js server:", err);
     }
 
     if (result.ready) {
         sendBootProgress("Almost there…");
+        // Warm the routes staff actually use once — but only after the login page
+        // itself has finished loading, so the warm requests never compete with it for
+        // the server's single event loop. From then on they run in the idle seconds
+        // between the login screen appearing and staff typing their PIN, not in front
+        // of a spinner. See serverManager.ts's warmRoutes().
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const readyUrl = result.url;
+            mainWindow.webContents.once("did-finish-load", () => {
+                const routes = Array.from(new Set([...DEFAULT_WARM_ROUTES, ...loadPersistedWarmRoutes()]));
+                warmRoutes(readyUrl, routes);
+            });
+        }
         await loadApp(result.url);
     } else {
         if (!isHiddenLaunch) {
             showBootError(result.url);
         }
     }
+
+    // Counter PCs in tray/background mode can go a long time between a clean quit
+    // (which is when persistVisitedRoutes() normally runs) — an abrupt power-off or
+    // Windows update reboot would otherwise lose everything learned since the last
+    // exit. Cheap to redo periodically since it's just a Set -> JSON.stringify.
+    setInterval(persistVisitedRoutes, 10 * 60 * 1000);
 
     setupAutoUpdater();
 
@@ -802,6 +879,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
     isQuitting = true;
+    persistVisitedRoutes();
 });
 
 app.on("will-quit", () => {

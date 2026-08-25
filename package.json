@@ -15,7 +15,7 @@
     "verify:package": "tsx scripts/verify-package.ts",
     "icon:build": "electron scripts/make-icon.js",
     "build:downloader": "tsx scripts/build-downloader.ts",
-    "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
+    "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/counter-build.ts",
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",

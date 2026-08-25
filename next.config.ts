@@ -11,6 +11,20 @@ const nextConfig: NextConfig = {
   // counter — no `pnpm install` on a shop machine, no node_modules to keep in sync
   // with the build.
   ...(COUNTER_BUILD ? { output: "standalone" as const } : {}),
+  ...(COUNTER_BUILD
+    ? {
+        experimental: {
+          // Default true: the standalone server eagerly compiles+executes every
+          // route entry (1300+ across pos/office/portal/shop/api) before it answers
+          // its first request — measured ~7s of the counter app's ~15s cold start.
+          // Off, boot only pays for Next's own core; each route instead compiles on
+          // its own first hit. electron/main.ts's warmRoutes() then pre-hits the
+          // routes a counter actually uses while the window is still painting, so
+          // that lazy cost lands in time we're already spending, not in front of staff.
+          preloadEntriesOnStart: false,
+        },
+      }
+    : {}),
   images: {
     // On the counter the optimizer is actively harmful, not merely useless: an
     // <Image> pointing at Cloudinary becomes a /_next/image request that makes the
