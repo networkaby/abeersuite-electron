@@ -598,6 +598,10 @@ function sendBootProgress(message: string): void {
 // split is by origin, not by allow/deny wholesale — our own pages open as real
 // windows, everything else is handed to the user's browser.
 const APP_ORIGIN = `http://127.0.0.1:${PORT}`;
+// Version in the title so a support call can immediately tell which build someone is
+// running, without digging through Settings — plain native window chrome, not a
+// web-app-style title bar.
+const APP_TITLE = `AbeerSuite ${app.getVersion()}`;
 
 // Resolved against APP_ORIGIN as base, so a relative target ("/vouchers/pos/help" — the
 // form most callers in the app use) is correctly judged same-origin. An absolute URL
@@ -616,6 +620,12 @@ function classifyTarget(rawUrl: string): { internal: boolean; href: string; prot
  * window that opens a further link must not fall back to Electron's permissive default.
  */
 function attachWindowOpenPolicy(win: BrowserWindow): void {
+    // Electron syncs the window title to document.title on every navigation by default —
+    // the splash page, the boot-error page, and every real app page each carry their own
+    // <title>, which would silently overwrite the version-stamped title set at
+    // construction the instant any of them loads. Pin it here instead.
+    win.on("page-title-updated", (event) => event.preventDefault());
+
     win.webContents.setWindowOpenHandler(({ url }) => {
         const target = classifyTarget(url);
         if (!target) return { action: "deny" };
@@ -630,7 +640,7 @@ function attachWindowOpenPolicy(win: BrowserWindow): void {
                     height: 820,
                     minWidth: 900,
                     minHeight: 600,
-                    title: "AbeerSuite",
+                    title: APP_TITLE,
                     autoHideMenuBar: true,
                     backgroundColor: SPLASH_BG,
                     webPreferences: {
@@ -671,7 +681,7 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
         height: 860,
         minWidth: 1024,
         minHeight: 700,
-        title: "AbeerSuite",
+        title: APP_TITLE,
         autoHideMenuBar: true,
         show: false,
         backgroundColor: SPLASH_BG,

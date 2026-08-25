@@ -1,6 +1,6 @@
 {
   "name": "abeersuite-electron",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AbeerSuite Desktop Operating System",
   "author": "AbeerSuite",
   "main": "dist-electron/main.js",
@@ -14,6 +14,7 @@
     "electron:release": "pnpm electron:pack && tsx scripts/release-electron.ts",
     "verify:package": "tsx scripts/verify-package.ts",
     "icon:build": "electron scripts/make-icon.js",
+    "build:downloader": "tsx scripts/build-downloader.ts",
     "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
@@ -184,7 +185,10 @@
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
+      "allowElevation": true,
+      "runAfterFinish": false,
+      "installerHeaderIcon": "build/icon.png",
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
