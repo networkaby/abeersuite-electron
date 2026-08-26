@@ -54,11 +54,13 @@
     "check:counter-mode": "tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter",
     "sync:tables": "tsx scripts/gen-sync-registry.ts",
     "sync:tables:check": "tsx scripts/gen-sync-registry.ts --check",
+    "db:local-schema": "tsx scripts/gen-local-schema.ts",
+    "db:local-schema:check": "tsx scripts/gen-local-schema.ts --check",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
     "check:guard-lint": "tsx scripts/check-guard-lint.ts",
-    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-guard-lint.ts",
+    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/gen-local-schema.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-guard-lint.ts",
     "install:git-hooks": "tsx scripts/install-git-hooks.ts"
   },
   "dependencies": {
@@ -161,6 +163,10 @@
       {
         "from": "resources/counter.env",
         "to": "counter.env"
+      },
+      {
+        "from": "resources/local-schema.sql",
+        "to": "local-schema.sql"
       },
       {
         "from": "resources/pgsql",
