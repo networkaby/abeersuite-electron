@@ -582,17 +582,42 @@ function warmRoutesFilePath(): string {
     return path.join(app.getPath("userData"), "warm-routes.json");
 }
 
+/**
+ * Is this something we can safely append to the server's origin and GET?
+ *
+ * The leading-slash test is the load-bearing part, and it exists because of a real
+ * crash: the splash and boot-error screens are `data:text/html,...` URLs, and
+ * `new URL()` parses those perfectly happily — `data:` is a valid scheme, so the
+ * try/catch that was meant to reject them never fired. Their "pathname"
+ * (`text/html;charset=utf-8,%3C!doctype...`) got recorded, persisted to
+ * warm-routes.json, and on the NEXT launch was concatenated onto the origin into
+ * `http://127.0.0.1:786text/html;...` — an invalid URL, thrown from inside
+ * warmRoutes, which took the whole main process down with "A JavaScript error
+ * occurred in the main process".
+ */
+function isWarmablePath(pathname: string): boolean {
+    // A real route path always starts with exactly one "/". "//host" would be
+    // protocol-relative and resolve off-origin, so it is rejected too.
+    if (!pathname.startsWith("/") || pathname.startsWith("//")) return false;
+    // /api/* and the landing page itself add no value to pre-warm: the landing page is
+    // already the first thing loaded, and API routes are hit incidentally by every
+    // page so warming them separately is redundant.
+    if (pathname === "/" || pathname.startsWith("/api/") || pathname === LANDING_PAGE) return false;
+    return true;
+}
+
 function recordVisitedRoute(rawUrl: string): void {
     try {
-        const { pathname } = new URL(rawUrl);
-        // /api/* and the login page itself add no value to pre-warm: the login page is
-        // already the first thing loaded, and API routes are hit incidentally by every
-        // page so warming them separately is redundant.
-        if (pathname && pathname !== "/" && !pathname.startsWith("/api/") && pathname !== LANDING_PAGE) {
-            visitedRoutes.add(pathname);
+        const parsed = new URL(rawUrl);
+        // Scheme check first: only pages actually served by our own Next server are
+        // worth warming. data:/about:/file: all parse fine, so they must be excluded
+        // explicitly rather than relied on to throw.
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return;
+        if (isWarmablePath(parsed.pathname)) {
+            visitedRoutes.add(parsed.pathname);
         }
     } catch {
-        // Non-http(s) URLs (data:, about:blank from the splash/error screens) — ignore.
+        // Genuinely unparseable — ignore.
     }
 }
 
@@ -610,7 +635,10 @@ function loadPersistedWarmRoutes(): string[] {
     try {
         const parsed = JSON.parse(fs.readFileSync(warmRoutesFilePath(), "utf-8")) as { routes?: unknown };
         if (Array.isArray(parsed.routes)) {
-            return parsed.routes.filter((r): r is string => typeof r === "string");
+            // Re-validated on the way IN, not just on the way out: machines that ran an
+            // earlier build already have a poisoned warm-routes.json on disk (see
+            // isWarmablePath), and it must not be trusted just because we wrote it.
+            return parsed.routes.filter((r): r is string => typeof r === "string" && isWarmablePath(r));
         }
     } catch {
         // No file yet on first run, or it's unreadable — fall through to the seed list.

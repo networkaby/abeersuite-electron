@@ -175,13 +175,35 @@ export async function startNextServer(port = 3000, compileCacheDir?: string): Pr
  */
 export function warmRoutes(baseUrl: string, routePaths: readonly string[]): void {
     for (const routePath of routePaths) {
-        const target = `${baseUrl}${routePath}`;
-        http.get(target, { timeout: 15000 }, (res) => {
-            res.resume();
-            console.log(`[NextServer] Warmed ${routePath} (${res.statusCode})`);
-        }).on("error", (err) => {
-            console.warn(`[NextServer] Warm request failed for ${routePath}:`, (err as Error).message);
-        });
+        // Resolved against the origin rather than string-concatenated, and wrapped:
+        // http.get() throws SYNCHRONOUSLY on a malformed URL, so a single bad entry used
+        // to escape this loop and kill the main process with "A JavaScript error occurred
+        // in the main process" — the opposite of the fire-and-forget contract above.
+        // Warming is an optimisation; nothing here may ever be fatal.
+        let target: string;
+        try {
+            const url = new URL(routePath, baseUrl);
+            // A path that resolved off our own origin is not ours to warm.
+            if (url.origin !== new URL(baseUrl).origin) {
+                console.warn(`[NextServer] Skipping off-origin warm path: ${routePath}`);
+                continue;
+            }
+            target = url.toString();
+        } catch {
+            console.warn(`[NextServer] Skipping unusable warm path: ${routePath}`);
+            continue;
+        }
+
+        try {
+            http.get(target, { timeout: 15000 }, (res) => {
+                res.resume();
+                console.log(`[NextServer] Warmed ${routePath} (${res.statusCode})`);
+            }).on("error", (err) => {
+                console.warn(`[NextServer] Warm request failed for ${routePath}:`, (err as Error).message);
+            });
+        } catch (err) {
+            console.warn(`[NextServer] Warm request could not start for ${routePath}:`, (err as Error).message);
+        }
     }
 }
 

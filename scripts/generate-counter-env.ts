@@ -46,16 +46,21 @@ function main(): void {
 
     // .env.counter is the desktop-variant source of truth — where the owner sets
     // APP_MODE and LANDING_PAGE before an electron build (see scripts/electron-build.ts,
-    // which loads it into process.env before this ever runs). Falls back to the root
-    // .env, then to the real process environment so a CI runner can inject secrets
-    // without writing a file at all.
+    // which loads it into process.env before this ever runs). MERGED with the root .env
+    // (counter wins on overlap), not either/or: .env.counter is deliberately minimal —
+    // just the variant knobs plus whatever the owner has copied over — so a key it
+    // doesn't set (e.g. INTERNAL_STAFF_EMAIL_DOMAINS) must still fall through to .env
+    // rather than the whole build treating it as absent. process.env is the last resort,
+    // so a CI runner can inject secrets without writing either file.
     const counterEnvPath = path.join(rootDir, ".env.counter");
     const rootEnvPath = path.join(rootDir, ".env");
-    const source = fs.existsSync(counterEnvPath)
-        ? parseEnvFile(counterEnvPath)
-        : fs.existsSync(rootEnvPath)
-          ? parseEnvFile(rootEnvPath)
-          : new Map<string, string>();
+    const source = new Map<string, string>();
+    if (fs.existsSync(rootEnvPath)) {
+        for (const [key, value] of parseEnvFile(rootEnvPath)) source.set(key, value);
+    }
+    if (fs.existsSync(counterEnvPath)) {
+        for (const [key, value] of parseEnvFile(counterEnvPath)) source.set(key, value);
+    }
     if (!fs.existsSync(counterEnvPath) && !fs.existsSync(rootEnvPath)) {
         console.warn(
             "[generate-counter-env] No .env.counter or .env on this machine — reading the process environment instead."
