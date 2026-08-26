@@ -132,6 +132,7 @@
   "build": {
     "appId": "com.abeersuite.desktop",
     "productName": "AbeerSuite",
+    "npmRebuild": false,
     "asar": true,
     "compression": "maximum",
     "electronLanguages": [

@@ -43,6 +43,21 @@ import { hoistNodeModules } from "./lib/hoistNodeModules";
  * dependency that is NOT N-API needs `@electron/rebuild` adding to this chain. Note
  * `asarUnpack` is not part of that: these workers ship via `extraResources`, so their
  * binaries already sit on a real path beside the asar rather than inside it.
+ *
+ * ── Why package.json sets `npmRebuild: false` ────────────────────────────────
+ * electron-builder rebuilds any native dependency it finds in `package.json` by default.
+ * Once `serialport` became a top-level dependency it did exactly that — invoking
+ * node-gyp, which needs a Visual Studio toolchain, and failing the whole build with
+ * "Could not find any Visual Studio installation to use" on a machine that has never
+ * needed one.
+ *
+ * That rebuild is pure downside here. The packaged app's own `files` list excludes
+ * `node_modules` entirely; the only tree inside the asar is `dist-electron/node_modules`
+ * (dotenv, electron-updater, pg — all pure JS). The native modules travel a different
+ * road: staged by THIS script into each worker's directory and shipped via
+ * `extraResources`, as prebuilt N-API binaries that already satisfy Electron's ABI. So
+ * there is nothing for electron-builder to usefully rebuild, and letting it try only
+ * adds a toolchain requirement to every build machine.
  */
 const BRIDGE_DEPS: Record<string, string[]> = {
     "sync-engine": ["pg", "@supabase/supabase-js"],
