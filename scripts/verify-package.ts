@@ -446,6 +446,45 @@ function checkResourcesSize(packageDir: string, failures: string[]): void {
     }
 }
 
+/**
+ * The replica's schema and the PostgreSQL that runs it.
+ *
+ * Neither is fatal to *starting* the app — `ensurePostgresRunning()` and
+ * `provisionLocalDatabase()` both fall back to live mode on anything missing. That is
+ * exactly why this check exists: an installer built without them looks completely
+ * healthy and quietly ships counters that read Supabase for every query, forever,
+ * which is the entire cost this project set out to remove.
+ */
+function checkReplicaPayload(packageDir: string, failures: string[]): void {
+    const resourcesDir = path.join(packageDir, "resources");
+
+    const schema = path.join(resourcesDir, "local-schema.sql");
+    if (!fs.existsSync(schema)) {
+        failures.push(
+            "resources/local-schema.sql is missing — a counter built from this package cannot "
+            + "create its local replica and will read Supabase for everything. "
+            + "Run `pnpm db:local-schema` and rebuild."
+        );
+    } else if (!fs.readFileSync(schema, "utf8").includes("CREATE TABLE")) {
+        failures.push("resources/local-schema.sql contains no CREATE TABLE — it is empty or truncated.");
+    }
+
+    // postgresManager.ts resolves resources/pgsql/bin and needs these three by name.
+    const binDir = path.join(resourcesDir, "pgsql", "bin");
+    if (!fs.existsSync(binDir)) {
+        failures.push(
+            "resources/pgsql is missing — no embedded PostgreSQL was bundled, so counters built "
+            + "from this package stay in live mode. Run `pnpm pg:fetch` and rebuild."
+        );
+    } else {
+        for (const exe of ["postgres.exe", "initdb.exe", "pg_ctl.exe"]) {
+            if (!fs.existsSync(path.join(binDir, exe))) {
+                failures.push(`resources/pgsql/bin/${exe} is missing — the embedded server cannot start.`);
+            }
+        }
+    }
+}
+
 function main(): void {
     const rootDir = process.cwd();
     const packageDir = path.resolve(rootDir, process.argv[2] || path.join("dist-app", "win-unpacked"));
@@ -490,6 +529,9 @@ function main(): void {
 
     // ── Check A4: resources/ has not regressed back toward its old duplicated size ──
     checkResourcesSize(packageDir, failures);
+
+    // ── Check A5: the local replica actually shipped ─────────────────────────
+    checkReplicaPayload(packageDir, failures);
 
     // ── Check B1: no .env files on disk ──────────────────────────────────────
     for (const file of allFiles) {

@@ -555,6 +555,7 @@ function setupAutoUpdater(): void {
 }
 
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
+import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
@@ -893,15 +894,32 @@ app.whenReady().then(async () => {
     try {
         const localDbUrl = await ensurePostgresRunning();
         if (localDbUrl) {
-            // Read-routing (prismaClient.ts / counterMode.ts) gates on COUNTER_PC, not on
-            // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
-            // result, rather than requiring it baked into the installer. serverManager.ts
-            // forks the Next server with `env: {...process.env}`, so this is inherited.
-            process.env.COUNTER_PC = "1";
-            // Owner decision: the app must SAY which database it picked, so the choice is
-            // never invisible. `counterStatus()` reports the same value to the in-app badge
-            // from LOCAL_DATABASE_SOURCE; this is the boot-time half of that.
-            sendBootProgress(`Local database ready (${process.env.LOCAL_DATABASE_SOURCE ?? "embedded"}).`);
+            sendBootProgress("Preparing local database…");
+            const appUrl = await provisionLocalDatabase(localDbUrl);
+            if (appUrl) {
+                // Downgrade from the superuser URL postgresManager handed back to the
+                // least-privilege app role, which cannot DELETE or change the schema.
+                process.env.LOCAL_DATABASE_URL = appUrl;
+                // Read-routing (prismaClient.ts / counterMode.ts) gates on COUNTER_PC, not on
+                // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
+                // result, rather than requiring it baked into the installer. serverManager.ts
+                // forks the Next server with `env: {...process.env}`, so this is inherited.
+                process.env.COUNTER_PC = "1";
+                // Owner decision: the app must SAY which database it picked, so the choice is
+                // never invisible. `counterStatus()` reports the same value to the in-app badge
+                // from LOCAL_DATABASE_SOURCE; this is the boot-time half of that.
+                sendBootProgress(`Local database ready (${process.env.LOCAL_DATABASE_SOURCE ?? "embedded"}).`);
+            } else {
+                // The server is up but the replica is not usable. Clear the URL
+                // postgresManager set: leaving it would make prismaClient.ts build a
+                // local client against an unprovisioned database, and `reportLiveDown()`
+                // demotes reads to LOCAL on any transient Supabase error — turning a
+                // brief network blip into pages that render with zero rows, which reads
+                // as "these records were deleted" rather than "this database is empty".
+                delete process.env.LOCAL_DATABASE_URL;
+                delete process.env.LOCAL_DATABASE_SOURCE;
+                sendBootProgress("Local database unavailable — using the live server.");
+            }
         } else {
             sendBootProgress("No local database — using the live server.");
         }

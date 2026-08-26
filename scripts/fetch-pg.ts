@@ -51,7 +51,7 @@ const PG_URL = `https://get.enterprisedb.com/postgresql/postgresql-${PG_VERSION}
  * hash it prints — an unpinned download is a supply-chain hole, so the script says so
  * loudly rather than pretending the check happened.
  */
-const PG_SHA256 = "";
+const PG_SHA256 = "d378882abd001a186735acd6f6ba716bca6ccd192e800412d4fd15ed25376b3e";
 
 /**
  * Directories removed after extraction. Everything here is documentation, developer

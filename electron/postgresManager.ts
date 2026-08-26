@@ -170,8 +170,21 @@ async function ensureLocalDatabase(port: number): Promise<boolean> {
     const client = new PgClient({ connectionString: adminUrl, connectionTimeoutMillis: 5000 });
     try {
         await client.connect();
-        const existing = await client.query<{ datcollate: string }>(
-            "SELECT datcollate FROM pg_database WHERE datname = $1",
+        // datlocprovider 'i' means ICU, and then the collation that actually orders text
+        // is the ICU locale, NOT `datcollate`. The first ladder rung below deliberately
+        // sets LC_COLLATE 'C' alongside an ICU locale, so a database created correctly
+        // reports datcollate = 'C' — comparing that against the source's 'en_US.UTF-8'
+        // would warn about a mismatch on every boot of a perfectly good replica.
+        //
+        // That column is `daticulocale` on PostgreSQL 15-16 and was renamed to
+        // `datlocale` in 17. Naming either one directly makes this query throw outright
+        // on the other version, so both are read through `to_jsonb`, where an absent key
+        // is simply null.
+        const existing = await client.query<{ collate: string; icuLocale: string | null; provider: string }>(
+            `SELECT datcollate           AS collate,
+                    datlocprovider       AS provider,
+                    COALESCE(to_jsonb(d) ->> 'datlocale', to_jsonb(d) ->> 'daticulocale') AS "icuLocale"
+               FROM pg_database d WHERE datname = $1`,
             [LOCAL_DB_NAME],
         );
 
@@ -179,12 +192,13 @@ async function ensureLocalDatabase(port: number): Promise<boolean> {
             // Already built. Say so if it disagrees with the source, because nothing
             // downstream will: mis-sorted reports do not raise anything.
             const source = await readSourceCollation();
-            if (source && existing.rows[0].datcollate !== source.collate
-                && existing.rows[0].datcollate !== source.icu) {
+            const row = existing.rows[0];
+            const effective = row.provider === "i" ? (row.icuLocale ?? row.collate) : row.collate;
+            if (source && effective !== source.collate && effective !== source.icu) {
                 console.warn(
-                    `[PostgresManager] WARNING: the local "${LOCAL_DB_NAME}" database collates as ` +
-                    `'${existing.rows[0].datcollate}' but the source uses '${source.collate}'. Text-ordered ` +
-                    "reports may disagree with live. Rebuilding the replica is the fix.",
+                    `[PostgresManager] WARNING: the local "${LOCAL_DB_NAME}" database orders text by ` +
+                    `'${effective}' but the source uses '${source.collate}'. Text-ordered reports may ` +
+                    "disagree with live. Rebuilding the replica is the fix.",
                 );
             }
             return true;
