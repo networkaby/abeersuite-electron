@@ -107,6 +107,33 @@ function getEmbeddedDataPath(): string {
 }
 
 /**
+ * Waits until PostgreSQL will actually answer a query.
+ *
+ * A listening port is NOT readiness, and the difference is not theoretical: the server
+ * binds its socket and then performs crash recovery, during which every connection is
+ * refused with "the database system is starting up" (SQLSTATE 57P03). The first
+ * packaged launch hit exactly that — the port answered in 0.4s, the very next statement
+ * was rejected, and the app fell back to live mode having just built a perfectly good
+ * cluster it then ignored.
+ *
+ * So this connects to the always-present `postgres` maintenance database instead.
+ * `canConnect()` runs `SELECT 1`, which is the only thing that proves the server is
+ * past recovery and accepting work.
+ *
+ * The budget is generous because the wait is bounded by recovery, not by a network:
+ * a first `initdb` is fast, but a cluster that was killed mid-write (a counter switched
+ * off at the wall — the normal way a shop closes) can take seconds to replay WAL.
+ */
+async function waitForPostgresReady(port: number, attempts = 60): Promise<boolean> {
+    const adminUrl = `postgresql://postgres@localhost:${port}/postgres`;
+    for (let i = 0; i < attempts; i++) {
+        if (await canConnect(adminUrl, 1000)) return true;
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    return false;
+}
+
+/**
  * `en_US.UTF-8` → `en-US`. A POSIX locale name is what Linux — and therefore the
  * source database — uses. Windows PostgreSQL's libc provider does not know those
  * names; ICU does, and names locales as BCP-47 tags.
@@ -316,13 +343,9 @@ async function startEmbeddedPostgres(): Promise<boolean> {
             console.error("[PostgresManager] Failed to start postgres process:", err);
         });
 
-        // Wait up to 5 seconds for the port to become ready.
-        for (let i = 0; i < 25; i++) {
-            await new Promise((r) => setTimeout(r, 200));
-            if (await isPortListening(EMBEDDED_PG_PORT, 200)) {
-                console.log(`[PostgresManager] Embedded PostgreSQL is ready on port ${EMBEDDED_PG_PORT}.`);
-                return true;
-            }
+        if (await waitForPostgresReady(EMBEDDED_PG_PORT)) {
+            console.log(`[PostgresManager] Embedded PostgreSQL is ready on port ${EMBEDDED_PG_PORT}.`);
+            return true;
         }
     } catch (err) {
         console.error("[PostgresManager] Error spawning postgres:", err);
@@ -379,6 +402,13 @@ export async function ensurePostgresRunning(): Promise<string | null> {
     //    exist yet, which step 2 is what fixes.
     if (await isPortListening(EMBEDDED_PG_PORT, 800)) {
         console.log(`[PostgresManager] Using the already-running embedded PostgreSQL (port ${EMBEDDED_PG_PORT}).`);
+        // Adopted, not started by us — so it may be a server that is still replaying
+        // WAL from an unclean shutdown. Same wait as the spawn path, for the same
+        // reason: the port is open well before queries are accepted.
+        if (!await waitForPostgresReady(EMBEDDED_PG_PORT)) {
+            console.warn("[PostgresManager] The running embedded PostgreSQL never became ready — staying in live mode.");
+            return null;
+        }
     } else if (!await startEmbeddedPostgres()) {
         return null;
     }
