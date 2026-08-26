@@ -107,6 +107,56 @@ function getEmbeddedDataPath(): string {
 }
 
 /**
+ * `en_US.UTF-8` → `en-US`. A POSIX locale name is what Linux — and therefore the
+ * source database — uses. Windows PostgreSQL's libc provider does not know those
+ * names; ICU does, and names locales as BCP-47 tags.
+ */
+function toIcuLocale(posix: string): string {
+    return posix.replace(/\.utf-?8$/i, "").replace(/_/g, "-");
+}
+
+/**
+ * Reads the collation of the database we are replicating.
+ *
+ * This has to come from the source rather than a constant, and getting it wrong is the
+ * worst class of bug this project can produce: a replica created with a different
+ * collation sorts text differently, so `ORDER BY name` returns a DIFFERENT ROW ORDER
+ * locally than live. No error, no failed query, no checksum mismatch — just reports
+ * that quietly disagree with the office.
+ *
+ * Returns null when the source cannot be reached, which the caller treats as "do not
+ * create the database yet". A replica built with a guessed collation cannot be detected
+ * later without comparing against live, so deferring to the next boot is strictly
+ * better than creating one that looks fine.
+ */
+async function readSourceCollation(): Promise<{ collate: string; icu: string } | null> {
+    const liveUrl = process.env.DATABASE_URL;
+    if (!liveUrl) return null;
+
+    const client = new PgClient({
+        // pg-connection-string now maps sslmode=require onto verify-full, which rejects
+        // Supabase's chain. prismaClient.ts strips it for the same reason.
+        connectionString: liveUrl.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, ""),
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 15_000,
+    });
+    try {
+        await client.connect();
+        const { rows } = await client.query<{ datcollate: string }>(
+            "SELECT datcollate FROM pg_database WHERE datname = current_database()",
+        );
+        const collate = rows[0]?.datcollate;
+        if (!collate) return null;
+        return { collate, icu: toIcuLocale(collate) };
+    } catch (err) {
+        console.warn("[PostgresManager] Could not read the source collation:", err instanceof Error ? err.message : err);
+        return null;
+    } finally {
+        await client.end().catch(() => {});
+    }
+}
+
+/**
  * `initdb` creates a cluster containing only `postgres` and the `template*` databases —
  * never the one this app connects to. Nothing used to create it, so the spawn path
  * below handed back `postgresql://…/smx` against a cluster where `smx` did not exist,
@@ -120,14 +170,79 @@ async function ensureLocalDatabase(port: number): Promise<boolean> {
     const client = new PgClient({ connectionString: adminUrl, connectionTimeoutMillis: 5000 });
     try {
         await client.connect();
-        const existing = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [LOCAL_DB_NAME]);
-        if (existing.rowCount === 0) {
-            // CREATE DATABASE takes no bind parameters and cannot run inside a
-            // transaction. LOCAL_DB_NAME is a module constant, never user input.
-            console.log(`[PostgresManager] Creating the "${LOCAL_DB_NAME}" database (first run on this machine).`);
-            await client.query(`CREATE DATABASE "${LOCAL_DB_NAME}"`);
+        const existing = await client.query<{ datcollate: string }>(
+            "SELECT datcollate FROM pg_database WHERE datname = $1",
+            [LOCAL_DB_NAME],
+        );
+
+        if (existing.rowCount && existing.rowCount > 0) {
+            // Already built. Say so if it disagrees with the source, because nothing
+            // downstream will: mis-sorted reports do not raise anything.
+            const source = await readSourceCollation();
+            if (source && existing.rows[0].datcollate !== source.collate
+                && existing.rows[0].datcollate !== source.icu) {
+                console.warn(
+                    `[PostgresManager] WARNING: the local "${LOCAL_DB_NAME}" database collates as ` +
+                    `'${existing.rows[0].datcollate}' but the source uses '${source.collate}'. Text-ordered ` +
+                    "reports may disagree with live. Rebuilding the replica is the fix.",
+                );
+            }
+            return true;
         }
-        return true;
+
+        const source = await readSourceCollation();
+        if (!source) {
+            console.warn(
+                `[PostgresManager] Deferring creation of "${LOCAL_DB_NAME}": the source collation is ` +
+                "unknown while offline, and guessing it would silently change how text sorts. " +
+                "Staying in live mode; will retry on the next boot.",
+            );
+            return false;
+        }
+
+        // TEMPLATE template0 is REQUIRED when specifying a locale — template1 may carry
+        // a different one and CREATE DATABASE then refuses the override. Tried in
+        // order: ICU (the only thing that can express a POSIX name on Windows), then
+        // the literal libc name, which is what works when the counter is Linux.
+        // LOCAL_DB_NAME and the locale are not user input, and CREATE DATABASE accepts
+        // no bind parameters.
+        const attempts = [
+            {
+                label: `ICU '${source.icu}' (portable equivalent of '${source.collate}')`,
+                sql: `CREATE DATABASE "${LOCAL_DB_NAME}" WITH TEMPLATE template0 ENCODING 'UTF8' `
+                    + `LOCALE_PROVIDER icu ICU_LOCALE '${source.icu}' LC_COLLATE 'C' LC_CTYPE 'C'`,
+            },
+            {
+                label: `ICU '${source.icu}' (inheriting template0's libc locale)`,
+                sql: `CREATE DATABASE "${LOCAL_DB_NAME}" WITH TEMPLATE template0 ENCODING 'UTF8' `
+                    + `LOCALE_PROVIDER icu ICU_LOCALE '${source.icu}'`,
+            },
+            {
+                label: `libc '${source.collate}' (copied from source)`,
+                sql: `CREATE DATABASE "${LOCAL_DB_NAME}" WITH TEMPLATE template0 ENCODING 'UTF8' `
+                    + `LC_COLLATE '${source.collate}' LC_CTYPE '${source.collate}'`,
+            },
+        ];
+
+        for (const attempt of attempts) {
+            try {
+                await client.query(attempt.sql);
+                console.log(`[PostgresManager] Created "${LOCAL_DB_NAME}" using ${attempt.label}.`);
+                return true;
+            } catch (err) {
+                console.warn(`[PostgresManager] ${attempt.label} rejected:`,
+                    err instanceof Error ? err.message : err);
+            }
+        }
+
+        // Deliberately not falling back to a bare CREATE DATABASE: the Windows default
+        // locale will not match the source, and that difference is invisible until
+        // someone notices two reports disagree.
+        console.error(
+            `[PostgresManager] Could not create "${LOCAL_DB_NAME}" with a collation matching the source. ` +
+            "Refusing to create one with a mismatched collation — staying in live mode.",
+        );
+        return false;
     } catch (err) {
         console.error(`[PostgresManager] Could not create or verify the "${LOCAL_DB_NAME}" database:`, err);
         return false;
