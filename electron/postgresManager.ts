@@ -16,6 +16,13 @@ const EMBEDDED_PG_PORT = 54329;
  */
 const LOCAL_DB_NAME = "smx";
 
+/**
+ * How long to wait for PostgreSQL to accept its first connection. Wall-clock, and
+ * deliberately generous: the wait is bounded by WAL recovery, not by a network, and the
+ * cost of giving up too early is a counter that silently reads Supabase all day.
+ */
+const READY_BUDGET_MS = 90_000;
+
 let pgProcess: ChildProcess | null = null;
 
 /**
@@ -120,14 +127,32 @@ function getEmbeddedDataPath(): string {
  * `canConnect()` runs `SELECT 1`, which is the only thing that proves the server is
  * past recovery and accepting work.
  *
- * The budget is generous because the wait is bounded by recovery, not by a network:
- * a first `initdb` is fast, but a cluster that was killed mid-write (a counter switched
- * off at the wall — the normal way a shop closes) can take seconds to replay WAL.
+ * ── The budget is a DEADLINE, not an attempt count ──────────────────────────
+ * This first shipped as 60 attempts of "connect, then sleep 250 ms", sized on the
+ * assumption that a failing attempt costs up to its 1 s connect timeout — roughly 75 s
+ * of budget. It does not: a *refused* connection comes back in about 120 ms, so the real
+ * budget was ~22 s. A packaged launch then failed at exactly 22 s, giving up on a
+ * cluster that was still replaying WAL after the app had been hard-killed — which is the
+ * normal state after a counter is switched off at the wall.
+ *
+ * Wall-clock is the only honest way to express "wait up to a minute and a half", because
+ * how long an attempt takes depends on whether the server is refusing, listening, or
+ * gone.
  */
-async function waitForPostgresReady(port: number, attempts = 60): Promise<boolean> {
+async function waitForPostgresReady(port: number, budgetMs = READY_BUDGET_MS): Promise<boolean> {
     const adminUrl = `postgresql://postgres@localhost:${port}/postgres`;
-    for (let i = 0; i < attempts; i++) {
-        if (await canConnect(adminUrl, 1000)) return true;
+    const deadline = Date.now() + budgetMs;
+    let announced = false;
+
+    while (Date.now() < deadline) {
+        if (await canConnect(adminUrl, 2000)) return true;
+
+        // Recovery can take a while and looks identical to a hang from outside, so say
+        // something once rather than sitting silent for a minute.
+        if (!announced && Date.now() > deadline - budgetMs + 5000) {
+            console.log("[PostgresManager] Still waiting for PostgreSQL to accept connections (recovery can take a while)…");
+            announced = true;
+        }
         await new Promise((r) => setTimeout(r, 250));
     }
     return false;
@@ -332,15 +357,44 @@ async function startEmbeddedPostgres(): Promise<boolean> {
         }
     }
 
+    // A hard-killed app (or a counter switched off at the wall) leaves a postmaster.pid
+    // behind. PostgreSQL normally detects a stale one and clears it, but it refuses to
+    // start if that PID now belongs to some unrelated process — and Windows reuses PIDs
+    // freely. Say so before starting, because the symptom otherwise is a silent
+    // twenty-second wait followed by "never became ready".
+    const pidFile = path.join(dataDir, "postmaster.pid");
+    if (fs.existsSync(pidFile)) {
+        console.log(`[PostgresManager] Found an existing ${pidFile} — previous shutdown was not clean.`);
+    }
+
     console.log(`[PostgresManager] Starting embedded PostgreSQL on port ${EMBEDDED_PG_PORT}...`);
     try {
+        // NOT "ignore". PostgreSQL explains itself on stderr — a stale lock file, a
+        // corrupt cluster, a port already bound, WAL recovery progress — and discarding
+        // that left a failure with no diagnosis at all: the app just reported "never
+        // became ready" and dropped to live mode, with nothing anywhere saying why.
+        // Relayed into the app log, which is the first thing anyone reads.
         pgProcess = spawn(postgresExe, ["-D", dataDir, "-p", String(EMBEDDED_PG_PORT)], {
             detached: false,
-            stdio: "ignore",
+            stdio: ["ignore", "pipe", "pipe"],
         });
+
+        const relay = (buf: Buffer) => {
+            for (const line of String(buf).split("\n")) {
+                if (line.trim()) console.log(`[postgres] ${line.trimEnd()}`);
+            }
+        };
+        pgProcess.stdout?.on("data", relay);
+        pgProcess.stderr?.on("data", relay);
 
         pgProcess.on("error", (err) => {
             console.error("[PostgresManager] Failed to start postgres process:", err);
+        });
+
+        pgProcess.on("exit", (code, sig) => {
+            // Exiting during startup is the interesting case: it means the wait below is
+            // doomed and the reason has just been relayed above.
+            console.warn(`[PostgresManager] postgres exited (code ${code}, signal ${sig}).`);
         });
 
         if (await waitForPostgresReady(EMBEDDED_PG_PORT)) {
@@ -352,7 +406,10 @@ async function startEmbeddedPostgres(): Promise<boolean> {
         return false;
     }
 
-    console.warn("[PostgresManager] Embedded PostgreSQL never became ready — staying in live mode.");
+    console.warn(
+        "[PostgresManager] Embedded PostgreSQL never became ready — staying in live mode. "
+        + `Any reason it gave is logged above as [postgres]; the cluster is at ${dataDir}.`,
+    );
     return false;
 }
 
