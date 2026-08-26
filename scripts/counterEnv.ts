@@ -31,15 +31,17 @@
  */
 
 import * as fs from "fs";
+import type { AppMode } from "../src/shared/lib/appModeCore";
 
 /** File name, both at `resources/<name>` in the build and next to the packaged app. */
 export const COUNTER_ENV_FILE = "counter.env";
 
 /**
- * Copied verbatim from the build machine's `.env`.
+ * Copied verbatim from the build machine's `.env` (or `.env.counter` — see
+ * `generate-counter-env.ts`), on every desktop variant regardless of `APP_MODE`.
  *
- * A key missing there is reported by name and skipped, so a counter build is never
- * silently configured with a stale value.
+ * A key missing there is reported by name and skipped, so a build is never silently
+ * configured with a stale value.
  */
 export const COUNTER_ENV_COPIED: readonly string[] = [
     // ── Data path ────────────────────────────────────────────────────────────
@@ -62,6 +64,9 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     // ── Operating mode ───────────────────────────────────────────────────────
     "APP_MODE",
     "READ_MODE",
+    // Electron window's start URL — see src/shared/lib/appModeCore.ts's
+    // resolveLandingPage(). A path only, validated at load time; not a credential.
+    "LANDING_PAGE",
 
     // ── Auto-update ──────────────────────────────────────────────────────────
     // GITHUB_UPDATE_REPO ("owner/repo") deliberately points at a separate, private,
@@ -72,23 +77,38 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     // skips update checks rather than failing the boot (electron/main.ts).
     "GITHUB_UPDATE_REPO",
     "PAT_TOKEN",
-
-    // ── Backup and restore: dormant in this build, on purpose ─────────────────
-    // Owner decision (2026-08-24): keep Dropbox/GitHub-triggered backup and restore
-    // dormant for now. `backupAvailability()` (src/shared/lib/backup/availability.ts)
-    // already reports `canBackup`/`canRestore` from key PRESENCE alone, and every route
-    // already renders the counter-only 503 shape — so simply not copying these seven
-    // keys turns the feature off everywhere with zero code change. To re-enable for a
-    // specific release, uncomment the block below; nothing else needs to change.
-    //
-    // "DROPBOX_APP_KEY",
-    // "DROPBOX_APP_SECRET",
-    // "DROPBOX_REFRESH_TOKEN",
-    // "DROPBOX_FOLDER",
-    // "GITHUB_DISPATCH_TOKEN",
-    // "GITHUB_REPO",
-    // "GITHUB_WORKFLOW_REF",
 ];
+
+/**
+ * Backup/restore keys — Dropbox-listing + GitHub-Actions-triggered dump/restore.
+ *
+ * Withheld from the `counter` variant on purpose: a till has no business triggering a
+ * database restore (the most destructive call in the app — see the comment in
+ * `src/app/api/settings/restore/route.ts`), and `backupAvailability()`
+ * (`src/shared/lib/backup/availability.ts`) already turns the whole feature off
+ * everywhere, with a gentle in-app message, purely from these keys being absent — see
+ * `BackupRestorePanel.tsx`. Granted to `office`, since admin/management is exactly who
+ * should be able to run a backup or restore from the desktop app.
+ */
+export const COUNTER_ENV_BACKUP_KEYS: readonly string[] = [
+    "DROPBOX_APP_KEY",
+    "DROPBOX_APP_SECRET",
+    "DROPBOX_REFRESH_TOKEN",
+    "DROPBOX_FOLDER",
+    "GITHUB_DISPATCH_TOKEN",
+    "GITHUB_REPO",
+    "GITHUB_WORKFLOW_REF",
+];
+
+/**
+ * Which keys `generate-counter-env.ts` copies, per desktop variant. `full`/`public`
+ * are Vercel modes in practice — if a desktop build is ever made with one of them
+ * (allowed, just unusual — see `electron-build.ts`), it gets the same minimal set as
+ * `counter`: withholding backup keys by default is the safer failure mode.
+ */
+export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
+    return mode === "office" ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS] : COUNTER_ENV_COPIED;
+}
 
 /**
  * Fixed values, identical on every counter, so they are written rather than copied.
@@ -111,11 +131,11 @@ export const COUNTER_ENV_REQUIRED: readonly string[] = [
     "INTERNAL_STAFF_EMAIL_DOMAINS",
 ];
 
-/** Every key the packaged file is allowed to contain. */
-export const COUNTER_ENV_ALLOWED: ReadonlySet<string> = new Set([
-    ...COUNTER_ENV_COPIED,
-    ...Object.keys(COUNTER_ENV_CONSTANTS),
-]);
+/** Every key the packaged file is allowed to contain, for the given variant. Used by
+ *  `verify-package.ts`'s packaging gate. */
+export function counterEnvAllowedFor(mode: AppMode): ReadonlySet<string> {
+    return new Set([...counterEnvCopiedFor(mode), ...Object.keys(COUNTER_ENV_CONSTANTS)]);
+}
 
 /**
  * Parses a `.env`-style file into key/value pairs, the way dotenv itself would.

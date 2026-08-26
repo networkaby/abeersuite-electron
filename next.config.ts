@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { parseAppMode, modeFlags } from "./src/shared/lib/appModeCore";
+
+// Reads APP_MODE directly rather than importing lib/appMode: next.config runs outside
+// the app's module graph, and appMode.ts pulls in the company constants. appModeCore.ts
+// is dependency-free precisely so this file (and the build scripts) can share the same
+// mode contract without that import.
+const { hasOfficeRoutes, indexable } = modeFlags(parseAppMode(process.env.APP_MODE));
 
 // Set only when building the artifact that runs ON a shop counter PC (localhost:3000
 // against a local Postgres replica). Unset everywhere else, so the Vercel build below
@@ -57,11 +64,9 @@ const nextConfig: NextConfig = {
   // This header travels with the response itself, so the instruction arrives even
   // when no HTML (and therefore no <meta name="robots">) is rendered.
   //
-  // Reads APP_MODE directly rather than importing lib/appMode: next.config runs
-  // outside the app's module graph, and appMode pulls in the company constants.
   // The default-to-full fallback is deliberately the same as appMode's.
   async headers() {
-    if (process.env.APP_MODE === "public") return [];
+    if (indexable) return []; // "public" mode only
     return [
       {
         source: "/:path*",
@@ -73,9 +78,9 @@ const nextConfig: NextConfig = {
   // restructure. Catches stored notification links and stale bookmarks while the
   // source-code refs are migrated.
   async redirects() {
-    // These all target /office/* — dead weight on the public build, which has
-    // no /office routes to redirect into.
-    if (process.env.APP_MODE === "public") return [];
+    // These all target /office/* — dead weight on any build with no /office routes.
+    // office and counter both keep /office, so they keep the redirects too.
+    if (!hasOfficeRoutes) return [];
     return [
       { source: "/office/tickets", destination: "/office/repairing/tickets", permanent: false },
       { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },

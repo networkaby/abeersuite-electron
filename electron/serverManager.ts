@@ -82,9 +82,10 @@ export async function startNextServer(port = 3000, compileCacheDir?: string): Pr
             ...process.env,
             PORT: String(port),
             // LAN-exposed on purpose: staff need to open a counter from another PC's
-            // browser (http://<counter-ip>:<port>), and each counter's port is unique
-            // (3000 + its EPBX extension, see main.ts resolvePort()) so counters on the
-            // same shop LAN never collide. Login is still required at the app layer.
+            // browser (http://<counter-ip>:786). Every counter binds the SAME fixed port
+            // (see main.ts resolvePort()) — the counter's IP is what disambiguates it on
+            // the shop LAN, not the port, since each counter is its own physical PC.
+            // Login is still required at the app layer.
             HOSTNAME: "0.0.0.0",
             NODE_ENV: "production",
             ELECTRON_RUN_AS_NODE: "1",

@@ -219,17 +219,50 @@ if (app.isPackaged) {
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 
 /**
- * Each counter serves itself on its own port — 3000 plus its two-digit EPBX extension
- * (e.g. extension "04" -> 3004) — so the same shop LAN can reach any counter's browser
- * directly by port number without a reverse proxy. COUNTER_EPBX_EXT is set per machine
- * in %APPDATA%/abeersuite-electron/.env (see .env.counter.example); it is never baked
- * into the shared counter.env because every counter's value is different.
+ * Minimal, deliberately duplicated copy of the mode/landing-page contract from
+ * `src/shared/lib/appModeCore.ts`. Not imported for the same reason `COUNTER_ENV_FILE`
+ * above is repeated rather than imported: this file is compiled by
+ * `electron/tsconfig.json`, rooted at `electron/`, and an import reaching outside that
+ * root would change the emitted output path and break the `main` entry in package.json.
+ * Keep this block, appModeCore.ts, and generate-counter-env.ts's copy of the same idea
+ * in sync by hand if the mode contract changes.
  */
+const KNOWN_APP_MODES = new Set(["full", "public", "office", "counter"]);
+function currentAppMode(): string {
+    const raw = (process.env.APP_MODE || "").trim();
+    return raw && KNOWN_APP_MODES.has(raw) ? raw : "full";
+}
+const APP_MODE = currentAppMode();
+
+/** Same-origin-only check — LANDING_PAGE is fed straight to loadURL below, so an
+ *  unvalidated value from a bad .env could point the window at an external site. */
+function isSafeLandingPage(value: string): boolean {
+    return value.startsWith("/") && !value.startsWith("//");
+}
+function resolveLandingPage(): string {
+    const raw = (process.env.LANDING_PAGE || "").trim();
+    return raw && isSafeLandingPage(raw) ? raw : "/staff/login";
+}
+const LANDING_PAGE = resolveLandingPage();
+
+/**
+ * Every counter binds the same fixed port — deliberately NOT derived per machine.
+ *
+ * A counter is its own physical PC with its own IP, so the LAN client reaching it as
+ * `http://<counter-ip>:786` is disambiguated by the IP, not the port; two counters on
+ * the same shop wifi never collide because they are two different machines. (This
+ * replaces an earlier per-counter `3000 + EPBX extension` scheme — dropped because it
+ * assumed a 1–2 digit extension, and real EPBX extensions here are not: only stops
+ * working if two counter installs ever need to share one machine/IP, which does not
+ * happen — one install per PC.)
+ *
+ * `PORT` remains a per-machine override escape hatch (%APPDATA%/abeersuite-electron/.env,
+ * see .env.counter.example) for the rare case a fixed port collides with something else
+ * already running on that PC.
+ */
+const FIXED_PORT = "786";
 function resolvePort(): string {
-    if (process.env.PORT) return process.env.PORT;
-    const ext = (process.env.COUNTER_EPBX_EXT || "").trim();
-    if (/^\d{1,2}$/.test(ext)) return String(3000 + Number(ext));
-    return "3000";
+    return process.env.PORT || FIXED_PORT;
 }
 const PORT = resolvePort();
 
@@ -534,7 +567,14 @@ import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } f
 // whatever this specific counter has actually opened before, learned at runtime —
 // a manager's PC and a till open different modules, and this adapts to each
 // without a config file per machine.
-const DEFAULT_WARM_ROUTES = ["/office/pos", "/vouchers/pos", "/office", "/office/accountancy/reports/day-book"];
+//
+// Mode-derived: a `counter` build never ships /office or the day-book report (see
+// COUNTER_OFFICE_MODULE_STRIP in appModeCore.ts), so warming them would spend the
+// cold start on 404s instead of a real page.
+const DEFAULT_WARM_ROUTES =
+    APP_MODE === "counter"
+        ? ["/office/pos", "/vouchers/pos"]
+        : ["/office/pos", "/vouchers/pos", "/office", "/office/accountancy/reports/day-book"];
 const WARM_ROUTES_MAX = 40;
 const visitedRoutes = new Set<string>();
 
@@ -548,7 +588,7 @@ function recordVisitedRoute(rawUrl: string): void {
         // /api/* and the login page itself add no value to pre-warm: the login page is
         // already the first thing loaded, and API routes are hit incidentally by every
         // page so warming them separately is redundant.
-        if (pathname && pathname !== "/" && !pathname.startsWith("/api/") && pathname !== "/staff/login") {
+        if (pathname && pathname !== "/" && !pathname.startsWith("/api/") && pathname !== LANDING_PAGE) {
             visitedRoutes.add(pathname);
         }
     } catch {
@@ -777,7 +817,7 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
 
 async function loadApp(baseUrl: string): Promise<void> {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    const startUrl = `${baseUrl}/staff/login`;
+    const startUrl = `${baseUrl}${LANDING_PAGE}`;
     const attempts = 10;
     for (let i = 1; i <= attempts; i++) {
         try {

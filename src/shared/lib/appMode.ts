@@ -1,21 +1,36 @@
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { parseAppMode, modeFlags, type AppMode } from "@/shared/lib/appModeCore";
 
 /**
- * Which half of the app this deployment is serving.
+ * Which variant of the app this deployment is serving.
  *
- * One branch, two Vercel projects:
- *   full   = internal build (staff). Everything. Hidden from search engines.
- *   public = external build (shop + customer portal). Indexed.
+ * One branch, four possible builds:
+ *   full    = internal build (staff). Everything. Hidden from search engines.
+ *   public  = external build (shop + customer portal). Indexed.
+ *   office  = desktop build for admin/management — everything minus public routes.
+ *   counter = desktop build for shop-floor tills — POS only, minimal.
  *
- * This is the only module that reads APP_MODE. Everything else imports from
- * here, so the mode cannot be interpreted two different ways in two places.
+ * This is the only module in `src/` that reads APP_MODE. Everything else imports
+ * from here, so the mode cannot be interpreted two different ways in two places.
+ * The parsing and per-mode facts themselves live in `appModeCore.ts` (dependency-free,
+ * so `next.config.ts` and the build scripts can read the same contract without pulling
+ * in `COMPANY_DETAILS`).
  *
- * Local dev keeps the full app, so anything other than an explicit "public"
- * means full — matching the note in .env.
+ * Local dev keeps the full app, so anything other than an explicit mode name means
+ * full — matching the note in .env. An unrecognised value THROWS rather than silently
+ * becoming full; see `parseAppMode`.
  */
-export const APP_MODE: "full" | "public" =
-    process.env.APP_MODE === "public" ? "public" : "full";
+export const APP_MODE: AppMode = parseAppMode(process.env.APP_MODE);
 
+const FLAGS = modeFlags(APP_MODE);
+
+export const HAS_OFFICE_ROUTES = FLAGS.hasOfficeRoutes;
+export const HAS_PUBLIC_ROUTES = FLAGS.hasPublicRoutes;
+export const IS_COUNTER = FLAGS.isCounter;
+export const INDEXABLE = FLAGS.indexable;
+
+/** Derived aliases kept for the existing "full vs public" call sites. Prefer the
+ *  intent-named flags above in new code — `IS_FULL` mis-handles `office` and `counter`. */
 export const IS_FULL = APP_MODE === "full";
 export const IS_PUBLIC = APP_MODE === "public";
 
@@ -39,6 +54,9 @@ export const IS_PUBLIC = APP_MODE === "public";
 export const CANONICAL_SITE_URL: string =
     process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SITE_URL
         ? process.env.NEXT_PUBLIC_SITE_URL
-        : IS_FULL
-          ? COMPANY_DETAILS.sites.office
-          : COMPANY_DETAILS.sites.shop;
+        // "public" is the only mode whose primary content is the storefront — full,
+        // office and counter are all staff-facing, even though "full" also happens to
+        // contain the public routes (nothing strips them out of a full build).
+        : APP_MODE === "public"
+          ? COMPANY_DETAILS.sites.shop
+          : COMPANY_DETAILS.sites.office;

@@ -64,15 +64,19 @@ These fix the direction that was previously unstated.
 4. **Local database readiness is lazy.** The app starts in live mode and is immediately usable;
    the replica is prepared in the background the first time the machine is online. It never
    blocks a cashier.
-5. **Port and LAN — implemented 2026-08-24.** Each counter now serves itself on **3000 + its
-   EPBX extension** (extension "04" -> port 3004), and the server is **bound to the LAN**
-   (`0.0.0.0`, not just loopback), on purpose — so any PC on the shop wifi can open a counter
-   directly in a browser at `http://<counter-ip>:<port>`, staff login still required. This
-   **reopens the LAN-exposure fix** from the 2026-08-24 distribution-hardening pass (which
-   bound to `127.0.0.1` specifically to stop that). Per-counter EPBX extension goes in
-   `COUNTER_EPBX_EXT`, set per machine in the existing `%APPDATA%/abeersuite-electron/.env`
-   override file — see `.env.counter.example`. Also added: GitHub Releases auto-update, via a
-   fine-grained PAT (contents:read only) since the releases repo is private.
+5. **Port and LAN — implemented 2026-08-24, port scheme superseded 2026-08-26.** The server is
+   **bound to the LAN** (`0.0.0.0`, not just loopback), on purpose — so any PC on the shop wifi
+   can open a counter directly in a browser at `http://<counter-ip>:786`, staff login still
+   required. This **reopens the LAN-exposure fix** from the 2026-08-24 distribution-hardening
+   pass (which bound to `127.0.0.1` specifically to stop that).
+   ~~Each counter served itself on 3000 + its EPBX extension (extension "04" -> port 3004),
+   read from `COUNTER_EPBX_EXT`.~~ Replaced 2026-08-26: every counter now binds the same
+   **fixed port, 786** — the derivation assumed a 1–2 digit extension, which doesn't match
+   real EPBX extensions here (e.g. `0786`), and per-counter uniqueness was never actually
+   needed since each counter is its own PC with its own IP (the IP disambiguates on the LAN,
+   not the port). `COUNTER_EPBX_EXT` still exists for whatever reads `PosCounter.epbxExtension`
+   directly; it just no longer feeds port selection. Also added: GitHub Releases auto-update,
+   via a fine-grained PAT (contents:read only) since the releases repo is private.
 6. **Auto-update repo split off the source repo, and made configurable — implemented
    2026-08-24.** Updates point at a **separate private repo**,
    `devloperakramul/abeersuite-networkservice-update` — release artifacts only, no source.
@@ -198,7 +202,7 @@ Summary of phase order:
 - **Phase 0** — make these docs honest. *(this rewrite)*
 - **Phase 0.5** — build and install the current code on a clean second machine to surface unknown
   errors early. This install is the baseline every later phase is compared against.
-- **Phase 1 — done.** Port and LAN scheme (3000 + EPBX extension, LAN-bound, see decision 5
+- **Phase 1 — done.** Port and LAN scheme (now a fixed port, 786, LAN-bound — see decision 5
   above); the adopt-existing-listener branch in `serverManager.ts` is deleted; the app shows a
   local splash immediately (`show: false` + `backgroundColor` + `ready-to-show`, no blank white
   frame), pushes boot progress to it over IPC, and falls through to a real error page naming the

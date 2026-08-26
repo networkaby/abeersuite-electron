@@ -53,11 +53,12 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
-    COUNTER_ENV_ALLOWED,
+    counterEnvAllowedFor,
     COUNTER_ENV_FILE,
     COUNTER_ENV_REQUIRED,
     parseEnvFile,
 } from "./counterEnv";
+import { parseAppMode } from "../src/shared/lib/appModeCore";
 
 /** Values shorter than this are too generic to search for without false hits. */
 const MIN_SECRET_LENGTH = 12;
@@ -83,6 +84,8 @@ const NON_SECRET_KEYS = new Set([
     "AUTH_URL",
     "NEXTAUTH_URL",
     "PORT",
+    // A path, not a credential — see resolveLandingPage() in appModeCore.ts.
+    "LANDING_PAGE",
 ]);
 
 /** Extensions worth scanning for leaked values — text-ish app output. */
@@ -287,6 +290,12 @@ function checkCounterEnv(packageDir: string, failures: string[]): void {
 
     const shipped = parseEnvFile(file);
 
+    // The allowlist is per-variant (office additionally allows the backup keys) — the
+    // shipped file names its own APP_MODE, so read the variant from what was actually
+    // packaged rather than from this process's env, which may not match.
+    const mode = parseAppMode(shipped.get("APP_MODE"));
+    const allowed = counterEnvAllowedFor(mode);
+
     const missing = COUNTER_ENV_REQUIRED.filter((key) => !shipped.has(key));
     if (missing.length > 0) {
         failures.push(
@@ -295,17 +304,17 @@ function checkCounterEnv(packageDir: string, failures: string[]): void {
         );
     }
 
-    const extra = [...shipped.keys()].filter((key) => !COUNTER_ENV_ALLOWED.has(key));
+    const extra = [...shipped.keys()].filter((key) => !allowed.has(key));
     if (extra.length > 0) {
         failures.push(
-            `resources/${COUNTER_ENV_FILE} ships key(s) outside the allowlist: ${extra.join(", ")} — ` +
+            `resources/${COUNTER_ENV_FILE} ships key(s) outside the APP_MODE=${mode} allowlist: ${extra.join(", ")} — ` +
             "each one installs a credential on every counter permanently. Either add it to " +
-            "COUNTER_ENV_COPIED in scripts/counterEnv.ts on purpose, or find what put it there"
+            "counterEnv.ts on purpose, or find what put it there"
         );
     }
 
     console.log(
-        `[verify-package] resources/${COUNTER_ENV_FILE} ships ${shipped.size} key(s): ` +
+        `[verify-package] resources/${COUNTER_ENV_FILE} ships ${shipped.size} key(s) (APP_MODE=${mode}): ` +
         `${[...shipped.keys()].join(", ")}`
     );
 }

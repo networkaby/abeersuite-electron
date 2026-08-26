@@ -6,7 +6,7 @@
  * Lives here rather than in the route that serves it because it is imported
  * across module boundaries — notably by `modules/inventory/lib/labelItems.ts`,
  * which is shared code and stays in the public (shop) build after
- * `scripts/strip-public-build.mjs` removes the office API routes. A type
+ * `scripts/strip-build.ts` removes the office API routes. A type
  * anchored in a stripped route file breaks that build; a type in a lib does not.
  */
 export interface PricingItem {

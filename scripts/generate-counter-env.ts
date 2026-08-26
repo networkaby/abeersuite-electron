@@ -17,11 +17,12 @@ import * as fs from "fs";
 import * as path from "path";
 import {
     COUNTER_ENV_CONSTANTS,
-    COUNTER_ENV_COPIED,
     COUNTER_ENV_FILE,
     COUNTER_ENV_REQUIRED,
+    counterEnvCopiedFor,
     parseEnvFile,
 } from "./counterEnv";
+import { parseAppMode } from "../src/shared/lib/appModeCore";
 
 /**
  * Serialises one line, always double-quoted.
@@ -41,22 +42,37 @@ function serialise(key: string, value: string): string {
 
 function main(): void {
     const rootDir = process.cwd();
-    const sourceEnv = path.join(rootDir, ".env");
     const outFile = path.join(rootDir, "resources", COUNTER_ENV_FILE);
 
-    // Values come from the build machine's .env, falling back to the real environment so
-    // a CI runner can inject them as secrets instead of writing a file.
-    const source = fs.existsSync(sourceEnv) ? parseEnvFile(sourceEnv) : new Map<string, string>();
-    if (!fs.existsSync(sourceEnv)) {
+    // .env.counter is the desktop-variant source of truth — where the owner sets
+    // APP_MODE and LANDING_PAGE before an electron build (see scripts/electron-build.ts,
+    // which loads it into process.env before this ever runs). Falls back to the root
+    // .env, then to the real process environment so a CI runner can inject secrets
+    // without writing a file at all.
+    const counterEnvPath = path.join(rootDir, ".env.counter");
+    const rootEnvPath = path.join(rootDir, ".env");
+    const source = fs.existsSync(counterEnvPath)
+        ? parseEnvFile(counterEnvPath)
+        : fs.existsSync(rootEnvPath)
+          ? parseEnvFile(rootEnvPath)
+          : new Map<string, string>();
+    if (!fs.existsSync(counterEnvPath) && !fs.existsSync(rootEnvPath)) {
         console.warn(
-            "[generate-counter-env] No .env on this machine — reading the process environment instead."
+            "[generate-counter-env] No .env.counter or .env on this machine — reading the process environment instead."
         );
     }
+
+    // APP_MODE decides which key set this variant gets (e.g. office additionally gets
+    // the backup/restore keys) — resolved the same way electron-build.ts already did
+    // when it loaded .env.counter into process.env, so both agree on the variant.
+    const mode = parseAppMode(source.get("APP_MODE") ?? process.env.APP_MODE);
+    const keysToConsider = counterEnvCopiedFor(mode);
+    console.log(`[generate-counter-env] APP_MODE=${mode} — copying ${keysToConsider.length} allowed key(s).`);
 
     const written = new Map<string, string>();
     const skipped: string[] = [];
 
-    for (const key of COUNTER_ENV_COPIED) {
+    for (const key of keysToConsider) {
         const value = (source.get(key) ?? process.env[key] ?? "").trim();
         if (value) written.set(key, value);
         else skipped.push(key);
@@ -82,8 +98,9 @@ function main(): void {
     const header = [
         "# AbeerSuite counter configuration — GENERATED, DO NOT EDIT.",
         "#",
-        "# Written by scripts/generate-counter-env.ts at build time from the build machine's",
-        "# .env, limited to the allowlist in scripts/counterEnv.ts. Rebuild to change it.",
+        "# Written by scripts/generate-counter-env.ts at build time from .env.counter (or the",
+        "# build machine's .env), limited to the allowlist in scripts/counterEnv.ts for this",
+        "# variant's APP_MODE. Rebuild to change it.",
         "#",
         "# A counter may override any of these per machine by placing its own .env at",
         "# %APPDATA%/abeersuite-electron/.env — that file is loaded first and wins.",
