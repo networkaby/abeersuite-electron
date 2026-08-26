@@ -49,6 +49,9 @@ const eslintConfig = defineConfig([
     // against real data; converting it to ESM to satisfy a linter that does not apply
     // to it would be the rewrite that move avoided. `node --check` covers its syntax.
     "sync-engine/**",
+    // Same reasoning as sync-engine: the thermal printer bridge is plain CommonJS moved
+    // in wholesale from the standalone combined-bridge service, run as a child process.
+    "hardware-bridge/**",
   ]),
 ]);
 

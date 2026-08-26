@@ -495,6 +495,49 @@ function checkReplicaPayload(packageDir: string, failures: string[]): void {
         );
     }
 
+    // The bundled workers run as child processes from plain directories under
+    // resources/, so Node resolves their `require`s by walking UP — and in a packaged
+    // install there is nothing above them: no resources/node_modules, none at the app
+    // root. On a DEVELOPMENT machine it walks further and finds the repo's own
+    // node_modules, which is why this was invisible until the packaged sync-engine was
+    // copied outside the repo and every require came back MODULE_NOT_FOUND.
+    //
+    // Left unfixed, a counter starts its sync worker, it dies immediately, and every
+    // read goes to Supabase forever — the exact cost this project removes, reintroduced
+    // by a packaging detail. scripts/prepare-bridge-deps.ts stages these; this proves
+    // they arrived.
+    const bridgeDeps: Record<string, string[]> = {
+        "sync-engine": ["pg", "@supabase/supabase-js"],
+        "hardware-bridge": ["express", "cors", "node-thermal-printer", "qrcode"],
+    };
+    for (const [bridge, deps] of Object.entries(bridgeDeps)) {
+        const dir = path.join(resourcesDir, bridge);
+        if (!fs.existsSync(dir)) continue; // absence is reported separately above
+        for (const dep of deps) {
+            if (!fs.existsSync(path.join(dir, "node_modules", dep, "package.json"))) {
+                failures.push(
+                    `resources/${bridge}/node_modules/${dep} is missing — that worker cannot `
+                    + "resolve it on a customer machine and will fail on startup. "
+                    + "Run `pnpm exec tsx scripts/prepare-bridge-deps.ts` and rebuild."
+                );
+            }
+        }
+    }
+
+    const bridgeEntry = path.join(resourcesDir, "hardware-bridge", "index.js");
+    if (!fs.existsSync(bridgeEntry)) {
+        failures.push(
+            "resources/hardware-bridge/index.js is missing — thermal printing is unavailable "
+            + "and the counter falls back to the browser print dialog."
+        );
+    }
+    if (fs.existsSync(path.join(resourcesDir, "hardware-bridge", "config.json"))) {
+        failures.push(
+            "resources/hardware-bridge/config.json IS PACKAGED — printer configuration is "
+            + "per-machine and must only be written at runtime into userData."
+        );
+    }
+
     // postgresManager.ts resolves resources/pgsql/bin and needs these three by name.
     const binDir = path.join(resourcesDir, "pgsql", "bin");
     if (!fs.existsSync(binDir)) {

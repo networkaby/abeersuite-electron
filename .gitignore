@@ -191,3 +191,12 @@ dist-package/
 dist-app/
 dist-app-*/
 release/
+
+# Staged at build time by scripts/prepare-bridge-deps.ts so the bundled workers can
+# resolve their requires on a customer machine (nothing above them in a packaged
+# install has a node_modules). Build output, never committed.
+sync-engine/node_modules/
+hardware-bridge/node_modules/
+hardware-bridge/config.json
+.sync-engine-deps-seed/
+.hardware-bridge-deps-seed/

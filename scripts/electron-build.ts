@@ -67,5 +67,6 @@ step("prepare-standalone", "pnpm", ["exec", "tsx", "scripts/prepare-standalone.t
 step("generate-counter-env", "pnpm", ["exec", "tsx", "scripts/generate-counter-env.ts"]);
 step("electron:compile", "pnpm", ["run", "electron:compile"]);
 step("prepare-electron-deps", "pnpm", ["exec", "tsx", "scripts/prepare-electron-deps.ts"]);
+step("prepare-bridge-deps", "pnpm", ["exec", "tsx", "scripts/prepare-bridge-deps.ts"]);
 
 console.log(`[electron-build] Done — APP_MODE=${mode} build ready.`);

@@ -557,6 +557,7 @@ function setupAutoUpdater(): void {
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
+import { startHardwareBridge, stopHardwareBridge } from "./hardwareBridgeManager";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
@@ -931,6 +932,10 @@ app.whenReady().then(async () => {
         console.error("[Main] Error during postgres initialization:", err);
     }
 
+    // Drives the thermal printer on :9191. Independent of the database — a counter with
+    // no replica still prints — so it starts regardless of what happened above.
+    startHardwareBridge();
+
     sendBootProgress("Starting server…");
     let result: ServerStartResult = { url: `http://127.0.0.1:${PORT}`, ready: false };
     try {
@@ -981,6 +986,7 @@ app.on("before-quit", () => {
 app.on("will-quit", () => {
     stopNextServer();
     stopSyncWorker();
+    stopHardwareBridge();
     stopEmbeddedPostgres();
     if (tray && !tray.isDestroyed()) {
         tray.destroy();
