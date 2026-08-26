@@ -8,6 +8,7 @@
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev",
     "electron:dev": "concurrently -k -n \"NEXT,ELECTRON\" -c \"yellow,cyan\" \"cross-env PORT=3000 NODE_OPTIONS=--max-http-header-size=65536 next dev\" \"wait-on http-get://127.0.0.1:3000/staff/login && tsc -p electron/tsconfig.json && electron .\"",
     "electron:compile": "tsc -p electron/tsconfig.json",
+    "pg:fetch": "tsx scripts/fetch-pg.ts",
     "electron:build": "tsx scripts/electron-build.ts",
     "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
     "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",

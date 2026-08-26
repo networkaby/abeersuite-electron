@@ -61,6 +61,12 @@ demo.env.example
 # "no .env anywhere in the package" check.
 resources/counter.env
 
+# Embedded PostgreSQL bundled into the desktop installer. ~80 MB of third-party
+# binaries — fetched reproducibly by `pnpm pg:fetch` (pinned version + checksum),
+# never committed. See scripts/fetch-pg.ts.
+resources/pgsql/
+.pg-download-cache/
+
 # vercel
 .vercel
 
