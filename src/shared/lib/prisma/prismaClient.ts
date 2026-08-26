@@ -5,10 +5,13 @@ import { OfflineWriteBlockedError } from "./offlineError";
 import {
     getMode,
     maybeReprobe,
+    readyIsStale,
     registerLiveProbe,
     reportLiveDown,
     reportLiveUp,
+    setReplicaReady,
     shouldReadLocal,
+    IS_COUNTER_PC,
 } from "./counterMode";
 
 // ── Two databases, or one ───────────────────────────────────────────────────
@@ -87,6 +90,47 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // codebase are typed to accept PrismaClient. The retry extension only adds runtime
 // behavior on read ops; every model delegate is still present at runtime, so we
 // assert the wrapped client back to PrismaClient. Type-only; no runtime effect.
+/**
+ * Refreshes `replicaReady` from the replica's own `_sync_status` row, in the same module
+ * that reads the flag.
+ *
+ * `shouldReadLocal()` gates every read below, and needs BOTH `READ_MODE=local` and
+ * `replicaReady`. That flag starts false on every boot, so something has to turn it on —
+ * and where that "something" lives turned out to matter more than expected:
+ *
+ *   - Originally only `GET /api/counter/status` refreshed it, polled by
+ *     `CounterStatusBadge`. The entire egress saving therefore hung off a status widget
+ *     being mounted; until a staff member opened a page carrying it, every read went to
+ *     Supabase.
+ *   - Moving it into `instrumentation.ts` looked like the fix, but did not work: the
+ *     instrumentation hook and the route handlers do not reliably share module state, so
+ *     the flag that got set was not the flag the reads consult. Measured — the watch was
+ *     provably ticking while a `User` lookup still went live.
+ *
+ * Doing it here removes the question entirely: the code that needs the answer is the code
+ * that fetches it, in one module instance.
+ *
+ * Cost is bounded by the 30s TTL in `counterMode.ts` — `readyIsStale()` is a timestamp
+ * comparison, so the overwhelming majority of reads add one integer compare and nothing
+ * else. At most one small query per TTL, against the LOCAL database, never Supabase.
+ *
+ * Fails CLOSED: any error leaves the replica not-ready and reads keep going to Supabase.
+ * `_sync_status` is written by the sync worker after each cycle, so an absent table, a
+ * missing grant, or a worker that has never run all resolve to "not ready" — slow and
+ * correct beats fast and wrong.
+ */
+async function refreshReplicaReadinessInline(): Promise<void> {
+    if (!IS_COUNTER_PC || !localClient || !readyIsStale()) return;
+    try {
+        const rows = await localClient.$queryRaw<{ ready: boolean }[]>`
+            SELECT ready FROM "_sync_status" WHERE only_row
+        `;
+        setReplicaReady(rows.length > 0 && rows[0].ready === true);
+    } catch {
+        setReplicaReady(false);
+    }
+}
+
 function createLive(): PrismaClient {
     const basePrisma = new PrismaClient({ adapter: new PrismaPg(createPool(liveUrl)) });
     return basePrisma.$extends({
@@ -95,6 +139,11 @@ function createLive(): PrismaClient {
             $allModels: {
                 async $allOperations({ model, operation, args, query }) {
                     if (!READ_OPS.has(operation)) return query(args);
+
+                    // Keep `replicaReady` current HERE, in the module that consumes it.
+                    // See refreshReplicaReadinessInline() for why this cannot live
+                    // somewhere tidier.
+                    await refreshReplicaReadinessInline();
 
                     // ── Local-First Zero-Egress Reads ──────────────────────────────────────
                     // When local replica is ready and configured, serve reads locally with 0ms
