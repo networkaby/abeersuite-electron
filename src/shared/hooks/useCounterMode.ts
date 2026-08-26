@@ -13,12 +13,21 @@ export type CounterStatus = {
 };
 
 /**
- * How often to ask. Deliberately slow: this is a status light, not a heartbeat, and
- * on a counter every poll is a request the machine could have spent on real work.
- * A cashier learns the shop is offline from the failed Save either way — the badge
- * exists so they learn it BEFORE trying, not so they learn it a second sooner.
+ * How often to ask.
+ *
+ * This was 30s, justified on the grounds that "a cashier learns the shop is offline from
+ * the failed Save either way". That justification no longer holds, twice over: offline
+ * writes now mean some saves SUCCEED while offline, so a failed save is no longer the
+ * reliable teacher it was; and the badge is now a permanent green/red light rather than
+ * a warning that only appears when something is wrong. A permanent light that can be
+ * half a minute stale is worse than no light, because people believe it.
+ *
+ * 10s is still not a heartbeat. The endpoint answers from process memory plus, at most,
+ * one small query against the LOCAL database per 30s TTL (`refreshReplicaReadiness`) —
+ * it never touches Supabase, so a faster poll costs no egress, which is the thing this
+ * whole project exists to protect.
  */
-const POLL_MS = 30_000;
+const POLL_MS = 10_000;
 
 /**
  * Where this machine is reading from, for the shell badge.
