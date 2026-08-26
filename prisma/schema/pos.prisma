@@ -43,6 +43,15 @@ model PosCounter {
   // EPBX/intercom extension of the phone at this counter (e.g. "201"). Free text,
   // shown in the admin counter config alongside the other counter details. Null = unset.
   epbxExtension            String?
+  // Sequential counter number (1, 2, 3…), set by admin in counter config. Used for
+  // offline id-range reservation: counter n gets autoincrement ids starting at
+  // 1,000,000,000 + (n-1) × 10,000,000, keeping all counters' ids non-overlapping
+  // inside int4. NULL = not numbered, cannot write offline.
+  counterNumber            Int?                       @unique
+  // First id in this counter's reserved autoincrement block, computed from
+  // counterNumber at first shift-open (bind time). NULL = not yet provisioned
+  // for offline writes. Set once, never changed.
+  idRangeStart             Int?
   // Device lock — which physical PC is bound to this counter. Set on first shift
   // open (the browser sends its stable bridge deviceId); every later open on a
   // different PC is refused. Released centrally from /office/admin/counters, or

@@ -441,6 +441,12 @@ ipcMain.handle("app:get-counter-id", () => {
     return counterInstallationId;
 });
 
+ipcMain.handle("counter:apply-id-ranges", async (_, blockStart: number) => {
+    const localUrl = process.env.LOCAL_DATABASE_URL;
+    if (!localUrl || typeof blockStart !== "number") return false;
+    return await applyIdRanges(localUrl, blockStart);
+});
+
 ipcMain.handle("printer:get-list", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return [];
@@ -558,6 +564,8 @@ import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { startHardwareBridge, stopHardwareBridge } from "./hardwareBridgeManager";
+import { startOutboxFlusher, stopOutboxFlusher } from "./outboxFlusher";
+import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
@@ -905,6 +913,8 @@ app.whenReady().then(async () => {
                 // Fills the replica and keeps it current. Runs under the sync role, which
                 // owns the data and may suspend foreign keys while replaying a table.
                 startSyncWorker(replica.syncUrl);
+                // Flushes offline outbox mutations to the cloud when online.
+                startOutboxFlusher(replica.appUrl);
                 // Read-routing (prismaClient.ts / counterMode.ts) gates on COUNTER_PC, not on
                 // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
                 // result, rather than requiring it baked into the installer. serverManager.ts
@@ -986,6 +996,7 @@ app.on("before-quit", () => {
 app.on("will-quit", () => {
     stopNextServer();
     stopSyncWorker();
+    stopOutboxFlusher();
     stopHardwareBridge();
     stopEmbeddedPostgres();
     if (tray && !tray.isDestroyed()) {

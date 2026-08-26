@@ -38,6 +38,7 @@ type Counter = {
 export type OpenedShift = {
     id: number;
     resumed?: boolean;   // true when an existing shift was recovered (browser crash/reopen)
+    idRangeStart?: number | null;
     counter: { id: number; name: string; tillAccount: { id: number; name: string } };
     branch:  { id: string; name: string };
     openingFloatPaise:   string;
@@ -120,6 +121,11 @@ export function ShiftOpenDialog({
                 legacyDeviceId:  (legacyDeviceId && legacyDeviceId !== deviceId) ? legacyDeviceId : undefined,
                 deviceLabel:     deviceLabel ?? undefined,
             });
+            if (data.idRangeStart && typeof window !== "undefined" && window.electronAPI?.applyIdRanges) {
+                window.electronAPI.applyIdRanges(data.idRangeStart).catch((err: unknown) => {
+                    console.warn("[ShiftOpen] Could not apply local id ranges:", err);
+                });
+            }
             if (data.resumed) {
                 toast.success(`Resumed shift — ${selectedCounter?.name} · continuing from where you left off`);
             } else {

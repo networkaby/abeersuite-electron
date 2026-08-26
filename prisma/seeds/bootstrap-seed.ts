@@ -949,6 +949,7 @@ async function main() {
         // GATEWAY rail or online checkout points to) is a HARD-CODED, self-healing
         // catalog (PAYMENT_METHOD_DEFAULTS): bootstrap seeds none — the app creates
         // any missing method-row on first load of Settings → Payment Methods.
+        const counterNumber = BRANCHES.indexOf(b) + 1;
         const { rows: existing } = await pool.query<{ id: number }>(
             `SELECT id FROM "pos_counters" WHERE "branchId" = $1 AND name = $2 LIMIT 1`,
             [b.id, counterName],
@@ -956,14 +957,14 @@ async function main() {
         if (existing[0]) {
             // Already exists — make sure the till account is wired.
             await pool.query(
-                `UPDATE "pos_counters" SET "tillAccountId" = $1 WHERE id = $2`,
-                [tillId, existing[0].id],
+                `UPDATE "pos_counters" SET "tillAccountId" = $1, "counterNumber" = COALESCE("counterNumber", $2) WHERE id = $3`,
+                [tillId, counterNumber, existing[0].id],
             );
         } else {
             await pool.query(
-                `INSERT INTO "pos_counters" ("branchId", name, "tillAccountId", "isActive")
-                 VALUES ($1, $2, $3, true)`,
-                [b.id, counterName, tillId],
+                `INSERT INTO "pos_counters" ("branchId", name, "tillAccountId", "isActive", "counterNumber")
+                 VALUES ($1, $2, $3, true, $4)`,
+                [b.id, counterName, tillId, counterNumber],
             );
         }
     }

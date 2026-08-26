@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
           // its own first hit. electron/main.ts's warmRoutes() then pre-hits the
           // routes a counter actually uses while the window is still painting, so
           // that lazy cost lands in time we're already spending, not in front of staff.
-          preloadEntriesOnStart: false,
+          preloadEntriesOnStart: true,
         },
       }
     : {}),

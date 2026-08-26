@@ -1489,6 +1489,8 @@ CREATE TABLE "pos_counters" (
     "allowedExpenseAccountIds" JSONB NOT NULL DEFAULT '[]',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "epbxExtension" TEXT,
+    "counterNumber" INTEGER,
+    "idRangeStart" INTEGER,
     "boundDeviceId" TEXT,
     "boundDeviceLabel" TEXT,
     "boundAt" TIMESTAMP(3),
@@ -2504,6 +2506,9 @@ CREATE INDEX "PersonPortalCredential_personId_idx" ON "PersonPortalCredential"("
 
 -- CreateIndex
 CREATE UNIQUE INDEX "pos_counters_tillAccountId_key" ON "pos_counters"("tillAccountId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "pos_counters_counterNumber_key" ON "pos_counters"("counterNumber");
 
 -- CreateIndex
 CREATE INDEX "pos_counters_branchId_idx" ON "pos_counters"("branchId");

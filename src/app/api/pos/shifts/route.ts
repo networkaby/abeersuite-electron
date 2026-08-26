@@ -19,6 +19,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { blockStartFor } from "@/shared/lib/counter/idRange";
 
 const openSchema = z.object({
     counterId:       z.number().int().positive(),
@@ -242,16 +243,29 @@ export async function POST(req: NextRequest) {
                 openingContraId = contra.voucherId;
             }
 
+            // Calculate or retrieve idRangeStart for this counter if counterNumber is configured.
+            let idRangeStart = counter.idRangeStart;
+            if (!idRangeStart && counter.counterNumber) {
+                try {
+                    idRangeStart = blockStartFor(counter.counterNumber);
+                } catch (err) {
+                    console.warn("[ShiftOpen] Invalid counterNumber for id-range reservation:", err);
+                }
+            }
+
             // Bind the counter to this PC on first open, or migrate it when it was
             // bound under the old legacyDeviceId and this open presents the
-            // canonical one instead. The lock check above already guarantees that
-            // if counter.boundDeviceId is set, it equals one of candidateIds — so
-            // reaching here with a mismatch against body.deviceId only ever means
-            // "unbound" or "bound via legacy id", both of which should (re)bind.
-            if (body.deviceId && counter.boundDeviceId !== body.deviceId) {
+            // canonical one instead. Also stamp idRangeStart if newly computed.
+            const needsBind = Boolean(body.deviceId && counter.boundDeviceId !== body.deviceId);
+            const needsRange = Boolean(idRangeStart && idRangeStart !== counter.idRangeStart);
+
+            if (needsBind || needsRange) {
                 await tx.posCounter.update({
                     where: { id: counter.id },
-                    data:  { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date() },
+                    data: {
+                        ...(needsBind ? { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date() } : {}),
+                        ...(needsRange ? { idRangeStart } : {}),
+                    },
                 });
             }
 
@@ -288,9 +302,11 @@ export async function POST(req: NextRequest) {
             declaredCashPaise:   null,
             expectedCashPaise:   null,
             variancePaise:       null,
+            idRangeStart:        shift.counter.idRangeStart ?? null,
             counter: {
-                id:   shift.counter.id,
-                name: shift.counter.name,
+                id:            shift.counter.id,
+                name:          shift.counter.name,
+                counterNumber: shift.counter.counterNumber ?? null,
                 tillAccount: {
                     id:   shift.counter.tillAccount.id,
                     name: shift.counter.tillAccount.name,

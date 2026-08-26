@@ -13,6 +13,7 @@ import {
     shouldReadLocal,
     IS_COUNTER_PC,
 } from "./counterMode";
+import { isVoucherTypeSafeOffline, getOfflineVoucherBlockedReason } from "@/shared/lib/accountancy/offlineVoucherSafety";
 
 // ── Two databases, or one ───────────────────────────────────────────────────
 // DATABASE_URL is Supabase — the source of truth, and on Vercel the only database
@@ -231,10 +232,9 @@ const MASTER_AND_BRANCH_MODELS = new Set([
     "GiftCardRedemption",
     // Tickets & CRM
     "Ticket",
-    "TicketDetailRepair",
-    "TicketDetailHelp",
-    "TicketDetailDeal",
-    "TicketDetailTask",
+    "TicketRepair",
+    "TicketHelp",
+    "TicketDeal",
     "TicketLog",
     "AuditLog",
 ]);
@@ -261,7 +261,19 @@ function createLocal(): PrismaClient {
                             );
                         }
 
-                        // 2. Allow safe Master creation & editing, and branch-owned POS transactions
+                        // 2. Enforce Offline Policies on vouchers
+                        if (model === "UniversalVoucher") {
+                            const data = (args as { data?: { type?: string } })?.data;
+                            if (data?.type && !isVoucherTypeSafeOffline(data.type)) {
+                                throw new OfflineWriteBlockedError(
+                                    model,
+                                    operation,
+                                    getOfflineVoucherBlockedReason(data.type),
+                                );
+                            }
+                        }
+
+                        // 3. Allow safe Master creation & editing, and branch-owned POS transactions
                         if (MASTER_AND_BRANCH_MODELS.has(model ?? "")) {
                             return query(args);
                         }

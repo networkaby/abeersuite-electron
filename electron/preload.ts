@@ -9,6 +9,7 @@ export interface ElectronAPI {
     onUpdateReady: (callback: () => void) => void;
     /** Splash-screen progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
+    applyIdRanges: (blockStart: number) => Promise<boolean>;
     platform: string;
 }
 
@@ -24,6 +25,7 @@ const electronAPI: ElectronAPI = {
     onBootProgress: (callback) => {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));
     },
+    applyIdRanges: (blockStart: number) => ipcRenderer.invoke("counter:apply-id-ranges", blockStart),
     platform: process.platform,
 };
 
