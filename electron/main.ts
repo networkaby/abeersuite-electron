@@ -898,6 +898,12 @@ app.whenReady().then(async () => {
             // result, rather than requiring it baked into the installer. serverManager.ts
             // forks the Next server with `env: {...process.env}`, so this is inherited.
             process.env.COUNTER_PC = "1";
+            // Owner decision: the app must SAY which database it picked, so the choice is
+            // never invisible. `counterStatus()` reports the same value to the in-app badge
+            // from LOCAL_DATABASE_SOURCE; this is the boot-time half of that.
+            sendBootProgress(`Local database ready (${process.env.LOCAL_DATABASE_SOURCE ?? "embedded"}).`);
+        } else {
+            sendBootProgress("No local database — using the live server.");
         }
     } catch (err) {
         console.error("[Main] Error during postgres initialization:", err);

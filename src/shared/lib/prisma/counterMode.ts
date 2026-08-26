@@ -36,7 +36,9 @@ export const READ_PREFERENCE: ReadPreference =
         : process.env.READ_MODE === "shadow" ? "shadow"
             : "live";
 
-/** True only on a counter PC — set by the installer alongside `LOCAL_DATABASE_URL`. */
+/** True only on a counter PC. Set by `electron/main.ts` from the actual outcome of
+ *  `ensurePostgresRunning()` — not baked into the installer — and inherited by this
+ *  process because the Next server is forked with the main process's env. */
 export const IS_COUNTER_PC = process.env.COUNTER_PC === "1";
 
 /** How long to wait before re-probing a live database we believe is down. */
@@ -148,7 +150,9 @@ export function counterStatus(): {
     isCounter: boolean;
     /** Which PostgreSQL the replica is running against, set by electron/postgresManager.ts
      *  and forwarded into this process's env when the Next server was forked — null when
-     *  there is no replica at all (the ship state today). */
+     *  there is no replica at all (the ship state today). Only ever "embedded" for now;
+     *  "installed" returns when ALLOW_EXITING_DB is implemented alongside the installer
+     *  work that collects the local server's credentials. */
     replicaSource: "installed" | "embedded" | null;
 } {
     const source = process.env.LOCAL_DATABASE_SOURCE;
