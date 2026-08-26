@@ -1,15 +1,19 @@
 # AbeerSuite — Desktop App & Offline-First Sync Roadmap
 
-> **Status honesty note (2026-08-24).** An earlier version of this document described a
-> three-tier offline-first desktop app as though it were built. It was not. This rewrite
-> separates **what actually ships today** from **what is still a design intention**, so that
-> decisions made against this document are made against facts.
+> **Status, 2026-08-26.** The local replica is **built and running**. An earlier version of
+> this document described a three-tier offline-first desktop app as though it were built
+> when it was not; the 2026-08-24 rewrite corrected that, and this rewrite records that
+> most of what it listed as missing has since shipped. What is still open is listed
+> honestly at the bottom.
 >
-> **What v0.1.0 actually is:** a hardened Electron kiosk shell that boots the standalone
-> Next server on loopback and points a window at it, plus thermal printing and the customer
-> QR display through an **external local bridge service on `:9191`**. It reads and writes
-> **live Supabase** like the web app does. There is no local database and no sync engine
-> running on any counter.
+> **What ships today:** an Electron shell that bundles **PostgreSQL 17.6**, creates and
+> provisions its own local replica on first run, and supervises two child processes — the
+> **sync engine** (moved in from the separate counter-sync tool repo) and the **thermal printer bridge**
+> (moved in from `combined-bridge`). A counter needs **nothing pre-installed**: no
+> PostgreSQL, no Node, no bridge installer, no scheduled task.
+>
+> Verified in the packaged app from a cold `initdb`: **113/113 tables, 20,136 rows in
+> 21.4 s**, `_sync_status.ready = true`, `/staff/login` 200.
 
 ---
 
@@ -21,31 +25,40 @@
 | Standalone Next server on loopback | **Built** | [`electron/serverManager.ts`](../electron/serverManager.ts) |
 | Windows installer, symlink hoisting, packaging gate | **Built** | [`scripts/prepare-standalone.ts`](../scripts/prepare-standalone.ts), [`scripts/verify-package.ts`](../scripts/verify-package.ts) |
 | Unattended install, baked env allowlist, per-machine `AUTH_SECRET` | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
-| Silent thermal printing | **Built, but via the `:9191` bridge**, not natively | `PrintToolbar.tsx`, `PosScreen.tsx` |
-| Customer QR display | **Built, but via the `:9191` bridge** (serial, COM port) | `qr-display-settings/page.tsx` |
 | Dexie UI hot cache | **Built and in real use** | [`src/shared/lib/browser/localDb.ts`](../src/shared/lib/browser/localDb.ts) |
 | Supabase realtime broadcast channel | **Built** | [`src/shared/lib/sync/realtimeSync.ts`](../src/shared/lib/sync/realtimeSync.ts) |
 | Sync table registry (113 tables) | **Built, generated, precommit-checked** | [`prisma/sync-tables.json`](../prisma/sync-tables.json) |
-| Live/local routing + outage demotion | **Built, but dormant** — no local URL is ever set on a counter | [`src/shared/lib/prisma/prismaClient.ts`](../src/shared/lib/prisma/prismaClient.ts) |
-| **Embedded / local PostgreSQL** | **NOT SHIPPING** | `resources/pgsql` is empty; `COUNTER_PC` is not in the baked env, so `ensurePostgresRunning()` returns `null` on every counter |
-| **Delta sync engine** | **SCAFFOLD ONLY** | `syncTableByNumber()` returns `rowsSynced: 0` without querying; `flushOutboxQueue()` never writes to Supabase; the outbox is an in-process array lost on restart |
-| **Local schema bootstrap / migration on first run** | **DOES NOT EXIST** | No `createdb`, no schema apply anywhere in `electron/` |
-| **Offline billing** | **NOT AVAILABLE** | Follows from the three rows above |
+| Live/local routing + outage demotion | **Built** | [`src/shared/lib/prisma/prismaClient.ts`](../src/shared/lib/prisma/prismaClient.ts) |
+| **Embedded PostgreSQL** | **BUILT — bundled, 108.8 MB after trim** | [`scripts/fetch-pg.ts`](../scripts/fetch-pg.ts), [`electron/postgresManager.ts`](../electron/postgresManager.ts) |
+| **Local schema bootstrap on first run** | **BUILT** — 113 tables / 52 enums from generated DDL | [`scripts/gen-local-schema.ts`](../scripts/gen-local-schema.ts), [`electron/localDbProvisioner.ts`](../electron/localDbProvisioner.ts) |
+| **Delta sync engine** | **BUILT** — moved in whole from the separate counter-sync tool repo | [`sync-engine/`](../sync-engine/), [`electron/syncManager.ts`](../electron/syncManager.ts) |
+| **`_sync_status` readiness signal** | **BUILT** — written by the engine, read by the app | [`replicaReadiness.ts`](../src/shared/lib/prisma/replicaReadiness.ts) |
+| **Thermal printing** | **BUILT, absorbed** — no separate bridge service | [`hardware-bridge/`](../hardware-bridge/), [`electron/hardwareBridgeManager.ts`](../electron/hardwareBridgeManager.ts) |
+| Customer QR display | **NOT ABSORBED** — still the external `:9192` bridge | needs `serialport` + `sharp` rebuilt for Electron |
+| **Offline billing / writes** | **NOT BUILT — blocked on identity** | `@default(autoincrement())` on 79 models; see §6 |
+| Offline Policies settings page | **UI ONLY** — localStorage, no API, no enforcement | `OfflinePoliciesForm.tsx`, `offlineVoucherSafety.ts` |
 
-### Known defects recorded during the 2026-08-24 audit
+### Defects fixed in the 2026-08-26 pass
 
-- **Port 3000 is hard-coded**, and `serverManager.ts` adopts *any* listener on 3000 as its own —
-  a running `next dev` gets loaded into the POS window.
-- **No splash screen and no loading state.** The window is created only after Postgres and a
-  15-second server poll, and is created *even when that poll times out*, producing a permanently
-  blank white window with no message.
-- **The installer ships `node_modules` twice** — ~646 MB extracted loose via `asarUnpack` that
-  nothing at runtime ever loads.
-- ~~`refreshReplicaReadiness()` has zero callers~~ — **correction:** it is called from
-  `GET /api/counter/status`. It still leaves `replicaReady` permanently `false` today,
-  though, because it reads `_sync_status`, a table only the (still-scaffold) sync worker
-  writes — see Phase 5.
-- **`schemaCheck.ts` has zero callers.**
+- `initdb` built a cluster but **nothing ever created the `smx` database**.
+- A bare `CREATE DATABASE` inherited the **Windows collation**, which silently changes
+  text sort order versus live — no error, no checksum mismatch, just reports that
+  disagree with the office.
+- **A listening port is not readiness.** PostgreSQL accepts connections ~600 ms after it
+  binds; the old check landed inside that window every time.
+- The bundled workers could not **resolve their own dependencies** on a customer machine
+  (resolution walked up into the dev repo and appeared to work).
+- electron-builder **dropped `node_modules`** from `extraResources`.
+- The dependency hoist **aborted a whole build** on a transient Windows file lock.
+
+### Known defects still open
+
+- **Port 3000 is hard-coded** in `serverManager.ts`'s adoption check — a running
+  `next dev` can be adopted into the POS window. (The serving port itself is 786.)
+- **The installer ships `node_modules` twice** — the 2026-08-24 size audit measured
+  ~646 MB extracted loose that nothing at runtime loads.
+- **`schemaCheck.ts` has zero callers** — superseded in practice by the sync engine's own
+  `schemaGuard.js`, which does halt on drift.
 
 ---
 
@@ -148,8 +161,11 @@ Two facts that were previously glossed over:
 ### 4.1 Event-driven realtime flow
 
 1. **Local mutation** commits to local PostgreSQL with no network wait.
-2. **Outbox** records it durably — this must be a **table in the local database**, not an
-   in-process array as the current scaffold uses.
+2. **Outbox** records it durably — this must be a **table in the local database**. The
+   old `src/shared/lib/sync/outbox.ts` was an in-process array with no callers and was
+   deleted on 2026-08-26 rather than left looking implemented; it has no replacement yet.
+   Whatever replaces it must enqueue in the **same local transaction** as the row it
+   describes, or a crash between the two silently loses the write.
 3. **Flush and broadcast** — the worker pushes to Supabase and publishes a small event:
    ```json
    { "n": 12, "ts": "2026-08-23T06:05:00.000Z", "originId": "counter-pos-01" }
