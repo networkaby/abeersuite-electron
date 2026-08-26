@@ -34,7 +34,8 @@
 | **Delta sync engine** | **BUILT** — moved in whole from the separate counter-sync tool repo | [`sync-engine/`](../sync-engine/), [`electron/syncManager.ts`](../electron/syncManager.ts) |
 | **`_sync_status` readiness signal** | **BUILT** — written by the engine, read by the app | [`replicaReadiness.ts`](../src/shared/lib/prisma/replicaReadiness.ts) |
 | **Thermal printing** | **BUILT, absorbed** — no separate bridge service | [`hardware-bridge/`](../hardware-bridge/), [`electron/hardwareBridgeManager.ts`](../electron/hardwareBridgeManager.ts) |
-| Customer QR display | **NOT ABSORBED** — still the external `:9192` bridge | needs `serialport` + `sharp` rebuilt for Electron |
+| **Native modules under Electron** | **No rebuild needed** — `sharp` and `serialport` are N-API | verified under `ELECTRON_RUN_AS_NODE` at ABI 148 |
+| Customer QR display | **BUILT, absorbed** — `:9192` now served in-app | [`hardware-bridge/qr.js`](../hardware-bridge/qr.js) |
 | **Offline billing / writes** | **NOT BUILT — blocked on identity** | `@default(autoincrement())` on 79 models; see §6 |
 | Offline Policies settings page | **UI ONLY** — localStorage, no API, no enforcement | `OfflinePoliciesForm.tsx`, `offlineVoucherSafety.ts` |
 

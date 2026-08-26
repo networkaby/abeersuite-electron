@@ -30,17 +30,23 @@ import { hoistNodeModules } from "./lib/hoistNodeModules";
  * files. Derived by grepping the sources, not by guessing:
  *
  *   sync-engine     — lib/db.js (pg), lib/signal.js (@supabase/supabase-js)
- *   hardware-bridge — thermal.js (express, node-thermal-printer, qrcode),
- *                     cors-pna.js (cors)
+ *   hardware-bridge — thermal.js (express, node-thermal-printer, qrcode, sharp),
+ *                     qr.js (sharp, serialport, qrcode), cors-pna.js (cors)
  *
- * `sharp` and `serialport` are deliberately ABSENT. Both are native modules needing an
- * Electron ABI rebuild that the build chain does not yet do. `serialport` was already
- * lazy; `sharp` was made lazy in the same move (see the shim at the top of thermal.js),
- * so printing works without them and only the two image features degrade.
+ * `sharp` and `serialport` are NATIVE, and were expected to need an Electron ABI rebuild
+ * (Electron 43 is ABI 148; the Node that builds here is 137). They do not: both ship as
+ * **N-API** addons, so one binary serves every ABI. Verified by loading them under
+ * `ELECTRON_RUN_AS_NODE` — the runtime the workers actually use — where they load as
+ * cleanly as under plain Node.
+ *
+ * That is a property of these two packages, not a general rule. A future native
+ * dependency that is NOT N-API needs `@electron/rebuild` adding to this chain. Note
+ * `asarUnpack` is not part of that: these workers ship via `extraResources`, so their
+ * binaries already sit on a real path beside the asar rather than inside it.
  */
 const BRIDGE_DEPS: Record<string, string[]> = {
     "sync-engine": ["pg", "@supabase/supabase-js"],
-    "hardware-bridge": ["express", "cors", "node-thermal-printer", "qrcode"],
+    "hardware-bridge": ["express", "cors", "node-thermal-printer", "qrcode", "sharp", "serialport"],
 };
 
 function stage(bridge: string, deps: string[], rootDir: string): void {

@@ -18,11 +18,18 @@
  * already exists in src/shared/lib/bridge/bridgeHealth.ts. The separate installer and
  * scheduled task are gone either way, which was the actual goal.
  *
- * ── The QR display is not here yet ───────────────────────────────────────────
- * `qr.js` needs `serialport` AND `sharp`, both native, so it waits until the build
- * chain gains electron-rebuild and asarUnpack. Until then the QR relay on :9192 stays
- * a separate bridge install. Thermal deliberately went first because its native
- * dependency is optional (see the sharp shim in thermal.js) rather than structural.
+ * ── Native modules turned out to be a non-issue ──────────────────────────────
+ * The QR display was expected to need `electron-rebuild` and `asarUnpack`, because it
+ * uses `serialport` and `sharp` and Electron 43 is ABI 148 while the system Node here is
+ * ABI 137. Neither is needed:
+ *
+ *   - Both ship as **N-API** addons (sharp 0.35, serialport 13), so one binary works
+ *     across ABIs. Verified by loading them under `ELECTRON_RUN_AS_NODE` — the exact
+ *     runtime this process uses — where they load as cleanly as under plain Node.
+ *   - `asarUnpack` never applied: these workers ship via `extraResources`, so they live
+ *     beside the asar rather than inside it, and a native binary loads from a real path.
+ *
+ * If a future dependency is NOT N-API, that is when the rebuild step becomes real work.
  */
 
 const fs = require("node:fs");
@@ -68,5 +75,21 @@ function makeAccessors(key) {
     };
 }
 
-console.log("[bridge] starting hardware bridge (thermal printer)…");
-require("./thermal").start(makeAccessors("thermal"));
+console.log("[bridge] starting hardware bridge (thermal printer + QR display)…");
+
+/**
+ * Each module is started independently so one failing hardware path cannot take the
+ * other down. A counter with a printer but no QR display is an ordinary configuration,
+ * not a fault — and the QR module opens a COM port, which is the more likely of the two
+ * to be missing, in use, or unplugged.
+ */
+function startModule(name) {
+    try {
+        require(`./${name}`).start(makeAccessors(name));
+    } catch (err) {
+        console.error(`[bridge] ${name} failed to start — the other module keeps running:`, err.message);
+    }
+}
+
+startModule("thermal");
+startModule("qr");

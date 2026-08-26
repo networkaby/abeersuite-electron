@@ -2,6 +2,12 @@ packages:
   - "."
 
 allowBuilds:
+  # Deliberately false: use the shipped N-API prebuild, never a source build.
+  # The hardware bridge runs under ELECTRON_RUN_AS_NODE, so its native modules must
+  # satisfy Electron 43 (ABI 148) — but a source build here would target the Node that
+  # runs the build (ABI 137) and produce a binary the bridge cannot load. The prebuild is
+  # N-API and works on both, verified under ELECTRON_RUN_AS_NODE.
+  '@serialport/bindings-cpp': false
   electron-winstaller: false
 
 onlyBuiltDependencies:

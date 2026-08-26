@@ -10,18 +10,16 @@ const os       = require("os");
 const net      = require("net");
 const { exec } = require("child_process");
 /**
- * `sharp` is a NATIVE module and is deliberately NOT a dependency of the desktop app.
+ * `sharp` is a native module, and IS a dependency now — the QR display needs it
+ * structurally, so it ships with the bridge (it is N-API, so no Electron rebuild is
+ * involved; see the note in index.js).
  *
- * It was a top-level require while this ran as its own Node service with its own
- * node_modules. Inside Electron a native module has to be rebuilt against Electron's
- * ABI and unpacked from the asar, and none of that is built yet — so requiring it here
- * would stop the whole printer from loading rather than just the two features that use
- * it.
- *
- * Those two are raster image conversions: a fetched logo (`logoToTempPng`) and the
- * struck-through MRP label (`strikeToTempPng`). Everything else — text, QR, barcodes,
- * cut, drawer — is pure JS. So it is loaded on demand and its absence degrades exactly
- * those two, with a message that names the cause.
+ * The lazy require stays anyway. It is used in exactly two places here: a fetched logo
+ * (`logoToTempPng`) and the struck-through MRP label (`strikeToTempPng`). Everything
+ * else the printer does — text, QR, barcodes, cut, drawer — is pure JS. Loading it on
+ * demand means a counter whose sharp binary is somehow unusable still prints receipts,
+ * with those two features degrading with a message that names the cause, rather than the
+ * whole printer failing to load. That was worth keeping once written.
  */
 let _sharp = null;
 function sharp(...args) {
