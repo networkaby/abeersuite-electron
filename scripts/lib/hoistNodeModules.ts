@@ -88,9 +88,49 @@ export function hoistNodeModules(
         }
     }
 
-    fs.rmSync(destDir, { recursive: true, force: true });
-    fs.renameSync(outDir, destDir);
+    // Windows hands out EPERM/EBUSY here for reasons that have nothing to do with this
+    // build: an editor's file watcher, or Defender scanning the hundred-odd packages
+    // that were just written, can hold a directory handle open without
+    // FILE_SHARE_DELETE for a moment. `counter-build.ts` hit exactly this and solved it
+    // the same way — the lock clears on its own, so the only wrong move is to treat the
+    // first failure as final and abort a fifteen-minute build.
+    rmWithRetry(destDir);
+    renameWithRetry(outDir, destDir);
     return placed.size;
+}
+
+/** Synchronous sleep — these are one-shot build scripts, not servers. */
+function sleepSync(ms: number): void {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function isTransientLock(err: unknown): boolean {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    return code === "EPERM" || code === "EBUSY" || code === "ENOTEMPTY";
+}
+
+function rmWithRetry(target: string, attempts = 10): void {
+    for (let i = 1; i <= attempts; i++) {
+        try {
+            fs.rmSync(target, { recursive: true, force: true });
+            return;
+        } catch (err) {
+            if (!isTransientLock(err) || i === attempts) throw err;
+            sleepSync(300);
+        }
+    }
+}
+
+function renameWithRetry(from: string, to: string, attempts = 10): void {
+    for (let i = 1; i <= attempts; i++) {
+        try {
+            fs.renameSync(from, to);
+            return;
+        } catch (err) {
+            if (!isTransientLock(err) || i === attempts) throw err;
+            sleepSync(300);
+        }
+    }
 }
 
 /** Every symlink under `dir`, recursively. Returns paths relative to `dir`. */

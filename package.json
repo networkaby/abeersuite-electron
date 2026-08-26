@@ -192,6 +192,20 @@
         ]
       },
       {
+        "from": "sync-engine/node_modules",
+        "to": "sync-engine/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "hardware-bridge/node_modules",
+        "to": "hardware-bridge/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "resources/pgsql",
         "to": "pgsql",
         "filter": [
