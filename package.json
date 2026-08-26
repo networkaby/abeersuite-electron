@@ -169,6 +169,18 @@
         "to": "local-schema.sql"
       },
       {
+        "from": "sync-engine",
+        "to": "sync-engine",
+        "filter": [
+          "**/*",
+          "!config.json"
+        ]
+      },
+      {
+        "from": "prisma/sync-tables.json",
+        "to": "sync-engine/sync-tables.json"
+      },
+      {
         "from": "resources/pgsql",
         "to": "pgsql",
         "filter": [

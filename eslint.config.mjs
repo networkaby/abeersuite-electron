@@ -42,6 +42,13 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     ".claude/**",
+    // The replica sync worker. Plain CommonJS Node, run as a child process under
+    // ELECTRON_RUN_AS_NODE — it never passes through Next's bundler, so this config's
+    // TypeScript/ESM rules do not describe it (every `require` reads as an error).
+    // It moved in wholesale from `tools/counter-sync` precisely because it is proven
+    // against real data; converting it to ESM to satisfy a linter that does not apply
+    // to it would be the rewrite that move avoided. `node --check` covers its syntax.
+    "sync-engine/**",
   ]),
 ]);
 

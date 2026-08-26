@@ -469,6 +469,32 @@ function checkReplicaPayload(packageDir: string, failures: string[]): void {
         failures.push("resources/local-schema.sql contains no CREATE TABLE — it is empty or truncated.");
     }
 
+    // The sync worker, and — more importantly — proof its credentials did not come with
+    // it. `config.json` holds connection strings for BOTH databases; it is written at
+    // runtime into userData and must never be packaged. The standalone tool it came from
+    // excluded it three independent ways for this reason, and its README is explicit
+    // that repeating the bridge's shipped-credentials mistake with database passwords
+    // would be "a different order of problem".
+    const engineDir = path.join(resourcesDir, "sync-engine");
+    if (!fs.existsSync(path.join(engineDir, "index.js"))) {
+        failures.push(
+            "resources/sync-engine/index.js is missing — the replica would be created but never "
+            + "filled, so every read falls back to Supabase."
+        );
+    }
+    if (!fs.existsSync(path.join(engineDir, "sync-tables.json"))) {
+        failures.push(
+            "resources/sync-engine/sync-tables.json is missing — the worker fails every cycle "
+            + "with \"No sync registry\" and backs off forever."
+        );
+    }
+    if (fs.existsSync(path.join(engineDir, "config.json"))) {
+        failures.push(
+            "resources/sync-engine/config.json IS PACKAGED — it holds credentials for both "
+            + "databases and must only ever be written at runtime into userData."
+        );
+    }
+
     // postgresManager.ts resolves resources/pgsql/bin and needs these three by name.
     const binDir = path.join(resourcesDir, "pgsql", "bin");
     if (!fs.existsSync(binDir)) {

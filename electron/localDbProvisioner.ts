@@ -89,14 +89,21 @@ function grantsFor(role: string, privileges: string): string[] {
     ];
 }
 
+export interface ProvisionedReplica {
+    /** Least-privilege URL the app reads and writes through. No DELETE, no DDL. */
+    appUrl: string;
+    /** The sync worker's URL: owns the replicated data, may suspend foreign keys. */
+    syncUrl: string;
+}
+
 /**
  * Applies the schema and roles if they are not already in place.
  *
- * @returns the connection string the app should use, or null when the replica could not
- *          be provisioned — in which case the caller stays in live mode, same contract
- *          as `ensurePostgresRunning()`.
+ * @returns both role connection strings, or null when the replica could not be
+ *          provisioned — in which case the caller stays in live mode, same contract as
+ *          `ensurePostgresRunning()`.
  */
-export async function provisionLocalDatabase(adminUrl: string): Promise<string | null> {
+export async function provisionLocalDatabase(adminUrl: string): Promise<ProvisionedReplica | null> {
     const schemaFile = resourcePath("local-schema.sql");
     if (!fs.existsSync(schemaFile)) {
         console.error(`[Provisioner] Missing ${schemaFile} — cannot build the replica. Staying in live mode.`);
@@ -168,9 +175,11 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<string |
                 err instanceof Error ? err.message : err);
         }
 
-        const appUrl = adminUrl.replace("://postgres@", `://${APP_ROLE}@`);
-        console.log(`[Provisioner] Replica ready — app connects as ${APP_ROLE}.`);
-        return appUrl;
+        console.log(`[Provisioner] Replica ready — app connects as ${APP_ROLE}, worker as ${SYNC_ROLE}.`);
+        return {
+            appUrl: adminUrl.replace("://postgres@", `://${APP_ROLE}@`),
+            syncUrl: adminUrl.replace("://postgres@", `://${SYNC_ROLE}@`),
+        };
     } catch (err) {
         console.error("[Provisioner] Failed to provision the replica:", err);
         return null;

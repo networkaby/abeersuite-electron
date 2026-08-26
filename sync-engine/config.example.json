@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to config.json and fill in. NEVER commit config.json, and never let it into a packaged zip - it holds database credentials.",
+
+  "sourceUrl": "postgresql://postgres:PASSWORD@db.<ref>.supabase.co:5432/postgres?sslmode=require",
+  "localUrl": "postgresql://smx_sync:PASSWORD@localhost:5432/smx",
+
+  "_registryPath": "Leave unset. sync-tables.json is bundled right next to this file at build time and that is the default. Only set this to override for local dev against a repo checkout -- a value here is machine-specific and will not resolve once installed elsewhere. This is exactly the mistake this template shipped with once already: the example value below was correct on the dev machine that wrote it and nowhere else, and a real install silently failed every cycle for it. Don't repeat it.",
+
+  "_realtime": "Optional. Lets the worker sync when something changes instead of only on a timer, by listening on the same app:changes channel the app already broadcasts on. Both values are the app's NEXT_PUBLIC_* Supabase settings - client-exposed by design, not secrets. Omit them and the worker falls back to the timer alone.",
+  "supabaseUrl": "https://<ref>.supabase.co",
+  "supabaseAnonKey": "eyJ..."
+}

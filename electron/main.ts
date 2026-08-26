@@ -556,6 +556,7 @@ function setupAutoUpdater(): void {
 
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
+import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
@@ -895,11 +896,14 @@ app.whenReady().then(async () => {
         const localDbUrl = await ensurePostgresRunning();
         if (localDbUrl) {
             sendBootProgress("Preparing local database…");
-            const appUrl = await provisionLocalDatabase(localDbUrl);
-            if (appUrl) {
+            const replica = await provisionLocalDatabase(localDbUrl);
+            if (replica) {
                 // Downgrade from the superuser URL postgresManager handed back to the
                 // least-privilege app role, which cannot DELETE or change the schema.
-                process.env.LOCAL_DATABASE_URL = appUrl;
+                process.env.LOCAL_DATABASE_URL = replica.appUrl;
+                // Fills the replica and keeps it current. Runs under the sync role, which
+                // owns the data and may suspend foreign keys while replaying a table.
+                startSyncWorker(replica.syncUrl);
                 // Read-routing (prismaClient.ts / counterMode.ts) gates on COUNTER_PC, not on
                 // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
                 // result, rather than requiring it baked into the installer. serverManager.ts
@@ -976,6 +980,7 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
     stopNextServer();
+    stopSyncWorker();
     stopEmbeddedPostgres();
     if (tray && !tray.isDestroyed()) {
         tray.destroy();
