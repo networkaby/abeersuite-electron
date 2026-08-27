@@ -2,6 +2,8 @@
 
 import { signIn, signOut, getSession } from "next-auth/react";
 import { isBridgeAvailable } from "@/shared/lib/bridge";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -40,7 +42,7 @@ function StaffLoginForm() {
             if (!bridgePresent) {
                 const session = await getSession();
                 const perms = (session?.user as { permissions?: string[] })?.permissions ?? [];
-                if (!perms.includes("auth:login:outside-counter")) {
+                if (!hasPermissionWithScope(perms, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
                     await signOut({ redirect: false });
                     setError(
                         "This machine is not a counter. " +

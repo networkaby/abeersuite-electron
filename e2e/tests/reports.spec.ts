@@ -36,7 +36,7 @@ for (const report of REPORTS) {
         const dataRegion = page
             .locator("table, [role='table']")
             .first()
-            .or(page.getByText(/No .*(yet|found)|0 of 0 rows|nothing to show/i).first());
+            .or(page.getByText(/No .*(yet|found|match)|0 of 0 rows|nothing to show/i).first());
         await expect(dataRegion).toBeVisible({ timeout: 90_000 });
     });
 }

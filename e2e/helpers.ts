@@ -8,10 +8,14 @@ import { expect, type Page } from "@playwright/test";
  * on every run (`ensureDemoUsers()` in bootstrap-seed.ts) — safe to keep here.
  */
 export const STAFF = {
-    email: process.env.E2E_STAFF_EMAIL || "admin@networkservice.in",
-    password: process.env.E2E_STAFF_PASSWORD || "admin123",
+    email: process.env.E2E_STAFF_EMAIL || "rakesh@networkservice.in",
+    password: process.env.E2E_STAFF_PASSWORD || "abcd@1234",
 };
-
+/** Seeded demo admin — has auth:login:outside-counter, so it works from any machine (incl. CI/Playwright). */
+export const admin = {
+    email: process.env.E2E_ADMIN_EMAIL || "admin@networkservice.in",
+    password: process.env.E2E_ADMIN_PASSWORD || "admin123",
+};
 /** Env super-admin — works even against a wiped DB (no DB lookup on login). */
 export const SUPER_ADMIN = {
     email: process.env.SUPER_ADMIN_EMAIL || "superadmin@networkservice.in",
