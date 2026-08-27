@@ -44,6 +44,83 @@ const HEADER = `-- GENERATED FILE — DO NOT EDIT BY HAND.
 `;
 
 /**
+ * The raw Prisma diff is written for a database that has never seen it — none of
+ * `CREATE TABLE`, `CREATE TYPE`, `CREATE INDEX`, `ALTER TABLE ... ADD CONSTRAINT` is
+ * idempotent. That is fine for a true first run, but `localDbProvisioner.ts` also
+ * re-runs this exact script on every app upgrade that changes the schema (its
+ * `schema_hash` check) and after any provisioning attempt that got interrupted
+ * partway — both re-apply against a database that already has some or all of these
+ * objects. Without guards, the first statement that collides throws and Postgres
+ * rolls back the whole multi-statement batch (it runs as one implicit transaction),
+ * which is exactly what happened on a real counter: an upgrade hit
+ * `type "X" already exists` and the counter silently stayed live-only forever after.
+ *
+ * `CREATE TABLE`/`CREATE INDEX` accept `IF NOT EXISTS` directly. `CREATE TYPE` and
+ * `ADD CONSTRAINT` do not, so those are wrapped in a `DO` block that swallows
+ * `duplicate_object` (42710) — the SQLSTATE both raise when the enum/constraint is
+ * already there.
+ *
+ * ── What this still does NOT fix ─────────────────────────────────────────────
+ * This file is a full from-empty snapshot, not a real diff against the previous
+ * version. `addColumnBackfills()` below closes the common case — a new column on an
+ * existing table — but a dropped/renamed/retyped column, or a new `NOT NULL` column
+ * with no default on a table that already has rows, is not expressible as an
+ * additive `ALTER` at all. Those still fail loudly rather than silently, which is
+ * correct: guessing at a destructive or data-losing migration would be worse than
+ * refusing. That needs a real diff-against-target migrator, which is separate work.
+ */
+function makeIdempotent(sql: string): string {
+    let out = sql;
+    out = out.replace(/^CREATE TABLE "/gm, 'CREATE TABLE IF NOT EXISTS "');
+    out = out.replace(/^CREATE UNIQUE INDEX "/gm, 'CREATE UNIQUE INDEX IF NOT EXISTS "');
+    out = out.replace(/^CREATE INDEX "/gm, 'CREATE INDEX IF NOT EXISTS "');
+
+    const guard = (stmt: string) =>
+        `DO $$ BEGIN\n    ${stmt}\nEXCEPTION\n    WHEN duplicate_object THEN NULL;\nEND $$;`;
+    out = out.replace(/^(CREATE TYPE .+;)$/gm, (_m, stmt: string) => guard(stmt));
+    out = out.replace(/^(ALTER TABLE .+ ADD CONSTRAINT .+;)$/gm, (_m, stmt: string) => guard(stmt));
+
+    return addColumnBackfills(out);
+}
+
+/**
+ * Re-declares every column of every table as a follow-up `ALTER TABLE ... ADD
+ * COLUMN IF NOT EXISTS` right after its `CREATE TABLE`, so a column added to a
+ * table that already existed on this replica actually reaches it — reproduced for
+ * real: `pos_counters` gained `counterNumber`, and a replica provisioned before
+ * that change kept failing with `column "counterNumber" does not exist` because
+ * `CREATE TABLE IF NOT EXISTS` skips the whole statement once the table exists.
+ *
+ * A no-op for a table just created fresh in this same script run (the column
+ * already exists). Postgres accepts `IF NOT EXISTS` on `ADD COLUMN` since 9.6, and
+ * a populated table only rejects the add when the new column is `NOT NULL` with no
+ * default — the same case `makeIdempotent()`'s doc comment above calls out as
+ * staying a loud failure on purpose.
+ *
+ * Relies on the Prisma diff's format being exactly this regular: every table body
+ * line is either a quoted `"col" type...,` definition, a `CONSTRAINT` line, or
+ * blank — verified against the current 113-table file (no inline `CHECK`, no
+ * column definition split across lines). A `CONSTRAINT` line never starts with a
+ * quote, so it is never mistaken for a column; a future table that broke this
+ * regularity would just get no backfills generated for its odd line, not corrupt
+ * SQL, because the per-line regex below only ever matches the shape it expects.
+ */
+function addColumnBackfills(sql: string): string {
+    return sql.replace(
+        /CREATE TABLE IF NOT EXISTS "([A-Za-z0-9_]+)" \(\n([\s\S]*?)\n\);/g,
+        (block: string, table: string, body: string) => {
+            const alters: string[] = [];
+            for (const line of body.split("\n")) {
+                const col = /^ {4}"([A-Za-z0-9_]+)" (.+),$/.exec(line);
+                if (!col) continue; // the CONSTRAINT line, or a blank separator line
+                alters.push(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "${col[1]}" ${col[2]};`);
+            }
+            return alters.length ? `${block}\n${alters.join("\n")}` : block;
+        },
+    );
+}
+
+/**
  * Prisma renamed this flag in v7: \`--to-schema-datamodel\` became \`--to-schema\`.
  * Pinned here so a future rename fails loudly instead of silently producing nothing.
  */
@@ -70,7 +147,7 @@ function generate(): string {
     if (!cleaned.includes("CREATE TABLE")) {
         throw new Error("Generated SQL contains no CREATE TABLE — refusing to write it.");
     }
-    return `${HEADER}\n${cleaned}\n`;
+    return `${HEADER}\n${makeIdempotent(cleaned)}\n`;
 }
 
 /** Compare on content, not bytes: this repo checks out CRLF on Windows. */
@@ -83,7 +160,8 @@ function main(): void {
     const generated = generate();
 
     const tables = (generated.match(/^CREATE TABLE/gm) ?? []).length;
-    const enums = (generated.match(/^CREATE TYPE/gm) ?? []).length;
+    // Wrapped in a DO block for idempotency, so no longer at line start — see makeIdempotent().
+    const enums = (generated.match(/CREATE TYPE "/g) ?? []).length;
 
     if (check) {
         if (!fs.existsSync(OUT_FILE)) {

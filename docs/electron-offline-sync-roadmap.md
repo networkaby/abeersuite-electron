@@ -52,6 +52,31 @@
 - electron-builder **dropped `node_modules`** from `extraResources`.
 - The dependency hoist **aborted a whole build** on a transient Windows file lock.
 
+### Defects fixed in the 2026-08-27 pass
+
+- **`local-schema.sql` re-apply was not idempotent, and crashed on the first collision.**
+  `localDbProvisioner.ts` re-runs the bundled schema on every app upgrade that changes
+  it (its `schema_hash` check) and after any interrupted first-run attempt — both
+  re-apply against a database that already has some or all of the objects. Reproduced
+  live: an upgrade hit `type "TierCurrentSaleScope" already exists`, `COUNTER_PC` never
+  got set, and the counter silently stayed live-only forever after — no badge, no local
+  reads, no error visible anywhere but the log. `scripts/gen-local-schema.ts` now
+  post-processes the generated DDL into an idempotent form (`CREATE TABLE`/`CREATE
+  INDEX` gain `IF NOT EXISTS`; `CREATE TYPE`/`ADD CONSTRAINT` are wrapped in a `DO`
+  block swallowing `duplicate_object`), verified by applying the new file twice against
+  a real counter's already-broken `pgdata`.
+- **A column added to an existing table never reached an already-provisioned replica.**
+  The schema file is a full from-empty snapshot, so `pos_counters` gaining
+  `counterNumber` showed up as that table's `CREATE TABLE` gaining a column — which
+  `IF NOT EXISTS` then skipped entirely, since the table already existed. Reproduced
+  live as `column "counterNumber" does not exist`. `gen-local-schema.ts` now also
+  emits `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for every column right after its
+  table, closing the common case (new nullable/defaulted column). A dropped/renamed/
+  retyped column, or a new `NOT NULL` column with no default on a populated table, is
+  not expressible as an additive `ALTER` and still fails loudly — deliberately not
+  silently patched over. A real diff-against-target migrator would close that
+  remaining gap and is separate work.
+
 ### Known defects still open
 
 - **Port 3000 is hard-coded** in `serverManager.ts`'s adoption check — a running
