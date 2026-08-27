@@ -44,12 +44,12 @@ export async function GET(req: Request) {
     const kind = SERIES_KIND[type];
     if (!kind) return NextResponse.json({ reference: "" });
 
-    const series = await prisma.voucherSeries.findUnique({ where: { kind } });
-    if (!series) return NextResponse.json({ reference: "" });
+    const counterParam = searchParams.get("counterNumber") ?? searchParams.get("counter");
+    const counterNumber = counterParam ? Number(counterParam) : 1;
 
     const reference = assembleReference(
         { ...series, nextSeq: series.nextSeq + 1 },
-        user?.id,
+        { counterNumber },
     );
     return NextResponse.json({ reference });
 }

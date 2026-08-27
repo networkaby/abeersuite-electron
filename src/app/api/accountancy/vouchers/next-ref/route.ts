@@ -23,12 +23,15 @@ export async function GET(req: Request) {
         return NextResponse.json({ reference: "" });
     }
 
+    const counterParam = searchParams.get("counterNumber") ?? searchParams.get("counter");
+    const counterNumber = counterParam ? Number(counterParam) : 1;
+
     // Mirror what nextRefFromSeries does at save time: it post-increments
     // nextSeq, then calls assembleReference. To preview the same value,
     // pass a shape with nextSeq + 1.
     const reference = assembleReference(
         { ...series, nextSeq: series.nextSeq + 1 },
-        user?.id,
+        { counterNumber },
     );
 
     return NextResponse.json({ reference });

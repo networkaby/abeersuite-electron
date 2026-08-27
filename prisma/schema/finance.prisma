@@ -238,15 +238,15 @@ model VoucherAllocation {
 }
 
 // ── Voucher Series (numbering configuration per voucher kind) ─────────────
-// Reference is assembled from configurable parts (type/user/year/number) joined
-// by a separator. On the next voucher creation past `yearClosingDate`, the year
-// part rolls forward and `nextSeq` resets to 0 automatically.
+// Reference is assembled from configurable parts (type/counter/year/number) joined
+// by custom separators / literals. On the next voucher creation past `yearClosingDate`,
+// the year part rolls forward and `nextSeq` resets to 0 automatically.
 //
-// Reference = parts in `partOrder` (subset of: type,user,year,number) joined by `separator`.
-//   type   → typeValue (truncated to typeMaxWidth)
-//   user   → creator's User.id (zero-padded to userMaxWidth)
-//   year   → fiscal year derived from fyStartYear, formatted per yearFormat
-//   number → startFrom + nextSeq - 1 (zero-padded to padWidth)
+// Reference = parts in `partOrder` (subset of: type,counter,year,number).
+//   type    → typeValue
+//   counter → POS counter / workstation number (e.g. 24)
+//   year    → fiscal year derived from fyStartYear, formatted per yearFormat
+//   number  → startFrom + nextSeq - 1 (zero-padded to padWidth)
 // Singleton org-level configuration. The book-restart day is shared by every
 // voucher series so a single year-end change rolls the whole business forward.
 model BooksConfig {
@@ -270,9 +270,8 @@ model VoucherSeries {
   typeEnabled Boolean @default(true)
   typeValue   String  @default("")
 
-  // User part (creator's user ID)
-  userEnabled  Boolean @default(false)
-  userMaxWidth Int     @default(3)
+  // Counter part (workstation / POS counter number, e.g. 24)
+  counterEnabled Boolean @default(true)
 
   // Year part
   yearEnabled Boolean @default(true)
@@ -284,13 +283,13 @@ model VoucherSeries {
   padWidth  Int @default(4)
   nextSeq   Int @default(0)
 
-  // Assembly: comma-separated list of parts. Reserved tokens — type, user,
+  // Assembly: comma-separated list of parts. Reserved tokens — type, counter,
   // year, number — expand to their values. Anything else is a literal,
   // letting the admin embed separators or text inline. Examples:
-  //   "type,/,year,-,number"     →  INV/26-27-0001
-  //   "type,number,-,user"       →  INV0001-007
-  //   "type,/,year,/,user,number"→  INV/26-27/0070001
-  partOrder String @default("type,-,year,-,number")
+  //   "type,-,year,-,counter,number" →  BT-26-240001 (or 24368 for counter 24 + seq 368)
+  //   "type,/,year,/,counter,number" →  INV/26-27/240001
+  //   "counter,number"               →  240001
+  partOrder String @default("type,-,year,-,counter,number")
 
   updatedAt DateTime @updatedAt
 }

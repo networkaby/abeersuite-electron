@@ -66,11 +66,11 @@ const PREFIX: Record<InvVoucherType, string> = {
 export async function invNextRef(
     tx: Prisma.TransactionClient,
     type: InvVoucherType,
-    userId?: number | null,
+    ctx?: import("@/modules/accountancy/lib/voucherRef").ReferenceContext,
 ): Promise<string> {
     const seriesKind = SERIES_KINDS[type];
     if (seriesKind) {
-        return nextRefFromSeries(tx, seriesKind, userId ?? undefined);
+        return nextRefFromSeries(tx, seriesKind, ctx);
     }
     // Legacy fallback — calendar-year prefix scheme.
     const year = new Date().getFullYear();

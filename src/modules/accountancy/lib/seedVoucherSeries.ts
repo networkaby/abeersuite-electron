@@ -90,14 +90,13 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         fyStartYear:     fyStart,
         typeEnabled:     true,
         typeValue:       r.typeValue,
-        userEnabled:     false,
-        userMaxWidth:    3,
+        counterEnabled:  true,
         yearEnabled:     true,
         yearFormat:      "FY_SHORT",
         startFrom:       1,
         padWidth:        4,
         nextSeq:         r.nextSeq,
-        partOrder:       "type,-,year,-,number",
+        partOrder:       "type,-,year,-,counter,number",
     }));
 
     await prisma.voucherSeries.createMany({ data: rows, skipDuplicates: true });
