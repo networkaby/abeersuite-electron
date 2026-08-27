@@ -15,21 +15,48 @@ import { spawnSync, execSync } from "child_process";
 
 loadDotenv({ path: path.join(process.cwd(), ".env") });
 
-if (!process.env.GH_TOKEN) {
-    console.error(
-        "[release-electron] FATAL: GH_TOKEN is not set in .env.\n" +
-        "  Create a fine-grained PAT with Contents: Read and write scoped to BOTH:\n" +
-        "  1) devloperakramul/abeersuite-networkservice-update\n" +
-        "  2) devloperakramul/abeersuite-electron\n" +
-        "  and add it to .env as GH_TOKEN=..."
-    );
+const packageJsonPath = path.join(process.cwd(), "package.json");
+const originalPackageJsonText = fs.readFileSync(packageJsonPath, "utf-8");
+const pkg = JSON.parse(originalPackageJsonText);
+const version = pkg.version;
+const tagName = `v${version}`;
+
+// Each release repo can sit under a DIFFERENT GitHub account, so a single
+// GH_TOKEN can't authenticate against both — electron-publish's GitHubPublisher
+// only ever reads process.env.GH_TOKEN (or a literal `token` in the publish
+// config, which we deliberately never write to package.json — see the .env
+// comment next to these vars). Map each publish target's repo to the .env var
+// holding ITS OWN token.
+const REPO_TOKEN_ENV: Record<string, string> = {
+    "abeersuite-networkservice-update": "GH_TOKEN_1",
+    "abeersuite-electron": "GH_TOKEN_2",
+};
+
+const publishTargets: any[] = pkg.build?.publish ?? [];
+if (publishTargets.length === 0) {
+    console.error("[release-electron] FATAL: package.json build.publish has no targets.");
     process.exit(1);
 }
 
-const packageJsonPath = path.join(process.cwd(), "package.json");
-const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-const version = pkg.version;
-const tagName = `v${version}`;
+for (const target of publishTargets) {
+    const envVar = REPO_TOKEN_ENV[target.repo];
+    if (!envVar) {
+        console.error(
+            `[release-electron] FATAL: no .env var mapped for publish target "${target.repo}".\n` +
+            "  Add it to REPO_TOKEN_ENV in this script."
+        );
+        process.exit(1);
+    }
+    if (!process.env[envVar]) {
+        console.error(
+            `[release-electron] FATAL: ${envVar} is not set in .env.\n` +
+            `  Create a fine-grained PAT with Contents: Read and write scoped to ${target.owner}/${target.repo}\n` +
+            `  (it can belong to a different GitHub account than the other repo's token)\n` +
+            `  and add it to .env as ${envVar}=...`
+        );
+        process.exit(1);
+    }
+}
 
 console.log(`[release-electron] Release target version: ${version} (${tagName})`);
 
@@ -42,8 +69,17 @@ if (!fs.existsSync(path.join(prepackaged, "AbeerSuite.exe"))) {
     process.exit(1);
 }
 
-// 1. Generate release notes from git commits since previous tag
-let releaseNotes = "";
+// 1. Release notes are two parts: our own hand-written summary (RELEASE_NOTES.md,
+// human-readable — edit it before releasing) followed by the auto-generated raw
+// commit log (mechanical, exhaustive, but not something a customer wants to read
+// on its own). Auto-generated always goes AFTER the hand-written part.
+const releaseNotesPath = path.join(process.cwd(), "RELEASE_NOTES.md");
+let humanNotes = "";
+if (fs.existsSync(releaseNotesPath)) {
+    humanNotes = fs.readFileSync(releaseNotesPath, "utf-8").trim();
+}
+
+let autoNotes = "";
 try {
     const rawTags = execSync("git tag --sort=-creatordate", { encoding: "utf-8" })
         .split("\n")
@@ -57,11 +93,13 @@ try {
 
     const commitLog = execSync(`git log ${range} --pretty=format:"* %s (%h)"`, { encoding: "utf-8" }).trim();
     if (commitLog) {
-        releaseNotes = `### What's Changed in ${tagName}\n\n${commitLog}\n\n**Full Changelog**: ${prevTag ? `https://github.com/devloperakramul/abeersuite-electron/compare/${prevTag}...${tagName}` : `https://github.com/devloperakramul/abeersuite-electron/commits/${tagName}`}`;
+        autoNotes = `### What's Changed in ${tagName}\n\n${commitLog}\n\n**Full Changelog**: ${prevTag ? `https://github.com/devloperakramul/abeersuite-electron/compare/${prevTag}...${tagName}` : `https://github.com/devloperakramul/abeersuite-electron/commits/${tagName}`}`;
     }
 } catch (e: any) {
     console.warn("[release-electron] Could not auto-generate release notes from git:", e?.message);
 }
+
+const releaseNotes = [humanNotes, autoNotes].filter(Boolean).join("\n\n---\n\n");
 
 // 2. Tag and push to origin if not already tagged
 try {
@@ -81,20 +119,41 @@ try {
     process.exit(1);
 }
 
-// 3. Publish to GitHub
-console.log("[release-electron] Publishing verified build in dist-app/win-unpacked to both repositories (abeersuite-networkservice-update & abeersuite-electron)...");
+// 3. Publish to GitHub — one electron-builder invocation PER target. Each repo
+// can belong to a different GitHub account, and GitHubPublisher only reads a
+// single process.env.GH_TOKEN, so we can't publish to both repos in one run
+// with two different tokens. Instead, for each target we temporarily narrow
+// package.json's build.publish down to just that one repo, run the build with
+// GH_TOKEN set to THAT repo's token, then restore package.json — same
+// rename-and-restore pattern counter-build.ts uses for excluded routes.
+console.log("[release-electron] Publishing verified build in dist-app/win-unpacked...");
 
 const builderArgs = ["--publish", "always", "--prepackaged", prepackaged];
 if (releaseNotes) {
     builderArgs.push(`-c.releaseInfo.releaseNotes=${JSON.stringify(releaseNotes)}`);
 }
 
-const result = spawnSync("electron-builder", builderArgs, {
-    stdio: "inherit",
-    shell: true,
-    env: process.env,
-});
+let exitCode = 0;
+for (const target of publishTargets) {
+    console.log(`[release-electron] → Publishing to ${target.owner}/${target.repo}...`);
+    pkg.build.publish = [target];
+    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+    try {
+        const result = spawnSync("electron-builder", builderArgs, {
+            stdio: "inherit",
+            shell: true,
+            env: { ...process.env, GH_TOKEN: process.env[REPO_TOKEN_ENV[target.repo]] },
+        });
+        exitCode = result.status ?? 1;
+    } finally {
+        fs.writeFileSync(packageJsonPath, originalPackageJsonText);
+    }
+    if (exitCode !== 0) {
+        console.error(`[release-electron] FATAL: publish to ${target.owner}/${target.repo} failed (exit ${exitCode}).`);
+        break;
+    }
+}
 
-process.exit(result.status ?? 1);
+process.exit(exitCode);
 
 
