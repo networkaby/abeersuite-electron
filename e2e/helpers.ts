@@ -23,12 +23,26 @@ export const SUPER_ADMIN = {
 };
 
 /**
+ * Seeded portal customer, authenticated via the password method (not OTP) —
+ * OTP delivery needs a real SMS/email vendor, which isn't wired for tests.
+ * The customer login form's "Password" tab hits `credentials-portal` directly,
+ * so this account needs a PersonPortalCredential row with a password set.
+ */
+export const CUSTOMER = {
+    identifier: process.env.E2E_CUSTOMER_IDENTIFIER || "9954999271",
+    password: process.env.E2E_CUSTOMER_PASSWORD || "abcd@1234",
+};
+
+/**
  * Where we send staff after login. The login page's built-in default is
  * `/office/work-flow-inbox` (the Work Inbox / assignments dashboard). We
  * override it to `/office`, a lighter landing, so the post-login render is
  * fast and deterministic in tests.
  */
 export const STAFF_HOME = "/office";
+
+/** Post-login landing for the customer portal. */
+export const CUSTOMER_HOME = "/portal";
 
 /**
  * Drive the staff login form at /staff/login and wait until authenticated.
@@ -60,6 +74,37 @@ export async function staffLogin(
     // URL leaves /staff/login → lands on STAFF_HOME. Resolve on commit so we
     // don't block on the heavy office-page first-compile.
     await page.waitForURL((url) => !url.pathname.startsWith("/staff/login"), {
+        timeout: 90_000,
+        waitUntil: "commit",
+    });
+}
+
+/**
+ * Drive the customer login form at /login and wait until authenticated.
+ *
+ * The form defaults to the OTP tab; we switch to "Password" so the test
+ * doesn't need a real SMS/email vendor. Waits on the NextAuth callback
+ * response (session cookie set) rather than the redirect, same reasoning as
+ * `staffLogin`.
+ */
+export async function customerLogin(
+    page: Page,
+    creds: { identifier: string; password: string } = CUSTOMER,
+): Promise<void> {
+    await page.goto(`/login?callbackUrl=${encodeURIComponent(CUSTOMER_HOME)}`);
+    await page.getByRole("button", { name: /password/i }).click();
+
+    await page.locator("#login-identifier").fill(creds.identifier);
+    await page.locator("#login-password").fill(creds.password);
+
+    const callback = page.waitForResponse(
+        (r) => r.url().includes("/api/auth/callback/credentials-portal"),
+        { timeout: 90_000 },
+    );
+    await page.getByRole("button", { name: /^sign in$/i }).click();
+    await callback; // session cookie is now set
+
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
         timeout: 90_000,
         waitUntil: "commit",
     });

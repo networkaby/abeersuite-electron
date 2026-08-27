@@ -54,21 +54,32 @@ Read from env, with seeded-demo fallbacks (see `helpers.ts`):
 |---|---|---|
 | `E2E_STAFF_EMAIL` / `E2E_STAFF_PASSWORD` | `admin@networkservice.in` / `admin123` | auth setup + authed specs |
 | `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` | from `.env` | login spec (DB-independent) |
+| `E2E_CUSTOMER_IDENTIFIER` / `E2E_CUSTOMER_PASSWORD` | seeded portal customer | customer setup + customer specs |
 | `E2E_BASE_URL` | `http://localhost:3000` | base URL |
+
+`CUSTOMER` logs in via the customer login page's **Password** tab, not OTP —
+OTP delivery needs a real SMS/email vendor, which isn't wired for tests (see
+[[portal-passwordless-login]]).
 
 ## Layout
 
 | File | Project | What it covers |
 |---|---|---|
 | `auth.setup.ts` | `setup` | Logs in as admin once → `e2e/.auth/admin.json` |
-| `login.spec.ts` | `unauth` | Login page render, bad creds, super-admin login |
+| `login.spec.ts` | `unauth` | Staff login page render, bad creds, super-admin login |
+| `public.spec.ts` | `public` | Public storefront (`/`, `/shop`) render, no session |
+| `customer-signin.spec.ts` | `customer-unauth` | Customer login page render, bad creds, password-login |
+| `customer.setup.ts` | `customer-setup` | Logs in as the seeded customer once → `e2e/.auth/customer.json` |
 | `warmup.ts` | `warmup` | Pre-compiles heavy authed routes (perf, not assertions) |
 | `tests/reports.spec.ts` | `authed` | Balance Sheet · P&L · Trial Balance · Day Book load |
 | `tests/pos.spec.ts` | `authed` | POS screen + shift controls (full sale = `fixme`) |
 | `tests/voucher-lifecycle.spec.ts` | `authed` | Payments register + GL payment form (full cycle = `fixme`) |
+| `tests-customer/portal.spec.ts` | `customer` | Portal home + tickets page load, signed in as customer |
 
 Project order: `setup` → `warmup` → `authed` (Playwright runs dependencies
-automatically; `--project=authed` pulls in both).
+automatically; `--project=authed` pulls in both). Same pattern for the
+customer side: `customer-setup` → `customer`. `public` and the two `*-unauth`
+projects have no dependencies and no stored session.
 
 ## Known app quirks the tests work around
 

@@ -77,6 +77,34 @@ export default defineConfig({
                 storageState: "e2e/.auth/admin.json",
             },
         },
+
+        // 5. Public storefront — no session at all, no dependency on staff auth.
+        {
+            name: "public",
+            testMatch: /public\.spec\.ts$/,
+            use: { ...devices["Desktop Chrome"] },
+        },
+
+        // 6. Unauthenticated customer flow (login page itself).
+        {
+            name: "customer-unauth",
+            testMatch: /customer-signin\.spec\.ts$/,
+            use: { ...devices["Desktop Chrome"] },
+        },
+
+        // 7. Authenticate once as the seeded customer, persist storage state.
+        { name: "customer-setup", testMatch: /customer\.setup\.ts$/ },
+
+        // 8. Everything under e2e/tests-customer/** runs as the logged-in customer.
+        {
+            name: "customer",
+            testMatch: /tests-customer\/.*\.spec\.ts$/,
+            dependencies: ["customer-setup"],
+            use: {
+                ...devices["Desktop Chrome"],
+                storageState: "e2e/.auth/customer.json",
+            },
+        },
     ],
 
     webServer: {
