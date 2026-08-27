@@ -8,18 +8,18 @@ import { expect, type Page } from "@playwright/test";
  * on every run (`ensureDemoUsers()` in bootstrap-seed.ts) — safe to keep here.
  */
 export const STAFF = {
-    email: process.env.E2E_STAFF_EMAIL || "rakesh@networkservice.in",
-    password: process.env.E2E_STAFF_PASSWORD || "abcd@1234",
+    email: process.env.E2E_STAFF_EMAIL,
+    password: process.env.E2E_STAFF_PASSWORD,
 };
 /** Seeded demo admin — has auth:login:outside-counter, so it works from any machine (incl. CI/Playwright). */
 export const admin = {
-    email: process.env.E2E_ADMIN_EMAIL || "admin@networkservice.in",
-    password: process.env.E2E_ADMIN_PASSWORD || "admin123",
+    email: process.env.E2E_ADMIN_EMAIL,
+    password: process.env.E2E_ADMIN_PASSWORD,
 };
 /** Env super-admin — works even against a wiped DB (no DB lookup on login). */
 export const SUPER_ADMIN = {
-    email: process.env.SUPER_ADMIN_EMAIL || "superadmin@networkservice.in",
-    password: process.env.SUPER_ADMIN_PASSWORD || "superadmin123",
+    email: process.env.SUPER_ADMIN_EMAIL,
+    password: process.env.SUPER_ADMIN_PASSWORD,
 };
 
 /**
@@ -29,7 +29,7 @@ export const SUPER_ADMIN = {
  * so this account needs a PersonPortalCredential row with a password set.
  */
 export const CUSTOMER = {
-    identifier: process.env.E2E_CUSTOMER_IDENTIFIER || "9954999271",
+    identifier: process.env.E2E_CUSTOMER_IDENTIFIER || "democustomer",
     password: process.env.E2E_CUSTOMER_PASSWORD || "abcd@1234",
 };
 
