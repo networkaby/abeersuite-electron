@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Pencil, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { gridRowClass } from "@/shared/lib/format";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -32,7 +33,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
     assembleReference,
     fyClosingDate,
@@ -75,6 +76,29 @@ const PART_PRESETS = [
 const MONTHS = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
+];
+
+const VOUCHER_GROUPS: { title: string; kinds: string[] }[] = [
+    {
+        title: "Financial & GL Vouchers",
+        kinds: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"],
+    },
+    {
+        title: "Sales & Billing",
+        kinds: ["SALE", "POS", "ONLINE_INVOICE", "ONLINE_ORDER", "ESTIMATE", "SALE_RETURN", "SALES_ORDER"],
+    },
+    {
+        title: "Purchases & Inward",
+        kinds: ["PURCHASE", "PURCHASE_RETURN", "PURCHASE_ORDER"],
+    },
+    {
+        title: "Inventory & Warehouse",
+        kinds: ["GRN", "CHALLAN", "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER", "REJECTION_IN", "REJECTION_OUT"],
+    },
+    {
+        title: "Services & Repairs",
+        kinds: ["REPAIR_TICKET"],
+    },
 ];
 
 function previewNext(row: SeriesShape, sampleCounter = 24): string {
@@ -198,8 +222,8 @@ export default function YearEndingPage() {
         : null;
 
     return (
-        <ScrollArea className="h-full" type="always">
-            <div className="mx-auto max-w-full space-y-6 p-6">
+        <ScrollArea className="h-full w-full" type="always">
+            <div className="mx-auto min-w-0 max-w-full space-y-6 p-6">
                 <div>
                     <h1 className="text-xl font-semibold">Year Ending — Voucher Numbering</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -283,55 +307,153 @@ export default function YearEndingPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {series.map((row) => {
-                                    const next = previewNext(row);
-                                    const closing =
-                                        row.fyStartYear != null && config
-                                            ? fmtDate(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
-                                            : "—";
+                                {VOUCHER_GROUPS.map((group) => {
+                                    const groupRows = series.filter((s) => group.kinds.includes(s.kind));
+                                    if (groupRows.length === 0) return null;
                                     return (
-                                        <TableRow key={row.kind}>
-                                            <TableCell>
-                                                <div className="font-medium">{row.label}</div>
-                                                <code className="text-xs text-muted-foreground">{row.kind}</code>
-                                            </TableCell>
-                                            <TableCell>
-                                                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                                                    {row.typeEnabled ? row.typeValue || "—" : <span className="opacity-50">off</span>}
-                                                </code>
-                                            </TableCell>
-                                            <TableCell className="text-sm">{row.fyStartYear ?? "—"}</TableCell>
-                                            <TableCell className="text-sm">{closing}</TableCell>
-                                            <TableCell>
-                                                <code className="text-xs text-muted-foreground">{row.partOrder}</code>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Badge variant="secondary">{row.nextSeq}</Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{next}</code>
-                                            </TableCell>
-                                            <TableCell className="text-right text-xs text-muted-foreground">
-                                                {next.length}
-                                            </TableCell>
-                                            <TableCell className="text-right pr-4">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button size="sm" variant="outline" onClick={() => openEdit(row)} title="Edit">
-                                                        <Pencil className="size-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => setResetKind(row.kind)}
-                                                        title="Reset counter"
+                                        <React.Fragment key={group.title}>
+                                            <TableRow className="bg-muted/40 hover:bg-muted/40 border-y">
+                                                <TableCell
+                                                    colSpan={9}
+                                                    className="py-2 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+                                                >
+                                                    <span className="flex items-center gap-2">
+                                                        <span>{group.title}</span>
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                                            {groupRows.length}
+                                                        </Badge>
+                                                    </span>
+                                                </TableCell>
+                                            </TableRow>
+                                            {groupRows.map((row, index) => {
+                                                const next = previewNext(row);
+                                                const closing =
+                                                    row.fyStartYear != null && config
+                                                        ? fmtDate(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
+                                                        : "—";
+                                                return (
+                                                    <TableRow
+                                                        key={row.kind}
+                                                        className={gridRowClass({ odd: index % 2 === 1 })}
                                                     >
-                                                        <RotateCcw className="size-3.5" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
+                                                        <TableCell>
+                                                            <div className="font-medium">{row.label}</div>
+                                                            <code className="text-xs text-muted-foreground">{row.kind}</code>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                                                                {row.typeEnabled ? row.typeValue || "—" : <span className="opacity-50">off</span>}
+                                                            </code>
+                                                        </TableCell>
+                                                        <TableCell className="text-sm">{row.fyStartYear ?? "—"}</TableCell>
+                                                        <TableCell className="text-sm">{closing}</TableCell>
+                                                        <TableCell>
+                                                            <code className="text-xs text-muted-foreground">{row.partOrder}</code>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Badge variant="secondary">{row.nextSeq}</Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{next}</code>
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-xs text-muted-foreground">
+                                                            {next.length}
+                                                        </TableCell>
+                                                        <TableCell className="text-right pr-4">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <Button size="sm" variant="outline" onClick={() => openEdit(row)} title="Edit">
+                                                                    <Pencil className="size-3.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => setResetKind(row.kind)}
+                                                                    title="Reset counter"
+                                                                >
+                                                                    <RotateCcw className="size-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </React.Fragment>
                                     );
                                 })}
+                                {(() => {
+                                    const assigned = new Set(VOUCHER_GROUPS.flatMap((g) => g.kinds));
+                                    const extraRows = series.filter((s) => !assigned.has(s.kind));
+                                    if (extraRows.length === 0) return null;
+                                    return (
+                                        <React.Fragment key="other">
+                                            <TableRow className="bg-muted/40 hover:bg-muted/40 border-y">
+                                                <TableCell
+                                                    colSpan={9}
+                                                    className="py-2 px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
+                                                >
+                                                    <span className="flex items-center gap-2">
+                                                        <span>Other Vouchers</span>
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                                            {extraRows.length}
+                                                        </Badge>
+                                                    </span>
+                                                </TableCell>
+                                            </TableRow>
+                                            {extraRows.map((row, index) => {
+                                                const next = previewNext(row);
+                                                const closing =
+                                                    row.fyStartYear != null && config
+                                                        ? fmtDate(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
+                                                        : "—";
+                                                return (
+                                                    <TableRow
+                                                        key={row.kind}
+                                                        className={gridRowClass({ odd: index % 2 === 1 })}
+                                                    >
+                                                        <TableCell>
+                                                            <div className="font-medium">{row.label}</div>
+                                                            <code className="text-xs text-muted-foreground">{row.kind}</code>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                                                                {row.typeEnabled ? row.typeValue || "—" : <span className="opacity-50">off</span>}
+                                                            </code>
+                                                        </TableCell>
+                                                        <TableCell className="text-sm">{row.fyStartYear ?? "—"}</TableCell>
+                                                        <TableCell className="text-sm">{closing}</TableCell>
+                                                        <TableCell>
+                                                            <code className="text-xs text-muted-foreground">{row.partOrder}</code>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Badge variant="secondary">{row.nextSeq}</Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{next}</code>
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-xs text-muted-foreground">
+                                                            {next.length}
+                                                        </TableCell>
+                                                        <TableCell className="text-right pr-4">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <Button size="sm" variant="outline" onClick={() => openEdit(row)} title="Edit">
+                                                                    <Pencil className="size-3.5" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => setResetKind(row.kind)}
+                                                                    title="Reset counter"
+                                                                >
+                                                                    <RotateCcw className="size-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </React.Fragment>
+                                    );
+                                })()}
                             </TableBody>
                         </Table>
                     </div>
@@ -594,6 +716,8 @@ export default function YearEndingPage() {
                     </DialogContent>
                 </Dialog>
             </div>
+            <ScrollBar orientation="horizontal" />
+            <ScrollBar orientation="vertical" />
         </ScrollArea>
     );
 }

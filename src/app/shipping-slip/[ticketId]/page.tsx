@@ -140,7 +140,7 @@ export default async function ShippingSlipPage({
     };
     const ownerLabel = showOwner ? "Device Owner" : "Contact (on behalf of owner)";
 
-    const ticketNo = `#${String(ticket.id).padStart(4, "0")}`;
+    const ticketNo = ticket.repair?.ticketNo || `#${String(ticket.id).padStart(4, "0")}`;
 
     const sample: ThermalReceiptSample = {
         reference:  ticketNo,

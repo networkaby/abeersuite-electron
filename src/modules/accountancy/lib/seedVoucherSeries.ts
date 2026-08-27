@@ -50,6 +50,7 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     const branchTransferCount     = await prisma.universalVoucher.count({ where: { type: "BRANCH_TRANSFER" } });
     const rejectionInCount        = await prisma.universalVoucher.count({ where: { type: "REJECTION_IN" } });
     const rejectionOutCount       = await prisma.universalVoucher.count({ where: { type: "REJECTION_OUT" } });
+    const repairTicketCount       = await prisma.ticketRepair.count();
 
     const rows = [
         ...KINDS.map(({ kind, label, typeValue }) => ({
@@ -84,6 +85,7 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         { kind: "BRANCH_TRANSFER",       label: "Branch Transfer",        typeValue: "BT",   nextSeq: branchTransferCount },
         { kind: "REJECTION_IN",          label: "Rejection In",           typeValue: "RIN",  nextSeq: rejectionInCount },
         { kind: "REJECTION_OUT",         label: "Rejection Out",          typeValue: "ROUT", nextSeq: rejectionOutCount },
+        { kind: "REPAIR_TICKET",         label: "Service Repair Ticket",  typeValue: "RT",   nextSeq: repairTicketCount },
     ].map((r) => ({
         kind:            r.kind,
         label:           r.label,
