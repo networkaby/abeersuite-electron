@@ -133,6 +133,17 @@ function restoreOrphans(dir: string): void {
 }
 
 function run(): void {
+    // A prior `next dev` run leaves `.next/dev/types` with a route set generated
+    // from the FULL app tree (before any exclusion above). tsconfig.json includes
+    // both `.next/types/**/*.ts` and `.next/dev/types/**/*.ts` in the same compile,
+    // so if a route excluded above (e.g. `/portal`) is still present in that stale
+    // dev-mode LayoutRoutes, `next build`'s typecheck fails with a "not assignable"
+    // constraint error comparing the two. Drop it so the build only typechecks
+    // against the route set it just generated; `next dev` regenerates it on its own.
+    const devTypesDir = path.join(__dirname, "..", ".next", "dev", "types");
+    if (fs.existsSync(devTypesDir)) {
+        fs.rmSync(devTypesDir, { recursive: true, force: true });
+    }
     execFileSync("node", [require.resolve("next/dist/bin/next"), "build"], {
         stdio: "inherit",
         cwd: path.join(__dirname, ".."),
