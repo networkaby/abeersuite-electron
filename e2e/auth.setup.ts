@@ -1,5 +1,5 @@
 import { test as setup, expect } from "@playwright/test";
-import { staffLogin, STAFF } from "./helpers";
+import { staffLogin, admin } from "./helpers";
 
 const AUTH_FILE = "e2e/.auth/admin.json";
 
@@ -9,7 +9,7 @@ const AUTH_FILE = "e2e/.auth/admin.json";
  * specs don't repeat the login.
  */
 setup("authenticate as admin", async ({ page }) => {
-    await staffLogin(page, STAFF);
+    await staffLogin(page, admin);
 
     // Sanity: we landed somewhere under /office (not bounced back to login).
     await expect(page).toHaveURL(/\/office(\/|$)/);
