@@ -16,6 +16,8 @@ import { extractApiError } from "@/shared/lib/api";
 import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
+import CounterStatusBadge from "@/shared/components/CounterStatusBadge";
+import SyncStatusBadge from "@/shared/components/SyncStatusBadge";
 
 export type ActiveShift = {
     id: number;
@@ -161,6 +163,10 @@ export function ActiveShiftBar({
                 <span className="font-medium">In drawer ≈ <span className="font-mono">₹{fmt(expected)}</span></span>
 
                 <div className="ml-auto flex items-center gap-1.5">
+                    {/* Renders nothing unless this machine is a counter with something
+                        worth reporting — see CounterStatusBadge / SyncStatusBadge. */}
+                    <CounterStatusBadge />
+                    <SyncStatusBadge />
                     {rightSlot}
                     <Button asChild size="sm" variant="outline" className="h-7 text-xs">
                         <a href="/office" target="_blank" rel="noopener noreferrer" title="Open the office in a new tab">

@@ -148,24 +148,29 @@ export async function markOutboxError(localUrl: string, id: number, error: strin
 }
 
 /**
- * Returns summary count of pending and errored outbox items.
+ * Returns summary count of pending and errored outbox items, plus the last
+ * time any mutation from this PC was confirmed pushed — the "last synced"
+ * answer for the shell badge.
  */
-export async function getOutboxStatus(localUrl: string): Promise<{ pending: number; failed: number }> {
+export async function getOutboxStatus(localUrl: string): Promise<{ pending: number; failed: number; lastSyncedAt: string | null }> {
     const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5000 });
     try {
         await client.connect();
-        const res = await client.query<{ pending: string; failed: string }>(
+        const res = await client.query<{ pending: string; failed: string; last_synced_at: Date | null }>(
             `SELECT
                 count(*) FILTER (WHERE pushed_at IS NULL) as pending,
-                count(*) FILTER (WHERE error IS NOT NULL AND pushed_at IS NULL) as failed
+                count(*) FILTER (WHERE error IS NOT NULL AND pushed_at IS NULL) as failed,
+                max(pushed_at) as last_synced_at
              FROM "_outbox"`,
         );
+        const row = res.rows[0];
         return {
-            pending: parseInt(res.rows[0]?.pending ?? "0", 10),
-            failed: parseInt(res.rows[0]?.failed ?? "0", 10),
+            pending: parseInt(row?.pending ?? "0", 10),
+            failed: parseInt(row?.failed ?? "0", 10),
+            lastSyncedAt: row?.last_synced_at ? new Date(row.last_synced_at).toISOString() : null,
         };
     } catch {
-        return { pending: 0, failed: 0 };
+        return { pending: 0, failed: 0, lastSyncedAt: null };
     } finally {
         await client.end().catch(() => {});
     }

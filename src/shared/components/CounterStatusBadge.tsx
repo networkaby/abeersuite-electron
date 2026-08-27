@@ -20,6 +20,13 @@ import { useCounterMode } from "@/shared/hooks/useCounterMode";
  *
  * Green is deliberately not silent-green: it still names WHICH database is answering,
  * because that is what explains any staleness a user notices.
+ *
+ * ── Label text ────────────────────────────────────────────────────────────────
+ * The top bar has very little room, so the visible label is just two words —
+ * "Local" / "Remote", naming which database is answering — with red/green
+ * carrying the online/offline distinction that used to be spelled out in the
+ * text ("Offline"/"Online"/"Local copy"). The fuller explanation still lives in
+ * the tooltip.
  */
 export default function CounterStatusBadge() {
     const status = useCounterMode();
@@ -43,7 +50,7 @@ export default function CounterStatusBadge() {
                 aria-label="Offline — working from this computer's local copy"
             >
                 <WifiOff className="size-3.5" aria-hidden />
-                Offline
+                Local
             </span>
         );
     }
@@ -72,7 +79,7 @@ export default function CounterStatusBadge() {
             {servingLocal
                 ? <RefreshCw className="size-3.5" aria-hidden />
                 : <Wifi className="size-3.5" aria-hidden />}
-            {servingLocal ? "Local copy" : "Online"}
+            {servingLocal ? "Local" : "Remote"}
         </span>
     );
 }

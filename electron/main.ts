@@ -479,6 +479,11 @@ ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
 ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     try {
         fs.writeFileSync(counterSetupFilePath(), JSON.stringify(setup, null, 2));
+        // Reflect the (possibly new) counter number in the title immediately —
+        // called both at first-launch setup and whenever the renderer discovers
+        // this device was reassigned to a different counter (see
+        // reconcileCounterSetup in setupGate.ts).
+        mainWindow?.setTitle(currentAppTitle());
         return true;
     } catch (err) {
         console.error("[main] Could not write counter-setup.json:", err);
@@ -492,6 +497,7 @@ ipcMain.handle("counter:clear-setup", (): boolean => {
     try {
         const file = counterSetupFilePath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
+        mainWindow?.setTitle(APP_TITLE);
         return true;
     } catch (err) {
         console.error("[main] Could not clear counter-setup.json:", err);
@@ -788,6 +794,24 @@ const APP_ORIGIN = `http://127.0.0.1:${PORT}`;
 // web-app-style title bar.
 const APP_TITLE = `AbeerSuite ${app.getVersion()}`;
 
+// Appends this PC's counter number (from counter-setup.json, see the
+// first-launch setup IPC handlers below) to the base title, when known. Read
+// synchronously — this only runs at window creation and right after
+// counter-setup.json is rewritten, never on a hot path.
+function currentAppTitle(): string {
+    try {
+        const file = counterSetupFilePath();
+        if (!fs.existsSync(file)) return APP_TITLE;
+        const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+        if (typeof data?.counterNumber === "number") {
+            return `${APP_TITLE} — Counter ${data.counterNumber}`;
+        }
+        return APP_TITLE;
+    } catch {
+        return APP_TITLE;
+    }
+}
+
 // Resolved against APP_ORIGIN as base, so a relative target ("/vouchers/pos/help" — the
 // form most callers in the app use) is correctly judged same-origin. An absolute URL
 // ignores the base, so external links are still classified on their own origin.
@@ -866,7 +890,7 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
         height: 860,
         minWidth: 1024,
         minHeight: 700,
-        title: APP_TITLE,
+        title: currentAppTitle(),
         autoHideMenuBar: true,
         show: false,
         backgroundColor: SPLASH_BG,

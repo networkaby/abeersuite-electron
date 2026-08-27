@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 import CounterStatusBadge from "@/shared/components/CounterStatusBadge";
+import SyncStatusBadge from "@/shared/components/SyncStatusBadge";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 import { readCache, subscribeToCache, writeCache } from "@/shared/lib/browser/pollCache";
@@ -289,8 +290,9 @@ export default function FinanceTopBar({
             {/* Right: connection state + branch switcher + refresh + timestamp + bar toggle */}
             <div className="ml-auto flex items-center gap-2">
                 {/* Renders nothing unless this machine is a counter with something
-                    worth reporting — see CounterStatusBadge. */}
+                    worth reporting — see CounterStatusBadge / SyncStatusBadge. */}
                 <CounterStatusBadge />
+                <SyncStatusBadge />
                 <BranchSwitcher />
                 {canView && lastUpdated && (
                     <span className="text-[10px] text-muted-foreground/85 hidden sm:block">

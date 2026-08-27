@@ -68,7 +68,9 @@ function StaffLoginForm() {
                     router.push(`/setup/counter?next=${encodeURIComponent(dest)}`);
                     return;
                 }
-                // "valid" or "unreachable" — trust the local file and proceed.
+                // "valid" — unchanged. "reassigned" — already self-healed inside
+                // reconcileCounterSetup (local cache + title rewritten). "unreachable"
+                // — trust the local file. All three proceed to dest as-is.
             }
 
             router.push(dest);
