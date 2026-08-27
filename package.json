@@ -245,6 +245,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "AbeerSuite",
       "differentialPackage": true,
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
       "include": "build/installer.nsh"
     }
   }
