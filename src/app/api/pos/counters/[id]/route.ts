@@ -8,6 +8,8 @@ import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { normalizeExtension } from "@/shared/lib/counter/idRange";
+import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 
 // One payment account on the counter. `id` present = update that row; absent =
 // create. `accountId` is the bank/cash-style ledger debited when collected here.
@@ -31,11 +33,22 @@ const paymentAccountSchema = z.object({
 const updateSchema = z.object({
     name:     z.string().trim().min(1).max(60).optional(),
     isActive: z.boolean().optional(),
-    // EPBX/intercom extension of the phone at this counter. Empty string/null clears
-    // it; an absent field is left untouched (.optional() outermost so the transform
-    // never runs on undefined and accidentally nulls it on unrelated PATCHes).
+    // EPBX/intercom extension of the phone at this counter — must be a unique
+    // whole number; it doubles as the voucher prefix and, when it's also 1-99,
+    // the offline id-range number (see claim-number/route.ts). Empty string/
+    // null clears it; an absent field is left untouched (.optional() outermost
+    // so the transform never runs on undefined and accidentally nulls it on
+    // unrelated PATCHes).
     epbxExtension: z.union([z.string().trim().max(20), z.null()])
-        .transform((v) => (typeof v === "string" && v.trim().length ? v.trim() : null))
+        .transform((v, ctx) => {
+            if (typeof v !== "string" || !v.trim().length) return null;
+            const normalized = normalizeExtension(v);
+            if (normalized === null) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a whole number" });
+                return z.NEVER;
+            }
+            return normalized;
+        })
         .optional(),
     // Full replace of the counter's payment-account list when supplied.
     paymentAccounts: z.array(paymentAccountSchema).max(20).optional(),
@@ -212,6 +225,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             boundAt:          updated.boundAt,
         });
     } catch (e) {
+        const conflict = prismaUniqueError(e, { epbxExtension: "That extension number is already used by another counter" });
+        if (conflict) return conflict;
         return handleApiError(e, "Failed to update counter");
     }
 }

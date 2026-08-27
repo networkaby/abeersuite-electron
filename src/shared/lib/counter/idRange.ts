@@ -33,6 +33,17 @@ export const MAX_COUNTER_NUMBER = 99;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Trims a counter's EPBX extension input and confirms it's a whole number —
+ * no padding, no range cap (epbxExtension itself has no ceiling; only the
+ * offline id-range derived from it in claim-number/route.ts is capped at
+ * MAX_COUNTER_NUMBER). Returns null if it isn't a whole number.
+ */
+export function normalizeExtension(input: string): string | null {
+    const trimmed = input.trim();
+    return /^\d+$/.test(trimmed) ? trimmed : null;
+}
+
+/**
  * Returns the first id in counter `counterNumber`'s reserved block.
  *
  * @param counterNumber  1-based counter number (1 … 114)

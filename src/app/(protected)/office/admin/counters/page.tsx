@@ -369,13 +369,14 @@ export default function CountersAdminPage() {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-medium text-muted-foreground">EPBX extension</label>
+                                                        <label className="text-xs font-medium text-muted-foreground">EPBX extension (unique number)</label>
                                                         <Input
+                                                            type="number"
+                                                            min={1}
                                                             value={editForm.epbxExtension}
                                                             onChange={(e) => setEditForm((f) => ({ ...f, epbxExtension: e.target.value }))}
-                                                            placeholder="e.g. 201"
+                                                            placeholder="e.g. 21"
                                                             className="mt-1"
-                                                            maxLength={20}
                                                         />
                                                     </div>
                                                 </div>

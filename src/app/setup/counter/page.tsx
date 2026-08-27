@@ -32,6 +32,13 @@ interface CounterOption {
     name: string;
     branch: { name: string } | null;
     counterNumber: number | null;
+    epbxExtension: string | null;
+}
+
+/** Clean 1–99 number, or null if this extension can't be used as one. */
+function extensionAsCounterNumber(ext: string | null): number | null {
+    const n = Number(ext);
+    return Number.isInteger(n) && n >= 1 && n <= MAX_COUNTER_NUMBER ? n : null;
 }
 
 function CounterSetupForm() {
@@ -58,12 +65,15 @@ function CounterSetupForm() {
     }, []);
 
     const selected = counters?.find((c) => String(c.id) === selectedId) ?? null;
-    const needsNumber = selected && selected.counterNumber === null;
+    const autoNumber = selected ? extensionAsCounterNumber(selected.epbxExtension) : null;
+    // Only ask for a number by hand when the counter has none yet AND its
+    // epbxExtension isn't already a clean 1–99 number to derive one from.
+    const needsNumber = selected && selected.counterNumber === null && autoNumber === null;
 
     const submit = async () => {
         if (!selected) { toast.error("Select which counter this PC is"); return; }
 
-        let counterNumber = selected.counterNumber;
+        let counterNumber = selected.counterNumber ?? autoNumber;
         if (needsNumber) {
             const parsed = Number(numberInput);
             if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_COUNTER_NUMBER) {
@@ -74,13 +84,14 @@ function CounterSetupForm() {
         }
         if (counterNumber === null) return; // unreachable, satisfies TS
 
+        const stillUnclaimed = selected.counterNumber === null;
         setSubmitting(true);
         try {
             let idRangeStart: number | null = null;
-            if (needsNumber) {
+            if (stillUnclaimed) {
                 const { data } = await axios.post<{ idRangeStart: number }>(
                     `/api/pos/counters/${selected.id}/claim-number`,
-                    { counterNumber },
+                    needsNumber ? { counterNumber } : {},
                 );
                 idRangeStart = data.idRangeStart;
             }

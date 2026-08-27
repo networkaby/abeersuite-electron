@@ -32,10 +32,25 @@ const REPO_TOKEN_ENV: Record<string, string> = {
     "abeersuite-electron": "GH_TOKEN_2",
 };
 
-const publishTargets: any[] = pkg.build?.publish ?? [];
+let publishTargets: any[] = pkg.build?.publish ?? [];
 if (publishTargets.length === 0) {
     console.error("[release-electron] FATAL: package.json build.publish has no targets.");
     process.exit(1);
+}
+
+// Retry a single target that failed (e.g. a bad token) without re-publishing a
+// repo that already succeeded: RELEASE_ONLY_REPO=abeersuite-electron pnpm ...
+if (process.env.RELEASE_ONLY_REPO) {
+    const only = publishTargets.filter(t => t.repo === process.env.RELEASE_ONLY_REPO);
+    if (only.length === 0) {
+        console.error(
+            `[release-electron] FATAL: RELEASE_ONLY_REPO="${process.env.RELEASE_ONLY_REPO}" matches no target in package.json build.publish.\n` +
+            `  Known repos: ${publishTargets.map(t => t.repo).join(", ")}`
+        );
+        process.exit(1);
+    }
+    publishTargets = only;
+    console.log(`[release-electron] RELEASE_ONLY_REPO set — publishing only to ${publishTargets[0].owner}/${publishTargets[0].repo}.`);
 }
 
 for (const target of publishTargets) {

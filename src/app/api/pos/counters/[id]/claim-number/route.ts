@@ -14,8 +14,11 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { blockStartFor, MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
 import { z } from "zod";
 
+// Optional: when the counter's epbxExtension is already a clean 1–99 number,
+// the caller doesn't need to send one — it's derived below. Only counters
+// whose extension isn't a clean number need to send this.
 const claimSchema = z.object({
-    counterNumber: z.number().int().min(1).max(MAX_COUNTER_NUMBER),
+    counterNumber: z.number().int().min(1).max(MAX_COUNTER_NUMBER).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const counter = await prisma.posCounter.findUnique({
             where:  { id: counterId },
-            select: { id: true, counterNumber: true, idRangeStart: true },
+            select: { id: true, counterNumber: true, idRangeStart: true, epbxExtension: true },
         });
         if (!counter) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
 
@@ -45,11 +48,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             );
         }
 
-        const idRangeStart = blockStartFor(data.counterNumber);
+        // Prefer the counter's own epbxExtension when it's already a clean 1–99
+        // number — avoids asking the same number twice at first-launch setup.
+        // Falls back to whatever the caller sent when the extension isn't a
+        // clean number (blank, non-numeric, out of range).
+        const extNumber = Number(counter.epbxExtension);
+        const autoNumber = Number.isInteger(extNumber) && extNumber >= 1 && extNumber <= MAX_COUNTER_NUMBER
+            ? extNumber
+            : null;
+        const counterNumber = autoNumber ?? data.counterNumber;
+        if (counterNumber === undefined) {
+            return NextResponse.json({ error: `Enter a counter number from 1 to ${MAX_COUNTER_NUMBER}` }, { status: 400 });
+        }
+
+        const idRangeStart = blockStartFor(counterNumber);
 
         const updated = await prisma.posCounter.update({
             where: { id: counterId },
-            data:  { counterNumber: data.counterNumber, idRangeStart },
+            data:  { counterNumber, idRangeStart },
             select: { id: true, counterNumber: true, idRangeStart: true },
         });
 
