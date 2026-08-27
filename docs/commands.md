@@ -4,7 +4,7 @@ One place that answers: *what does this command do, when do I run it, and can I 
 
 - **Repo:** `abeersuite-electron` (Next.js app + Electron desktop counter + sync engine)
 - **App version at time of writing:** `0.3.1`
-- **Release target:** private GitHub repo `devloperakramul/abeersuite-networkservice-update`
+- **Release target:** `devloperakramul/abeersuite-networkservice-update` (updater feed) and `devloperakramul/abeersuite-electron` (origin releases)
 - **Package manager:** `pnpm` only
 
 ---

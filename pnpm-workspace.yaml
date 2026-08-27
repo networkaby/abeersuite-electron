@@ -17,6 +17,7 @@ allowBuilds:
   # N-API and works on both, verified under ELECTRON_RUN_AS_NODE.
   '@serialport/bindings-cpp': false
   electron-winstaller: false
+  esbuild: true
 
 onlyBuiltDependencies:
   - "@prisma/client"

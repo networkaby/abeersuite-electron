@@ -1,6 +1,6 @@
 {
   "name": "abeersuite-electron",
-  "version": "0.3.1",
+  "version": "5.0.0",
   "description": "AbeerSuite Desktop Operating System",
   "author": "AbeerSuite",
   "main": "dist-electron/main.js",
@@ -221,13 +221,22 @@
         "to": "icon.png"
       }
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "devloperakramul",
-      "repo": "abeersuite-networkservice-update",
-      "private": true,
-      "releaseType": "release"
-    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "devloperakramul",
+        "repo": "abeersuite-networkservice-update",
+        "private": true,
+        "releaseType": "release"
+      },
+      {
+        "provider": "github",
+        "owner": "devloperakramul",
+        "repo": "abeersuite-electron",
+        "private": true,
+        "releaseType": "release"
+      }
+    ],
     "win": {
       "target": [
         "nsis"
