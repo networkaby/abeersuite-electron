@@ -122,9 +122,13 @@ export function ShiftOpenDialog({
                 deviceLabel:     deviceLabel ?? undefined,
             });
             if (data.idRangeStart && typeof window !== "undefined" && window.electronAPI?.applyIdRanges) {
-                window.electronAPI.applyIdRanges(data.idRangeStart).catch((err: unknown) => {
+                const applied = await window.electronAPI.applyIdRanges(data.idRangeStart).catch((err: unknown) => {
                     console.warn("[ShiftOpen] Could not apply local id ranges:", err);
+                    return false;
                 });
+                if (!applied) {
+                    toast.warning("Offline writes unavailable this session — could not confirm this counter's reserved id range.");
+                }
             }
             if (data.resumed) {
                 toast.success(`Resumed shift — ${selectedCounter?.name} · continuing from where you left off`);

@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
                 branch:      c.branch,
                 isActive:    c.isActive,
                 epbxExtension: c.epbxExtension,
+                counterNumber: c.counterNumber,
                 tillAccount: {
                     id:      c.tillAccount.id,
                     name:    c.tillAccount.name,
@@ -129,6 +130,9 @@ export async function GET(req: NextRequest) {
             // popup uses it alongside boundDeviceId to find "my counter" without
             // needing a shift open (see useMyCounterExtension).
             epbxExtension: c.epbxExtension,
+            // Set once at first-launch counter setup (see /setup/counter), never by
+            // this endpoint — null means the counter still needs setup completed.
+            counterNumber: c.counterNumber,
             tillAccount: {
                 id:      c.tillAccount.id,
                 name:    c.tillAccount.name,

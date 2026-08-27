@@ -9,6 +9,34 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { Client: PgClient } = require("pg") as typeof import("pg");
 
+/**
+ * Prisma model name -> client delegate accessor, for every model the outbox is
+ * allowed to carry. Single source of truth shared by the write interceptor
+ * (`prismaClient.ts`, which enqueues) and `/api/sync/push` (which replays) — a
+ * model missing from here is a model the outbox pipeline does not know about.
+ *
+ * 7 are id-range-protected (`OFFLINE_SEQUENCE_MAP` in `idRange.ts`); PosShift/
+ * PosCashDrop/PosExpenditure/PosReceipt are also autoincrement and protected the
+ * same way; TicketRepair/TicketHelp/TicketDeal share their parent Ticket's id
+ * (no separate sequence, so no collision risk of their own).
+ */
+export const OUTBOX_MODEL_DELEGATES: Record<string, string> = {
+    UniversalVoucher:     "universalVoucher",
+    VoucherDetail:        "voucherDetail",
+    VoucherGlLine:        "voucherGlLine",
+    VoucherInventoryLine: "voucherInventoryLine",
+    VoucherLink:          "voucherLink",
+    Ticket:               "ticket",
+    TicketLog:            "ticketLog",
+    TicketRepair:         "ticketRepair",
+    TicketHelp:           "ticketHelp",
+    TicketDeal:           "ticketDeal",
+    PosShift:             "posShift",
+    PosCashDrop:          "posCashDrop",
+    PosExpenditure:       "posExpenditure",
+    PosReceipt:           "posReceipt",
+};
+
 export interface OutboxRecord {
     id: number;
     table_name: string;

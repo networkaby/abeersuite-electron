@@ -10,6 +10,9 @@ export interface ElectronAPI {
     /** Splash-screen progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
     applyIdRanges: (blockStart: number) => Promise<boolean>;
+    getCounterSetup: () => Promise<{ counterId: number; counterNumber: number } | null>;
+    saveCounterSetup: (setup: { counterId: number; counterNumber: number }) => Promise<boolean>;
+    clearCounterSetup: () => Promise<boolean>;
     platform: string;
 }
 
@@ -26,6 +29,9 @@ const electronAPI: ElectronAPI = {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));
     },
     applyIdRanges: (blockStart: number) => ipcRenderer.invoke("counter:apply-id-ranges", blockStart),
+    getCounterSetup: () => ipcRenderer.invoke("counter:get-setup"),
+    saveCounterSetup: (setup) => ipcRenderer.invoke("counter:save-setup", setup),
+    clearCounterSetup: () => ipcRenderer.invoke("counter:clear-setup"),
     platform: process.platform,
 };
 

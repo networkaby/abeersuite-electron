@@ -36,7 +36,7 @@
 | **Thermal printing** | **BUILT, absorbed** — no separate bridge service | [`hardware-bridge/`](../hardware-bridge/), [`electron/hardwareBridgeManager.ts`](../electron/hardwareBridgeManager.ts) |
 | **Native modules under Electron** | **No rebuild needed** — `sharp` and `serialport` are N-API | verified under `ELECTRON_RUN_AS_NODE` at ABI 148 |
 | Customer QR display | **BUILT, absorbed** — `:9192` now served in-app | [`hardware-bridge/qr.js`](../hardware-bridge/qr.js) |
-| **Offline billing / writes** | **NOT BUILT — blocked on identity** | `@default(autoincrement())` on 79 models; see §6 |
+| **Offline billing / writes** | **BUILT** — id-range reservation, first-launch setup, write gate, outbox | `idRange.ts`, `applyIdRanges.ts`, `/setup/counter`, `createLocal()`, `/api/sync/push`; see §6 |
 | Offline Policies settings page | **UI ONLY** — localStorage, no API, no enforcement | `OfflinePoliciesForm.tsx`, `offlineVoucherSafety.ts` |
 
 ### Defects fixed in the 2026-08-26 pass
@@ -280,6 +280,21 @@ Summary of phase order:
   than being hacked in blind. In practice this has near-zero effect today: `broadcastTableMutation`
   is only ever called from the outbox's stub flush, which nothing populates. Do this phase
   once Phase 4's local database actually exists to test against.
+  **Superseded, 2026-08-27**: local Postgres provisioning shipped (`electron/localDbProvisioner.ts`
+  applies `resources/local-schema.sql`, creates the `smx_sync`/`smx_app` roles) and the delta-pull
+  sync engine was absorbed whole (`sync-engine/`, `electron/syncManager.ts`) — both well before
+  this note was corrected, which this doc had not caught up to. On top of that, this pass built
+  the missing offline-**write** half end to end: per-counter id-range reservation
+  (`src/shared/lib/counter/idRange.ts`), a first-launch setup screen (`/setup/counter`) that
+  claims a counter number and applies the range before anything can bill, a confirmed-range write
+  gate in `createLocal()` (an unconfirmed range now refuses the write, not silently proceeds
+  unprotected), a real durable outbox (`enqueueOutbox()` now has callers — it had none before this
+  pass, so nothing had ever reached `_outbox`), and `/api/sync/push` rewritten on Prisma's typed
+  client (the previous raw-SQL version had a column-name injection hole and an allowlist of table
+  names that didn't match 10 of its 14 real tables — neither had ever been exercised). Last-write-
+  wins was also added for offline edits, on both the pull (`sync-engine/lib/pull.js`) and push
+  sides. The `useRealtimeTopics.ts` over-fire noted above is still open — genuinely lower priority,
+  queued after the correctness/security work above.
 - **Phase 6 — done.** [`scripts/counterEnv.ts`](../scripts/counterEnv.ts)'s `COUNTER_ENV_COPIED`
   no longer includes the 4 `DROPBOX_*` / 3 `GITHUB_*` keys (commented out, not deleted, so
   re-enabling for a specific release is a one-line uncomment). `resources/counter.env` now

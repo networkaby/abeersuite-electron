@@ -2,6 +2,8 @@
 
 import { signIn, signOut, getSession } from "next-auth/react";
 import { isBridgeAvailable } from "@/shared/lib/bridge";
+import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
+import { reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -51,6 +53,22 @@ function StaffLoginForm() {
                 }
             }
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
+
+            // First-launch counter setup, or a counter an admin has since released —
+            // both send this machine through /setup/counter instead of straight to
+            // dest. Never blocks a non-Electron login (office staff, Vercel).
+            if (isElectronEnvironment()) {
+                const status = await reconcileCounterSetup();
+                if (status === "released") {
+                    await window.electronAPI?.clearCounterSetup?.();
+                }
+                if (status === "not-set-up" || status === "released") {
+                    router.push(`/setup/counter?next=${encodeURIComponent(dest)}`);
+                    return;
+                }
+                // "valid" or "unreachable" — trust the local file and proceed.
+            }
+
             router.push(dest);
         }
     };

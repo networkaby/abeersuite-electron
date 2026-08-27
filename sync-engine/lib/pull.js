@@ -58,6 +58,17 @@ function chunk(arr, size) {
  * Columns are taken from the row objects themselves, so a column added on the source
  * before the replica's schema catches up would be an error here rather than silent
  * data loss -- which is what the schema guard exists to catch first.
+ *
+ * ── Last-write-wins, when the row carries updatedAt ──────────────────────────
+ * A CREATE never collides here: offline creates mint an id from this counter's own
+ * reserved block, which cannot already exist in cloud, so there is nothing to
+ * conflict with. The real exposure is an EDIT to a row that exists on both
+ * sides -- an offline edit racing a pull cycle. Without a guard, whichever side's
+ * write happens to arrive over the wire last always wins, regardless of which one
+ * is actually newer. When the row has an `updatedAt` column, the conflict update
+ * is guarded so an older incoming row can never overwrite a newer local edit; a
+ * row with no `updatedAt` (most append/full reference tables) keeps the previous
+ * unconditional behaviour.
  */
 async function upsert(client, table, pk, rows, jsonCols) {
     if (rows.length === 0) return 0;
@@ -69,9 +80,13 @@ async function upsert(client, table, pk, rows, jsonCols) {
     // Every non-key column is refreshed. Listing them explicitly (rather than using
     // EXCLUDED.*) keeps the statement valid if the row shape ever narrows.
     const updates = cols.filter((c) => !pk.includes(c));
+    const hasUpdatedAt = cols.includes("updatedAt");
     const setSql = updates.length
         ? updates.map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(", ")
         : null;
+    const guardSql = hasUpdatedAt
+        ? ` WHERE ${q(table)}.${q("updatedAt")} IS NULL OR EXCLUDED.${q("updatedAt")} > ${q(table)}.${q("updatedAt")}`
+        : "";
 
     let written = 0;
     for (const batch of chunk(rows, CHUNK)) {
@@ -86,7 +101,7 @@ async function upsert(client, table, pk, rows, jsonCols) {
         const sql =
             `INSERT INTO ${q(table)} (${colSql}) VALUES ${tuples.join(", ")} ` +
             (setSql
-                ? `ON CONFLICT (${conflict}) DO UPDATE SET ${setSql}`
+                ? `ON CONFLICT (${conflict}) DO UPDATE SET ${setSql}${guardSql}`
                 // A table whose columns are ALL key columns (a pure join table) has
                 // nothing to update; the row either exists or does not.
                 : `ON CONFLICT (${conflict}) DO NOTHING`);

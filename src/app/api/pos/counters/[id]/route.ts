@@ -180,8 +180,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     isActive: data.isActive,
                     epbxExtension: data.epbxExtension,
                     allowedExpenseAccountIds: data.allowedExpenseAccountIds,
-                    // Release clears all three lock fields; next open rebinds.
-                    ...(data.releaseLock ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null } : {}),
+                    // Release clears the device lock AND this counter's offline-write
+                    // identity together — releasing a counter is one action, not three.
+                    // A stale counterNumber/idRangeStart left behind after release would
+                    // let a re-setup machine believe it already has a confirmed id range
+                    // it never actually re-applied.
+                    ...(data.releaseLock
+                        ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, counterNumber: null, idRangeStart: null }
+                        : {}),
                 }),
                 include: counterInclude,
             });

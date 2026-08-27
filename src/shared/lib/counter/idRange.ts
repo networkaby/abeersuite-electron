@@ -6,8 +6,9 @@
  *   Cloud (Supabase):  1 … 999,999,999
  *   Counter n:         1,000,000,000 + (n-1) × 10,000,000  …  + 10,000,000 - 1
  *
- * With a block size of 10 million ids per counter and 114 counters, the highest
- * reserved id is 2,139,999,999 — safely within int4.
+ * With a block size of 10 million ids per counter and 99 counters (the real-world
+ * ceiling — EPBX extensions here are 2 digits), the highest reserved id is
+ * 1,989,999,999 — safely within int4.
  *
  * Only tables whose Prisma model carries `@default(autoincrement())` need a
  * sequence reservation; every other table uses a UUID or an application-assigned
@@ -24,9 +25,10 @@ export const BLOCK_SIZE = 10_000_000;
 
 /**
  * Maximum counter number supported by this scheme.
- * Counter 114's block ends at 2,139,999,999 — the highest value that fits int4.
+ * Matches the real-world ceiling — EPBX extensions here are 2 digits (1–99).
+ * Counter 99's block ends at 1,989,999,999, safely within int4.
  */
-export const MAX_COUNTER_NUMBER = 114;
+export const MAX_COUNTER_NUMBER = 99;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,9 +64,13 @@ export function blockEndFor(counterNumber: number): number {
 // ── Sequence catalogue ───────────────────────────────────────────────────────
 
 /**
- * The 7 PostgreSQL sequences that need their start value overridden on the
- * local replica. These are the only tables whose Prisma model uses
- * `@default(autoincrement())`.
+ * The PostgreSQL sequences that need their start value overridden on the
+ * local replica — every table whose Prisma model uses `@default(autoincrement())`
+ * and is reachable from an offline write. `PosShift`/`PosCashDrop`/`PosExpenditure`/
+ * `PosReceipt` carry the identical collision risk (also autoincrement Int ids) and
+ * were missing from this list — `TicketRepair`/`TicketDeal`/`TicketHelp` are NOT
+ * listed because they share their parent `Ticket`'s id (`ticketId Int @id`, no
+ * separate sequence), so there is nothing to reserve for them.
  */
 export const OFFLINE_SEQUENCES: readonly string[] = [
     "universal_vouchers_id_seq",
@@ -74,6 +80,10 @@ export const OFFLINE_SEQUENCES: readonly string[] = [
     "voucher_links_id_seq",
     "tickets_id_seq",
     "ticket_logs_id_seq",
+    "pos_shifts_id_seq",
+    "pos_cash_drops_id_seq",
+    "pos_expenditures_id_seq",
+    "pos_receipts_id_seq",
 ] as const;
 
 /**
@@ -88,4 +98,8 @@ export const OFFLINE_SEQUENCE_MAP: Record<string, string> = {
     VoucherLink: "voucher_links_id_seq",
     Ticket: "tickets_id_seq",
     TicketLog: "ticket_logs_id_seq",
+    PosShift: "pos_shifts_id_seq",
+    PosCashDrop: "pos_cash_drops_id_seq",
+    PosExpenditure: "pos_expenditures_id_seq",
+    PosReceipt: "pos_receipts_id_seq",
 };

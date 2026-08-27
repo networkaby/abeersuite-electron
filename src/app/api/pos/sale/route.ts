@@ -232,6 +232,15 @@ export async function POST(req: Request) {
             { status: 400 },
         );
     }
+    if (!shift.counter.epbxExtension?.trim()) {
+        return NextResponse.json(
+            {
+                error: "This counter has no EPBX extension set — ask an admin to configure it under /office/admin/counters before billing.",
+                code: "COUNTER_NOT_CONFIGURED",
+            },
+            { status: 409 },
+        );
+    }
     const tillAccountId  = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;
     // The counter's payment accounts (id → {channel, ledger}). A non-cash payment
@@ -865,7 +874,8 @@ export async function POST(req: Request) {
             // tender for any unsettled balance). postInvVoucherToGl posts
             // a single balanced JE per voucher; no separate Receipt
             // voucher / VoucherAllocation needed.
-            const counterCode = (shift.counter.epbxExtension?.trim() || String(shift.counter.id)).padStart(2, "0");
+            // Guarded above — epbxExtension is confirmed non-blank by this point.
+            const counterCode = shift.counter.epbxExtension!.trim().padStart(2, "0");
             const voucherRef = await invNextRef(tx, "POS", user!.id, counterCode);
             // POS today enforces paymentTotal == totalAmount, so onCredit
             // is always 0 and no AR tender is needed. Kept as a future-

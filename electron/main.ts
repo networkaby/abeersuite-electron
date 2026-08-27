@@ -447,6 +447,58 @@ ipcMain.handle("counter:apply-id-ranges", async (_, blockStart: number) => {
     return await applyIdRanges(localUrl, blockStart);
 });
 
+// ── First-launch counter setup ───────────────────────────────────────────────
+// Which PosCounter (and its counterNumber) this PC is bound to, chosen once at
+// setup. Separate from counter-installation-id.json (this machine's own identity,
+// created above) — this file records which counter ROW that identity was matched
+// to, so later launches can skip the setup screen without hitting the server.
+interface CounterSetup {
+    counterId: number;
+    counterNumber: number;
+}
+
+function counterSetupFilePath(): string {
+    return path.join(app.getPath("userData"), "counter-setup.json");
+}
+
+ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
+    try {
+        const file = counterSetupFilePath();
+        if (!fs.existsSync(file)) return null;
+        const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+        if (typeof data?.counterId === "number" && typeof data?.counterNumber === "number") {
+            return { counterId: data.counterId, counterNumber: data.counterNumber };
+        }
+        return null;
+    } catch (err) {
+        console.error("[main] Could not read counter-setup.json:", err);
+        return null;
+    }
+});
+
+ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
+    try {
+        fs.writeFileSync(counterSetupFilePath(), JSON.stringify(setup, null, 2));
+        return true;
+    } catch (err) {
+        console.error("[main] Could not write counter-setup.json:", err);
+        return false;
+    }
+});
+
+// Called when the server reports this counter was released — the local file is
+// stale and must not be trusted on the next launch.
+ipcMain.handle("counter:clear-setup", (): boolean => {
+    try {
+        const file = counterSetupFilePath();
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+        return true;
+    } catch (err) {
+        console.error("[main] Could not clear counter-setup.json:", err);
+        return false;
+    }
+});
+
 ipcMain.handle("printer:get-list", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return [];
