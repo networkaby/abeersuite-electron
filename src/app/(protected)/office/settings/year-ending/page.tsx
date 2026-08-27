@@ -473,7 +473,7 @@ export default function YearEndingPage() {
                         <DialogHeader className="border-b px-6 py-4">
                             <DialogTitle>Configure {draft?.label}</DialogTitle>
                             <DialogDescription className="text-xs">
-                                Toggle each part on/off, set max width, and reorder via the part-order field.
+                                Toggle each part on/off, set min width (zero padding), and reorder via the part-order field.
                                 Books restart date is configured once on the main page.
                             </DialogDescription>
                         </DialogHeader>
@@ -565,7 +565,7 @@ export default function YearEndingPage() {
                                                     />
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <Label className="text-xs">Width</Label>
+                                                    <Label className="text-xs">Min Width</Label>
                                                     <Input
                                                         type="text"
                                                         inputMode="numeric"
@@ -581,6 +581,9 @@ export default function YearEndingPage() {
                                                     <Input className="h-8" value={draft.nextSeq} disabled />
                                                 </div>
                                             </div>
+                                            <p className="text-[10px] text-muted-foreground mt-1.5">
+                                                Zero-padded minimum digits (e.g. 0001). Auto-expands to 5+ digits when numbers grow.
+                                            </p>
                                         </fieldset>
                                     </div>
 
