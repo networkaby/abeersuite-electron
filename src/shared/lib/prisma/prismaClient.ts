@@ -11,6 +11,7 @@ import {
     reportLiveUp,
     setReplicaReady,
     shouldReadLocal,
+    maybeHeartbeatLive,
     IS_COUNTER_PC,
 } from "./counterMode";
 import { isVoucherTypeSafeOffline, getOfflineVoucherBlockedReason } from "@/shared/lib/accountancy/offlineVoucherSafety";
@@ -134,14 +135,60 @@ async function refreshReplicaReadinessInline(): Promise<void> {
     }
 }
 
-function createLive(): PrismaClient {
-    const basePrisma = new PrismaClient({ adapter: new PrismaPg(createPool(liveUrl)) });
-    return basePrisma.$extends({
-        name: "retry-reads-on-conn-drop",
+// In dev, Next.js HMR re-evaluates this module on every edit. Without a cache, each
+// reload builds a fresh pg Pool (max 10) that is never closed, so open connections
+// pile up across reloads until the database refuses new ones ("timeout exceeded when
+// trying to connect"). Cache the client on globalThis so every reload reuses one pool.
+// Production containers are short-lived and single-instance, so no caching there.
+const globalForPrisma = globalThis as unknown as {
+    __prismaBase?: PrismaClient;
+    __prismaLocal?: PrismaClient;
+};
+
+/**
+ * ONE physical connection to Supabase, wrapped twice below.
+ *
+ * `$extends` shares the underlying engine and pool, so the second wrapper costs no
+ * extra connections — it only changes which reads may be answered from the replica.
+ */
+const baseLive: PrismaClient =
+    globalForPrisma.__prismaBase ?? new PrismaClient({ adapter: new PrismaPg(createPool(liveUrl)) });
+
+/**
+ * @param allowLocalRedirect
+ *   true  — reads may be served from the replica when it is ready (the egress saving).
+ *   false — every read goes to Supabase. For reads whose result AUTHORISES or REFLECTS
+ *           a write.
+ *
+ * ── Why "reflects" belongs in that rule, not just "authorises" ────────────────
+ * The replica lags live by up to a sync cycle, and on a page that just wrote, a stale
+ * answer does not read as "slightly old data" — it reads as "the write did not
+ * happen". Releasing a counter's device lock wrote to live and then re-read the
+ * replica, which still showed it locked: a release that had genuinely succeeded
+ * looked broken, and the counter stayed unusable.
+ */
+function wrapLive(allowLocalRedirect: boolean): PrismaClient {
+    return baseLive.$extends({
+        name: allowLocalRedirect ? "retry-reads-on-conn-drop" : "authoritative-live-reads",
         query: {
             $allModels: {
                 async $allOperations({ model, operation, args, query }) {
-                    if (!READ_OPS.has(operation)) return query(args);
+                    // ── Writes ───────────────────────────────────────────────────
+                    // Still never retried: a write that died after reaching the server
+                    // but before the ack could otherwise be applied twice. But its
+                    // outcome does tell us whether live is reachable, and while reads
+                    // are served locally a write is often the ONLY thing touching live
+                    // at all — without this, nothing could ever demote us.
+                    if (!READ_OPS.has(operation)) {
+                        try {
+                            const out = await query(args);
+                            if (localClient) reportLiveUp();
+                            return out;
+                        } catch (e) {
+                            if (localClient && isTransientConnError(e)) reportLiveDown();
+                            throw e;
+                        }
+                    }
 
                     // Keep `replicaReady` current HERE, in the module that consumes it.
                     // See refreshReplicaReadinessInline() for why this cannot live
@@ -151,7 +198,16 @@ function createLive(): PrismaClient {
                     // ── Local-First Zero-Egress Reads ──────────────────────────────────────
                     // When local replica is ready and configured, serve reads locally with 0ms
                     // latency and 0 Supabase bandwidth/egress cost.
-                    if (localClient && shouldReadLocal()) {
+                    // An authoritative read skips the PREFERENCE-driven redirect, but still
+                    // honours the OUTAGE one: when live is genuinely unreachable there is no
+                    // authoritative source left to consult, and refusing outright would take
+                    // offline shift-open (and every other offline-capable flow) down with it.
+                    const serveLocal = allowLocalRedirect ? shouldReadLocal() : getMode() === "LOCAL";
+                    if (localClient && serveLocal) {
+                        // Nothing else in this mode touches live, so this heartbeat is the
+                        // only thing that can notice an outage. Fire-and-forget — it never
+                        // delays the read below.
+                        maybeHeartbeatLive();
                         try {
                             const delegate = (localClient as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
                             if (delegate && typeof delegate[operation] === "function") {
@@ -173,6 +229,9 @@ function createLive(): PrismaClient {
                             if (!isTransientConnError(e)) throw e;
                             if (localClient) {
                                 reportLiveDown();
+                                // Same reasoning as the outage case above: live having just
+                                // failed means there is no authoritative answer to be had, so
+                                // a stale one beats a dead page for BOTH clients.
                                 try {
                                     const delegate = (localClient as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
                                     if (delegate && typeof delegate[operation] === "function") {
@@ -371,16 +430,6 @@ function createLocal(): PrismaClient {
     }) as unknown as PrismaClient;
 }
 
-// In dev, Next.js HMR re-evaluates this module on every edit. Without a cache, each
-// reload builds a fresh pg Pool (max 10) that is never closed, so open connections
-// pile up across reloads until the database refuses new ones ("timeout exceeded when
-// trying to connect"). Cache the client on globalThis so every reload reuses one pool.
-// Production containers are short-lived and single-instance, so no caching there.
-const globalForPrisma = globalThis as unknown as {
-    __prisma?: PrismaClient;
-    __prismaLocal?: PrismaClient;
-};
-
 /**
  * The replica client, or null on any machine without one.
  *
@@ -392,8 +441,31 @@ export function getLocalClient(): PrismaClient | null {
     return localClient;
 }
 
-/** Supabase. Always present. Use directly when a read MUST be authoritative. */
-export const prismaLive: PrismaClient = globalForPrisma.__prisma ?? createLive();
+/**
+ * Supabase — but its READS may still be answered from the replica when one is ready.
+ *
+ * This is the ordinary live client, not an escape hatch: the name once promised
+ * authoritativeness it never delivered, because the local-read redirect lives inside
+ * this very wrapper. When a read must genuinely see Supabase, use
+ * `prismaAuthoritative` below.
+ */
+export const prismaLive: PrismaClient = wrapLive(true);
+
+/**
+ * Supabase whenever Supabase is reachable — never the replica merely because
+ * `READ_MODE` prefers it.
+ *
+ * For reads whose answer authorises or reflects a write: device locks, shift state,
+ * credit limits, FIFO allocation, stock at sale time, loyalty balances, coupon and
+ * gift-card validity, and any read a write handler makes before deciding. Costs
+ * egress on every call, so it is opt-in per read rather than the default.
+ *
+ * Not a hard guarantee, deliberately: during a real outage it falls back to the
+ * replica like everything else, because a counter must keep working offline and a
+ * stale answer then beats no answer. It removes the SILENT staleness that happens
+ * while perfectly online, which is the case that reads as a bug.
+ */
+export const prismaAuthoritative: PrismaClient = wrapLive(false);
 
 /** The counter's replica, or null everywhere else. */
 const localClient: PrismaClient | null = localUrl
@@ -401,7 +473,7 @@ const localClient: PrismaClient | null = localUrl
     : null;
 
 if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.__prisma = prismaLive;
+    globalForPrisma.__prismaBase = baseLive;
     if (localClient) globalForPrisma.__prismaLocal = localClient;
 }
 
@@ -462,7 +534,8 @@ export const prisma: PrismaClient = localClient
  *
  * NEVER use this for a read whose result authorises a write (credit limit, FIFO
  * allocation, stock at sale time, loyalty balance, coupon or gift-card validity).
- * Those must see the authoritative row — import `prismaLive` explicitly there.
+ * Those must see the authoritative row — import `prismaAuthoritative` explicitly there.
+ * (`prismaLive` is NOT that guarantee: its reads still redirect to the replica.)
  */
 export const prismaRead: PrismaClient = localClient
     ? new Proxy({} as PrismaClient, {

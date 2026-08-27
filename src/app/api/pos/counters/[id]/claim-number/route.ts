@@ -8,7 +8,7 @@
 // or clear one. Only /office/admin/counters (the "release" action) can clear it.
 
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { blockStartFor, MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
@@ -35,7 +35,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const counter = await prisma.posCounter.findUnique({
+        // Authoritative: this decides ALREADY_CONFIGURED just below. Read from the
+        // replica it could still show a counterNumber an admin cleared on live minutes
+        // ago, refusing a setup that is in fact allowed — and there is no way for the
+        // technician standing at the counter to tell that apart from a real conflict.
+        const counter = await prismaAuthoritative.posCounter.findUnique({
             where:  { id: counterId },
             select: { id: true, counterNumber: true, idRangeStart: true, epbxExtension: true },
         });

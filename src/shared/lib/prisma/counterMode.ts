@@ -108,6 +108,42 @@ export function reportLiveUp(): void {
 }
 
 /**
+ * Confirm live is STILL reachable while every read is being served from the replica.
+ *
+ * ── Why the failure-driven design needs this one exception ───────────────────
+ * Demotion above is driven by a real live query failing. That works while reads go
+ * live. It stops working the moment `shouldReadLocal()` is true: reads are then
+ * answered from the replica and return before touching Supabase, so no live query
+ * ever runs, so nothing can ever fail, so `mode` stays LIVE forever — and the shell
+ * badge stays green through a total outage. Writes now report their outcome too
+ * (see prismaClient), but a counter can go a long time between writes, and "the
+ * light was green until I tried to save" is exactly the failure the badge exists
+ * to prevent.
+ *
+ * One `SELECT 1` per interval is a rounding error against the egress this mode
+ * saves. Fire-and-forget; never awaited on a request path.
+ */
+const LIVE_HEARTBEAT_MS = 20_000;
+let lastHeartbeatAt = 0;
+let heartbeat: Promise<void> | null = null;
+
+export function maybeHeartbeatLive(): void {
+    if (mode !== "LIVE" || !liveProbe) return;
+    if (Date.now() - lastHeartbeatAt < LIVE_HEARTBEAT_MS) return;
+    if (heartbeat) return;
+
+    lastHeartbeatAt = Date.now();
+    heartbeat = liveProbe()
+        .then((ok) => {
+            if (!ok) reportLiveDown();
+        })
+        .catch(() => reportLiveDown())
+        .finally(() => {
+            heartbeat = null;
+        });
+}
+
+/**
  * While demoted, re-probe on a timer so we notice recovery without waiting for a
  * write to fail. Fire-and-forget; never awaited on a request path.
  */

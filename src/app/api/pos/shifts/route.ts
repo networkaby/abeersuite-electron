@@ -7,7 +7,7 @@
 //        the previous close). Only the `vaultTopUpPaise` portion triggers a Contra
 //        (Vault → Counter till). If 0, no Contra is posted.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -133,7 +133,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve the counter + verify it belongs to this branch.
-    const counter = await prisma.posCounter.findUnique({
+    //
+    // Authoritative: this row carries the device lock checked just below, and the
+    // replica lags live by up to a sync cycle. Reading it from the replica meant an
+    // admin's "release counter" (a live write) stayed invisible here, so a released
+    // counter kept refusing to open — the release looked broken when it had worked.
+    const counter = await prismaAuthoritative.posCounter.findUnique({
         where:   { id: body.counterId },
         include: { tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } },
     });
@@ -159,8 +164,9 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // Resolve the branch vault (needed only if vaultTopUpPaise > 0).
-    const branch = await prisma.branch.findUnique({
+    // Resolve the branch vault (needed only if vaultTopUpPaise > 0). Authoritative —
+    // it names the account an opening Contra is posted to.
+    const branch = await prismaAuthoritative.branch.findUnique({
         where:  { id: branchId },
         select: { id: true, name: true, vaultAccountId: true },
     });
@@ -171,8 +177,9 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // Check whether the counter already has an active shift.
-    const existing = await prisma.posShift.findFirst({
+    // Check whether the counter already has an active shift. Authoritative — a shift
+    // closed on another terminal seconds ago must not still look open here.
+    const existing = await prismaAuthoritative.posShift.findFirst({
         where:   { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
         include: {
             counter: { include: { tillAccount: { select: { id: true, name: true } } } },

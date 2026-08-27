@@ -1,7 +1,7 @@
 // PATCH  /api/pos/counters/[id]  — rename / toggle active / manage payment accounts
 // DELETE /api/pos/counters/[id]  — only allowed when no shifts have ever used this counter
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -87,7 +87,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
 
-        const existing = await prisma.posCounter.findUnique({ where: { id }, include: { tillAccount: true, branch: { select: { name: true } } } });
+        // Authoritative — every check below it gates a write to this same row.
+        const existing = await prismaAuthoritative.posCounter.findUnique({ where: { id }, include: { tillAccount: true, branch: { select: { name: true } } } });
         if (!existing) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
 
         // ── Each payment account's ledger must be a real ASSET account, so we never
@@ -139,13 +140,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // If renaming, ensure no other counter in the same branch has that name.
         if (data.name && data.name !== existing.name) {
-            const dup = await prisma.posCounter.findFirst({ where: { branchId: existing.branchId, name: data.name, NOT: { id } } });
+            const dup = await prismaAuthoritative.posCounter.findFirst({ where: { branchId: existing.branchId, name: data.name, NOT: { id } } });
             if (dup) return NextResponse.json({ error: `Counter "${data.name}" already exists in this branch` }, { status: 409 });
         }
 
         // Block deactivation while a shift is OPEN or AWAITING_HANDOVER.
         if (data.isActive === false) {
-            const active = await prisma.posShift.findFirst({
+            const active = await prismaAuthoritative.posShift.findFirst({
                 where: { counterId: id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
                 select: { id: true },
             });

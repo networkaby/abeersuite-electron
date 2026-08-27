@@ -7,7 +7,7 @@
 //   - Auto-creates the till GL account ("Cash – <name> – <branch>") under Cash-in-Hand if missing.
 //   - Returns the created counter with tillAccount.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
@@ -38,7 +38,12 @@ export async function GET(req: NextRequest) {
         // Book counter picker). Listing counters is a read — default-open;
         // counter writes below keep their pos-counters:* gates. ─
         if (scope === "all") {
-            const counters = await prisma.posCounter.findMany({
+            // Authoritative: this list carries boundDeviceId/counterNumber, which the
+            // admin counters page renders and the "release" button acts on, and which
+            // ShiftOpenDialog + reconcileCounterSetup use to decide which counter this
+            // PC is. Served from the replica, a release written to live still showed as
+            // locked here, so the UI contradicted the action the user had just taken.
+            const counters = await prismaAuthoritative.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { name: "asc" }],
                 include: {
                     tillAccount:         { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
@@ -107,7 +112,9 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        const counters = await prisma.posCounter.findMany({
+        // Authoritative for the same reason as the scope=all branch above — this is the
+        // list ShiftOpenDialog locks its picker against.
+        const counters = await prismaAuthoritative.posCounter.findMany({
             where:   { branchId, isActive: true },
             orderBy: { name: "asc" },
             include: {
