@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         // counter writes below keep their pos-counters:* gates. ─
         if (scope === "all") {
             const counters = await prisma.posCounter.findMany({
-                orderBy: [{ branchId: "asc" }, { name: "asc" }],
+                orderBy: [{ branchId: "asc" }, { counterNumber: "asc" }, { name: "asc" }],
                 include: {
                     tillAccount:         { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                     branch:              { select: { id: true, name: true } },
@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
             });
             return NextResponse.json(counters.map((c) => ({
                 id:          c.id,
+                counterNumber: c.counterNumber,
                 name:        c.name,
                 branchId:    c.branchId,
                 branch:      c.branch,
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
 
         const counters = await prisma.posCounter.findMany({
             where:   { branchId, isActive: true },
-            orderBy: { name: "asc" },
+            orderBy: [{ counterNumber: "asc" }, { name: "asc" }],
             include: {
                 tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                 shifts: {
@@ -122,6 +123,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(counters.map((c) => ({
             id:          c.id,
+            counterNumber: c.counterNumber,
             name:        c.name,
             branchId:    c.branchId,
             isActive:    c.isActive,
@@ -146,8 +148,9 @@ export async function GET(req: NextRequest) {
 // ── POST: create a new counter ───────────────────────────────────────────────
 
 const createSchema = z.object({
-    branchId: z.string().trim().min(1, "branchId is required"),
-    name:     z.string().trim().min(1, "Counter name is required").max(60),
+    branchId:      z.string().trim().min(1, "branchId is required"),
+    name:          z.string().trim().min(1, "Counter name is required").max(60),
+    counterNumber: z.coerce.number().int().positive("Counter number must be greater than 0"),
 });
 
 const CASH_IN_HAND_GROUP = "Cash-in-Hand";
@@ -159,15 +162,19 @@ export async function POST(req: NextRequest) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { branchId, name } = data;
+        const { branchId, name, counterNumber } = data;
 
         // Verify branch exists.
         const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, name: true } });
         if (!branch) return NextResponse.json({ error: "Branch not found" }, { status: 404 });
 
         // Reject duplicate (branchId, name).
-        const dup = await prisma.posCounter.findFirst({ where: { branchId, name } });
-        if (dup) return NextResponse.json({ error: `Counter "${name}" already exists in ${branch.name}` }, { status: 409 });
+        const dupName = await prisma.posCounter.findFirst({ where: { branchId, name } });
+        if (dupName) return NextResponse.json({ error: `Counter "${name}" already exists in ${branch.name}` }, { status: 409 });
+
+        // Reject duplicate (branchId, counterNumber).
+        const dupNum = await prisma.posCounter.findFirst({ where: { branchId, counterNumber } });
+        if (dupNum) return NextResponse.json({ error: `Counter number ${counterNumber} already exists in ${branch.name}` }, { status: 409 });
 
         const tillName = `Cash – ${name} – ${branch.name}`;
 
@@ -203,6 +210,7 @@ export async function POST(req: NextRequest) {
                 data: {
                     branchId,
                     name,
+                    counterNumber,
                     tillAccountId: till.id,
                     isActive:      true,
                 },
@@ -214,11 +222,12 @@ export async function POST(req: NextRequest) {
         });
 
         return NextResponse.json({
-            id:       counter.id,
-            name:     counter.name,
-            branchId: counter.branchId,
-            branch:   counter.branch,
-            isActive: counter.isActive,
+            id:            counter.id,
+            counterNumber: counter.counterNumber,
+            name:          counter.name,
+            branchId:      counter.branchId,
+            branch:        counter.branch,
+            isActive:      counter.isActive,
             tillAccount: {
                 id:      counter.tillAccount.id,
                 name:    counter.tillAccount.name,

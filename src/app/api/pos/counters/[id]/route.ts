@@ -29,8 +29,9 @@ const paymentAccountSchema = z.object({
 });
 
 const updateSchema = z.object({
-    name:     z.string().trim().min(1).max(60).optional(),
-    isActive: z.boolean().optional(),
+    name:          z.string().trim().min(1).max(60).optional(),
+    counterNumber: z.coerce.number().int().positive("Counter number must be greater than 0").optional(),
+    isActive:      z.boolean().optional(),
     // EPBX/intercom extension of the phone at this counter. Empty string/null clears
     // it; an absent field is left untouched (.optional() outermost so the transform
     // never runs on undefined and accidentally nulls it on unrelated PATCHes).
@@ -130,6 +131,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (dup) return NextResponse.json({ error: `Counter "${data.name}" already exists in this branch` }, { status: 409 });
         }
 
+        // If updating counterNumber, ensure no other counter in the same branch has that number.
+        if (data.counterNumber && data.counterNumber !== existing.counterNumber) {
+            const dup = await prisma.posCounter.findFirst({ where: { branchId: existing.branchId, counterNumber: data.counterNumber, NOT: { id } } });
+            if (dup) return NextResponse.json({ error: `Counter number ${data.counterNumber} already exists in this branch` }, { status: 409 });
+        }
+
         // Block deactivation while a shift is OPEN or AWAITING_HANDOVER.
         if (data.isActive === false) {
             const active = await prisma.posShift.findFirst({
@@ -177,6 +184,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 where: { id },
                 data: pickDefined({
                     name: data.name,
+                    counterNumber: data.counterNumber,
                     isActive: data.isActive,
                     epbxExtension: data.epbxExtension,
                     allowedExpenseAccountIds: data.allowedExpenseAccountIds,
@@ -188,11 +196,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
         return NextResponse.json({
-            id:       updated.id,
-            name:     updated.name,
-            branchId: updated.branchId,
-            branch:   updated.branch,
-            isActive: updated.isActive,
+            id:            updated.id,
+            counterNumber: updated.counterNumber,
+            name:          updated.name,
+            branchId:      updated.branchId,
+            branch:        updated.branch,
+            isActive:      updated.isActive,
             epbxExtension: updated.epbxExtension,
             tillAccount: {
                 id:      updated.tillAccount.id,

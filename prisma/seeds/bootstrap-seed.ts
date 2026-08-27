@@ -954,15 +954,15 @@ async function main() {
             [b.id, counterName],
         );
         if (existing[0]) {
-            // Already exists — make sure the till account is wired.
+            // Already exists — make sure the till account is wired and counterNumber is set.
             await pool.query(
-                `UPDATE "pos_counters" SET "tillAccountId" = $1 WHERE id = $2`,
+                `UPDATE "pos_counters" SET "tillAccountId" = $1, "counterNumber" = COALESCE("counterNumber", 1) WHERE id = $2`,
                 [tillId, existing[0].id],
             );
         } else {
             await pool.query(
-                `INSERT INTO "pos_counters" ("branchId", name, "tillAccountId", "isActive")
-                 VALUES ($1, $2, $3, true)`,
+                `INSERT INTO "pos_counters" ("branchId", name, "counterNumber", "tillAccountId", "isActive")
+                 VALUES ($1, $2, 1, $3, true)`,
                 [b.id, counterName, tillId],
             );
         }
