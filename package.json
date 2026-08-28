@@ -52,7 +52,7 @@
     "seed:apply-account-groups": "tsx prisma/seeds/apply-account-groups.ts",
     "seed:apply-workgroup-name": "tsx prisma/seeds/apply-workgroup-name.ts",
     "seed:apply-voucher-series-counter": "tsx prisma/seeds/apply-voucher-series-counter.ts",
-    "check:counter-mode": "tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter",
+    "check:counter-mode": "tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-counter-mode.ts counter-write-local",
     "sync:tables": "tsx scripts/gen-sync-registry.ts",
     "sync:tables:check": "tsx scripts/gen-sync-registry.ts --check",
     "db:local-schema": "tsx scripts/gen-local-schema.ts",
@@ -61,7 +61,7 @@
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
     "check:guard-lint": "tsx scripts/check-guard-lint.ts",
-    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/gen-local-schema.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-guard-lint.ts",
+    "precommit": "tsx scripts/check-doc-sync.ts --strict && tsx scripts/check-nav-icons.ts && tsx scripts/gen-sync-registry.ts --check && tsx scripts/gen-local-schema.ts --check && tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-counter-mode.ts counter-write-local && tsx scripts/check-guard-lint.ts",
     "install:git-hooks": "tsx scripts/install-git-hooks.ts"
   },
   "dependencies": {

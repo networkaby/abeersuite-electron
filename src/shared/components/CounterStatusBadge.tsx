@@ -39,10 +39,17 @@ export default function CounterStatusBadge() {
     const base = "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium";
 
     // ── RED: Supabase is unreachable ─────────────────────────────────────────
-    // `mode === "LOCAL"` is set by reportLiveDown() in counterMode.ts after a live read
-    // actually fails — it is measured, not guessed from navigator.onLine, which reports
-    // the LAN and says nothing about whether Supabase is reachable.
-    if (status.mode === "LOCAL") {
+    // Measured, never guessed from navigator.onLine — that reports the LAN and says
+    // nothing about whether Supabase can be reached.
+    //
+    // Two sources, because they cover different modes. `mode === "LOCAL"` is set by
+    // reportLiveDown() when a live query actually fails, which is the signal under
+    // WRITE_MODE=live. Under WRITE_MODE=local nothing on the request path touches
+    // Supabase at all, so no query can fail and `mode` would sit on LIVE through a
+    // total outage — there, the outbox flusher's last result is the only honest
+    // answer, and it happens to measure exactly what a cashier cares about: whether
+    // work is leaving this machine.
+    if (status.mode === "LOCAL" || !status.cloudReachable) {
         return (
             <span
                 className={`${base} border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-200`}

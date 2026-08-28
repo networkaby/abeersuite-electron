@@ -63,7 +63,12 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
 
     // ── Operating mode ───────────────────────────────────────────────────────
     "APP_MODE",
+    // Two independent dials. READ_MODE (live|shadow|local) decides where reads are
+    // served from; WRITE_MODE (live|local) decides where writes land, and picks the
+    // client the other rides on. Both default to `live`, so a counter that sets
+    // neither behaves exactly as it did before either existed.
     "READ_MODE",
+    "WRITE_MODE",
     // Electron window's start URL — see src/shared/lib/appModeCore.ts's
     // resolveLandingPage(). A path only, validated at load time; not a credential.
     "LANDING_PAGE",

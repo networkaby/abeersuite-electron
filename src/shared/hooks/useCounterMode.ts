@@ -6,10 +6,21 @@ import axios from "axios";
 /** Mirror of `counterStatus()` in shared/lib/prisma/counterMode.ts. */
 export type CounterStatus = {
     mode: "LIVE" | "LOCAL";
+    /** READ_MODE — where reads are served from. */
     preference: "live" | "shadow" | "local";
+    /** WRITE_MODE — where writes land. */
+    writePreference: "live" | "local";
     replicaReady: boolean;
     isCounter: boolean;
     replicaSource: "installed" | "embedded" | null;
+    /**
+     * Whether the last outbox flush reached Supabase.
+     *
+     * Under WRITE_MODE=local nothing on the request path touches Supabase, so this —
+     * not `mode` — is what says whether the counter's work is leaving the machine.
+     */
+    cloudReachable: boolean;
+    lastFlushAt: string | null;
 };
 
 /**

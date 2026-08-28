@@ -11,6 +11,9 @@ import {
     reportLiveUp,
     setReplicaReady,
     shouldReadLocal,
+    shouldWriteLocal,
+    localWriteIsFallback,
+    READ_PREFERENCE,
     maybeHeartbeatLive,
     IS_COUNTER_PC,
 } from "./counterMode";
@@ -165,9 +168,20 @@ const baseLive: PrismaClient =
  * replica, which still showed it locked: a release that had genuinely succeeded
  * looked broken, and the counter stayed unusable.
  */
-function wrapLive(allowLocalRedirect: boolean): PrismaClient {
+/**
+ * How far a read on the live client may be redirected to the replica.
+ *
+ *   "preference" — whenever `shouldReadLocal()` says so. The egress win.
+ *   "outage"     — only while Supabase is unreachable, where a stale answer beats a
+ *                  dead page and there is no authoritative source left to consult.
+ *   "never"      — Supabase or an error. For the push path, which is meaningless
+ *                  against the replica: it is the thing sending rows TO Supabase.
+ */
+type ReadRedirect = "preference" | "outage" | "never";
+
+function wrapLive(redirect: ReadRedirect): PrismaClient {
     return baseLive.$extends({
-        name: allowLocalRedirect ? "retry-reads-on-conn-drop" : "authoritative-live-reads",
+        name: `live-reads-${redirect}`,
         query: {
             $allModels: {
                 async $allOperations({ model, operation, args, query }) {
@@ -194,13 +208,19 @@ function wrapLive(allowLocalRedirect: boolean): PrismaClient {
                     await refreshReplicaReadinessInline();
 
                     // ── Local-First Zero-Egress Reads ──────────────────────────────────────
-                    // When local replica is ready and configured, serve reads locally with 0ms
-                    // latency and 0 Supabase bandwidth/egress cost.
-                    // An authoritative read skips the PREFERENCE-driven redirect, but still
-                    // honours the OUTAGE one: when live is genuinely unreachable there is no
-                    // authoritative source left to consult, and refusing outright would take
-                    // offline shift-open (and every other offline-capable flow) down with it.
-                    const serveLocal = allowLocalRedirect ? shouldReadLocal() : getMode() === "LOCAL";
+                    // When the replica is ready and configured, serve reads locally with 0ms
+                    // latency and no Supabase egress.
+                    //
+                    // "outage" still honours the outage case even though it skips the
+                    // preference: when live is genuinely unreachable there is no
+                    // authoritative source left to consult, and refusing outright would
+                    // take offline shift-open — and every other offline-capable flow —
+                    // down with it. "never" refuses even that, because the only caller is
+                    // the push path, whose entire job is to reach Supabase.
+                    const serveLocal =
+                        redirect === "never" ? false
+                            : redirect === "preference" ? shouldReadLocal()
+                                : getMode() === "LOCAL";
                     if (localClient && serveLocal) {
                         // Nothing else in this mode touches live, so this heartbeat is the
                         // only thing that can notice an outage. Fire-and-forget — it never
@@ -229,7 +249,10 @@ function wrapLive(allowLocalRedirect: boolean): PrismaClient {
                                 reportLiveDown();
                                 // Same reasoning as the outage case above: live having just
                                 // failed means there is no authoritative answer to be had, so
-                                // a stale one beats a dead page for BOTH clients.
+                                // a stale one beats a dead page — for every redirect policy
+                                // except "never", where a replica answer would be worse than
+                                // the error (the caller is trying to reach Supabase itself).
+                                if (redirect === "never") throw e;
                                 try {
                                     const delegate = (localClient as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
                                     if (delegate && typeof delegate[operation] === "function") {
@@ -346,13 +369,13 @@ function createLocal(): PrismaClient {
                             );
                         }
 
-                        // 3. Offline voucher policy. Still correct while local writes only
-                        // happen as an outage fallback: those types need live validation
-                        // and the outage is temporary. When WRITE_MODE=local makes local
-                        // the normal destination, this has to become conditional on the
-                        // fallback — permanently refusing them would break the counter
-                        // rather than protect it.
-                        if (model === "UniversalVoucher") {
+                        // 3. Offline voucher policy — only when a local write means
+                        // "Supabase is unreachable" (WRITE_MODE=live). Those types were
+                        // held back because they need live validation and the outage is
+                        // temporary. Under WRITE_MODE=local the replica is simply where
+                        // writes go, so enforcing this would refuse them permanently and
+                        // break the counter rather than protect anything.
+                        if (model === "UniversalVoucher" && localWriteIsFallback()) {
                             const data = (args as { data?: { type?: string } })?.data;
                             if (data?.type && !isVoucherTypeSafeOffline(data.type)) {
                                 throw new OfflineWriteBlockedError(
@@ -361,6 +384,30 @@ function createLocal(): PrismaClient {
                                     getOfflineVoucherBlockedReason(data.type),
                                 );
                             }
+                        }
+                        return query(args);
+                    }
+
+                    // ── Reads, when the operator wants them live ────────────────
+                    // The mirror image of the redirect in wrapLive: WRITE_MODE=local
+                    // with READ_MODE=live means writes land here but reads should see
+                    // Supabase. Only while Supabase is actually reachable — during an
+                    // outage the replica is the only answer there is.
+                    //
+                    // Reads inside a transaction are NOT redirected: `query(args)` for a
+                    // transactional operation must stay on the client that opened it, and
+                    // the Proxy has already chosen this one for the write.
+                    if (READ_PREFERENCE === "live" && getMode() === "LIVE") {
+                        try {
+                            const delegate = (baseLive as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
+                            if (delegate && typeof delegate[operation] === "function") {
+                                const out = await delegate[operation](args);
+                                reportLiveUp();
+                                return out;
+                            }
+                        } catch (e) {
+                            if (isTransientConnError(e)) reportLiveDown();
+                            console.warn("[prismaClient] live read failed, using the replica:", e);
                         }
                     }
                     return query(args);
@@ -382,30 +429,39 @@ export function getLocalClient(): PrismaClient | null {
 }
 
 /**
- * Supabase — but its READS may still be answered from the replica when one is ready.
+ * Supabase, and only Supabase.
  *
- * This is the ordinary live client, not an escape hatch: the name once promised
- * authoritativeness it never delivered, because the local-read redirect lives inside
- * this very wrapper. When a read must genuinely see Supabase, use
- * `prismaAuthoritative` below.
+ * Its reads are never redirected, not even during an outage — the sole caller is the
+ * push path, whose whole job is to reach Supabase, and an answer from the replica
+ * would be worse than the error.
+ *
+ * The name used to mean something weaker: it was the ordinary live client, whose reads
+ * DID redirect to the replica. Nothing relied on that, so it now says what it does.
  */
-export const prismaLive: PrismaClient = wrapLive(true);
+export const prismaLive: PrismaClient = wrapLive("never");
 
 /**
  * Supabase whenever Supabase is reachable — never the replica merely because
  * `READ_MODE` prefers it.
  *
- * For reads whose answer authorises or reflects a write: device locks, shift state,
- * credit limits, FIFO allocation, stock at sale time, loyalty balances, coupon and
- * gift-card validity, and any read a write handler makes before deciding. Costs
- * egress on every call, so it is opt-in per read rather than the default.
+ * Kept for the counter-administration flows only — binding a PC to a counter, and the
+ * config PATCH behind /office/admin/counters. Those are technician actions performed
+ * online, and each read gates a decision to REFUSE: a stale "still bound" or "shift
+ * still open" answer blocks something that is in fact allowed, and nobody standing at
+ * the counter can tell that apart from a real conflict.
  *
- * Not a hard guarantee, deliberately: during a real outage it falls back to the
- * replica like everything else, because a counter must keep working offline and a
- * stale answer then beats no answer. It removes the SILENT staleness that happens
- * while perfectly online, which is the case that reads as a bug.
+ * Everything else that used this — the counter list, shift-open's own reads — now uses
+ * `prisma`, and follows the dials like the rest of the app.
+ *
+ * Not a hard guarantee: during a real outage it falls back to the replica like
+ * everything else, because a counter must keep working offline and a stale answer
+ * then beats no answer. What it removes is the SILENT staleness while perfectly
+ * online, which is the case that reads as a bug.
  */
-export const prismaAuthoritative: PrismaClient = wrapLive(false);
+const prismaOnline: PrismaClient = wrapLive("outage");
+
+/** Reads that redirect to the replica whenever `READ_MODE` says they may. */
+const prismaReadRouted: PrismaClient = wrapLive("preference");
 
 /** The counter's replica, or null everywhere else. */
 const localClient: PrismaClient | null = localUrl
@@ -445,47 +501,43 @@ if (localClient) {
  * delegate untouched. Everything downstream — promise identity, transactions, raw
  * templates — behaves exactly as it does against a plain client, because it IS one.
  *
- * The cost of that choice: mode is per-client, not per-operation, so while reads are
- * being served locally a write also reaches the local client — where it is refused
- * rather than misapplied. That is correct when live is genuinely down (the write
- * could not have succeeded anyway), and it is why flipping READ_MODE to `local`
- * while online needs the separate mechanism in Phase 4 rather than this switch.
+ * ── WRITE_MODE picks the client; READ_MODE redirects reads off it ────────────
+ * Because the choice is per-CLIENT and not per-operation, it has to be made on the
+ * thing that cannot be split: a `$transaction` is a write, so it opens on the
+ * WRITE_MODE client and every read inside it stays on that same database. Deciding
+ * per-operation instead would let one transaction straddle two databases.
+ *
+ * Reads then get redirected by the extension inside whichever client was chosen —
+ * `wrapLive("preference")` sends them to the replica, `createLocal()` sends them to
+ * Supabase — so the two dials compose without either overriding the other:
+ *
+ *   WRITE_MODE=local, READ_MODE=local  -> replica for both. The rollout target.
+ *   WRITE_MODE=live,  READ_MODE=live   -> Supabase for both. The escape hatch.
+ *   WRITE_MODE=live,  READ_MODE=local  -> Supabase writes, replica reads.
+ *   WRITE_MODE=local, READ_MODE=live   -> replica writes, Supabase reads.
+ *
+ * Under WRITE_MODE=live an outage still demotes to the replica, where the write is
+ * captured by the outbox trigger and pushed when Supabase returns.
  */
 export const prisma: PrismaClient = localClient
     ? new Proxy({} as PrismaClient, {
         get(_target, prop, receiver) {
             maybeReprobe();
-            const client = getMode() === "LOCAL" ? localClient : prismaLive;
+            const client = shouldWriteLocal() ? localClient : prismaReadRouted;
             return Reflect.get(client, prop, receiver);
         },
         has(_target, prop) {
-            return Reflect.has(getMode() === "LOCAL" ? localClient : prismaLive, prop);
+            return Reflect.has(shouldWriteLocal() ? localClient : prismaReadRouted, prop);
         },
     })
     : prismaLive;
 
 /**
- * Read-path client for hot, repeatedly-fetched data — the egress lever.
+ * Supabase whenever it is reachable, for the two technician flows that need it.
  *
- * Supabase bills per row that leaves it, so a report opened fifty times is billed
- * fifty times. Pointing a read at the replica pulls each changed row ONCE and serves
- * it locally thereafter. Migrate hot GET routes here one at a time, each verified in
- * shadow mode, rather than flipping everything at once.
- *
- * NEVER use this for a read whose result authorises a write (credit limit, FIFO
- * allocation, stock at sale time, loyalty balance, coupon or gift-card validity).
- * Those must see the authoritative row — import `prismaAuthoritative` explicitly there.
- * (`prismaLive` is NOT that guarantee: its reads still redirect to the replica.)
+ * Exported separately from `prisma` because on a counter `prisma` may be the replica,
+ * and these two reads decide whether to REFUSE an action — a stale "still bound"
+ * answer turns a counter an admin released minutes ago into one nobody can set up.
  */
-export const prismaRead: PrismaClient = localClient
-    ? new Proxy({} as PrismaClient, {
-        get(_target, prop, receiver) {
-            maybeReprobe();
-            const client = shouldReadLocal() ? localClient : prismaLive;
-            return Reflect.get(client, prop, receiver);
-        },
-        has(_target, prop) {
-            return Reflect.has(shouldReadLocal() ? localClient : prismaLive, prop);
-        },
-    })
-    : prismaLive;
+export const prismaAuthoritative: PrismaClient = localClient ? prismaOnline : prismaLive;
+

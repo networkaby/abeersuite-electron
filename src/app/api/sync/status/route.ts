@@ -18,7 +18,7 @@ export async function GET() {
     if (response) return response;
 
     if (!IS_COUNTER_PC || !process.env.LOCAL_DATABASE_URL) {
-        return NextResponse.json({ isCounter: false, pending: 0, failed: 0, lastSyncedAt: null });
+        return NextResponse.json({ isCounter: false, pending: 0, failed: 0, retrying: 0, lastSyncedAt: null });
     }
 
     try {

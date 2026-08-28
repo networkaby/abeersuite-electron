@@ -7,7 +7,8 @@ import { timeAgo } from "@/shared/lib/format/timeAgo";
 /**
  * This PC's own offline-write sync state — "did my sale actually reach the
  * server yet?" Sourced from the outbox (`_outbox` table), flushed every 15s
- * by electron/outboxFlusher.ts. Not the same thing as CounterStatusBadge,
+ * by the in-process flusher (shared/lib/sync/flusher.ts). Not the same thing as
+ * CounterStatusBadge,
  * which is about which database READS come from — this is about whether
  * WRITES made on this PC have gone out.
  *
@@ -26,7 +27,7 @@ export default function SyncStatusBadge() {
         return (
             <span
                 className={`${base} border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-200`}
-                title={`${status.failed} offline mutation(s) were rejected by the server and need review. ${lastSynced}`}
+                title={`${status.failed} saved item(s) could not be sent to the server after repeated attempts and need someone to look at them. Everything queued behind them is still going out normally. ${lastSynced}`}
                 aria-label={`Sync error — ${status.failed} rejected`}
             >
                 <CloudOff className="size-3.5" aria-hidden />

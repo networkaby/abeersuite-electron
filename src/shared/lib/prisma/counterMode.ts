@@ -36,6 +36,36 @@ export const READ_PREFERENCE: ReadPreference =
         : process.env.READ_MODE === "shadow" ? "shadow"
             : "live";
 
+/**
+ * Where WRITES go, from `WRITE_MODE`. Independent of `READ_MODE`.
+ *
+ *   live  — write Supabase, falling back to the replica + outbox during an outage.
+ *           Today's behaviour, and the escape hatch: one env var reverts a
+ *           misbehaving till to it without a rebuild.
+ *   local — write the replica always; the outbox carries it up afterwards. The
+ *           counter treats its own PostgreSQL the way the web app treats Supabase.
+ *
+ * ── How the two dials compose ───────────────────────────────────────────────
+ * WRITE_MODE picks the base client; READ_MODE decides whether reads are redirected
+ * off it. That ordering is not arbitrary — a `$transaction` is a write, so it opens
+ * on the WRITE_MODE client, and a read inside it stays on that same database. Any
+ * other arrangement could split a transaction across two databases.
+ *
+ * The distinction also decides whether the offline voucher-type policy applies. Under
+ * `live` a local write means a temporary outage, which is what that policy was written
+ * for. Under `local` it is simply where writes go, so enforcing it would permanently
+ * refuse those voucher types rather than protect anything.
+ */
+export type WritePreference = "live" | "local";
+
+export const WRITE_PREFERENCE: WritePreference =
+    process.env.WRITE_MODE === "local" ? "local" : "live";
+
+/** True when a local write means "Supabase is unreachable", not "this is where we write". */
+export function localWriteIsFallback(): boolean {
+    return WRITE_PREFERENCE === "live";
+}
+
 /** True only on a counter PC. Set by `electron/main.ts` from the actual outcome of
  *  `ensurePostgresRunning()` — not baked into the installer — and inherited by this
  *  process because the Next server is forked with the main process's env. */
@@ -178,10 +208,21 @@ export function shouldReadLocal(): boolean {
     return READ_PREFERENCE === "local" || READ_PREFERENCE === "shadow";
 }
 
+/**
+ * Should this WRITE be served by the replica?
+ *
+ * Under `WRITE_MODE=local` that is simply where writes go. Under `live` it happens
+ * only while Supabase is unreachable, which is the fallback the outbox exists for.
+ */
+export function shouldWriteLocal(): boolean {
+    return WRITE_PREFERENCE === "local" || mode === "LOCAL";
+}
+
 /** Snapshot for `/api/counter/status` and the shell badge. */
 export function counterStatus(): {
     mode: CounterMode;
     preference: ReadPreference;
+    writePreference: WritePreference;
     replicaReady: boolean;
     isCounter: boolean;
     /** Which PostgreSQL the replica is running against, set by electron/postgresManager.ts
@@ -193,7 +234,11 @@ export function counterStatus(): {
 } {
     const source = process.env.LOCAL_DATABASE_SOURCE;
     return {
-        mode, preference: READ_PREFERENCE, replicaReady, isCounter: IS_COUNTER_PC,
+        mode,
+        preference: READ_PREFERENCE,
+        writePreference: WRITE_PREFERENCE,
+        replicaReady,
+        isCounter: IS_COUNTER_PC,
         replicaSource: source === "installed" || source === "embedded" ? source : null,
     };
 }

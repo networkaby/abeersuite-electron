@@ -6,8 +6,12 @@ import axios from "axios";
 /** Mirror of the JSON shape returned by /api/sync/status. */
 export type OutboxStatus = {
     isCounter: boolean;
+    /** Captured writes not yet pushed, excluding dead-lettered ones. */
     pending: number;
+    /** DEAD-LETTERED writes: given up on, and the one state needing a human. */
     failed: number;
+    /** Pending writes that have failed at least once and are backing off. */
+    retrying: number;
     lastSyncedAt: string | null;
 };
 

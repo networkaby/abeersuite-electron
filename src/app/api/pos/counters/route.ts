@@ -7,7 +7,7 @@
 //   - Auto-creates the till GL account ("Cash – <name> – <branch>") under Cash-in-Hand if missing.
 //   - Returns the created counter with tillAccount.
 
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         // Book counter picker). Listing counters is a read — default-open;
         // counter writes below keep their pos-counters:* gates. ─
         if (scope === "all") {
-            const counters = await prismaAuthoritative.posCounter.findMany({
+            const counters = await prisma.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { counterNumber: "asc" }, { name: "asc" }],
                 include: {
                     tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 
         // Authoritative for the same reason as the scope=all branch above — this is the
         // list ShiftOpenDialog locks its picker against.
-        const counters = await prismaAuthoritative.posCounter.findMany({
+        const counters = await prisma.posCounter.findMany({
             where: { branchId, isActive: true },
             orderBy: [{ counterNumber: "asc" }, { name: "asc" }],
             include: {
