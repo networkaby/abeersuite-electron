@@ -23,15 +23,24 @@ export async function GET() {
             ],
         });
 
-        // Sort in logical order rather than alphabetical. Inventory voucher
-        // kinds appear after the GL kinds since they roll up into stock + GL.
+        // Sort in logical order rather than alphabetical.
+        // GL -> Sales -> Purchases -> Inventory -> Services / Repairs
         const ORDER = [
-            "CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE",
-            "INVOICE", "JOURNAL",
-            "SALE", "POS", "PURCHASE", "ESTIMATE",
-            "SALE_RETURN", "PURCHASE_RETURN",
+            "CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL",
+            "SALE", "POS", "ONLINE_INVOICE", "ONLINE_ORDER", "ESTIMATE", "SALE_RETURN",
+            "PURCHASE", "PURCHASE_RETURN", "SALES_ORDER", "PURCHASE_ORDER",
+            "GRN", "CHALLAN", "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER",
+            "REJECTION_IN", "REJECTION_OUT",
+            "REPAIR_TICKET",
         ];
-        series.sort((a: { kind: string }, b: { kind: string }) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
+        series.sort((a: { kind: string; label: string }, b: { kind: string; label: string }) => {
+            const idxA = ORDER.indexOf(a.kind);
+            const idxB = ORDER.indexOf(b.kind);
+            const rankA = idxA === -1 ? 999 : idxA;
+            const rankB = idxB === -1 ? 999 : idxB;
+            if (rankA !== rankB) return rankA - rankB;
+            return a.label.localeCompare(b.label);
+        });
 
         return NextResponse.json(series);
     } catch (e) {

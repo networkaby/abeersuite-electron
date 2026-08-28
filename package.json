@@ -51,6 +51,7 @@
     "seed:apply-credit-card-group": "tsx prisma/seeds/apply-credit-card-group.ts",
     "seed:apply-account-groups": "tsx prisma/seeds/apply-account-groups.ts",
     "seed:apply-workgroup-name": "tsx prisma/seeds/apply-workgroup-name.ts",
+    "seed:apply-voucher-series-counter": "tsx prisma/seeds/apply-voucher-series-counter.ts",
     "check:counter-mode": "tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter",
     "sync:tables": "tsx scripts/gen-sync-registry.ts",
     "sync:tables:check": "tsx scripts/gen-sync-registry.ts --check",

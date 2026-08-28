@@ -124,6 +124,7 @@ model TicketRepair {
   serviceCenterId Int?
   serviceCenter   ServiceCenter? @relation(fields: [serviceCenterId], references: [id])
 
+  ticketNo       String?
   estimatedCost  Float?
   accessInfo     String?
   accessories    String? // items received with the device (bag, charger, cover …)

@@ -38,16 +38,11 @@ export async function GET(req: NextRequest) {
         // Book counter picker). Listing counters is a read — default-open;
         // counter writes below keep their pos-counters:* gates. ─
         if (scope === "all") {
-            // Authoritative: this list carries boundDeviceId/counterNumber, which the
-            // admin counters page renders and the "release" button acts on, and which
-            // ShiftOpenDialog + reconcileCounterSetup use to decide which counter this
-            // PC is. Served from the replica, a release written to live still showed as
-            // locked here, so the UI contradicted the action the user had just taken.
-            const counters = await prismaAuthoritative.posCounter.findMany({
-                orderBy: [{ branchId: "asc" }, { name: "asc" }],
+            const counters = await prisma.posCounter.findMany({
+                orderBy: [{ branchId: "asc" }, { counterNumber: "asc" }, { name: "asc" }],
                 include: {
-                    tillAccount:         { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
-                    branch:              { select: { id: true, name: true } },
+                    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                    branch: { select: { id: true, name: true } },
                     paymentAccounts: {
                         orderBy: { sortOrder: "asc" },
                         select: {
@@ -57,25 +52,26 @@ export async function GET(req: NextRequest) {
                             gateway: { select: { id: true, displayName: true, provider: true } },
                         },
                     },
-                    _count:      { select: { shifts: true } },
+                    _count: { select: { shifts: true } },
                     shifts: {
-                        where:  { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
+                        where: { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
                         select: { id: true, status: true, user: { select: { name: true } } },
                         take: 1,
                     },
                 },
             });
             return NextResponse.json(counters.map((c) => ({
-                id:          c.id,
-                name:        c.name,
-                branchId:    c.branchId,
-                branch:      c.branch,
-                isActive:    c.isActive,
+                id: c.id,
+                counterNumber: c.counterNumber,
+                name: c.name,
+                branchId: c.branchId,
+                branch: c.branch,
+                isActive: c.isActive,
                 epbxExtension: c.epbxExtension,
                 counterNumber: c.counterNumber,
                 tillAccount: {
-                    id:      c.tillAccount.id,
-                    name:    c.tillAccount.name,
+                    id: c.tillAccount.id,
+                    name: c.tillAccount.name,
                     balance: String(effectiveAccountBalance(c.tillAccount)),
                 },
                 paymentAccounts: c.paymentAccounts,
@@ -83,9 +79,9 @@ export async function GET(req: NextRequest) {
                 totalShifts: c._count.shifts,
                 activeShift: c.shifts[0] ?? null,
                 // Device lock — which PC is bound to this counter (null = free).
-                boundDeviceId:    c.boundDeviceId,
+                boundDeviceId: c.boundDeviceId,
                 boundDeviceLabel: c.boundDeviceLabel,
-                boundAt:          c.boundAt,
+                boundAt: c.boundAt,
             })));
         }
 
@@ -115,12 +111,12 @@ export async function GET(req: NextRequest) {
         // Authoritative for the same reason as the scope=all branch above — this is the
         // list ShiftOpenDialog locks its picker against.
         const counters = await prismaAuthoritative.posCounter.findMany({
-            where:   { branchId, isActive: true },
-            orderBy: { name: "asc" },
+            where: { branchId, isActive: true },
+            orderBy: [{ counterNumber: "asc" }, { name: "asc" }],
             include: {
                 tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                 shifts: {
-                    where:  { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
+                    where: { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
                     select: { id: true, status: true, userId: true, user: { select: { name: true } }, openedAt: true },
                     orderBy: { openedAt: "desc" },
                     take: 1,
@@ -129,10 +125,11 @@ export async function GET(req: NextRequest) {
         });
 
         return NextResponse.json(counters.map((c) => ({
-            id:          c.id,
-            name:        c.name,
-            branchId:    c.branchId,
-            isActive:    c.isActive,
+            id: c.id,
+            counterNumber: c.counterNumber,
+            name: c.name,
+            branchId: c.branchId,
+            isActive: c.isActive,
             // Which extension this counter's phone sits on — the call follow-up
             // popup uses it alongside boundDeviceId to find "my counter" without
             // needing a shift open (see useMyCounterExtension).
@@ -141,8 +138,8 @@ export async function GET(req: NextRequest) {
             // this endpoint — null means the counter still needs setup completed.
             counterNumber: c.counterNumber,
             tillAccount: {
-                id:      c.tillAccount.id,
-                name:    c.tillAccount.name,
+                id: c.tillAccount.id,
+                name: c.tillAccount.name,
                 balance: String(effectiveAccountBalance(c.tillAccount)),
             },
             activeShift: c.shifts[0] ?? null,
@@ -158,7 +155,8 @@ export async function GET(req: NextRequest) {
 
 const createSchema = z.object({
     branchId: z.string().trim().min(1, "branchId is required"),
-    name:     z.string().trim().min(1, "Counter name is required").max(60),
+    name: z.string().trim().min(1, "Counter name is required").max(60),
+    counterNumber: z.coerce.number().int().positive("Counter number must be greater than 0"),
 });
 
 const CASH_IN_HAND_GROUP = "Cash-in-Hand";
@@ -170,15 +168,19 @@ export async function POST(req: NextRequest) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { branchId, name } = data;
+        const { branchId, name, counterNumber } = data;
 
         // Verify branch exists.
         const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, name: true } });
         if (!branch) return NextResponse.json({ error: "Branch not found" }, { status: 404 });
 
         // Reject duplicate (branchId, name).
-        const dup = await prisma.posCounter.findFirst({ where: { branchId, name } });
-        if (dup) return NextResponse.json({ error: `Counter "${name}" already exists in ${branch.name}` }, { status: 409 });
+        const dupName = await prisma.posCounter.findFirst({ where: { branchId, name } });
+        if (dupName) return NextResponse.json({ error: `Counter "${name}" already exists in ${branch.name}` }, { status: 409 });
+
+        // Reject duplicate (branchId, counterNumber).
+        const dupNum = await prisma.posCounter.findFirst({ where: { branchId, counterNumber } });
+        if (dupNum) return NextResponse.json({ error: `Counter number ${counterNumber} already exists in ${branch.name}` }, { status: 409 });
 
         const tillName = `Cash – ${name} – ${branch.name}`;
 
@@ -195,10 +197,10 @@ export async function POST(req: NextRequest) {
             if (!till) {
                 till = await tx.account.create({
                     data: {
-                        name:          tillName,
-                        groupId:       group.id,
+                        name: tillName,
+                        groupId: group.id,
                         normalBalance: "DEBIT",
-                        isActive:      true,
+                        isActive: true,
                     },
                     select: { id: true, name: true, balance: true },
                 });
@@ -214,25 +216,27 @@ export async function POST(req: NextRequest) {
                 data: {
                     branchId,
                     name,
+                    counterNumber,
                     tillAccountId: till.id,
-                    isActive:      true,
+                    isActive: true,
                 },
                 include: {
                     tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
-                    branch:      { select: { id: true, name: true } },
+                    branch: { select: { id: true, name: true } },
                 },
             });
         });
 
         return NextResponse.json({
-            id:       counter.id,
-            name:     counter.name,
+            id: counter.id,
+            counterNumber: counter.counterNumber,
+            name: counter.name,
             branchId: counter.branchId,
-            branch:   counter.branch,
+            branch: counter.branch,
             isActive: counter.isActive,
             tillAccount: {
-                id:      counter.tillAccount.id,
-                name:    counter.tillAccount.name,
+                id: counter.tillAccount.id,
+                name: counter.tillAccount.name,
                 balance: String(effectiveAccountBalance(counter.tillAccount)),
             },
         }, { status: 201 });

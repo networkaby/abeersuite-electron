@@ -10,6 +10,7 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
+import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -216,46 +217,58 @@ export async function POST(req: Request) {
 
         // A repair ticket = a core Ticket (GL bridge on accountId) + a TicketRepair
         // detail carrying the device it was raised for.
-        const ticket = await prisma.ticket.create({
-            data: {
-                priority:   body.priority ?? Priority.MEDIUM,
-                notes:      body.notes || null,
-                pipelineId: body.pipelineId || "P1",
-                accountId,
-                createdBy:  author,
-                repair: {
-                    create: {
-                        device: {
-                            create: {
-                                type: body.deviceType,
-                                brand: body.brand,
-                                model: body.model,
-                                problem: body.problem,
-                                ...(accountId ? { accountId } : {}),
+        const ticket = await prisma.$transaction(async (tx) => {
+            let ticketNo: string | null = null;
+            try {
+                ticketNo = await nextRefFromSeries(tx, "REPAIR_TICKET");
+            } catch {
+                // fallback if series is not yet initialised
+            }
+
+            const t = await tx.ticket.create({
+                data: {
+                    priority:   body.priority ?? Priority.MEDIUM,
+                    notes:      body.notes || null,
+                    pipelineId: body.pipelineId || "P1",
+                    accountId,
+                    createdBy:  author,
+                    repair: {
+                        create: {
+                            ticketNo,
+                            device: {
+                                create: {
+                                    type: body.deviceType,
+                                    brand: body.brand,
+                                    model: body.model,
+                                    problem: body.problem,
+                                    ...(accountId ? { accountId } : {}),
+                                },
                             },
+                            accessInfo:          body.accessInfo || null,
+                            accessories:         body.accessories || null,
+                            estimatedCost:       body.estimatedCost ? Number(body.estimatedCost) : null,
+                            isWarranty:          Boolean(body.isWarranty),
+                            warrantyStatus:      body.isWarranty ? "CLAIMED" : "NONE",
+                            warrantyRef:         body.warrantyRef || null,
+                            purchaseDate:        body.purchaseDate ? new Date(body.purchaseDate) : null,
+                            sourceOrderTicketId: body.sourceShopOrderId ?? null,
                         },
-                        accessInfo:          body.accessInfo || null,
-                        accessories:         body.accessories || null,
-                        estimatedCost:       body.estimatedCost ? Number(body.estimatedCost) : null,
-                        isWarranty:          Boolean(body.isWarranty),
-                        warrantyStatus:      body.isWarranty ? "CLAIMED" : "NONE",
-                        warrantyRef:         body.warrantyRef || null,
-                        purchaseDate:        body.purchaseDate ? new Date(body.purchaseDate) : null,
-                        sourceOrderTicketId: body.sourceShopOrderId ?? null,
                     },
                 },
-            },
-            include: repairInclude,
-        });
+                include: repairInclude,
+            });
 
-        // Log initial status
-        await prisma.ticketLog.create({
-            data: {
-                ticketId: ticket.id,
-                status:   "S1",
-                note:     "Ticket created",
-                author,
-            },
+            // Log initial status
+            await tx.ticketLog.create({
+                data: {
+                    ticketId: t.id,
+                    status:   "S1",
+                    note:     "Ticket created",
+                    author,
+                },
+            });
+
+            return t;
         });
 
         // Auto-enter the entry-point worker for this status (a fromWorkerId=null

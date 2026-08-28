@@ -47,6 +47,7 @@ type PaymentAccount = {
 
 type Counter = {
     id: number;
+    counterNumber: number;
     name: string;
     branchId: string;
     branch: { id: string; name: string };
@@ -63,7 +64,7 @@ type Counter = {
     boundAt: string | null;
 };
 
-const EMPTY_FORM = { branchId: "", name: "" };
+const EMPTY_FORM = { branchId: "", counterNumber: "", name: "" };
 
 // An editable payment-account row (accountId nullable until the ledger is picked).
 // gatewayId links a GATEWAY rail to a configured catalog entry (null = none).
@@ -71,12 +72,14 @@ type EditPayAcct = { id?: number; channel: PosPayChannel; label: string; account
 
 type EditForm = {
     name: string;
+    counterNumber: string;
     epbxExtension: string;
     paymentAccounts: EditPayAcct[];
     allowedExpenseAccountIds: number[];
 };
 const EMPTY_EDIT: EditForm = {
     name: "",
+    counterNumber: "",
     epbxExtension: "",
     paymentAccounts: [],
     allowedExpenseAccountIds: [],
@@ -149,13 +152,17 @@ export default function CountersAdminPage() {
     useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); void loadGateways(); }, []);
 
     const startAdd = () => {
-        setForm({ ...EMPTY_FORM, branchId: branches[0]?.id ?? "" });
+        const initialBranchId = branches[0]?.id ?? "";
+        const branchCounters = counters.filter((c) => c.branchId === initialBranchId);
+        const nextNum = branchCounters.length > 0 ? Math.max(...branchCounters.map((c) => c.counterNumber || 0)) + 1 : 1;
+        setForm({ ...EMPTY_FORM, branchId: initialBranchId, counterNumber: String(nextNum), name: `Counter ${nextNum}` });
         setEditId(null);
         setAddingNew(true);
     };
     const startEdit = (c: Counter) => {
         setEditForm({
             name: c.name,
+            counterNumber: String(c.counterNumber ?? ""),
             epbxExtension: c.epbxExtension ?? "",
             paymentAccounts: (c.paymentAccounts ?? []).map((p) => ({
                 id: p.id,
@@ -189,12 +196,18 @@ export default function CountersAdminPage() {
 
     const handleCreate = async () => {
         if (!form.branchId)    { toast.error("Pick a branch"); return; }
+        const num = Number(form.counterNumber);
+        if (!form.counterNumber || !Number.isInteger(num) || num <= 0) {
+            toast.error("Counter number must be a valid integer greater than 0");
+            return;
+        }
         if (!form.name.trim()) { toast.error("Counter name is required"); return; }
         setSaving(true);
         try {
             await axios.post("/api/pos/counters", {
-                branchId: form.branchId,
-                name:     form.name.trim(),
+                branchId:      form.branchId,
+                counterNumber: num,
+                name:          form.name.trim(),
             });
             toast.success("Counter created");
             cancel();
@@ -208,6 +221,11 @@ export default function CountersAdminPage() {
 
     const handleUpdate = async () => {
         if (editId == null) return;
+        const num = Number(editForm.counterNumber);
+        if (!editForm.counterNumber || !Number.isInteger(num) || num <= 0) {
+            toast.error("Counter number must be a valid integer greater than 0");
+            return;
+        }
         if (!editForm.name.trim()) { toast.error("Counter name is required"); return; }
         // Only rows with a linked bank ledger are sent; an incomplete row is dropped.
         const dropped = editForm.paymentAccounts.filter((p) => !p.accountId).length;
@@ -227,8 +245,9 @@ export default function CountersAdminPage() {
         setSaving(true);
         try {
             await axios.patch(`/api/pos/counters/${editId}`, {
-                name: editForm.name.trim(),
-                epbxExtension: editForm.epbxExtension.trim() || null,
+                name:                     editForm.name.trim(),
+                counterNumber:            num,
+                epbxExtension:            editForm.epbxExtension.trim() || null,
                 paymentAccounts,
                 allowedExpenseAccountIds: editForm.allowedExpenseAccountIds,
             });
@@ -305,15 +324,33 @@ export default function CountersAdminPage() {
             {addingNew && (
                 <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
                     <p className="text-sm font-semibold">New Counter</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
                             <label className="text-xs font-medium text-muted-foreground">Branch *</label>
-                            <Select value={form.branchId} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}>
+                            <Select
+                                value={form.branchId}
+                                onValueChange={(v) => {
+                                    const branchCounters = counters.filter((c) => c.branchId === v);
+                                    const nextNum = branchCounters.length > 0 ? Math.max(...branchCounters.map((c) => c.counterNumber || 0)) + 1 : 1;
+                                    setForm((f) => ({ ...f, branchId: v, counterNumber: String(nextNum), name: `Counter ${nextNum}` }));
+                                }}
+                            >
                                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select branch…" /></SelectTrigger>
                                 <SelectContent>
                                     {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground">Counter Number *</label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={form.counterNumber}
+                                onChange={(e) => setForm((f) => ({ ...f, counterNumber: e.target.value }))}
+                                placeholder="1"
+                                className="mt-1"
+                            />
                         </div>
                         <div>
                             <label className="text-xs font-medium text-muted-foreground">Name *</label>
@@ -359,7 +396,18 @@ export default function CountersAdminPage() {
                                     >
                                         {editId === c.id ? (
                                             <div className="p-4 space-y-4">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                    <div>
+                                                        <label className="text-xs font-medium text-muted-foreground">Counter Number *</label>
+                                                        <Input
+                                                            type="number"
+                                                            min={1}
+                                                            value={editForm.counterNumber}
+                                                            onChange={(e) => setEditForm((f) => ({ ...f, counterNumber: e.target.value }))}
+                                                            placeholder="1"
+                                                            className="mt-1"
+                                                        />
+                                                    </div>
                                                     <div>
                                                         <label className="text-xs font-medium text-muted-foreground">Name *</label>
                                                         <Input
@@ -517,7 +565,10 @@ export default function CountersAdminPage() {
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-4 px-4 py-3 flex-wrap">
-                                                <div className="shrink-0">
+                                                <div className="shrink-0 flex items-center gap-1.5">
+                                                    <Badge variant="outline" className="font-mono text-xs font-semibold">
+                                                        #{c.counterNumber}
+                                                    </Badge>
                                                     <Badge className="font-mono text-xs"><Monitor size={11} className="mr-1" />{c.name}</Badge>
                                                 </div>
                                                 <div className="flex-1 min-w-0">

@@ -26,6 +26,7 @@ model PosCounter {
   branchId                 String
   branch                   Branch                     @relation("BranchCounters", fields: [branchId], references: [id])
   name                     String // "Counter 1", "Billing Desk", "Service Counter"
+  counterNumber            Int
   tillAccountId            Int                        @unique
   tillAccount              Account                    @relation("CounterTill", fields: [tillAccountId], references: [id])
   // Non-cash payment accounts are a flexible LIST (paymentAccounts below) — each
@@ -63,6 +64,7 @@ model PosCounter {
   shifts                   PosShift[]
 
   @@unique([branchId, name])
+  @@unique([branchId, counterNumber])
   @@index([branchId])
   @@map("pos_counters")
 }

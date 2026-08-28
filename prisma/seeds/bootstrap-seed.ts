@@ -157,9 +157,9 @@ const PIPELINES: PipelineSeed[] = [
         description: "Front-desk enquiries & first response — price, availability, technical info, warranty help",
         color: "bg-teal-100 text-teal-700", order: 2, entityType: "help",
         statuses: [
-            { id: "S10", label: "Open", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P2" },
+            { id: "S10", label: "Open", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P2" },
             { id: "S11", label: "Reviewing", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P2" },
-            { id: "S16", label: "Closed", color: "bg-gray-100 text-gray-400", order: 3, isEntryPoint: false, isTerminal: true,  pipelineId: "P2" },
+            { id: "S16", label: "Closed", color: "bg-gray-100 text-gray-400", order: 3, isEntryPoint: false, isTerminal: true, pipelineId: "P2" },
         ],
     },
     {
@@ -167,13 +167,13 @@ const PIPELINES: PipelineSeed[] = [
         description: "Sales pipeline for new customers and upsell opportunities",
         color: "bg-green-100 text-green-700", order: 3, entityType: "deal",
         statuses: [
-            { id: "S17", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P3" },
+            { id: "S17", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P3" },
             { id: "S18", label: "Contacted", color: "bg-blue-100 text-blue-600", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P3" },
             { id: "S19", label: "Qualified", color: "bg-teal-100 text-teal-600", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P3" },
             { id: "S20", label: "Proposal Sent", color: "bg-yellow-100 text-yellow-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P3" },
             { id: "S21", label: "Negotiation", color: "bg-orange-100 text-orange-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P3" },
-            { id: "S22", label: "Won", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true,  pipelineId: "P3" },
-            { id: "S23", label: "Lost", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P3" },
+            { id: "S22", label: "Won", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P3" },
+            { id: "S23", label: "Lost", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P3" },
         ],
     },
     {
@@ -181,11 +181,11 @@ const PIPELINES: PipelineSeed[] = [
         description: "Internal tasks, HR, admin, and operational workflows",
         color: "bg-purple-100 text-purple-700", order: 4, entityType: "task",
         statuses: [
-            { id: "S24", label: "Open", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P4" },
+            { id: "S24", label: "Open", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P4" },
             { id: "S25", label: "In Review", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P4" },
             { id: "S26", label: "In Progress", color: "bg-blue-100 text-blue-600", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P4" },
             { id: "S27", label: "On Hold", color: "bg-orange-100 text-orange-600", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P4" },
-            { id: "S28", label: "Done", color: "bg-green-100 text-green-600", order: 5, isEntryPoint: false, isTerminal: true,  pipelineId: "P4" },
+            { id: "S28", label: "Done", color: "bg-green-100 text-green-600", order: 5, isEntryPoint: false, isTerminal: true, pipelineId: "P4" },
         ],
     },
     {
@@ -193,12 +193,12 @@ const PIPELINES: PipelineSeed[] = [
         description: "Marketing campaigns, content, and outreach initiatives",
         color: "bg-pink-100 text-pink-700", order: 5, entityType: "deal",
         statuses: [
-            { id: "S29", label: "Idea", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P5" },
+            { id: "S29", label: "Idea", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P5" },
             { id: "S30", label: "Planning", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P5" },
             { id: "S31", label: "In Execution", color: "bg-blue-100 text-blue-600", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P5" },
             { id: "S32", label: "Under Review", color: "bg-orange-100 text-orange-600", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P5" },
             { id: "S33", label: "Live", color: "bg-teal-100 text-teal-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P5" },
-            { id: "S34", label: "Completed", color: "bg-green-100 text-green-600", order: 6, isEntryPoint: false, isTerminal: true,  pipelineId: "P5" },
+            { id: "S34", label: "Completed", color: "bg-green-100 text-green-600", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P5" },
         ],
     },
     {
@@ -206,14 +206,14 @@ const PIPELINES: PipelineSeed[] = [
         description: "Order processing pipeline — online, in-store, phone, and WhatsApp orders",
         color: "bg-amber-100 text-amber-800", order: 7, entityType: "voucher",
         statuses: [
-            { id: "S42", label: "New", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P7" },
+            { id: "S42", label: "New", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P7" },
             { id: "S43", label: "Under Review", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Mark Under Review" },
             { id: "S44", label: "Confirmed", color: "bg-blue-100 text-blue-700", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Confirm Order" },
             { id: "S45", label: "Packing", color: "bg-indigo-100 text-indigo-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Start Packing" },
             { id: "S46", label: "Dispatched", color: "bg-purple-100 text-purple-700", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Mark Dispatched" },
-            { id: "S47", label: "Delivered", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true,  pipelineId: "P7", actionLabel: "Mark Delivered" },
-            { id: "S48", label: "Cancelled", color: "bg-gray-100 text-gray-400", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P7", actionLabel: "Cancel Order" },
-            { id: "S49", label: "Returned", color: "bg-red-100 text-red-600", order: 8, isEntryPoint: false, isTerminal: true,  pipelineId: "P7", actionLabel: "Mark Returned" },
+            { id: "S47", label: "Delivered", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P7", actionLabel: "Mark Delivered" },
+            { id: "S48", label: "Cancelled", color: "bg-gray-100 text-gray-400", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P7", actionLabel: "Cancel Order" },
+            { id: "S49", label: "Returned", color: "bg-red-100 text-red-600", order: 8, isEntryPoint: false, isTerminal: true, pipelineId: "P7", actionLabel: "Mark Returned" },
         ],
     },
     {
@@ -221,13 +221,13 @@ const PIPELINES: PipelineSeed[] = [
         description: "Delivery / dispatch sub-pipeline — carrier dispatch & tracking for confirmed orders",
         color: "bg-sky-100 text-sky-800", order: 8, entityType: "delivery",
         statuses: [
-            { id: "S50", label: "To Dispatch", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P8" },
+            { id: "S50", label: "To Dispatch", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P8" },
             { id: "S51", label: "Carrier Assigned", color: "bg-blue-100 text-blue-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Assign Carrier" },
             { id: "S52", label: "Picked Up", color: "bg-indigo-100 text-indigo-700", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Mark Picked Up" },
             { id: "S53", label: "In Transit", color: "bg-purple-100 text-purple-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Mark In Transit" },
             { id: "S54", label: "Out for Delivery", color: "bg-amber-100 text-amber-700", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P8", actionLabel: "Out for Delivery" },
-            { id: "S55", label: "Delivered", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true,  pipelineId: "P8", actionLabel: "Mark Delivered" },
-            { id: "S56", label: "Failed / RTO", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P8", actionLabel: "Mark Failed" },
+            { id: "S55", label: "Delivered", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P8", actionLabel: "Mark Delivered" },
+            { id: "S56", label: "Failed / RTO", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P8", actionLabel: "Mark Failed" },
         ],
     },
     {
@@ -235,10 +235,10 @@ const PIPELINES: PipelineSeed[] = [
         description: "Refund sub-pipeline — pay back advances on rejected / cancelled orders",
         color: "bg-rose-100 text-rose-800", order: 9, entityType: "refund",
         statuses: [
-            { id: "S57", label: "Requested", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P9" },
+            { id: "S57", label: "Requested", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P9" },
             { id: "S58", label: "Approved", color: "bg-amber-100 text-amber-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P9", actionLabel: "Approve Refund" },
-            { id: "S59", label: "Refunded", color: "bg-green-100 text-green-700", order: 3, isEntryPoint: false, isTerminal: true,  pipelineId: "P9", actionLabel: "Mark Refunded" },
-            { id: "S60", label: "Rejected", color: "bg-red-100 text-red-600", order: 4, isEntryPoint: false, isTerminal: true,  pipelineId: "P9", actionLabel: "Reject Refund" },
+            { id: "S59", label: "Refunded", color: "bg-green-100 text-green-700", order: 3, isEntryPoint: false, isTerminal: true, pipelineId: "P9", actionLabel: "Mark Refunded" },
+            { id: "S60", label: "Rejected", color: "bg-red-100 text-red-600", order: 4, isEntryPoint: false, isTerminal: true, pipelineId: "P9", actionLabel: "Reject Refund" },
         ],
     },
     {
@@ -246,13 +246,13 @@ const PIPELINES: PipelineSeed[] = [
         description: "Sales deal pipeline (revenue opportunities); stages shared with pipeline settings",
         color: "bg-cyan-100 text-cyan-800", order: 6, entityType: "deal",
         statuses: [
-            { id: "S35", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true,  isTerminal: false, pipelineId: "P6" },
+            { id: "S35", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P6" },
             { id: "S36", label: "Contacted", color: "bg-blue-100 text-blue-600", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
             { id: "S37", label: "Qualified", color: "bg-teal-100 text-teal-600", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
             { id: "S38", label: "Proposal Sent", color: "bg-yellow-100 text-yellow-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
             { id: "S39", label: "Negotiation", color: "bg-orange-100 text-orange-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
-            { id: "S40", label: "Won", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true,  pipelineId: "P6" },
-            { id: "S41", label: "Lost", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true,  pipelineId: "P6" },
+            { id: "S40", label: "Won", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P6" },
+            { id: "S41", label: "Lost", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P6" },
         ],
     },
 ];
@@ -318,45 +318,45 @@ const WORKERS_SEED: WorkerSeed[] = [
     { id: "SS38", label: "New Repair Wating", order: 1, color: "bg-gray-100 text-gray-600", workId: "W2", statusId: "S1", pipelineId: "P1", actionLabel: "Dear Technician, Accept or Reject this ticket as per device condition, down waste time !! ", successWorkerId: "SS39", failWorkerId: "SS40" },
     { id: "SS1", label: "Working", order: 1, color: "bg-yellow-50 text-yellow-700", workId: null, statusId: "S2", pipelineId: "P1" },
     { id: "SS47", label: "Call Log", order: 1, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS39", label: "Start", order: 2, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: {"S1":"S2"} },
-    { id: "SS40", label: "Reject", order: 3, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: {"S1":"S8"} },
-    { id: "SS42", label: "Calling: Customer Info", order: 11, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successWorkerId: "SS4", failWorkerId: "SS3" },
-    { id: "SS10", label: "Need Parts", order: 11, color: "#B5D345", workId: "W6", statusId: "S3", pipelineId: "P1", actionLabel: "Hi, Dear Manager, Service need 3rd Party Help. Should we proceed or Reject and close ?", retrySchedule: [{"unit":"hour","every":3,"times":100}], successWorkerId: "SS58", failWorkerId: "SS51" },
-    { id: "SS58", label: "Order Parts", order: 12, color: "bg-orange-50 text-orange-600", workId: "W4", statusId: "S3", pipelineId: "P1", actionLabel: "Dear Purchase Manager, Please order the item need for complete the repair  . ", retrySchedule: [{"unit":"hour","every":3,"times":100}], successWorkerId: "SS50", failWorkerId: "SS51" },
-    { id: "SS3", label: "Unreachable: Customer Info", order: 12, color: "bg-red-50 text-red-600", workId: null, statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", triggerMap: {"S2":"S8"}, successWorkerId: "SS4", failWorkerId: "SS3" },
+    { id: "SS39", label: "Start", order: 2, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: { "S1": "S2" } },
+    { id: "SS40", label: "Reject", order: 3, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: { "S1": "S8" } },
+    { id: "SS42", label: "Calling: Customer Info", order: 11, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS4", failWorkerId: "SS3" },
+    { id: "SS10", label: "Need Parts", order: 11, color: "#B5D345", workId: "W6", statusId: "S3", pipelineId: "P1", actionLabel: "Hi, Dear Manager, Service need 3rd Party Help. Should we proceed or Reject and close ?", retrySchedule: [{ "unit": "hour", "every": 3, "times": 100 }], successWorkerId: "SS58", failWorkerId: "SS51" },
+    { id: "SS58", label: "Order Parts", order: 12, color: "bg-orange-50 text-orange-600", workId: "W4", statusId: "S3", pipelineId: "P1", actionLabel: "Dear Purchase Manager, Please order the item need for complete the repair  . ", retrySchedule: [{ "unit": "hour", "every": 3, "times": 100 }], successWorkerId: "SS50", failWorkerId: "SS51" },
+    { id: "SS3", label: "Unreachable: Customer Info", order: 12, color: "bg-red-50 text-red-600", workId: null, statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", triggerMap: { "S2": "S8" }, successWorkerId: "SS4", failWorkerId: "SS3" },
     { id: "SS4", label: "Customer Responded", order: 13, color: "bg-green-50 text-green-700", workId: "W2", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Technician, Customer Responded if Happy Start Work Again, if Not Happy Close the Ticket !!", successWorkerId: "SS1", failWorkerId: "SS3" },
     { id: "SS50", label: "Waiting for parts", order: 13, color: "bg-teal-100 text-teal-600", workId: "W5", statusId: "S3", pipelineId: "P1", successWorkerId: "SS52", failWorkerId: "SS50" },
     { id: "SS18", label: "Engineer Visit Requested", order: 18, color: "bg-orange-50 text-orange-600", workId: null, statusId: "S4", pipelineId: "P1" },
     { id: "SS19", label: "Engineer Visit Scheduled", order: 19, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
     { id: "SS20", label: "Engineer On-Site", order: 20, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS21", label: "Engineer Work Complete", order: 21, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: {"S4":"S3"} },
-    { id: "SS43", label: "Calling: Customer to Bring Accessories", order: 21, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successWorkerId: "SS2", failWorkerId: "SS53" },
-    { id: "SS2", label: "Waiting: Customer to Bring Accessories", order: 22, color: "bg-orange-100 text-orange-600", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{"unit":"day","every":1,"times":3}], successWorkerId: "SS1", failWorkerId: "SS54" },
+    { id: "SS21", label: "Engineer Work Complete", order: 21, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: { "S4": "S3" } },
+    { id: "SS43", label: "Calling: Customer to Bring Accessories", order: 21, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS2", failWorkerId: "SS53" },
+    { id: "SS2", label: "Waiting: Customer to Bring Accessories", order: 22, color: "bg-orange-100 text-orange-600", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{ "unit": "day", "every": 1, "times": 3 }], successWorkerId: "SS1", failWorkerId: "SS54" },
     { id: "SS22", label: "Pending Despatch", order: 22, color: "bg-orange-50 text-orange-700", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS54", label: "Calling: Customer to Bring Accessories 2nd Attempt", order: 23, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successWorkerId: "SS55", failWorkerId: "SS53" },
+    { id: "SS54", label: "Calling: Customer to Bring Accessories 2nd Attempt", order: 23, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS55", failWorkerId: "SS53" },
     { id: "SS23", label: "Dispatched", order: 23, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
     { id: "SS24", label: "Received by Service Centre", order: 24, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
     { id: "SS25", label: "Being Repaired", order: 25, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS55", label: "Waiting: Customer to Bring Accessories 2nd Attempt", order: 25, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{"unit":"day","every":1,"times":3}], successWorkerId: "SS1", failWorkerId: "SS56" },
+    { id: "SS55", label: "Waiting: Customer to Bring Accessories 2nd Attempt", order: 25, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{ "unit": "day", "every": 1, "times": 3 }], successWorkerId: "SS1", failWorkerId: "SS56" },
     { id: "SS26", label: "Service Centre Delayed", order: 26, color: "bg-red-50 text-red-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS56", label: "Calling: Customer to Bring Accessories 3rd Attempt", order: 26, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{"unit":"minute","every":60,"times":1},{"unit":"hour","every":6,"times":2},{"unit":"day","every":1,"times":3},{"unit":"week","every":1,"times":3},{"unit":"month","every":1,"times":3},{"unit":"year","every":1,"times":2}], successWorkerId: "SS57", failWorkerId: "SS53" },
+    { id: "SS56", label: "Calling: Customer to Bring Accessories 3rd Attempt", order: 26, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS57", failWorkerId: "SS53" },
     { id: "SS27", label: "Shipped Back to Us", order: 27, color: "bg-purple-50 text-purple-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS57", label: "Waiting: Customer to Bring Accessories 3rd Attempt", order: 27, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{"unit":"year","every":2,"times":1}], successWorkerId: "SS1", failWorkerId: "SS53" },
-    { id: "SS28", label: "Received by Us", order: 28, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: {"S4":"S5"} },
+    { id: "SS57", label: "Waiting: Customer to Bring Accessories 3rd Attempt", order: 27, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{ "unit": "year", "every": 2, "times": 1 }], successWorkerId: "SS1", failWorkerId: "SS53" },
+    { id: "SS28", label: "Received by Us", order: 28, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: { "S4": "S5" } },
     { id: "SS29", label: "Customer Notified", order: 29, color: "bg-green-50 text-green-700", workId: null, statusId: "S6", pipelineId: "P1" },
     { id: "SS30", label: "Reminder Sent", order: 30, color: "bg-yellow-50 text-yellow-700", workId: null, statusId: "S6", pipelineId: "P1" },
-    { id: "SS53", label: "move to scrap", order: 31, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S2", pipelineId: "P1", triggerMap: {"S2":"S63"} },
+    { id: "SS53", label: "move to scrap", order: 31, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S2", pipelineId: "P1", triggerMap: { "S2": "S63" } },
     { id: "SS31", label: "Uncollected - Action Needed", order: 31, color: "bg-red-50 text-red-600", workId: null, statusId: "S6", pipelineId: "P1" },
     { id: "SS32", label: "Beyond Economical Repair", order: 32, color: "bg-red-50 text-red-600", workId: null, statusId: "S8", pipelineId: "P1" },
     { id: "SS33", label: "Customer Informed", order: 33, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1" },
-    { id: "SS34", label: "Collecting Unrepaired", order: 34, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1", triggerMap: {"S8":"S7"} },
+    { id: "SS34", label: "Collecting Unrepaired", order: 34, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1", triggerMap: { "S8": "S7" } },
     { id: "SS35", label: "Scrapped with Consent", order: 35, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1" },
     { id: "SS36", label: "Warranty Voided - Customer Approval Needed", order: 36, color: "bg-red-100 text-red-600", workId: "W1", statusId: null, pipelineId: "P1", actionLabel: "Call customer - warranty void, confirm paid repair" },
     { id: "SS37", label: "Confirmed Under Warranty - Proceeding", order: 37, color: "bg-green-100 text-green-700", workId: "W1", statusId: null, pipelineId: "P1", actionLabel: "Inform customer - covered under warranty, no charge" },
-    { id: "SS46", label: "Need 3rd Party Help", order: 46, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: {"S3":"S61"} },
+    { id: "SS46", label: "Need 3rd Party Help", order: 46, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: { "S3": "S61" } },
     { id: "SS48", label: "Find Help and Call Log", order: 48, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S61", pipelineId: "P1" },
     { id: "SS52", label: "End Wait", order: 52, color: "bg-gray-100 text-gray-600", workId: "W5", statusId: "S3", pipelineId: "P1", successWorkerId: "SS45", failWorkerId: "SS51" },
-    { id: "SS51", label: "Parts Not Avilable - Close", order: 100, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: {"S3":"S8"} },
+    { id: "SS51", label: "Parts Not Avilable - Close", order: 100, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: { "S3": "S8" } },
 ];
 
 const STATUS_TRANSITIONS = [
@@ -452,20 +452,20 @@ const STATUS_STARTS: Record<string, string> = {
 const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
     {
-        id:    "BR-HQ",
-        name:  "Head Office",
+        id: "BR-HQ",
+        name: "Head Office",
         // Legacy single-line — kept for old list rows that still consult it.
-        address:      `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
-        phone:        COMPANY_DETAILS.contact.phone || null,
+        address: `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
+        phone: COMPANY_DETAILS.contact.phone || null,
         // Structured identity for invoice headers / letterheads
         addressLine1: COMPANY_DETAILS.address.line1,
         addressLine2: COMPANY_DETAILS.address.line2 ?? "",
-        city:         COMPANY_DETAILS.address.city,
-        state:        COMPANY_DETAILS.address.state,
-        pinCode:      COMPANY_DETAILS.address.pin,
-        country:      COMPANY_DETAILS.address.country,
-        email:        COMPANY_DETAILS.contact.email || null,
-        gstin:        HQ_GSTIN,
+        city: COMPANY_DETAILS.address.city,
+        state: COMPANY_DETAILS.address.state,
+        pinCode: COMPANY_DETAILS.address.pin,
+        country: COMPANY_DETAILS.address.country,
+        email: COMPANY_DETAILS.contact.email || null,
+        gstin: HQ_GSTIN,
         gstStateCode: HQ_GSTIN.length >= 2 ? HQ_GSTIN.slice(0, 2) : "",
     },
 ];
@@ -475,14 +475,14 @@ const DEPARTMENTS: { id: string; name: string; description: string; isAllAccess?
     // permission pool is "every permission" (computed live; no DepartmentPermission
     // rows), so new permissions are auto-grantable to admin roles. Exactly one
     // department carries isAllAccess.
-    { id: "DEP-ADMIN",  name: "Administration", description: "Org-wide administration — all-access role authoring", isAllAccess: true },
-    { id: "DEP-REPAIR", name: "Repairs",     description: "Device diagnosis and repair" },
-    { id: "DEP-SALES",  name: "Sales",       description: "Sales and customer acquisition" },
-    { id: "DEP-DESK",   name: "Front Desk",  description: "Customer intake, calls, and receipts" },
-    { id: "DEP-FIN",    name: "Finance",     description: "Accounts, invoices, and reporting" },
-    { id: "DEP-HR",     name: "HR",          description: "People operations and recruitment" },
-    { id: "DEP-IT",     name: "IT / Admin",  description: "Systems, infrastructure, and admin" },
-    { id: "DEP-DESP",   name: "Despatch",    description: "Courier, logistics, and shipping" },
+    { id: "DEP-ADMIN", name: "Administration", description: "Org-wide administration — all-access role authoring", isAllAccess: true },
+    { id: "DEP-REPAIR", name: "Repairs", description: "Device diagnosis and repair" },
+    { id: "DEP-SALES", name: "Sales", description: "Sales and customer acquisition" },
+    { id: "DEP-DESK", name: "Front Desk", description: "Customer intake, calls, and receipts" },
+    { id: "DEP-FIN", name: "Finance", description: "Accounts, invoices, and reporting" },
+    { id: "DEP-HR", name: "HR", description: "People operations and recruitment" },
+    { id: "DEP-IT", name: "IT / Admin", description: "Systems, infrastructure, and admin" },
+    { id: "DEP-DESP", name: "Despatch", description: "Courier, logistics, and shipping" },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -495,7 +495,7 @@ const DEPARTMENTS: { id: string; name: string; description: string; isAllAccess?
 // real GL accounts here would double-count.
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
-type NormBal   = "DEBIT" | "CREDIT";
+type NormBal = "DEBIT" | "CREDIT";
 
 async function upsertGroup(
     name: string, type: GroupType, sortOrder: number, parentId?: number,
@@ -559,7 +559,7 @@ async function upsertLedger(
         const updates: string[] = [];
         const vals: unknown[] = [];
         if (rows[0].groupId === null && groupId !== null) { vals.push(groupId); updates.push(`"groupId" = $${vals.length}`); }
-        if (rows[0].code === null && code)                 { vals.push(code);    updates.push(`code = $${vals.length}`);    }
+        if (rows[0].code === null && code) { vals.push(code); updates.push(`code = $${vals.length}`); }
         if (updates.length) {
             vals.push(rows[0].id);
             await pool.query(`UPDATE "Account" SET ${updates.join(", ")} WHERE id = $${vals.length}`, vals);
@@ -578,9 +578,9 @@ async function upsertLedger(
 // ════════════════════════════════════════════════════════════════════════════
 
 const ADMIN = {
-    email:    "admin@networkservice.in",
-    name:     "Admin",
-    role:     "R1",
+    email: "admin@networkservice.in",
+    name: "Admin",
+    role: "R1",
     password: "admin123",
 };
 
@@ -616,14 +616,14 @@ async function main() {
     }
     for (const r of ROLES) {
         await prisma.role.upsert({
-            where:  { id: r.id },
+            where: { id: r.id },
             update: { label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank, departmentId: r.departmentId },
             create: { id: r.id, label: r.label, color: r.color, isSystem: r.isSystem, rank: r.rank, departmentId: r.departmentId },
         });
     }
     for (const p of PERMISSIONS) {
         await prisma.permission.upsert({
-            where:  { id: p.id },
+            where: { id: p.id },
             update: { label: p.label, module: p.module, description: p.description },
             create: p,
         });
@@ -654,13 +654,13 @@ async function main() {
     console.log("[2/7] Workflow — Pipelines, Statuses, Workers, Transitions");
     for (const pl of PIPELINES) {
         await prisma.pipeline.upsert({
-            where:  { id: pl.id },
+            where: { id: pl.id },
             update: { name: pl.name, label: pl.label, description: pl.description, color: pl.color, isDefault: pl.isDefault ?? false, isActive: true, order: pl.order, entityType: pl.entityType },
             create: { id: pl.id, name: pl.name, label: pl.label, description: pl.description, color: pl.color, isDefault: pl.isDefault ?? false, isActive: true, order: pl.order, entityType: pl.entityType },
         });
         for (const s of pl.statuses) {
             await prisma.ticketStatus.upsert({
-                where:  { id: s.id },
+                where: { id: s.id },
                 update: { label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint, actionLabel: s.actionLabel ?? null, warrantyScope: "any", leavePrompt: s.leavePrompt ?? null, announceOnEntry: s.announceOnEntry ?? false, etaText: s.etaText ?? null, resolveTimeHours: s.resolveTimeHours ?? null, pipelineId: s.pipelineId },
                 create: { id: s.id, label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint, actionLabel: s.actionLabel ?? null, warrantyScope: "any", leavePrompt: s.leavePrompt ?? null, announceOnEntry: s.announceOnEntry ?? false, etaText: s.etaText ?? null, resolveTimeHours: s.resolveTimeHours ?? null, pipelineId: s.pipelineId },
             });
@@ -671,7 +671,7 @@ async function main() {
     const seedColor = (c: string) => /^#/.test(c) ? c : "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0").toUpperCase();
     for (const g of WORK_GROUPS) {
         await prisma.workGroup.upsert({
-            where:  { id: g.id },
+            where: { id: g.id },
             update: { name: g.name, label: g.label, color: seedColor(g.color), order: g.order },
             create: { id: g.id, name: g.name, label: g.label, color: seedColor(g.color), order: g.order },
         });
@@ -688,7 +688,7 @@ async function main() {
             toolConfig: (shape.toolConfig ?? {}) as Prisma.InputJsonValue,
         };
         await prisma.work.upsert({
-            where:  { id: w.id },
+            where: { id: w.id },
             update: { label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields, groups: { deleteMany: {}, create: w.groupIds.map((workGroupId) => ({ workGroupId })) } },
             create: { id: w.id, label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields, groups: { create: w.groupIds.map((workGroupId) => ({ workGroupId })) } },
         });
@@ -697,7 +697,7 @@ async function main() {
         const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue, transitionNote: ss.transitionNote ?? null, skipNoteOnEntry: ss.skipNoteOnEntry ?? false, requireNoteOnEntry: ss.requireNoteOnEntry ?? false, entryQuestion: ss.entryQuestion ?? null };
         const color = seedColor(ss.color);
         await prisma.ticketWorker.upsert({
-            where:  { id: ss.id },
+            where: { id: ss.id },
             update: { label: ss.label, color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
             create: { id: ss.id, label: ss.label, color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
         });
@@ -722,7 +722,7 @@ async function main() {
     }
     for (const t of STATUS_TRANSITIONS) {
         await prisma.statusTransition.upsert({
-            where:  { fromStatusId_toStatusId: { fromStatusId: t.fromStatusId, toStatusId: t.toStatusId } },
+            where: { fromStatusId_toStatusId: { fromStatusId: t.fromStatusId, toStatusId: t.toStatusId } },
             update: {},
             create: t,
         });
@@ -768,139 +768,139 @@ async function main() {
     console.log("[4/7] Chart of accounts — Groups + GL ledgers (Stock-in-Hand intentionally empty)");
 
     // Primary groups
-    const capitalAccountId     = await upsertGroup("Capital Account",        "LIABILITY", 10);
-    const loansLiabilityId     = await upsertGroup("Loans (Liability)",      "LIABILITY", 20);
-    const currentLiabilitiesId = await upsertGroup("Current Liabilities",    "LIABILITY", 30);
-    await upsertGroup("Fixed Assets",           "ASSET",     40);
-    await upsertGroup("Investments",            "ASSET",     50);
-    const currentAssetsId      = await upsertGroup("Current Assets",         "ASSET",     60);
-    await upsertGroup("Branch / Divisions",     "ASSET",     70);
-    await upsertGroup("Misc. Expenses (Asset)", "ASSET",     80);
-    await upsertGroup("Suspense A/c",           "ASSET",     90);
-    await upsertGroup("Sales Accounts",         "INCOME",    100);
-    await upsertGroup("Purchase Accounts",      "EXPENSE",   110);
-    await upsertGroup("Direct Incomes",         "INCOME",    120);
-    await upsertGroup("Direct Expenses",        "EXPENSE",   130);
-    await upsertGroup("Indirect Incomes",       "INCOME",    140);
-    await upsertGroup("Indirect Expenses",      "EXPENSE",   150);
+    const capitalAccountId = await upsertGroup("Capital Account", "LIABILITY", 10);
+    const loansLiabilityId = await upsertGroup("Loans (Liability)", "LIABILITY", 20);
+    const currentLiabilitiesId = await upsertGroup("Current Liabilities", "LIABILITY", 30);
+    await upsertGroup("Fixed Assets", "ASSET", 40);
+    await upsertGroup("Investments", "ASSET", 50);
+    const currentAssetsId = await upsertGroup("Current Assets", "ASSET", 60);
+    await upsertGroup("Branch / Divisions", "ASSET", 70);
+    await upsertGroup("Misc. Expenses (Asset)", "ASSET", 80);
+    await upsertGroup("Suspense A/c", "ASSET", 90);
+    await upsertGroup("Sales Accounts", "INCOME", 100);
+    await upsertGroup("Purchase Accounts", "EXPENSE", 110);
+    await upsertGroup("Direct Incomes", "INCOME", 120);
+    await upsertGroup("Direct Expenses", "EXPENSE", 130);
+    await upsertGroup("Indirect Incomes", "INCOME", 140);
+    await upsertGroup("Indirect Expenses", "EXPENSE", 150);
 
     // Sub-groups
-    await upsertGroup("Reserves & Surplus",       "LIABILITY", 10, capitalAccountId);
-    await upsertGroup("Bank OD A/c",              "LIABILITY", 10, loansLiabilityId);
-    await upsertGroup("Credit Card",              "LIABILITY", 15, loansLiabilityId);
-    await upsertGroup("BNPL A/c",                 "LIABILITY", 17, loansLiabilityId);
-    await upsertGroup("Secured Loans",            "LIABILITY", 20, loansLiabilityId);
-    await upsertGroup("Unsecured Loans",          "LIABILITY", 30, loansLiabilityId);
-    await upsertGroup("Duties & Taxes",           "LIABILITY", 10, currentLiabilitiesId);
-    await upsertGroup("Provisions",               "LIABILITY", 20, currentLiabilitiesId);
-    await upsertGroup("Sundry Creditors",         "LIABILITY", 30, currentLiabilitiesId);
-    await upsertGroup("Stock-in-Hand",            "ASSET",     10, currentAssetsId);
-    await upsertGroup("Deposits (Asset)",         "ASSET",     20, currentAssetsId);
-    await upsertGroup("Loans & Advances (Asset)", "ASSET",     30, currentAssetsId);
-    await upsertGroup("Sundry Debtors",           "ASSET",     40, currentAssetsId);
-    await upsertGroup("Cash-in-Hand",             "ASSET",     50, currentAssetsId);
-    await upsertGroup("Bank Accounts",            "ASSET",     60, currentAssetsId);
-    await upsertGroup("Wallets",                  "ASSET",     65, currentAssetsId);
+    await upsertGroup("Reserves & Surplus", "LIABILITY", 10, capitalAccountId);
+    await upsertGroup("Bank OD A/c", "LIABILITY", 10, loansLiabilityId);
+    await upsertGroup("Credit Card", "LIABILITY", 15, loansLiabilityId);
+    await upsertGroup("BNPL A/c", "LIABILITY", 17, loansLiabilityId);
+    await upsertGroup("Secured Loans", "LIABILITY", 20, loansLiabilityId);
+    await upsertGroup("Unsecured Loans", "LIABILITY", 30, loansLiabilityId);
+    await upsertGroup("Duties & Taxes", "LIABILITY", 10, currentLiabilitiesId);
+    await upsertGroup("Provisions", "LIABILITY", 20, currentLiabilitiesId);
+    await upsertGroup("Sundry Creditors", "LIABILITY", 30, currentLiabilitiesId);
+    await upsertGroup("Stock-in-Hand", "ASSET", 10, currentAssetsId);
+    await upsertGroup("Deposits (Asset)", "ASSET", 20, currentAssetsId);
+    await upsertGroup("Loans & Advances (Asset)", "ASSET", 30, currentAssetsId);
+    await upsertGroup("Sundry Debtors", "ASSET", 40, currentAssetsId);
+    await upsertGroup("Cash-in-Hand", "ASSET", 50, currentAssetsId);
+    await upsertGroup("Bank Accounts", "ASSET", 60, currentAssetsId);
+    await upsertGroup("Wallets", "ASSET", 65, currentAssetsId);
     // "Payment Gateway" (ASSET, under Current Assets) is NOT seeded generically —
     // it's real-config only (see personal.local.json); a new client adds it
     // themselves via Accountancy → Masters → Account Groups if they take
     // payments through a gateway.
 
     // GL ledgers — Stock-in-Hand intentionally has NO children.
-    await upsertLedger("Cash",                    "Cash-in-Hand",      "DEBIT",  "1000");
-    await upsertLedger("Petty Cash",              "Cash-in-Hand",      "DEBIT");
-    await upsertLedger("Bank Account",            "Bank Accounts",     "DEBIT",  "1010");
-    await upsertLedger("Accounts Receivable",     "Sundry Debtors",    "DEBIT",  "1100");
-    await upsertLedger("Accounts Payable",        "Sundry Creditors",  "CREDIT", "2000");
-    await upsertLedger("Walk-in Cash Customer",   "Sundry Debtors",    "DEBIT",  "CASH-WALKIN");
-    await upsertLedger("Prepaid Expenses",        "Loans & Advances (Asset)", "DEBIT", "1300");
-    await upsertLedger("Profit & Loss A/c",       null,                "CREDIT");
-    await upsertLedger("Capital",                 "Capital Account",   "CREDIT", "3000");
-    await upsertLedger("Drawings",                "Capital Account",   "DEBIT");
-    await upsertLedger("Retained Earnings",       "Reserves & Surplus", "CREDIT", "3100");
-    await upsertLedger("Sales A/c",               "Sales Accounts",    "CREDIT");
-    await upsertLedger("Parts Revenue",           "Sales Accounts",    "CREDIT", "4100");
-    await upsertLedger("Shop Sales Revenue",      "Sales Accounts",    "CREDIT", "4150");
-    await upsertLedger("Purchase A/c",            "Purchase Accounts", "DEBIT");
-    await upsertLedger("Sales Returns",           "Sales Accounts",    "DEBIT");
-    await upsertLedger("Purchase Returns",        "Purchase Accounts", "CREDIT");
-    await upsertLedger("CGST",                    "Duties & Taxes",    "CREDIT");
-    await upsertLedger("SGST",                    "Duties & Taxes",    "CREDIT");
-    await upsertLedger("IGST",                    "Duties & Taxes",    "CREDIT");
-    await upsertLedger("UTGST",                   "Duties & Taxes",    "CREDIT");
-    await upsertLedger("TDS",                     "Duties & Taxes",    "CREDIT");
-    await upsertLedger("Tax Payable",             "Duties & Taxes",    "CREDIT", "2100");
-    await upsertLedger("Professional Tax",        "Duties & Taxes",    "CREDIT");
-    await upsertLedger("ESI Payable",             "Duties & Taxes",    "CREDIT");
-    await upsertLedger("PF Payable",              "Duties & Taxes",    "CREDIT");
-    await upsertLedger("Accrued Expenses",        "Provisions",        "CREDIT", "2200");
-    await upsertLedger("Provision for Tax",       "Provisions",        "CREDIT");
-    await upsertLedger("Provision for Bad Debts", "Provisions",        "CREDIT");
-    await upsertLedger("General Reserve",         "Reserves & Surplus", "CREDIT");
-    await upsertLedger("Service Charges Income",  "Direct Incomes",    "CREDIT", "4000");
-    await upsertLedger("Warranty Revenue",        "Direct Incomes",    "CREDIT", "4200");
-    await upsertLedger("Other Revenue",           "Indirect Incomes",  "CREDIT", "4900");
-    await upsertLedger("Discount Received",       "Indirect Incomes",  "CREDIT");
+    await upsertLedger("Cash", "Cash-in-Hand", "DEBIT", "1000");
+    await upsertLedger("Petty Cash", "Cash-in-Hand", "DEBIT");
+    await upsertLedger("Bank Account", "Bank Accounts", "DEBIT", "1010");
+    await upsertLedger("Accounts Receivable", "Sundry Debtors", "DEBIT", "1100");
+    await upsertLedger("Accounts Payable", "Sundry Creditors", "CREDIT", "2000");
+    await upsertLedger("Walk-in Cash Customer", "Sundry Debtors", "DEBIT", "CASH-WALKIN");
+    await upsertLedger("Prepaid Expenses", "Loans & Advances (Asset)", "DEBIT", "1300");
+    await upsertLedger("Profit & Loss A/c", null, "CREDIT");
+    await upsertLedger("Capital", "Capital Account", "CREDIT", "3000");
+    await upsertLedger("Drawings", "Capital Account", "DEBIT");
+    await upsertLedger("Retained Earnings", "Reserves & Surplus", "CREDIT", "3100");
+    await upsertLedger("Sales A/c", "Sales Accounts", "CREDIT");
+    await upsertLedger("Parts Revenue", "Sales Accounts", "CREDIT", "4100");
+    await upsertLedger("Shop Sales Revenue", "Sales Accounts", "CREDIT", "4150");
+    await upsertLedger("Purchase A/c", "Purchase Accounts", "DEBIT");
+    await upsertLedger("Sales Returns", "Sales Accounts", "DEBIT");
+    await upsertLedger("Purchase Returns", "Purchase Accounts", "CREDIT");
+    await upsertLedger("CGST", "Duties & Taxes", "CREDIT");
+    await upsertLedger("SGST", "Duties & Taxes", "CREDIT");
+    await upsertLedger("IGST", "Duties & Taxes", "CREDIT");
+    await upsertLedger("UTGST", "Duties & Taxes", "CREDIT");
+    await upsertLedger("TDS", "Duties & Taxes", "CREDIT");
+    await upsertLedger("Tax Payable", "Duties & Taxes", "CREDIT", "2100");
+    await upsertLedger("Professional Tax", "Duties & Taxes", "CREDIT");
+    await upsertLedger("ESI Payable", "Duties & Taxes", "CREDIT");
+    await upsertLedger("PF Payable", "Duties & Taxes", "CREDIT");
+    await upsertLedger("Accrued Expenses", "Provisions", "CREDIT", "2200");
+    await upsertLedger("Provision for Tax", "Provisions", "CREDIT");
+    await upsertLedger("Provision for Bad Debts", "Provisions", "CREDIT");
+    await upsertLedger("General Reserve", "Reserves & Surplus", "CREDIT");
+    await upsertLedger("Service Charges Income", "Direct Incomes", "CREDIT", "4000");
+    await upsertLedger("Warranty Revenue", "Direct Incomes", "CREDIT", "4200");
+    await upsertLedger("Other Revenue", "Indirect Incomes", "CREDIT", "4900");
+    await upsertLedger("Discount Received", "Indirect Incomes", "CREDIT");
     // Outward freight collected from customers on the sale invoice.
     // Separated from Sales A/c so the P&L breaks out delivery revenue.
-    await upsertLedger("Shipping Income",         "Indirect Incomes",  "CREDIT");
-    await upsertLedger("Round Off",               "Indirect Incomes",  "CREDIT");
-    await upsertLedger("Interest Received",       "Indirect Incomes",  "CREDIT");
-    await upsertLedger("Commission Received",     "Indirect Incomes",  "CREDIT");
-    await upsertLedger("Cost of Parts Sold",      "Direct Expenses",   "DEBIT",  "5000");
-    await upsertLedger("Tools & Equipment",       "Direct Expenses",   "DEBIT",  "6300");
-    await upsertLedger("Repair & Maintenance",    "Direct Expenses",   "DEBIT");
-    await upsertLedger("Consumables & Spares",    "Direct Expenses",   "DEBIT");
-    await upsertLedger("Freight Charges",         "Direct Expenses",   "DEBIT");
-    await upsertLedger("Carriage Inward",         "Direct Expenses",   "DEBIT");
-    await upsertLedger("Salary & Wages",          "Indirect Expenses", "DEBIT",  "6200");
-    await upsertLedger("Rent",                    "Indirect Expenses", "DEBIT",  "6000");
-    await upsertLedger("Utilities Expense",       "Indirect Expenses", "DEBIT",  "6100");
-    await upsertLedger("Miscellaneous Expense",   "Indirect Expenses", "DEBIT",  "6900");
-    await upsertLedger("Electricity Charges",     "Indirect Expenses", "DEBIT");
-    await upsertLedger("Telephone / Internet",    "Indirect Expenses", "DEBIT");
-    await upsertLedger("Discount Allowed",        "Indirect Expenses", "DEBIT");
+    await upsertLedger("Shipping Income", "Indirect Incomes", "CREDIT");
+    await upsertLedger("Round Off", "Indirect Incomes", "CREDIT");
+    await upsertLedger("Interest Received", "Indirect Incomes", "CREDIT");
+    await upsertLedger("Commission Received", "Indirect Incomes", "CREDIT");
+    await upsertLedger("Cost of Parts Sold", "Direct Expenses", "DEBIT", "5000");
+    await upsertLedger("Tools & Equipment", "Direct Expenses", "DEBIT", "6300");
+    await upsertLedger("Repair & Maintenance", "Direct Expenses", "DEBIT");
+    await upsertLedger("Consumables & Spares", "Direct Expenses", "DEBIT");
+    await upsertLedger("Freight Charges", "Direct Expenses", "DEBIT");
+    await upsertLedger("Carriage Inward", "Direct Expenses", "DEBIT");
+    await upsertLedger("Salary & Wages", "Indirect Expenses", "DEBIT", "6200");
+    await upsertLedger("Rent", "Indirect Expenses", "DEBIT", "6000");
+    await upsertLedger("Utilities Expense", "Indirect Expenses", "DEBIT", "6100");
+    await upsertLedger("Miscellaneous Expense", "Indirect Expenses", "DEBIT", "6900");
+    await upsertLedger("Electricity Charges", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Telephone / Internet", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Discount Allowed", "Indirect Expenses", "DEBIT");
     // Dedicated expense ledger for loyalty-point redemptions (kept separate from
     // "Discount Allowed" so the P&L breaks out the cost of the loyalty programme).
     // Redemption posts here as a negative InvVoucherCharge on the POS sale.
-    await upsertLedger("Loyalty Points Redeemed",  "Indirect Expenses", "DEBIT");
+    await upsertLedger("Loyalty Points Redeemed", "Indirect Expenses", "DEBIT");
     // Dedicated expense ledger for coupon/promo discounts (kept separate from
     // "Discount Allowed" + "Loyalty Points Redeemed" so the P&L breaks out the
     // cost of each promotion channel). Posts as a negative InvVoucherCharge.
-    await upsertLedger("Coupon Discounts",         "Indirect Expenses", "DEBIT");
+    await upsertLedger("Coupon Discounts", "Indirect Expenses", "DEBIT");
     // Gift-card prepaid liability (Phase 4): issuing a gift card credits this;
     // redeeming one debits it via a payment tender on the POS sale.
-    await upsertLedger("Gift Card Liability",      "Current Liabilities", "CREDIT");
+    await upsertLedger("Gift Card Liability", "Current Liabilities", "CREDIT");
     // Breakage income: when a gift card expires unredeemed, the leftover liability
     // is recognised here (Dr Gift Card Liability / Cr this).
-    await upsertLedger("Gift Card Breakage",       "Indirect Incomes",  "CREDIT");
-    await upsertLedger("Bad Debts",               "Indirect Expenses", "DEBIT");
-    await upsertLedger("Bank Charges",            "Indirect Expenses", "DEBIT");
-    await upsertLedger("Audit Fees",              "Indirect Expenses", "DEBIT");
-    await upsertLedger("Printing & Stationery",   "Indirect Expenses", "DEBIT");
-    await upsertLedger("Postage & Courier",       "Indirect Expenses", "DEBIT");
-    await upsertLedger("Advertisement",           "Indirect Expenses", "DEBIT");
-    await upsertLedger("Travelling Expenses",     "Indirect Expenses", "DEBIT");
-    await upsertLedger("Insurance",               "Indirect Expenses", "DEBIT");
-    await upsertLedger("Depreciation",            "Indirect Expenses", "DEBIT");
-    await upsertLedger("Interest Paid",           "Indirect Expenses", "DEBIT");
-    await upsertLedger("Commission Paid",         "Indirect Expenses", "DEBIT");
-    await upsertLedger("Furniture & Fixtures",       "Fixed Assets",   "DEBIT");
-    await upsertLedger("Computer & Peripherals",     "Fixed Assets",   "DEBIT");
-    await upsertLedger("Office Equipment",           "Fixed Assets",   "DEBIT");
-    await upsertLedger("Plant & Machinery",          "Fixed Assets",   "DEBIT");
-    await upsertLedger("CCTV & Security Equipment", "Fixed Assets",    "DEBIT");
-    await upsertLedger("Security Deposit",        "Deposits (Asset)",        "DEBIT");
-    await upsertLedger("Earnest Money Deposit",   "Deposits (Asset)",        "DEBIT");
-    await upsertLedger("Staff Advance",           "Loans & Advances (Asset)", "DEBIT");
-    await upsertLedger("Advance to Suppliers",    "Loans & Advances (Asset)", "DEBIT");
-    await upsertLedger("TDS Receivable",          "Loans & Advances (Asset)", "DEBIT");
-    await upsertLedger("Preliminary Expenses",    "Misc. Expenses (Asset)",  "DEBIT");
+    await upsertLedger("Gift Card Breakage", "Indirect Incomes", "CREDIT");
+    await upsertLedger("Bad Debts", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Bank Charges", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Audit Fees", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Printing & Stationery", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Postage & Courier", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Advertisement", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Travelling Expenses", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Insurance", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Depreciation", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Interest Paid", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Commission Paid", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Furniture & Fixtures", "Fixed Assets", "DEBIT");
+    await upsertLedger("Computer & Peripherals", "Fixed Assets", "DEBIT");
+    await upsertLedger("Office Equipment", "Fixed Assets", "DEBIT");
+    await upsertLedger("Plant & Machinery", "Fixed Assets", "DEBIT");
+    await upsertLedger("CCTV & Security Equipment", "Fixed Assets", "DEBIT");
+    await upsertLedger("Security Deposit", "Deposits (Asset)", "DEBIT");
+    await upsertLedger("Earnest Money Deposit", "Deposits (Asset)", "DEBIT");
+    await upsertLedger("Staff Advance", "Loans & Advances (Asset)", "DEBIT");
+    await upsertLedger("Advance to Suppliers", "Loans & Advances (Asset)", "DEBIT");
+    await upsertLedger("TDS Receivable", "Loans & Advances (Asset)", "DEBIT");
+    await upsertLedger("Preliminary Expenses", "Misc. Expenses (Asset)", "DEBIT");
     // POS cash-drawer variance — sister P&L accounts used by shift close
     // adjustment JEs. Short = staff handed in less than expected (expense);
     // Over = handed in more (income).
-    await upsertLedger("Cash Short",              "Indirect Expenses", "DEBIT",  "6950");
-    await upsertLedger("Cash Over",               "Indirect Incomes",  "CREDIT", "4950");
+    await upsertLedger("Cash Short", "Indirect Expenses", "DEBIT", "6950");
+    await upsertLedger("Cash Over", "Indirect Incomes", "CREDIT", "4950");
     // "Difference in Opening Balances" is intentionally NOT seeded — it's
     // a pure synthetic computed by the BS UI = |Σ Dr opening − Σ Cr opening|,
     // shown on the side that needs balancing. Don't add a real ledger by
@@ -932,7 +932,7 @@ async function main() {
     // a counter. Shortage accountability is via the shift report, not GL.
     for (const b of BRANCHES) {
         const counterName = "Counter 1";
-        const tillName    = `Cash – Counter 1 – ${b.name}`;
+        const tillName = `Cash – Counter 1 – ${b.name}`;
         await upsertLedger(tillName, "Cash-in-Hand", "DEBIT");
         const { rows: tillRows } = await pool.query<{ id: number }>(
             `SELECT id FROM "Account" WHERE LOWER(name) = LOWER($1) LIMIT 1`,
@@ -955,16 +955,16 @@ async function main() {
             [b.id, counterName],
         );
         if (existing[0]) {
-            // Already exists — make sure the till account is wired.
+            // Already exists — make sure the till account is wired and counterNumber is set.
             await pool.query(
-                `UPDATE "pos_counters" SET "tillAccountId" = $1, "counterNumber" = COALESCE("counterNumber", $2) WHERE id = $3`,
-                [tillId, counterNumber, existing[0].id],
+                `UPDATE "pos_counters" SET "tillAccountId" = $1, "counterNumber" = COALESCE("counterNumber", 1) WHERE id = $2`,
+                [tillId, existing[0].id],
             );
         } else {
             await pool.query(
-                `INSERT INTO "pos_counters" ("branchId", name, "tillAccountId", "isActive", "counterNumber")
-                 VALUES ($1, $2, $3, true, $4)`,
-                [b.id, counterName, tillId, counterNumber],
+                `INSERT INTO "pos_counters" ("branchId", name, "counterNumber", "tillAccountId", "isActive")
+                 VALUES ($1, $2, 1, $3, true)`,
+                [b.id, counterName, tillId],
             );
         }
     }
@@ -975,7 +975,7 @@ async function main() {
     console.log("[5/7] Admin user");
     const password = await bcrypt.hash(ADMIN.password, 10);
     const adminUser = await prisma.user.upsert({
-        where:  { email: ADMIN.email },
+        where: { email: ADMIN.email },
         update: { name: ADMIN.name, role: ADMIN.role, password },
         create: { name: ADMIN.name, email: ADMIN.email, password, role: ADMIN.role },
         select: { id: true },
@@ -993,7 +993,7 @@ async function main() {
         roleTemplateIds: ["R1"],
     });
     await prisma.userPosition.upsert({
-        where:  { userId_positionId: { userId: adminUser.id, positionId: "POS-SYSADMIN" } },
+        where: { userId_positionId: { userId: adminUser.id, positionId: "POS-SYSADMIN" } },
         update: {},
         create: { userId: adminUser.id, positionId: "POS-SYSADMIN" },
     });
@@ -1013,9 +1013,9 @@ async function main() {
     console.log("[7/7] Inventory naming convention");
     const namingDefaults = {
         nameFields: [
-            { kind: "brand",    enabled: true, defaultValue: null },
-            { kind: "group",    enabled: true, defaultValue: "General" },
-            { kind: "modelNo",  enabled: true, defaultValue: null },
+            { kind: "brand", enabled: true, defaultValue: null },
+            { kind: "group", enabled: true, defaultValue: "General" },
+            { kind: "modelNo", enabled: true, defaultValue: null },
             // Operator-curated free text (InvProduct.namePart). Sits after the
             // master-driven tokens so the regenerate button rebuilds masters
             // around it without ever overwriting it.
@@ -1023,25 +1023,25 @@ async function main() {
         ],
         separator: " ",
         onlineNameFields: [
-            { kind: "brand",    enabled: true, defaultValue: null },
-            { kind: "group",    enabled: true, defaultValue: null },
+            { kind: "brand", enabled: true, defaultValue: null },
+            { kind: "group", enabled: true, defaultValue: null },
             { kind: "category", enabled: true, defaultValue: null },
-            { kind: "modelNo",  enabled: true, defaultValue: null },
+            { kind: "modelNo", enabled: true, defaultValue: null },
             { kind: "warranty", enabled: true, defaultValue: null },
         ],
         onlineSeparator: " ",
         slugFields: [
-            { kind: "brand",   enabled: true, defaultValue: null },
-            { kind: "group",   enabled: true, defaultValue: null },
+            { kind: "brand", enabled: true, defaultValue: null },
+            { kind: "group", enabled: true, defaultValue: null },
             { kind: "modelNo", enabled: true, defaultValue: null },
         ],
         slugSeparator: "-",
         slugEnabled: true,
         slugMaxLength: 80,
         fallbackFields: {
-            group:    ["category", "brand"],
+            group: ["category", "brand"],
             category: ["group", "brand"],
-            brand:    ["group", "category"],
+            brand: ["group", "category"],
         },
     };
     const existingNaming = await prisma.invNamingConfig.findFirst({ orderBy: { id: "asc" } });
@@ -1055,17 +1055,17 @@ async function main() {
     // ── Section 8: GST Rate master ─────────────────────────────────────
     console.log("[8/11] GST Rate master (Indian slabs)");
     const GST_RATES = [
-        { rate: "0.00",  label: "Nil (0%)",         description: "Nil rated — essential goods & services" },
-        { rate: "0.25",  label: "Special (0.25%)",   description: "Rough / uncut diamonds" },
-        { rate: "3.00",  label: "Special (3%)",      description: "Gold, silver, precious metals & jewellery" },
-        { rate: "5.00",  label: "GST 5%",            description: "Basic necessities — packaged food, transport, etc." },
-        { rate: "12.00", label: "GST 12%",           description: "Processed food, business class travel, etc." },
-        { rate: "18.00", label: "GST 18%",           description: "Standard rate — electronics, IT services, etc." },
-        { rate: "28.00", label: "GST 28%",           description: "Luxury goods, automobiles, tobacco, etc." },
+        { rate: "0.00", label: "Nil (0%)", description: "Nil rated — essential goods & services" },
+        { rate: "0.25", label: "Special (0.25%)", description: "Rough / uncut diamonds" },
+        { rate: "3.00", label: "Special (3%)", description: "Gold, silver, precious metals & jewellery" },
+        { rate: "5.00", label: "GST 5%", description: "Basic necessities — packaged food, transport, etc." },
+        { rate: "12.00", label: "GST 12%", description: "Processed food, business class travel, etc." },
+        { rate: "18.00", label: "GST 18%", description: "Standard rate — electronics, IT services, etc." },
+        { rate: "28.00", label: "GST 28%", description: "Luxury goods, automobiles, tobacco, etc." },
     ];
     for (const g of GST_RATES) {
         await prisma.gstRate.upsert({
-            where:  { label: g.label },
+            where: { label: g.label },
             update: { rate: g.rate, description: g.description, isActive: true },
             create: { rate: g.rate, label: g.label, description: g.description, isActive: true },
         });
@@ -1075,23 +1075,23 @@ async function main() {
     // ── Section 9: Inventory Unit master ───────────────────────────────
     console.log("[9/11] Inventory Unit master");
     const INV_UNITS = [
-        { code: "PCS",  label: "Piece",      decimals: 0 },
-        { code: "NOS",  label: "Numbers",    decimals: 0 },
-        { code: "BOX",  label: "Box",        decimals: 0 },
-        { code: "SET",  label: "Set",        decimals: 0 },
-        { code: "UNIT", label: "Unit",       decimals: 0 },
-        { code: "MTR",  label: "Metre",      decimals: 2 },
-        { code: "ROLL", label: "Roll",       decimals: 0 },
-        { code: "PKT",  label: "Packet",     decimals: 0 },
-        { code: "PAIR", label: "Pair",       decimals: 0 },
-        { code: "KG",   label: "Kilogram",   decimals: 3 },
-        { code: "BAG",  label: "Bag",        decimals: 0 },
-        { code: "REAM", label: "Ream",       decimals: 0 },
-        { code: "DAY",  label: "Day",        decimals: 0 },
+        { code: "PCS", label: "Piece", decimals: 0 },
+        { code: "NOS", label: "Numbers", decimals: 0 },
+        { code: "BOX", label: "Box", decimals: 0 },
+        { code: "SET", label: "Set", decimals: 0 },
+        { code: "UNIT", label: "Unit", decimals: 0 },
+        { code: "MTR", label: "Metre", decimals: 2 },
+        { code: "ROLL", label: "Roll", decimals: 0 },
+        { code: "PKT", label: "Packet", decimals: 0 },
+        { code: "PAIR", label: "Pair", decimals: 0 },
+        { code: "KG", label: "Kilogram", decimals: 3 },
+        { code: "BAG", label: "Bag", decimals: 0 },
+        { code: "REAM", label: "Ream", decimals: 0 },
+        { code: "DAY", label: "Day", decimals: 0 },
     ];
     for (const u of INV_UNITS) {
         await prisma.invUnit.upsert({
-            where:  { code: u.code },
+            where: { code: u.code },
             update: { label: u.label, decimals: u.decimals, isActive: true },
             create: { code: u.code, label: u.label, decimals: u.decimals, isActive: true },
         });
@@ -1111,14 +1111,14 @@ async function main() {
     // Weight/length chains (G→KG→TONNE, CM→M→KM) are trade-specific and
     // likewise left to the admin.
     const INV_COMPOUND_UNITS = [
-        { code: "DOZ",   label: "Dozen", base: "NOS", factor: 12 },
+        { code: "DOZ", label: "Dozen", base: "NOS", factor: 12 },
         { code: "GROSS", label: "Gross", base: "DOZ", factor: 12 },
     ];
     for (const c of INV_COMPOUND_UNITS) {
         const base = await prisma.invUnit.findUnique({ where: { code: c.base }, select: { id: true } });
         if (!base) continue;
         await prisma.invUnit.upsert({
-            where:  { code: c.code },
+            where: { code: c.code },
             update: { label: c.label, baseUnitId: base.id, conversionFactor: c.factor, isActive: true },
             create: { code: c.code, label: c.label, decimals: 0, baseUnitId: base.id, conversionFactor: c.factor, isActive: true },
         });
@@ -1134,16 +1134,16 @@ async function main() {
     // unique in the schema, so we idempotently match on name.
     console.log("[10/11] Inventory Warranty Term master");
     const WARRANTY_TERMS = [
-        { name: "No Warranty",        durationDays: 0,    description: "Sold as-is — no warranty coverage." },
-        { name: "7-Day Replacement",  durationDays: 7,    description: "DOA / dead-on-arrival replacement window." },
-        { name: "15-Day Replacement", durationDays: 15,   description: "Short replacement window." },
-        { name: "1 Month",            durationDays: 30,   description: "30-day warranty." },
-        { name: "3 Months",           durationDays: 90,   description: "90-day warranty." },
-        { name: "6 Months",           durationDays: 180,  description: "6-month warranty." },
-        { name: "1 Year",             durationDays: 365,  description: "12-month manufacturer / seller warranty." },
-        { name: "2 Years",            durationDays: 730,  description: "24-month warranty." },
-        { name: "3 Years",            durationDays: 1095, description: "36-month warranty." },
-        { name: "5 Years",            durationDays: 1825, description: "60-month warranty." },
+        { name: "No Warranty", durationDays: 0, description: "Sold as-is — no warranty coverage." },
+        { name: "7-Day Replacement", durationDays: 7, description: "DOA / dead-on-arrival replacement window." },
+        { name: "15-Day Replacement", durationDays: 15, description: "Short replacement window." },
+        { name: "1 Month", durationDays: 30, description: "30-day warranty." },
+        { name: "3 Months", durationDays: 90, description: "90-day warranty." },
+        { name: "6 Months", durationDays: 180, description: "6-month warranty." },
+        { name: "1 Year", durationDays: 365, description: "12-month manufacturer / seller warranty." },
+        { name: "2 Years", durationDays: 730, description: "24-month warranty." },
+        { name: "3 Years", durationDays: 1095, description: "36-month warranty." },
+        { name: "5 Years", durationDays: 1825, description: "60-month warranty." },
     ];
     let warrantyCreated = 0;
     for (const w of WARRANTY_TERMS) {
@@ -1162,23 +1162,23 @@ async function main() {
     // Resolve the GST 18% master row that we just seeded in section 8.
     const gst18 = await prisma.gstRate.findUnique({ where: { label: "GST 18%" } });
     const orgDefaultsData = {
-        defaultGstRateId:            gst18?.id       ?? null,
-        defaultUnitId:               defaultUnit?.id ?? null,
-        defaultTaxability:           "TAXABLE"       as const,
-        defaultCurrencySymbol:       "₹",
+        defaultGstRateId: gst18?.id ?? null,
+        defaultUnitId: defaultUnit?.id ?? null,
+        defaultTaxability: "TAXABLE" as const,
+        defaultCurrencySymbol: "₹",
         // Credit restricted by default — admin can raise in Settings → Org Defaults.
-        defaultSaleCreditPeriod:     0,
+        defaultSaleCreditPeriod: 0,
         defaultPurchaseCreditPeriod: 0,
     };
     // Default barcode price bands (Update & Print Labels). Create-only so admin
     // edits via Settings → Org Defaults survive a reseed (left out of `update`).
     const DEFAULT_BARCODE_BANDS = [
-        { max: 50,    add: 10,  hint: 1 },
-        { max: 100,   add: 20,  hint: 2 },
-        { max: 300,   add: 30,  hint: 3 },
-        { max: 500,   add: 50,  hint: 5 },
-        { max: 2000,  add: 100, hint: 6 },
-        { max: 5000,  add: 150, hint: 7 },
+        { max: 50, add: 10, hint: 1 },
+        { max: 100, add: 20, hint: 2 },
+        { max: 300, add: 30, hint: 3 },
+        { max: 500, add: 50, hint: 5 },
+        { max: 2000, add: 100, hint: 6 },
+        { max: 5000, add: 150, hint: 7 },
         { max: 10000, add: 200, hint: 8 },
         { max: 99999, add: 500, hint: 9 },
     ];
@@ -1186,7 +1186,7 @@ async function main() {
     // notes + coins. Create-only so admin edits via Settings survive a reseed.
     const DEFAULT_CASH_DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
     await prisma.orgDefaults.upsert({
-        where:  { id: 1 },
+        where: { id: 1 },
         // Scalars in `orgDefaultsData` re-seed to baseline; barcodeBandsJson and
         // cashDenominationsJson are create-only so admin customisation is
         // preserved across reseeds.
@@ -1205,7 +1205,7 @@ async function main() {
         select: { id: true },
     });
     await prisma.loyaltyConfig.upsert({
-        where:  { id: 1 },
+        where: { id: 1 },
         create: { id: 1, enabled: true, earnEnabled: true, redeemEnabled: true, globalEarnRatePer: 100, redeemValue: 1, expiryEnabled: true, expiryDays: 365, redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
         update: { redeemExpenseAccountId: loyaltyRedeemLedger?.id ?? null },
     });
@@ -1221,7 +1221,7 @@ async function main() {
         prisma.account.findFirst({ where: { name: { equals: "Gift Card Breakage", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
     ]);
     await prisma.couponConfig.upsert({
-        where:  { id: 1 },
+        where: { id: 1 },
         create: { id: 1, maxTotalDiscountPct: null, couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null, giftCardBreakageAccountId: giftCardBreakageLedger?.id ?? null },
         update: { couponExpenseAccountId: couponExpenseLedger?.id ?? null, giftCardLiabilityAccountId: giftCardLiabilityLedger?.id ?? null, giftCardBreakageAccountId: giftCardBreakageLedger?.id ?? null },
     });
@@ -1232,7 +1232,7 @@ async function main() {
     // Settings → Credit Limit) survive a reseed. Defaults are auto OFF, so
     // behaviour stays deny-by-default (manual limits only) until switched on.
     await prisma.creditLimitConfig.upsert({
-        where:  { id: 1 },
+        where: { id: 1 },
         create: { id: 1, autoEnabled: false, windowDays: 90, pctOfSales: 10, roundToStep: 0 },
         update: {},
     });
@@ -1260,9 +1260,9 @@ async function main() {
                 sortOrder: 0,
                 levels: {
                     create: [
-                        { name: "Bronze",   minSpend: 0,      discountPct: 0, sortOrder: 0 },
-                        { name: "Silver",   minSpend: 10000,  discountPct: 2, sortOrder: 1 },
-                        { name: "Gold",     minSpend: 50000,  discountPct: 5, sortOrder: 2 },
+                        { name: "Bronze", minSpend: 0, discountPct: 0, sortOrder: 0 },
+                        { name: "Silver", minSpend: 10000, discountPct: 2, sortOrder: 1 },
+                        { name: "Gold", minSpend: 50000, discountPct: 5, sortOrder: 2 },
                         { name: "Platinum", minSpend: 200000, discountPct: 8, sortOrder: 3 },
                     ],
                 },
@@ -1290,7 +1290,7 @@ async function main() {
     for (const kind of VOUCHER_TEMPLATE_KINDS) {
         const data = buildVoucherTemplateDefaults(kind);
         await prisma.voucherPrintTemplate.upsert({
-            where:  { kind },
+            where: { kind },
             create: data,
             update: { defaultPaper: data.defaultPaper },
         });
@@ -1304,11 +1304,11 @@ async function main() {
     // (Doesn't touch the human-readable `state` text — admins clean those
     // via the UI, which now rejects mismatches.)
     const gstinFixupSql = `gstStateCode" = LEFT("gstin", 2) WHERE "gstin" IS NOT NULL AND "gstin" <> '' AND ("gstStateCode" IS DISTINCT FROM LEFT("gstin", 2))`;
-    const branchFix     = await pool.query(`UPDATE "Branch"       SET "${gstinFixupSql}`);
-    const personFix     = await pool.query(`UPDATE "Person"       SET "${gstinFixupSql}`);
-    const companyFix    = await pool.query(`UPDATE "Company"      SET "${gstinFixupSql}`);
+    const branchFix = await pool.query(`UPDATE "Branch"       SET "${gstinFixupSql}`);
+    const personFix = await pool.query(`UPDATE "Person"       SET "${gstinFixupSql}`);
+    const companyFix = await pool.query(`UPDATE "Company"      SET "${gstinFixupSql}`);
     const fixedTotal = (branchFix.rowCount ?? 0) + (personFix.rowCount ?? 0)
-                     + (companyFix.rowCount ?? 0);
+        + (companyFix.rowCount ?? 0);
     console.log(`      ✓ Re-aligned gstStateCode on ${fixedTotal} row(s) where it disagreed with GSTIN\n`);
 
     // ── Section 15: Strategy points (the additive-margin pricing engine) ──────
@@ -1321,7 +1321,7 @@ async function main() {
     // create-only so an admin's edited base survives a reseed.
     console.log("[15/16] Strategy points default (BASE = 25)");
     await prisma.strategyPoint.upsert({
-        where:  { dimension_refKey: { dimension: "BASE", refKey: "" } },
+        where: { dimension_refKey: { dimension: "BASE", refKey: "" } },
         update: {},
         create: { dimension: "BASE", refKey: "", points: 25 },
     });

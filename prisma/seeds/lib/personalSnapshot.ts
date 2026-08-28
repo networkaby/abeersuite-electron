@@ -642,6 +642,10 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     idx = await buildRefIndex(prisma); // gateways now resolvable
     for (const c of snap.posCounters) {
         const data = internalize(c, { tillAccountId: "account" }, idx);
+        if (data.counterNumber == null) {
+            const match = typeof c.name === "string" ? c.name.match(/\d+/) : null;
+            data.counterNumber = match ? parseInt(match[0], 10) : 1;
+        }
         data.allowedExpenseAccountIds = (Array.isArray(c.allowedExpenseAccountIds) ? c.allowedExpenseAccountIds : [])
             .map((ref: Ref) => idx.account.toId(ref)).filter((v: number | null) => v != null);
         if (data.tillAccountId == null) { stats.skipped.push(`POS counter "${c.name}" skipped — its till account did not resolve`); continue; }

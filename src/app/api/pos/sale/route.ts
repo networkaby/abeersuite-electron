@@ -77,13 +77,13 @@ import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 // See docs/modules/pos.md.
 
 const lineSchema = z.object({
-    productId:   z.number().int().positive(),
+    productId: z.number().int().positive(),
     description: z.string().trim().min(1),
-    quantity:    z.number().positive(),
-    unitPrice:   z.number().min(0),
-    taxRate:     z.number().min(0).max(100).default(0),
+    quantity: z.number().positive(),
+    unitPrice: z.number().min(0),
+    taxRate: z.number().min(0).max(100).default(0),
     // Snapshots for the customer-facing "Today's discount" price ladder (paise).
-    mrpPaise:            z.number().int().nonnegative().nullish(),
+    mrpPaise: z.number().int().nonnegative().nullish(),
     savedSalePricePaise: z.number().int().nonnegative().nullish(),
 });
 
@@ -91,17 +91,17 @@ const paymentSchema = z.object({
     // Which counter payment account collected this — null = CASH (the till).
     // The server resolves its ledger + method from the counter's list.
     paymentAccountId: z.number().int().positive().nullable(),
-    amount:           z.number().positive(),
-    reference:        z.string().trim().max(120).optional(),
+    amount: z.number().positive(),
+    reference: z.string().trim().max(120).optional(),
 });
 
 // Signed amount — positive raises the bill (Cr Income leg), negative lowers it
 // (Dr Expense leg). Mirrors office SALE charges. accountId is the GL account
 // the leg posts against.
 const chargeSchema = z.object({
-    accountId:   z.number().int().positive(),
+    accountId: z.number().int().positive(),
     description: z.string().trim().max(200).optional(),
-    amount:      z.number().refine((n) => Math.abs(n) >= 0.005, "Charge amount must be non-zero"),
+    amount: z.number().refine((n) => Math.abs(n) >= 0.005, "Charge amount must be non-zero"),
 });
 
 // POS-service line (Settings → POS Services catalogue). The client sends only
@@ -109,25 +109,25 @@ const chargeSchema = z.object({
 // ledger + GST rate from the catalogue — never trusted from the browser. Posts
 // GL-only (Cr income net + Cr Output GST as a tax-bearing charge); no stock.
 const serviceLineSchema = z.object({
-    serviceId:   z.number().int().positive(),
+    serviceId: z.number().int().positive(),
     description: z.string().trim().max(200).optional(),
-    quantity:    z.number().positive(),
-    unitPrice:   z.number().min(0),
+    quantity: z.number().positive(),
+    unitPrice: z.number().min(0),
 });
 
 const createSchema = z.object({
     accountId: z.number().int().positive(),                                       // customer AR account
     issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    dueDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    notes:     z.string().trim().optional(),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    notes: z.string().trim().optional(),
     // Goods lines. A sale may also be services-only — the cross-field refine
     // below enforces "at least one line OR one service".
-    lines:     z.array(lineSchema).default([]),
-    services:  z.array(serviceLineSchema).default([]),
-    payments:  z.array(paymentSchema).min(1, "At least one payment line required"),
+    lines: z.array(lineSchema).default([]),
+    services: z.array(serviceLineSchema).default([]),
+    payments: z.array(paymentSchema).min(1, "At least one payment line required"),
     shippingAmt: z.number().min(0).default(0),
-    roundOff:    z.number().default(0),  // signed
-    charges:     z.array(chargeSchema).default([]),
+    roundOff: z.number().default(0),  // signed
+    charges: z.array(chargeSchema).default([]),
     // Voucher-level tier discount (₹). Reduces the bill via the existing
     // discountAmt → "Discount Allowed" path. Client-supplied (cashier-trusted,
     // same as line prices). Server still validates payment total == bill total.
@@ -199,17 +199,17 @@ export async function POST(req: Request) {
     // of three serial round-trips. Guards run after, in the same order + messages.
     const [shift, customerAccount, loyaltyConfig] = await Promise.all([
         prisma.posShift.findFirst({
-            where:  { userId: user!.id, status: "OPEN" },
+            where: { userId: user!.id, status: "OPEN" },
             select: {
                 id: true, branchId: true,
                 counter: {
                     select: {
                         id: true,
                         name: true,
-                        epbxExtension: true,
+                        counterNumber: true,
                         tillAccountId: true,
                         paymentAccounts: {
-                            where:  { isActive: true },
+                            where: { isActive: true },
                             select: { id: true, channel: true, accountId: true, label: true },
                         },
                     },
@@ -217,10 +217,10 @@ export async function POST(req: Request) {
             },
         }),
         prisma.account.findUnique({
-            where:  { id: body.accountId },
+            where: { id: body.accountId },
             select: {
                 id: true, name: true, personId: true, companyId: true,
-                person:  { select: { name: true, noDiscount: true } },
+                person: { select: { name: true, noDiscount: true } },
                 company: { select: { name: true, noDiscount: true } },
             },
         }),
@@ -232,16 +232,7 @@ export async function POST(req: Request) {
             { status: 400 },
         );
     }
-    if (!shift.counter.epbxExtension?.trim()) {
-        return NextResponse.json(
-            {
-                error: "This counter has no EPBX extension set — ask an admin to configure it under /office/admin/counters before billing.",
-                code: "COUNTER_NOT_CONFIGURED",
-            },
-            { status: 409 },
-        );
-    }
-    const tillAccountId  = shift.counter.tillAccountId;
+    const tillAccountId = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;
     // The counter's payment accounts (id → {channel, ledger}). A non-cash payment
     // line carries the chosen paymentAccountId; we resolve its ledger + method
@@ -258,14 +249,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Customer account not found." }, { status: 422 });
     }
     const partyName = customerAccount.person?.name
-                   ?? customerAccount.company?.name
-                   ?? customerAccount.name;
+        ?? customerAccount.company?.name
+        ?? customerAccount.name;
     const partyType = customerAccount.personId !== null ? "customer"
-                     : customerAccount.companyId !== null ? "company"
-                     : "account";
-    const partyId   = customerAccount.personId
-                   ?? customerAccount.companyId
-                   ?? customerAccount.id;
+        : customerAccount.companyId !== null ? "company"
+            : "account";
+    const partyId = customerAccount.personId
+        ?? customerAccount.companyId
+        ?? customerAccount.id;
 
     // ── Customer Quality: no-discount flag (server-authoritative) ─────────
     // Flagged customer bills at barcode price — ALL automatic benefits are
@@ -306,7 +297,7 @@ export async function POST(req: Request) {
     const serviceIds = [...new Set(body.services.map((s) => s.serviceId))];
     const serviceById = new Map(
         (serviceIds.length === 0 ? [] : await prisma.posService.findMany({
-            where:  { id: { in: serviceIds }, isActive: true },
+            where: { id: { in: serviceIds }, isActive: true },
             select: { id: true, name: true, accountId: true, gstRate: { select: { rate: true } } },
         })).map((s) => [s.id, s]),
     );
@@ -328,10 +319,10 @@ export async function POST(req: Request) {
         const tax = (net * rate) / 100;
         const qtyTag = s.quantity !== 1 ? ` × ${s.quantity}` : "";
         return {
-            accountId:   svc.accountId,
+            accountId: svc.accountId,
             description: `Service: ${svc.name}${s.description ? ` · ${s.description}` : ""}${qtyTag}`,
-            amount:      net,
-            taxAmount:   tax,
+            amount: net,
+            taxAmount: tax,
         };
     });
     // Customer-facing value of the services (net + GST) — rides chargesNet so
@@ -349,7 +340,7 @@ export async function POST(req: Request) {
         ? body.lines.map((l) => ({ value: l.quantity * l.unitPrice, taxRate: l.taxRate }))
         : body.services.map((s) => ({ value: s.quantity * s.unitPrice, taxRate: serviceById.get(s.serviceId)?.gstRate ? Number(serviceById.get(s.serviceId)!.gstRate!.rate) : 0 }));
     const shippingGstRate = body.shippingAmt > 0 ? resolveShippingGstRate(shippingRateLines) : 0;
-    const shippingTaxAmt  = (body.shippingAmt * shippingGstRate) / (100 + shippingGstRate);
+    const shippingTaxAmt = (body.shippingAmt * shippingGstRate) / (100 + shippingGstRate);
 
     // ── Validate line items + payment totals ──────────────────────────────
     // goodsValue = pre-tax goods (Σ qty × unit price). grossTaxAmount = the tag GST
@@ -385,7 +376,7 @@ export async function POST(req: Request) {
     // customer-facing discount), even though the discount now lives on the lines.
     const tierDiscount = body.lines.reduce((s, l, i) => {
         const gross = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }).amount;
-        const net   = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscExclRaw[i], taxRate: l.taxRate }).amount;
+        const net = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscExclRaw[i], taxRate: l.taxRate }).amount;
         return s + (gross - net);
     }, 0);
 
@@ -597,7 +588,7 @@ export async function POST(req: Request) {
     if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
         return NextResponse.json({ error: redemption.reason, code: "LOYALTY_REDEEM_REJECTED" }, { status: 422 });
     }
-    const redeemPoints     = redemption.points;
+    const redeemPoints = redemption.points;
     const redemptionRupees = redemption.value;
     if (redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId == null) {
         return NextResponse.json(
@@ -622,7 +613,7 @@ export async function POST(req: Request) {
     const lineTierDiscAfterCoupon = lineTierDiscExclRaw.map((v, i) => (exclusionMask[i] ? 0 : v));
     const tierDiscountAfterCoupon = body.lines.reduce((s, l, i) => {
         const gross = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }).amount;
-        const net   = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscAfterCoupon[i], taxRate: l.taxRate }).amount;
+        const net = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscAfterCoupon[i], taxRate: l.taxRate }).amount;
         return s + (gross - net);
     }, 0);
     // Money slot: a ₹ coupon (rule 4) is guard-finalized; a money-grant (rule
@@ -632,9 +623,9 @@ export async function POST(req: Request) {
     let couponId: number | null = null;
     if (selected.kind === "ok" && couponConfig) {
         const fin = finalizeCouponAmount({
-            selectedDiscount:    selected.discountRupees,
-            tierRupees:          tierDiscountAfterCoupon,
-            loyaltyRupees:       redemptionRupees,
+            selectedDiscount: selected.discountRupees,
+            tierRupees: tierDiscountAfterCoupon,
+            loyaltyRupees: redemptionRupees,
             goodsValue,
             maxTotalDiscountPct: couponConfig.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null,
         });
@@ -661,20 +652,20 @@ export async function POST(req: Request) {
             quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt, taxRate: l.taxRate,
         });
         return {
-            productId:   l.productId,
+            productId: l.productId,
             description: l.description,
-            quantity:    l.quantity,
-            freeQty:     0,
-            unitPrice:   l.unitPrice,
-            taxRate:     l.taxRate,
+            quantity: l.quantity,
+            freeQty: 0,
+            unitPrice: l.unitPrice,
+            taxRate: l.taxRate,
             // Per-line spend-tier discount (pre-tax); discountPct is the configured
             // tier % (record only — the displayed % is derived synthetically).
             discountAmt,
             discountPct: body.discountPct,
-            taxAmount:   lineTax,
+            taxAmount: lineTax,
             amount,
             // Customer-facing ladder snapshots (paise) — display only.
-            mrpPaise:            l.mrpPaise ?? null,
+            mrpPaise: l.mrpPaise ?? null,
             savedSalePricePaise: l.savedSalePricePaise ?? null,
         };
     });
@@ -693,17 +684,17 @@ export async function POST(req: Request) {
         const rate = tax.taxability == null || tax.taxability === "TAXABLE" ? (tax.gstRate ?? 0) : 0;
         const freeProduct = await prisma.invProduct.findUnique({ where: { id: grant.productId }, select: { name: true } });
         computedLines.push({
-            productId:   grant.productId,
+            productId: grant.productId,
             description: `FREE · ${couponName}`,
-            quantity:    0,
-            freeQty:     grant.freeQty,
-            unitPrice:   0,
-            taxRate:     rate,
+            quantity: 0,
+            freeQty: grant.freeQty,
+            unitPrice: 0,
+            taxRate: rate,
             discountAmt: 0,
             discountPct: 0,
-            taxAmount:   0,
-            amount:      0,
-            mrpPaise:            null,
+            taxAmount: 0,
+            amount: 0,
+            mrpPaise: null,
             savedSalePricePaise: null,
         });
         freeLinesOut.push({ productId: grant.productId, freeQty: grant.freeQty, productName: freeProduct?.name ?? "Item" });
@@ -751,7 +742,7 @@ export async function POST(req: Request) {
         body.roundOff,
         chargesNet,              // includes the negative loyalty + coupon charges
     );
-    const subtotal    = round2(netTotals.subtotal + tierPretaxDiscount);
+    const subtotal = round2(netTotals.subtotal + tierPretaxDiscount);
     const totalAmount = netTotals.totalAmount;
 
     // ── Gift card (payment tender, NOT a discount) ─────────────────────────
@@ -874,9 +865,7 @@ export async function POST(req: Request) {
             // tender for any unsettled balance). postInvVoucherToGl posts
             // a single balanced JE per voucher; no separate Receipt
             // voucher / VoucherAllocation needed.
-            // Guarded above — epbxExtension is confirmed non-blank by this point.
-            const counterCode = shift.counter.epbxExtension!.trim().padStart(2, "0");
-            const voucherRef = await invNextRef(tx, "POS", user!.id, counterCode);
+            const voucherRef = await invNextRef(tx, "POS", { counterNumber: shift.counter.counterNumber });
             // POS today enforces paymentTotal == totalAmount, so onCredit
             // is always 0 and no AR tender is needed. Kept as a future-
             // facing branch in case partial POS sales get enabled.
@@ -890,8 +879,8 @@ export async function POST(req: Request) {
                 : [
                     ...resolvedPayments.map((p) => ({
                         accountId: p.accountId,
-                        amount:    p.amount,
-                        method:    p.method,
+                        amount: p.amount,
+                        method: p.method,
                         reference: p.reference ?? null,
                     })),
                     // Gift-card tender — Dr "Gift Card Liability" (bypasses counterMethodMap;
@@ -909,13 +898,13 @@ export async function POST(req: Request) {
             // off it; enginePost attaches the GL lines + flips it via existingSpineId.
             const voucherDescription = body.notes?.trim() || `POS sale — ${partyName}`;
             const spineId = await engineCreateSpine(tx, {
-                type:           "POS",
-                date:           new Date(body.issueDate),
-                description:    voucherDescription,
-                voucherNo:    voucherRef,
+                type: "POS",
+                date: new Date(body.issueDate),
+                description: voucherDescription,
+                voucherNo: voucherRef,
                 partyAccountId: customerAccount.id,
-                branchId:       activeBranchId,   // 5D-12: branch primary on the spine
-                userId:         user!.id,
+                branchId: activeBranchId,   // 5D-12: branch primary on the spine
+                userId: user!.id,
             });
             // Link the bill to the repair ticket it was raised from (if any), so it
             // surfaces in the ticket's Invoices panel (VoucherLink kind=TICKET).
@@ -925,23 +914,23 @@ export async function POST(req: Request) {
                     // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
                     universalVoucherId: spineId,
                     // Convert-to-sale link → marks the source estimate/order "Converted".
-                    refVoucherId:   body.sourceVoucherId ?? null,
+                    refVoucherId: body.sourceVoucherId ?? null,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
-                    partyJson:      buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
+                    partyJson: buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
                     partyType,
                     partyId,
-                    deliveryMode:   "COUNTER",
-                    placeOfSupply:  sellerStateCode,
-                    shippingAmt:    body.shippingAmt,
+                    deliveryMode: "COUNTER",
+                    placeOfSupply: sellerStateCode,
+                    shippingAmt: body.shippingAmt,
                     shippingTaxAmt: round2(shippingTaxAmt),
                     // Pre-tax tier discount total (Σ line discountAmt). Stored with the
                     // GROSS subtotal above so the engine posts the "Discount Allowed"
                     // leg exactly as before — only the amount's base changed (% of
                     // cost, pre-tax). discountPct stays the configured tier % — the
                     // receipt's tier-name lookup key when the tier actually applied.
-                    discountAmt:    tierPretaxDiscount,
-                    discountPct:    tierDiscountAfterCoupon > 0 ? body.discountPct : 0,
-                    roundOff:       body.roundOff,
+                    discountAmt: tierPretaxDiscount,
+                    discountPct: tierDiscountAfterCoupon > 0 ? body.discountPct : 0,
+                    roundOff: body.roundOff,
                     subtotal,
                     taxAmount,
                     totalAmount,
@@ -955,20 +944,20 @@ export async function POST(req: Request) {
             await tx.voucherInventoryLine.createMany({
                 data: computedLines.map((l) => ({
                     universalVoucherId: spineId,
-                    productId:   l.productId,
+                    productId: l.productId,
                     description: l.description,
-                    quantity:    l.quantity,
+                    quantity: l.quantity,
                     // Free-grant lines carry quantity 0 + freeQty — the receipt
                     // prints them as "1 × Fanta FREE" and the ledger moves qty+free.
-                    freeQty:     l.freeQty > 0 ? l.freeQty : null,
-                    rate:        l.unitPrice,
-                    taxRate:     l.taxRate,
+                    freeQty: l.freeQty > 0 ? l.freeQty : null,
+                    rate: l.unitPrice,
+                    taxRate: l.taxRate,
                     // Per-line spend-tier discount (pre-tax) — netted into amount/tax.
                     discountAmt: l.discountAmt,
                     discountPct: l.discountPct,
-                    taxAmount:   l.taxAmount,
-                    amount:      l.amount,
-                    mrpPaise:            l.mrpPaise,
+                    taxAmount: l.taxAmount,
+                    amount: l.amount,
+                    mrpPaise: l.mrpPaise,
                     savedSalePricePaise: l.savedSalePricePaise,
                 })),
             });
@@ -980,23 +969,23 @@ export async function POST(req: Request) {
             // via recordStockMovementsBatch). saleToSpec reads the tender rows
             // directly — one Dr leg per tender. POS is counter-pickup → intra-state.
             const spec = await saleToSpec(tx, {
-                id:          voucher.id,
-                type:        "POS",   // 5D-11: type on the spine
-                reference:   voucherRef,
-                date:        new Date(body.issueDate),   // 5D-10: date on the spine (attach-mode ignores spec.date)
+                id: voucher.id,
+                type: "POS",   // 5D-11: type on the spine
+                reference: voucherRef,
+                date: new Date(body.issueDate),   // 5D-10: date on the spine (attach-mode ignores spec.date)
                 description: voucherDescription,
-                partyJson:   voucher.partyJson,
-                subtotal:    voucher.subtotal,
-                taxAmount:   voucher.taxAmount,
+                partyJson: voucher.partyJson,
+                subtotal: voucher.subtotal,
+                taxAmount: voucher.taxAmount,
                 shippingAmt: voucher.shippingAmt,
                 // UNROUNDED (matches line/service tax) — the engine rounds each leg once.
                 shippingTaxAmt,
                 discountAmt: voucher.discountAmt,
-                roundOff:    voucher.roundOff,
+                roundOff: voucher.roundOff,
                 totalAmount: voucher.totalAmount,
                 // Tenders/charges straight from the in-memory input (no DB round-trip).
-                tenders:     tenderPayload.map((t) => ({ accountId: t.accountId, amount: Number(t.amount), method: t.method, reference: t.reference })),
-                charges:     allCharges.map((c) => ({ accountId: c.accountId, amount: Number(c.amount), description: c.description, taxAmount: c.taxAmount ?? null })),
+                tenders: tenderPayload.map((t) => ({ accountId: t.accountId, amount: Number(t.amount), method: t.method, reference: t.reference })),
+                charges: allCharges.map((c) => ({ accountId: c.accountId, amount: Number(c.amount), description: c.description, taxAmount: c.taxAmount ?? null })),
                 sellerStateCode,
                 buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });
@@ -1009,7 +998,7 @@ export async function POST(req: Request) {
             }
             await tx.voucherDetail.update({
                 where: { id: voucher.id },
-                data:  { universalVoucherId: gl.universalVoucherId },
+                data: { universalVoucherId: gl.universalVoucherId },
             });
 
             // ── 3a. Coupon: log the redemption(s) (enforces usage limits +
@@ -1021,8 +1010,8 @@ export async function POST(req: Request) {
                     couponId,
                     accountId: isIdentified ? customerAccount.id : null,
                     universalVoucherId: spineId,
-                    amount:    couponRupees,
-                    channel:   "POS",
+                    amount: couponRupees,
+                    channel: "POS",
                 });
             }
             // On-top partial (rule 2): its own redemption with its ₹.
@@ -1031,8 +1020,8 @@ export async function POST(req: Request) {
                     couponId: onTopSelected.coupon.id,
                     accountId: isIdentified ? customerAccount.id : null,
                     universalVoucherId: spineId,
-                    amount:    onTopRupees,
-                    channel:   "POS",
+                    amount: onTopRupees,
+                    channel: "POS",
                 });
             }
             // Free-grant coupon (rule 1): log its redemption too (usage limits
@@ -1044,8 +1033,8 @@ export async function POST(req: Request) {
                     couponId: freeSelected.coupon.id,
                     accountId: isIdentified ? customerAccount.id : null,
                     universalVoucherId: spineId,
-                    amount:    0,
-                    channel:   "POS",
+                    amount: 0,
+                    channel: "POS",
                 });
             }
 
@@ -1062,18 +1051,18 @@ export async function POST(req: Request) {
             let milestoneCoupons: string[] = [];
             if (loyaltyEnabled) {
                 loyaltyResult = await applyLoyaltyForSale(tx, {
-                    accountId:        customerAccount.id,
+                    accountId: customerAccount.id,
                     universalVoucherId: spineId,
                     // Protected lines neither earn nor redeem — filtered out of
                     // the earn base (index-aligned with the unfiltered array).
                     earnLines: earnLines.filter((_, i) => !protectedProductIds.has(body.lines[i].productId)),
                     combinedDiscount: tierDiscountAfterCoupon + redemptionRupees + couponRupees,
                     redeemPoints,
-                    invoiceValue:     invoiceValueGross,
-                    rates:            loyaltyRates,
+                    invoiceValue: invoiceValueGross,
+                    rates: loyaltyRates,
                     rulesIndex,
                     taxonomyMaps,
-                    createdById:      user!.id,
+                    createdById: user!.id,
                 });
 
                 // ── Milestone bonus points: award any lifetime-spend tier the
@@ -1087,12 +1076,12 @@ export async function POST(req: Request) {
                     });
                     const lifetimeSpend = Number(spendAgg._sum.totalAmount ?? 0);
                     const ms = await applyMilestones(tx, {
-                        accountId:     customerAccount.id,
+                        accountId: customerAccount.id,
                         lifetimeSpend,
                         universalVoucherId: spineId,
-                        milestones:    milestoneTiers,
-                        rates:         loyaltyRates,
-                        createdById:   user!.id,
+                        milestones: milestoneTiers,
+                        rates: loyaltyRates,
+                        createdById: user!.id,
                     });
                     milestoneBonus = ms.awarded.reduce((s, a) => s + a.points, 0);
                     milestoneCoupons = ms.issuedCouponCodes;
@@ -1112,14 +1101,14 @@ export async function POST(req: Request) {
                     .map((line) => ({
                         universalVoucherId: spineId,
                         productId: line.productId,
-                        branchId:  activeBranchId,
+                        branchId: activeBranchId,
                         date,
-                        inQty:  0,
+                        inQty: 0,
                         // Free units leave the shelf like any other (the ledger
                         // records qty+free so stock, margin and movement-class
                         // all agree the item physically went out).
                         outQty: Number(line.quantity) + Number(line.freeQty),
-                        rate:   line.unitPrice,
+                        rate: line.unitPrice,
                         amount: line.amount,
                     })),
             );
@@ -1131,9 +1120,9 @@ export async function POST(req: Request) {
             // (closes the AR tender above), then the oldest open bills; any leftover
             // stays as a customer advance (the unallocated Cr to the customer).
             let surplusCollected = 0;
-            let arrearCleared    = 0;
-            let advanceCredited  = 0;
-            let receiptVoucherId:  number | null = null;
+            let arrearCleared = 0;
+            let advanceCredited = 0;
+            let receiptVoucherId: number | null = null;
             let receiptVoucherRef: string | null = null;
             if (collectingSurplus) {
                 surplusCollected = surplus;
@@ -1150,47 +1139,47 @@ export async function POST(req: Request) {
                         remaining = round2(remaining - take);
                     }
                 }
-                arrearCleared   = round2(surplus - remaining);
+                arrearCleared = round2(surplus - remaining);
                 advanceCredited = round2(remaining);
 
                 // Receipt tenders mirror the counter method→ledger map (cash→till,
                 // UPI→upi, …); full inflow, carrying the UTR/reference.
                 const receiptTenders = resolvedPayments.map((p) => ({
-                    accountId:   p.accountId,
-                    amount:      p.amount,
+                    accountId: p.accountId,
+                    amount: p.amount,
                     description: `${METHOD_LABEL[p.method]}${p.reference ? ` ref ${p.reference}` : ""}`,
                 }));
                 const narration = `POS surplus on ${voucherRef} — arrear ₹${arrearCleared.toFixed(2)}, advance ₹${advanceCredited.toFixed(2)}`;
                 const receipt = await postReceiptVoucher(tx, {
                     customerAccountId: customerAccount.id,
-                    tenders:           receiptTenders,
-                    date:              new Date(body.issueDate),
-                    userId:            user!.id,
-                    branchId:          activeBranchId,
+                    tenders: receiptTenders,
+                    date: new Date(body.issueDate),
+                    userId: user!.id,
+                    branchId: activeBranchId,
                     narration,
                     allocations,
                 });
-                receiptVoucherId  = receipt.voucherId;
+                receiptVoucherId = receipt.voucherId;
                 receiptVoucherRef = receipt.voucherRef;
 
                 // Audit row tying the receipt to the shift (mirrors shifts/[id]/receipts).
                 await tx.posReceipt.create({
                     data: {
-                        shiftId:     shift.id,
+                        shiftId: shift.id,
                         amountPaise: BigInt(Math.round(paymentTotal * 100)),
-                        accountId:   customerAccount.id,
-                        note:        narration,
-                        voucherId:   receipt.voucherId,
+                        accountId: customerAccount.id,
+                        note: narration,
+                        voucherId: receipt.voucherId,
                         createdById: user!.id,
                     },
                 });
             }
 
             return {
-                voucherId:      voucher.id,
-                voucherRef:     voucherRef,
+                voucherId: voucher.id,
+                voucherRef: voucherRef,
                 journalEntryId: gl.journalEntryId,
-                shiftId:        shift.id,
+                shiftId: shift.id,
                 // Surplus outcome — surfaced on the POS success toast + print.
                 surplusCollected,
                 arrearCleared,
@@ -1198,7 +1187,7 @@ export async function POST(req: Request) {
                 receiptVoucherId,
                 receiptVoucherRef,
                 // Loyalty outcome — surfaced on the POS success toast.
-                pointsEarned:   loyaltyResult.pointsEarned,
+                pointsEarned: loyaltyResult.pointsEarned,
                 pointsRedeemed: loyaltyResult.pointsRedeemed,
                 milestoneBonus,
                 milestoneCoupons,
@@ -1206,16 +1195,16 @@ export async function POST(req: Request) {
                 // Coupon outcome — surfaced on the POS success toast (money ₹ +
                 // on-top ₹; a money-grant reports 0 and its free items below).
                 couponDiscount: couponDiscountTotal,
-                couponCode:     couponDiscountTotal > 0 ? (body.couponCode ?? "auto") : null,
+                couponCode: couponDiscountTotal > 0 ? (body.couponCode ?? "auto") : null,
                 // Free-grant outcome — the free items added to the bill (zero
                 // price; the receipt prints them with the FREE badge).
-                freeCouponId:   freeSelected?.coupon.id ?? null,
+                freeCouponId: freeSelected?.coupon.id ?? null,
                 freeCouponCode: freeSelected?.coupon.code ?? null,
-                freeItems:      freeLinesOut,
+                freeItems: freeLinesOut,
                 giftCardRedeemed: giftCardRedeem,
                 // Back-compat aliases — PosScreen still reads these names.
-                invoiceId:      voucher.id,
-                invoiceNumber:  voucherRef,
+                invoiceId: voucher.id,
+                invoiceNumber: voucherRef,
             };
         }, {
             // POS does voucher + GL post + per-line stock movement in ONE
@@ -1241,27 +1230,27 @@ export async function POST(req: Request) {
                 const payStatus = credit <= 0.01 ? "full" : paid <= 0.01 ? "credit" : "partial";
                 const payLabel =
                     payStatus === "full" ? "Paid in full"
-                    : payStatus === "credit" ? `On credit — ₹${credit.toFixed(2)} due`
-                    : `Partial — paid ₹${paid.toFixed(2)}, ₹${credit.toFixed(2)} on credit`;
+                        : payStatus === "credit" ? `On credit — ₹${credit.toFixed(2)} due`
+                            : `Partial — paid ₹${paid.toFixed(2)}, ₹${credit.toFixed(2)} on credit`;
                 const t = await prisma.ticket.findUnique({ where: { id: body.ticketId }, select: { status: true } });
                 if (t) {
                     const author = await buildActorSnapshot(user!.id);
                     await prisma.ticketLog.create({
                         data: {
-                            ticketId:   body.ticketId,
-                            status:     t.status,
-                            note:       `Bill ${result.voucherRef} · ₹${billTotal.toFixed(2)} · ${payLabel}`,
+                            ticketId: body.ticketId,
+                            status: t.status,
+                            note: `Bill ${result.voucherRef} · ₹${billTotal.toFixed(2)} · ${payLabel}`,
                             visibility: "INTERNAL",
                             author,
                             data: {
                                 bill: {
-                                    voucherId:   result.voucherId,
-                                    voucherRef:  result.voucherRef,
+                                    voucherId: result.voucherId,
+                                    voucherRef: result.voucherRef,
                                     voucherType: "POS",
-                                    total:       billTotal,
+                                    total: billTotal,
                                     paid,
-                                    onCredit:    credit,
-                                    status:      payStatus,
+                                    onCredit: credit,
+                                    status: payStatus,
                                 },
                             },
                         },

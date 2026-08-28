@@ -88,7 +88,7 @@ export default async function ShippingLabelPage({
     const data: ShippingLabelData = {
         from,
         to,
-        ticketNo: `#${String(ticket.id).padStart(4, "0")}`,
+        ticketNo: ticket.repair.ticketNo || `#${String(ticket.id).padStart(4, "0")}`,
         date:     formatDate(slip?.date ?? ticket.createdAt),
         ref:      slip?.ref ?? null,
         device:   `${dev.brand} ${dev.model}`.trim() + (dev.type ? ` (${dev.type})` : ""),

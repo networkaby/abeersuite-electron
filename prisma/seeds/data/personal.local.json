@@ -11244,6 +11244,7 @@
     {
       "branchId": "BR-HQ",
       "name": "Counter 22 Prokash",
+      "counterNumber": 22,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 22 Prokash – Head Office"
@@ -11265,6 +11266,7 @@
     {
       "branchId": "BR-HQ",
       "name": "Counter 23 rakesh",
+      "counterNumber": 23,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 23 rakesh – Head Office"
@@ -11277,6 +11279,7 @@
     {
       "branchId": "BR-HQ",
       "name": "Counter 21 naba",
+      "counterNumber": 21,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 21 naba – Head Office"
@@ -11302,6 +11305,7 @@
     {
       "branchId": "BR-HQ",
       "name": "Counter 24 aka",
+      "counterNumber": 24,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 24 aka – Head Office"

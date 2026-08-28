@@ -70,7 +70,7 @@ export default async function ReceiptPage({
           }
         : null;
     const createdByName = (ticket.createdBy as { userName?: string })?.userName ?? null;
-    const ticketNo = `#${String(ticket.id).padStart(4, "0")}`;
+    const ticketNo = ticket.repair.ticketNo || `#${String(ticket.id).padStart(4, "0")}`;
 
     // Minimal sample — the shared header/footer chrome reads reference/date/party;
     // the ticket body below carries everything else. No line-items table.

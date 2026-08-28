@@ -15,30 +15,28 @@ import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 // create. `accountId` is the bank/cash-style ledger debited when collected here.
 // `vpa` is optional (UPI/gateway pay-to id); validated only when supplied.
 const paymentAccountSchema = z.object({
-    id:        z.number().int().positive().optional(),
-    channel:   z.enum(["UPI", "CARD", "CHEQUE", "WALLET", "BANK_TRANSFER", "GATEWAY"]),
-    label:     z.string().trim().min(1).max(40),
+    id: z.number().int().positive().optional(),
+    channel: z.enum(["UPI", "CARD", "CHEQUE", "WALLET", "BANK_TRANSFER", "GATEWAY"]),
+    label: z.string().trim().min(1).max(40),
     accountId: z.number().int().positive(),
-    vpa:       z.union([z.string().trim().max(60), z.null()]).optional()
+    vpa: z.union([z.string().trim().max(60), z.null()]).optional()
         .transform((v) => (typeof v === "string" && v.trim().length ? v.trim() : null))
         .refine((v) => v == null || /^[\w.\-]+@[\w.\-]+$/.test(v), "Enter a valid UPI ID like name@bank"),
     // Optional link to a configured gateway from the Settings catalog (PaymentGateway).
     // Only meaningful for the GATEWAY channel; validated below. null = no gateway.
     gatewayId: z.union([z.number().int().positive(), z.null()]).optional(),
     sortOrder: z.number().int().min(0).optional(),
-    isActive:  z.boolean().optional(),
+    isActive: z.boolean().optional(),
     defaultVisible: z.boolean().optional(),
 });
 
 const updateSchema = z.object({
-    name:     z.string().trim().min(1).max(60).optional(),
+    name: z.string().trim().min(1).max(60).optional(),
+    counterNumber: z.coerce.number().int().positive("Counter number must be greater than 0").optional(),
     isActive: z.boolean().optional(),
-    // EPBX/intercom extension of the phone at this counter — must be a unique
-    // whole number; it doubles as the voucher prefix and, when it's also 1-99,
-    // the offline id-range number (see claim-number/route.ts). Empty string/
-    // null clears it; an absent field is left untouched (.optional() outermost
-    // so the transform never runs on undefined and accidentally nulls it on
-    // unrelated PATCHes).
+    // EPBX/intercom extension of the phone at this counter. Empty string/null clears
+    // it; an absent field is left untouched (.optional() outermost so the transform
+    // never runs on undefined and accidentally nulls it on unrelated PATCHes).
     epbxExtension: z.union([z.string().trim().max(20), z.null()])
         .transform((v, ctx) => {
             if (typeof v !== "string" || !v.trim().length) return null;
@@ -63,7 +61,7 @@ const updateSchema = z.object({
 
 const counterInclude = {
     tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
-    branch:      { select: { id: true, name: true } },
+    branch: { select: { id: true, name: true } },
     paymentAccounts: {
         orderBy: { sortOrder: "asc" as const },
         select: {
@@ -96,13 +94,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (data.paymentAccounts && data.paymentAccounts.length > 0) {
             const ledgerIds = [...new Set(data.paymentAccounts.map((p) => p.accountId))];
             const accounts = await prisma.account.findMany({
-                where:  { id: { in: ledgerIds } },
+                where: { id: { in: ledgerIds } },
                 select: { id: true, group: { select: { type: true } } },
             });
             const byId = new Map(accounts.map((a) => [a.id, a]));
             for (const aid of ledgerIds) {
                 const a = byId.get(aid);
-                if (!a)                        return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
+                if (!a) return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
                 if (a.group?.type !== "ASSET") return NextResponse.json({ error: `Account ${aid} is not an ASSET ledger (cash/bank-style) — cannot route payment receipts here.` }, { status: 400 });
             }
 
@@ -112,13 +110,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             )];
             if (gatewayIds.length > 0) {
                 const gateways = await prisma.paymentGateway.findMany({
-                    where:  { id: { in: gatewayIds } },
+                    where: { id: { in: gatewayIds } },
                     select: { id: true, isActive: true, enabledForCounter: true, displayName: true },
                 });
                 const gById = new Map(gateways.map((g) => [g.id, g]));
                 for (const gid of gatewayIds) {
                     const g = gById.get(gid);
-                    if (!g)                        return NextResponse.json({ error: `Payment gateway ${gid} not found` }, { status: 400 });
+                    if (!g) return NextResponse.json({ error: `Payment gateway ${gid} not found` }, { status: 400 });
                     if (!g.isActive || !g.enabledForCounter) return NextResponse.json({ error: `"${g.displayName}" is not available for counters. Enable it under Settings → Payment Methods.` }, { status: 400 });
                 }
             }
@@ -127,13 +125,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Validate allowed-expenditure ledgers are real EXPENSE-group accounts.
         if (data.allowedExpenseAccountIds && data.allowedExpenseAccountIds.length > 0) {
             const accs = await prisma.account.findMany({
-                where:  { id: { in: data.allowedExpenseAccountIds } },
+                where: { id: { in: data.allowedExpenseAccountIds } },
                 select: { id: true, name: true, group: { select: { type: true } } },
             });
             const byId = new Map(accs.map((a) => [a.id, a]));
             for (const aid of data.allowedExpenseAccountIds) {
                 const a = byId.get(aid);
-                if (!a)                          return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
+                if (!a) return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
                 if (a.group?.type !== "EXPENSE") return NextResponse.json({ error: `"${a.name}" is not an expense ledger.` }, { status: 400 });
             }
         }
@@ -142,6 +140,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (data.name && data.name !== existing.name) {
             const dup = await prismaAuthoritative.posCounter.findFirst({ where: { branchId: existing.branchId, name: data.name, NOT: { id } } });
             if (dup) return NextResponse.json({ error: `Counter "${data.name}" already exists in this branch` }, { status: 409 });
+        }
+
+        // If updating counterNumber, ensure no other counter in the same branch has that number.
+        if (data.counterNumber && data.counterNumber !== existing.counterNumber) {
+            const dup = await prisma.posCounter.findFirst({ where: { branchId: existing.branchId, counterNumber: data.counterNumber, NOT: { id } } });
+            if (dup) return NextResponse.json({ error: `Counter number ${data.counterNumber} already exists in this branch` }, { status: 409 });
         }
 
         // Block deactivation while a shift is OPEN or AWAITING_HANDOVER.
@@ -169,14 +173,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 for (let i = 0; i < data.paymentAccounts.length; i++) {
                     const p = data.paymentAccounts[i];
                     const row = {
-                        channel:   p.channel,
-                        label:     p.label,
+                        channel: p.channel,
+                        label: p.label,
                         accountId: p.accountId,
-                        vpa:       p.vpa,
+                        vpa: p.vpa,
                         // Only the GATEWAY channel carries a gateway link; clear it otherwise.
                         gatewayId: p.channel === "GATEWAY" ? (p.gatewayId ?? null) : null,
                         sortOrder: p.sortOrder ?? i,
-                        isActive:  p.isActive ?? true,
+                        isActive: p.isActive ?? true,
                         defaultVisible: p.defaultVisible ?? false,
                     };
                     if (p.id && ownedIds.has(p.id)) {
@@ -191,6 +195,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 where: { id },
                 data: pickDefined({
                     name: data.name,
+                    counterNumber: data.counterNumber,
                     isActive: data.isActive,
                     epbxExtension: data.epbxExtension,
                     allowedExpenseAccountIds: data.allowedExpenseAccountIds,
@@ -208,22 +213,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
         return NextResponse.json({
-            id:       updated.id,
-            name:     updated.name,
+            id: updated.id,
+            counterNumber: updated.counterNumber,
+            name: updated.name,
             branchId: updated.branchId,
-            branch:   updated.branch,
+            branch: updated.branch,
             isActive: updated.isActive,
             epbxExtension: updated.epbxExtension,
             tillAccount: {
-                id:      updated.tillAccount.id,
-                name:    updated.tillAccount.name,
+                id: updated.tillAccount.id,
+                name: updated.tillAccount.name,
                 balance: String(effectiveAccountBalance(updated.tillAccount)),
             },
             paymentAccounts: updated.paymentAccounts,
             allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
-            boundDeviceId:    updated.boundDeviceId,
+            boundDeviceId: updated.boundDeviceId,
             boundDeviceLabel: updated.boundDeviceLabel,
-            boundAt:          updated.boundAt,
+            boundAt: updated.boundAt,
         });
     } catch (e) {
         const conflict = prismaUniqueError(e, { epbxExtension: "That extension number is already used by another counter" });

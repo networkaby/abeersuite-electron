@@ -4,22 +4,21 @@
 import { businessToday } from "@/shared/lib/format/formatDate";
 
 export type YearFormat = "CALENDAR" | "CALENDAR_SHORT" | "FY_SHORT" | "FY_LONG";
-export type PartName = "type" | "user" | "year" | "number";
+export type PartName = "type" | "counter" | "year" | "number";
 
-const RESERVED: ReadonlySet<string> = new Set(["type", "user", "year", "number"]);
+const RESERVED: ReadonlySet<string> = new Set(["type", "counter", "year", "number", "user"]);
 
 export interface SeriesShape {
-    typeEnabled:  boolean;
-    typeValue:    string;
-    userEnabled:  boolean;
-    userMaxWidth: number;
-    yearEnabled:  boolean;
-    yearFormat:   string;
-    fyStartYear:  number | null;
-    startFrom:    number;
-    padWidth:     number;
-    nextSeq:      number;
-    partOrder:    string;
+    typeEnabled: boolean;
+    typeValue: string;
+    counterEnabled: boolean;
+    yearEnabled: boolean;
+    yearFormat: string;
+    fyStartYear: number | null;
+    startFrom: number;
+    padWidth: number;
+    nextSeq: number;
+    partOrder: string;
 }
 
 export function formatYear(fyStartYear: number, format: string): string {
@@ -28,11 +27,11 @@ export function formatYear(fyStartYear: number, format: string): string {
     const ss = String(start).slice(-2);
     const es = String(end).slice(-2);
     switch (format) {
-        case "CALENDAR":       return String(start);
+        case "CALENDAR": return String(start);
         case "CALENDAR_SHORT": return ss;
-        case "FY_SHORT":       return `${ss}-${es}`;
-        case "FY_LONG":        return `${start}-${es}`;
-        default:               return String(start);
+        case "FY_SHORT": return `${ss}-${es}`;
+        case "FY_LONG": return `${start}-${es}`;
+        default: return String(start);
     }
 }
 
@@ -66,21 +65,28 @@ export function fyClosingDate(fyStartYear: number, restartMonth: number, restart
     return new Date(nextRestart - 86_400_000); // minus 1 day
 }
 
+export type ReferenceContext = { counterNumber?: number | null } | number | null;
+
 /**
- * Assemble the reference string from a series + optional userId and optional counterCode.
+ * Assemble the reference string from a series + optional counterNumber.
  * `nextSeq` on the series shape should already be the post-increment value.
  *
- * partOrder is a CSV. Reserved tokens (type/user/year/number) expand to
+ * partOrder is a CSV. Reserved tokens (type/counter/year/number) expand to
  * their values. Anything else is treated as a literal — letting admins
- * embed separators or arbitrary text inline. Disabled parts contribute
- * nothing (their token is dropped). Disabled tokens still preserve any
- * adjacent literals as-is, so be mindful when toggling.
+ * embed separators or arbitrary text inline.
+ *
+ * Counter number is MANDATORY on all vouchers — if no counter is active/passed,
+ * it defaults to 1. If counter token is omitted from partOrder, it is
+ * automatically prefixed to the number part.
  */
-export function assembleReference(s: SeriesShape, userId?: number | null, counterCode?: string | null): string {
+export function assembleReference(s: SeriesShape, ctx?: ReferenceContext): string {
     const fyStart = s.fyStartYear ?? indianFyStartYear();
     const num = s.startFrom + s.nextSeq - 1;
+    const rawCounter = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;
+    const counterNumber = rawCounter != null && rawCounter > 0 ? rawCounter : 1;
 
     const tokens = s.partOrder.split(",").map((p) => p.trim());
+    const hasCounterToken = tokens.some((p) => p === "counter" || p === "user");
     const out: string[] = [];
 
     for (const part of tokens) {
@@ -96,20 +102,26 @@ export function assembleReference(s: SeriesShape, userId?: number | null, counte
                     out.push(s.typeValue);
                 }
                 break;
-            case "user":
-                if (s.userEnabled && userId != null) {
-                    const uStr = String(userId).padStart(s.userMaxWidth, "0");
-                    out.push(uStr.slice(-s.userMaxWidth));
-                }
+            case "counter":
+            case "user": // backwards compatibility alias for legacy partOrder
+                out.push(String(counterNumber));
                 break;
             case "year":
                 if (s.yearEnabled) {
                     out.push(formatYear(fyStart, s.yearFormat));
                 }
                 break;
-            case "number":
-                out.push(String(Math.max(0, num)).padStart(s.padWidth, "0"));
+            case "number": {
+                const numStr = String(Math.max(0, num)).padStart(s.padWidth, "0");
+                // Mandatory counter prefix: if counter token was not standalone in partOrder,
+                // prefix counterNumber directly before number.
+                if (!hasCounterToken) {
+                    out.push(`${counterNumber}${numStr}`);
+                } else {
+                    out.push(numStr);
+                }
                 break;
+            }
         }
     }
 

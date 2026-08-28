@@ -22,12 +22,12 @@ export type AccountForEffectiveBalance = {
  *  master opening the same way (e.g. POS till accounts, which are routinely
  *  opened with a master `openingBalance` instead of a GL voucher). */
 export const EFFECTIVE_BALANCE_SELECT_FIELDS = {
-    balance:            true,
-    normalBalance:      true,
-    openingBalance:     true,
+    balance: true,
+    normalBalance: true,
+    openingBalance: true,
     openingBalanceType: true,
     openingBalanceDate: true,
-    group:              { select: { type: true } },
+    group: { select: { type: true } },
 } as const;
 
 /**
@@ -89,14 +89,14 @@ export async function loadNormalBalances(
     if (ids.length === 0) return out;
 
     const rows = await tx.account.findMany({
-        where:  { id: { in: ids } },
+        where: { id: { in: ids } },
         select: { id: true, normalBalance: true, group: { select: { type: true } } },
     });
     for (const r of rows) {
         out.set(
             r.id,
             r.normalBalance
-                ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type) : null),
+            ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type) : null),
         );
     }
     return out;
@@ -142,8 +142,7 @@ export function computeBalance(
 export async function nextRefFromSeries(
     tx: import("@/generated/prisma/client").Prisma.TransactionClient,
     kind: string,
-    userId?: number | null,
-    counterCode?: string | null,
+    ctx?: import("./voucherRef").ReferenceContext,
 ): Promise<string> {
     const { assembleReference, fyClosingDate } = await import("./voucherRef");
 
@@ -176,7 +175,7 @@ export async function nextRefFromSeries(
                 where: { kind },
                 data: {
                     fyStartYear: current.fyStartYear + 1,
-                    nextSeq:     0,
+                    nextSeq: 0,
                 },
             });
         }
@@ -188,6 +187,6 @@ export async function nextRefFromSeries(
         data: { nextSeq: { increment: 1 } },
     });
 
-    return assembleReference(series, userId, counterCode);
+    return assembleReference(series, ctx);
 }
 

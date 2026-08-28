@@ -9,15 +9,17 @@ const updateSchema = z.object({
     fyStartYear:     z.number().int().min(1900).max(9999).nullable().optional(),
     typeEnabled:     z.boolean().optional(),
     typeValue:       z.string().max(10).optional(),
-    userEnabled:     z.boolean().optional(),
-    userMaxWidth:    z.number().int().min(1).max(10).optional(),
+    counterEnabled:  z.boolean().optional(),
     yearEnabled:     z.boolean().optional(),
     yearFormat:      z.enum(["CALENDAR", "CALENDAR_SHORT", "FY_SHORT", "FY_LONG"]).optional(),
     startFrom:       z.number().int().min(1).optional(),
     padWidth:        z.number().int().min(1).max(10).optional(),
-    // CSV of reserved tokens (type/user/year/number) and arbitrary literals
+    // CSV of reserved tokens (type/counter/year/number) and arbitrary literals
     // (e.g. "/", "-", "india"). Anything not a reserved token is taken as-is.
-    partOrder:       z.string().min(1).max(200).optional(),
+    partOrder:       z.string().min(1).max(200).refine((val) => {
+        const tokens = val.split(",").map((t) => t.trim());
+        return tokens.includes("counter") && tokens.includes("number");
+    }, { message: "Both 'counter' and 'number' tokens are mandatory in part order" }).optional(),
 });
 
 // PATCH /api/accountancy/voucher-series/[kind]
