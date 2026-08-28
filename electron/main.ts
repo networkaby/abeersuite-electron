@@ -631,6 +631,7 @@ function setupAutoUpdater(): void {
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
+import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
@@ -1019,6 +1020,10 @@ app.whenReady().then(async () => {
                 // never invisible. `counterStatus()` reports the same value to the in-app badge
                 // from LOCAL_DATABASE_SOURCE; this is the boot-time half of that.
                 sendBootProgress(`Local database ready (${process.env.LOCAL_DATABASE_SOURCE ?? "embedded"}).`);
+                // Hold the splash until the replica has actually filled. An empty replica
+                // does not error, it returns fewer rows — see waitForReplica.ts. Instant
+                // on every launch after the first, because `ready` is already true.
+                await waitForReplicaReady(localDbUrl, sendBootProgress);
             } else {
                 // The server is up but the replica is not usable. Clear the URL
                 // postgresManager set: leaving it would make prismaClient.ts build a

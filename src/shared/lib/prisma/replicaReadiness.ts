@@ -1,6 +1,6 @@
 import "server-only";
 import { getLocalClient } from "./prismaClient";
-import { setReplicaReady, readyIsStale, IS_COUNTER_PC } from "./counterMode";
+import { setReplicaReady, readyIsStale, isReplicaReady, IS_COUNTER_PC } from "./counterMode";
 
 /**
  * Asks the counter's replica whether it considers itself trustworthy.
@@ -27,8 +27,10 @@ export async function refreshReplicaReadiness(): Promise<boolean> {
     if (!local) return false;
 
     // Cheap enough to call from a request path only because of this: one query per
-    // TTL, not one per request.
-    if (!readyIsStale()) return false;
+    // TTL, not one per request. Return the CACHED answer while it is fresh — returning
+    // false here conflated "asked recently" with "not ready", so a caller that happened
+    // to arrive inside the TTL was told the replica was unusable when it was fine.
+    if (!readyIsStale()) return isReplicaReady();
 
     try {
         const rows = await local.$queryRaw<{ ready: boolean }[]>`

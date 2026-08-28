@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import CounterReconciler from "@/shared/components/CounterReconciler";
 import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
+import ReplicaReadyGate from "@/shared/components/ReplicaReadyGate";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { CANONICAL_SITE_URL, INDEXABLE } from "@/shared/lib/appMode";
 
@@ -68,6 +69,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <CounterReconciler />
         <StatusTitleUpdater />
+        <ReplicaReadyGate />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
