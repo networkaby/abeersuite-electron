@@ -334,10 +334,37 @@ Tied to the app, syncing now only happens while AbeerSuite is running — which 
 for a till that is open all day, but means a counter left closed for a week catches up
 on next launch rather than overnight.
 
+## Two dials, and the trigger that depends on this worker (2026-08-28)
+
+`READ_MODE` decides where READS are served from. `WRITE_MODE` (`live` | `local`) decides
+where WRITES land, and picks the client the read dial rides on — a `$transaction` is a
+write, so it opens on the WRITE_MODE client and every read inside it stays on the same
+database. Both default to `live`.
+
+Under `WRITE_MODE=local` this worker is only half the picture. The app writes its
+replica directly; those writes are captured by an `_outbox_capture` trigger on every
+replicated table (generated into `resources/local-schema.sql` from the same
+`sync-tables.json` this worker reads) and pushed up by a flusher running inside the Next
+server.
+
+**That trigger is why this worker must keep using `session_replication_role = replica`.**
+Ordinary triggers do not fire in replica mode, and that is precisely what stops rows
+pulled down here from being queued straight back up — echo suppression comes for free
+from a mechanism this engine already had. Two things must stay true:
+
+- `inReplicaTransaction()` in `lib/db.js` wraps every local write in `pull.js`. Do not
+  add a write path to a replicated table that skips it, or the next cycle will fill the
+  outbox with the entire pulled dataset.
+- The triggers are created with plain `CREATE TRIGGER`. Never `ENABLE ALWAYS`, which
+  would fire them in replica mode too and defeat the whole arrangement.
+
+The app role is also deliberately NOT granted `SET ON PARAMETER
+session_replication_role`, so the app cannot silence its own capture.
+
 ## Not built yet
 
 `AuditLog` tombstones — voucher deletes currently wait for the reconcile sweep
 rather than propagating immediately.
 
-`READ_MODE` can now move to `shadow` whenever you want to start proving the replica
+`READ_MODE` can move to `shadow` whenever you want to start proving the replica
 against live traffic; `local` after that.
