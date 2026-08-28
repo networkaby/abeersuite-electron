@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         // Book counter picker). Listing counters is a read — default-open;
         // counter writes below keep their pos-counters:* gates. ─
         if (scope === "all") {
-            const counters = await prisma.posCounter.findMany({
+            const counters = await prismaAuthoritative.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { counterNumber: "asc" }, { name: "asc" }],
                 include: {
                     tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
@@ -68,7 +68,6 @@ export async function GET(req: NextRequest) {
                 branch: c.branch,
                 isActive: c.isActive,
                 epbxExtension: c.epbxExtension,
-                counterNumber: c.counterNumber,
                 tillAccount: {
                     id: c.tillAccount.id,
                     name: c.tillAccount.name,

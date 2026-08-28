@@ -194,21 +194,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             return tx.posCounter.update({
                 where: { id },
-                data: pickDefined({
-                    name: data.name,
-                    counterNumber: data.counterNumber,
-                    isActive: data.isActive,
-                    epbxExtension: data.epbxExtension,
-                    allowedExpenseAccountIds: data.allowedExpenseAccountIds,
+                data: {
+                    ...pickDefined({
+                        name: data.name,
+                        counterNumber: data.counterNumber,
+                        isActive: data.isActive,
+                        epbxExtension: data.epbxExtension,
+                        allowedExpenseAccountIds: data.allowedExpenseAccountIds,
+                    }),
+                    // If counterNumber changed, clear idRangeStart so it will be recalculated
+                    // on next offline setup. Mismatched counterNumber/idRangeStart would reserve
+                    // the wrong id-range block for offline writes.
+                    ...(data.counterNumber && data.counterNumber !== existing.counterNumber ? { idRangeStart: null } : {}),
                     // Release clears the device lock AND this counter's offline-write
                     // identity together — releasing a counter is one action, not three.
-                    // A stale counterNumber/idRangeStart left behind after release would
-                    // let a re-setup machine believe it already has a confirmed id range
-                    // it never actually re-applied.
                     ...(data.releaseLock
                         ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, counterNumber: null, idRangeStart: null }
                         : {}),
-                }),
+                },
                 include: counterInclude,
             });
         });
