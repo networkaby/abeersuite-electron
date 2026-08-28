@@ -24,7 +24,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
 import type { PosPayChannel } from "@/generated/prisma/client";
 
-type Branch = { id: string; name: string; isActive: boolean };
+type Branch = { id: string; number: number; name: string; isActive: boolean };
 
 // A configured gateway from the Settings → Payment Methods catalog, filtered to
 // the ones available at the counter. The counter picks one for a GATEWAY rail.
@@ -151,11 +151,31 @@ export default function CountersAdminPage() {
     };
     useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); void loadGateways(); }, []);
 
+    const getNextCounterSuffix = (branchId: string, bList = branches, cList = counters) => {
+        const branch = bList.find((b) => b.id === branchId);
+        const prefixStr = branch?.number != null ? String(branch.number) : "";
+        const branchCounters = cList.filter((c) => c.branchId === branchId);
+        
+        let maxSuffix = 0;
+        for (const c of branchCounters) {
+            const cStr = String(c.counterNumber);
+            if (prefixStr && cStr.startsWith(prefixStr) && cStr.length > prefixStr.length) {
+                const s = parseInt(cStr.slice(prefixStr.length), 10);
+                if (!isNaN(s) && s > maxSuffix) maxSuffix = s;
+            } else if (c.counterNumber > maxSuffix) {
+                maxSuffix = c.counterNumber;
+            }
+        }
+        return maxSuffix + 1;
+    };
+
     const startAdd = () => {
-        const initialBranchId = branches[0]?.id ?? "";
-        const branchCounters = counters.filter((c) => c.branchId === initialBranchId);
-        const nextNum = branchCounters.length > 0 ? Math.max(...branchCounters.map((c) => c.counterNumber || 0)) + 1 : 1;
-        setForm({ ...EMPTY_FORM, branchId: initialBranchId, counterNumber: String(nextNum), name: `Counter ${nextNum}` });
+        const initialBranch = branches[0];
+        const initialBranchId = initialBranch?.id ?? "";
+        const nextSuffix = getNextCounterSuffix(initialBranchId);
+        const prefix = initialBranch?.number != null ? String(initialBranch.number) : "";
+        const combined = prefix ? `${prefix}${nextSuffix}` : String(nextSuffix);
+        setForm({ ...EMPTY_FORM, branchId: initialBranchId, counterNumber: String(nextSuffix), name: `Counter ${combined}` });
         setEditId(null);
         setAddingNew(true);
     };
@@ -194,10 +214,14 @@ export default function CountersAdminPage() {
         paymentAccounts: f.paymentAccounts.filter((_, i) => i !== idx),
     }));
 
+    const selectedBranch = branches.find((b) => b.id === form.branchId);
+    const branchPrefix = selectedBranch?.number != null ? String(selectedBranch.number) : "";
+    const fullCounterNumber = branchPrefix ? `${branchPrefix}${form.counterNumber}` : form.counterNumber;
+
     const handleCreate = async () => {
         if (!form.branchId)    { toast.error("Pick a branch"); return; }
-        const num = Number(form.counterNumber);
-        if (!form.counterNumber || !Number.isInteger(num) || num <= 0) {
+        const num = Number(fullCounterNumber);
+        if (!fullCounterNumber || !Number.isInteger(num) || num <= 0) {
             toast.error("Counter number must be a valid integer greater than 0");
             return;
         }
@@ -327,9 +351,11 @@ export default function CountersAdminPage() {
                             <Select
                                 value={form.branchId}
                                 onValueChange={(v) => {
-                                    const branchCounters = counters.filter((c) => c.branchId === v);
-                                    const nextNum = branchCounters.length > 0 ? Math.max(...branchCounters.map((c) => c.counterNumber || 0)) + 1 : 1;
-                                    setForm((f) => ({ ...f, branchId: v, counterNumber: String(nextNum), name: `Counter ${nextNum}` }));
+                                    const nextSuffix = getNextCounterSuffix(v);
+                                    const branch = branches.find((b) => b.id === v);
+                                    const p = branch?.number != null ? String(branch.number) : "";
+                                    const combined = p ? `${p}${nextSuffix}` : String(nextSuffix);
+                                    setForm((f) => ({ ...f, branchId: v, counterNumber: String(nextSuffix), name: `Counter ${combined}` }));
                                 }}
                             >
                                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select branch…" /></SelectTrigger>
@@ -340,21 +366,41 @@ export default function CountersAdminPage() {
                         </div>
                         <div>
                             <label className="text-xs font-medium text-muted-foreground">Counter Number *</label>
-                            <Input
-                                type="number"
-                                min={1}
-                                value={form.counterNumber}
-                                onChange={(e) => setForm((f) => ({ ...f, counterNumber: e.target.value }))}
-                                placeholder="1"
-                                className="mt-1"
-                            />
+                            <div className="flex items-center mt-1">
+                                {branchPrefix && (
+                                    <span className="inline-flex items-center px-3 py-2 border border-r-0 border-input rounded-l-md bg-muted text-muted-foreground font-mono text-sm font-semibold select-none">
+                                        {branchPrefix}
+                                    </span>
+                                )}
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={form.counterNumber}
+                                    onChange={(e) => {
+                                        const suffix = e.target.value;
+                                        const combined = branchPrefix ? `${branchPrefix}${suffix}` : suffix;
+                                        setForm((f) => ({
+                                            ...f,
+                                            counterNumber: suffix,
+                                            name: `Counter ${combined}`,
+                                        }));
+                                    }}
+                                    placeholder="12"
+                                    className={`font-mono ${branchPrefix ? "rounded-l-none" : ""}`}
+                                />
+                            </div>
+                            {branchPrefix && (
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                    Saves as <span className="font-mono font-semibold text-foreground">{fullCounterNumber || "..."}</span>
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="text-xs font-medium text-muted-foreground">Name *</label>
                             <Input
                                 value={form.name}
                                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                                placeholder="Counter 2"
+                                placeholder="Counter 1"
                                 className="mt-1"
                             />
                         </div>

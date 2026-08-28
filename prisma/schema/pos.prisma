@@ -26,7 +26,13 @@ model PosCounter {
   branchId                 String
   branch                   Branch                     @relation("BranchCounters", fields: [branchId], references: [id])
   name                     String // "Counter 1", "Billing Desk", "Service Counter"
-  counterNumber            Int
+  // GLOBALLY unique (not just per-branch) — embedded directly in the offline-safe
+  // numeric PK formula for Tickets/PosShifts/UniversalVoucher (see
+  // shared/lib/id/numericId.ts). Two branches must never share a counterNumber,
+  // or their offline-minted ids would collide. Enforced at creation (see
+  // /api/pos/counters) AND here at the DB level (@unique, not @@unique with
+  // branchId) so a race can't slip a duplicate through either.
+  counterNumber            Int                        @unique
   tillAccountId            Int                        @unique
   tillAccount              Account                    @relation("CounterTill", fields: [tillAccountId], references: [id])
   // Non-cash payment accounts are a flexible LIST (paymentAccounts below) — each
@@ -54,7 +60,6 @@ model PosCounter {
   shifts                   PosShift[]
 
   @@unique([branchId, name])
-  @@unique([branchId, counterNumber])
   @@index([branchId])
   @@map("pos_counters")
 }
