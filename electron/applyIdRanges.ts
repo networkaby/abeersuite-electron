@@ -1,42 +1,36 @@
 /**
- * Applies the reserved id range to the local embedded PostgreSQL sequences.
+ * Applies this counter's reserved id range to the local replica's sequences.
  *
- * Called after the shift-open API returns an `idRangeStart` value. Each of the 7
- * autoincrement sequences is restarted at `blockStart`, so that any rows created
- * offline get ids in this counter's reserved block and can never collide with
- * cloud-assigned ids or ids from another counter.
+ * Called at first-launch counter setup and again whenever shift-open returns an
+ * `idRangeStart`. Every sequence behind an `@default(autoincrement())` model is moved
+ * into this counter's block, so rows created locally can never collide with
+ * cloud-assigned ids or with another counter's.
  *
- * Idempotent: a bookkeeping table (`_id_ranges`) records the last applied
- * `blockStart`; subsequent calls with the same value are no-ops.
+ * ── All of the work happens in `_apply_id_range()` ───────────────────────────
+ * That function is defined in `resources/local-schema.sql` and owned by `postgres`,
+ * `SECURITY DEFINER`. This module used to run the DDL and the `ALTER SEQUENCE`s itself
+ * on whatever URL it was handed — which is `smx_app`, a role with neither `CREATE ON
+ * SCHEMA` nor sequence ownership. Both statements failed, the `catch` below swallowed
+ * the errors, `_id_ranges` was never written, and `isOfflineRangeApplied()` in
+ * prismaClient.ts read that absence as "no confirmed range" — permanently blocking
+ * every offline write on the machine. Moving the privileged half into a definer
+ * function means the app role needs nothing but EXECUTE.
+ *
+ * It also discovers the sequence list from the catalogue rather than a hand-kept
+ * constant, and never moves a sequence backwards, so calling this repeatedly is safe.
  *
  * Never throws — returns `false` on any failure, same contract as
  * `localDbProvisioner.ts`.
  */
 
-import { OFFLINE_SEQUENCES } from "../src/shared/lib/counter/idRange";
-
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { Client: PgClient } = require("pg") as typeof import("pg");
 
 /**
- * Bookkeeping table: remembers the last applied blockStart so we skip
- * redundant ALTERs on subsequent calls within the same shift.
- */
-const ID_RANGES_DDL = `
-CREATE TABLE IF NOT EXISTS "_id_ranges" (
-    only_row    boolean PRIMARY KEY DEFAULT true CHECK (only_row),
-    block_start integer NOT NULL,
-    applied_at  timestamptz NOT NULL DEFAULT now()
-);
-`;
-
-/**
- * Applies the reserved id range to the local replica's sequences.
- *
- * @param localUrl    Admin connection string for the embedded cluster
- *                    (e.g. `postgresql://postgres@localhost:54329/smx`).
- * @param blockStart  The first id in this counter's reserved block, as returned
- *                    by `blockStartFor(counterNumber)`.
+ * @param localUrl    Connection string for the embedded cluster. The app role is
+ *                    enough — `_apply_id_range` supplies the privilege.
+ * @param blockStart  The first id in this counter's reserved block, as returned by
+ *                    `blockStartFor(counterNumber)`.
  * @returns `true` on success, `false` on any failure.
  */
 export async function applyIdRanges(localUrl: string, blockStart: number): Promise<boolean> {
@@ -44,45 +38,13 @@ export async function applyIdRanges(localUrl: string, blockStart: number): Promi
     try {
         await client.connect();
 
-        // ── Ensure bookkeeping table exists ──────────────────────────────────
-        await client.query(ID_RANGES_DDL);
-
-        // ── Check if already applied ─────────────────────────────────────────
-        const { rows } = await client.query<{ block_start: number }>(
-            `SELECT block_start FROM "_id_ranges" WHERE only_row`,
-        );
-        const applied = rows[0]?.block_start;
-
-        if (applied === blockStart) {
-            console.log(`[IdRanges] Sequences already set to blockStart ${blockStart} — skipping.`);
-            return true;
-        }
-
-        if (applied !== undefined) {
-            console.log(
-                `[IdRanges] blockStart changed from ${applied} to ${blockStart} — re-applying.`,
-            );
-        } else {
-            console.log(`[IdRanges] First application — setting sequences to blockStart ${blockStart}.`);
-        }
-
-        // ── ALTER each sequence ──────────────────────────────────────────────
-        for (const seq of OFFLINE_SEQUENCES) {
-            // Sequence names come from our own constant, not user input — safe to
-            // interpolate. PostgreSQL does not accept bind parameters in ALTER SEQUENCE.
-            const sql = `ALTER SEQUENCE "${seq}" RESTART WITH ${blockStart}`;
-            await client.query(sql);
-            console.log(`[IdRanges] ${sql}`);
-        }
-
-        // ── Record what we applied ───────────────────────────────────────────
-        await client.query(
-            `INSERT INTO "_id_ranges" (only_row, block_start) VALUES (true, $1)
-             ON CONFLICT (only_row) DO UPDATE SET block_start = EXCLUDED.block_start, applied_at = now()`,
+        const { rows } = await client.query<{ altered: number }>(
+            `SELECT _apply_id_range($1) AS altered`,
             [blockStart],
         );
+        const altered = rows[0]?.altered ?? 0;
 
-        console.log(`[IdRanges] All ${OFFLINE_SEQUENCES.length} sequences set to blockStart ${blockStart}.`);
+        console.log(`[IdRanges] blockStart ${blockStart} applied across ${altered} sequences.`);
         return true;
     } catch (err) {
         console.error("[IdRanges] Failed to apply id ranges:", err);

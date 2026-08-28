@@ -75,27 +75,18 @@ export function blockEndFor(counterNumber: number): number {
 // ── Sequence catalogue ───────────────────────────────────────────────────────
 
 /**
- * The PostgreSQL sequences that need their start value overridden on the
- * local replica — every table whose Prisma model uses `@default(autoincrement())`
- * and is reachable from an offline write. `PosShift`/`PosCashDrop`/`PosExpenditure`/
- * `PosReceipt` carry the identical collision risk (also autoincrement Int ids) and
- * were missing from this list — `TicketRepair`/`TicketDeal`/`TicketHelp` are NOT
- * listed because they share their parent `Ticket`'s id (`ticketId Int @id`, no
- * separate sequence), so there is nothing to reserve for them.
+ * There is deliberately no hand-written list of sequences here any more.
+ *
+ * There used to be one, naming 11. The schema has 79 models on
+ * `@default(autoincrement())`, and once the counter writes locally by default it
+ * writes all of them — so 68 sequences would have kept minting ids from 1, colliding
+ * head-on with cloud ids. That failure is silent rather than loud: the push upserts by
+ * id, so a colliding row overwrites an unrelated cloud record.
+ *
+ * `_apply_id_range()` (defined in `resources/local-schema.sql`, called by
+ * `electron/applyIdRanges.ts`) reads the sequences out of the PostgreSQL catalogue
+ * instead, so a table added tomorrow is covered with nothing to remember.
  */
-export const OFFLINE_SEQUENCES: readonly string[] = [
-    "universal_vouchers_id_seq",
-    "voucher_details_id_seq",
-    "voucher_gl_lines_id_seq",
-    "voucher_inventory_lines_id_seq",
-    "voucher_links_id_seq",
-    "tickets_id_seq",
-    "ticket_logs_id_seq",
-    "pos_shifts_id_seq",
-    "pos_cash_drops_id_seq",
-    "pos_expenditures_id_seq",
-    "pos_receipts_id_seq",
-] as const;
 
 /**
  * Maps a Prisma model name to its PostgreSQL sequence name.

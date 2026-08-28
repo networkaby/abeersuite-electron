@@ -190,8 +190,16 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<Provisio
             await client.query(sql);
         }
 
+        // Reserving this counter's autoincrement block needs sequence ownership, which
+        // the app role must not have (it implies DROP and ALTER on every sequence).
+        // `_apply_id_range` is SECURITY DEFINER and owned by postgres, so EXECUTE on it
+        // is the whole grant — see the note in scripts/gen-local-schema.ts.
+        await client.query(`GRANT EXECUTE ON FUNCTION _apply_id_range(integer) TO ${APP_ROLE}`);
+
         // The sync engine creates _sync_state itself and suspends foreign keys per
-        // transaction while replaying a table.
+        // transaction while replaying a table. The app role is deliberately NOT given
+        // session_replication_role: that parameter suppresses ordinary triggers, and
+        // the outbox capture triggers are how local writes are recorded for push.
         await client.query(`GRANT CREATE ON SCHEMA public TO ${SYNC_ROLE}`);
         try {
             await client.query(`GRANT SET ON PARAMETER session_replication_role TO ${SYNC_ROLE}`);

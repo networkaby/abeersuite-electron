@@ -1173,14 +1173,13 @@ CREATE TABLE IF NOT EXISTS "VoucherSeries" (
     "fyStartYear" INTEGER,
     "typeEnabled" BOOLEAN NOT NULL DEFAULT true,
     "typeValue" TEXT NOT NULL DEFAULT '',
-    "userEnabled" BOOLEAN NOT NULL DEFAULT false,
-    "userMaxWidth" INTEGER NOT NULL DEFAULT 3,
+    "counterEnabled" BOOLEAN NOT NULL DEFAULT true,
     "yearEnabled" BOOLEAN NOT NULL DEFAULT true,
     "yearFormat" TEXT NOT NULL DEFAULT 'FY_SHORT',
     "startFrom" INTEGER NOT NULL DEFAULT 1,
     "padWidth" INTEGER NOT NULL DEFAULT 4,
     "nextSeq" INTEGER NOT NULL DEFAULT 0,
-    "partOrder" TEXT NOT NULL DEFAULT 'type,-,year,-,number',
+    "partOrder" TEXT NOT NULL DEFAULT 'type,-,year,-,counter,number',
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "VoucherSeries_pkey" PRIMARY KEY ("kind")
@@ -1190,14 +1189,13 @@ ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "label" TEXT NOT NULL;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "fyStartYear" INTEGER;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "typeEnabled" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "typeValue" TEXT NOT NULL DEFAULT '';
-ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "userEnabled" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "userMaxWidth" INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "counterEnabled" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "yearEnabled" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "yearFormat" TEXT NOT NULL DEFAULT 'FY_SHORT';
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "startFrom" INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "padWidth" INTEGER NOT NULL DEFAULT 4;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "nextSeq" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "partOrder" TEXT NOT NULL DEFAULT 'type,-,year,-,number';
+ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "partOrder" TEXT NOT NULL DEFAULT 'type,-,year,-,counter,number';
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable
@@ -2167,6 +2165,7 @@ ALTER TABLE "LoyaltyLedger" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NO
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "Branch" (
     "id" TEXT NOT NULL,
+    "number" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "address" TEXT,
     "phone" TEXT,
@@ -2187,6 +2186,7 @@ CREATE TABLE IF NOT EXISTS "Branch" (
     CONSTRAINT "Branch_pkey" PRIMARY KEY ("id")
 );
 ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL;
+ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "number" INTEGER NOT NULL;
 ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
 ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "phone" TEXT;
@@ -2551,11 +2551,11 @@ CREATE TABLE IF NOT EXISTS "pos_counters" (
     "id" SERIAL NOT NULL,
     "branchId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "counterNumber" INTEGER NOT NULL,
     "tillAccountId" INTEGER NOT NULL,
     "allowedExpenseAccountIds" JSONB NOT NULL DEFAULT '[]',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "epbxExtension" TEXT,
-    "counterNumber" INTEGER,
     "idRangeStart" INTEGER,
     "boundDeviceId" TEXT,
     "boundDeviceLabel" TEXT,
@@ -2566,11 +2566,11 @@ CREATE TABLE IF NOT EXISTS "pos_counters" (
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "branchId" TEXT NOT NULL;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "counterNumber" INTEGER NOT NULL;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "tillAccountId" INTEGER NOT NULL;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "allowedExpenseAccountIds" JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "epbxExtension" TEXT;
-ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "counterNumber" INTEGER;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "idRangeStart" INTEGER;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceId" TEXT;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceLabel" TEXT;
@@ -3049,6 +3049,7 @@ CREATE TABLE IF NOT EXISTS "TicketRepair" (
     "ticketId" INTEGER NOT NULL,
     "deviceId" INTEGER NOT NULL,
     "serviceCenterId" INTEGER,
+    "ticketNo" TEXT,
     "estimatedCost" DOUBLE PRECISION,
     "accessInfo" TEXT,
     "accessories" TEXT,
@@ -3070,6 +3071,7 @@ CREATE TABLE IF NOT EXISTS "TicketRepair" (
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "deviceId" INTEGER NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "serviceCenterId" INTEGER;
+ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketNo" TEXT;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "estimatedCost" DOUBLE PRECISION;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "accessInfo" TEXT;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "accessories" TEXT;
@@ -3920,6 +3922,9 @@ CREATE INDEX IF NOT EXISTS "LoyaltyLedger_accountId_createdAt_idx" ON "LoyaltyLe
 CREATE INDEX IF NOT EXISTS "LoyaltyLedger_universalVoucherId_idx" ON "LoyaltyLedger"("universalVoucherId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "Branch_number_key" ON "Branch"("number");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "PositionRole_roleId_idx" ON "PositionRole"("roleId");
 
 -- CreateIndex
@@ -3947,13 +3952,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PersonPortalCredential_emailNormalized_key" O
 CREATE INDEX IF NOT EXISTS "PersonPortalCredential_personId_idx" ON "PersonPortalCredential"("personId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_counterNumber_key" ON "pos_counters"("counterNumber");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_tillAccountId_key" ON "pos_counters"("tillAccountId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_epbxExtension_key" ON "pos_counters"("epbxExtension");
-
--- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_counterNumber_key" ON "pos_counters"("counterNumber");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "pos_counters_branchId_idx" ON "pos_counters"("branchId");
@@ -5597,3 +5602,64 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
+
+-- ── Counter-local: reserved autoincrement id range ──────────────────────────
+CREATE TABLE IF NOT EXISTS "_id_ranges" (
+    only_row    boolean PRIMARY KEY DEFAULT true CHECK (only_row),
+    block_start integer     NOT NULL,
+    applied_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION _apply_id_range(p_block_start integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+    seq_name  text;
+    cur_last  bigint;
+    cur_called boolean;
+    new_start bigint;
+    altered   integer := 0;
+BEGIN
+    IF p_block_start IS NULL OR p_block_start < 1 THEN
+        RAISE EXCEPTION 'block start must be a positive integer, got %', p_block_start;
+    END IF;
+
+    FOR seq_name IN
+        SELECT s.oid::regclass::text
+        FROM pg_class s
+        JOIN pg_depend d
+          ON d.objid = s.oid
+         AND d.classid = 'pg_class'::regclass
+         AND d.deptype = 'a'
+        JOIN pg_class t ON t.oid = d.refobjid
+        JOIN pg_namespace n ON n.oid = s.relnamespace
+        WHERE s.relkind = 'S'
+          AND n.nspname = 'public'
+          AND t.relname NOT LIKE '\_%'
+    LOOP
+        EXECUTE format('SELECT last_value, is_called FROM %s', seq_name)
+            INTO cur_last, cur_called;
+
+        -- Never backwards: see the header note on re-application.
+        new_start := GREATEST(
+            p_block_start::bigint,
+            CASE WHEN cur_called THEN cur_last + 1 ELSE cur_last END
+        );
+
+        EXECUTE format('ALTER SEQUENCE %s RESTART WITH %s', seq_name, new_start);
+        altered := altered + 1;
+    END LOOP;
+
+    INSERT INTO "_id_ranges" (only_row, block_start)
+    VALUES (true, p_block_start)
+    ON CONFLICT (only_row)
+    DO UPDATE SET block_start = EXCLUDED.block_start, applied_at = now();
+
+    RETURN altered;
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION _apply_id_range(integer) FROM PUBLIC;

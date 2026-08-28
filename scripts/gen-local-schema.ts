@@ -147,8 +147,112 @@ function generate(): string {
     if (!cleaned.includes("CREATE TABLE")) {
         throw new Error("Generated SQL contains no CREATE TABLE — refusing to write it.");
     }
-    return `${HEADER}\n${makeIdempotent(cleaned)}\n`;
+    return `${HEADER}\n${makeIdempotent(cleaned)}\n${COUNTER_LOCAL_DDL}`;
 }
+
+/**
+ * Counter-local machinery that has no Prisma model, appended after the generated DDL.
+ *
+ * It lives here rather than in `localDbProvisioner.ts` for one reason: the provisioner
+ * gates a re-apply on a hash of THIS file. Anything defined here is therefore covered
+ * by that hash, so an app upgrade that changes it re-applies automatically. Anything
+ * defined in the provisioner's own DDL constants is not, and has to be remembered by
+ * hand — which is exactly how `_id_ranges` came to be created by the wrong role.
+ *
+ * ── Why `_apply_id_range` is a function and not client-side SQL ──────────────
+ * Restarting a sequence requires OWNERSHIP of it, and creating a table requires
+ * `CREATE ON SCHEMA`. `smx_app` deliberately has neither, so `electron/applyIdRanges.ts`
+ * — which connects on the app URL — could do neither. Both calls failed, the errors
+ * were swallowed, `_id_ranges` was never written, and the write gate that reads it
+ * concluded "no confirmed range" forever. That single failure blocked every offline
+ * write the counter could make.
+ *
+ * Granting `smx_app` sequence ownership would fix it and hand the app role DROP and
+ * ALTER on every sequence at the same time. A `SECURITY DEFINER` function owned by
+ * `postgres` gives it exactly the one operation it needs and nothing else.
+ *
+ * ── Why the sequence list is discovered, not passed in ───────────────────────
+ * It used to be a hand-written list of 11 names. The schema has 79 models on
+ * `@default(autoincrement())`, and under local-first writes the counter writes all of
+ * them — so 68 sequences would have kept minting ids from 1, colliding head-on with
+ * cloud ids. That does not crash: the push upserts, so it overwrites the wrong cloud
+ * row. Reading the catalogue instead means a newly added table is covered the day it
+ * appears, with nothing to remember.
+ *
+ * `deptype = 'a'` is the ownership link Postgres creates for a SERIAL column, so this
+ * finds precisely the sequences behind `@default(autoincrement())`. Underscore-prefixed
+ * tables are counter-local bookkeeping (`_outbox`, `_provision`, `_sync_state`) whose
+ * ids must stay local and small — they are excluded.
+ *
+ * ── Why it never moves a sequence backwards ──────────────────────────────────
+ * A plain `RESTART WITH block_start` is only safe the first time. Re-applying it after
+ * the counter has already minted ids inside its block would hand out the same ids a
+ * second time — locally-unique, silently duplicated once pushed. Taking the greater of
+ * the block start and the sequence's current position makes a re-apply a no-op instead,
+ * so the operation is safe to repeat and safe to run on an already-working counter.
+ */
+const COUNTER_LOCAL_DDL = `
+-- ── Counter-local: reserved autoincrement id range ──────────────────────────
+CREATE TABLE IF NOT EXISTS "_id_ranges" (
+    only_row    boolean PRIMARY KEY DEFAULT true CHECK (only_row),
+    block_start integer     NOT NULL,
+    applied_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION _apply_id_range(p_block_start integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+    seq_name  text;
+    cur_last  bigint;
+    cur_called boolean;
+    new_start bigint;
+    altered   integer := 0;
+BEGIN
+    IF p_block_start IS NULL OR p_block_start < 1 THEN
+        RAISE EXCEPTION 'block start must be a positive integer, got %', p_block_start;
+    END IF;
+
+    FOR seq_name IN
+        SELECT s.oid::regclass::text
+        FROM pg_class s
+        JOIN pg_depend d
+          ON d.objid = s.oid
+         AND d.classid = 'pg_class'::regclass
+         AND d.deptype = 'a'
+        JOIN pg_class t ON t.oid = d.refobjid
+        JOIN pg_namespace n ON n.oid = s.relnamespace
+        WHERE s.relkind = 'S'
+          AND n.nspname = 'public'
+          AND t.relname NOT LIKE '\\_%'
+    LOOP
+        EXECUTE format('SELECT last_value, is_called FROM %s', seq_name)
+            INTO cur_last, cur_called;
+
+        -- Never backwards: see the header note on re-application.
+        new_start := GREATEST(
+            p_block_start::bigint,
+            CASE WHEN cur_called THEN cur_last + 1 ELSE cur_last END
+        );
+
+        EXECUTE format('ALTER SEQUENCE %s RESTART WITH %s', seq_name, new_start);
+        altered := altered + 1;
+    END LOOP;
+
+    INSERT INTO "_id_ranges" (only_row, block_start)
+    VALUES (true, p_block_start)
+    ON CONFLICT (only_row)
+    DO UPDATE SET block_start = EXCLUDED.block_start, applied_at = now();
+
+    RETURN altered;
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION _apply_id_range(integer) FROM PUBLIC;
+`;
 
 /** Compare on content, not bytes: this repo checks out CRLF on Windows. */
 function normalise(text: string): string {
@@ -159,7 +263,10 @@ function main(): void {
     const check = process.argv.includes("--check");
     const generated = generate();
 
-    const tables = (generated.match(/^CREATE TABLE/gm) ?? []).length;
+    // Counts the modelled tables only. COUNTER_LOCAL_DDL's own bookkeeping tables are
+    // not Prisma models, and folding them in would make this number drift away from
+    // the 113 the provisioner and sync registry both talk about.
+    const tables = (generated.match(/^CREATE TABLE IF NOT EXISTS "[A-Za-z]/gm) ?? []).length;
     // Wrapped in a DO block for idempotency, so no longer at line start — see makeIdempotent().
     const enums = (generated.match(/CREATE TYPE "/g) ?? []).length;
 
