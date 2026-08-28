@@ -269,6 +269,8 @@ const PORT = resolvePort();
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let currentSyncStatus = "";
+let currentConnectionStatus = "";
 
 const isHiddenLaunch = process.argv.includes("--hidden") || process.argv.includes("--autostart");
 
@@ -483,7 +485,7 @@ ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
         // called both at first-launch setup and whenever the renderer discovers
         // this device was reassigned to a different counter (see
         // reconcileCounterSetup in setupGate.ts).
-        mainWindow?.setTitle(currentAppTitle());
+        mainWindow?.setTitle(buildFullTitle());
         return true;
     } catch (err) {
         console.error("[main] Could not write counter-setup.json:", err);
@@ -497,12 +499,20 @@ ipcMain.handle("counter:clear-setup", (): boolean => {
     try {
         const file = counterSetupFilePath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
+        currentSyncStatus = "";
+        currentConnectionStatus = "";
         mainWindow?.setTitle(APP_TITLE);
         return true;
     } catch (err) {
         console.error("[main] Could not clear counter-setup.json:", err);
         return false;
     }
+});
+
+ipcMain.handle("app:update-window-status", (_, status: { sync: string; connection: string }): void => {
+    currentSyncStatus = status.sync;
+    currentConnectionStatus = status.connection;
+    mainWindow?.setTitle(buildFullTitle());
 });
 
 ipcMain.handle("printer:get-list", async (event) => {
@@ -810,6 +820,15 @@ function currentAppTitle(): string {
     } catch {
         return APP_TITLE;
     }
+}
+
+// Builds the full title including sync and connection status
+function buildFullTitle(): string {
+    const base = currentAppTitle();
+    const parts: string[] = [base];
+    if (currentSyncStatus) parts.push(currentSyncStatus);
+    if (currentConnectionStatus) parts.push(currentConnectionStatus);
+    return parts.join(" | ");
 }
 
 // Resolved against APP_ORIGIN as base, so a relative target ("/vouchers/pos/help" — the

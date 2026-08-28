@@ -32,6 +32,7 @@ import * as path from "node:path";
 const ROOT = path.join(__dirname, "..");
 const SCHEMA_DIR = path.join(ROOT, "prisma", "schema");
 const OUT_FILE = path.join(ROOT, "resources", "local-schema.sql");
+const REGISTRY_FILE = path.join(ROOT, "prisma", "sync-tables.json");
 
 const HEADER = `-- GENERATED FILE — DO NOT EDIT BY HAND.
 --
@@ -151,6 +152,57 @@ function generate(): string {
 }
 
 /**
+ * One capture trigger per replicated table, generated from `prisma/sync-tables.json`.
+ *
+ * ── Why triggers rather than an interceptor in the app ───────────────────────
+ * The outbox used to be filled by a `$extends` on the Prisma client, keyed off a
+ * hand-written map of 14 models. It captured `args.data` — not the stored row, so
+ * defaults and generated ids were missing — and only on bare `create`/`update`, so
+ * `createMany`, `upsert`, nested writes and raw SQL all slipped past it. Three models
+ * in the map were unreachable because a second hand-written list did not contain them,
+ * and 27 models that the same list DID permit had no map entry at all, so they wrote
+ * locally and never reached the cloud: products, customers, accounts, stock ledger,
+ * loyalty ledger. A trigger sees the committed row whatever wrote it, and this list is
+ * derived from the registry, so it cannot drift from the schema the way those did.
+ *
+ * ── Echo suppression is free, and this is why it must stay an ORDINARY trigger ──
+ * The sync worker writes pulled rows inside `SET LOCAL session_replication_role =
+ * replica` (sync-engine/lib/db.js). In that mode PostgreSQL fires only triggers marked
+ * REPLICA or ALWAYS, so an ordinary trigger — `tgenabled = 'O'`, what plain CREATE
+ * TRIGGER produces — does not fire, and rows arriving from the cloud are not queued
+ * straight back to it. Never add ENABLE ALWAYS here, and never grant the app role
+ * `SET ON PARAMETER session_replication_role`, or the app could silence its own capture.
+ *
+ * DROP-then-CREATE rather than a guard: it makes a changed primary key re-point the
+ * trigger's arguments on the next provision instead of leaving stale ones behind.
+ */
+function outboxTriggers(): string {
+    const registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8")) as {
+        tables: Record<string, { table: string; pk: string[] }>;
+    };
+
+    const out: string[] = [];
+    for (const [model, entry] of Object.entries(registry.tables)) {
+        if (!entry.pk?.length) {
+            throw new Error(`sync-tables.json: ${model} has no primary key — cannot capture it`);
+        }
+        const args = entry.pk.map((c) => `'${c}'`).join(", ");
+        // to_regclass keeps this tolerant of a registry entry whose table the schema
+        // does not (yet) create, rather than aborting the whole provision.
+        out.push(
+            `DO $$ BEGIN\n` +
+            `    IF to_regclass('public."${entry.table}"') IS NOT NULL THEN\n` +
+            `        DROP TRIGGER IF EXISTS "_outbox_capture" ON "${entry.table}";\n` +
+            `        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "${entry.table}"\n` +
+            `            FOR EACH ROW EXECUTE FUNCTION _outbox_capture(${args});\n` +
+            `    END IF;\n` +
+            `END $$;`,
+        );
+    }
+    return `\n${out.join("\n")}\n`;
+}
+
+/**
  * Counter-local machinery that has no Prisma model, appended after the generated DDL.
  *
  * It lives here rather than in `localDbProvisioner.ts` for one reason: the provisioner
@@ -192,6 +244,35 @@ function generate(): string {
  * so the operation is safe to repeat and safe to run on an already-working counter.
  */
 const COUNTER_LOCAL_DDL = `
+-- ── Counter-local: outbox of local writes awaiting push ─────────────────────
+CREATE TABLE IF NOT EXISTS "_outbox" (
+    id               SERIAL PRIMARY KEY,
+    table_name       text        NOT NULL,
+    row_pk           text        NOT NULL,
+    row_key          jsonb       NOT NULL DEFAULT '{}'::jsonb,
+    operation        text        NOT NULL CHECK (operation IN ('create', 'update')),
+    payload          jsonb       NOT NULL,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    pushed_at        timestamptz,
+    idempotency_key  text        UNIQUE NOT NULL DEFAULT gen_random_uuid()::text,
+    error            text,
+    attempts         integer     NOT NULL DEFAULT 0,
+    next_attempt_at  timestamptz,
+    dead_lettered_at timestamptz
+);
+-- Backfills for a replica provisioned before these columns existed. The generated
+-- section above gets these automatically (see addColumnBackfills); this hand-written
+-- section has to spell them out.
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "row_key" jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "attempts" integer NOT NULL DEFAULT 0;
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "next_attempt_at" timestamptz;
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "dead_lettered_at" timestamptz;
+ALTER TABLE "_outbox" ALTER COLUMN "idempotency_key" SET DEFAULT gen_random_uuid()::text;
+
+-- The flusher's queue scan: pending, not dead-lettered, not backing off, in id order.
+CREATE INDEX IF NOT EXISTS "_outbox_pending_idx"
+    ON "_outbox" (id) WHERE pushed_at IS NULL AND dead_lettered_at IS NULL;
+
 -- ── Counter-local: reserved autoincrement id range ──────────────────────────
 CREATE TABLE IF NOT EXISTS "_id_ranges" (
     only_row    boolean PRIMARY KEY DEFAULT true CHECK (only_row),
@@ -252,7 +333,52 @@ END;
 $fn$;
 
 REVOKE ALL ON FUNCTION _apply_id_range(integer) FROM PUBLIC;
-`;
+
+-- ── Counter-local: outbox capture ───────────────────────────────────────────
+CREATE OR REPLACE FUNCTION _outbox_capture()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+    v_row jsonb;
+    v_key jsonb := '{}'::jsonb;
+    v_pk  text;
+    v_col text;
+BEGIN
+    -- Prisma writes no-op updates in a few places; there is nothing to ship.
+    IF TG_OP = 'UPDATE' AND OLD IS NOT DISTINCT FROM NEW THEN
+        RETURN NULL;
+    END IF;
+
+    v_row := to_jsonb(NEW);
+
+    -- PK column names arrive as trigger arguments, so one function serves every
+    -- table, compound keys included.
+    FOREACH v_col IN ARRAY TG_ARGV LOOP
+        v_key := v_key || jsonb_build_object(v_col, v_row -> v_col);
+    END LOOP;
+
+    SELECT string_agg(v_row ->> u.col, chr(31) ORDER BY u.ord)
+      INTO v_pk
+      FROM unnest(TG_ARGV) WITH ORDINALITY AS u(col, ord);
+
+    INSERT INTO "_outbox" (table_name, row_pk, row_key, operation, payload)
+    VALUES (
+        TG_TABLE_NAME,
+        coalesce(v_pk, ''),
+        v_key,
+        CASE TG_OP WHEN 'INSERT' THEN 'create' ELSE 'update' END,
+        v_row
+    );
+
+    RETURN NULL;
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION _outbox_capture() FROM PUBLIC;
+${outboxTriggers()}`;
 
 /** Compare on content, not bytes: this repo checks out CRLF on Windows. */
 function normalise(text: string): string {
@@ -269,6 +395,18 @@ function main(): void {
     const tables = (generated.match(/^CREATE TABLE IF NOT EXISTS "[A-Za-z]/gm) ?? []).length;
     // Wrapped in a DO block for idempotency, so no longer at line start — see makeIdempotent().
     const enums = (generated.match(/CREATE TYPE "/g) ?? []).length;
+    const triggers = (generated.match(/CREATE TRIGGER "_outbox_capture"/g) ?? []).length;
+
+    // Every replicated table must carry a capture trigger. A table in the registry with
+    // no trigger is a table whose local writes never reach the cloud — the exact
+    // failure the old hand-written model list produced, and just as quiet.
+    const registryCount = Object.keys(
+        (JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8")) as { tables: Record<string, unknown> }).tables,
+    ).length;
+    if (triggers !== registryCount) {
+        console.error(`[local-schema] TRIGGER GAP: ${triggers} capture triggers for ${registryCount} registry tables.`);
+        process.exit(1);
+    }
 
     if (check) {
         if (!fs.existsSync(OUT_FILE)) {
@@ -282,13 +420,13 @@ function main(): void {
             console.error("[local-schema] Run `pnpm db:local-schema` and commit the result.");
             process.exit(1);
         }
-        console.log(`[local-schema] OK — in sync (${tables} tables, ${enums} enums).`);
+        console.log(`[local-schema] OK — in sync (${tables} tables, ${enums} enums, ${triggers} capture triggers).`);
         return;
     }
 
     fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
     fs.writeFileSync(OUT_FILE, generated, "utf8");
-    console.log(`[local-schema] Wrote resources/local-schema.sql — ${tables} tables, ${enums} enums.`);
+    console.log(`[local-schema] Wrote resources/local-schema.sql — ${tables} tables, ${enums} enums, ${triggers} capture triggers.`);
 }
 
 try {

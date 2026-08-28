@@ -40,47 +40,26 @@ export const OUTBOX_MODEL_DELEGATES: Record<string, string> = {
 export interface OutboxRecord {
     id: number;
     table_name: string;
+    /** PK values joined by US (0x1f) — for logs. Use `row_key` to address the row. */
     row_pk: string;
+    /** `{column: value}` for the row's primary key, compound keys included. */
+    row_key: Record<string, unknown>;
     operation: "create" | "update";
     payload: Record<string, unknown>;
     created_at: Date;
     pushed_at: Date | null;
     idempotency_key: string;
     error: string | null;
+    attempts: number;
+    next_attempt_at: Date | null;
+    dead_lettered_at: Date | null;
 }
 
-export interface EnqueueOutboxParams {
-    tableName: string;
-    rowPk: string;
-    operation: "create" | "update";
-    payload: Record<string, unknown>;
-    idempotencyKey?: string;
-}
-
-/**
- * Generates a stable idempotency key if one is not provided.
- */
-export function generateIdempotencyKey(tableName: string, rowPk: string, operation: string): string {
-    return `${tableName}:${rowPk}:${operation}:${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-/**
- * Enqueues an offline mutation into `_outbox` using a raw SQL client or transaction client.
- */
-export async function enqueueOutbox(
-    client: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
-    params: EnqueueOutboxParams,
-): Promise<void> {
-    const { tableName, rowPk, operation, payload } = params;
-    const idempotencyKey = params.idempotencyKey || generateIdempotencyKey(tableName, rowPk, operation);
-
-    await client.query(
-        `INSERT INTO "_outbox" (table_name, row_pk, operation, payload, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (idempotency_key) DO NOTHING`,
-        [tableName, rowPk, operation, JSON.stringify(payload), idempotencyKey],
-    );
-}
+// Nothing enqueues from TypeScript any more. Rows are written by the `_outbox_capture`
+// trigger on every replicated table (see scripts/gen-local-schema.ts), which records
+// the committed row rather than the arguments that produced it and cannot be bypassed
+// by createMany, upsert, a nested write or raw SQL. `idempotency_key` is filled by its
+// column default.
 
 /**
  * Retrieves unpushed outbox records in chronological order.

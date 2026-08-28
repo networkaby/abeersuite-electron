@@ -13,6 +13,7 @@ export interface ElectronAPI {
     getCounterSetup: () => Promise<{ counterId: number; counterNumber: number } | null>;
     saveCounterSetup: (setup: { counterId: number; counterNumber: number }) => Promise<boolean>;
     clearCounterSetup: () => Promise<boolean>;
+    updateWindowStatus: (status: { sync: string; connection: string }) => Promise<void>;
     platform: string;
 }
 
@@ -32,6 +33,7 @@ const electronAPI: ElectronAPI = {
     getCounterSetup: () => ipcRenderer.invoke("counter:get-setup"),
     saveCounterSetup: (setup) => ipcRenderer.invoke("counter:save-setup", setup),
     clearCounterSetup: () => ipcRenderer.invoke("counter:clear-setup"),
+    updateWindowStatus: (status) => ipcRenderer.invoke("app:update-window-status", status),
     platform: process.platform,
 };
 

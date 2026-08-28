@@ -5603,6 +5603,35 @@ EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
+-- ── Counter-local: outbox of local writes awaiting push ─────────────────────
+CREATE TABLE IF NOT EXISTS "_outbox" (
+    id               SERIAL PRIMARY KEY,
+    table_name       text        NOT NULL,
+    row_pk           text        NOT NULL,
+    row_key          jsonb       NOT NULL DEFAULT '{}'::jsonb,
+    operation        text        NOT NULL CHECK (operation IN ('create', 'update')),
+    payload          jsonb       NOT NULL,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    pushed_at        timestamptz,
+    idempotency_key  text        UNIQUE NOT NULL DEFAULT gen_random_uuid()::text,
+    error            text,
+    attempts         integer     NOT NULL DEFAULT 0,
+    next_attempt_at  timestamptz,
+    dead_lettered_at timestamptz
+);
+-- Backfills for a replica provisioned before these columns existed. The generated
+-- section above gets these automatically (see addColumnBackfills); this hand-written
+-- section has to spell them out.
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "row_key" jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "attempts" integer NOT NULL DEFAULT 0;
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "next_attempt_at" timestamptz;
+ALTER TABLE "_outbox" ADD COLUMN IF NOT EXISTS "dead_lettered_at" timestamptz;
+ALTER TABLE "_outbox" ALTER COLUMN "idempotency_key" SET DEFAULT gen_random_uuid()::text;
+
+-- The flusher's queue scan: pending, not dead-lettered, not backing off, in id order.
+CREATE INDEX IF NOT EXISTS "_outbox_pending_idx"
+    ON "_outbox" (id) WHERE pushed_at IS NULL AND dead_lettered_at IS NULL;
+
 -- ── Counter-local: reserved autoincrement id range ──────────────────────────
 CREATE TABLE IF NOT EXISTS "_id_ranges" (
     only_row    boolean PRIMARY KEY DEFAULT true CHECK (only_row),
@@ -5663,3 +5692,840 @@ END;
 $fn$;
 
 REVOKE ALL ON FUNCTION _apply_id_range(integer) FROM PUBLIC;
+
+-- ── Counter-local: outbox capture ───────────────────────────────────────────
+CREATE OR REPLACE FUNCTION _outbox_capture()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+    v_row jsonb;
+    v_key jsonb := '{}'::jsonb;
+    v_pk  text;
+    v_col text;
+BEGIN
+    -- Prisma writes no-op updates in a few places; there is nothing to ship.
+    IF TG_OP = 'UPDATE' AND OLD IS NOT DISTINCT FROM NEW THEN
+        RETURN NULL;
+    END IF;
+
+    v_row := to_jsonb(NEW);
+
+    -- PK column names arrive as trigger arguments, so one function serves every
+    -- table, compound keys included.
+    FOREACH v_col IN ARRAY TG_ARGV LOOP
+        v_key := v_key || jsonb_build_object(v_col, v_row -> v_col);
+    END LOOP;
+
+    SELECT string_agg(v_row ->> u.col, chr(31) ORDER BY u.ord)
+      INTO v_pk
+      FROM unnest(TG_ARGV) WITH ORDINALITY AS u(col, ord);
+
+    INSERT INTO "_outbox" (table_name, row_pk, row_key, operation, payload)
+    VALUES (
+        TG_TABLE_NAME,
+        coalesce(v_pk, ''),
+        v_key,
+        CASE TG_OP WHEN 'INSERT' THEN 'create' ELSE 'update' END,
+        v_row
+    );
+
+    RETURN NULL;
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION _outbox_capture() FROM PUBLIC;
+
+DO $$ BEGIN
+    IF to_regclass('public."Account"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Account";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Account"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."AccountAlias"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "AccountAlias";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "AccountAlias"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."AccountGroup"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "AccountGroup";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "AccountGroup"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."additional_cost_allocations"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "additional_cost_allocations";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "additional_cost_allocations"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."AuditLog"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "AuditLog";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "AuditLog"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BiGstPlanningConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BiGstPlanningConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BiGstPlanningConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BiGstPlanningFy"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BiGstPlanningFy";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BiGstPlanningFy"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('fyStartYear');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BiGstPlanningMonth"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BiGstPlanningMonth";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BiGstPlanningMonth"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('yearMonth');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BooksConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BooksConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BooksConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Branch"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Branch";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Branch"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Call"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Call";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Call"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ChatMessage"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ChatMessage";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ChatMessage"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ChatRoom"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ChatRoom";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ChatRoom"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ChatRoomMember"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ChatRoomMember";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ChatRoomMember"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Company"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Company";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Company"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Coupon"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Coupon";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Coupon"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CouponConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CouponConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CouponConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CouponProductRule"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CouponProductRule";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CouponProductRule"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CouponRedemption"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CouponRedemption";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CouponRedemption"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CreditLimitConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CreditLimitConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CreditLimitConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CustomerGroup"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CustomerGroup";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CustomerGroup"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CustomerSocialProfile"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CustomerSocialProfile";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CustomerSocialProfile"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CustomerTier"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CustomerTier";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CustomerTier"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CustomerTierPeriod"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CustomerTierPeriod";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CustomerTierPeriod"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."delivery_methods"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "delivery_methods";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "delivery_methods"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Department"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Department";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Department"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."DepartmentPermission"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "DepartmentPermission";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "DepartmentPermission"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('departmentId', 'permissionId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Device"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Device";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Device"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Email"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Email";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Email"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."GiftCard"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "GiftCard";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "GiftCard"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."GiftCardTxn"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "GiftCardTxn";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "GiftCardTxn"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."GstRate"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "GstRate";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "GstRate"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvAttributeMaster"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvAttributeMaster";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvAttributeMaster"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvBom"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvBom";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvBom"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvBomLine"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvBomLine";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvBomLine"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvBrand"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvBrand";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvBrand"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvCategory"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvCategory";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvCategory"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvNamingConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvNamingConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvNamingConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvProduct"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvProduct";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvProduct"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."inv_product_branches"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "inv_product_branches";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "inv_product_branches"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('productId', 'branchId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."inv_product_codes"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "inv_product_codes";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "inv_product_codes"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvProductGroup"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvProductGroup";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvProductGroup"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvStockLedger"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvStockLedger";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvStockLedger"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvUnit"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvUnit";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvUnit"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."InvWarrantyTerm"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvWarrantyTerm";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvWarrantyTerm"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyAccount"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyAccount";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyAccount"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyEarnRule"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyEarnRule";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyEarnRule"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyLedger"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyLedger";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyLedger"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyLot"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyLot";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyLot"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyMilestone"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyMilestone";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyMilestone"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."LoyaltyMilestoneAward"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyMilestoneAward";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyMilestoneAward"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."OrgDefaults"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "OrgDefaults";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "OrgDefaults"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."payment_gateways"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "payment_gateways";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "payment_gateways"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Permission"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Permission";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Permission"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Person"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Person";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Person"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."PersonCompany"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PersonCompany";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PersonCompany"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."PersonPortalCredential"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PersonPortalCredential";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PersonPortalCredential"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Phone"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Phone";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Phone"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Pipeline"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Pipeline";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Pipeline"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_cash_drops"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_cash_drops";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_cash_drops"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_counters"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_counters";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_counters"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_counter_payment_accounts"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_counter_payment_accounts";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_counter_payment_accounts"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_expenditures"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_expenditures";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_expenditures"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_handovers"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_handovers";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_handovers"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Position"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Position";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Position"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."PositionRole"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PositionRole";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PositionRole"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('positionId', 'roleId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_receipts"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_receipts";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_receipts"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_services"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_services";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_services"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."pos_shifts"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_shifts";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_shifts"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."product_protection"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "product_protection";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "product_protection"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."QuickNote"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "QuickNote";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "QuickNote"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."redemption_holds"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "redemption_holds";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "redemption_holds"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Role"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Role";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Role"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."RolePermission"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "RolePermission";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "RolePermission"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('roleId', 'permissionId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."SavedFilter"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "SavedFilter";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "SavedFilter"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ServiceCenter"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ServiceCenter";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ServiceCenter"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."SocialConnection"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "SocialConnection";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "SocialConnection"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."StatusTransition"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "StatusTransition";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "StatusTransition"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."stock_reservations"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "stock_reservations";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "stock_reservations"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."strategy_points"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "strategy_points";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "strategy_points"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TaskRecurrence"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TaskRecurrence";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TaskRecurrence"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Ticket"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Ticket";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Ticket"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketDeal"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketDeal";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketDeal"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('ticketId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketDelivery"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketDelivery";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketDelivery"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('ticketId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketHelp"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketHelp";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketHelp"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('ticketId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketLog"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketLog";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketLog"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketOrder"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketOrder";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketOrder"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('ticketId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketOrderLine"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketOrderLine";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketOrderLine"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketParticipant"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketParticipant";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketParticipant"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketRefund"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketRefund";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketRefund"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('ticketId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketRepair"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketRepair";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketRepair"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('ticketId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketStatus"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketStatus";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketStatus"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."TicketWorker"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "TicketWorker";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "TicketWorker"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."UniversalVoucher"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UniversalVoucher";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "UniversalVoucher"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."User"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "User";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "User"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."UserPermission"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserPermission";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "UserPermission"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."UserPosition"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserPosition";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "UserPosition"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('userId', 'positionId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."UserSurfaceSeen"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserSurfaceSeen";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "UserSurfaceSeen"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('userId', 'surface');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherAllocation"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherAllocation";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherAllocation"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherDetail"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherDetail";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherDetail"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherGlLine"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherGlLine";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherGlLine"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherInventoryLine"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherInventoryLine";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherInventoryLine"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherLink"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherLink";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherLink"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherPrintTemplate"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherPrintTemplate";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherPrintTemplate"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherSeries"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherSeries";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherSeries"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WallPost"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WallPost";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WallPost"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WallPostComment"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WallPostComment";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WallPostComment"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WallPostLike"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WallPostLike";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WallPostLike"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Work"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Work";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Work"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WorkerTransition"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WorkerTransition";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WorkerTransition"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WorkGroup"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WorkGroup";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WorkGroup"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WorkGroupWork"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WorkGroupWork";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WorkGroupWork"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('workGroupId', 'workId');
+    END IF;
+END $$;

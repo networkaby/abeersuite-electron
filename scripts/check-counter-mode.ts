@@ -80,8 +80,10 @@ async function counterMode(): Promise<Check[]> {
     out.push(["demotes to LOCAL on live failure", mode.getMode() === "LOCAL"]);
     out.push(["LOCAL mode swaps to a different delegate", proxy.user !== live.user]);
 
-    // The replica is a mirror: a write landing there would look like it succeeded,
-    // be invisible everywhere else, then vanish at the next sync. Refuse it instead.
+    // No confirmed id range on this machine (there is no database here at all, and
+    // the check fails closed), so every local write is refused. This is the gate that
+    // replaced the 36-model allowlist: an unreserved sequence mints ids from 1, and
+    // the push then upserts them over unrelated cloud rows.
     let blocked = false;
     try {
         await (proxy.user as { create: (a: unknown) => Promise<unknown> })
@@ -89,17 +91,31 @@ async function counterMode(): Promise<Check[]> {
     } catch (e) {
         blocked = isOfflineWriteBlocked(e);
     }
-    out.push(["write while LOCAL throws OfflineWriteBlockedError", blocked]);
+    out.push(["write with no confirmed id range is refused", blocked]);
 
-    // Raw execution bypasses $allModels entirely and needs its own guard.
+    // Deletes are refused on their own terms, ahead of the id-range check — the one
+    // guard that survives regardless of how well provisioned the counter is.
+    let deleteBlocked = false;
+    try {
+        await (proxy.user as { delete: (a: unknown) => Promise<unknown> })
+            .delete({ where: { id: 1 } });
+    } catch (e) {
+        deleteBlocked = isOfflineWriteBlocked(e);
+    }
+    out.push(["delete while LOCAL throws OfflineWriteBlockedError", deleteBlocked]);
+
+    // Raw execution is deliberately NO LONGER blocked at this layer. The replica is
+    // where this machine's work is written now, not a read-only mirror; the capture
+    // trigger records raw writes like any other, and the smx_app role still has no
+    // DDL and no DELETE. It should fail on the (absent) connection, not on a guard.
     let rawBlocked = false;
     try {
         await (m.prisma as unknown as { $executeRawUnsafe: (s: string) => Promise<unknown> })
-            .$executeRawUnsafe('DELETE FROM "User"');
+            .$executeRawUnsafe('UPDATE "User" SET name = name');
     } catch (e) {
         rawBlocked = isOfflineWriteBlocked(e);
     }
-    out.push(["$executeRawUnsafe while LOCAL is refused", rawBlocked]);
+    out.push(["$executeRawUnsafe is not guard-blocked any more", !rawBlocked]);
 
     return out;
 }

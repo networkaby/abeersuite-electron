@@ -3,6 +3,7 @@ import { DM_Sans, Space_Mono, Roboto_Condensed } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import CounterReconciler from "@/shared/components/CounterReconciler";
+import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { CANONICAL_SITE_URL, INDEXABLE } from "@/shared/lib/appMode";
 
@@ -66,6 +67,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <CounterReconciler />
+        <StatusTitleUpdater />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

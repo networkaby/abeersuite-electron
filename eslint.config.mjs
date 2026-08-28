@@ -36,10 +36,24 @@ const eslintConfig = defineConfig([
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
+    "node_modules/**",
+    "**/node_modules/**",
+    ".git/**",
     ".next/**",
     "out/**",
     "build/**",
+    "dist/**",
+    "dist-app/**",
+    "dist-electron/**",
+    "src/generated/**",
+    "playwright-report/**",
+    "test-results/**",
+    ".pg-download-cache/**",
+    ".cursor/**",
+    ".kilo/**",
+    ".freebuff/**",
+    "scratch/**",
+    ".gemini/**",
     "next-env.d.ts",
     ".claude/**",
     // The replica sync worker. Plain CommonJS Node, run as a child process under

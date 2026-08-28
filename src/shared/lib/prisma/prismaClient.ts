@@ -15,8 +15,6 @@ import {
     IS_COUNTER_PC,
 } from "./counterMode";
 import { isVoucherTypeSafeOffline, getOfflineVoucherBlockedReason } from "@/shared/lib/accountancy/offlineVoucherSafety";
-import { OFFLINE_SEQUENCE_MAP } from "@/shared/lib/counter/idRange";
-import { enqueueOutbox, OUTBOX_MODEL_DELEGATES } from "@/shared/lib/sync/outbox";
 
 // ── Two databases, or one ───────────────────────────────────────────────────
 // DATABASE_URL is Supabase — the source of truth, and on Vercel the only database
@@ -252,63 +250,23 @@ function wrapLive(allowLocalRedirect: boolean): PrismaClient {
     }) as unknown as PrismaClient;
 }
 
-const MASTER_AND_BRANCH_MODELS = new Set([
-    // Products & Inventory Masters
-    "InvProduct",
-    "InvProductVariant",
-    "InvProductBranch",
-    "InvProductPrice",
-    "InvUnit",
-    "InvBrand",
-    "InvCategory",
-    "InvSubCategory",
-    "InvRack",
-    "InvStockLedger",
-    // Contacts & Customers
-    "Person",
-    "Company",
-    "PersonCompany",
-    "Address",
-    // Accounts & Ledgers
-    "Account",
-    "AccountGroup",
-    // POS & Shifts
-    "PosShift",
-    "PosShiftCashCount",
-    "PosCounter",
-    "PosService",
-    // Universal Voucher Spine & Details
-    "UniversalVoucher",
-    "VoucherDetail",
-    "VoucherInventoryLine",
-    "VoucherGlLine",
-    "VoucherLink",
-    "VoucherSeries",
-    "BooksConfig",
-    // Loyalty & Retention
-    "LoyaltyLedger",
-    "LoyaltyConfig",
-    "LoyaltyMilestone",
-    "CouponRedemption",
-    "GiftCardRedemption",
-    // Tickets & CRM
-    "Ticket",
-    "TicketRepair",
-    "TicketHelp",
-    "TicketDeal",
-    "TicketLog",
-    "AuditLog",
-]);
 
 // ── Id-range confirmation cache ──────────────────────────────────────────────
-// The 7 models in OFFLINE_SEQUENCE_MAP mint their own primary key locally
-// (autoincrement sequences) — writing one before applyIdRanges() has actually
-// restarted those sequences on THIS machine risks the exact cross-counter/cloud
-// id collision the whole scheme exists to prevent. `_id_ranges` is the same
-// bookkeeping table electron/applyIdRanges.ts writes to on success; read it as
-// the single source of truth rather than trusting the shift-open response.
-// Cached briefly — this is checked on every offline write to a sequence table,
-// and the table only ever changes once per shift-open/setup.
+// 79 models mint their own primary key locally (autoincrement sequences) —
+// writing one before _apply_id_range() has actually restarted those sequences on
+// THIS machine risks the exact cross-counter/cloud id collision the whole scheme
+// exists to prevent, and does it silently: the push upserts by id, so a colliding
+// row overwrites an unrelated cloud record. `_id_ranges` is the bookkeeping table
+// that function writes on success; read it as the single source of truth rather
+// than trusting the shift-open response.
+//
+// This gates EVERY local write, not just the sequence-backed models. Once local is
+// a normal place to write rather than an emergency, a confirmed range is a
+// precondition for the counter functioning at all — and a per-model exemption list
+// is precisely the kind of hand-kept thing that drifted before.
+//
+// Cached briefly — checked on every local write, and the table only ever changes
+// at shift-open/setup.
 const ID_RANGE_CACHE_TTL_MS = 30_000;
 let idRangeAppliedCache: { value: boolean; checkedAt: number } | null = null;
 
@@ -334,41 +292,66 @@ async function isOfflineRangeApplied(basePrisma: PrismaClient): Promise<boolean>
 
 /**
  * The replica client.
- * Serves local reads and allows safe offline master data creation/editing and branch-owned transactions.
- * Strictly blocks all deletions across all models while offline.
+ *
+ * Two guards, and deliberately no more. What used to be here — an allowlist of 36
+ * writable models, a 14-model outbox map, and a block on raw execution — is gone:
+ *
+ *   - The **allowlist** was the direct cause of two silent data faults. Three models
+ *     had outbox entries but were missing from it, so their writes threw; 27 models
+ *     were in it with no outbox entry, so their writes succeeded locally and never
+ *     reached the cloud — products, customers, accounts, stock ledger, loyalty
+ *     ledger. A list of "models the counter may write" is a list of features it has,
+ *     which is what `requireAuth` and the permission system already decide.
+ *   - The **outbox enqueue** now happens in a Postgres trigger (see
+ *     `_outbox_capture` in scripts/gen-local-schema.ts). It records the committed
+ *     row rather than `args.data`, and it cannot be bypassed by `createMany`,
+ *     `upsert`, a nested write or raw SQL — all of which slipped past the version
+ *     that lived here.
+ *   - The **raw-execution block** existed to keep the replica a pristine mirror.
+ *     It is not one any more; it is where this machine's work is written first. The
+ *     trigger captures raw writes like any other, and the `smx_app` role still has
+ *     no DDL and no DELETE, so raw SQL cannot do the two irreversible things.
  */
 function createLocal(): PrismaClient {
     const basePrisma = new PrismaClient({ adapter: new PrismaPg(createPool(localUrl)) });
     return basePrisma.$extends({
-        name: "replica-is-read-only",
+        name: "replica-write-guard",
         query: {
             $allModels: {
                 async $allOperations({ model, operation, args, query }) {
                     if (!READ_OPS.has(operation)) {
-                        // 1. Strict Invariant: NO DELETIONS ALLOWED OFFLINE
+                        // 1. No deletes, ever. A delete replayed against a row another
+                        // counter has since changed is not recoverable, and the reconcile
+                        // pass cannot tell a local delete from a row it never received.
+                        // Enforced twice: here for a message a cashier can act on, and in
+                        // the `smx_app` grant, which is what survives raw SQL, a cascade,
+                        // or a future refactor of this extension.
                         if (operation === "delete" || operation === "deleteMany") {
                             throw new OfflineWriteBlockedError(
                                 model ?? "unknown",
                                 operation,
-                                `Offline: deleting records from ${model} is disabled while offline to prevent data loss.`
+                                `Deleting ${model} records is not possible on a counter — do it from an office machine.`,
                             );
                         }
 
-                        // 1.5. Id-range-backed tables need a CONFIRMED applied range, not
-                        // just an Offline Policies allow — an unconfirmed range means this
-                        // counter would mint ids starting at 1, colliding with the cloud
-                        // or another counter the moment it syncs.
-                        if (model && Object.prototype.hasOwnProperty.call(OFFLINE_SEQUENCE_MAP, model)) {
-                            if (!(await isOfflineRangeApplied(basePrisma))) {
-                                throw new OfflineWriteBlockedError(
-                                    model,
-                                    operation,
-                                    `Offline: this counter's reserved id range is not confirmed applied — ${model} cannot be created offline until it is.`,
-                                );
-                            }
+                        // 2. Nothing may be written until this counter's id range is
+                        // confirmed applied. See the note on isOfflineRangeApplied: this
+                        // covers every model, because an unreserved sequence mints ids
+                        // from 1 and the push then overwrites an unrelated cloud row.
+                        if (!(await isOfflineRangeApplied(basePrisma))) {
+                            throw new OfflineWriteBlockedError(
+                                model ?? "unknown",
+                                operation,
+                                "This counter's reserved id range is not confirmed applied yet — nothing can be written locally until it is. Re-open the shift, or re-run counter setup.",
+                            );
                         }
 
-                        // 2. Enforce Offline Policies on vouchers
+                        // 3. Offline voucher policy. Still correct while local writes only
+                        // happen as an outage fallback: those types need live validation
+                        // and the outage is temporary. When WRITE_MODE=local makes local
+                        // the normal destination, this has to become conditional on the
+                        // fallback — permanently refusing them would break the counter
+                        // rather than protect it.
                         if (model === "UniversalVoucher") {
                             const data = (args as { data?: { type?: string } })?.data;
                             if (data?.type && !isVoucherTypeSafeOffline(data.type)) {
@@ -379,52 +362,9 @@ function createLocal(): PrismaClient {
                                 );
                             }
                         }
-
-                        // 3. Allow safe Master creation & editing, and branch-owned POS transactions
-                        if (MASTER_AND_BRANCH_MODELS.has(model ?? "")) {
-                            // 3.5. Outbox-tracked models must enqueue in the SAME local
-                            // transaction as the write itself — enqueueOutbox() had zero
-                            // callers before this, so nothing ever reached _outbox and the
-                            // push endpoint had nothing to replay. A crash between a
-                            // successful write and a separate enqueue call would silently
-                            // lose the mutation, which is exactly what the outbox's own
-                            // durability contract exists to prevent.
-                            const delegateName = model ? OUTBOX_MODEL_DELEGATES[model] : undefined;
-                            if (delegateName && (operation === "create" || operation === "update")) {
-                                return basePrisma.$transaction(async (tx) => {
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                    const delegate = (tx as any)[delegateName];
-                                    const result = await delegate[operation](args);
-                                    const payload = (args as { data?: Record<string, unknown> })?.data ?? {};
-                                    await enqueueOutbox(
-                                        {
-                                            query: (sql: string, params?: unknown[]) =>
-                                                tx.$executeRawUnsafe(sql, ...(params ?? [])),
-                                        },
-                                        {
-                                            tableName: model as string,
-                                            rowPk: String((result as { id: number | string }).id),
-                                            operation,
-                                            payload,
-                                        },
-                                    );
-                                    return result;
-                                });
-                            }
-                            return query(args);
-                        }
-                        throw new OfflineWriteBlockedError(model ?? "unknown", operation);
                     }
                     return query(args);
                 },
-            },
-            async $executeRaw({ args, query }) {
-                void args; void query;
-                throw new OfflineWriteBlockedError("$executeRaw", "executeRaw");
-            },
-            async $executeRawUnsafe({ args, query }) {
-                void args; void query;
-                throw new OfflineWriteBlockedError("$executeRawUnsafe", "executeRawUnsafe");
             },
         },
     }) as unknown as PrismaClient;
