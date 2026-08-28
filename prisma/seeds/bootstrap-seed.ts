@@ -453,6 +453,7 @@ const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
     {
         id: "BR-HQ",
+        number: 1,
         name: "Head Office",
         // Legacy single-line — kept for old list rows that still consult it.
         address: `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
@@ -741,20 +742,20 @@ async function main() {
     for (const b of BRANCHES) {
         // Re-seed contract: insert with the full identity on a fresh DB so
         // invoices have a printable address on day one. On re-seed we touch
-        // only `name` and `isActive` — every other column is preserved so
+        // only `name`, `number` and `isActive` — every other column is preserved so
         // admin edits via /office/admin/branches survive `pnpm prisma db seed`.
         await pool.query(
             `INSERT INTO "Branch" (
-                id, name, address, phone, "isActive",
+                id, number, name, address, phone, "isActive",
                 "addressLine1", "addressLine2", city, state, "pinCode", country,
                 email, gstin, "gstStateCode"
              )
-             VALUES ($1, $2, $3, $4, true,
-                     $5, $6, $7, $8, $9, $10,
-                     $11, $12, $13)
-             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "isActive" = true`,
+             VALUES ($1, $2, $3, $4, $5, true,
+                     $6, $7, $8, $9, $10, $11,
+                     $12, $13, $14)
+             ON CONFLICT (id) DO UPDATE SET number = EXCLUDED.number, name = EXCLUDED.name, "isActive" = true`,
             [
-                b.id, b.name, b.address, b.phone,
+                b.id, b.number, b.name, b.address, b.phone,
                 b.addressLine1, b.addressLine2, b.city, b.state, b.pinCode, b.country,
                 b.email, b.gstin, b.gstStateCode,
             ],
@@ -955,16 +956,25 @@ async function main() {
             [b.id, counterName],
         );
         if (existing[0]) {
-            // Already exists — make sure the till account is wired and counterNumber is set.
+            // Already exists — just make sure the till account is wired.
+            // counterNumber is left untouched: it's GLOBALLY unique (see
+            // pos.prisma) and may already be set from a prior seed run.
             await pool.query(
-                `UPDATE "pos_counters" SET "tillAccountId" = $1, "counterNumber" = COALESCE("counterNumber", 1) WHERE id = $2`,
+                `UPDATE "pos_counters" SET "tillAccountId" = $1 WHERE id = $2`,
                 [tillId, existing[0].id],
             );
         } else {
+            // counterNumber is GLOBALLY unique across every branch (see pos.prisma)
+            // — auto-assign the next free number rather than hardcoding 1, so
+            // seeding a second/third branch never collides with an earlier one.
+            const { rows: maxRows } = await pool.query<{ max: number | null }>(
+                `SELECT MAX("counterNumber") AS max FROM "pos_counters"`,
+            );
+            const nextCounterNumber = (maxRows[0]?.max ?? 0) + 1;
             await pool.query(
                 `INSERT INTO "pos_counters" ("branchId", name, "counterNumber", "tillAccountId", "isActive")
-                 VALUES ($1, $2, 1, $3, true)`,
-                [b.id, counterName, tillId],
+                 VALUES ($1, $2, $3, $4, true)`,
+                [b.id, counterName, nextCounterNumber, tillId],
             );
         }
     }

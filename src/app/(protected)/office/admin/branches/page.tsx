@@ -13,6 +13,7 @@ import { branchAddressSummary } from "@/shared/lib/org/formatBranchAddress";
 
 interface Branch {
     id:           string;
+    number:       number;
     name:         string;
     address:      string | null; // legacy summary
     phone:        string | null;
@@ -32,6 +33,7 @@ interface Branch {
 
 interface FormState {
     id:           string;
+    number:       number | "";
     name:         string;
     address:      string;
     phone:        string;
@@ -48,7 +50,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-    id: "", name: "", address: "", phone: "",
+    id: "", number: "", name: "", address: "", phone: "",
     addressLine1: "", addressLine2: "", city: "", state: "",
     pinCode: "", country: "India",
     email: "", gstin: "", gstStateCode: "",
@@ -58,6 +60,7 @@ const EMPTY: FormState = {
 function fromBranch(b: Branch): FormState {
     return {
         id:           b.id,
+        number:       b.number,
         name:         b.name,
         address:      b.address      ?? "",
         phone:        b.phone        ?? "",
@@ -92,7 +95,12 @@ export default function BranchesPage() {
 
     useEffect(() => { loadBranches(); }, []);
 
-    const startAdd = () => { setForm(EMPTY); setEditId(null); setAddingNew(true); };
+    const startAdd = () => {
+        const nextNum = branches.length > 0 ? Math.max(...branches.map(b => b.number || 0)) + 1 : 1;
+        setForm({ ...EMPTY, number: nextNum });
+        setEditId(null);
+        setAddingNew(true);
+    };
     const startEdit = (b: Branch) => { setForm(fromBranch(b)); setEditId(b.id); setAddingNew(false); };
     const cancel    = () => { setAddingNew(false); setEditId(null); };
 
@@ -110,11 +118,17 @@ export default function BranchesPage() {
     const handleSave = async () => {
         if (!form.name.trim()) { toast.error("Name is required"); return; }
         if (addingNew && !form.id.trim()) { toast.error("ID is required"); return; }
+        const num = typeof form.number === "string" ? parseInt(form.number, 10) : form.number;
+        if (!num || isNaN(num) || num <= 0) {
+            toast.error("Branch number must be an integer greater than 0");
+            return;
+        }
         setSaving(true);
         try {
             // Send nullable empties as null so the column stays clean (avoids
             // empty strings vs nulls drift in the DB).
             const body: Record<string, unknown> = {
+                number:       num,
                 name:         form.name,
                 address:      form.address || null,
                 phone:        form.phone || null,
@@ -218,7 +232,8 @@ export default function BranchesPage() {
                                 />
                             ) : (
                                 <div className="flex items-center gap-4 px-4 py-3">
-                                    <div className="shrink-0">
+                                    <div className="shrink-0 flex items-center gap-1.5">
+                                        <Badge variant="outline" className="font-mono text-xs font-semibold">#{b.number}</Badge>
                                         <Badge className="font-mono text-xs">{b.id}</Badge>
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -284,22 +299,39 @@ function BranchForm({ form, set, onSave, onCancel, saving, title, isCreate, rena
             {/* Identity */}
             <section className="space-y-2">
                 <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">Identity</p>
-                <div className="grid grid-cols-2 gap-3">
-                    <Field label={`ID${isCreate ? " *" : ""}`} hint={isCreate ? "e.g. BR-HQ, BR-NYC" : undefined}>
-                        <Input
-                            value={form.id}
-                            onChange={(e) => set("id", e.target.value.toUpperCase())}
-                            className="font-mono uppercase"
-                        />
-                        {renameWarning && (
-                            <p className="text-[10px] text-amber-600 mt-0.5">
-                                Renaming ID — all linked departments, positions and inventory will cascade automatically.
-                            </p>
-                        )}
-                    </Field>
-                    <Field label="Name *">
-                        <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
-                    </Field>
+                <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-3">
+                        <Field label="Number *" hint="Unique positive integer (e.g. 1, 2)">
+                            <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={form.number}
+                                onChange={(e) => set("number", e.target.value === "" ? "" : parseInt(e.target.value, 10) || "")}
+                                className="font-mono"
+                                placeholder="1"
+                            />
+                        </Field>
+                    </div>
+                    <div className="col-span-4">
+                        <Field label={`ID${isCreate ? " *" : ""}`} hint={isCreate ? "e.g. BR-HQ, BR-NYC" : undefined}>
+                            <Input
+                                value={form.id}
+                                onChange={(e) => set("id", e.target.value.toUpperCase())}
+                                className="font-mono uppercase"
+                            />
+                            {renameWarning && (
+                                <p className="text-[10px] text-amber-600 mt-0.5">
+                                    Renaming ID — all linked departments, positions and inventory will cascade automatically.
+                                </p>
+                            )}
+                        </Field>
+                    </div>
+                    <div className="col-span-5">
+                        <Field label="Name *">
+                            <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
+                        </Field>
+                    </div>
                 </div>
             </section>
 

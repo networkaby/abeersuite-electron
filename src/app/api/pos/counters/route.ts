@@ -178,9 +178,12 @@ export async function POST(req: NextRequest) {
         const dupName = await prisma.posCounter.findFirst({ where: { branchId, name } });
         if (dupName) return NextResponse.json({ error: `Counter "${name}" already exists in ${branch.name}` }, { status: 409 });
 
-        // Reject duplicate (branchId, counterNumber).
-        const dupNum = await prisma.posCounter.findFirst({ where: { branchId, counterNumber } });
-        if (dupNum) return NextResponse.json({ error: `Counter number ${counterNumber} already exists in ${branch.name}` }, { status: 409 });
+        // counterNumber is GLOBALLY unique (not just per-branch) — it's embedded
+        // directly in the offline-safe numeric PK formula (shared/lib/id/numericId.ts)
+        // for Tickets/PosShifts/UniversalVoucher, so two counters in different
+        // branches must never share a number or their offline-minted ids collide.
+        const dupNum = await prisma.posCounter.findFirst({ where: { counterNumber }, select: { id: true, name: true, branch: { select: { name: true } } } });
+        if (dupNum) return NextResponse.json({ error: `Counter number ${counterNumber} is already used by "${dupNum.name}" in ${dupNum.branch.name}` }, { status: 409 });
 
         const tillName = `Cash – ${name} – ${branch.name}`;
 

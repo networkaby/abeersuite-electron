@@ -142,10 +142,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (dup) return NextResponse.json({ error: `Counter "${data.name}" already exists in this branch` }, { status: 409 });
         }
 
-        // If updating counterNumber, ensure no other counter in the same branch has that number.
+        // counterNumber is GLOBALLY unique (not just per-branch) — see the POST
+        // route for why (offline-safe numeric PK formula).
         if (data.counterNumber && data.counterNumber !== existing.counterNumber) {
-            const dup = await prisma.posCounter.findFirst({ where: { branchId: existing.branchId, counterNumber: data.counterNumber, NOT: { id } } });
-            if (dup) return NextResponse.json({ error: `Counter number ${data.counterNumber} already exists in this branch` }, { status: 409 });
+            const dup = await prisma.posCounter.findFirst({ where: { counterNumber: data.counterNumber, NOT: { id } }, select: { name: true, branch: { select: { name: true } } } });
+            if (dup) return NextResponse.json({ error: `Counter number ${data.counterNumber} is already used by "${dup.name}" in ${dup.branch.name}` }, { status: 409 });
         }
 
         // Block deactivation while a shift is OPEN or AWAITING_HANDOVER.

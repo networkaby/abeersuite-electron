@@ -11,6 +11,7 @@ const branchTextField = z.string().trim().optional().nullable();
 
 const updateSchema = z.object({
     id:       z.string().trim().min(1).regex(/^[A-Z0-9-]+$/, "ID must be uppercase letters, numbers and hyphens only").optional(),
+    number:   z.coerce.number().int().positive("Branch number must be a positive integer greater than 0").optional(),
     name:     z.string().trim().min(1).optional(),
     address:  branchTextField,
     phone:    branchTextField,
@@ -35,6 +36,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (error) return error;
 
         const payload = { ...data };
+
+        if (data.number !== undefined) {
+            const conflict = await prisma.branch.findFirst({
+                where: { number: data.number, NOT: { id } },
+            });
+            if (conflict) {
+                return NextResponse.json({ error: `Branch number ${data.number} already exists` }, { status: 409 });
+            }
+        }
 
         // GSTIN ↔ state guard, but only when the PATCH touched any of those
         // three fields. Otherwise we'd reject "rename only" PATCHes whose

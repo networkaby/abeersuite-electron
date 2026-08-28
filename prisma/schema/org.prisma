@@ -1,8 +1,9 @@
 // ── Org structure — Branch, Department & Position ─────────────────────────────
 
 model Branch {
-  id   String @id
-  name String
+  id     String @id
+  number Int    @unique
+  name   String
 
   // Legacy free-form single-line address. Kept for back-compat with older
   // list / display surfaces. New structured fields below are the canonical

@@ -11,6 +11,7 @@ const branchTextField = z.string().trim().optional().nullable();
 
 const createSchema = z.object({
     id:       z.string().trim().min(1, "ID is required").toUpperCase(),
+    number:   z.coerce.number().int().positive("Branch number must be a positive integer greater than 0"),
     name:     z.string().trim().min(1, "Name is required"),
     // Legacy single-line summary — kept for back-compat. Structured fields below
     // are the canonical identity used by invoice printing.
@@ -77,9 +78,14 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { id } = data;
-        const existing = await prisma.branch.findUnique({ where: { id } });
-        if (existing) return NextResponse.json({ error: "Branch ID already exists" }, { status: 409 });
+        const { id, number } = data;
+        const existing = await prisma.branch.findFirst({
+            where: { OR: [{ id }, { number }] },
+        });
+        if (existing) {
+            if (existing.id === id) return NextResponse.json({ error: "Branch ID already exists" }, { status: 409 });
+            if (existing.number === number) return NextResponse.json({ error: `Branch number ${number} already exists` }, { status: 409 });
+        }
 
         // GSTIN ↔ state-code/state-name integrity guard. Cross-checks all three
         // and rejects mismatches with a clear error.

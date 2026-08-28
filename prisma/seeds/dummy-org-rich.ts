@@ -30,11 +30,11 @@ const prisma = new PrismaClient({ adapter });
 // ── Branches ────────────────────────────────────────────────────────────────
 // Reuses BR-HQ (renamed to Headquarters – Mumbai) and adds 4 regional branches.
 const BRANCHES = [
-    { id: "BR-HQ",          name: "Headquarters – Mumbai", address: "Mumbai, Maharashtra" },
-    { id: "BR-GUWAHATI",    name: "Guwahati Branch",       address: "Guwahati, Assam" },
-    { id: "BR-ABHAYAPURI",  name: "Abhayapuri Branch",     address: "Abhayapuri, Assam" },
-    { id: "BR-BONGAIGAON",  name: "Bongaigaon Branch",     address: "Bongaigaon, Assam" },
-    { id: "BR-KOKRAJHAR",   name: "Kokrajhar Branch",      address: "Kokrajhar, Assam" },
+    { id: "BR-HQ",          number: 1, name: "Headquarters – Mumbai", address: "Mumbai, Maharashtra" },
+    { id: "BR-GUWAHATI",    number: 2, name: "Guwahati Branch",       address: "Guwahati, Assam" },
+    { id: "BR-ABHAYAPURI",  number: 3, name: "Abhayapuri Branch",     address: "Abhayapuri, Assam" },
+    { id: "BR-BONGAIGAON",  number: 4, name: "Bongaigaon Branch",     address: "Bongaigaon, Assam" },
+    { id: "BR-KOKRAJHAR",   number: 5, name: "Kokrajhar Branch",      address: "Kokrajhar, Assam" },
 ];
 
 // ── Departments (all org-wide; positions tag the specific branch) ──────────
@@ -169,10 +169,10 @@ async function main() {
     console.log("[1/4] Upserting branches…");
     for (const b of BRANCHES) {
         await pool.query(
-            `INSERT INTO "Branch" (id, name, address, "isActive")
-             VALUES ($1, $2, $3, true)
-             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, "isActive" = true`,
-            [b.id, b.name, b.address],
+            `INSERT INTO "Branch" (id, number, name, address, "isActive")
+             VALUES ($1, $2, $3, $4, true)
+             ON CONFLICT (id) DO UPDATE SET number = EXCLUDED.number, name = EXCLUDED.name, address = EXCLUDED.address, "isActive" = true`,
+            [b.id, b.number, b.name, b.address],
         );
         console.log(`  + ${b.id.padEnd(16)} ${b.name}`);
     }

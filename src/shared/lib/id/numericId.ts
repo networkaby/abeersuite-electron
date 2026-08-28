@@ -5,16 +5,34 @@
  * Formula: YY (2 digits FY) * 10,000,000 + Counter (2 digits) * 100,000 + Sequence (5 digits)
  * Fits comfortably in a standard PostgreSQL Int4 (max 2,147,483,647).
  *
+ * `counterNumber` (PosCounter.counterNumber) is assigned GLOBALLY unique across
+ * every branch at counter-creation time (see /api/pos/counters) — not just
+ * unique within its own branch — so two different branches' counters can never
+ * mint the same id. No branch component needed in the formula.
+ *
+ * There is deliberately NO fallback/default for a missing counter — a caller
+ * with no real counter context (e.g. an office/server path with no active
+ * PosShift) MUST NOT mint one of these ids; it would silently collide into
+ * Counter 1's lane. Such callers are expected to have a live-DB autoincrement
+ * id instead. See offline-sync design notes.
+ *
  * Examples:
  *   - FY 2026, Counter 1, Seq 45  -> 260100045
  *   - FY 2026, Counter 12, Seq 1  -> 261200001
  */
 
+const MAX_COUNTER = 99;
+const MAX_SEQ     = 99999;
+
 export function generateNumericId(fyYear: number, counterNumber: number, localSeq: number): number {
+    if (!Number.isInteger(counterNumber) || counterNumber < 1 || counterNumber > MAX_COUNTER) {
+        throw new Error(`generateNumericId: counterNumber must be 1-${MAX_COUNTER}, got ${counterNumber}`);
+    }
+    if (!Number.isInteger(localSeq) || localSeq < 1 || localSeq > MAX_SEQ) {
+        throw new Error(`generateNumericId: localSeq must be 1-${MAX_SEQ}, got ${localSeq}`);
+    }
     const yy = fyYear % 100;
-    const cc = Math.min(Math.max(counterNumber, 1), 99);
-    const seq = Math.min(Math.max(localSeq, 1), 99999);
-    return yy * 10_000_000 + cc * 100_000 + seq;
+    return yy * 10_000_000 + counterNumber * 100_000 + localSeq;
 }
 
 /**
