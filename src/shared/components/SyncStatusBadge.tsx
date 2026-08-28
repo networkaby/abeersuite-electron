@@ -6,11 +6,8 @@ import { timeAgo } from "@/shared/lib/format/timeAgo";
 
 /**
  * This PC's own offline-write sync state — "did my sale actually reach the
- * server yet?" Sourced from the outbox (`_outbox` table), flushed every 15s
- * by the in-process flusher (shared/lib/sync/flusher.ts). Not the same thing as
- * CounterStatusBadge,
- * which is about which database READS come from — this is about whether
- * WRITES made on this PC have gone out.
+ * server yet?" Sourced from the outbox (`_outbox` table), queried via
+ * /api/sync/status.
  *
  * Renders nothing off a counter PC, same as CounterStatusBadge — there is no
  * outbox to report on.
@@ -27,7 +24,7 @@ export default function SyncStatusBadge() {
         return (
             <span
                 className={`${base} border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-200`}
-                title={`${status.failed} saved item(s) could not be sent to the server after repeated attempts and need someone to look at them. Everything queued behind them is still going out normally. ${lastSynced}`}
+                title={`${status.failed} saved item(s) could not be sent to the server after repeated attempts and need attention. ${lastSynced}`}
                 aria-label={`Sync error — ${status.failed} rejected`}
             >
                 <CloudOff className="size-3.5" aria-hidden />
@@ -40,7 +37,7 @@ export default function SyncStatusBadge() {
         return (
             <span
                 className={`${base} border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200`}
-                title={`${status.pending} sale(s)/ticket(s) saved on this PC are queued and will upload automatically once connected. ${lastSynced}`}
+                title={`${status.pending} item(s) saved on this PC are queued and will upload automatically once connected. ${lastSynced}`}
                 aria-label={`Sync pending — ${status.pending} queued`}
             >
                 <CloudUpload className="size-3.5" aria-hidden />

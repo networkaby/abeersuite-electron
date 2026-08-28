@@ -9,9 +9,9 @@ import { getOutboxStatus } from "@/shared/lib/sync/outbox";
  * badge. "Sync done/pending": can this cashier trust their last sale actually
  * left this machine?
  *
- * Off a counter PC (no LOCAL_DATABASE_URL) there is no outbox to ask about —
- * report isCounter: false so the client hides the badge, same pattern as
- * /api/counter/status.
+ * Off a counter PC (no LOCAL_DATABASE_URL or IS_COUNTER_PC=false) there is no
+ * outbox to ask about — report isCounter: false so the client hides the badge,
+ * same pattern as /api/counter/status.
  */
 export async function GET() {
     const { response } = await requireAuth();

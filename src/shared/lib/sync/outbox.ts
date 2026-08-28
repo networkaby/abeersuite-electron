@@ -28,20 +28,20 @@ const { Client: PgClient } = require("pg") as typeof import("pg");
  * (no separate sequence, so no collision risk of their own).
  */
 export const OUTBOX_MODEL_DELEGATES: Record<string, string> = {
-    UniversalVoucher:     "universalVoucher",
-    VoucherDetail:        "voucherDetail",
-    VoucherGlLine:        "voucherGlLine",
+    UniversalVoucher: "universalVoucher",
+    VoucherDetail: "voucherDetail",
+    VoucherGlLine: "voucherGlLine",
     VoucherInventoryLine: "voucherInventoryLine",
-    VoucherLink:          "voucherLink",
-    Ticket:               "ticket",
-    TicketLog:            "ticketLog",
-    TicketRepair:         "ticketRepair",
-    TicketHelp:           "ticketHelp",
-    TicketDeal:           "ticketDeal",
-    PosShift:             "posShift",
-    PosCashDrop:          "posCashDrop",
-    PosExpenditure:       "posExpenditure",
-    PosReceipt:           "posReceipt",
+    VoucherLink: "voucherLink",
+    Ticket: "ticket",
+    TicketLog: "ticketLog",
+    TicketRepair: "ticketRepair",
+    TicketHelp: "ticketHelp",
+    TicketDeal: "ticketDeal",
+    PosShift: "posShift",
+    PosCashDrop: "posCashDrop",
+    PosExpenditure: "posExpenditure",
+    PosReceipt: "posReceipt",
 };
 
 export interface OutboxRecord {
@@ -110,7 +110,7 @@ export async function getPendingOutbox(localUrl: string, limit = 50): Promise<Ou
         console.error("[Outbox] Failed to fetch pending outbox records:", err);
         return [];
     } finally {
-        await client.end().catch(() => {});
+        await client.end().catch(() => { });
     }
 }
 
@@ -152,7 +152,7 @@ export async function markOutboxFailure(
     } catch (err) {
         console.error("[Outbox] Failed to record push failure:", err);
     } finally {
-        await client.end().catch(() => {});
+        await client.end().catch(() => { });
     }
 }
 
@@ -173,8 +173,15 @@ export async function markOutboxPushed(localUrl: string, ids: number[]): Promise
     } catch (err) {
         console.error("[Outbox] Failed to mark records as pushed:", err);
     } finally {
-        await client.end().catch(() => {});
+        await client.end().catch(() => { });
     }
+}
+
+export interface OutboxStatusResult {
+    pending: number;
+    failed: number;
+    retrying: number;
+    lastSyncedAt: string | null;
 }
 
 /**
@@ -185,12 +192,7 @@ export async function markOutboxPushed(localUrl: string, ids: number[]): Promise
  * something a cashier can act on; a dead-lettered one is the only state that needs a
  * human, and nothing surfaced it before.
  */
-export async function getOutboxStatus(localUrl: string): Promise<{
-    pending: number;
-    failed: number;
-    retrying: number;
-    lastSyncedAt: string | null;
-}> {
+export async function getOutboxStatus(localUrl: string): Promise<OutboxStatusResult> {
     const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5000 });
     try {
         await client.connect();
@@ -212,6 +214,6 @@ export async function getOutboxStatus(localUrl: string): Promise<{
     } catch {
         return { pending: 0, failed: 0, retrying: 0, lastSyncedAt: null };
     } finally {
-        await client.end().catch(() => {});
+        await client.end().catch(() => { });
     }
 }
