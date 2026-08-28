@@ -5,10 +5,13 @@
  * before the POS screen, on any Electron install with no local `counter.json`
  * (see staff/login/page.tsx, which redirects here instead of `dest`).
  *
- * Picks which PosCounter this PC is, and — if that counter has no counterNumber
- * yet — claims one (1–99). Immediately applies the resulting id-range to the
- * local replica's sequences before ever letting the counter bill anything, so
- * "set up" and "safe to write offline" become the same moment rather than two.
+ * Picks which PosCounter this PC is, binds the device lock to this machine, and
+ * immediately applies that counter's id-range to the local replica's sequences
+ * before ever letting it bill anything — so "set up", "this PC owns the counter"
+ * and "safe to write offline" all become the same moment rather than three.
+ *
+ * There is no counter-number step: counterNumber is permanent config, required
+ * when the counter is created in /office/admin/counters.
  *
  * Not skippable: no back door, no "later" option. A counter with no identity
  * cannot bill anything needing a counter-prefixed reference or write offline —
@@ -21,24 +24,16 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
-import { MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
+import { resolveMachineIdentity } from "@/shared/lib/counter/identity";
 
 interface CounterOption {
     id: number;
     name: string;
     branch: { name: string } | null;
-    counterNumber: number | null;
-    epbxExtension: string | null;
-}
-
-/** Clean 1–99 number, or null if this extension can't be used as one. */
-function extensionAsCounterNumber(ext: string | null): number | null {
-    const n = Number(ext);
-    return Number.isInteger(n) && n >= 1 && n <= MAX_COUNTER_NUMBER ? n : null;
+    counterNumber: number;
 }
 
 function CounterSetupForm() {
@@ -48,7 +43,6 @@ function CounterSetupForm() {
 
     const [counters, setCounters] = useState<CounterOption[] | null>(null);
     const [selectedId, setSelectedId] = useState<string>("");
-    const [numberInput, setNumberInput] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [loadError, setLoadError] = useState("");
 
@@ -65,36 +59,34 @@ function CounterSetupForm() {
     }, []);
 
     const selected = counters?.find((c) => String(c.id) === selectedId) ?? null;
-    const autoNumber = selected ? extensionAsCounterNumber(selected.epbxExtension) : null;
-    // Only ask for a number by hand when the counter has none yet AND its
-    // epbxExtension isn't already a clean 1–99 number to derive one from.
-    const needsNumber = selected && selected.counterNumber === null && autoNumber === null;
 
     const submit = async () => {
         if (!selected) { toast.error("Select which counter this PC is"); return; }
 
-        let counterNumber = selected.counterNumber ?? autoNumber;
-        if (needsNumber) {
-            const parsed = Number(numberInput);
-            if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_COUNTER_NUMBER) {
-                toast.error(`Enter a whole number from 1 to ${MAX_COUNTER_NUMBER}`);
-                return;
-            }
-            counterNumber = parsed;
-        }
-        if (counterNumber === null) return; // unreachable, satisfies TS
-
-        const stillUnclaimed = selected.counterNumber === null;
+        const counterNumber = selected.counterNumber;
         setSubmitting(true);
         try {
-            let idRangeStart: number | null = null;
-            if (stillUnclaimed) {
-                const { data } = await axios.post<{ idRangeStart: number }>(
-                    `/api/pos/counters/${selected.id}/claim-number`,
-                    needsNumber ? { counterNumber } : {},
-                );
-                idRangeStart = data.idRangeStart;
+            // Bind the device lock to this PC and get back the counter's id-range block.
+            // Sending the identity here is what makes setup and binding one action — see
+            // the route's header for why leaving it to shift-open was broken.
+            const identity = await resolveMachineIdentity();
+            const deviceId = identity.machineId ?? identity.legacyDeviceId;
+            if (!deviceId) {
+                toast.error("Could not identify this PC. Restart the app and try again.");
+                return;
             }
+
+            const { data } = await axios.post<{ idRangeStart: number | null }>(
+                `/api/pos/counters/${selected.id}/claim-number`,
+                {
+                    deviceId,
+                    ...(identity.legacyDeviceId && identity.legacyDeviceId !== deviceId
+                        ? { legacyDeviceId: identity.legacyDeviceId }
+                        : {}),
+                    deviceLabel: identity.deviceLabel,
+                },
+            );
+            const idRangeStart = data.idRangeStart;
 
             if (idRangeStart !== null && typeof window !== "undefined" && window.electronAPI?.applyIdRanges) {
                 const applied = await window.electronAPI.applyIdRanges(idRangeStart).catch(() => false);
@@ -148,22 +140,11 @@ function CounterSetupForm() {
                         </Select>
                     </div>
 
-                    {needsNumber && (
-                        <div className="space-y-2">
-                            <Label>Counter Number (1–{MAX_COUNTER_NUMBER})</Label>
-                            <Input
-                                type="number"
-                                min={1}
-                                max={MAX_COUNTER_NUMBER}
-                                value={numberInput}
-                                onChange={(e) => setNumberInput(e.target.value)}
-                                placeholder="e.g. 3"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                This counter hasn&apos;t been assigned a number yet — needed once, so
-                                offline sales here never collide with another counter&apos;s.
-                            </p>
-                        </div>
+                    {selected && (
+                        <p className="text-xs text-muted-foreground">
+                            Counter number {selected.counterNumber} — this PC will be locked to it,
+                            and its offline sales will never collide with another counter&apos;s.
+                        </p>
                     )}
 
                     <Button className="w-full" disabled={!selected || submitting} onClick={submit}>

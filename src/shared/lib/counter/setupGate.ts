@@ -7,9 +7,9 @@
  *
  * ── Why check at all, rather than trust the local file forever ──────────────
  * An admin can release a counter from /office/admin/counters at any time, which
- * clears its counterNumber/idRangeStart centrally. A machine that already
- * completed setup has no other way to learn that happened — it would otherwise
- * keep believing it holds a confirmed, safe id range it no longer actually owns.
+ * clears its device binding centrally. A machine that already completed setup has
+ * no other way to learn that happened — it would otherwise keep billing as a
+ * counter it no longer holds.
  *
  * ── Why "trust it" is still the right default when offline ──────────────────
  * This machine cannot always reach the server to ask. Every other readiness
@@ -37,7 +37,7 @@ export type ReconcileResult = "valid" | "reassigned" | "released" | "unreachable
 
 interface CounterListEntry {
     id: number;
-    counterNumber: number | null;
+    counterNumber: number;
     boundDeviceId: string | null;
 }
 
@@ -68,8 +68,11 @@ export async function reconcileCounterSetup(): Promise<ReconcileResult> {
 
         // Which counter is THIS device actually bound to, right now, per the
         // server — independent of what the local cache says.
+        // The BINDING is the whole signal. counterNumber is permanent counter config
+        // (NOT NULL, set at creation), so it can never indicate a release — an earlier
+        // version checked it for null and that branch is now unreachable.
         const bound = counters.find((c) => matchesThisMachine(c.boundDeviceId, identity));
-        if (!bound || bound.counterNumber === null) return "released";
+        if (!bound) return "released";
 
         if (bound.id !== local.counterId || bound.counterNumber !== local.counterNumber) {
             // Rebound to a different counter (or the same counter's number

@@ -125,11 +125,8 @@ export function assembleReference(s: SeriesShape, ctx?: ReferenceContext): strin
         }
     }
 
-    const baseRef = out.join("");
-    if (counterCode && counterCode.trim()) {
-        const cleanCounter = counterCode.trim().padStart(2, "0");
-        return `${cleanCounter}/${baseRef}`;
-    }
-
-    return baseRef;
+    // No trailing counter prefix here: the loop above has already placed the counter,
+    // either as its own `counter`/`user` token or prefixed onto the number part when
+    // partOrder omits one. A second prefix would emit it twice.
+    return out.join("");
 }

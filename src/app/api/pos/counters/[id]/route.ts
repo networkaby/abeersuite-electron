@@ -206,10 +206,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     // on next offline setup. Mismatched counterNumber/idRangeStart would reserve
                     // the wrong id-range block for offline writes.
                     ...(data.counterNumber && data.counterNumber !== existing.counterNumber ? { idRangeStart: null } : {}),
-                    // Release clears the device lock AND this counter's offline-write
-                    // identity together — releasing a counter is one action, not three.
+                    // Release clears the DEVICE BINDING only. counterNumber is permanent
+                    // counter config, set at creation and NOT NULL — a counter always has
+                    // one, whichever PC happens to be sitting at it. idRangeStart is derived
+                    // from that number, so it stays correct too; only a counterNumber CHANGE
+                    // invalidates it, which the branch above already handles.
                     ...(data.releaseLock
-                        ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, counterNumber: null, idRangeStart: null }
+                        ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null }
                         : {}),
                 },
                 include: counterInclude,

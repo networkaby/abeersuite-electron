@@ -75,8 +75,12 @@ export async function invNextRef(
     // Legacy fallback — calendar-year prefix scheme.
     const year = new Date().getFullYear();
     const prefix = PREFIX[type];
-    const cleanCounter = counterCode && counterCode.trim() ? `${counterCode.trim().padStart(2, "0")}-` : "";
-    const startsWith = `${cleanCounter}${prefix}-${year}-`;
+    // Same counter derivation assembleReference uses, so the legacy scheme stays
+    // counter-prefixed too — two counters on the legacy fallback would otherwise
+    // count the same `startsWith` and mint identical refs.
+    const rawCounter = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;
+    const counterNumber = rawCounter != null && rawCounter > 0 ? rawCounter : 1;
+    const startsWith = `${String(counterNumber).padStart(2, "0")}-${prefix}-${year}-`;
     const count = await tx.voucherDetail.count({ where: { universalVoucher: { voucherNo: { startsWith } } } });   // 5D-6: ref on spine
     return `${startsWith}${String(count + 1).padStart(4, "0")}`;
 }
