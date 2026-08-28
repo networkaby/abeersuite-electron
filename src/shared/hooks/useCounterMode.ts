@@ -9,15 +9,14 @@ export type CounterStatus = {
     preference: "live" | "shadow" | "local";
     replicaReady: boolean;
     isCounter: boolean;
+    replicaSource?: "installed" | "embedded" | null;
+    cloudReachable?: boolean;
 };
 
 /**
- * How often to ask. Deliberately slow: this is a status light, not a heartbeat, and
- * on a counter every poll is a request the machine could have spent on real work.
- * A cashier learns the shop is offline from the failed Save either way — the badge
- * exists so they learn it BEFORE trying, not so they learn it a second sooner.
+ * How often to ask (10s).
  */
-const POLL_MS = 30_000;
+const POLL_MS = 10_000;
 
 /**
  * Where this machine is reading from, for the shell badge.
