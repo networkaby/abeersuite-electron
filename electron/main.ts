@@ -632,7 +632,6 @@ import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { startHardwareBridge, stopHardwareBridge } from "./hardwareBridgeManager";
-import { startOutboxFlusher, stopOutboxFlusher } from "./outboxFlusher";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 
@@ -1008,8 +1007,9 @@ app.whenReady().then(async () => {
                 // Fills the replica and keeps it current. Runs under the sync role, which
                 // owns the data and may suspend foreign keys while replaying a table.
                 startSyncWorker(replica.syncUrl);
-                // Flushes offline outbox mutations to the cloud when online.
-                startOutboxFlusher(replica.appUrl);
+                // The outbox flusher runs INSIDE the Next server (see src/instrumentation.ts):
+                // pushing needs the Supabase client, which lives there. Driving it from here
+                // meant an HTTP hop that requireAuth() rejected with 401 on every attempt.
                 // Read-routing (prismaClient.ts / counterMode.ts) gates on COUNTER_PC, not on
                 // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
                 // result, rather than requiring it baked into the installer. serverManager.ts
@@ -1091,7 +1091,6 @@ app.on("before-quit", () => {
 app.on("will-quit", () => {
     stopNextServer();
     stopSyncWorker();
-    stopOutboxFlusher();
     stopHardwareBridge();
     stopEmbeddedPostgres();
     if (tray && !tray.isDestroyed()) {

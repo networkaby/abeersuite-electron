@@ -38,6 +38,81 @@ import { join } from "node:path";
 const SCHEMA_DIR = join(process.cwd(), "prisma", "schema");
 const REGISTRY = join(process.cwd(), "prisma", "sync-tables.json");
 
+/**
+ * A TypeScript mirror of the registry, for the app to import.
+ *
+ * The JSON itself cannot be imported from `src/`: tsconfig's `include` covers
+ * `src/**` only, so a relative import reaching up into `prisma/` fails to resolve.
+ * Emitting a module instead keeps it bundled (no runtime `fs`, so it survives the
+ * standalone build) and typed.
+ *
+ * The push path needs it to turn a `_outbox.table_name` — which the capture trigger
+ * writes as the PHYSICAL table name — back into the Prisma model and delegate that can
+ * apply it. 17 models are `@@map`'d, so the two differ for those and guessing is not an
+ * option. Deriving it from the same registry the triggers are generated from is what
+ * stops the push allowlist drifting from the capture set, which is exactly how the
+ * previous hand-written 14-model map came to be wrong.
+ */
+const TS_MIRROR = join(process.cwd(), "src", "shared", "lib", "sync", "syncRegistry.generated.ts");
+
+function renderTsMirror(tables: Record<string, TableEntry>, models: Model[]): string {
+    const byName = new Map(models.map((m) => [m.name, m]));
+
+    /**
+     * Fields whose value must cross the wire as a STRING, not a JSON number.
+     *
+     * The capture trigger stores `to_jsonb(NEW)`, which keeps `numeric` exact in the
+     * database. The loss happens in JavaScript: `JSON.parse` turns every number into a
+     * double, so a Decimal beyond ~15 significant digits, or a BigInt beyond 2^53,
+     * silently changes value on its way to the cloud. The flusher reads the payload as
+     * text and re-quotes exactly these fields before parsing — Prisma accepts a string
+     * for both types. Quoting every number instead would be simpler and wrong: Prisma
+     * validates Int and would reject it.
+     */
+    const exactFieldsFor = (modelName: string): string[] => {
+        const m = byName.get(modelName);
+        if (!m) return [];
+        return m.fields
+            .filter((f) => /^(Decimal|BigInt)\b/.test(f.type))
+            .map((f) => f.name)
+            .sort();
+    };
+
+    const rows = Object.entries(tables)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([model, t]) => {
+            const pk = t.pk.map((c) => JSON.stringify(c)).join(", ");
+            const exact = exactFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
+            return `    ${JSON.stringify(t.table)}: { model: ${JSON.stringify(model)}, `
+                + `delegate: ${JSON.stringify(model.charAt(0).toLowerCase() + model.slice(1))}, `
+                + `pk: [${pk}], exact: [${exact}] },`;
+        });
+
+    return `// GENERATED FILE — DO NOT EDIT BY HAND.
+//
+// Regenerate with: pnpm sync:tables
+// Verified by:     pnpm sync:tables --check  (runs in pnpm precommit)
+//
+// Physical table name -> the Prisma model that owns it. Mirrors
+// prisma/sync-tables.json; see gen-sync-registry.ts for why this exists as TS.
+
+export interface SyncRegistryEntry {
+    /** Prisma model name, e.g. "InvProductBranch". */
+    model: string;
+    /** Property on PrismaClient, e.g. "invProductBranch". */
+    delegate: string;
+    /** Primary-key column names, in order. Compound keys have more than one. */
+    pk: string[];
+    /** Decimal/BigInt fields — must be parsed as strings to keep their value. */
+    exact: string[];
+}
+
+export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
+${rows.join("\n")}
+};
+`;
+}
+
 type Strategy = "child" | "watermark" | "append" | "full";
 
 type TableEntry = {
@@ -314,12 +389,22 @@ function main(): void {
             console.error("  " + summary);
             process.exit(1);
         }
+        // The TS mirror the app imports must not lag the JSON: a stale entry means a
+        // captured write cannot be resolved back to a model, and it never pushes.
+        const mirror = renderTsMirror(tables, models);
+        const currentMirror = existsSync(TS_MIRROR) ? readFileSync(TS_MIRROR, "utf8") : "";
+        if (currentMirror.replace(/\r\n/g, "\n") !== mirror) {
+            console.error("[sync-registry] syncRegistry.generated.ts is out of date — run `pnpm sync:tables`.");
+            process.exit(1);
+        }
         console.log(`[sync-registry] ok — ${summary}`);
         return;
     }
 
     writeFileSync(REGISTRY, serialized);
+    writeFileSync(TS_MIRROR, renderTsMirror(tables, models));
     console.log(`[sync-registry] wrote ${REGISTRY}`);
+    console.log(`[sync-registry] wrote ${TS_MIRROR}`);
     console.log(`  ${summary}`);
     if (retired.length) console.log(`  retired numbers: ${retired.join(", ")}`);
 }

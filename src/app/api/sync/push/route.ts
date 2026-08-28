@@ -1,42 +1,36 @@
 /**
  * POST /api/sync/push
  *
- * Ingestion endpoint for offline outbox mutations. Receives serialized mutations
- * from counters and applies them idempotently to the cloud database (Supabase).
+ * Applies outbox mutations from a counter to Supabase.
  *
- * ── Why the typed Prisma client, not raw SQL ─────────────────────────────────
- * The previous version built `INSERT`/`ON CONFLICT DO UPDATE` SQL by interpolating
- * `Object.keys(payload)` — client-controlled JSON keys — directly as column
- * identifiers. `tableName` was allowlisted; column names never were, which is a
- * live SQL-injection hole reachable by any authenticated session. Routing through
- * `prismaLive[model].upsert(...)` closes that by construction: Prisma validates
- * `payload` against the actual schema and never builds SQL from a string, so an
- * unknown/malicious key is rejected as a validation error, not executed.
+ * ── Not on the counter's own path any more ──────────────────────────────────
+ * A counter flushes its outbox in-process (see src/shared/lib/sync/flusher.ts): the
+ * Next server already holds both connections, so there is no reason to make it talk to
+ * itself over HTTP. This endpoint remains for a pusher that genuinely arrives over the
+ * network, and it delegates to the same `pushMutations()` the flusher uses — the two
+ * must not drift, because ordering and the PosCounter binding rule live in there.
  *
- * `tableName` here is the Prisma MODEL name (e.g. "UniversalVoucher"), matching
- * the convention `prisma/sync-tables.json` already uses — not the raw DB table
- * name. Several of these models have no `@@map`, so their real table name equals
- * the model name anyway; the previous allowlist's snake_case guesses
- * ("universal_vouchers" etc.) didn't match the real tables for 10 of the 14
- * entries, which is further evidence this endpoint had never been exercised.
- *
- * Row-ownership verification (confirming a pushed id actually belongs to the
- * calling counter's own reserved id-range block) is deliberately out of scope
- * here — tracked separately, not solved by this change.
+ * ── What is deliberately not solved here ────────────────────────────────────
+ * Row ownership: nothing confirms a pushed id actually falls inside the calling
+ * counter's reserved block, so an authenticated staff session can address any row in a
+ * syncable table. Tracked separately.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { prismaLive } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { OUTBOX_MODEL_DELEGATES } from "@/shared/lib/sync/outbox";
+import { pushMutations } from "@/shared/lib/sync/push";
+import type { OutboxRecord } from "@/shared/lib/sync/outbox";
 import { z } from "zod";
 
 const mutationSchema = z.object({
-    id:             z.number().int(),
-    tableName:      z.string().min(1),
-    rowPk:          z.string().min(1),
-    operation:      z.enum(["create", "update"]),
-    payload:        z.record(z.string(), z.unknown()),
+    id: z.number().int(),
+    /** PHYSICAL table name, as the capture trigger records it (e.g. "pos_shifts"). */
+    tableName: z.string().min(1),
+    rowPk: z.string().min(1),
+    /** `{column: value}` for the primary key — compound keys carry every column. */
+    rowKey: z.record(z.string(), z.unknown()),
+    operation: z.enum(["create", "update"]),
+    payload: z.record(z.string(), z.unknown()),
     idempotencyKey: z.string().min(1),
 });
 
@@ -45,13 +39,12 @@ const pushPayloadSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     let body: z.infer<typeof pushPayloadSchema>;
     try {
-        const json = await req.json();
-        body = pushPayloadSchema.parse(json);
+        body = pushPayloadSchema.parse(await req.json());
     } catch (err) {
         return NextResponse.json(
             { error: "Invalid payload", details: err instanceof Error ? err.message : String(err) },
@@ -59,84 +52,33 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const successfulIds: number[] = [];
-    const failed: Array<{ id: number; error: string }> = [];
+    // Sort by id here too: the ordering argument in push.ts is about the order rows are
+    // APPLIED, and a caller that batched them differently must not break it.
+    const records = body.mutations
+        .map((m): OutboxRecord => ({
+            id: m.id,
+            table_name: m.tableName,
+            row_pk: m.rowPk,
+            row_key: m.rowKey,
+            operation: m.operation,
+            payload: m.payload,
+            created_at: new Date(),
+            pushed_at: null,
+            idempotency_key: m.idempotencyKey,
+            error: null,
+            attempts: 0,
+            next_attempt_at: null,
+            dead_lettered_at: null,
+        }))
+        .sort((a, b) => a.id - b.id);
 
-    for (const mutation of body.mutations) {
-        try {
-            const { tableName, payload, operation, rowPk } = mutation;
-
-            const delegateName = OUTBOX_MODEL_DELEGATES[tableName];
-            if (!delegateName) {
-                failed.push({ id: mutation.id, error: `Model '${tableName}' is not permitted in sync push` });
-                continue;
-            }
-
-            if (Object.keys(payload).length === 0) {
-                successfulIds.push(mutation.id);
-                continue;
-            }
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const delegate = (prismaLive as any)[delegateName];
-            const targetId = operation === "create" ? payload.id : Number(rowPk);
-
-            // ── Last-write-wins for edits ────────────────────────────────────
-            // Creates never need this: the id is minted from this counter's own
-            // reserved block and cannot already exist in cloud. An update might be
-            // editing a row that also changed in the cloud between sync cycles —
-            // without a check, whichever write reaches this endpoint last always
-            // wins, regardless of which edit is actually newer. Only applies when
-            // the payload actually carries updatedAt; models without one keep the
-            // previous unconditional-overwrite behaviour.
-            const incomingUpdatedAt = payload.updatedAt instanceof Date
-                ? payload.updatedAt
-                : typeof payload.updatedAt === "string"
-                    ? new Date(payload.updatedAt)
-                    : null;
-
-            if (incomingUpdatedAt) {
-                const existing = await delegate.findUnique({
-                    where: { id: targetId },
-                    select: { updatedAt: true },
-                });
-                if (existing && existing.updatedAt >= incomingUpdatedAt) {
-                    // Cloud already has an equal-or-newer edit — the offline edit
-                    // loses. Still counts as "successfully processed": the counter
-                    // should drop it from its outbox, not retry it forever.
-                    successfulIds.push(mutation.id);
-                    continue;
-                }
-            }
-
-            if (operation === "create") {
-                // Prisma validates `payload`'s keys/shape against the model itself —
-                // an unknown field throws here rather than reaching SQL.
-                await delegate.upsert({
-                    where:  { id: payload.id },
-                    create: payload,
-                    update: payload,
-                });
-            } else {
-                await delegate.update({
-                    where: { id: targetId },
-                    data:  payload,
-                });
-            }
-
-            successfulIds.push(mutation.id);
-        } catch (err) {
-            console.error(`[SyncPush] Error processing mutation ${mutation.id} on ${mutation.tableName}:`, err);
-            failed.push({
-                id: mutation.id,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
+    const { pushedIds, failure } = await pushMutations(records);
 
     return NextResponse.json({
-        successfulIds,
-        failed,
-        total: body.mutations.length,
+        successfulIds: pushedIds,
+        // At most one: the run stops at the first failure so later rows cannot overtake
+        // the one that is stuck. The caller retries from there.
+        failed: failure ? [{ id: failure.id, error: failure.error, permanent: failure.permanent }] : [],
+        total: records.length,
     });
 }
