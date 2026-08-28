@@ -142,7 +142,7 @@ function loadCounterEnv(): void {
         "This installer was built incorrectly — the file is generated during packaging " +
         "and should always be present.\n\n" +
         "Report this to whoever built the installer. As a stop-gap, a configuration file " +
-        `placed at\n\n${userEnv}\n\nis loaded instead (see '.env.counter.example').`
+        `placed at\n\n${userEnv}\n\nis loaded instead (see '.env.example').`
     );
     app.exit(1);
 }
@@ -257,7 +257,7 @@ const LANDING_PAGE = resolveLandingPage();
  * happen — one install per PC.)
  *
  * `PORT` remains a per-machine override escape hatch (%APPDATA%/abeersuite-electron/.env,
- * see .env.counter.example) for the rare case a fixed port collides with something else
+ * see .env.example) for the rare case a fixed port collides with something else
  * already running on that PC.
  */
 const FIXED_PORT = "786";

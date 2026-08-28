@@ -37,7 +37,7 @@ import type { AppMode } from "../src/shared/lib/appModeCore";
 export const COUNTER_ENV_FILE = "counter.env";
 
 /**
- * Copied verbatim from the build machine's `.env` (or `.env.counter` — see
+ * Copied verbatim from the build machine's `.env` (see
  * `generate-counter-env.ts`), on every desktop variant regardless of `APP_MODE`.
  *
  * A key missing there is reported by name and skipped, so a build is never silently

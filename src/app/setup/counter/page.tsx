@@ -34,6 +34,8 @@ interface CounterOption {
     name: string;
     branch: { name: string } | null;
     counterNumber: number;
+    boundDeviceId: string | null;
+    boundDeviceLabel: string | null;
 }
 
 function CounterSetupForm() {
@@ -45,6 +47,7 @@ function CounterSetupForm() {
     const [selectedId, setSelectedId] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
     const [loadError, setLoadError] = useState("");
+    const [currentDeviceId, setCurrentDeviceId] = useState<string>("");
 
     useEffect(() => {
         // Not an Electron install — this screen has nothing to do. Send them on.
@@ -52,6 +55,12 @@ function CounterSetupForm() {
             router.replace(next);
             return;
         }
+
+        resolveMachineIdentity().then((identity) => {
+            const devId = identity.machineId ?? identity.legacyDeviceId ?? "";
+            setCurrentDeviceId(devId);
+        });
+
         axios.get<CounterOption[]>("/api/pos/counters?scope=all")
             .then((res) => setCounters(res.data))
             .catch(() => setLoadError("Could not load the counter list. Check the connection and reload."));
@@ -59,16 +68,21 @@ function CounterSetupForm() {
     }, []);
 
     const selected = counters?.find((c) => String(c.id) === selectedId) ?? null;
+    const isSelectedLockedToOther = Boolean(
+        selected?.boundDeviceId && currentDeviceId && selected.boundDeviceId !== currentDeviceId
+    );
 
     const submit = async () => {
         if (!selected) { toast.error("Select which counter this PC is"); return; }
+        if (isSelectedLockedToOther) {
+            toast.error("This counter is already locked to another PC. An admin must release it in Counter Settings.");
+            return;
+        }
 
         const counterNumber = selected.counterNumber;
         setSubmitting(true);
         try {
             // Bind the device lock to this PC and get back the counter's id-range block.
-            // Sending the identity here is what makes setup and binding one action — see
-            // the route's header for why leaving it to shift-open was broken.
             const identity = await resolveMachineIdentity();
             const deviceId = identity.machineId ?? identity.legacyDeviceId;
             if (!deviceId) {
@@ -131,23 +145,52 @@ function CounterSetupForm() {
                                 <SelectValue placeholder={counters ? "Select a counter…" : "Loading…"} />
                             </SelectTrigger>
                             <SelectContent>
-                                {counters?.map((c) => (
-                                    <SelectItem key={c.id} value={String(c.id)}>
-                                        {c.name}{c.branch ? ` — ${c.branch.name}` : ""}
-                                    </SelectItem>
-                                ))}
+                                {counters?.map((c) => {
+                                    const isLockedElsewhere = Boolean(
+                                        c.boundDeviceId && currentDeviceId && c.boundDeviceId !== currentDeviceId
+                                    );
+                                    const isBoundHere = Boolean(
+                                        c.boundDeviceId && currentDeviceId && c.boundDeviceId === currentDeviceId
+                                    );
+                                    return (
+                                        <SelectItem
+                                            key={c.id}
+                                            value={String(c.id)}
+                                            disabled={isLockedElsewhere}
+                                        >
+                                            {c.name}{c.branch ? ` — ${c.branch.name}` : ""}
+                                            {isLockedElsewhere
+                                                ? ` (Locked: ${c.boundDeviceLabel || "Another PC"})`
+                                                : isBoundHere
+                                                    ? " (This PC)"
+                                                    : " (Available)"}
+                                        </SelectItem>
+                                    );
+                                })}
                             </SelectContent>
                         </Select>
                     </div>
 
                     {selected && (
-                        <p className="text-xs text-muted-foreground">
-                            Counter number {selected.counterNumber} — this PC will be locked to it,
-                            and its offline sales will never collide with another counter&apos;s.
-                        </p>
+                        <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                                Counter number {selected.counterNumber} — this PC will be locked to it,
+                                and its offline sales will never collide with another counter&apos;s.
+                            </p>
+                            {isSelectedLockedToOther && (
+                                <p className="text-xs font-medium text-destructive">
+                                    ⚠️ This counter is currently locked to {selected.boundDeviceLabel || "another device"}.
+                                    Please choose an available counter or have an admin release it in Counter Settings.
+                                </p>
+                            )}
+                        </div>
                     )}
 
-                    <Button className="w-full" disabled={!selected || submitting} onClick={submit}>
+                    <Button
+                        className="w-full"
+                        disabled={!selected || isSelectedLockedToOther || submitting}
+                        onClick={submit}
+                    >
                         {submitting ? "Saving…" : "Save and Continue"}
                     </Button>
                 </CardContent>

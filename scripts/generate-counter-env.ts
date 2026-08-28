@@ -44,32 +44,25 @@ function main(): void {
     const rootDir = process.cwd();
     const outFile = path.join(rootDir, "resources", COUNTER_ENV_FILE);
 
-    // .env.counter is the desktop-variant source of truth — where the owner sets
-    // APP_MODE and LANDING_PAGE before an electron build (see scripts/electron-build.ts,
-    // which loads it into process.env before this ever runs). MERGED with the root .env
-    // (counter wins on overlap), not either/or: .env.counter is deliberately minimal —
-    // just the variant knobs plus whatever the owner has copied over — so a key it
-    // doesn't set (e.g. INTERNAL_STAFF_EMAIL_DOMAINS) must still fall through to .env
-    // rather than the whole build treating it as absent. process.env is the last resort,
-    // so a CI runner can inject secrets without writing either file.
-    const counterEnvPath = path.join(rootDir, ".env.counter");
+    // Sourced from root .env (and .env.local if present)
     const rootEnvPath = path.join(rootDir, ".env");
+    const localEnvPath = path.join(rootDir, ".env.local");
     const source = new Map<string, string>();
     if (fs.existsSync(rootEnvPath)) {
         for (const [key, value] of parseEnvFile(rootEnvPath)) source.set(key, value);
     }
-    if (fs.existsSync(counterEnvPath)) {
-        for (const [key, value] of parseEnvFile(counterEnvPath)) source.set(key, value);
+    if (fs.existsSync(localEnvPath)) {
+        for (const [key, value] of parseEnvFile(localEnvPath)) source.set(key, value);
     }
-    if (!fs.existsSync(counterEnvPath) && !fs.existsSync(rootEnvPath)) {
+    if (!fs.existsSync(rootEnvPath)) {
         console.warn(
-            "[generate-counter-env] No .env.counter or .env on this machine — reading the process environment instead."
+            "[generate-counter-env] No .env on this machine — reading the process environment instead."
         );
     }
 
     // APP_MODE decides which key set this variant gets (e.g. office additionally gets
     // the backup/restore keys) — resolved the same way electron-build.ts already did
-    // when it loaded .env.counter into process.env, so both agree on the variant.
+    // when it loaded .env into process.env, so both agree on the variant.
     const mode = parseAppMode(source.get("APP_MODE") ?? process.env.APP_MODE);
     const keysToConsider = counterEnvCopiedFor(mode);
     console.log(`[generate-counter-env] APP_MODE=${mode} — copying ${keysToConsider.length} allowed key(s).`);
