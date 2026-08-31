@@ -9,6 +9,7 @@ allowBuilds:
   # Downloads the sentry-cli binary, used for source-map upload. Already listed in
   # onlyBuiltDependencies below, so `true` records the intent that was already there.
   # (Counter builds skip the upload entirely — see COUNTER_BUILD in next.config.ts.)
+  '@prisma/engines': set this to true or false
   '@sentry/cli': true
   # Deliberately false: use the shipped N-API prebuild, never a source build.
   # The hardware bridge runs under ELECTRON_RUN_AS_NODE, so its native modules must
@@ -18,6 +19,7 @@ allowBuilds:
   '@serialport/bindings-cpp': false
   electron-winstaller: false
   esbuild: true
+  prisma: set this to true or false
 
 onlyBuiltDependencies:
   - "@prisma/client"
