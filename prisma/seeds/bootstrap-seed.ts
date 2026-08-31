@@ -950,7 +950,6 @@ async function main() {
         // GATEWAY rail or online checkout points to) is a HARD-CODED, self-healing
         // catalog (PAYMENT_METHOD_DEFAULTS): bootstrap seeds none — the app creates
         // any missing method-row on first load of Settings → Payment Methods.
-        const counterNumber = BRANCHES.indexOf(b) + 1;
         const { rows: existing } = await pool.query<{ id: number }>(
             `SELECT id FROM "pos_counters" WHERE "branchId" = $1 AND name = $2 LIMIT 1`,
             [b.id, counterName],

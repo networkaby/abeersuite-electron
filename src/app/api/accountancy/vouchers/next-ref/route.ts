@@ -12,7 +12,7 @@ import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
 // concurrently, the live reference may differ by ±1 from this preview.
 
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

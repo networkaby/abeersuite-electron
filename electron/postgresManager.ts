@@ -70,12 +70,10 @@ async function canConnect(connectionString: string, timeoutMs = 1500): Promise<b
 export function isPortListening(port: number, timeoutMs = 1000): Promise<boolean> {
     return new Promise((resolve) => {
         const socket = new net.Socket();
-        let status = false;
 
         socket.setTimeout(timeoutMs);
 
         socket.on("connect", () => {
-            status = true;
             socket.destroy();
             resolve(true);
         });

@@ -32,7 +32,15 @@ const REPO_TOKEN_ENV: Record<string, string> = {
     "abeersuite-electron": "GH_TOKEN_2",
 };
 
-let publishTargets: any[] = pkg.build?.publish ?? [];
+interface PublishTarget {
+    provider: string;
+    owner: string;
+    repo: string;
+    private?: boolean;
+    releaseType?: string;
+}
+
+let publishTargets: PublishTarget[] = pkg.build?.publish ?? [];
 if (publishTargets.length === 0) {
     console.error("[release-electron] FATAL: package.json build.publish has no targets.");
     process.exit(1);
@@ -110,8 +118,8 @@ try {
     if (commitLog) {
         autoNotes = `### What's Changed in ${tagName}\n\n${commitLog}\n\n**Full Changelog**: ${prevTag ? `https://github.com/devloperakramul/abeersuite-electron/compare/${prevTag}...${tagName}` : `https://github.com/devloperakramul/abeersuite-electron/commits/${tagName}`}`;
     }
-} catch (e: any) {
-    console.warn("[release-electron] Could not auto-generate release notes from git:", e?.message);
+} catch (e: unknown) {
+    console.warn("[release-electron] Could not auto-generate release notes from git:", (e as Error)?.message);
 }
 
 const releaseNotes = [humanNotes, autoNotes].filter(Boolean).join("\n\n---\n\n");
@@ -128,8 +136,8 @@ try {
 
     console.log(`[release-electron] Pushing HEAD and tag ${tagName} to origin...`);
     execSync(`git push origin HEAD --tags`, { stdio: "inherit" });
-} catch (err: any) {
-    console.error(`[release-electron] Git tag/push failed:`, err?.message || err);
+} catch (err: unknown) {
+    console.error(`[release-electron] Git tag/push failed:`, (err as Error)?.message || err);
     console.error("[release-electron] Please resolve git status or push permissions before releasing.");
     process.exit(1);
 }

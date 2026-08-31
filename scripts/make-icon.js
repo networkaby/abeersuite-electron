@@ -20,6 +20,7 @@
  * `build/icon.png` with a proper square mark when design provides one — the build
  * picks it up with no code change.
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { app, BrowserWindow } = require("electron");
 const fs = require("fs");
 const path = require("path");

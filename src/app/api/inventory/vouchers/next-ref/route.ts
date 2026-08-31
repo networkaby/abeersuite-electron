@@ -36,7 +36,7 @@ const SERIES_KIND: Partial<Record<InvVoucherType, string>> = {
 };
 
 export async function GET(req: Request) {
-    const { response, user } = await requireAuth();
+    const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -26,9 +26,20 @@ export async function POST() {
         return Response.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }
 
+    const dbUrl = (process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL)?.trim();
+    if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
+        return Response.json(
+            { error: "Active database URL is missing or invalid in server environment." },
+            { status: 500 },
+        );
+    }
+
     const fileName = makeBackupFileName();
     try {
-        await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", { file_name: fileName });
+        await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", {
+            file_name: fileName,
+            source_db_url: dbUrl,
+        });
     } catch (err) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }

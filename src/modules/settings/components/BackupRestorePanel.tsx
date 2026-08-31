@@ -49,6 +49,7 @@ export function BackupRestorePanel() {
     const [backups, setBackups] = useState<DropboxBackup[]>([]);
     const [loadingList, setLoadingList] = useState(false);
     const [selectedPath, setSelectedPath] = useState("");
+    const [targetDbUrl, setTargetDbUrl] = useState("");
     const [confirmText, setConfirmText] = useState("");
     const [restoring, setRestoring] = useState(false);
     const [availability, setAvailability] = useState<Availability | null>(null);
@@ -88,6 +89,9 @@ export function BackupRestorePanel() {
     const counterOnly = availability != null && (!canBackup || !canRestore);
     const missing = availability?.missing ?? [];
 
+    const isTargetDbValid =
+        targetDbUrl.trim().startsWith("postgres://") || targetDbUrl.trim().startsWith("postgresql://");
+
     async function handleBackup() {
         if (!canBackup) return;
         setBackingUp(true);
@@ -109,10 +113,10 @@ export function BackupRestorePanel() {
     }
 
     async function handleRestore() {
-        if (!canRestore || !selectedPath || confirmText !== "RESTORE") return;
+        if (!canRestore || !selectedPath || !isTargetDbValid || confirmText !== "RESTORE") return;
         if (
             !window.confirm(
-                "Last chance: this will REPLACE the entire current database with the selected Dropbox backup. Continue?",
+                "Last chance: this will REPLACE the entire target database with the selected Dropbox backup. Continue?",
             )
         ) {
             return;
@@ -123,13 +127,17 @@ export function BackupRestorePanel() {
             const res = await fetch("/api/settings/restore", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: selectedPath, confirm: "RESTORE" }),
+                body: JSON.stringify({
+                    path: selectedPath,
+                    targetDbUrl: targetDbUrl.trim(),
+                    confirm: "RESTORE",
+                }),
             });
             const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
             if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
 
             toast.success(
-                "Restore started — it runs in the background, so you can close this page. Sign out and back in once it finishes.",
+                "Restore started — it runs in the background, so you can close this page. Once it finishes, the target database is ready.",
                 { id: progress, duration: 12_000 },
             );
             setConfirmText("");
@@ -234,6 +242,23 @@ export function BackupRestorePanel() {
                     </Select>
                 </div>
 
+                <div className="space-y-1">
+                    <Label className="text-xs">
+                        Target Database URL <span className="text-destructive font-semibold">*</span>
+                    </Label>
+                    <Input
+                        className="h-9 font-mono text-xs"
+                        value={targetDbUrl}
+                        onChange={(e) => setTargetDbUrl(e.target.value)}
+                        placeholder="postgresql://postgres:[password]@[host]:5432/postgres"
+                        autoComplete="off"
+                        disabled={!canRestore}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                        Mandatory: restore will strictly overwrite this database.
+                    </p>
+                </div>
+
                 <div className="space-y-1 max-w-[240px]">
                     <Label className="text-xs">
                         Type <span className="font-mono font-semibold">RESTORE</span> to enable the button
@@ -252,7 +277,7 @@ export function BackupRestorePanel() {
                     variant="destructive"
                     size="sm"
                     onClick={handleRestore}
-                    disabled={restoring || !canRestore || !selectedPath || confirmText !== "RESTORE"}
+                    disabled={restoring || !canRestore || !selectedPath || !isTargetDbValid || confirmText !== "RESTORE"}
                 >
                     <Upload className="mr-1.5 size-3.5" />
                     {!canRestore ? "Not available here" : restoring ? "Starting…" : "Restore database"}

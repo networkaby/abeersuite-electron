@@ -101,7 +101,7 @@ async function getStats(db: { label: string; url: string }) {
     colMap[r.table_name] = r.col_count;
   }
 
-  const tables = tablesRes.rows.map((r: any) => r.table_name);
+  const tables = tablesRes.rows.map((r: { table_name: string }) => r.table_name);
   const counts: Record<string, number> = {};
 
   for (const t of tables) {

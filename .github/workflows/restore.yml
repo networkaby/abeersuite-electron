@@ -12,6 +12,9 @@ on:
       file_path:
         description: Full Dropbox path of the dump to restore (e.g. /smx-backup-….dump)
         required: true
+      target_db_url:
+        description: Mandatory direct Postgres connection URL to restore into (e.g. postgresql://...)
+        required: true
 
 concurrency:
   group: db-restore
@@ -22,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+      DIRECT_DATABASE_URL: ${{ github.event.inputs.target_db_url }}
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
@@ -98,7 +101,8 @@ jobs:
       # here instead of silently dropping data.
       - name: Sync schema to current code (additive only)
         env:
-          DIRECT_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+          DIRECT_URL: ${{ github.event.inputs.target_db_url }}
+          DATABASE_URL: ${{ github.event.inputs.target_db_url }}
         run: pnpm prisma db push
 
       - name: Append run to Dropbox log

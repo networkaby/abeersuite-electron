@@ -70,8 +70,6 @@ export default function PrinterSettingsPage() {
     const [comPorts, setComPorts] = useState<string[]>([]);
     const [portsLoading, setPortsLoading] = useState(false);
 
-    const isElectron = typeof window !== "undefined" && Boolean(window.electronAPI?.isElectron);
-
     const checkRelay = useCallback(async () => {
         if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
             setRelayUp(true);

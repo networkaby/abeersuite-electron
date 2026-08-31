@@ -30,16 +30,30 @@ export async function POST(req: Request) {
         return Response.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }
 
-    const body = (await req.json().catch(() => null)) as { path?: string; confirm?: string } | null;
+    const body = (await req.json().catch(() => null)) as {
+        path?: string;
+        confirm?: string;
+        targetDbUrl?: string;
+    } | null;
     if (!body || body.confirm !== "RESTORE") {
         return Response.json({ error: "Type RESTORE to confirm." }, { status: 400 });
+    }
+    const targetDbUrl = body.targetDbUrl?.trim();
+    if (!targetDbUrl || (!targetDbUrl.startsWith("postgres://") && !targetDbUrl.startsWith("postgresql://"))) {
+        return Response.json(
+            { error: "Target Database URL is required and must start with postgresql:// or postgres://" },
+            { status: 400 },
+        );
     }
     if (!isUnderBackupFolder(body.path)) {
         return Response.json({ error: "Invalid or unsupported backup path." }, { status: 400 });
     }
 
     try {
-        await triggerWorkflow(process.env.GITHUB_RESTORE_WORKFLOW?.trim() || "restore.yml", { file_path: body.path });
+        await triggerWorkflow(process.env.GITHUB_RESTORE_WORKFLOW?.trim() || "restore.yml", {
+            file_path: body.path,
+            target_db_url: targetDbUrl,
+        });
     } catch (err) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }

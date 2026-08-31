@@ -11,6 +11,9 @@ on:
       file_name:
         description: Dump file name to create in Dropbox (e.g. smx-backup-….dump)
         required: true
+      source_db_url:
+        description: Mandatory direct Postgres connection URL to dump from (e.g. postgresql://...)
+        required: true
 
 concurrency:
   group: db-backup
@@ -21,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+      DIRECT_DATABASE_URL: ${{ github.event.inputs.source_db_url }}
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
