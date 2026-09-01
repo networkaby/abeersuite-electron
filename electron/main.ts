@@ -463,6 +463,22 @@ function counterSetupFilePath(): string {
     return path.join(app.getPath("userData"), "counter-setup.json");
 }
 
+/**
+ * The replica's sync-role url, held from boot so the sync worker can be started later —
+ * a machine that had no counter at launch starts syncing the moment it claims one,
+ * without needing a restart.
+ */
+let pendingSyncUrl: string | null = null;
+
+/** Does this PC hold a counter? Sync is gated on this — see the boot path. */
+function hasCounterSetup(): boolean {
+    try {
+        return fs.existsSync(counterSetupFilePath());
+    } catch {
+        return false;
+    }
+}
+
 ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
     try {
         const file = counterSetupFilePath();
@@ -481,6 +497,9 @@ ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
 ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     try {
         fs.writeFileSync(counterSetupFilePath(), JSON.stringify(setup, null, 2));
+        // This PC now has a counter, so it has something to sync for. No-op when the
+        // worker is already up (a reassignment rather than a first claim).
+        if (pendingSyncUrl) startSyncWorker(pendingSyncUrl);
         // Reflect the (possibly new) counter number in the title immediately —
         // called both at first-launch setup and whenever the renderer discovers
         // this device was reassigned to a different counter (see
@@ -499,6 +518,8 @@ ipcMain.handle("counter:clear-setup", (): boolean => {
     try {
         const file = counterSetupFilePath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
+        // No counter, no sync — the mirror image of the boot gate above.
+        stopSyncWorker();
         currentSyncStatus = "";
         currentConnectionStatus = "";
         mainWindow?.setTitle(APP_TITLE);
@@ -1030,7 +1051,15 @@ app.whenReady().then(async () => {
                 process.env.LOCAL_DATABASE_URL = replica.appUrl;
                 // Fills the replica and keeps it current. Runs under the sync role, which
                 // owns the data and may suspend foreign keys while replaying a table.
-                startSyncWorker(replica.syncUrl);
+                //
+                // Only once this PC actually holds a counter, though. A machine sitting on
+                // the setup wizard has nothing to sync FOR: there is no counter to bill on,
+                // no local writes to push, and no reason to drag the whole dataset down or
+                // to show sync failures on a screen the cashier cannot act on. The url is
+                // kept so the wizard can start the worker the moment a counter is claimed.
+                pendingSyncUrl = replica.syncUrl;
+                if (hasCounterSetup()) startSyncWorker(replica.syncUrl);
+                else console.log("[main] No counter claimed yet — sync worker stays down until setup completes.");
                 // The outbox flusher runs INSIDE the Next server (see src/instrumentation.ts):
                 // pushing needs the Supabase client, which lives there. Driving it from here
                 // meant an HTTP hop that requireAuth() rejected with 401 on every attempt.
