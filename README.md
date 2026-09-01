@@ -245,42 +245,59 @@ own, so an hourly cron would mean 24 full dumps a day. Per-hour control is what
 the unfinished in-app schedule UI is for — see
 `docs/backup-schedule-activation.md`.
 
-### Setting the GitHub schedule — the daily backup
+### The automatic backup — schedule and on/off switch
 
-This is the one that actually runs. Edit `.github/workflows/backup.yml`, commit,
-and push:
+Two separate controls, in two different places.
+
+**When it runs** lives in `.github/workflows/backup-scheduled.yml`. Edit, commit,
+push:
 
 ```yaml
 on:
   schedule:
-    - cron: "30 18 * * *"   # 18:30 UTC = 00:00 IST, daily
+    - cron: "30 4 * * *"    # 10:00 IST
+    - cron: "30 7 * * *"    # 13:00 IST
+    - cron: "30 10 * * *"   # 16:00 IST
+    - cron: "30 13 * * *"   # 19:00 IST
+    - cron: "30 16 * * *"   # 22:00 IST
 ```
 
-Three things to get right:
+Unlike Vercel, GitHub puts no limit on how many schedules a workflow has; each
+entry fires its own run. Three things to get right:
 
 1. **Push it.** GitHub reads the schedule from the pushed file, not your working
    copy.
-2. **It must be on `main`.** Scheduled workflows only run from the default
-   branch, so a cron changed on another branch does nothing until it merges.
-3. **The value is UTC** — subtract 5:30 from the IST time you want. Use the
-   conversion table above.
+2. **It must be on `main`.** Scheduled workflows only run from the default branch.
+3. **The value is UTC** — subtract 5:30 from the IST time you want, using the
+   table above.
 
-#### More than one backup a day
+**Whether it runs at all** is the *Automatic backup* switch on
+Settings → Backup & Restore. That calls GitHub's enable/disable API for this
+workflow, so it takes effect immediately — no commit, no deploy.
 
-Unlike Vercel, GitHub puts no limit on how many schedules a workflow has. Add
-entries and each fires its own run:
+The consequence to remember: **the off state lives in GitHub, not in the repo.**
+`backup-scheduled.yml` keeps listing its cron times while switched off, so the
+file alone will tell you backups are running when they may not be. The settings
+page, and the Actions tab, are where the truth is.
 
-```yaml
-on:
-  schedule:
-    - cron: "30 18 * * *"   # 00:00 IST — midnight
-    - cron: "30 6 * * *"    # 12:00 IST — noon
-```
+#### Why the schedule is its own file
 
-Every run is a full `pg_dump`, so keep an eye on two things as the database
-grows: Dropbox space (nothing in this system deletes old dumps — there is no
-retention policy yet) and Actions minutes (~2 minutes per run, against 2000 free
-per month).
+Enable/disable acts on a whole workflow. If the schedule sat in `backup.yml`,
+switching it off would also disable **Back up now**, which dispatches that same
+file. `backup-scheduled.yml` holds nothing but the timetable and calls
+`backup.yml` to do the work, so the switch reaches the schedule and nothing else.
+
+#### Cost of running it often
+
+Every run is a full `pg_dump` — there are no incremental backups here, and
+nothing deletes old dumps. At five a day, watch three things as the database
+grows:
+
+- **Supabase egress.** The dump is compressed *after* leaving the database, so a
+  1 MB file is more like 5–10 MB of metered egress. Five a day is roughly
+  0.8–1.5 GB/month against 5 GB on the free plan.
+- **Dropbox space.** 150 dumps a month accumulate with no retention policy.
+- **Actions minutes.** About 2 minutes a run, against 2000 free per month.
 
 #### What a scheduled run does differently
 
@@ -299,10 +316,10 @@ its own file name (`…-git-<timestamp>-IST.dump`). Two consequences:
 
 - **Scheduled runs start late.** GitHub queues them, usually by minutes and
   sometimes much more at the top of the hour. `:30` is chosen partly to dodge the
-  worst of it. Treat the time as "around midnight".
+  worst of it.
 - **Schedules are disabled after 60 days without repository activity.** GitHub
-  emails first. If backups quietly stop, check this before anything else — a
-  single push re-enables them.
+  emails first, and the settings page shows this as a distinct reason. Turning
+  the switch back on fixes it.
 
 ## Documentation Map
 

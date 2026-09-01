@@ -1,0 +1,31 @@
+name: Scheduled Database Backup
+
+# The clock for automatic backups. It holds nothing but the schedule and calls
+# backup.yml to do the work.
+#
+# Why this is a separate file: Settings → Backup & Restore can switch automatic
+# backups off, and it does that through GitHub's enable/disable API, which acts on
+# a WHOLE workflow. If the schedule lived in backup.yml, turning it off would also
+# disable the "Back up now" button, since that dispatches the same file. Splitting
+# them means the switch reaches the schedule and nothing else.
+#
+# Times are UTC — cron has no timezone. Subtract 5:30 from the IST time you want.
+
+on:
+  schedule:
+    - cron: "30 4 * * *"    # 10:00 IST
+    - cron: "30 7 * * *"    # 13:00 IST
+    - cron: "30 10 * * *"   # 16:00 IST
+    - cron: "30 13 * * *"   # 19:00 IST
+    - cron: "30 16 * * *"   # 22:00 IST
+
+  # Lets you test the scheduled path without waiting for a cron, and without
+  # dispatching backup.yml directly (which would take the input path instead).
+  workflow_dispatch:
+
+jobs:
+  backup:
+    # No inputs: the called workflow finds github.event.inputs empty and falls back
+    # to the DIRECT_DATABASE_URL secret, building its own "…-git-…" file name.
+    uses: ./.github/workflows/backup.yml
+    secrets: inherit

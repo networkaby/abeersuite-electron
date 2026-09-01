@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Download, Upload, AlertTriangle, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,6 +47,12 @@ function formatWhen(iso: string) {
 export function BackupRestorePanel() {
     const [backingUp, setBackingUp] = useState(false);
 
+    // null until the first answer from GitHub — the switch stays out of the way
+    // rather than guessing a position and flipping under the user a moment later.
+    const [scheduleOn, setScheduleOn] = useState<boolean | null>(null);
+    const [scheduleState, setScheduleState] = useState("");
+    const [savingSchedule, setSavingSchedule] = useState(false);
+
     const [backups, setBackups] = useState<DropboxBackup[]>([]);
     const [loadingList, setLoadingList] = useState(false);
     const [selectedPath, setSelectedPath] = useState("");
@@ -53,6 +60,44 @@ export function BackupRestorePanel() {
     const [confirmText, setConfirmText] = useState("");
     const [restoring, setRestoring] = useState(false);
     const [availability, setAvailability] = useState<Availability | null>(null);
+
+    const loadSchedule = useCallback(async () => {
+        try {
+            const res = await fetch("/api/settings/backup/workflow");
+            if (!res.ok) return; // counter build, or GitHub unreachable — leave it hidden
+            const json = (await res.json()) as { enabled: boolean; state: string };
+            setScheduleOn(json.enabled);
+            setScheduleState(json.state);
+        } catch {
+            // Same: a switch we cannot trust is not shown at all.
+        }
+    }, []);
+
+    async function toggleSchedule(next: boolean) {
+        setSavingSchedule(true);
+        const previous = scheduleOn;
+        setScheduleOn(next); // optimistic, rolled back below if GitHub refuses
+        try {
+            const res = await fetch("/api/settings/backup/workflow", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled: next }),
+            });
+            const json = (await res.json().catch(() => null)) as
+                | { enabled?: boolean; state?: string; error?: string }
+                | null;
+            if (!res.ok || typeof json?.enabled !== "boolean") throw new Error(json?.error || `HTTP ${res.status}`);
+
+            setScheduleOn(json.enabled);
+            setScheduleState(json.state ?? "");
+            toast.success(json.enabled ? "Automatic backup turned on." : "Automatic backup turned off.");
+        } catch (err) {
+            setScheduleOn(previous);
+            toast.error(err instanceof Error ? err.message : "Could not change the automatic backup setting");
+        } finally {
+            setSavingSchedule(false);
+        }
+    }
 
     const loadBackups = useCallback(async () => {
         setLoadingList(true);
@@ -79,7 +124,8 @@ export function BackupRestorePanel() {
 
     useEffect(() => {
         void loadBackups();
-    }, [loadBackups]);
+        void loadSchedule();
+    }, [loadBackups, loadSchedule]);
 
     // Optimistic until the status arrives: a transient network error must not label a
     // properly configured machine "counter-only". If it really is one, the routes still
@@ -186,6 +232,33 @@ export function BackupRestorePanel() {
                     <Download className="mr-1.5 size-3.5" />
                     {!canBackup ? "Not available here" : backingUp ? "Starting…" : "Back up now"}
                 </Button>
+
+                {/* Hidden entirely when GitHub could not be asked — a switch showing a
+                    position it has not confirmed would be worse than no switch. */}
+                {scheduleOn !== null && (
+                    <div className="flex items-start justify-between gap-4 rounded-md border bg-background p-3">
+                        <div className="space-y-0.5">
+                            <Label className="text-xs font-medium">Automatic backup</Label>
+                            <p className="text-[11px] leading-snug text-muted-foreground">
+                                {scheduleOn
+                                    ? "On — backs up five times a day (10 AM, 1, 4, 7 and 10 PM). Times are set in the workflow file, not here."
+                                    : "Off — nothing backs up on its own. The button above still works."}
+                            </p>
+                            {scheduleState === "disabled_inactivity" && (
+                                <p className="text-[11px] leading-snug text-amber-600">
+                                    GitHub switched this off after 60 days without any change to the code. Turning it
+                                    back on here fixes it.
+                                </p>
+                            )}
+                        </div>
+                        <Switch
+                            checked={scheduleOn}
+                            disabled={savingSchedule || !canBackup}
+                            onCheckedChange={(next) => void toggleSchedule(next)}
+                            aria-label="Automatic backup"
+                        />
+                    </div>
+                )}
             </section>
 
             {/* Restore */}

@@ -7,17 +7,17 @@ name: Database Backup
 # Three ways in, and the file name records which:
 #   manual  the app, on a click     (POST /api/settings/backup)
 #   cron    the app, on a schedule  (Vercel Cron -> /api/cron/backup)
-#   git     the schedule below, with no app involved
+#   git     backup-scheduled.yml, with no app involved
+#
+# The schedule lives in backup-scheduled.yml, not here, so that switching automatic
+# backups off from the settings page does not also disable the manual button.
 
 on:
-  # Safety net independent of the app and of Vercel: this fires even if the site
-  # is down, the deployment is broken, or the Vercel cron is disabled.
-  schedule:
-    # 18:30 UTC = 00:00 IST, daily. Cron here is always UTC — there is no timezone
-    # option — so midnight Indian time is written as 18:30 the previous day.
-    # GitHub queues scheduled runs and can start them late (typically minutes, more
-    # at the top of the hour), so treat this as "around midnight", not exactly.
-    - cron: "30 18 * * *"
+  # Called by backup-scheduled.yml, which owns the timetable. No inputs arrive that
+  # way, so the steps below fall back to the DIRECT_DATABASE_URL secret and build
+  # their own file name.
+  workflow_call:
+
   workflow_dispatch:
     inputs:
       file_name:

@@ -56,3 +56,86 @@ export async function triggerWorkflow(workflowFile: string, inputs: Record<strin
         throw new Error(`GitHub workflow dispatch failed (HTTP ${res.status}): ${text.slice(0, 500)}${hint}`);
     }
 }
+
+/**
+ * The workflow that owns the backup timetable. Separate from backup.yml on purpose:
+ * enabling/disabling acts on a whole workflow, and the manual "Back up now" button
+ * dispatches backup.yml — so pointing the switch at that file would stop the button
+ * working too.
+ */
+export const SCHEDULED_BACKUP_WORKFLOW = "backup-scheduled.yml";
+
+/** Shared token/repo resolution, so the callers below cannot drift from triggerWorkflow. */
+function githubConfig(): { token: string; repo: string } {
+    const token = cleanEnvValue(process.env.GITHUB_DISPATCH_TOKEN);
+    const repo = cleanEnvValue(process.env.GITHUB_REPO);
+    if (!token) throw new Error("GITHUB_DISPATCH_TOKEN is not set.");
+    if (!repo) throw new Error("GITHUB_REPO is not set (expected 'owner/repo').");
+    return { token, repo };
+}
+
+function githubHeaders(token: string): HeadersInit {
+    return {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    };
+}
+
+/** Same 404-means-anything caveat as triggerWorkflow, so say what to check. */
+function githubError(action: string, status: number, body: string, repo: string, workflow: string): Error {
+    const hint =
+        status === 404
+            ? ` — check that the PAT lists "${repo}" under Repository access and that ${workflow} exists on the default branch.`
+            : status === 403
+              ? " — the PAT needs the Actions permission set to Read and write."
+              : status === 401
+                ? " — GITHUB_DISPATCH_TOKEN is invalid, expired, or has a stray comment/whitespace in it."
+                : "";
+    return new Error(`GitHub ${action} failed (HTTP ${status}): ${body.slice(0, 300)}${hint}`);
+}
+
+/**
+ * Is the scheduled-backup workflow currently allowed to run?
+ *
+ * GitHub reports "active", or one of the disabled states — disabled_manually (a
+ * person or this app switched it off) and disabled_inactivity (60 days without a
+ * push, which GitHub does on its own and is the usual reason backups stop quietly).
+ * The caller shows the difference, because the fix differs: one is a click, the
+ * other is a push.
+ */
+export async function getScheduledBackupState(): Promise<{ enabled: boolean; state: string }> {
+    const { token, repo } = githubConfig();
+    const workflow = SCHEDULED_BACKUP_WORKFLOW;
+
+    const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}`, {
+        headers: githubHeaders(token),
+        // The schedule changes rarely, but a stale answer here would show the wrong
+        // switch position, so this is one of the few places worth always asking.
+        cache: "no-store",
+    });
+    if (!res.ok) {
+        throw githubError("workflow lookup", res.status, await res.text().catch(() => ""), repo, workflow);
+    }
+
+    const json = (await res.json()) as { state?: string };
+    const state = json.state ?? "unknown";
+    return { enabled: state === "active", state };
+}
+
+/** Turn the schedule on or off. Takes effect immediately — no commit, no deploy. */
+export async function setScheduledBackupEnabled(enabled: boolean): Promise<void> {
+    const { token, repo } = githubConfig();
+    const workflow = SCHEDULED_BACKUP_WORKFLOW;
+
+    const res = await fetch(
+        `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/${enabled ? "enable" : "disable"}`,
+        { method: "PUT", headers: githubHeaders(token) },
+    );
+    // Success is 204 No Content.
+    if (!res.ok) {
+        const action = enabled ? "workflow enable" : "workflow disable";
+        throw githubError(action, res.status, await res.text().catch(() => ""), repo, workflow);
+    }
+}
+

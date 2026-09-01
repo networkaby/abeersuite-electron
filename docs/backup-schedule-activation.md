@@ -7,6 +7,14 @@ GitHub schedule in `.github/workflows/backup.yml` (09:00 UTC / 14:30 IST daily) 
 what keeps automatic backups running meanwhile. To set a Vercel cron time by hand,
 see the Backup Schedule section of `README.md`.
 
+**The on/off half is already solved, elsewhere.** Settings → Backup & Restore now
+carries an *Automatic backup* switch that enables/disables `backup-scheduled.yml`
+through GitHub's API — no table, no tick, no redeploy. What remains unbuilt here is
+only editing the *times* from the UI; those live in that workflow file today.
+
+So read the rest of this as: worth doing if changing the schedule from the UI ever
+becomes a real need, and not before.
+
 Work through this at the production-start commit.
 
 ## Why it is built this way
