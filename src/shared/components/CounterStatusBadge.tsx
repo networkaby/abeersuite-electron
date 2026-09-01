@@ -1,41 +1,29 @@
 "use client";
 
-import { RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { Cloud, CloudOff } from "lucide-react";
 import { useCounterMode } from "@/shared/hooks/useCounterMode";
+import { shellStatus, type StatusField } from "@/shared/lib/counter/statusLabels";
 
 /**
- * Connection state for a counter, always visible while the app is on one.
+ * Where this counter is reading from and writing to, always visible while the app
+ * is on one.
  *
- * Green is deliberately not silent-green: it still names WHICH database is answering,
- * because that is what explains any staleness a user notices.
+ * TWO FIELDS, because they are two independent dials. `READ_MODE` and `WRITE_MODE`
+ * are set separately and all four combinations are legal — a till reading its own
+ * replica while writing straight to Supabase is a supported configuration, and one
+ * blended word could not describe it. The badge used to print a single "Local" or
+ * "Live" and simply lost that information.
  *
- * The top bar has very little room, so the visible label is just two words —
- * "Local" / "Live", naming which database is answering — with red/green
- * carrying the online/offline distinction.
+ * The words and the colour come from `shellStatus()`, shared with the Electron
+ * window title so the two can never disagree. See statusLabels.ts for what each
+ * word means and why "Local" stays "Local" when the connection drops.
  */
 export default function CounterStatusBadge() {
     const status = useCounterMode();
 
     if (!status || !status.isCounter) return null;
 
-    const base = "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium";
-
-    // ── RED: Supabase is unreachable ─────────────────────────────────────────
-    if (status.mode === "LOCAL" || status.cloudReachable === false) {
-        return (
-            <span
-                className={`${base} border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-200`}
-                title="No connection to the server. You can browse normally, and any offline-enabled counter actions can still be saved locally. Anything requiring server verification cannot be saved until connection returns."
-                aria-label="Offline — working from this computer's local copy"
-            >
-                <WifiOff className="size-3.5" aria-hidden />
-                Local
-            </span>
-        );
-    }
-
-    // ── GREEN: connected ─────────────────────────────────────────────────────
-    const servingLocal = status.preference !== "live" && status.replicaReady;
+    const { read, write, offline } = shellStatus(status);
 
     const sourceNote = status.replicaSource === "installed"
         ? " Running against the PostgreSQL already installed on this PC."
@@ -43,20 +31,42 @@ export default function CounterStatusBadge() {
             ? " Running against this app's own embedded PostgreSQL."
             : "";
 
+    const title = offline
+        ? `No connection to the server. Reads are being served from this computer's own copy, which may be behind. `
+        + `${write.word === "Local"
+            ? "Saving works as normal — it goes to this computer and uploads when the connection returns."
+            : "Only the actions enabled in Offline Policies can be saved until the connection returns."}`
+        : `Connected. Reads come from ${read.word === "Local" ? "this computer's own copy, which keeps itself up to date" : "the server"}. `
+        + `Saves go to ${write.word === "Local" ? "this computer and upload straight away" : "the server"}.${sourceNote}`;
+
     return (
         <span
-            className={`${base} border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-200`}
-            title={
-                servingLocal
-                    ? `Connected. Pages load from this machine's own copy, which keeps itself up to date, so they open instantly and cost nothing to read. Saving goes to the server as normal.${sourceNote}`
-                    : "Connected. Pages are loading from the server — this machine's local copy is still catching up and will take over on its own once it is ready."
-            }
-            aria-label={servingLocal ? "Online — reading from the local copy" : "Online — reading from the server"}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-900"
+            title={title}
+            aria-label={`Reading ${read.word}, writing ${write.word}${offline ? ", server unreachable" : ""}`}
         >
-            {servingLocal
-                ? <RefreshCw className="size-3.5" aria-hidden />
-                : <Wifi className="size-3.5" aria-hidden />}
-            {servingLocal ? "Local" : "Live"}
+            {offline
+                ? <CloudOff className="size-3.5 text-rose-600 dark:text-rose-400" aria-hidden />
+                : <Cloud className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />}
+            <Field label="R" field={read} />
+            <span className="text-slate-400 dark:text-slate-600" aria-hidden>·</span>
+            <Field label="W" field={write} />
+        </span>
+    );
+}
+
+/**
+ * One dial. The label is a single letter because the top bar has very little room
+ * and this sits next to the sync badge; the tooltip and aria-label carry the full
+ * sentence for anyone who needs it.
+ */
+function Field({ label, field }: { label: string; field: StatusField }) {
+    const tone = field.tone === "down"
+        ? "text-rose-700 dark:text-rose-300"
+        : "text-emerald-700 dark:text-emerald-300";
+    return (
+        <span className={tone}>
+            <span className="opacity-60">{label}:</span> {field.word}
         </span>
     );
 }

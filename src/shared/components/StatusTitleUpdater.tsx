@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect } from "react";
-import { useOutboxStatus } from "@/shared/hooks/useOutboxStatus";
+import { useSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { useCounterMode } from "@/shared/hooks/useCounterMode";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
+import { shellStatus } from "@/shared/lib/counter/statusLabels";
 
 /**
- * Sends sync and connection status to Electron's main process via IPC,
- * which updates the window title to show real-time status.
- * Renders nothing — purely side-effect based.
+ * Pushes sync and connection status to Electron's main process, which puts it in
+ * the window title. Renders nothing.
+ *
+ * The connection half now comes from `shellStatus()`, the same helper the shell
+ * badge uses. It previously computed its own answer from `replicaReady` alone
+ * while the badge tested `preference !== "live" && replicaReady`, and ignored
+ * `cloudReachable` entirely — so on a counter with READ_MODE=live and a ready
+ * replica the badge said "Live" while the title said "Online • Local", and under
+ * WRITE_MODE=local with Supabase down the title still claimed "Online". One
+ * helper, one answer, and the vocabulary matches what is on screen.
  */
 export default function StatusTitleUpdater() {
-    const syncStatus = useOutboxStatus();
+    const syncStatus = useSyncStatus();
     const counterMode = useCounterMode();
 
     useEffect(() => {
@@ -26,30 +34,21 @@ export default function StatusTitleUpdater() {
         if (!api?.updateWindowStatus) return;
         if (!syncStatus || !counterMode) return;
 
-        // Determine sync status label
-        let syncLabel = "Synced";
+        // Same priority as SyncStatusBadge — keep the two in step if either changes.
+        let sync = "Synced";
         if (syncStatus.isCounter) {
-            if (syncStatus.failed > 0) {
-                syncLabel = `Sync error (${syncStatus.failed})`;
-            } else if (syncStatus.pending > 0) {
-                syncLabel = `Pending (${syncStatus.pending})`;
-            }
+            const replica = syncStatus.replica;
+            if (syncStatus.failed > 0) sync = `Sync error (${syncStatus.failed})`;
+            else if (replica && (replica.failing.length || replica.neverSynced.length)) sync = "Copy incomplete";
+            else if (syncStatus.pending > 0) sync = `Upload (${syncStatus.pending})`;
+            else if (syncStatus.downloading.length > 0) sync = "Download";
         }
 
-        // Determine connection status label
-        let connectionLabel = "Online • Remote";
-        if (counterMode.isCounter) {
-            const isOffline = counterMode.mode === "LOCAL";
-            const isLocal = counterMode.replicaReady;
+        // Off a counter there are no dials to report — the app is simply on the server.
+        const { read, write } = shellStatus(counterMode);
+        const connection = counterMode.isCounter ? `R:${read.word} · W:${write.word}` : "Live";
 
-            if (isOffline) {
-                connectionLabel = "Offline • Local";
-            } else if (isLocal) {
-                connectionLabel = "Online • Local";
-            }
-        }
-
-        api.updateWindowStatus({ sync: syncLabel, connection: connectionLabel });
+        api.updateWindowStatus({ sync, connection });
     }, [syncStatus, counterMode]);
 
     return null;
