@@ -115,8 +115,13 @@ function isTransientLock(err: unknown): boolean {
  * Defender was still scanning them when the rename came round — failing the build
  * every time, while the same rename by hand a few seconds later worked. A minute of
  * patience is nothing against a fifteen-minute build.
+ *
+ * 40 attempts was not the minute this comment promised — it was twenty seconds, and
+ * that is exactly how long the lock outlasted on the run that failed at
+ * prepare-bridge-deps with the hoisted directory already staged and `node_modules`
+ * already removed. The numbers now say what the reasoning says.
  */
-const LOCK_RETRY_ATTEMPTS = 40;
+const LOCK_RETRY_ATTEMPTS = 120;
 const LOCK_RETRY_DELAY_MS = 500;
 
 function rmWithRetry(target: string, attempts = LOCK_RETRY_ATTEMPTS): void {
