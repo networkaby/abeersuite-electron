@@ -26,7 +26,7 @@
 | Windows installer, symlink hoisting, packaging gate | **Built** | [`scripts/prepare-standalone.ts`](../scripts/prepare-standalone.ts), [`scripts/verify-package.ts`](../scripts/verify-package.ts) |
 | Unattended install, baked env allowlist, per-machine `AUTH_SECRET` | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
 | Dexie UI hot cache | **Built and in real use** | [`src/shared/lib/browser/localDb.ts`](../src/shared/lib/browser/localDb.ts) |
-| Supabase realtime broadcast channel | **Built** | [`src/shared/lib/sync/realtimeSync.ts`](../src/shared/lib/sync/realtimeSync.ts) |
+| Supabase realtime broadcast channel | **Built** — one channel, `app:changes` | [`src/shared/lib/realtime/appChannel.ts`](../src/shared/lib/realtime/appChannel.ts) |
 | Sync table registry (113 tables) | **Built, generated, precommit-checked** | [`prisma/sync-tables.json`](../prisma/sync-tables.json) |
 | Live/local routing + outage demotion | **Built** | [`src/shared/lib/prisma/prismaClient.ts`](../src/shared/lib/prisma/prismaClient.ts) |
 | **Embedded PostgreSQL** | **BUILT — bundled, 108.8 MB after trim** | [`scripts/fetch-pg.ts`](../scripts/fetch-pg.ts), [`electron/postgresManager.ts`](../electron/postgresManager.ts) |
@@ -318,8 +318,15 @@ Summary of phase order:
   client (the previous raw-SQL version had a column-name injection hole and an allowlist of table
   names that didn't match 10 of its 14 real tables — neither had ever been exercised). Last-write-
   wins was also added for offline edits, on both the pull (`sync-engine/lib/pull.js`) and push
-  sides. The `useRealtimeTopics.ts` over-fire noted above is still open — genuinely lower priority,
-  queued after the correctness/security work above.
+  sides.
+  **Closed, 2026-09-01**: the `useRealtimeTopics.ts` over-fire is gone, and the table-number ->
+  `Topic` mapping it was waiting on was never needed. The sync-event channel it over-fired on
+  (`abeersuite:sync-events`) had no publisher at all — `broadcastTableMutation` had zero callers
+  and the outbox stub that was supposed to call it had been replaced by the real durable outbox,
+  which pushes over `/api/sync/push` and does not broadcast. The channel was deleted rather than
+  filtered: it also opened a socket per TAB, outside the tab-leader election. `useRealtimeTopics`
+  now listens only to `app:changes`, where the topic filter it was accused of ignoring has always
+  been applied.
 - **Phase 6 — done.** [`scripts/counterEnv.ts`](../scripts/counterEnv.ts)'s `COUNTER_ENV_COPIED`
   no longer includes the 4 `DROPBOX_*` / 3 `GITHUB_*` keys (commented out, not deleted, so
   re-enabling for a specific release is a one-line uncomment). `resources/counter.env` now
