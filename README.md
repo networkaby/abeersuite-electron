@@ -247,33 +247,8 @@ the unfinished in-app schedule UI is for — see
 
 ### Setting the GitHub schedule — the daily backup
 
-This is the one that actually runs. Easiest way is the console tool, which does
-the IST→UTC conversion for you:
-
-```bash
-pnpm backup:schedule
-```
-
-It prints the current schedule and offers: off, daily at a time you choose, or
-weekly on a day and time. Non-interactive forms for scripting:
-
-```bash
-pnpm backup:schedule show
-pnpm backup:schedule off
-pnpm backup:schedule daily 00:00
-pnpm backup:schedule weekly sunday 02:30
-```
-
-Times are entered in **IST** and written to the workflow as UTC. The tool also
-shifts the weekday when the conversion crosses midnight — 00:00 Sunday IST is
-18:30 **Saturday** UTC — which is the part most often got wrong by hand.
-
-It edits `.github/workflows/backup.yml` and nothing else: `vercel.json` and the
-manual button are untouched. **Commit and push afterwards**, because GitHub reads
-the schedule from the pushed file, not your working copy. The tool prints the
-exact git command when it finishes.
-
-To edit the file directly instead:
+This is the one that actually runs. Edit `.github/workflows/backup.yml`, commit,
+and push:
 
 ```yaml
 on:
@@ -281,13 +256,36 @@ on:
     - cron: "30 18 * * *"   # 18:30 UTC = 00:00 IST, daily
 ```
 
-Same UTC cron syntax and the same IST→UTC table as above; change the value and
-push. Unlike Vercel, you may add as many schedules as you like and they may run
-as often as you like.
+Three things to get right:
 
-A scheduled run takes no inputs — it reads the `DIRECT_DATABASE_URL` **repo
-secret** and builds its own file name (`…-git-<timestamp>-IST.dump`). Two
-consequences:
+1. **Push it.** GitHub reads the schedule from the pushed file, not your working
+   copy.
+2. **It must be on `main`.** Scheduled workflows only run from the default
+   branch, so a cron changed on another branch does nothing until it merges.
+3. **The value is UTC** — subtract 5:30 from the IST time you want. Use the
+   conversion table above.
+
+#### More than one backup a day
+
+Unlike Vercel, GitHub puts no limit on how many schedules a workflow has. Add
+entries and each fires its own run:
+
+```yaml
+on:
+  schedule:
+    - cron: "30 18 * * *"   # 00:00 IST — midnight
+    - cron: "30 6 * * *"    # 12:00 IST — noon
+```
+
+Every run is a full `pg_dump`, so keep an eye on two things as the database
+grows: Dropbox space (nothing in this system deletes old dumps — there is no
+retention policy yet) and Actions minutes (~2 minutes per run, against 2000 free
+per month).
+
+#### What a scheduled run does differently
+
+It takes no inputs. It reads the `DIRECT_DATABASE_URL` **repo secret** and builds
+its own file name (`…-git-<timestamp>-IST.dump`). Two consequences:
 
 - That secret must hold the **direct** URL — port 5432, no `pgbouncer=true`. The
   pooled URL fails: `pg_dump` rejects connection parameters it does not
@@ -297,7 +295,7 @@ consequences:
   the run log. Backups triggered from the app pass the URL as an input, which
   GitHub echoes in full — so the scheduled path is also the safer one.
 
-Two GitHub-specific caveats:
+#### Two GitHub-specific traps
 
 - **Scheduled runs start late.** GitHub queues them, usually by minutes and
   sometimes much more at the top of the hour. `:30` is chosen partly to dodge the
