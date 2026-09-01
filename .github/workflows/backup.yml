@@ -21,10 +21,17 @@ on:
   workflow_dispatch:
     inputs:
       file_name:
-        description: Dump file name to create in Dropbox. Blank = generate one (scheduled runs).
+        description: Dump file name to create in Dropbox. Blank = generate one here.
         required: false
       source_db_url:
         description: Direct Postgres URL to dump from. Blank = use the DIRECT_DATABASE_URL secret.
+        required: false
+      source:
+        description: What started this — manual, cron or git. Only used when generating a name.
+        required: false
+        default: git
+      domain:
+        description: Site that asked for it, e.g. office.networkservice.in. Name only.
         required: false
 
 concurrency:
@@ -47,28 +54,44 @@ jobs:
       FILE_NAME: ${{ github.event.inputs.file_name }}
     steps:
       - name: Resolve dump file name
+        env:
+          SOURCE: ${{ github.event.inputs.source }}
+          DOMAIN: ${{ github.event.inputs.domain }}
         run: |
           set -euo pipefail
           if [ -n "${FILE_NAME:-}" ]; then echo "using supplied name: $FILE_NAME"; exit 0; fi
 
-          # No name supplied → this is a scheduled run, with no app and so no
-          # domain. Build the same shape the app builds, minus the domain, and
-          # tag the source "git": smx-backup-<project-ref>-git-<timestamp>.dump
+          # No name supplied, so build one here. This is the path that matters when
+          # the app stops sending source_db_url: the dump is then of whatever
+          # DIRECT_DATABASE_URL points at, and the app cannot know that database's
+          # project ref — so the name has to be built where the URL actually is.
           RAW="${DIRECT_DATABASE_URL:-}"
           if [ -z "$RAW" ]; then echo "No source_db_url input and no DIRECT_DATABASE_URL secret."; exit 1; fi
           NOPROTO="${RAW#*://}"
           case "$NOPROTO" in *@*) USERINFO="${NOPROTO%%@*}" ;; *) USERINFO="" ;; esac
           DB_USER="${USERINFO%%:*}"
+          # Supabase pooler users look like "postgres.<project-ref>".
           case "$DB_USER" in *.*) REF="${DB_USER#*.}" ;; *) REF="" ;; esac
 
-          NAME="smx-backup"
-          [ -n "$REF" ] && NAME="$NAME-$REF"
+          # Same shape as istStamp()/makeBackupFileName() in
+          # src/shared/lib/backup/dropbox.ts — segments dropped when unknown, and
+          # only [a-z0-9.-] kept, so the two generators cannot drift apart.
+          clean() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9.-' '-' | sed 's/^[-.]*//; s/[-.]*$//'; }
+          SRC=$(clean "${SOURCE:-git}"); [ -n "$SRC" ] || SRC="git"
+          DOM=$(clean "${DOMAIN:-}")
+          # The ref goes through clean() too. Supabase refs are lowercase in practice,
+          # but the app-side generator lowercases every segment and these two names
+          # must be indistinguishable.
+          REF=$(clean "$REF")
+
           # Indian time without depending on the runner having tzdata: shift the
-          # epoch by +5:30 and read it back on the UTC clock. Same method as
-          # istStamp() in src/shared/lib/backup/dropbox.ts, so the app-generated
-          # and workflow-generated names cannot drift apart.
+          # epoch by +5:30 and read it back on the UTC clock.
           IST_NOW=$(date -u -d "@$(( $(date -u +%s) + 19800 ))" '+%Y-%m-%d-%H%M%S')
-          NAME="$NAME-git-$IST_NOW-IST.dump"
+
+          NAME="smx-backup"
+          [ -n "$DOM" ] && NAME="$NAME-$DOM"
+          [ -n "$REF" ] && NAME="$NAME-$REF"
+          NAME="$NAME-$SRC-$IST_NOW-IST.dump"
           echo "FILE_NAME=$NAME" >> "$GITHUB_ENV"
           echo "generated name: $NAME"
 

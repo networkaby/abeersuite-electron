@@ -145,11 +145,18 @@ export function BackupRestorePanel() {
         const progress = toast.loading("Starting backup…");
         try {
             const res = await fetch("/api/settings/backup", { method: "POST" });
-            const json = (await res.json().catch(() => null)) as { fileName?: string; error?: string } | null;
-            if (!res.ok || !json?.fileName) throw new Error(json?.error || `HTTP ${res.status}`);
+            const json = (await res.json().catch(() => null)) as
+                | { fileName?: string | null; error?: string }
+                | null;
+            if (!res.ok || !json) throw new Error(json?.error || `HTTP ${res.status}`);
 
+            // fileName is null when the server is configured to let the runner pick
+            // the database and the name (BACKUP_USE_REPO_DB_URL). Nothing is wrong —
+            // this side simply cannot know the name yet, so do not promise one.
             toast.success(
-                `Backup started. In a few minutes "${json.fileName}" will appear in your Dropbox. You can close this page.`,
+                json.fileName
+                    ? `Backup started. In a few minutes "${json.fileName}" will appear in your Dropbox. You can close this page.`
+                    : "Backup started. The file will appear in your Dropbox in a few minutes. You can close this page.",
                 { id: progress, duration: 10_000 },
             );
         } catch (err) {

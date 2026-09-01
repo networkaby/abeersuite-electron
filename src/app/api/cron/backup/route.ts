@@ -1,4 +1,4 @@
-import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
+import { triggerWorkflow, useRepoDbUrl } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
@@ -33,31 +33,36 @@ export async function GET(req: Request) {
         );
     }
 
-    // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
-    // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
-    // rejects any URI param it does not know, so pg_dump exits immediately with
-    // "invalid URI query parameter" and the run uploads a 0-byte dump.
-    const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
-    if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
-        return Response.json(
-            { error: "Active database URL is missing or invalid in server environment." },
-            { status: 500 },
-        );
+    // Repo-secret mode: send no URL and no file name — see the settings route for
+    // why the runner has to build the name in that case.
+    let inputs: Record<string, string>;
+    let fileName: string | null = null;
+
+    if (useRepoDbUrl()) {
+        inputs = { source: "cron", domain: process.env.VERCEL_URL?.trim() ?? "" };
+    } else {
+        // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
+        // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
+        // rejects any URI param it does not know, so pg_dump exits immediately with
+        // "invalid URI query parameter" and the run uploads a 0-byte dump.
+        const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
+        if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
+            return Response.json(
+                { error: "Active database URL is missing or invalid in server environment." },
+                { status: 500 },
+            );
+        }
+        // Vercel Cron calls this directly, so there is no browser Host header to read.
+        fileName = makeBackupFileName({
+            domain: process.env.VERCEL_URL?.trim(),
+            projectRef: projectRefFromDbUrl(dbUrl),
+            source: "cron",
+        });
+        inputs = { file_name: fileName, source_db_url: dbUrl };
     }
 
-    // Vercel Cron calls this directly, so there is no browser Host header to read.
-    // VERCEL_URL is the deployment's own hostname; absent in local dev, and then the
-    // domain segment is simply dropped.
-    const fileName = makeBackupFileName({
-        domain: process.env.VERCEL_URL?.trim(),
-        projectRef: projectRefFromDbUrl(dbUrl),
-        source: "cron",
-    });
     try {
-        await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", {
-            file_name: fileName,
-            source_db_url: dbUrl,
-        });
+        await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
     } catch (err) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }

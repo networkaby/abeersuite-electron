@@ -91,3 +91,42 @@ comparing in UTC would put a Monday backup on Sunday.
   solving before the database grows.
 - **GitHub disables schedules after 60 days without a push.** The settings page
   surfaces this as its own reason; turning the switch back on fixes it.
+
+## Production: stop sending the database URL
+
+While database credentials rotate often, the app sends its own `DIRECT_URL` with
+every manual and Vercel-cron backup. That keeps rotations free — the app always
+holds the current one and no repo secret has to be updated.
+
+It costs one thing: `source_db_url` is a workflow **input**, and GitHub echoes
+inputs in full in the job's env group. Secrets are masked; inputs are not. So every
+app-triggered run prints the password in its log.
+
+Once the credentials settle, switch it off:
+
+```
+BACKUP_USE_REPO_DB_URL=true
+```
+
+Set that in the Vercel deployment. The app then sends **no URL and no file name**;
+the runner dumps whatever `DIRECT_DATABASE_URL` points at and builds the name
+itself.
+
+The name has to move to the runner because the secret may point at a **different
+database** than the app uses. The app cannot read that database's project ref, so a
+name built app-side would be wrong. The app sends only `source` (manual or cron) and
+`domain`; the runner supplies the ref. Both generators produce byte-identical names —
+verified — so dumps from before and after the switch sort and read the same.
+
+Two consequences to expect:
+
+- **The toast stops naming the file.** It says the backup started and the file will
+  appear shortly, because this side genuinely cannot know the name. That is correct,
+  not a regression.
+- **`DIRECT_URL` stops being required for backups**, but is still needed by Prisma
+  and by the seed scripts. Do not remove it.
+
+When both databases are the same, the switch changes nothing visible except that the
+password leaves the logs. When they differ, the project ref in the file name is what
+tells you which one a dump holds.
+

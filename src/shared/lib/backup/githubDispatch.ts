@@ -58,6 +58,24 @@ export async function triggerWorkflow(workflowFile: string, inputs: Record<strin
 }
 
 /**
+ * Should the app send the database URL with a backup request, or let the runner use
+ * the DIRECT_DATABASE_URL repo secret?
+ *
+ * Sending it is the default and is right while the credentials rotate often: the app
+ * always holds the current one, and a rotation needs no repo change. It has one real
+ * cost — `source_db_url` is a workflow INPUT, and GitHub echoes inputs in full in the
+ * job's env group, password included. Secrets are masked; inputs are not.
+ *
+ * Set BACKUP_USE_REPO_DB_URL=true in production once the credentials settle. The app
+ * then sends no URL and no file name: the runner dumps whatever the secret points at
+ * and names the file there, because that database may not be the one the app itself
+ * uses and only the runner can read its project ref.
+ */
+export function useRepoDbUrl(): boolean {
+    return cleanEnvValue(process.env.BACKUP_USE_REPO_DB_URL)?.toLowerCase() === "true";
+}
+
+/**
  * The workflow that owns the backup timetable. Separate from backup.yml on purpose:
  * enabling/disabling acts on a whole workflow, and the manual "Back up now" button
  * dispatches backup.yml — so pointing the switch at that file would stop the button
