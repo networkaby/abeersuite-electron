@@ -155,18 +155,30 @@ smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-02-00004
 | `cron` | Vercel Cron → `/api/cron/backup` | `vercel.json` |
 | `git` | GitHub Actions | `.github/workflows/backup.yml` |
 
-### Right now: Vercel cron is OFF
+### Where the daily backup comes from
 
-`vercel.json` ships with an empty `crons` array, so Vercel starts no backups.
-**Automatic backups still happen** — the GitHub schedule runs daily at 09:00 UTC
-(14:30 IST) and does not depend on Vercel, on the app being up, or on the
-database being reachable from the app. That independence is the point: it is the
-one that still works when the deployment is broken.
+`vercel.json` ships with an empty `crons` array, so Vercel starts no backups —
+and on the free plan there is little reason to change that. **The daily midnight
+backup runs from GitHub Actions instead**, on the `schedule:` in
+`.github/workflows/backup.yml`.
 
-### To start daily midnight backups — copy this
+GitHub is the better host for it here: schedules are free and unlimited, not
+capped at once a day like Vercel Hobby, and the run does not depend on Vercel, on
+the app being up, or on the database being reachable from the app. That last part
+is the real argument — it still works on the night the deployment is broken.
+
+The Vercel section below is kept for the case where you want a backup triggered
+*through the app* (so it uses the app's own `DIRECT_URL` rather than the repo
+secret). It is not needed for ordinary scheduled backups.
+
+### Optional: also backing up from Vercel
+
+Not needed for the daily backup — GitHub already does that. Use this only if you
+want a backup triggered *through the app*, which makes it use the deployment's
+own `DIRECT_URL` instead of the repo secret.
 
 Replace the whole of `vercel.json` with this, commit, and push. Vercel picks up
-the schedule on the next deploy; nothing else needs changing.
+the schedule on the next deploy.
 
 ```json
 {
@@ -233,13 +245,40 @@ own, so an hourly cron would mean 24 full dumps a day. Per-hour control is what
 the unfinished in-app schedule UI is for — see
 `docs/backup-schedule-activation.md`.
 
-### Setting the GitHub schedule
+### Setting the GitHub schedule — the daily backup
 
-In `.github/workflows/backup.yml`, under `on: schedule:`. Same UTC cron syntax.
-A scheduled run takes no inputs — it reads the `DIRECT_DATABASE_URL` repo secret
-and builds its own file name. That secret must be the **direct** URL (port 5432,
-no `pgbouncer=true`); the pooled URL fails, because `pg_dump` rejects unknown
-connection parameters.
+This is the one that actually runs. In `.github/workflows/backup.yml`:
+
+```yaml
+on:
+  schedule:
+    - cron: "30 18 * * *"   # 18:30 UTC = 00:00 IST, daily
+```
+
+Same UTC cron syntax and the same IST→UTC table as above; change the value and
+push. Unlike Vercel, you may add as many schedules as you like and they may run
+as often as you like.
+
+A scheduled run takes no inputs — it reads the `DIRECT_DATABASE_URL` **repo
+secret** and builds its own file name (`…-git-<timestamp>-IST.dump`). Two
+consequences:
+
+- That secret must hold the **direct** URL — port 5432, no `pgbouncer=true`. The
+  pooled URL fails: `pg_dump` rejects connection parameters it does not
+  recognise and the run writes a 0-byte dump. Set it at
+  **Settings → Secrets and variables → Actions**.
+- Because it is a secret rather than a workflow input, the password is masked in
+  the run log. Backups triggered from the app pass the URL as an input, which
+  GitHub echoes in full — so the scheduled path is also the safer one.
+
+Two GitHub-specific caveats:
+
+- **Scheduled runs start late.** GitHub queues them, usually by minutes and
+  sometimes much more at the top of the hour. `:30` is chosen partly to dodge the
+  worst of it. Treat the time as "around midnight".
+- **Schedules are disabled after 60 days without repository activity.** GitHub
+  emails first. If backups quietly stop, check this before anything else — a
+  single push re-enables them.
 
 ## Documentation Map
 

@@ -13,7 +13,11 @@ on:
   # Safety net independent of the app and of Vercel: this fires even if the site
   # is down, the deployment is broken, or the Vercel cron is disabled.
   schedule:
-    - cron: "0 9 * * *"   # 09:00 UTC = 14:30 IST, daily
+    # 18:30 UTC = 00:00 IST, daily. Cron here is always UTC — there is no timezone
+    # option — so midnight Indian time is written as 18:30 the previous day.
+    # GitHub queues scheduled runs and can start them late (typically minutes, more
+    # at the top of the hour), so treat this as "around midnight", not exactly.
+    - cron: "30 18 * * *"
   workflow_dispatch:
     inputs:
       file_name:
