@@ -27,6 +27,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
+import { BrowserWindow } from "electron";
 import { app } from "electron";
 
 let worker: ChildProcess | null = null;
@@ -134,6 +135,32 @@ export function startSyncWorker(syncUrl: string): void {
     });
 
     console.log("[SyncManager] Sync worker started.");
+}
+
+/**
+ * The worker prints one machine-readable line, after a cycle has committed rows into
+ * the replica (`__SYNC_APPLIED__` in sync-engine/sync-once.js). Forward it to every
+ * window so screens re-read once the data is ACTUALLY there, instead of racing the
+ * worker on the same Realtime signal and losing.
+ *
+ * Matched on the raw line rather than a clean protocol because the text passes through
+ * two relays that each prefix it; the marker plus a JSON tail survives both. A line that
+ * does not parse is ignored — a log message is not worth crashing a boot path for.
+ */
+const APPLIED_RE = /__SYNC_APPLIED__ (\{.*\})\s*$/;
+
+function notifyIfApplied(line: string): void {
+    const m = APPLIED_RE.exec(line);
+    if (!m) return;
+    let info: { rows: number; models: string[] };
+    try {
+        info = JSON.parse(m[1]);
+    } catch {
+        return;
+    }
+    for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send("sync:applied", info);
+    }
 }
 
 /**

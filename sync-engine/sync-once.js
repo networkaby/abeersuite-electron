@@ -91,6 +91,10 @@ async function main() {
 
     const t0 = Date.now();
     let pulledTotal = 0;
+    /** Models this cycle actually wrote rows into — the payload of the "applied" line
+     *  below. A model that pulled nothing is deliberately absent: the whole point is to
+     *  leave screens alone when a cycle changed nothing they could see. */
+    const changedModels = new Set();
     let failed = 0;
     let skipped = 0;
     let verified = 0;
@@ -210,6 +214,7 @@ async function main() {
                     }
                 }
                 moved.set(model, res.ids);
+                if (res.pulled !== 0) changedModels.add(model);
                 pulledTotal += Math.max(res.pulled, 0);
                 if (!DRY) await state.recordSuccess(local, entry, model, res.watermark, res.watermarkId);
                 if (res.pulled !== 0) {
@@ -242,6 +247,7 @@ async function main() {
                     ? { pulled: parentIds.length, ids: [] }
                     : await pullChildren(source, local, entry, parentIds);
                 moved.set(model, res.ids);
+                if (res.pulled !== 0) changedModels.add(model);
                 pulledTotal += res.pulled;
                 if (!DRY) await state.recordSuccess(local, entry, model, null);
                 if (res.pulled !== 0) {
@@ -350,6 +356,15 @@ async function main() {
     );
     if (verified || repaired) {
         console.log(`${verified} table(s) verified against source, ${repaired} row(s) repaired.`);
+    }
+
+    // The one line in this program a machine reads. Printed AFTER every write has
+    // committed and the pools are closed, so a reader that acts on it is guaranteed the
+    // rows are already queryable -- which is the entire point: the app's screens used to
+    // re-read the replica in parallel with this process and routinely beat it there.
+    // Silent when nothing moved, so a no-op cycle wakes nobody.
+    if (!DRY && pulledTotal > 0) {
+        console.log(`__SYNC_APPLIED__ ${JSON.stringify({ rows: pulledTotal, models: [...changedModels] })}`);
     }
     process.exit(failed === 0 ? 0 : 1);
 }

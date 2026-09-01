@@ -25,10 +25,17 @@
  *
  * `fn` may change identity between renders — the latest one is always used and
  * the subscription is not rebuilt for it, so callers need not memoise.
+ *
+ * TWO SOURCES, NOT ONE. On a counter the change signal fires while the sync worker is
+ * still writing the replica these screens read from, so acting on it alone means reading
+ * too early and showing the old rows. `syncApplied.ts` supplies the second source — the
+ * worker reporting that rows are committed and queryable — and that one is filtered only
+ * by "did anything change on this machine", not by topic. Off Electron it never fires.
  */
 
 import { useEffect, useRef } from "react";
 import { onChangeSignal } from "@/shared/lib/realtime/appChannel";
+import { ensureSyncAppliedBridge, SYNC_APPLIED_EVENT } from "@/shared/lib/realtime/syncApplied";
 import type { Topic } from "@/shared/lib/realtime/topics";
 
 /** Long enough to swallow a multi-request save, short enough to feel instant. */
@@ -67,6 +74,18 @@ export function useRealtimeTopics(
             schedule();
         });
 
+        // On a counter the signal above fires while the replica is still being written,
+        // so the read it schedules can land before the data does. This second source is
+        // the worker saying the rows ARE there now — see syncApplied.ts. Not filtered by
+        // topic: the worker reports models, and mapping models back to topics would mean
+        // hand-maintaining a second map that silently narrows what refreshes as the
+        // schema grows, which is exactly how the worker's own topic map rotted. A cycle
+        // that pulled nothing stays silent, so this only fires when something really did
+        // change on this machine.
+        ensureSyncAppliedBridge();
+        const onApplied = () => schedule();
+        window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
+
         // A gap this tab sat hidden through is exactly what a remembered
         // "owed" flag would try to cover — and get wrong the moment the gap
         // held no signal at all. Reading unconditionally on return is both
@@ -76,6 +95,7 @@ export function useRealtimeTopics(
 
         return () => {
             offApp();
+            window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
             if (timer) clearTimeout(timer);
             document.removeEventListener("visibilitychange", onVisibility);
         };

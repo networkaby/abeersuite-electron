@@ -9,6 +9,16 @@ export interface ElectronAPI {
     onUpdateReady: (callback: () => void) => void;
     /** Splash-screen progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
+    /**
+     * Fired after the sync worker has COMMITTED pulled rows into the local replica.
+     *
+     * Screens are served from that replica, and they used to re-read it in parallel with
+     * the worker on the same Realtime signal — the worker has to spawn a process and scan
+     * 113 tables, so the screen normally won that race and re-read the OLD data. This is the
+     * only event in the system that means "what you would read is now actually there".
+     * Silent when a cycle pulled nothing.
+     */
+    onSyncApplied: (callback: (info: { rows: number; models: string[] }) => void) => void;
     applyIdRanges: (blockStart: number) => Promise<boolean>;
     getCounterSetup: () => Promise<{ counterId: number; counterNumber: number } | null>;
     saveCounterSetup: (setup: { counterId: number; counterNumber: number }) => Promise<boolean>;
@@ -39,6 +49,9 @@ const electronAPI: ElectronAPI = {
     },
     onBootProgress: (callback) => {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));
+    },
+    onSyncApplied: (callback) => {
+        ipcRenderer.on("sync:applied", (_event, info: { rows: number; models: string[] }) => callback(info));
     },
     applyIdRanges: (blockStart: number) => ipcRenderer.invoke("counter:apply-id-ranges", blockStart),
     getCounterSetup: () => ipcRenderer.invoke("counter:get-setup"),
