@@ -637,7 +637,11 @@ function start({ getConfig, setConfig }) {
 
     // ── Start ────────────────────────────────────────────────────────────────
 
-    app.listen(RELAY_PORT, () => {
+    // Loopback only. Every client hardcodes `http://localhost:919x` (see bridgeHealth.ts,
+    // qrDisplay.ts, PosScreen, PrintToolbar), so a browser on another PC resolves that to
+    // its own machine and never reaches this relay — binding 0.0.0.0 only exposed the
+    // shop hardware to the whole LAN for nothing.
+    app.listen(RELAY_PORT, "127.0.0.1", () => {
         const cfg = getConfig();
         console.log(`[qr] running on http://localhost:${RELAY_PORT}`);
         console.log(`[qr] COM port: ${cfg.comPort}  baud: ${cfg.baudRate || 921600}`);

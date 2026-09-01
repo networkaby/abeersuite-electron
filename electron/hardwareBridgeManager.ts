@@ -8,8 +8,9 @@
  * window down with it. See `hardware-bridge/index.js` for why it still speaks HTTP on
  * the port the renderer already knows.
  *
- * The QR display half (:9192) has NOT moved yet — it needs `serialport` and `sharp`,
- * both native modules, which the build chain cannot yet rebuild and unpack.
+ * The QR display half (:9192, the DQ11 customer-facing panel) lives here too — see
+ * `hardware-bridge/qr.js`, started alongside thermal by `index.js`. Both relays bind
+ * loopback only and check the request Origin; they are not reachable from the LAN.
  */
 
 import * as fs from "node:fs";
