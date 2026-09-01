@@ -104,6 +104,16 @@ async function reconcileCounterBinding(
 const BARE_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
 /**
+ * A local DATE, as `to_jsonb` renders a `@db.Date` column — no time part at all.
+ * `UniversalVoucher.date` is one, and it is on the path of every voucher a counter
+ * writes, so this blocked the whole queue behind it (push stops at the first failure):
+ * Prisma answered "premature end of input. Expected ISO-8601 DateTime" and every later
+ * row waited. Widening BARE_DATETIME would have been wrong — a date needs a time
+ * supplied, not just a `Z` appended.
+ */
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
  * Stamps `Z` on the payload's DateTime columns.
  *
  * The counter's capture trigger stores `to_jsonb(NEW)`, and Prisma maps every
@@ -129,9 +139,16 @@ function withZonedDates(
     let out: Record<string, unknown> | null = null;
     for (const col of dates) {
         const v = payload[col];
-        if (typeof v !== "string" || !BARE_DATETIME.test(v)) continue;
-        out ??= { ...payload };
-        out[col] = `${v.replace(" ", "T")}Z`;
+        if (typeof v !== "string") continue;
+        if (BARE_DATETIME.test(v)) {
+            out ??= { ...payload };
+            out[col] = `${v.replace(" ", "T")}Z`;
+        } else if (BARE_DATE.test(v)) {
+            // Midnight UTC — exactly what Prisma itself writes into a `@db.Date`
+            // column, so this round-trips the value rather than shifting the day.
+            out ??= { ...payload };
+            out[col] = `${v}T00:00:00Z`;
+        }
     }
     return out ?? payload;
 }
