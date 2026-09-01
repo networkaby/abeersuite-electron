@@ -8,15 +8,18 @@
  * Owner decision 2026-08-26 — one box — so the printer half moved here unchanged and
  * Electron supervises it (see electron/hardwareBridgeManager.ts).
  *
- * ── Why it still serves HTTP on the same port ────────────────────────────────
- * The obvious "native" thing would be IPC. But the app has eight-plus call sites that
- * fetch `http://localhost:9191/...` directly — PosScreen, PrintToolbar, printer
- * settings, counter identity, bridge health — and rewriting all of them at the same
- * time as moving 1300 lines of ESC/POS, Windows-spooler and COM code is two risky
- * changes at once. Keeping the interface means the renderer does not change at all
- * today; call sites can migrate to IPC afterwards behind the BRIDGE_ORIGIN seam that
- * already exists in src/shared/lib/bridge/bridgeHealth.ts. The separate installer and
- * scheduled task are gone either way, which was the actual goal.
+ * ── Why one half still serves HTTP ──────────────────────────────────────────
+ * The obvious "native" thing is IPC, and the QR display now uses it: qr.js takes
+ * `{ mod, cmd, payload, id? }` messages over the Electron channel and has no port.
+ * Thermal has not moved yet — it has eight-plus call sites fetching
+ * `http://localhost:9191/...` (PosScreen, PrintToolbar, printer settings, counter
+ * identity, bridge health), and rewriting those at the same time as moving 1300 lines
+ * of ESC/POS, Windows-spooler and COM code is two risky changes at once. QR went first
+ * because its calls are fire-and-forget through a single facade (qrDisplay.ts), so
+ * nothing the cashier sees depends on the reply. Thermal migrates behind the
+ * BRIDGE_ORIGIN seam in src/shared/lib/bridge/bridgeHealth.ts once QR has run on a
+ * real counter. The separate installer and scheduled task are gone either way, which
+ * was the actual goal.
  *
  * ── Native modules turned out to be a non-issue ──────────────────────────────
  * The QR display was expected to need `electron-rebuild` and `asarUnpack`, because it

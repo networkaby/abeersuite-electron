@@ -515,6 +515,28 @@ ipcMain.handle("app:update-window-status", (_, status: { sync: string; connectio
     mainWindow?.setTitle(buildFullTitle());
 });
 
+// ── Customer-facing DQ11 display ─────────────────────────────────────────────
+//
+// Replaces the old HTTP relay on :9192. Renderer → here → the bridge child's message
+// channel. No listening socket, so nothing on the shop LAN and no website the cashier
+// browses can drive the display.
+
+ipcMain.handle("qr:send", (_event, cmd: string, payload?: unknown) => {
+    sendQr(cmd, payload);
+});
+
+ipcMain.handle("qr:request", async (_event, cmd: string, payload?: unknown) => {
+    // Surfaced to the settings page as a message, not a thrown IPC error, so the page
+    // can render "bridge not running" the way the old /health probe let it.
+    try {
+        return { ok: true, result: await requestQr(cmd, payload) };
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+});
+
+ipcMain.handle("qr:connected", () => isBridgeConnected());
+
 ipcMain.handle("printer:get-list", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return [];
@@ -633,7 +655,7 @@ import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { waitForReplicaReady } from "./waitForReplica";
-import { startHardwareBridge, stopHardwareBridge } from "./hardwareBridgeManager";
+import { startHardwareBridge, stopHardwareBridge, sendQr, requestQr, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 

@@ -1,24 +1,50 @@
-// Fire-and-forget client for the local QR-display relay (DQ11).
+// Fire-and-forget client for the customer-facing DQ11 display.
 //
-// The relay runs on the shop PC at http://localhost:9192 and drives the
-// customer-facing USB display. **Every call must be best-effort** — if the
-// relay is down, slow, or returns an error, POS must keep working. Never
-// surface a failure to the cashier; never throw into the React render path.
+// Commands go over Electron IPC (preload `electronAPI.qr` → main → hardware-bridge/qr.js).
+// This used to POST to a local HTTP relay on :9192, a shape inherited from when the app
+// ran in a plain browser; inside Electron that port bought nothing and left the display
+// drivable by anything on the shop LAN.
+//
+// **Every call must be best-effort** — if the bridge is down, POS must keep working.
+// Never surface a failure to the cashier; never throw into the React render path.
+// Outside Electron (the app opened from another PC's browser) there is no bridge to
+// reach, so every call is a silent no-op — same outcome as the old fetch to a localhost
+// that was never this counter.
 
-const RELAY = "http://localhost:9192";
+import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 
-async function send(path: string, body: unknown): Promise<void> {
+type QrReply = { ok: boolean; result?: unknown; error?: string };
+
+type QrBridge = {
+    qr?: {
+        send:    (cmd: string, payload?: unknown) => void;
+        request: (cmd: string, payload?: unknown) => Promise<QrReply>;
+    };
+};
+
+function bridge(): QrBridge["qr"] | undefined {
+    if (!isElectronEnvironment()) return undefined;
+    return (window as unknown as { electronAPI?: QrBridge }).electronAPI?.qr;
+}
+
+/**
+ * Command that needs an answer — the settings page (config, COM ports, test screens).
+ * Unlike `qrDisplay.*` this **throws**, because the settings page has a human waiting
+ * on a toast and a silent failure there is just confusing.
+ */
+export async function qrRequest<T>(cmd: string, payload?: unknown): Promise<T> {
+    const qr = bridge();
+    if (!qr) throw new Error("Display bridge is only available in the desktop app.");
+    const reply = await qr.request(cmd, payload);
+    if (!reply?.ok) throw new Error(reply?.error || `"${cmd}" failed.`);
+    return reply.result as T;
+}
+
+function send(cmd: string, payload: unknown): void {
     try {
-        await fetch(`${RELAY}${path}`, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify(body),
-            signal:  AbortSignal.timeout(2000),
-            credentials: "omit",
-            cache:       "no-store",
-        });
+        bridge()?.send(cmd, payload);
     } catch {
-        // Relay unreachable — silent.
+        // Bridge unreachable — silent, by contract.
     }
 }
 
@@ -97,12 +123,12 @@ export interface QrProduct {
 }
 
 export const qrDisplay = {
-    customer: (data: QrCustomer) => send("/pos/customer", data),
-    cart:     (data: QrCart)     => send("/pos/cart",     data),
-    payment:  (data: QrPayment)  => send("/pos/payment",  data),
-    upi:      (data: QrUpi)      => send("/pos/upi",      data),
-    product:  (data: QrProduct)  => send("/pos/product",  data),
-    thankyou: (data: QrThankyou) => send("/pos/thankyou", data),
-    idle:     ()                 => send("/idle/start",   {}),
-    clear:    ()                 => send("/clear",        {}),
+    customer: (data: QrCustomer) => send("pos/customer", data),
+    cart:     (data: QrCart)     => send("pos/cart",     data),
+    payment:  (data: QrPayment)  => send("pos/payment",  data),
+    upi:      (data: QrUpi)      => send("pos/upi",      data),
+    product:  (data: QrProduct)  => send("pos/product",  data),
+    thankyou: (data: QrThankyou) => send("pos/thankyou", data),
+    idle:     ()                 => send("idle/start",   {}),
+    clear:    ()                 => send("clear",        {}),
 };

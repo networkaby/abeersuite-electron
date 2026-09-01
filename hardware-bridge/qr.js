@@ -1,10 +1,15 @@
-// QR display relay (DQ11 320×480 RGB565 over USB serial @ 921600).
-// Listens on cfg.relayPort (default 9192). Endpoints kept identical to the
-// standalone qr-display relay so the web app (QrDisplaySettingsPage + POS
-// integration) doesn't need any changes.
+// QR display driver (DQ11 320×480 RGB565 over USB serial @ 921600).
+//
+// Driven over the Electron IPC channel, not HTTP. It used to run an Express app on
+// cfg.relayPort (9192) — a shape inherited from the standalone qr-display relay, back
+// when the app ran in a plain browser and HTTP was the only way to reach a local
+// process. Inside Electron that port bought nothing and cost real exposure: unauthed
+// endpoints that could paint the customer-facing display. Commands now arrive as
+// `{ mod: "qr", cmd, payload, id? }` messages — see COMMANDS in start().
+//
+// `cfg.relayPort` is still read by thermal.js for its own port, and survives in saved
+// configs; it is simply unused here now.
 
-const express  = require("express");
-const cors     = require("./cors-pna");
 const fs       = require("fs");
 const path     = require("path");
 const { exec } = require("child_process");
@@ -423,13 +428,6 @@ function listComPorts() {
 // ── start() — boots the QR display Express app ───────────────────────────────
 
 function start({ getConfig, setConfig }) {
-    const app = express();
-    app.use(cors());
-    app.use(express.json({ limit: "2mb" }));
-
-    const initialCfg = getConfig();
-    const RELAY_PORT = process.env.QR_RELAY_PORT || initialCfg.relayPort || 9192;
-
     // ── Display pipeline (queued so concurrent calls serialize) ───────────────
 
     let sendChain = Promise.resolve();
@@ -512,143 +510,132 @@ function start({ getConfig, setConfig }) {
         if (resumeIdleInMs && resumeIdleInMs > 0) scheduleResumeIdle(resumeIdleInMs);
     }
 
-    // ── Routes ───────────────────────────────────────────────────────────────
+    // ── Commands ─────────────────────────────────────────────────────────────
+    //
+    // Replaces the old Express app on :9192. The renderer reaches these through
+    // Electron IPC (preload `electronAPI.qr` → main → this child's message channel),
+    // so there is no listening socket and nothing on the shop LAN — or in any website
+    // the cashier happens to browse — can drive the customer-facing display.
+    //
+    // Names deliberately match the old HTTP paths so logs and greps still line up.
+    // The two /config verbs are the one place that could not stay identical.
 
-    app.get("/health", (_req, res) => {
-        const cfg = getConfig();
-        res.json({
-            ok:       true,
-            comPort:  cfg.comPort,
-            baudRate: cfg.baudRate || 921600,
-            idle:     { running: !!idleTimer, files: idleFiles.length },
-        });
-    });
-
-    app.get("/config", (_req, res) => {
-        try { res.json(getConfig()); }
-        catch (err) { res.status(500).json({ error: err.message }); }
-    });
-
-    app.post("/config", (req, res) => {
-        try {
-            const updated = setConfig(req.body || {});
-            console.log("[qr:config] updated:", req.body);
-            res.json({ ok: true, config: updated });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    });
-
-    app.get("/ports", async (_req, res) => res.json(await listComPorts()));
-
-    app.post("/pos/customer", async (req, res) => {
-        try {
-            const rgb = await renderCustomer(req.body || {});
-            await showActive(rgb);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[qr:customer]", err.message);
-            res.status(503).json({ error: err.message });
-        }
-    });
-
-    app.post("/pos/cart", async (req, res) => {
-        try {
-            const rgb = await renderCart(req.body || {});
-            await showActive(rgb);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[qr:cart]", err.message);
-            res.status(503).json({ error: err.message });
-        }
-    });
-
-    app.post("/pos/payment", async (req, res) => {
-        try {
-            const rgb = await renderPayment(req.body || {});
-            await showActive(rgb);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[qr:payment]", err.message);
-            res.status(503).json({ error: err.message });
-        }
-    });
-
-    app.post("/pos/upi", async (req, res) => {
-        try {
+    const COMMANDS = {
+        "health": async () => {
             const cfg = getConfig();
-            const payload = {
-                ...req.body,
-                vpa:              req.body?.vpa || cfg.upiPayeeVpa,
-                payeeName:        req.body?.payeeName || cfg.upiPayeeName,
+            return {
+                ok:       true,
+                comPort:  cfg.comPort,
+                baudRate: cfg.baudRate || 921600,
+                idle:     { running: !!idleTimer, files: idleFiles.length },
+            };
+        },
+
+        "config:get": async () => getConfig(),
+
+        "config:set": async (payload) => {
+            const updated = setConfig(payload || {});
+            console.log("[qr:config] updated:", payload);
+            return { ok: true, config: updated };
+        },
+
+        "ports": async () => listComPorts(),
+
+        "pos/customer": async (payload) => {
+            await showActive(await renderCustomer(payload || {}));
+            return { ok: true };
+        },
+
+        "pos/cart": async (payload) => {
+            await showActive(await renderCart(payload || {}));
+            return { ok: true };
+        },
+
+        "pos/payment": async (payload) => {
+            await showActive(await renderPayment(payload || {}));
+            return { ok: true };
+        },
+
+        "pos/upi": async (payload) => {
+            const cfg = getConfig();
+            const full = {
+                ...payload,
+                vpa:              payload?.vpa       || cfg.upiPayeeVpa,
+                payeeName:        payload?.payeeName || cfg.upiPayeeName,
                 payeeNameDefault: cfg.upiPayeeName,
             };
-            if (!payload.vpa) return res.status(400).json({ error: "vpa missing (set upiPayeeVpa in config or pass in body)" });
-            const rgb = await renderUpi(payload);
-            await showActive(rgb);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[qr:upi]", err.message);
-            res.status(503).json({ error: err.message });
-        }
-    });
+            if (!full.vpa) throw new Error("vpa missing (set upiPayeeVpa in config or pass in payload)");
+            await showActive(await renderUpi(full));
+            return { ok: true };
+        },
 
-    app.post("/pos/product", async (req, res) => {
-        try {
-            const rgb = await renderProduct(req.body || {});
-            await showActive(rgb);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[qr:product]", err.message);
-            res.status(503).json({ error: err.message });
-        }
-    });
+        "pos/product": async (payload) => {
+            await showActive(await renderProduct(payload || {}));
+            return { ok: true };
+        },
 
-    app.post("/pos/thankyou", async (req, res) => {
-        try {
+        "pos/thankyou": async (payload) => {
             const cfg = getConfig();
-            const rgb = await renderThankyou(req.body || {});
-            await showActive(rgb, { resumeIdleInMs: Number(cfg.thankyouDurationMs) || 4000 });
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[qr:thankyou]", err.message);
-            res.status(503).json({ error: err.message });
-        }
-    });
+            await showActive(await renderThankyou(payload || {}),
+                { resumeIdleInMs: Number(cfg.thankyouDurationMs) || 4000 });
+            return { ok: true };
+        },
 
-    app.post("/idle/start", (_req, res) => {
-        try {
+        "idle/start": async () => {
             startIdle();
-            res.json({ ok: true, files: idleFiles.length });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    });
+            return { ok: true, files: idleFiles.length };
+        },
 
-    app.post("/clear", async (_req, res) => {
-        try {
+        "clear": async () => {
             stopIdle();
             await display(await renderBlank());
-            res.json({ ok: true });
+            return { ok: true };
+        },
+    };
+
+    // A message carrying no `id` is fire-and-forget — the eight POS screen commands are
+    // best-effort by contract (see qrDisplay.ts: never surface a failure to the cashier),
+    // so they get no reply and only log on failure. `id` is present only for the four
+    // settings-page calls that actually need an answer.
+    process.on("message", async (msg) => {
+        if (!msg || msg.mod !== "qr" || !msg.cmd) return;
+
+        const reply = (body) => {
+            if (msg.id && process.send) process.send({ mod: "qr", id: msg.id, ...body });
+        };
+
+        const fn = COMMANDS[msg.cmd];
+        if (!fn) {
+            console.error(`[qr] unknown command: ${msg.cmd}`);
+            return reply({ error: `unknown command: ${msg.cmd}` });
+        }
+
+        try {
+            reply({ result: await fn(msg.payload) });
         } catch (err) {
-            res.status(503).json({ error: err.message });
+            console.error(`[qr:${msg.cmd}]`, err.message);
+            reply({ error: err.message });
         }
     });
 
     // ── Start ────────────────────────────────────────────────────────────────
 
-    // Loopback only. Every client hardcodes `http://localhost:919x` (see bridgeHealth.ts,
-    // qrDisplay.ts, PosScreen, PrintToolbar), so a browser on another PC resolves that to
-    // its own machine and never reaches this relay — binding 0.0.0.0 only exposed the
-    // shop hardware to the whole LAN for nothing.
-    app.listen(RELAY_PORT, "127.0.0.1", () => {
-        const cfg = getConfig();
-        console.log(`[qr] running on http://localhost:${RELAY_PORT}`);
-        console.log(`[qr] COM port: ${cfg.comPort}  baud: ${cfg.baudRate || 921600}`);
-        const folder = cfg.idleFolder && cfg.idleFolder.trim() ? cfg.idleFolder : path.join(__dirname, "assets", "idle");
-        console.log(`[qr] idle folder: ${folder}`);
-        startIdle();
-    });
+    const cfg = getConfig();
+    if (process.send) {
+        // Announce readiness. Loading sharp + serialport takes a second or two, and a
+        // message that arrives before the handler above is registered is dropped on the
+        // floor by Node (no listener, no queue) — so main buffers until it sees this.
+        process.send({ mod: "qr", ready: true });
+        console.log("[qr] ready on the Electron IPC channel (no HTTP port)");
+    } else {
+        // Standalone `node index.js` with no IPC channel. The display cannot be driven
+        // at all in that mode, so say why rather than idling silently forever.
+        console.error("[qr] no IPC channel — start the bridge from Electron (hardwareBridgeManager).");
+    }
+    console.log(`[qr] COM port: ${cfg.comPort}  baud: ${cfg.baudRate || 921600}`);
+    const folder = cfg.idleFolder && cfg.idleFolder.trim() ? cfg.idleFolder : path.join(__dirname, "assets", "idle");
+    console.log(`[qr] idle folder: ${folder}`);
+    startIdle();
 }
 
 module.exports = { start };

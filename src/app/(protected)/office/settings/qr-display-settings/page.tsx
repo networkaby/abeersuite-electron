@@ -8,12 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-
-const RELAY = "http://localhost:9192";
+import { qrRequest } from "@/modules/pos/lib/qrDisplay";
 
 interface RelayConfig {
     comPort:            string;
     baudRate:           number;
+    /** Unused since the display moved to IPC; kept so saved configs round-trip. */
     relayPort:          number;
     companyName:        string;
     idleFolder:         string;
@@ -47,9 +47,7 @@ export default function QrDisplaySettingsPage() {
 
     const checkRelay = useCallback(async () => {
         try {
-            const r = await fetch(`${RELAY}/config`, { signal: AbortSignal.timeout(3000) });
-            if (!r.ok) throw new Error();
-            const data: RelayConfig = await r.json();
+            const data = await qrRequest<RelayConfig>("config:get");
             setConfig({ ...DEFAULT, ...data });
             setRelayUp(true);
         } catch {
@@ -64,10 +62,9 @@ export default function QrDisplaySettingsPage() {
     const fetchPorts = async () => {
         setPortsLoading(true);
         try {
-            const list: PortInfo[] = await (await fetch(`${RELAY}/ports`)).json();
-            setPorts(list);
+            setPorts(await qrRequest<PortInfo[]>("ports"));
         } catch {
-            toast.error("Could not fetch COM ports from relay");
+            toast.error("Could not fetch COM ports from the display bridge");
         } finally {
             setPortsLoading(false);
         }
@@ -76,12 +73,7 @@ export default function QrDisplaySettingsPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const r = await fetch(`${RELAY}/config`, {
-                method:  "POST",
-                headers: { "Content-Type": "application/json" },
-                body:    JSON.stringify(config),
-            });
-            if (!r.ok) throw new Error((await r.json()).error);
+            await qrRequest("config:set", config);
             toast.success("QR display settings saved");
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Save failed");
@@ -90,15 +82,12 @@ export default function QrDisplaySettingsPage() {
         }
     };
 
-    const runTest = async (label: string, path: string, body: unknown) => {
+    // Test screens use qrRequest, not the fire-and-forget qrDisplay facade: here a
+    // failure must reach the person configuring the display, not be swallowed.
+    const runTest = async (label: string, cmd: string, body: unknown) => {
         setTesting(label);
         try {
-            const r = await fetch(`${RELAY}${path}`, {
-                method:  "POST",
-                headers: { "Content-Type": "application/json" },
-                body:    JSON.stringify(body ?? {}),
-            });
-            if (!r.ok) throw new Error((await r.json()).error);
+            await qrRequest(cmd, body ?? {});
             toast.success(`Sent: ${label}`);
         } catch (err) {
             toast.error(err instanceof Error ? err.message : `${label} failed`);
@@ -110,7 +99,7 @@ export default function QrDisplaySettingsPage() {
     // Mirrors the ladder payload a real sale pushes (see PosScreen `qrDisplay.cart`):
     // per-item mrp/barcode, a named "Counter discount" pool, and a "You saved" hero.
     // Legacy subtotal/discount/total are kept so an un-updated relay still renders.
-    const testCart = () => runTest("Test cart", "/pos/cart", {
+    const testCart = () => runTest("Test cart", "pos/cart", {
         // Gross-at-tag (barcode) = 150×2 + 499 + 599 = 1398; discounts sum 280 →
         // goods 1118; + Shipping 50 = total 1168; MRP total = 199×2 + 699 + 599 =
         // 1696; saved = 1696 − 1168 = 528 (31%). Kept consistent so the demo reconciles.
@@ -139,7 +128,7 @@ export default function QrDisplaySettingsPage() {
     // POS call. This diagnostic only checks the DQ11 renders a UPI QR frame, so it
     // sends a throwaway sample payee — never a live one.
     const testUpi = () =>
-        runTest("Test UPI QR", "/pos/upi", {
+        runTest("Test UPI QR", "pos/upi", {
             amount: 100,
             vpa: "test@upi",
             payeeName: "Test Payee",
@@ -149,15 +138,15 @@ export default function QrDisplaySettingsPage() {
     // Product Explorer hover preview — a real, small, publicly reachable photo
     // so the button also proves the relay's fetch-and-composite path works,
     // not just its text layout.
-    const testProduct = () => runTest("Test product photo", "/pos/product", {
+    const testProduct = () => runTest("Test product photo", "pos/product", {
         name: "Wireless Mouse Pro",
         price: 799,
         mrp: 999,
         image: "https://picsum.photos/seed/dq11-test/320/300",
     });
-    const testThankyou = () => runTest("Test thank-you", "/pos/thankyou", { amount: 1300 });
-    const testIdle     = () => runTest("Start slideshow", "/idle/start", {});
-    const testClear    = () => runTest("Clear screen",   "/clear",       {});
+    const testThankyou = () => runTest("Test thank-you", "pos/thankyou", { amount: 1300 });
+    const testIdle     = () => runTest("Start slideshow", "idle/start", {});
+    const testClear    = () => runTest("Clear screen",   "clear",       {});
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -178,7 +167,7 @@ export default function QrDisplaySettingsPage() {
                         <XCircle size={16} className="text-destructive" />
                     )}
                     <span className={relayUp ? "text-green-700 font-medium" : "text-destructive font-medium"}>
-                        {loading ? "Checking relay…" : relayUp ? "Relay running — localhost:9192" : "Relay not running"}
+                        {loading ? "Checking display bridge…" : relayUp ? "Display bridge connected" : "Display bridge not running"}
                     </span>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => { setLoading(true); checkRelay(); }}>
