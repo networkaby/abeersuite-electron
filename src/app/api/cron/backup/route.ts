@@ -1,4 +1,4 @@
-import { triggerWorkflow, useRepoDbUrl } from "@/shared/lib/backup/githubDispatch";
+import { triggerWorkflow, USE_REPO_DB_URL } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     let inputs: Record<string, string>;
     let fileName: string | null = null;
 
-    if (useRepoDbUrl()) {
+    if (USE_REPO_DB_URL) {
         inputs = { source: "cron", domain: process.env.VERCEL_URL?.trim() ?? "" };
     } else {
         // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool

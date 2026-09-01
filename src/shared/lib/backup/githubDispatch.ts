@@ -58,22 +58,27 @@ export async function triggerWorkflow(workflowFile: string, inputs: Record<strin
 }
 
 /**
- * Should the app send the database URL with a backup request, or let the runner use
- * the DIRECT_DATABASE_URL repo secret?
+ * Where the backup gets its database URL from. Flip this constant — it is not an env
+ * var on purpose, because it changes once, at the move to production, and a
+ * deployment-time toggle for a one-time decision is a setting nobody remembers.
  *
- * Sending it is the default and is right while the credentials rotate often: the app
- * always holds the current one, and a rotation needs no repo change. It has one real
- * cost — `source_db_url` is a workflow INPUT, and GitHub echoes inputs in full in the
- * job's env group, password included. Secrets are masked; inputs are not.
+ *   false  the app sends its own DIRECT_URL with every manual and cron backup.
+ *          Right while credentials rotate often: the app always holds the current
+ *          one, and a rotation needs no repo change.
  *
- * Set BACKUP_USE_REPO_DB_URL=true in production once the credentials settle. The app
- * then sends no URL and no file name: the runner dumps whatever the secret points at
- * and names the file there, because that database may not be the one the app itself
- * uses and only the runner can read its project ref.
+ *   true   the app sends no URL and no file name. The runner dumps whatever the
+ *          DIRECT_DATABASE_URL repo secret points at and builds the name there —
+ *          it has to, because that database may not be the one this app uses and
+ *          only the side holding the URL can read its project ref.
+ *
+ * The reason to switch: `source_db_url` is a workflow INPUT, and GitHub echoes
+ * inputs in full in the job's env group. Secrets are masked; inputs are not. So
+ * every app-triggered run currently prints the database password in its log.
+ *
+ * When switching, set DIRECT_DATABASE_URL to the new database's DIRECT url — port
+ * 5432, no `pgbouncer=true` — or pg_dump writes a 0-byte dump.
  */
-export function useRepoDbUrl(): boolean {
-    return cleanEnvValue(process.env.BACKUP_USE_REPO_DB_URL)?.toLowerCase() === "true";
-}
+export const USE_REPO_DB_URL: boolean = false;
 
 /**
  * The workflow that owns the backup timetable. Separate from backup.yml on purpose:

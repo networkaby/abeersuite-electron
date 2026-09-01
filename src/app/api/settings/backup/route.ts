@@ -1,6 +1,6 @@
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { triggerWorkflow, useRepoDbUrl } from "@/shared/lib/backup/githubDispatch";
+import { triggerWorkflow, USE_REPO_DB_URL } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     let inputs: Record<string, string>;
     let fileName: string | null = null;
 
-    if (useRepoDbUrl()) {
+    if (USE_REPO_DB_URL) {
         inputs = { source: "manual", domain };
     } else {
         // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool

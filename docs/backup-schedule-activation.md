@@ -102,15 +102,17 @@ It costs one thing: `source_db_url` is a workflow **input**, and GitHub echoes
 inputs in full in the job's env group. Secrets are masked; inputs are not. So every
 app-triggered run prints the password in its log.
 
-Once the credentials settle, switch it off:
+Once the credentials settle, switch it off in code — one line in
+`src/shared/lib/backup/githubDispatch.ts`:
 
-```
-BACKUP_USE_REPO_DB_URL=true
+```ts
+export const USE_REPO_DB_URL: boolean = true;
 ```
 
-Set that in the Vercel deployment. The app then sends **no URL and no file name**;
-the runner dumps whatever `DIRECT_DATABASE_URL` points at and builds the name
-itself.
+Deliberately not an env var: it changes once, and a deployment toggle for a one-time
+decision is a setting nobody remembers exists. The app then sends **no URL and no
+file name**; the runner dumps whatever `DIRECT_DATABASE_URL` points at and builds
+the name itself.
 
 The name has to move to the runner because the secret may point at a **different
 database** than the app uses. The app cannot read that database's project ref, so a
