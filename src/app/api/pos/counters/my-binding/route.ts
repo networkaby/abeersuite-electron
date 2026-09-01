@@ -50,10 +50,18 @@ export async function GET(req: NextRequest) {
         // binding it already carries is this machine's own, written when it claimed
         // the counter, so finding it here is a positive answer and not a guess.
         if (searchParams.get("prefer") === "local") {
-            const local = await prisma.posCounter.findFirst({
+            // Every row the replica thinks this device holds — not just the first.
+            // A replica can carry a stale binding beside the real one (a counter this
+            // PC held before, whose release has not been pulled down yet), and
+            // findFirst would have answered with whichever sorted first: this machine
+            // would then be told it is the counter it used to be. Two answers means
+            // the replica is not trustworthy on this question, so ask the DB.
+            const localMatches = await prisma.posCounter.findMany({
                 where:  { boundDeviceId: { in: ids } },
                 select: { id: true, counterNumber: true, name: true },
+                take:   2,
             });
+            const local = localMatches.length === 1 ? localMatches[0] : null;
             if (local) {
                 const localShift = await prisma.posShift.findFirst({
                     where:  { counterId: local.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },

@@ -38,7 +38,13 @@ export default function CounterSetupGuard({ children }: { children: React.ReactN
 
         let cancelled = false;
         void getLocalCounterSetup().then((setup) => {
-            if (cancelled || setup) return;
+            if (cancelled) return;
+            // Lifting the block matters as much as setting it. Without this the flag
+            // latched: the guard blocked a route, sent the machine to the wizard, and
+            // when the wizard navigated back after a successful claim the flag was
+            // still set — so a correctly set-up counter rendered nothing at all, on
+            // every route, until it was restarted.
+            if (setup) { setBlocked(false); return; }
             setBlocked(true);
             router.replace(`/setup/counter?next=${encodeURIComponent(pathname || "/office/work-flow-inbox")}`);
         });
