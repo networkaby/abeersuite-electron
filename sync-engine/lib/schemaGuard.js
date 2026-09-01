@@ -46,13 +46,22 @@ async function columnMap(client) {
 /**
  * @returns {Promise<{ ok: boolean, missing: string[], extra: string[], changed: string[], detail: string }>}
  *
- * `ignore` skips tables that legitimately exist on only one side -- `_sync_state`
- * and `_sync_status` are the worker's own bookkeeping and live only on the replica,
- * and `_prisma_migrations` is a leftover on Supabase that is not a model at all.
+ * `ignore` skips tables that legitimately exist on only one side.
+ *
+ * Every underscore-prefixed table is skipped outright, whichever side it is on. None
+ * of them is a model: `_sync_state`/`_sync_status` are this worker's bookkeeping,
+ * `_outbox`/`_id_ranges`/`_provision` belong to the counter alone, and
+ * `_prisma_migrations` is a leftover on Supabase. Naming them one by one meant the
+ * counter-only ones were reported as drift on EVERY cycle -- 19 "stale local
+ * column(s)" of pure noise printed next to the one line that mattered. Prisma models
+ * are PascalCase, so the prefix cannot swallow a real table.
  */
 async function compare(source, local, ignore) {
     const skip = new Set([...(ignore || []), "_sync_state", "_sync_status"]);
-    const skipCol = (k) => skip.has(k.split(".")[0]);
+    const skipCol = (k) => {
+        const table = k.split(".")[0];
+        return table.startsWith("_") || skip.has(table);
+    };
 
     const [src, loc] = await Promise.all([columnMap(source), columnMap(local)]);
 

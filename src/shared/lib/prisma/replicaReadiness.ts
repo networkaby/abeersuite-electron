@@ -33,11 +33,14 @@ export async function refreshReplicaReadiness(): Promise<boolean> {
     if (!readyIsStale()) return isReplicaReady();
 
     try {
-        const rows = await local.$queryRaw<{ ready: boolean }[]>`
-            SELECT ready FROM "_sync_status" WHERE only_row
+        const rows = await local.$queryRaw<{ ready: boolean; schema_ok: boolean }[]>`
+            SELECT ready, schema_ok FROM "_sync_status" WHERE only_row
         `;
         const ready = rows.length > 0 && rows[0].ready === true;
-        setReplicaReady(ready);
+        // Read alongside readiness because the two answer different questions: `ready`
+        // says whether reads are safe, `schema_ok` says whether waiting will ever help.
+        const schemaOk = rows.length === 0 || rows[0].schema_ok !== false;
+        setReplicaReady(ready, schemaOk);
         return ready;
     } catch {
         setReplicaReady(false);

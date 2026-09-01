@@ -12,6 +12,11 @@ export type CounterStatus = {
     /** WRITE_MODE — where writes land. */
     writePreference: "live" | "local";
     replicaReady: boolean;
+    /**
+     * False when the sync worker has HALTED on schema drift. Not-ready then means
+     * "this will never finish on its own", which is a different sentence to say.
+     */
+    replicaSchemaOk: boolean;
     isCounter: boolean;
     replicaSource: "installed" | "embedded" | null;
     /**

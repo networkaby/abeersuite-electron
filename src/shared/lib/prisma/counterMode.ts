@@ -93,13 +93,25 @@ let liveProbe: (() => Promise<boolean>) | null = null;
  * partial still beats a dead page.
  */
 let replicaReady = false;
+let replicaSchemaOk = true;
 let readyCheckedAt = 0;
 
 /** How long a readiness answer is trusted before asking the replica again. */
 const READY_TTL_MS = 30_000;
 
-export function setReplicaReady(ready: boolean): void {
+/**
+ * Record the replica's own verdict.
+ *
+ * `schemaOk` is carried alongside because "not ready" has two very different causes
+ * and only one of them clears on its own. A replica that is still filling will be
+ * ready in minutes; a replica the worker has HALTED on schema drift will never be
+ * ready, no matter how long anyone waits, because the fix is a new build. Defaults
+ * to true so that an unknown answer (the worker has never run, no grant) reads as
+ * "still catching up" rather than accusing a deploy that may be fine.
+ */
+export function setReplicaReady(ready: boolean, schemaOk: boolean = true): void {
     replicaReady = ready;
+    replicaSchemaOk = schemaOk;
     readyCheckedAt = Date.now();
 }
 
@@ -227,6 +239,8 @@ export function counterStatus(): {
     preference: ReadPreference;
     writePreference: WritePreference;
     replicaReady: boolean;
+    /** False when the sync worker has HALTED on schema drift — see `setReplicaReady`. */
+    replicaSchemaOk: boolean;
     isCounter: boolean;
     /** Which PostgreSQL the replica is running against, set by electron/postgresManager.ts
      *  and forwarded into this process's env when the Next server was forked — null when
@@ -241,6 +255,7 @@ export function counterStatus(): {
         preference: READ_PREFERENCE,
         writePreference: WRITE_PREFERENCE,
         replicaReady,
+        replicaSchemaOk,
         isCounter: IS_COUNTER_PC,
         replicaSource: source === "installed" || source === "embedded" ? source : null,
     };

@@ -128,10 +128,13 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 async function refreshReplicaReadinessInline(): Promise<void> {
     if (!IS_COUNTER_PC || !localClient || !readyIsStale()) return;
     try {
-        const rows = await localClient.$queryRaw<{ ready: boolean }[]>`
-            SELECT ready FROM "_sync_status" WHERE only_row
+        const rows = await localClient.$queryRaw<{ ready: boolean; schema_ok: boolean }[]>`
+            SELECT ready, schema_ok FROM "_sync_status" WHERE only_row
         `;
-        setReplicaReady(rows.length > 0 && rows[0].ready === true);
+        setReplicaReady(
+            rows.length > 0 && rows[0].ready === true,
+            rows.length === 0 || rows[0].schema_ok !== false,
+        );
     } catch {
         setReplicaReady(false);
     }
