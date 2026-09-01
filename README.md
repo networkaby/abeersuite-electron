@@ -138,6 +138,75 @@ pnpm dev
 - `src/proxy.ts` is the active middleware entry in Next.js 16.
 - Sentry example routes/pages are for testing and should be removed/disabled for production if not needed.
 
+## Backup Schedule
+
+Backups are dumped by a GitHub Actions runner (Vercel functions have no
+`pg_dump`) and uploaded to Dropbox. Three things can start one, and the dump's
+file name records which:
+
+```
+smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-01-011055.dump
+            └─ where from ────────┘ └─ which database ──┘ └ how ┘ └─ when (UTC) ─┘
+```
+
+| Source | Started by | Schedule lives in |
+|---|---|---|
+| `manual` | **Back up now**, Settings → Backup & Restore | — |
+| `cron` | Vercel Cron → `/api/cron/backup` | `vercel.json` |
+| `git` | GitHub Actions | `.github/workflows/backup.yml` |
+
+### Right now: Vercel cron is OFF
+
+`vercel.json` ships with an empty `crons` array, so Vercel starts no backups.
+**Automatic backups still happen** — the GitHub schedule runs daily at 09:00 UTC
+(14:30 IST) and does not depend on Vercel, on the app being up, or on the
+database being reachable from the app. That independence is the point: it is the
+one that still works when the deployment is broken.
+
+### Setting the Vercel cron time
+
+Edit `vercel.json` and deploy. The schedule is standard cron, **always in UTC** —
+there is no timezone option, so subtract 5:30 to convert from IST:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["bom1"],
+  "crons": [{ "path": "/api/cron/backup", "schedule": "0 21 * * *" }]
+}
+```
+
+| Wanted (IST) | UTC | `schedule` |
+|---|---|---|
+| 2:30 AM daily | 21:00 previous day | `0 21 * * *` |
+| 11:30 PM daily | 18:00 | `0 18 * * *` |
+| 5:30 AM daily | 00:00 | `0 0 * * *` |
+| 2:30 AM Sundays | 21:00 Saturday | `0 21 * * 6` |
+
+Fields are `minute hour day-of-month month day-of-week`, and day-of-week runs
+`0`–`6` from Sunday. To stop Vercel backups again, set `"crons": []`.
+
+**Do not set an hourly tick** (`0 * * * *`). `/api/cron/backup` dispatches on
+every tick with no schedule check of its own, so an hourly cron means 24 full
+dumps a day. Per-hour control is what the unfinished in-app schedule UI is for —
+see `docs/backup-schedule-activation.md`.
+
+Two more things worth knowing:
+
+- **Set `CRON_SECRET` in the Vercel deployment.** The route only checks the
+  Authorization header when that variable exists; with it unset, anyone who knows
+  the URL can trigger a backup.
+- **Hobby plan allows 2 cron jobs, once per day each**, fired at an approximate
+  time within the hour. Pro allows any schedule.
+
+### Setting the GitHub schedule
+
+In `.github/workflows/backup.yml`, under `on: schedule:`. Same UTC cron syntax.
+A scheduled run takes no inputs — it reads the `DIRECT_DATABASE_URL` repo secret
+and builds its own file name. That secret must be the **direct** URL (port 5432,
+no `pgbouncer=true`); the pooled URL fails, because `pg_dump` rejects unknown
+connection parameters.
+
 ## Documentation Map
 
 - `ARCHITECTURE.md` — current architecture and module boundaries (present-tense).
@@ -146,3 +215,4 @@ pnpm dev
 - `docs/modules/<module>.md` — per-module reference (URLs, permissions, models, key components, gotchas).
 - `docs/completed-and-protected.md` — behaviour-guarded surfaces (accounting math, POS GL, BS/P&L/Day Book).
 - `docs/seeds.md` — seed lifecycle (bootstrap / dummy / hard-clean).
+- `docs/backup-schedule-activation.md` — switching on the in-app backup schedule UI (built, not live).

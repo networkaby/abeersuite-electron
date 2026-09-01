@@ -232,3 +232,36 @@ model OrgDefaults {
 
   updatedAt DateTime @updatedAt
 }
+
+/// Scheduled-backup settings, edited from Settings → Backup & Restore.
+///
+/// NOT WIRED UP YET. Nothing reads this table: /api/cron/backup still dispatches
+/// unconditionally, exactly as before. It is here so the production-start commit
+/// can switch scheduling on without a schema change. See the activation checklist
+/// in docs/backup-schedule-activation.md.
+///
+/// Why a table at all: Vercel Cron schedules live in vercel.json and are fixed at
+/// deploy time — there is no runtime API to toggle or re-time them. So the plan is
+/// to let Vercel fire a dumb tick and keep the real decision here, where the UI can
+/// change it with no redeploy.
+model BackupConfig {
+  id      Int     @id @default(1) // singleton — always row id=1
+  /// Master switch. false = the tick fires and does nothing.
+  enabled Boolean @default(true)
+
+  /// "daily" | "weekly". Kept as text, not an enum, so adding "hourly" later is a
+  /// code change and not a migration.
+  frequency String @default("daily")
+  /// When to run, in UTC — the tick compares against these. Stored UTC and shown
+  /// as IST in the UI, so the schedule does not drift when the server timezone does.
+  hourUtc   Int    @default(21) // 21:00 UTC = 02:30 IST, matching today's vercel.json
+  minuteUtc Int    @default(0)
+  /// 0 = Sunday .. 6 = Saturday. Only read when frequency = "weekly".
+  weekday   Int?
+
+  /// Set after a successful dispatch. Guards a double-fire when the tick runs more
+  /// often than the configured schedule.
+  lastRunAt DateTime?
+
+  updatedAt DateTime @updatedAt
+}
