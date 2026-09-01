@@ -247,7 +247,33 @@ the unfinished in-app schedule UI is for — see
 
 ### Setting the GitHub schedule — the daily backup
 
-This is the one that actually runs. In `.github/workflows/backup.yml`:
+This is the one that actually runs. Easiest way is the console tool, which does
+the IST→UTC conversion for you:
+
+```bash
+pnpm backup:schedule
+```
+
+It prints the current schedule and offers: off, daily at a time you choose, or
+weekly on a day and time. Non-interactive forms for scripting:
+
+```bash
+pnpm backup:schedule show
+pnpm backup:schedule off
+pnpm backup:schedule daily 00:00
+pnpm backup:schedule weekly sunday 02:30
+```
+
+Times are entered in **IST** and written to the workflow as UTC. The tool also
+shifts the weekday when the conversion crosses midnight — 00:00 Sunday IST is
+18:30 **Saturday** UTC — which is the part most often got wrong by hand.
+
+It edits `.github/workflows/backup.yml` and nothing else: `vercel.json` and the
+manual button are untouched. **Commit and push afterwards**, because GitHub reads
+the schedule from the pushed file, not your working copy. The tool prints the
+exact git command when it finishes.
+
+To edit the file directly instead:
 
 ```yaml
 on:
