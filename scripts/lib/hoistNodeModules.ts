@@ -109,26 +109,36 @@ function isTransientLock(err: unknown): boolean {
     return code === "EPERM" || code === "EBUSY" || code === "ENOTEMPTY";
 }
 
-function rmWithRetry(target: string, attempts = 10): void {
+/**
+ * How long to keep retrying a locked directory operation. 3s was not enough:
+ * `hardware-bridge/node_modules` holds sharp's and serialport's native binaries, and
+ * Defender was still scanning them when the rename came round — failing the build
+ * every time, while the same rename by hand a few seconds later worked. A minute of
+ * patience is nothing against a fifteen-minute build.
+ */
+const LOCK_RETRY_ATTEMPTS = 40;
+const LOCK_RETRY_DELAY_MS = 500;
+
+function rmWithRetry(target: string, attempts = LOCK_RETRY_ATTEMPTS): void {
     for (let i = 1; i <= attempts; i++) {
         try {
             fs.rmSync(target, { recursive: true, force: true });
             return;
         } catch (err) {
             if (!isTransientLock(err) || i === attempts) throw err;
-            sleepSync(300);
+            sleepSync(LOCK_RETRY_DELAY_MS);
         }
     }
 }
 
-function renameWithRetry(from: string, to: string, attempts = 10): void {
+function renameWithRetry(from: string, to: string, attempts = LOCK_RETRY_ATTEMPTS): void {
     for (let i = 1; i <= attempts; i++) {
         try {
             fs.renameSync(from, to);
             return;
         } catch (err) {
             if (!isTransientLock(err) || i === attempts) throw err;
-            sleepSync(300);
+            sleepSync(LOCK_RETRY_DELAY_MS);
         }
     }
 }
