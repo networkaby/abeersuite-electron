@@ -62,7 +62,7 @@ function findCsc(): string {
 }
 
 // 3. Prepare token
-const rawToken = (process.env.GH_DOWNLOAD_TOKEN || process.env.GH_TOKEN || "").trim();
+const rawToken = (process.env.GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN || "").trim();
 const XOR_KEY = 0x5a;
 
 let tokenBytesStr = "/* No token embedded */";
@@ -76,17 +76,28 @@ if (rawToken) {
     console.log(`[build-downloader] Embedded read token into executable (obfuscated, length ${rawToken.length}).`);
 } else {
     console.warn(
-        "[build-downloader] NOTE: No GH_DOWNLOAD_TOKEN or GH_TOKEN found in .env.\n" +
+        "[build-downloader] NOTE: No GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN found in .env.\n" +
         "  The generated .exe will prompt the user to enter their token at runtime or accept --token=..."
     );
 }
 
-// 4. Read C# source and inject token
+// 3b. Prepare target repo — owner/repo the downloader fetches releases from.
+const [repoOwner, repoName] = (process.env.GITHUB_DOWNLOAD_UPDATE_REPO || "").split("/");
+if (!repoOwner || !repoName) {
+    throw new Error(
+        "GITHUB_DOWNLOAD_UPDATE_REPO must be set in .env as \"owner/repo\" — the repo the bootstrap downloader fetches releases from."
+    );
+}
+
+// 4. Read C# source and inject token + repo
 let csContent = fs.readFileSync(SOURCE_CS, "utf8");
-csContent = csContent.replace(
-    "public static byte[] EmbeddedTokenBytes = new byte[] { /* TOKEN_BYTES */ };",
-    `public static byte[] EmbeddedTokenBytes = new byte[] { ${tokenBytesStr} };`
-);
+csContent = csContent
+    .replace(
+        "public static byte[] EmbeddedTokenBytes = new byte[] { /* TOKEN_BYTES */ };",
+        `public static byte[] EmbeddedTokenBytes = new byte[] { ${tokenBytesStr} };`
+    )
+    .replace('"/* REPO_OWNER */"', JSON.stringify(repoOwner))
+    .replace('"/* REPO_NAME */"', JSON.stringify(repoName));
 
 const tempCs = path.join(SCRIPTS_DIR, "AbeerSuiteDownloader.g.cs");
 fs.writeFileSync(tempCs, csContent, "utf8");

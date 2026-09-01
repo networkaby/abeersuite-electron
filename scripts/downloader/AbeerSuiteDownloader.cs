@@ -15,8 +15,9 @@ namespace AbeerSuite.Downloader
         public static byte[] EmbeddedTokenBytes = new byte[] { /* TOKEN_BYTES */ };
         public static byte TokenXorKey = 0x5A;
 
-        public static string RepoOwner = "devloperakramul";
-        public static string RepoName = "abeersuite-networkservice-update";
+        // Repo placeholders (replaced at build time from GITHUB_DOWNLOAD_UPDATE_REPO in .env)
+        public static string RepoOwner = "/* REPO_OWNER */";
+        public static string RepoName = "/* REPO_NAME */";
 
         [STAThread]
         static void Main(string[] args)

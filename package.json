@@ -224,22 +224,6 @@
         "to": "icon.png"
       }
     ],
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "devloperakramul",
-        "repo": "abeersuite-networkservice-update",
-        "private": true,
-        "releaseType": "release"
-      },
-      {
-        "provider": "github",
-        "owner": "devloperakramul",
-        "repo": "abeersuite-electron",
-        "private": true,
-        "releaseType": "release"
-      }
-    ],
     "win": {
       "target": [
         "nsis"

@@ -74,14 +74,15 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     "LANDING_PAGE",
 
     // ── Auto-update ──────────────────────────────────────────────────────────
-    // GITHUB_UPDATE_REPO ("owner/repo") deliberately points at a separate, private,
-    // release-artifacts-only repo — not the source repo. PAT_TOKEN is a fine-grained
-    // PAT, "Contents: Read-only", scoped to ONLY that repo, so a leaked installer
-    // exposes at most the release artifacts every counter already has on disk, never
-    // the private codebase. Both optional: absent here, setupAutoUpdater() logs and
-    // skips update checks rather than failing the boot (electron/main.ts).
-    "GITHUB_UPDATE_REPO",
-    "PAT_TOKEN",
+    // GITHUB_DOWNLOAD_UPDATE_REPO ("owner/repo") deliberately points at a separate,
+    // private, release-artifacts-only repo — not the source repo.
+    // GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN is a fine-grained PAT, "Contents: Read-only",
+    // scoped to ONLY that repo, so a leaked installer exposes at most the release
+    // artifacts every counter already has on disk, never the private codebase. Both
+    // optional: absent here, setupAutoUpdater() logs and skips update checks rather
+    // than failing the boot (electron/main.ts).
+    "GITHUB_DOWNLOAD_UPDATE_REPO",
+    "GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN",
 ];
 
 /**

@@ -1,7 +1,7 @@
 /**
- * Publishes an ALREADY-VERIFIED build to both repositories:
- * - `devloperakramul/abeersuite-networkservice-update` (update-only binary feed)
- * - `devloperakramul/abeersuite-electron` (main source repo release artifacts)
+ * Publishes an ALREADY-VERIFIED build to every repo listed in .env via
+ * GITHUB_UPDATE_REPO_1, GITHUB_UPDATE_REPO_2, ... (each paired with its own
+ * GH_TOKEN_1, GH_TOKEN_2, ...).
  *
  * It also ensures:
  * 1. The commit is tagged with `v<version>` matching `package.json`.
@@ -21,28 +21,34 @@ const pkg = JSON.parse(originalPackageJsonText);
 const version = pkg.version;
 const tagName = `v${version}`;
 
-// Each release repo can sit under a DIFFERENT GitHub account, so a single
-// GH_TOKEN can't authenticate against both — electron-publish's GitHubPublisher
-// only ever reads process.env.GH_TOKEN (or a literal `token` in the publish
-// config, which we deliberately never write to package.json — see the .env
-// comment next to these vars). Map each publish target's repo to the .env var
-// holding ITS OWN token.
-const REPO_TOKEN_ENV: Record<string, string> = {
-    "abeersuite-networkservice-update": "GH_TOKEN_1",
-    "abeersuite-electron": "GH_TOKEN_2",
-};
-
 interface PublishTarget {
     provider: string;
     owner: string;
     repo: string;
     private?: boolean;
     releaseType?: string;
+    tokenEnv: string;
 }
 
-let publishTargets: PublishTarget[] = pkg.build?.publish ?? [];
+// Each release repo can sit under a DIFFERENT GitHub account, so a single
+// GH_TOKEN can't authenticate against both — electron-publish's GitHubPublisher
+// only ever reads process.env.GH_TOKEN (or a literal `token` in the publish
+// config, which we deliberately never write to package.json). Targets come
+// from GITHUB_UPDATE_REPO_1="owner/repo", GITHUB_UPDATE_REPO_2=..., each paired
+// with its OWN token GH_TOKEN_1, GH_TOKEN_2, ... — scanned until a gap, so
+// adding a repo is just a new numbered pair in .env, no code change needed.
+let publishTargets: PublishTarget[] = [];
+for (let n = 1; process.env[`GITHUB_UPDATE_REPO_${n}`]; n++) {
+    const [owner, repo] = (process.env[`GITHUB_UPDATE_REPO_${n}`] || "").split("/");
+    if (!owner || !repo) {
+        console.error(`[release-electron] FATAL: GITHUB_UPDATE_REPO_${n} must be "owner/repo", got "${process.env[`GITHUB_UPDATE_REPO_${n}`]}".`);
+        process.exit(1);
+    }
+    publishTargets.push({ provider: "github", owner, repo, private: true, releaseType: "release", tokenEnv: `GH_TOKEN_${n}` });
+}
+
 if (publishTargets.length === 0) {
-    console.error("[release-electron] FATAL: package.json build.publish has no targets.");
+    console.error("[release-electron] FATAL: no GITHUB_UPDATE_REPO_N vars set in .env (need at least GITHUB_UPDATE_REPO_1 + GH_TOKEN_1).");
     process.exit(1);
 }
 
@@ -62,11 +68,11 @@ if (process.env.RELEASE_ONLY_REPO) {
 }
 
 for (const target of publishTargets) {
-    const envVar = REPO_TOKEN_ENV[target.repo];
+    const envVar = target.tokenEnv;
     if (!envVar) {
         console.error(
-            `[release-electron] FATAL: no .env var mapped for publish target "${target.repo}".\n` +
-            "  Add it to REPO_TOKEN_ENV in this script."
+            `[release-electron] FATAL: no token env mapped for publish target "${target.repo}".\n` +
+            "  Add a matching GITHUB_UPDATE_REPO_N / GH_TOKEN_N pair to .env."
         );
         process.exit(1);
     }
@@ -116,7 +122,8 @@ try {
 
     const commitLog = execSync(`git log ${range} --pretty=format:"* %s (%h)"`, { encoding: "utf-8" }).trim();
     if (commitLog) {
-        autoNotes = `### What's Changed in ${tagName}\n\n${commitLog}\n\n**Full Changelog**: ${prevTag ? `https://github.com/devloperakramul/abeersuite-electron/compare/${prevTag}...${tagName}` : `https://github.com/devloperakramul/abeersuite-electron/commits/${tagName}`}`;
+        const sourceRepo = process.env.GITHUB_REPO || "devloperakramul/abeersuite-electron";
+        autoNotes = `### What's Changed in ${tagName}\n\n${commitLog}\n\n**Full Changelog**: ${prevTag ? `https://github.com/${sourceRepo}/compare/${prevTag}...${tagName}` : `https://github.com/${sourceRepo}/commits/${tagName}`}`;
     }
 } catch (e: unknown) {
     console.warn("[release-electron] Could not auto-generate release notes from git:", (e as Error)?.message);
@@ -159,13 +166,14 @@ if (releaseNotes) {
 let exitCode = 0;
 for (const target of publishTargets) {
     console.log(`[release-electron] → Publishing to ${target.owner}/${target.repo}...`);
-    pkg.build.publish = [target];
+    const { tokenEnv, ...builderTarget } = target;
+    pkg.build.publish = [builderTarget];
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
     try {
         const result = spawnSync("electron-builder", builderArgs, {
             stdio: "inherit",
             shell: true,
-            env: { ...process.env, GH_TOKEN: process.env[REPO_TOKEN_ENV[target.repo]] },
+            env: { ...process.env, GH_TOKEN: process.env[tokenEnv] },
         });
         exitCode = result.status ?? 1;
     } finally {
