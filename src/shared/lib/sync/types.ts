@@ -13,18 +13,6 @@ export interface SyncTableEntry {
     parent?: string;
 }
 
-export interface SyncBroadcastEvent {
-    /** Append-only stable table number from sync-tables.json */
-    n: number;
-    /** ISO timestamp when mutation happened */
-    ts: string;
-    /** Unique installation counter ID that produced this mutation */
-    originId: string;
-    /** Optional mutation action */
-    action?: "UPSERT" | "DELETE";
-    /** Optional primary key value */
-    key?: string | number;
-}
 
 export interface TableWatermark {
     tableNumber: number;

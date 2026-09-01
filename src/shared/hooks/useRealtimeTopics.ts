@@ -29,7 +29,6 @@
 
 import { useEffect, useRef } from "react";
 import { onChangeSignal } from "@/shared/lib/realtime/appChannel";
-import { subscribeToSyncEvents } from "@/shared/lib/sync/realtimeSync";
 import type { Topic } from "@/shared/lib/realtime/topics";
 
 /** Long enough to swallow a multi-request save, short enough to feel instant. */
@@ -68,17 +67,6 @@ export function useRealtimeTopics(
             schedule();
         });
 
-        // Listen to selective delta sync events across terminals
-        const offSync = subscribeToSyncEvents(() => {
-            schedule();
-        });
-
-        // Listen to local in-app mutation deltas
-        const onLocalDelta = () => schedule();
-        if (typeof window !== "undefined") {
-            window.addEventListener("app:live-delta", onLocalDelta);
-        }
-
         // A gap this tab sat hidden through is exactly what a remembered
         // "owed" flag would try to cover — and get wrong the moment the gap
         // held no signal at all. Reading unconditionally on return is both
@@ -88,10 +76,6 @@ export function useRealtimeTopics(
 
         return () => {
             offApp();
-            offSync();
-            if (typeof window !== "undefined") {
-                window.removeEventListener("app:live-delta", onLocalDelta);
-            }
             if (timer) clearTimeout(timer);
             document.removeEventListener("visibilitychange", onVisibility);
         };
