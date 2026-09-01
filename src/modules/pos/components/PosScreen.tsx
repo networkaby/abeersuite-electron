@@ -19,6 +19,7 @@ import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { usePosBilling, parseAmt } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
+import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { extractApiError } from "@/shared/lib/api";
@@ -346,9 +347,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             b.resetAfterSubmit();
             convertFromRef.current = null;   // conversion completed
             if (printAfter) {
-                const relayAvailable = await fetch("http://localhost:9191/health", { signal: AbortSignal.timeout(1000) })
-                    .then((r) => r.ok).catch(() => false);
-                if (relayAvailable) {
+                if (await bridgeOk("thermal", 1000)) {
                     // Customer "Today's discount" ladder for the thermal slip (B
                     // density). Additive — the external relay renders these new
                     // fields; older relays ignore them.
@@ -368,56 +367,52 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         extraCharges: b.posExtraCharges,
                         total: b.total,
                     }, { tier: b.posTierLabel });
-                    fetch("http://localhost:9191/print/pos", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            invoiceNumber: data.voucherRef,
-                            date: today,
-                            customerName: snapshot?.party.name ?? "Walk-in",
-                            customerGstin: snapshot?.party.gstin ?? null,
-                            // Resolved POS print template → the relay renders the
-                            // header/address/toggles/terms/footer + ladder so the
-                            // printed slip matches /receipt/invoice/[id]?kind=POS.
-                            template: data.posTemplate,
-                            lines: cart.map((l, i) => {
-                                // Per-unit tag from the ladder (single source of truth) so the
-                                // MRP-fallback hides the real price even with no barcode. The
-                                // relay multiplies by qty to rebuild the line total.
-                                const ll = printLadder.lines[i];
-                                return {
-                                    name: l.name,
-                                    qty: l.qty,
-                                    unitPrice: l.unitPrice,
-                                    amount: l.qty * l.unitPrice,
-                                    mrp: ll?.mrp != null && l.qty ? ll.mrp / l.qty : null,
-                                    barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : null,
-                                };
-                            }),
-                            subtotal: b.subtotal,
-                            discountPct: b.discountPct,
-                            discountAmount: b.discountAmount,
-                            tax: b.tax,
-                            total: b.total,
-                            // Overpayment: the tenders live on the separate Receipt
-                            // voucher (RV-…), so the sale slip shows NO payment lines
-                            // (the sale is settled to the customer account). Exact-pay
-                            // sales keep the traditional cash/UPI breakdown.
-                            cashPaid: b.overpaid > 0 ? 0 : b.cashNet,
-                            upiPaid: b.overpaid > 0 ? 0 : b.upiEntered,
-                            extrasPaid: b.overpaid > 0 ? [] : splits
-                                .filter((s) => s.amount > 0 && payAccountById.get(s.paymentAccountId ?? -1)?.channel !== "UPI")
-                                .map((s) => ({ method: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Other", amount: s.amount, reference: s.reference })),
-                            // "Today's discount" ladder (additive).
-                            grossAtTag: printLadder.barcodeTotal,
-                            discounts: printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
-                            charges: printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
-                            savings: printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
-                            hsnSummary: printLadder.hsn,
-                            // Total GST embedded in the bill (goods + shipping/tax-bearing
-                            // charges) — additive field, older relays ignore it.
-                            taxTotal: printLadder.taxTotal,
+                    void bridgeRequest("thermal", "print/pos", {
+                        invoiceNumber: data.voucherRef,
+                        date: today,
+                        customerName: snapshot?.party.name ?? "Walk-in",
+                        customerGstin: snapshot?.party.gstin ?? null,
+                        // Resolved POS print template → the relay renders the
+                        // header/address/toggles/terms/footer + ladder so the
+                        // printed slip matches /receipt/invoice/[id]?kind=POS.
+                        template: data.posTemplate,
+                        lines: cart.map((l, i) => {
+                            // Per-unit tag from the ladder (single source of truth) so the
+                            // MRP-fallback hides the real price even with no barcode. The
+                            // relay multiplies by qty to rebuild the line total.
+                            const ll = printLadder.lines[i];
+                            return {
+                                name: l.name,
+                                qty: l.qty,
+                                unitPrice: l.unitPrice,
+                                amount: l.qty * l.unitPrice,
+                                mrp: ll?.mrp != null && l.qty ? ll.mrp / l.qty : null,
+                                barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : null,
+                            };
                         }),
+                        subtotal: b.subtotal,
+                        discountPct: b.discountPct,
+                        discountAmount: b.discountAmount,
+                        tax: b.tax,
+                        total: b.total,
+                        // Overpayment: the tenders live on the separate Receipt
+                        // voucher (RV-…), so the sale slip shows NO payment lines
+                        // (the sale is settled to the customer account). Exact-pay
+                        // sales keep the traditional cash/UPI breakdown.
+                        cashPaid: b.overpaid > 0 ? 0 : b.cashNet,
+                        upiPaid: b.overpaid > 0 ? 0 : b.upiEntered,
+                        extrasPaid: b.overpaid > 0 ? [] : splits
+                            .filter((s) => s.amount > 0 && payAccountById.get(s.paymentAccountId ?? -1)?.channel !== "UPI")
+                            .map((s) => ({ method: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Other", amount: s.amount, reference: s.reference })),
+                        // "Today's discount" ladder (additive).
+                        grossAtTag: printLadder.barcodeTotal,
+                        discounts: printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
+                        charges: printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
+                        savings: printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
+                        hsnSummary: printLadder.hsn,
+                        // Total GST embedded in the bill (goods + shipping/tax-bearing
+                        // charges) — additive field, older relays ignore it.
+                        taxTotal: printLadder.taxTotal,
                     }).catch(() => toast.error("Thermal print failed"));
                     // Overpayment booked a separate Receipt voucher (RV-…). On a
                     // relay setup it prints on the SAME thermal printer — the tender
@@ -429,19 +424,15 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                             if (s.amount <= 0) continue;
                             rcvTenders.push({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount });
                         }
-                        fetch("http://localhost:9191/print/payment", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                reference: data.receiptVoucherRef,
-                                date: today,
-                                party: snapshot?.party.name ?? null,
-                                tenders: rcvTenders,
-                                total: b.collected,
-                                arrear: data.arrearCleared,
-                                advance: data.advanceCredited,
-                                note: `Against ${data.voucherRef}`,
-                            }),
+                        void bridgeRequest("thermal", "print/payment", {
+                            reference: data.receiptVoucherRef,
+                            date: today,
+                            party: snapshot?.party.name ?? null,
+                            tenders: rcvTenders,
+                            total: b.collected,
+                            arrear: data.arrearCleared,
+                            advance: data.advanceCredited,
+                        note: `Against ${data.voucherRef}`,
                         }).catch(() => toast.error("Receipt voucher print failed"));
                     }
                 } else {

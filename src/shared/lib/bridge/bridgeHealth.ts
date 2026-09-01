@@ -9,15 +9,20 @@
  * books on this disk. A managed shop machine caches; anything else stays live-only
  * and writes nothing locally.
  *
- * The origin used to be copy-pasted into every caller (ShiftOpenDialog, PosScreen,
- * PrintToolbar, printer-settings). New callers import it from here.
+ * Commands go through `hardwareBridge.ts` (IPC in Electron, HTTP to a standalone
+ * combined-bridge from a browser). This file keeps only the "is there a counter here?"
+ * question, which several unrelated features ask.
  *
  * Note the probe fails loudly in the browser console on a non-counter machine —
  * a refused connection to localhost is logged by the browser itself and cannot be
  * suppressed. That is expected, not a fault.
  */
 
-export const BRIDGE_ORIGIN = "http://localhost:9191";
+import { bridgeOk } from "./hardwareBridge";
+import { isElectronEnvironment } from "./electronEnv";
+// Re-exported: this was its home before hardwareBridge needed it too, and plenty of
+// callers still import it from here.
+export { isElectronEnvironment };
 
 /** Long enough for a local service to answer, short enough not to stall a page. */
 const PROBE_TIMEOUT_MS = 1000;
@@ -25,9 +30,6 @@ const PROBE_TIMEOUT_MS = 1000;
 /** Shared across callers so one page load costs one probe, not one per component. */
 let inflight: Promise<boolean> | null = null;
 
-export function isElectronEnvironment(): boolean {
-    return typeof window !== "undefined" && Boolean((window as unknown as { electronAPI?: { isElectron?: boolean } }).electronAPI?.isElectron);
-}
 
 /**
  * Returns the persistent unique counter machine installation ID if running in Electron.
@@ -55,9 +57,7 @@ export function isBridgeAvailable({ refresh = false }: { refresh?: boolean } = {
         return Promise.resolve(true);
     }
     if (refresh) inflight = null;
-    inflight ??= fetch(`${BRIDGE_ORIGIN}/health`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
-        .then((r) => r.ok)
-        .catch(() => false);
+    inflight ??= bridgeOk("thermal", PROBE_TIMEOUT_MS);
     return inflight;
 }
 

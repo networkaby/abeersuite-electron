@@ -1,9 +1,15 @@
-// Thermal printer relay (ESC/POS). Listens on cfg.relayPort (default 9191).
-// Endpoints kept identical to the standalone thermal-relay so the web app
-// (PrinterSettingsPage + voucher print buttons) doesn't need any changes.
+// Thermal printer driver (ESC/POS).
+//
+// Driven over the Electron IPC channel, not HTTP. It used to run an Express app on
+// cfg.relayPort (9191) — inherited from the standalone thermal-relay, back when the app
+// ran in a plain browser and HTTP was the only way to reach a local process. Inside
+// Electron that port bought nothing and left the printer drivable by anything that could
+// reach it. Commands now arrive as `{ mod: "thermal", cmd, payload, id? }` — see COMMANDS
+// in start(). A browser still talks HTTP, but to a standalone combined-bridge install on
+// its own PC; see src/shared/lib/bridge/thermalBridge.ts.
+//
+// `cfg.relayPort` survives in saved configs and is simply unused now.
 
-const express  = require("express");
-const cors     = require("./cors-pna");
 const fs       = require("fs");
 const path     = require("path");
 const os       = require("os");
@@ -1285,129 +1291,118 @@ function listComPorts() {
     });
 }
 
-// ── start() — boots the thermal Express app ──────────────────────────────────
+// ── start() — registers the thermal command handler ──────────────────────────
 
 function start({ getConfig, setConfig }) {
-    const app = express();
-    app.use(cors());
-    app.use(express.json());
+    // ── Commands ─────────────────────────────────────────────────────────────
+    //
+    // Replaces the old Express app on :9191, for the reasons in index.js. Unlike the QR
+    // display, every command here is request/response: a failed receipt must reach the
+    // cashier, never be swallowed.
+    //
+    // Names deliberately match the old HTTP paths so logs and greps still line up. The
+    // two /config verbs are the one place that could not stay identical.
 
-    const initialCfg = getConfig();
-    const RELAY_PORT = process.env.THERMAL_RELAY_PORT || initialCfg.relayPort || 9191;
+    const COMMANDS = {
+        "health": async () => {
+            const cfg = getConfig();
+            return {
+                ok:                 true,
+                version:            pkg.version,
+                connectionType:     cfg.connectionType || "network",
+                printerIp:          cfg.printerIp,
+                printerPort:        cfg.printerPort,
+                comPort:            cfg.comPort,
+                windowsPrinterName: cfg.windowsPrinterName,
+            };
+        },
 
-    app.get("/health", (_req, res) => {
-        const cfg = getConfig();
-        res.json({
-            ok:                 true,
-            version:            pkg.version,
-            connectionType:     cfg.connectionType || "network",
-            printerIp:          cfg.printerIp,
-            printerPort:        cfg.printerPort,
-            comPort:            cfg.comPort,
-            windowsPrinterName: cfg.windowsPrinterName,
-        });
-    });
+        "config:get": async () => getConfig(),
 
-    app.get("/config", (_req, res) => {
-        try { res.json(getConfig()); }
-        catch (err) { res.status(500).json({ error: err.message }); }
-    });
+        "config:set": async (payload) => {
+            const updated = setConfig(payload || {});
+            console.log("[thermal:config] updated:", payload);
+            return { ok: true, config: updated };
+        },
 
-    app.post("/config", (req, res) => {
-        try {
-            const updated = setConfig(req.body || {});
-            console.log("[thermal:config] updated:", req.body);
-            res.json({ ok: true, config: updated });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    });
+        "printers": async () => listWindowsPrinters(),
+        "ports":    async () => listComPorts(),
 
-    app.get("/printers", async (_req, res) => res.json(await listWindowsPrinters()));
-    app.get("/ports",    async (_req, res) => res.json(await listComPorts()));
-
-    app.post("/print", async (req, res) => {
-        const { reference, lines } = req.body;
-        if (!reference || !lines)
-            return res.status(400).json({ error: "Missing required fields: reference, lines" });
-
-        const cfg = getConfig();
-        try {
-            const buffer = buildReceiptBuffer(req.body, cfg.companyName || "My Company");
-            await sendBuffer(cfg, buffer);
+        "print": async (payload) => {
+            const { reference, lines } = payload || {};
+            if (!reference || !lines) throw new Error("Missing required fields: reference, lines");
+            const cfg = getConfig();
+            await sendBuffer(cfg, buildReceiptBuffer(payload, cfg.companyName || "My Company"));
             console.log(`[thermal] Printed: ${reference}`);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[thermal] print error:", err.message);
-            res.status(503).json({ error: err.message || "Print failed" });
-        }
-    });
+            return { ok: true };
+        },
 
-    app.post("/print/pos", async (req, res) => {
-        const { invoiceNumber, lines } = req.body;
-        if (!invoiceNumber || !lines)
-            return res.status(400).json({ error: "Missing required fields: invoiceNumber, lines" });
-
-        const cfg = getConfig();
-        try {
-            const buffer = await buildPosBuffer(req.body, cfg.companyName || "My Company");
-            await sendBuffer(cfg, buffer);
+        "print/pos": async (payload) => {
+            const { invoiceNumber, lines } = payload || {};
+            if (!invoiceNumber || !lines) throw new Error("Missing required fields: invoiceNumber, lines");
+            const cfg = getConfig();
+            await sendBuffer(cfg, await buildPosBuffer(payload, cfg.companyName || "My Company"));
             console.log(`[thermal] POS printed: ${invoiceNumber}`);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[thermal] POS print error:", err.message);
-            res.status(503).json({ error: err.message || "Print failed" });
-        }
-    });
+            return { ok: true };
+        },
 
-    app.post("/print/payment", async (req, res) => {
-        const { reference } = req.body;
-        if (!reference)
-            return res.status(400).json({ error: "Missing required field: reference" });
-
-        const cfg = getConfig();
-        try {
-            const buffer = await buildPaymentBuffer(req.body, cfg.companyName || "My Company");
-            await sendBuffer(cfg, buffer);
+        "print/payment": async (payload) => {
+            const { reference } = payload || {};
+            if (!reference) throw new Error("Missing required field: reference");
+            const cfg = getConfig();
+            await sendBuffer(cfg, await buildPaymentBuffer(payload, cfg.companyName || "My Company"));
             console.log(`[thermal] Payment printed: ${reference}`);
-            res.json({ ok: true });
-        } catch (err) {
-            console.error("[thermal] payment print error:", err.message);
-            res.status(503).json({ error: err.message || "Print failed" });
-        }
-    });
+            return { ok: true };
+        },
 
-    // Generic office voucher (GL · inventory · journal) — renders the app's
-    // ThermalReceiptSample + per-kind template. Payload: { kind, title, sample, template }.
-    app.post("/print/voucher", async (req, res) => {
-        const { sample } = req.body || {};
-        if (!sample || !Array.isArray(sample.lines))
-            return res.status(400).json({ error: "Missing required field: sample.lines" });
-
-        const cfg = getConfig();
-        try {
-            const buffer = await buildVoucherBuffer(req.body, cfg.companyName || "My Company");
-            await sendBuffer(cfg, buffer);
+        // Generic office voucher (GL · inventory · journal) — renders the app's
+        // ThermalReceiptSample + per-kind template. Payload: { kind, title, sample, template }.
+        "print/voucher": async (payload) => {
+            const { sample } = payload || {};
+            if (!sample || !Array.isArray(sample.lines)) throw new Error("Missing required field: sample.lines");
+            const cfg = getConfig();
+            await sendBuffer(cfg, await buildVoucherBuffer(payload, cfg.companyName || "My Company"));
             console.log(`[thermal] Voucher printed: ${sample.reference || ""}`);
-            res.json({ ok: true });
+            return { ok: true };
+        },
+    };
+
+    process.on("message", async (msg) => {
+        if (!msg || msg.mod !== "thermal" || !msg.cmd) return;
+
+        const reply = (body) => {
+            if (msg.id && process.send) process.send({ mod: "thermal", id: msg.id, ...body });
+        };
+
+        const fn = COMMANDS[msg.cmd];
+        if (!fn) {
+            console.error(`[thermal] unknown command: ${msg.cmd}`);
+            return reply({ error: `unknown command: ${msg.cmd}` });
+        }
+
+        try {
+            reply({ result: await fn(msg.payload) });
         } catch (err) {
-            console.error("[thermal] voucher print error:", err.message);
-            res.status(503).json({ error: err.message || "Print failed" });
+            console.error(`[thermal:${msg.cmd}]`, err.message);
+            reply({ error: err.message || "Print failed" });
         }
     });
 
-    // Loopback only. Every client hardcodes `http://localhost:919x` (see bridgeHealth.ts,
-    // qrDisplay.ts, PosScreen, PrintToolbar), so a browser on another PC resolves that to
-    // its own machine and never reaches this relay — binding 0.0.0.0 only exposed the
-    // shop hardware to the whole LAN for nothing.
-    app.listen(RELAY_PORT, "127.0.0.1", () => {
-        const cfg = getConfig();
-        console.log(`[thermal] running on http://localhost:${RELAY_PORT}`);
-        console.log(`[thermal] connection: ${cfg.connectionType || "network"}`);
-        if ((cfg.connectionType || "network") === "network") console.log(`[thermal] printer: ${cfg.printerIp}:${cfg.printerPort || 9100}`);
-        if (cfg.connectionType === "com")     console.log(`[thermal] COM port: ${cfg.comPort}`);
-        if (cfg.connectionType === "windows") console.log(`[thermal] windows printer: ${cfg.windowsPrinterName}`);
-    });
+    // ── Start ────────────────────────────────────────────────────────────────
+
+    const cfg = getConfig();
+    if (process.send) {
+        // Announce readiness — main buffers commands until it sees this, because Node
+        // drops an IPC message that arrives before this handler is registered.
+        process.send({ mod: "thermal", ready: true });
+        console.log("[thermal] ready on the Electron IPC channel (no HTTP port)");
+    } else {
+        console.error("[thermal] no IPC channel — start the bridge from Electron (hardwareBridgeManager).");
+    }
+    console.log(`[thermal] connection: ${cfg.connectionType || "network"}`);
+    if ((cfg.connectionType || "network") === "network") console.log(`[thermal] printer: ${cfg.printerIp}:${cfg.printerPort || 9100}`);
+    if (cfg.connectionType === "com")     console.log(`[thermal] COM port: ${cfg.comPort}`);
+    if (cfg.connectionType === "windows") console.log(`[thermal] windows printer: ${cfg.windowsPrinterName}`);
 }
 
 module.exports = { start, buildPosBuffer, buildReceiptBuffer, buildPaymentBuffer, buildVoucherBuffer };

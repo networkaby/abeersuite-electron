@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { resolveMachineIdentity, matchesThisMachine, type MachineIdentity } from "@/shared/lib/counter/identity";
 
-const RELAY = "http://localhost:9191";
+import { bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 
 // Latest shipped bridge version is read from this static manifest in /public.
 // Bump combined-bridge.version.json (+ package.json) whenever you re-ship the
@@ -78,16 +78,14 @@ export default function PrinterSettingsPage() {
             return;
         }
         try {
-            const r = await fetch(`${RELAY}/config`, { signal: AbortSignal.timeout(3000) });
-            if (!r.ok) throw new Error();
-            const data: RelayConfig = await r.json();
+            const data = await bridgeRequest<RelayConfig>("thermal", "config:get", undefined, 3000);
             setConfig({ ...DEFAULT, ...data });
             setRelayUp(true);
             // Bridge version drives the "update available" prompt. Best-effort —
-            // an older bridge without /health.version just reports null.
+            // an older bridge with no version in health just reports null.
             try {
-                const hr = await fetch(`${RELAY}/health`, { signal: AbortSignal.timeout(3000) });
-                if (hr.ok) { const h = await hr.json() as { version?: string }; setBridgeVersion(h.version ?? null); }
+                const h = await bridgeRequest<{ version?: string }>("thermal", "health", undefined, 3000);
+                setBridgeVersion(h.version ?? null);
             } catch { /* version optional */ }
         } catch {
             setRelayUp(false);
@@ -134,8 +132,7 @@ export default function PrinterSettingsPage() {
                 setWinPrinters(list.map((p) => p.name));
                 return;
             }
-            const list: string[] = await (await fetch(`${RELAY}/printers`)).json();
-            setWinPrinters(list);
+            setWinPrinters(await bridgeRequest<string[]>("thermal", "printers"));
         } catch {
             toast.error("Could not fetch printer list");
         } finally {
@@ -146,10 +143,9 @@ export default function PrinterSettingsPage() {
     const fetchComPorts = async () => {
         setPortsLoading(true);
         try {
-            const list: string[] = await (await fetch(`${RELAY}/ports`)).json();
-            setComPorts(list);
+            setComPorts(await bridgeRequest<string[]>("thermal", "ports"));
         } catch {
-            toast.error("Could not fetch COM ports from relay");
+            toast.error("Could not fetch COM ports from the bridge");
         } finally {
             setPortsLoading(false);
         }
@@ -164,12 +160,7 @@ export default function PrinterSettingsPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const r = await fetch(`${RELAY}/config`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(config),
-            });
-            if (!r.ok) throw new Error((await r.json()).error);
+            await bridgeRequest("thermal", "config:set", config);
             toast.success("Printer settings saved");
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Save failed");
@@ -207,26 +198,21 @@ export default function PrinterSettingsPage() {
                     return;
                 }
             }
-            const r = await fetch(`${RELAY}/print`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    reference: "TEST-001",
-                    date: new Date().toISOString(),
-                    type: "TEST",
-                    party: null,
-                    narration: "Printer test — if you can read this, it works!",
-                    lines: [
-                        { accountName: "Test Account", type: "DEBIT", amount: 1000, description: null },
-                        { accountName: "Test Account", type: "CREDIT", amount: 1000, description: null },
-                    ],
-                    totalDebit: 1000,
-                    totalCredit: 1000,
-                    status: "POSTED",
-                    createdBy: "System",
-                }),
+            await bridgeRequest("thermal", "print", {
+                reference: "TEST-001",
+                date: new Date().toISOString(),
+                type: "TEST",
+                party: null,
+                narration: "Printer test — if you can read this, it works!",
+                lines: [
+                    { accountName: "Test Account", type: "DEBIT", amount: 1000, description: null },
+                    { accountName: "Test Account", type: "CREDIT", amount: 1000, description: null },
+                ],
+                totalDebit: 1000,
+                totalCredit: 1000,
+                status: "POSTED",
+                createdBy: "System",
             });
-            if (!r.ok) throw new Error((await r.json()).error);
             toast.success("Test sent — check the printer");
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Test failed");
@@ -263,7 +249,7 @@ export default function PrinterSettingsPage() {
                             <XCircle size={16} className="text-destructive" />
                         )}
                         <span className={relayUp ? "text-green-700 font-medium" : "text-destructive font-medium"}>
-                            {loading ? "Checking relay…" : relayUp ? "Relay running — localhost:9191" : "Relay not running"}
+                            {loading ? "Checking bridge…" : relayUp ? "Bridge connected" : "Bridge not running"}
                         </span>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => { setLoading(true); checkRelay(); }}>

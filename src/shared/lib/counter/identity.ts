@@ -17,7 +17,7 @@
 
 import { isElectronEnvironment, getCounterInstallationId } from "@/shared/lib/bridge/bridgeHealth";
 
-const BRIDGE_ORIGIN = "http://localhost:9191";
+import { bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 
 export interface MachineIdentity {
     /** Canonical id — bind and match against this going forward. */
@@ -30,18 +30,14 @@ export interface MachineIdentity {
 
 async function readBridgeConfig(mintIfMissing: boolean): Promise<{ deviceId: string | null; companyName: string | null }> {
     try {
-        const r = await fetch(`${BRIDGE_ORIGIN}/config`, { signal: AbortSignal.timeout(2000) });
-        if (!r.ok) return { deviceId: null, companyName: null };
-        const cfg: { deviceId?: string | null; companyName?: string | null } = await r.json();
+        const cfg = await bridgeRequest<{ deviceId?: string | null; companyName?: string | null }>(
+            "thermal", "config:get", undefined, 2000);
         if (cfg.deviceId) return { deviceId: cfg.deviceId, companyName: cfg.companyName ?? null };
         if (!mintIfMissing) return { deviceId: null, companyName: cfg.companyName ?? null };
         // Bridge-only machine, no id yet — mint one and persist it, same as before.
         const id = crypto.randomUUID();
-        fetch(`${BRIDGE_ORIGIN}/config`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ deviceId: id }),
-        }).catch(() => { /* offline — id just won't persist */ });
+        void bridgeRequest("thermal", "config:set", { deviceId: id })
+            .catch(() => { /* offline — id just won't persist */ });
         return { deviceId: id, companyName: cfg.companyName ?? null };
     } catch {
         return { deviceId: null, companyName: null };

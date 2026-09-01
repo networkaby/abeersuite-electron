@@ -15,13 +15,14 @@ export interface ElectronAPI {
     clearCounterSetup: () => Promise<boolean>;
     updateWindowStatus: (status: { sync: string; connection: string }) => Promise<void>;
     /**
-     * Customer-facing DQ11 display (hardware-bridge/qr.js). `send` is fire-and-forget —
-     * the eight POS screens are best-effort and must never surface a failure to the
-     * cashier. `request` is for the settings page, which needs real answers.
+     * Shop hardware: the DQ11 customer display (hardware-bridge/qr.js) and the thermal
+     * printer (thermal.js). `send` is fire-and-forget — the eight QR screens are
+     * best-effort and must never surface a failure to the cashier. `request` is for
+     * everything that needs a real answer, which is all of printing.
      */
-    qr: {
-        send:      (cmd: string, payload?: unknown) => void;
-        request:   (cmd: string, payload?: unknown) => Promise<unknown>;
+    bridge: {
+        send:      (mod: "qr" | "thermal", cmd: string, payload?: unknown) => void;
+        request:   (mod: "qr" | "thermal", cmd: string, payload?: unknown) => Promise<unknown>;
         connected: () => Promise<boolean>;
     };
     platform: string;
@@ -44,10 +45,10 @@ const electronAPI: ElectronAPI = {
     saveCounterSetup: (setup) => ipcRenderer.invoke("counter:save-setup", setup),
     clearCounterSetup: () => ipcRenderer.invoke("counter:clear-setup"),
     updateWindowStatus: (status) => ipcRenderer.invoke("app:update-window-status", status),
-    qr: {
-        send:      (cmd, payload) => { void ipcRenderer.invoke("qr:send", cmd, payload); },
-        request:   (cmd, payload) => ipcRenderer.invoke("qr:request", cmd, payload),
-        connected: () => ipcRenderer.invoke("qr:connected"),
+    bridge: {
+        send:      (mod, cmd, payload) => { void ipcRenderer.invoke("bridge:send", mod, cmd, payload); },
+        request:   (mod, cmd, payload) => ipcRenderer.invoke("bridge:request", mod, cmd, payload),
+        connected: () => ipcRenderer.invoke("bridge:connected"),
     },
     platform: process.platform,
 };

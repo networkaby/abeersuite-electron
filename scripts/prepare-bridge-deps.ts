@@ -30,8 +30,11 @@ import { hoistNodeModules } from "./lib/hoistNodeModules";
  * files. Derived by grepping the sources, not by guessing:
  *
  *   sync-engine     — lib/db.js (pg), lib/signal.js (@supabase/supabase-js)
- *   hardware-bridge — thermal.js (express, node-thermal-printer, qrcode, sharp),
- *                     qr.js (sharp, serialport, qrcode), cors-pna.js (cors)
+ *   hardware-bridge — thermal.js (node-thermal-printer, qrcode, sharp),
+ *                     qr.js (sharp, serialport, qrcode)
+ *
+ * `express` and `cors` left the list when both modules moved from HTTP relays to the
+ * Electron IPC channel; cors-pna.js went with them.
  *
  * `sharp` and `serialport` are NATIVE, and were expected to need an Electron ABI rebuild
  * (Electron 43 is ABI 148; the Node that builds here is 137). They do not: both ship as
@@ -61,7 +64,7 @@ import { hoistNodeModules } from "./lib/hoistNodeModules";
  */
 const BRIDGE_DEPS: Record<string, string[]> = {
     "sync-engine": ["pg", "@supabase/supabase-js"],
-    "hardware-bridge": ["express", "cors", "node-thermal-printer", "qrcode", "sharp", "serialport"],
+    "hardware-bridge": ["node-thermal-printer", "qrcode", "sharp", "serialport"],
 };
 
 function stage(bridge: string, deps: string[], rootDir: string): void {

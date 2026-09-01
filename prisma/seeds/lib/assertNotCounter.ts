@@ -17,8 +17,10 @@
  * and maintained by the sync worker; if it is wrong, the fix is to reseed it from a
  * dump, never to run a seed against it.
  */
+import { parseCounterPc } from "../../../src/shared/lib/appModeCore";
+
 export function assertNotCounterReplica(scriptName: string): void {
-    if (process.env.COUNTER_PC !== "1" && !process.env.LOCAL_DATABASE_URL) return;
+    if (parseCounterPc(process.env.COUNTER_PC) !== true && !process.env.LOCAL_DATABASE_URL) return;
 
     console.error(
         `\n✖ ${scriptName} refused to run: this looks like a shop counter PC.\n\n` +

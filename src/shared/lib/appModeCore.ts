@@ -148,10 +148,31 @@ export const COUNTER_VOUCHERS_MODULE_STRIP = [
 
 /** office/settings keeps only what a till actually touches: POS service config, the
  *  printer, and the customer-facing QR display — the two things the counter bridge
- *  (localhost:9191) exists to drive, per `src/shared/lib/bridge/bridgeHealth.ts`. */
+ *  exists to drive, per `src/shared/lib/bridge/hardwareBridge.ts`. */
 export const COUNTER_SETTINGS_KEEP = new Set(["pos-services", "printer-settings", "qr-display-settings"]);
 
 export const COUNTER_API_ALLOWLIST = new Set([
     "auth", "pos", "counter", "parties", "inventory", "pricing-strategy", "accounts",
     "branches", "users", "permissions", "nav", "settings", "health", "search-slno",
 ]);
+
+// ── COUNTER_PC ───────────────────────────────────────────────────────────────
+
+/**
+ * "Is this machine a shop counter running its own replica?", from `COUNTER_PC`.
+ *
+ * Owner decision: the `.env` spells it `true`/`false`, because `1`/`0` reads as a
+ * count, not a yes/no. The older `1`/`0` form is still accepted so machines and
+ * scripts already carrying it keep working — `electron/main.ts` has been setting
+ * `"1"` from its own provisioning result since before this parser existed.
+ *
+ * Returns `undefined` for unset OR unrecognised, deliberately: `postgresManager.ts`
+ * treats "no opinion from the env" as "ask the per-machine settings file", and a typo
+ * must land there rather than silently meaning `false` and disabling the replica.
+ */
+export function parseCounterPc(raw: string | undefined): boolean | undefined {
+    const value = raw?.trim().toLowerCase();
+    if (value === "true" || value === "1") return true;
+    if (value === "false" || value === "0") return false;
+    return undefined;
+}

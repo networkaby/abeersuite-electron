@@ -14,7 +14,8 @@ export const PERMISSIONS = {
 
     // Auth — login location control.
     // When granted, the user may log in from any machine. Without it, login is
-    // restricted to counter machines (where the bridge runs on localhost:9191).
+    // restricted to counter machines (those that answer a bridge health check —
+    // see src/shared/lib/bridge/bridgeHealth.ts).
     AUTH_LOGIN_OUTSIDE_COUNTER: "auth:login:outside-counter",
 
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart

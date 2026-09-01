@@ -17,6 +17,8 @@
  * when to come back. Healthy operation costs nothing.
  */
 
+import { parseCounterPc } from "@/shared/lib/appModeCore";
+
 /** Where reads are actually being served from right now. */
 export type CounterMode = "LIVE" | "LOCAL";
 
@@ -68,8 +70,9 @@ export function localWriteIsFallback(): boolean {
 
 /** True only on a counter PC. Set by `electron/main.ts` from the actual outcome of
  *  `ensurePostgresRunning()` — not baked into the installer — and inherited by this
- *  process because the Next server is forked with the main process's env. */
-export const IS_COUNTER_PC = process.env.COUNTER_PC === "1";
+ *  process because the Next server is forked with the main process's env. Accepts
+ *  `true`/`false` (the form the `.env` documents) as well as the older `1`/`0`. */
+export const IS_COUNTER_PC = parseCounterPc(process.env.COUNTER_PC) === true;
 
 /** How long to wait before re-probing a live database we believe is down. */
 const REPROBE_INTERVAL_MS = 15_000;

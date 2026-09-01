@@ -71,8 +71,8 @@ export function startHardwareBridge(): void {
             if (line.trim()) console.log(`[bridge] ${line.trimEnd()}`);
         }
     };
-    resetQrReady();
-    attachQrReplyRouter(bridge);
+    resetReady();
+    attachReplyRouter(bridge);
 
     bridge.stdout?.on("data", relay);
     bridge.stderr?.on("data", relay);
@@ -100,36 +100,43 @@ export function startHardwareBridge(): void {
     console.log("[HardwareBridge] Started.");
 }
 
+/** The bridge's two hardware modules. Each is a separate file with its own COMMANDS table. */
+type BridgeModule = "qr" | "thermal";
+
 /**
- * Pending `requestQr` calls, keyed by correlation id.
+ * Pending `bridgeRequest` calls, keyed by correlation id.
  *
- * Only the four settings-page commands (health, config:get, config:set, ports) ever
- * land here — the eight POS screen commands are fire-and-forget and never allocate an
- * entry. A wedged display therefore cannot grow this map during a sale.
+ * Fire-and-forget commands never allocate an entry — that is every QR display screen,
+ * which is best-effort by contract. So a wedged display cannot grow this map during a
+ * sale. Printing does land here, because the cashier has to be told when it fails.
  */
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
 let nextRequestId = 1;
 
 /**
- * Resolves when qr.js has registered its message handler.
+ * Per-module gate, resolved when that module has registered its message handler.
  *
  * Loading sharp + serialport takes a second or two, and Node drops a message that
  * arrives before a `message` listener exists — no listener, no queue, no error. Without
  * this gate a command sent during boot vanishes and the caller just waits out its
  * timeout. Reset on every spawn.
  */
-let qrReady: Promise<void> = Promise.resolve();
-let markQrReady: () => void = () => {};
+const ready = new Map<BridgeModule, { promise: Promise<void>; mark: () => void }>();
 
-function resetQrReady(): void {
-    qrReady = new Promise<void>((resolve) => { markQrReady = resolve; });
+function resetReady(): void {
+    ready.clear();
+    for (const mod of ["qr", "thermal"] as const) {
+        let mark: () => void = () => {};
+        const promise = new Promise<void>((resolve) => { mark = resolve; });
+        ready.set(mod, { promise, mark });
+    }
 }
 
-function attachQrReplyRouter(child: ChildProcess): void {
+function attachReplyRouter(child: ChildProcess): void {
     child.on("message", (msg: unknown) => {
-        const m = msg as { mod?: string; ready?: boolean; id?: number; result?: unknown; error?: string };
-        if (!m || m.mod !== "qr") return;
-        if (m.ready) return markQrReady();
+        const m = msg as { mod?: BridgeModule; ready?: boolean; id?: number; result?: unknown; error?: string };
+        if (!m || (m.mod !== "qr" && m.mod !== "thermal")) return;
+        if (m.ready) return ready.get(m.mod)?.mark();
         if (typeof m.id !== "number") return;
         const slot = pending.get(m.id);
         if (!slot) return; // Already timed out — the late reply is nothing to act on.
@@ -146,42 +153,46 @@ export function isBridgeConnected(): boolean {
 }
 
 /**
- * Fire-and-forget QR display command. Never throws: the display is best-effort by
- * contract (see `qrDisplay.ts` — a failure must never reach the cashier), and a counter
- * with no DQ11 attached is an ordinary configuration, not a fault.
+ * Fire-and-forget command. Never throws — used only where a failure must not reach the
+ * cashier (see `qrDisplay.ts`), and where a counter without that hardware attached is an
+ * ordinary configuration rather than a fault.
  */
-export function sendQr(cmd: string, payload?: unknown): void {
+export function bridgeSend(mod: BridgeModule, cmd: string, payload?: unknown): void {
     if (!bridge?.connected) return;
-    void qrReady.then(() => {
+    void ready.get(mod)?.promise.then(() => {
         if (!bridge?.connected) return;
         try {
-            bridge.send({ mod: "qr", cmd, payload });
+            bridge.send({ mod, cmd, payload });
         } catch (err) {
-            console.error(`[HardwareBridge] qr ${cmd} failed:`, err);
+            console.error(`[HardwareBridge] ${mod} ${cmd} failed:`, err);
         }
     });
 }
 
 /**
- * QR display command that needs an answer (settings page only). Rejects rather than
- * hanging if the bridge is down or the child stops replying — the old HTTP client had
- * an AbortSignal.timeout for the same reason.
+ * Command that needs an answer. Rejects rather than hanging if the bridge is down or the
+ * module stops replying — the HTTP clients this replaced had an AbortSignal.timeout for
+ * the same reason.
+ *
+ * The default is generous because printing is in here: a network printer that is asleep,
+ * out of paper, or on a slow COM port can take several seconds to fail, and timing out
+ * early would tell the cashier "failed" for a receipt that then prints anyway.
  */
-export function requestQr(cmd: string, payload?: unknown, timeoutMs = 8000): Promise<unknown> {
-    if (!bridge?.connected) return Promise.reject(new Error("Display bridge is not running."));
+export function bridgeRequest(mod: BridgeModule, cmd: string, payload?: unknown, timeoutMs = 15_000): Promise<unknown> {
+    if (!bridge?.connected) return Promise.reject(new Error("Hardware bridge is not running."));
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
         // Timer starts now, not after the ready gate: the caller cares about total wait,
-        // and a bridge that never becomes ready must fail rather than hang the page.
+        // and a module that never becomes ready must fail rather than hang the page.
         const timer = setTimeout(() => {
             pending.delete(id);
-            reject(new Error(`Display bridge did not answer "${cmd}" within ${timeoutMs}ms.`));
+            reject(new Error(`Hardware bridge did not answer "${cmd}" within ${timeoutMs}ms.`));
         }, timeoutMs);
         pending.set(id, { resolve, reject, timer });
-        void qrReady.then(() => {
+        void ready.get(mod)?.promise.then(() => {
             if (!pending.has(id)) return; // Already timed out.
             try {
-                bridge!.send({ mod: "qr", cmd, payload, id });
+                bridge!.send({ mod, cmd, payload, id });
             } catch (err) {
                 pending.delete(id);
                 clearTimeout(timer);

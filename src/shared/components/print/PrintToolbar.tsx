@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
-const RELAY = "http://localhost:9191";
+import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 
 // Self-contained toolbar styling. This bar lives inside a STANDALONE print
 // document (its own <html>, no app chrome / shadcn), so it carries its own
@@ -99,15 +99,11 @@ export default function PrintToolbar({
     const sendToRelay = async (): Promise<boolean> => {
         if (!bridge) return false;
         try {
-            const ok = await fetch(`${RELAY}/health`, { signal: AbortSignal.timeout(1200) })
-                .then((r) => r.ok).catch(() => false);
-            if (!ok) return false;
-            const res = await fetch(`${RELAY}${bridge.endpoint}`, {
-                method:  "POST",
-                headers: { "Content-Type": "application/json" },
-                body:    JSON.stringify(bridge.payload),
-            });
-            return res.ok;
+            if (!await bridgeOk("thermal", 1200)) return false;
+            // `endpoint` keeps its leading slash: it is a public prop set by five receipt
+            // pages, and the bridge command is the same string without it.
+            await bridgeRequest("thermal", bridge.endpoint.slice(1), bridge.payload);
+            return true;
         } catch {
             return false;
         }

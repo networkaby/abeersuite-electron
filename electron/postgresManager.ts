@@ -39,8 +39,15 @@ function getReplicaSettingsPath(): string {
 
 function isReplicaEnabled(): boolean {
     // Explicit env override always wins — for dev/testing without touching userData.
-    if (process.env.COUNTER_PC === "1") return true;
-    if (process.env.COUNTER_PC === "0") return false;
+    // `true`/`false` is the documented form; `1`/`0` still works because main.ts and
+    // older machines set it. Anything else is "no opinion" and falls through below,
+    // so a typo asks the settings file rather than silently disabling the replica.
+    // Deliberately duplicated rather than imported from `src/shared/lib/appModeCore.ts`
+    // — this file is compiled by `electron/tsconfig.json`, rooted at `electron/`, and
+    // an import reaching outside that root would change the emitted output path.
+    const override = process.env.COUNTER_PC?.trim().toLowerCase();
+    if (override === "true" || override === "1") return true;
+    if (override === "false" || override === "0") return false;
     try {
         const parsed = JSON.parse(fs.readFileSync(getReplicaSettingsPath(), "utf-8")) as { enabled?: boolean };
         if (typeof parsed.enabled === "boolean") return parsed.enabled;

@@ -515,27 +515,27 @@ ipcMain.handle("app:update-window-status", (_, status: { sync: string; connectio
     mainWindow?.setTitle(buildFullTitle());
 });
 
-// ── Customer-facing DQ11 display ─────────────────────────────────────────────
+// ── Shop hardware: DQ11 customer display + thermal printer ───────────────────
 //
-// Replaces the old HTTP relay on :9192. Renderer → here → the bridge child's message
-// channel. No listening socket, so nothing on the shop LAN and no website the cashier
-// browses can drive the display.
+// Replaces the old HTTP relays on :9192 and :9191. Renderer → here → the bridge child's
+// message channel. No listening sockets, so nothing on the shop LAN and no website the
+// cashier browses can drive the printer or the display.
 
-ipcMain.handle("qr:send", (_event, cmd: string, payload?: unknown) => {
-    sendQr(cmd, payload);
+ipcMain.handle("bridge:send", (_event, mod: "qr" | "thermal", cmd: string, payload?: unknown) => {
+    bridgeSend(mod, cmd, payload);
 });
 
-ipcMain.handle("qr:request", async (_event, cmd: string, payload?: unknown) => {
-    // Surfaced to the settings page as a message, not a thrown IPC error, so the page
-    // can render "bridge not running" the way the old /health probe let it.
+ipcMain.handle("bridge:request", async (_event, mod: "qr" | "thermal", cmd: string, payload?: unknown) => {
+    // Surfaced as a message, not a thrown IPC error, so callers can render "bridge not
+    // running" the way the old /health probe let them.
     try {
-        return { ok: true, result: await requestQr(cmd, payload) };
+        return { ok: true, result: await bridgeRequest(mod, cmd, payload) };
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 });
 
-ipcMain.handle("qr:connected", () => isBridgeConnected());
+ipcMain.handle("bridge:connected", () => isBridgeConnected());
 
 ipcMain.handle("printer:get-list", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -655,7 +655,7 @@ import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { waitForReplicaReady } from "./waitForReplica";
-import { startHardwareBridge, stopHardwareBridge, sendQr, requestQr, isBridgeConnected } from "./hardwareBridgeManager";
+import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 
@@ -1038,7 +1038,7 @@ app.whenReady().then(async () => {
                 // LOCAL_DATABASE_URL's mere presence — set it here, from the actual detection
                 // result, rather than requiring it baked into the installer. serverManager.ts
                 // forks the Next server with `env: {...process.env}`, so this is inherited.
-                process.env.COUNTER_PC = "1";
+                process.env.COUNTER_PC = "true";
                 // Owner decision: the app must SAY which database it picked, so the choice is
                 // never invisible. `counterStatus()` reports the same value to the in-app badge
                 // from LOCAL_DATABASE_SOURCE; this is the boot-time half of that.

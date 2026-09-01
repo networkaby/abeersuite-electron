@@ -5,21 +5,23 @@
  *
  * This was `combined-bridge`: a separate Node service, its own installer, its own
  * autostart task, serving the thermal printer on :9191 and the QR display on :9192.
- * Owner decision 2026-08-26 — one box — so the printer half moved here unchanged and
- * Electron supervises it (see electron/hardwareBridgeManager.ts).
+ * Owner decision 2026-08-26 — one box — so both halves moved here and Electron
+ * supervises them (see electron/hardwareBridgeManager.ts).
  *
- * ── Why one half still serves HTTP ──────────────────────────────────────────
- * The obvious "native" thing is IPC, and the QR display now uses it: qr.js takes
- * `{ mod, cmd, payload, id? }` messages over the Electron channel and has no port.
- * Thermal has not moved yet — it has eight-plus call sites fetching
- * `http://localhost:9191/...` (PosScreen, PrintToolbar, printer settings, counter
- * identity, bridge health), and rewriting those at the same time as moving 1300 lines
- * of ESC/POS, Windows-spooler and COM code is two risky changes at once. QR went first
- * because its calls are fire-and-forget through a single facade (qrDisplay.ts), so
- * nothing the cashier sees depends on the reply. Thermal migrates behind the
- * BRIDGE_ORIGIN seam in src/shared/lib/bridge/bridgeHealth.ts once QR has run on a
- * real counter. The separate installer and scheduled task are gone either way, which
- * was the actual goal.
+ * ── Why there are no longer any ports ───────────────────────────────────────
+ * Both modules now take `{ mod, cmd, payload, id? }` messages over the Electron channel
+ * and listen on nothing. The ports were inherited from `combined-bridge`, when the app
+ * ran in a plain browser and HTTP was the only way to reach a local process; inside
+ * Electron they bought nothing and left the printer and display drivable by anything
+ * that could reach them.
+ *
+ * QR moved first — its calls are fire-and-forget through one facade, so nothing the
+ * cashier sees depends on the reply — then thermal, whose commands all return answers
+ * because a failed receipt must be reported. Browsers still speak HTTP, but to a
+ * standalone combined-bridge on their OWN PC (src/shared/lib/bridge/hardwareBridge.ts):
+ * an admin opening a counter from their desk drives their own hardware, which is the
+ * design this bridge always had. The separate installer and scheduled task are gone
+ * either way, which was the actual goal.
  *
  * ── Native modules turned out to be a non-issue ──────────────────────────────
  * The QR display was expected to need `electron-rebuild` and `asarUnpack`, because it

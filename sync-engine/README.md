@@ -92,7 +92,7 @@ It fails loudly rather than silently accepting the Windows default.
 ## Wiring the app to it
 
 Nothing to wire by hand any more. `electron/main.ts` sets `LOCAL_DATABASE_URL` (to the
-`smx_app` role) and `COUNTER_PC=1` from the *actual* outcome of provisioning, and
+`smx_app` role) and `COUNTER_PC=true` from the *actual* outcome of provisioning, and
 `READ_MODE` ships in `resources/counter.env`.
 
 `LOCAL_DATABASE_URL` is what switches the machinery on at all. Without it the app builds
@@ -113,7 +113,7 @@ Move through `shadow` first if you want a proving week.
   mint autoincrement ids; the replica's ids must stay byte-identical to Supabase's,
   because a `User.id` in a JWT and a `universalVoucherId` on a ledger line resolve
   against whichever database answers. A colliding id attaches a session or a ledger
-  line to the wrong record, silently. Both seeds refuse to run when `COUNTER_PC=1`
+  line to the wrong record, silently. Both seeds refuse to run when `COUNTER_PC=true`
   or `LOCAL_DATABASE_URL` is set (`prisma/seeds/lib/assertNotCounter.ts`).
 
   This is also why **offline writes need per-counter id ranges** before they ship: the

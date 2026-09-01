@@ -508,7 +508,7 @@ function checkReplicaPayload(packageDir: string, failures: string[]): void {
     // they arrived.
     const bridgeDeps: Record<string, string[]> = {
         "sync-engine": ["pg", "@supabase/supabase-js"],
-        "hardware-bridge": ["express", "cors", "node-thermal-printer", "qrcode", "sharp", "serialport"],
+        "hardware-bridge": ["node-thermal-printer", "qrcode", "sharp", "serialport"],
     };
     for (const [bridge, deps] of Object.entries(bridgeDeps)) {
         const dir = path.join(resourcesDir, bridge);
