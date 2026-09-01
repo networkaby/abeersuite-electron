@@ -2,9 +2,9 @@
  * Creates the BackupConfig singleton (row id=1) — run ONCE after `prisma db push`
  * adds the table, WITHOUT running the full bootstrap seed.
  *
- * Part of the scheduled-backup feature, which is BUILT BUT NOT SWITCHED ON. Running
- * this script alone changes no behaviour: nothing reads the table until the cron
- * route is wired up. See docs/backup-schedule-activation.md for the full checklist.
+ * Part of the scheduled-backup feature: `/api/cron/backup-due` reads this table live
+ * every hour to decide whether today/this-hour is due. See
+ * docs/backup-schedule-activation.md for the full checklist.
  *
  * Defaults are every day at 10 PM IST — a schedule that is safe rather than clever,
  * on the reasoning that a row created by accident should still back the shop up.
