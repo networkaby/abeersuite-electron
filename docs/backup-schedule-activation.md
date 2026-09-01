@@ -48,10 +48,18 @@ comparing in UTC would put a Monday backup on Sunday.
    | Secret | Value | Why |
    |---|---|---|
    | `APP_BASE_URL` | `https://office.networkservice.in` | where the tick asks. Unset = every gated hour skips, leaving only the Sunday run |
-   | `CRON_SECRET` | same value as the Vercel env var | without it the endpoint is open, and anyone could stamp `lastRunAt` to suppress a real backup |
+   | `CRON_SECRET` | **optional** — same value as the Vercel env var, if you set one | locks the endpoint down. Leave it unset on both sides and the check is skipped; set it on only one side and every gated hour 401s |
 
    `DIRECT_DATABASE_URL` must already be set, holding the **direct** URL — port 5432,
    no `pgbouncer=true`. The pooled URL makes `pg_dump` write a 0-byte dump.
+
+   **On `CRON_SECRET` specifically.** It is optional by design, and blank counts as
+   absent. Requiring it would mean a missing variable on either side silently stops
+   every backup, and that failure looks identical to the app being down — a worse
+   outcome than an open endpoint. The trade-off to understand: with no secret,
+   anyone who knows the URL can trigger a backup, or hammer `/api/cron/backup-due`
+   to stamp `lastRunAt` and thereby suppress a real one. Set it on **both** sides or
+   **neither**; one side alone is the only broken combination.
 
 3. **Push.** GitHub only runs schedules from the default branch, and only from the
    pushed file.

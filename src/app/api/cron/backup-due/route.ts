@@ -12,12 +12,17 @@ export const dynamic = "force-dynamic";
  * hour is one the shop asked for. That inversion is what lets the schedule be edited
  * from Settings → Backup & Restore without committing to the repo.
  *
- * Guarded by CRON_SECRET, the same shared secret the Vercel cron route uses. It only
- * reveals a schedule, but an unauthenticated version could be hammered to mark
- * lastRunAt and thereby suppress a real backup.
+ * CRON_SECRET is OPTIONAL, matching /api/cron/backup. Unset, empty, or whitespace
+ * means the check is skipped. Worth setting: this endpoint stamps lastRunAt, so an
+ * open one could be hammered to suppress a real backup. But requiring it would be
+ * worse — a missing variable on either side would stop backups silently, and the
+ * failure would look identical to the app being down.
+ *
+ * A blank value counts as absent on purpose: a half-filled env var must not be able
+ * to lock the scheduler out.
  */
 export async function GET(req: Request) {
-    const secret = process.env.CRON_SECRET;
+    const secret = process.env.CRON_SECRET?.trim();
     if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

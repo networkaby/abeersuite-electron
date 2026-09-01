@@ -57,9 +57,16 @@ jobs:
             echo "due=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
 
-          BODY=$(curl -sS --max-time 30 \
-            -H "Authorization: Bearer ${CRON_SECRET:-}" \
-            "${APP_BASE_URL%/}/api/cron/backup-due" || echo '')
+          # CRON_SECRET is optional on both sides. Unset here, the header is omitted
+          # rather than sent empty — an app with no secret accepts it either way, and
+          # one WITH a secret gives a clean 401 instead of an empty-bearer mismatch.
+          if [ -n "${CRON_SECRET:-}" ]; then
+            AUTH=(-H "Authorization: Bearer $CRON_SECRET")
+          else
+            AUTH=()
+          fi
+
+          BODY=$(curl -sS --max-time 30 "${AUTH[@]}" "${APP_BASE_URL%/}/api/cron/backup-due" || echo '')
 
           # Fail CLOSED. Failing open would turn an app outage into 24 full dumps a
           # day, which is worse than the missed backups — and the Sunday run above is

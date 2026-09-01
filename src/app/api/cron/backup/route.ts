@@ -14,11 +14,14 @@ export const dynamic = "force-dynamic";
  * backup runner, which dumps the database and uploads it to Dropbox.
  */
 export async function GET(req: Request) {
-    const authHeader = req.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    // Verify caller is Vercel Cron (if CRON_SECRET is set in deployment env)
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // CRON_SECRET is OPTIONAL. Unset, empty, or whitespace means the check is
+    // skipped and the endpoint is open to anyone who knows the URL — deliberate, so
+    // that a deployment missing the variable still backs up rather than silently
+    // failing every night. Set it when the endpoint should be locked down; a blank
+    // value is treated as absent so a half-filled env var cannot lock the scheduler
+    // out by accident.
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    if (cronSecret && req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
