@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { DM_Sans, Space_Mono, Roboto_Condensed } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
+import CounterSetupGuard from "@/shared/components/CounterSetupGuard";
 import CounterReconciler from "@/shared/components/CounterReconciler";
 import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
 import ReplicaReadyGate from "@/shared/components/ReplicaReadyGate";
@@ -70,7 +71,9 @@ export default function RootLayout({
         <CounterReconciler />
         <StatusTitleUpdater />
         <ReplicaReadyGate />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <CounterSetupGuard>{children}</CounterSetupGuard>
+        </ThemeProvider>
       </body>
     </html>
   );

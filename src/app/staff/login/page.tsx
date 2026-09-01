@@ -60,7 +60,10 @@ function StaffLoginForm() {
             // both send this machine through /setup/counter instead of straight to
             // dest. Never blocks a non-Electron login (office staff, Vercel).
             if (isElectronEnvironment()) {
-                const status = await reconcileCounterSetup();
+                // Local-first: a binding the replica already carries is enough to
+                // let this PC in. Only a machine the replica knows nothing about
+                // waits on the DB, and that is exactly the one that may need setup.
+                const status = await reconcileCounterSetup(true);
                 if (status === "released") {
                     await window.electronAPI?.clearCounterSetup?.();
                 }

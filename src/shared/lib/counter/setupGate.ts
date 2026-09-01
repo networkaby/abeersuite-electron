@@ -26,6 +26,14 @@
  * `/api/pos/counters/my-binding`, which reads authoritatively. "Cannot reach the DB"
  * still resolves to `unreachable`, so the trust-the-local-file rule above is intact.
  *
+ * ── Login is local-first; the periodic check is not ─────────────────────────
+ * `reconcileCounterSetup(true)` lets the replica answer when it already carries this
+ * machine's binding, so signing in does not wait on the cloud for a PC that plainly
+ * holds a counter. A release is not urgent at that moment — the periodic reconcile
+ * asks authoritatively and signs the cashier out when the DB says the counter is gone.
+ * Only when the replica knows of no binding does login consult the DB, which doubles
+ * as "refresh before deciding to run the wizard".
+ *
  * ── Reassignment is not the same as release ──────────────────────────────────
  * An admin can also REBIND this device to a different counter row rather than
  * releasing it outright (boundDeviceId moved from counter A to counter B). The
@@ -73,7 +81,7 @@ export async function getLocalCounterSetup(): Promise<{ counterId: number; count
  * Confirms the local setup still matches the server. Never throws — a network
  * failure resolves to "unreachable", not an error the caller has to catch.
  */
-export async function reconcileCounterSetup(): Promise<ReconcileResult> {
+export async function reconcileCounterSetup(preferLocal = false): Promise<ReconcileResult> {
     const local = await getLocalCounterSetup();
     if (!local) return "not-set-up";
 
@@ -87,6 +95,9 @@ export async function reconcileCounterSetup(): Promise<ReconcileResult> {
         const qs = new URLSearchParams();
         if (identity.machineId) qs.set("deviceId", identity.machineId);
         if (identity.legacyDeviceId) qs.set("legacyDeviceId", identity.legacyDeviceId);
+        // Login answers from the replica when it already knows this machine's
+        // binding; the periodic reconcile never does. See the route's header.
+        if (preferLocal) qs.set("prefer", "local");
 
         const res = await fetch(`/api/pos/counters/my-binding?${qs}`, { cache: "no-store" });
         if (!res.ok) return "unreachable";

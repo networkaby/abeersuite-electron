@@ -1,4 +1,4 @@
-// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…
+// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…[&prefer=local]
 //
 // "Does this PC still hold a counter, and is its shift still open?" — answered from
 // the DB, not from the counter's own replica.
@@ -13,9 +13,23 @@
 // Unreachable is NOT released. When Supabase cannot be reached this returns
 // `reachable: false` and the caller keeps trusting its local file — a network blip
 // must never sign anyone out mid-shift.
+//
+// ── prefer=local: the login path ────────────────────────────────────────────
+// Login should not wait on the cloud for a machine that plainly already holds a
+// counter. With `prefer=local` the replica is consulted FIRST: a binding found there
+// is good enough to let the cashier in, because a release is not urgent — the
+// reconciler asks authoritatively every five minutes and signs them out when the DB
+// says the counter is gone.
+//
+// Only when the replica knows of no binding does this fall through to the DB, which
+// is also the "sync the table before running the wizard" step: a machine whose replica
+// is simply behind must not be sent through counter setup it does not need.
+//
+// The reconciler itself never passes `prefer=local` — a check that can eject someone
+// from the till reads the source of truth, always.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 
 export async function GET(req: NextRequest) {
@@ -32,6 +46,25 @@ export async function GET(req: NextRequest) {
     if (ids.length === 0) return NextResponse.json({ reachable: false, counter: null });
 
     try {
+        // Local-first, for login only. `prisma` is the replica on a counter PC; a
+        // binding it already carries is this machine's own, written when it claimed
+        // the counter, so finding it here is a positive answer and not a guess.
+        if (searchParams.get("prefer") === "local") {
+            const local = await prisma.posCounter.findFirst({
+                where:  { boundDeviceId: { in: ids } },
+                select: { id: true, counterNumber: true, name: true },
+            });
+            if (local) {
+                const localShift = await prisma.posShift.findFirst({
+                    where:  { counterId: local.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
+                    select: { id: true, status: true, userId: true },
+                });
+                return NextResponse.json({ reachable: true, counter: local, openShift: localShift });
+            }
+            // Nothing locally — fall through and ask the DB, so a replica that is
+            // merely behind does not push this PC into the setup wizard.
+        }
+
         const counter = await prismaAuthoritative.posCounter.findFirst({
             where:  { boundDeviceId: { in: ids } },
             select: { id: true, counterNumber: true, name: true },
