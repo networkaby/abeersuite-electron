@@ -65,9 +65,31 @@ function segment(value: string | undefined, max = 40): string {
         .slice(0, max);
 }
 
+/** IST is a fixed +5:30 — no daylight saving, so shifting the clock is exact. */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 /**
- * Server-generated backup file name (UTC), e.g.
- * "smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-01-011055.dump".
+ * Timestamp in Indian time, e.g. "2026-09-02-000045-IST".
+ *
+ * The shop reads these names while deciding what to restore, so they are in the
+ * timezone the shop thinks in. Before this, a backup taken at midnight IST was
+ * named 18:30 on the PREVIOUS day (UTC) — correct, and reliably misread.
+ *
+ * The IST suffix is not decoration: the Dropbox folder still holds older
+ * UTC-stamped dumps, and nothing else distinguishes the two.
+ *
+ * Shift the epoch, then read with the getUTC* accessors — that yields IST fields
+ * regardless of what timezone the server happens to run in.
+ */
+function istStamp(now: Date): string {
+    const d = new Date(now.getTime() + IST_OFFSET_MS);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-IST`;
+}
+
+/**
+ * Server-generated backup file name, e.g.
+ * "smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-02-000045-IST.dump".
  *
  * Domain and project ref are what make a dump identifiable months later: which
  * site asked for it, and which database it holds. Either is dropped when not
@@ -75,9 +97,7 @@ function segment(value: string | undefined, max = 40): string {
  * original "smx-backup-<timestamp>.dump" shape rather than growing empty gaps.
  */
 export function makeBackupFileName(opts: { domain?: string; projectRef?: string; source: BackupSource }): string {
-    const d = new Date();
-    const p = (n: number) => String(n).padStart(2, "0");
-    const ts = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+    const ts = istStamp(new Date());
     // Strip the port here rather than trusting every caller to: "localhost:3000"
     // would otherwise sanitise to "localhost-3000".
     const parts = ["smx-backup", segment(opts.domain?.split(":")[0]), segment(opts.projectRef), opts.source, ts];

@@ -145,8 +145,8 @@ Backups are dumped by a GitHub Actions runner (Vercel functions have no
 file name records which:
 
 ```
-smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-01-011055.dump
-            └─ where from ────────┘ └─ which database ──┘ └ how ┘ └─ when (UTC) ─┘
+smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-02-000045-IST.dump
+            └─ where from ────────┘ └─ which database ──┘ └ how ┘ └─ when (IST) ──┘
 ```
 
 | Source | Started by | Schedule lives in |
@@ -205,11 +205,13 @@ So on the night you switch this on, expect the dump to appear in Dropbox
 somewhere in that window, named:
 
 ```
-smx-backup-<your-domain>-gphtzbejvpijcfmvqpqo-cron-<timestamp>.dump
+smx-backup-<your-domain>-gphtzbejvpijcfmvqpqo-cron-2026-09-02-0007xx-IST.dump
 ```
 
-The timestamp inside the name is UTC, so a midnight-IST backup is stamped with
-the previous day's date at 18:3x. That is expected, not a bug.
+Times in the file name and in `backup-log.txt` are **Indian time**, marked `IST`.
+Dumps taken before 1 September 2026 carry an unmarked **UTC** stamp instead — for
+those, add 5:30 to get Indian time. The `IST` suffix is how you tell the two
+apart.
 
 ### Setting a different Vercel cron time
 

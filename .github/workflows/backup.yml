@@ -59,7 +59,12 @@ jobs:
 
           NAME="smx-backup"
           [ -n "$REF" ] && NAME="$NAME-$REF"
-          NAME="$NAME-git-$(date -u '+%Y-%m-%d-%H%M%S').dump"
+          # Indian time without depending on the runner having tzdata: shift the
+          # epoch by +5:30 and read it back on the UTC clock. Same method as
+          # istStamp() in src/shared/lib/backup/dropbox.ts, so the app-generated
+          # and workflow-generated names cannot drift apart.
+          IST_NOW=$(date -u -d "@$(( $(date -u +%s) + 19800 ))" '+%Y-%m-%d-%H%M%S')
+          NAME="$NAME-git-$IST_NOW-IST.dump"
           echo "FILE_NAME=$NAME" >> "$GITHUB_ENV"
           echo "generated name: $NAME"
 
@@ -155,7 +160,7 @@ jobs:
           SIZE="-"; [ -f backup.dump ] && SIZE=$(ls -lh backup.dump | awk '{print $5}')
           DUR="-"; START=$(cat "$RUNNER_TEMP/run_start" 2>/dev/null || echo "")
           [ -n "$START" ] && { S=$(( $(date +%s) - START )); DUR=$(printf '%dm%02ds' $((S/60)) $((S%60))); }
-          LINE="$(date -u '+%Y-%m-%d %H:%M:%SZ')  BACKUP   ${FILE_NAME}   size=${SIZE}   dur=${DUR}   ${STATUS}   by=${ACTOR}   host=${DB_HOST}   project=${PROJECT}   db=${DB_NAME}   user=${DB_USER}"
+          LINE="$(date -u -d "@$(( $(date -u +%s) + 19800 ))" '+%Y-%m-%d %H:%M:%S IST')  BACKUP   ${FILE_NAME}   size=${SIZE}   dur=${DUR}   ${STATUS}   by=${ACTOR}   host=${DB_HOST}   project=${PROJECT}   db=${DB_NAME}   user=${DB_USER}"
 
           # Download the current log (start fresh if it doesn't exist yet), append, re-upload.
           HTTP=$(curl -sS -o prev-log.txt -w "%{http_code}" -X POST \

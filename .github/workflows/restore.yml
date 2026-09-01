@@ -145,7 +145,8 @@ jobs:
           SIZE="-"; [ -f restore.dump ] && SIZE=$(ls -lh restore.dump | awk '{print $5}')
           DUR="-"; START=$(cat "$RUNNER_TEMP/run_start" 2>/dev/null || echo "")
           [ -n "$START" ] && { S=$(( $(date +%s) - START )); DUR=$(printf '%dm%02ds' $((S/60)) $((S%60))); }
-          LINE="$(date -u '+%Y-%m-%d %H:%M:%SZ')  RESTORE  $(basename "$FILE_PATH")   size=${SIZE}   dur=${DUR}   ${STATUS}   by=${ACTOR}   host=${DB_HOST}   project=${PROJECT}   db=${DB_NAME}   user=${DB_USER}"
+          # +5:30 on the UTC clock — Indian time without needing tzdata.
+          LINE="$(date -u -d "@$(( $(date -u +%s) + 19800 ))" '+%Y-%m-%d %H:%M:%S IST')  RESTORE  $(basename "$FILE_PATH")   size=${SIZE}   dur=${DUR}   ${STATUS}   by=${ACTOR}   host=${DB_HOST}   project=${PROJECT}   db=${DB_NAME}   user=${DB_USER}"
 
           # Download the current log (start fresh if it doesn't exist yet), append, re-upload.
           HTTP=$(curl -sS -o prev-log.txt -w "%{http_code}" -X POST \

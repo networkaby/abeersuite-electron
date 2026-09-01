@@ -97,8 +97,8 @@ Move the tick there and have it call the app, or let it keep dumping directly.
    `PROJECT_BRAIN.md`, and run `/sync-docs-with-code`.
 
 8. **Verify** — set the time a few minutes ahead, wait for the tick, confirm a dump
-   named `smx-backup-<domain>-<ref>-cron-<timestamp>.dump` lands in Dropbox. Then
-   switch the toggle off and confirm the next tick does nothing.
+   named `smx-backup-<domain>-<ref>-cron-<timestamp>-IST.dump` lands in Dropbox.
+   Then switch the toggle off and confirm the next tick does nothing.
 
 ## Leave the GitHub schedule alone
 
