@@ -26,7 +26,11 @@ export async function POST() {
         return Response.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }
 
-    const dbUrl = (process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL)?.trim();
+    // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
+    // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
+    // rejects any URI param it does not know, so pg_dump exits immediately with
+    // "invalid URI query parameter" and the run uploads a 0-byte dump.
+    const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
     if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
         return Response.json(
             { error: "Active database URL is missing or invalid in server environment." },
