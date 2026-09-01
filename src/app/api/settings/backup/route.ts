@@ -2,7 +2,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { describeDbUrl } from "@/shared/lib/backup/dbUrl";
+import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const domain = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").split(":")[0];
     const fileName = makeBackupFileName({
         domain,
-        projectRef: describeDbUrl(dbUrl).projectRef,
+        projectRef: projectRefFromDbUrl(dbUrl),
         source: "manual",
     });
     try {

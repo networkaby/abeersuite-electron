@@ -1,49 +1,36 @@
 /**
- * Identity of a Postgres connection URL — everything except the password.
+ * Which database a Postgres connection URL points at, for labelling backups.
  *
- * Used to label backups (file name, Dropbox log line) so a dump found months
- * later says which database it came from. Parsed with a regex rather than
- * `new URL()` because Supabase passwords routinely contain characters the URL
- * parser mangles or rejects.
+ * Only the Supabase project ref, because only it distinguishes anything: host,
+ * database name and role are identical across every project on the same Supabase
+ * region ("aws-1-ap-south-1.pooler.supabase.com", "postgres", "postgres.<ref>"),
+ * so carrying them made file names and log lines longer without making them say
+ * more.
  *
- * The password is never extracted, returned, or logged.
+ * Parsed with a regex rather than `new URL()` because Supabase passwords
+ * routinely contain characters the URL parser mangles or rejects. The password is
+ * never extracted, returned, or logged.
  */
-
-export interface DbIdentity {
-    /** Host without the port, e.g. "aws-1-ap-south-1.pooler.supabase.com". "" if unparseable. */
-    host: string;
-    /** Supabase project ref, from the "postgres.<ref>" pooler user. "" for a non-Supabase URL. */
-    projectRef: string;
-    /** Database name, e.g. "postgres". "" if absent. */
-    dbName: string;
-    /** Role name, e.g. "postgres.gphtzbejvpijcfmvqpqo". "" if absent. */
-    user: string;
-}
-
-const EMPTY: DbIdentity = { host: "", projectRef: "", dbName: "", user: "" };
 
 /**
  * `(.*)@` is greedy on purpose: it splits at the LAST "@", so a password
- * containing "@" still leaves the host intact.
+ * containing "@" still leaves the rest of the URL intact.
  */
-const URL_RE = /^[a-z][a-z0-9+.-]*:\/\/(?:(.*)@)?([^@/?#]+)(?:\/([^?#]*))?/i;
+const USER_RE = /^[a-z][a-z0-9+.-]*:\/\/(.*)@/i;
 
-export function describeDbUrl(raw: string | undefined | null): DbIdentity {
-    const value = raw?.trim();
-    if (!value) return EMPTY;
+/**
+ * "postgresql://postgres.gphtzbejvpijcfmvqpqo:…@…" → "gphtzbejvpijcfmvqpqo".
+ *
+ * "" when the URL is missing, unparseable, or not a Supabase pooler URL (a direct
+ * connection uses a plain "postgres" role with no ref in it). Callers drop the
+ * segment rather than printing a placeholder.
+ */
+export function projectRefFromDbUrl(raw: string | undefined | null): string {
+    const match = USER_RE.exec(raw?.trim() ?? "");
+    if (!match) return "";
 
-    const match = URL_RE.exec(value);
-    if (!match) return EMPTY;
-
-    const [, userInfo, hostPort, path] = match;
-    const user = userInfo ? userInfo.split(":")[0] : "";
+    // Role name is the part before the password.
+    const user = match[1].split(":")[0];
     const dot = user.indexOf(".");
-
-    return {
-        host: hostPort.split(":")[0],
-        // Supabase pooler users look like "postgres.<project-ref>".
-        projectRef: dot === -1 ? "" : user.slice(dot + 1),
-        dbName: path ?? "",
-        user,
-    };
+    return dot === -1 ? "" : user.slice(dot + 1);
 }

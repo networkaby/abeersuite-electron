@@ -1,6 +1,6 @@
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { describeDbUrl } from "@/shared/lib/backup/dbUrl";
+import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     // domain segment is simply dropped.
     const fileName = makeBackupFileName({
         domain: process.env.VERCEL_URL?.trim(),
-        projectRef: describeDbUrl(dbUrl).projectRef,
+        projectRef: projectRefFromDbUrl(dbUrl),
         source: "cron",
     });
     try {
