@@ -2,6 +2,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
+import { describeDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 //
 // settings:manage, not just a signed-in staff member: counter builds ship a working
 // GitHub token, so this is reachable from any till without the settings UI ever opening.
-export async function POST() {
+export async function POST(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
 
@@ -38,7 +39,15 @@ export async function POST() {
         );
     }
 
-    const fileName = makeBackupFileName();
+    // "x-forwarded-host" first: behind Vercel's proxy the plain Host header is the
+    // internal hostname, not the site the user is actually on. Client-controlled, so
+    // it is a label only — it is sanitised into a file-name segment, never trusted.
+    const domain = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").split(":")[0];
+    const fileName = makeBackupFileName({
+        domain,
+        projectRef: describeDbUrl(dbUrl).projectRef,
+        source: "manual",
+    });
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", {
             file_name: fileName,

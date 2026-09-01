@@ -47,12 +47,41 @@ export function isUnderBackupFolder(path: string | null | undefined): path is st
     return path.slice(prefix.length).indexOf("/") === -1;
 }
 
-/** Server-generated backup file name (UTC), e.g. "smx-backup-2026-05-29-064115.dump". */
-export function makeBackupFileName(): string {
+/** What started a backup. Ends up in the file name so the origin survives in Dropbox. */
+export type BackupSource = "manual" | "cron" | "git";
+
+/**
+ * One file-name segment: lowercase, and only the characters that are safe in a
+ * Dropbox path AND a Windows file name (this folder syncs to the office laptop).
+ * A host arrives as "localhost:3000" — the port has to go, ":" is illegal on
+ * Windows. Capped so one long segment cannot crowd out the timestamp.
+ */
+function segment(value: string | undefined, max = 40): string {
+    return (value ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9.-]+/g, "-")
+        .replace(/-{2,}/g, "-")
+        .replace(/^[-.]+|[-.]+$/g, "")
+        .slice(0, max);
+}
+
+/**
+ * Server-generated backup file name (UTC), e.g.
+ * "smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-01-011055.dump".
+ *
+ * Domain and project ref are what make a dump identifiable months later: which
+ * site asked for it, and which database it holds. Either is dropped when not
+ * known (a GitHub-scheduled run has no domain), so the name degrades to the
+ * original "smx-backup-<timestamp>.dump" shape rather than growing empty gaps.
+ */
+export function makeBackupFileName(opts: { domain?: string; projectRef?: string; source: BackupSource }): string {
     const d = new Date();
     const p = (n: number) => String(n).padStart(2, "0");
     const ts = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
-    return `smx-backup-${ts}.dump`;
+    // Strip the port here rather than trusting every caller to: "localhost:3000"
+    // would otherwise sanitise to "localhost-3000".
+    const parts = ["smx-backup", segment(opts.domain?.split(":")[0]), segment(opts.projectRef), opts.source, ts];
+    return `${parts.filter(Boolean).join("-")}.dump`;
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null;

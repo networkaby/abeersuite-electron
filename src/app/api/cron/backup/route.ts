@@ -1,5 +1,6 @@
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
+import { describeDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -41,7 +42,14 @@ export async function GET(req: Request) {
         );
     }
 
-    const fileName = makeBackupFileName();
+    // Vercel Cron calls this directly, so there is no browser Host header to read.
+    // VERCEL_URL is the deployment's own hostname; absent in local dev, and then the
+    // domain segment is simply dropped.
+    const fileName = makeBackupFileName({
+        domain: process.env.VERCEL_URL?.trim(),
+        projectRef: describeDbUrl(dbUrl).projectRef,
+        source: "cron",
+    });
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", {
             file_name: fileName,

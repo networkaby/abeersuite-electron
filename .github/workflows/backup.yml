@@ -1,19 +1,27 @@
 name: Database Backup
 
-# Triggered on demand by the app (POST /api/settings/backup). Runs pg_dump on a
-# GitHub runner — which has the Postgres client tools that Vercel functions lack
-# — and uploads the dump to Dropbox. Fire-and-forget: the app does not wait; the
-# file just appears in Dropbox a few minutes later.
+# Runs pg_dump on a GitHub runner — which has the Postgres client tools that
+# Vercel functions lack — and uploads the dump to Dropbox. Fire-and-forget: the
+# caller does not wait; the file appears in Dropbox a few minutes later.
+#
+# Three ways in, and the file name records which:
+#   manual  the app, on a click     (POST /api/settings/backup)
+#   cron    the app, on a schedule  (Vercel Cron -> /api/cron/backup)
+#   git     the schedule below, with no app involved
 
 on:
+  # Safety net independent of the app and of Vercel: this fires even if the site
+  # is down, the deployment is broken, or the Vercel cron is disabled.
+  schedule:
+    - cron: "0 9 * * *"   # 09:00 UTC = 14:30 IST, daily
   workflow_dispatch:
     inputs:
       file_name:
-        description: Dump file name to create in Dropbox (e.g. smx-backup-….dump)
-        required: true
+        description: Dump file name to create in Dropbox. Blank = generate one (scheduled runs).
+        required: false
       source_db_url:
-        description: Mandatory direct Postgres connection URL to dump from (e.g. postgresql://...)
-        required: true
+        description: Direct Postgres URL to dump from. Blank = use the DIRECT_DATABASE_URL secret.
+        required: false
 
 concurrency:
   group: db-backup
@@ -24,13 +32,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DIRECT_DATABASE_URL: ${{ github.event.inputs.source_db_url }}
+      # Scheduled runs have no inputs, so fall back to the repo secret. The secret
+      # is also the safer path: GitHub masks secrets in logs, but a workflow INPUT
+      # is echoed in full in the job's env group — password included.
+      DIRECT_DATABASE_URL: ${{ github.event.inputs.source_db_url || secrets.DIRECT_DATABASE_URL }}
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
       DROPBOX_FOLDER: ${{ secrets.DROPBOX_FOLDER }}
       FILE_NAME: ${{ github.event.inputs.file_name }}
     steps:
+      - name: Resolve dump file name
+        run: |
+          set -euo pipefail
+          if [ -n "${FILE_NAME:-}" ]; then echo "using supplied name: $FILE_NAME"; exit 0; fi
+
+          # No name supplied → this is a scheduled run, with no app and so no
+          # domain. Build the same shape the app builds, minus the domain, and
+          # tag the source "git": smx-backup-<project-ref>-git-<timestamp>.dump
+          RAW="${DIRECT_DATABASE_URL:-}"
+          if [ -z "$RAW" ]; then echo "No source_db_url input and no DIRECT_DATABASE_URL secret."; exit 1; fi
+          NOPROTO="${RAW#*://}"
+          case "$NOPROTO" in *@*) USERINFO="${NOPROTO%%@*}" ;; *) USERINFO="" ;; esac
+          DB_USER="${USERINFO%%:*}"
+          case "$DB_USER" in *.*) REF="${DB_USER#*.}" ;; *) REF="" ;; esac
+
+          NAME="smx-backup"
+          [ -n "$REF" ] && NAME="$NAME-$REF"
+          NAME="$NAME-git-$(date -u '+%Y-%m-%d-%H%M%S').dump"
+          echo "FILE_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "generated name: $NAME"
+
       - name: Install PostgreSQL 17 client
         run: |
           set -euo pipefail
