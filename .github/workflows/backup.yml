@@ -87,6 +87,7 @@ jobs:
         if: always()
         env:
           STATUS: ${{ job.status }}
+          ACTOR: ${{ github.actor }}
         run: |
           # Best-effort history line in Dropbox. Never fail the job over the log
           # (no `set -e`), and always exit 0.
@@ -97,15 +98,32 @@ jobs:
             -u "$DROPBOX_APP_KEY:$DROPBOX_APP_SECRET" | jq -r .access_token) || true
           if [ -z "${ACCESS:-}" ] || [ "$ACCESS" = "null" ]; then echo "log: token mint failed, skipping"; exit 0; fi
 
-          # Normalise folder: "" → app-folder root; otherwise ensure a leading "/".
-          FOLDER="${DROPBOX_FOLDER:-}"
-          if [ -n "$FOLDER" ] && [ "${FOLDER#/}" = "$FOLDER" ]; then FOLDER="/$FOLDER"; fi
-          LOG="${FOLDER%/}/backup-log.txt"
+          # The history log lives at the Dropbox app-folder root, not inside
+          # DROPBOX_FOLDER, so one log covers every backup folder.
+          LOG="/backup-log.txt"
+
+          # Describe the target DB from the connection URL — user/host/project/db
+          # only, never the password.
+          DB_USER="-"; DB_HOST="-"; DB_NAME="-"; PROJECT="-"
+          RAW="${DIRECT_DATABASE_URL:-}"
+          if [ -n "$RAW" ]; then
+            NOPROTO="${RAW#*://}"
+            case "$NOPROTO" in
+              *@*) USERINFO="${NOPROTO%%@*}"; HOSTPART="${NOPROTO##*@}" ;;
+              *)   USERINFO="";              HOSTPART="$NOPROTO" ;;
+            esac
+            [ -n "$USERINFO" ] && DB_USER="${USERINFO%%:*}"
+            DB_HOST="${HOSTPART%%[:/]*}"
+            DB_NAME="${HOSTPART#*/}"; DB_NAME="${DB_NAME%%\?*}"
+            [ "$DB_NAME" = "$HOSTPART" ] && DB_NAME="-"
+            # Supabase pooler users look like "postgres.<project-ref>".
+            case "$DB_USER" in *.*) PROJECT="${DB_USER#*.}" ;; esac
+          fi
 
           SIZE="-"; [ -f backup.dump ] && SIZE=$(ls -lh backup.dump | awk '{print $5}')
           DUR="-"; START=$(cat "$RUNNER_TEMP/run_start" 2>/dev/null || echo "")
           [ -n "$START" ] && { S=$(( $(date +%s) - START )); DUR=$(printf '%dm%02ds' $((S/60)) $((S%60))); }
-          LINE="$(date -u '+%Y-%m-%d %H:%M:%SZ')  BACKUP   ${FILE_NAME}   size=${SIZE}   dur=${DUR}   ${STATUS}"
+          LINE="$(date -u '+%Y-%m-%d %H:%M:%SZ')  BACKUP   ${FILE_NAME}   size=${SIZE}   dur=${DUR}   ${STATUS}   by=${ACTOR}   host=${DB_HOST}   project=${PROJECT}   db=${DB_NAME}   user=${DB_USER}"
 
           # Download the current log (start fresh if it doesn't exist yet), append, re-upload.
           HTTP=$(curl -sS -o prev-log.txt -w "%{http_code}" -X POST \
