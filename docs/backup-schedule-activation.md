@@ -28,17 +28,30 @@ Vercel Cron (fixed tick) → /api/cron/backup → read BackupConfig
 The tick has to fire at least as often as the finest schedule you want to offer.
 Hourly (`0 * * * *`) gives the UI any hour of the day.
 
-## Before starting: check the Vercel plan
+## The plan is Hobby — read this before building on it
 
-This is the one thing that decides whether the time picker can work at all.
+This project is on Vercel **Hobby** (free), where crons run **once per day** and
+fire at an approximate time within the hour. That breaks the central assumption of
+the design above: there is no hourly tick to gate, so **the time picker cannot
+work**. The tick happens once a day at whatever `vercel.json` says, and moving it
+needs a deploy.
 
-- **Pro** — crons may run on any schedule. Set the tick to hourly and the feature
-  works as designed.
-- **Hobby** — crons are limited to **once per day**, triggered at an approximate
-  time within the hour. The on/off switch still works, but the time picker cannot:
-  the tick only happens once a day, at whatever `vercel.json` says. In that case
-  either stay on Pro-style scheduling via the GitHub schedule instead, or accept
-  that changing the time needs a redeploy and mark the field read-only.
+What still works on Hobby:
+
+- **The on/off toggle.** The tick fires; the route reads `enabled` and does
+  nothing. That is a genuine in-app switch with no redeploy, and it is most of the
+  value.
+- **Weekly.** A daily tick can be gated down to one weekday.
+
+What does not:
+
+- **Choosing the hour.** Ship the time field read-only, showing the `vercel.json`
+  time with a note that changing it needs a deploy — or leave it out entirely and
+  keep `README.md` as the place where the time is set.
+
+If per-hour control is genuinely wanted later, the cheaper route is not a Vercel
+upgrade: `.github/workflows/backup.yml` can hold any schedule, on any plan, free.
+Move the tick there and have it call the app, or let it keep dumping directly.
 
 ## What already exists
 
@@ -52,8 +65,9 @@ This is the one thing that decides whether the time picker can work at all.
 
 ## Checklist
 
-1. **Confirm the plan tier** (above). If Hobby, decide the time-picker question
-   first — the rest of the steps assume Pro.
+1. **Decide the time-picker question** (above) — on Hobby it must be read-only or
+   dropped. `BackupScheduleCard.tsx` currently renders it as editable, so this is a
+   real edit to that file, not just a decision.
 
 2. **Create the table.**
    ```bash
@@ -65,8 +79,9 @@ This is the one thing that decides whether the time picker can work at all.
 3. **Add the seed script** to `package.json`:
    `"seed:apply-backup-config": "tsx prisma/seeds/apply-backup-config.ts"`
 
-4. **Speed up the tick** in `vercel.json` — `"schedule": "0 * * * *"`. Only after
-   step 5, or an hourly tick means an hourly backup.
+4. **Set the tick** in `vercel.json` — on Hobby this stays a once-daily schedule
+   (see `README.md` for the syntax). An hourly tick is neither allowed on this plan
+   nor safe before step 5, since the route would dispatch on every one.
 
 5. **Gate the cron route.** In `src/app/api/cron/backup/route.ts`, before
    dispatching: read `BackupConfig`, return early unless `enabled` and the current

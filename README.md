@@ -163,41 +163,73 @@ smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-01-01105
 database being reachable from the app. That independence is the point: it is the
 one that still works when the deployment is broken.
 
-### Setting the Vercel cron time
+### To start daily midnight backups — copy this
 
-Edit `vercel.json` and deploy. The schedule is standard cron, **always in UTC** —
-there is no timezone option, so subtract 5:30 to convert from IST:
+Replace the whole of `vercel.json` with this, commit, and push. Vercel picks up
+the schedule on the next deploy; nothing else needs changing.
 
 ```json
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["bom1"],
-  "crons": [{ "path": "/api/cron/backup", "schedule": "0 21 * * *" }]
+  "crons": [{ "path": "/api/cron/backup", "schedule": "30 18 * * *" }]
 }
 ```
 
+`30 18 * * *` is 18:30 UTC = **00:00 IST**, i.e. midnight tonight, every night.
+Cron has no timezone setting, so the time is always written in UTC.
+
+Before pushing, check two things:
+
+1. **`CRON_SECRET` is set** in the Vercel project's environment variables. The
+   route only checks the Authorization header when that variable exists — unset,
+   anyone who knows the URL can trigger a backup.
+2. **`DIRECT_URL` is set** in the same place, holding the direct Postgres URL
+   (port 5432, no `pgbouncer=true`). The pooled URL fails: `pg_dump` rejects
+   connection parameters it does not recognise, and the run uploads a 0-byte
+   dump.
+
+To stop Vercel backups again, set `"crons": []` and deploy.
+
+#### What to expect on the free plan
+
+This project is on Vercel **Hobby**, which limits cron jobs to:
+
+- **2 cron jobs** per project.
+- **Once per day** each — no hourly or twice-daily schedule.
+- Fired **within the hour** of the stated time, not exactly on it. A midnight
+  backup may actually run any time between 00:00 and 01:00 IST. For a backup
+  that is fine; do not build anything time-critical on it.
+
+So on the night you switch this on, expect the dump to appear in Dropbox
+somewhere in that window, named:
+
+```
+smx-backup-<your-domain>-gphtzbejvpijcfmvqpqo-cron-<timestamp>.dump
+```
+
+The timestamp inside the name is UTC, so a midnight-IST backup is stamped with
+the previous day's date at 18:3x. That is expected, not a bug.
+
+### Setting a different Vercel cron time
+
+Edit the `schedule` field above. Fields are
+`minute hour day-of-month month day-of-week`, day-of-week runs `0`–`6` from
+Sunday, and the time is **always UTC** — subtract 5:30 from IST:
+
 | Wanted (IST) | UTC | `schedule` |
 |---|---|---|
+| Midnight daily | 18:30 previous day | `30 18 * * *` |
 | 2:30 AM daily | 21:00 previous day | `0 21 * * *` |
 | 11:30 PM daily | 18:00 | `0 18 * * *` |
 | 5:30 AM daily | 00:00 | `0 0 * * *` |
-| 2:30 AM Sundays | 21:00 Saturday | `0 21 * * 6` |
+| Midnight Sundays | 18:30 Saturday | `30 18 * * 6` |
 
-Fields are `minute hour day-of-month month day-of-week`, and day-of-week runs
-`0`–`6` from Sunday. To stop Vercel backups again, set `"crons": []`.
-
-**Do not set an hourly tick** (`0 * * * *`). `/api/cron/backup` dispatches on
-every tick with no schedule check of its own, so an hourly cron means 24 full
-dumps a day. Per-hour control is what the unfinished in-app schedule UI is for —
-see `docs/backup-schedule-activation.md`.
-
-Two more things worth knowing:
-
-- **Set `CRON_SECRET` in the Vercel deployment.** The route only checks the
-  Authorization header when that variable exists; with it unset, anyone who knows
-  the URL can trigger a backup.
-- **Hobby plan allows 2 cron jobs, once per day each**, fired at an approximate
-  time within the hour. Pro allows any schedule.
+**Do not set an hourly tick** (`0 * * * *`) — quite apart from Hobby rejecting
+it, `/api/cron/backup` dispatches on every tick with no schedule check of its
+own, so an hourly cron would mean 24 full dumps a day. Per-hour control is what
+the unfinished in-app schedule UI is for — see
+`docs/backup-schedule-activation.md`.
 
 ### Setting the GitHub schedule
 
