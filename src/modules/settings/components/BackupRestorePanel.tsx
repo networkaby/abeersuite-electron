@@ -150,9 +150,9 @@ export function BackupRestorePanel() {
                 | null;
             if (!res.ok || !json) throw new Error(json?.error || `HTTP ${res.status}`);
 
-            // fileName is null when the runner picks the database and the name
-            // (USE_REPO_DB_URL in githubDispatch.ts). Nothing is wrong — this side
-            // simply cannot know the name, so do not promise one.
+            // fileName is null when the server no longer sends the database URL (the
+            // commented-out block in /api/settings/backup) and the runner names the
+            // file instead. Nothing is wrong — this side cannot know the name then.
             toast.success(
                 json.fileName
                     ? `Backup started. In a few minutes "${json.fileName}" will appear in your Dropbox. You can close this page.`

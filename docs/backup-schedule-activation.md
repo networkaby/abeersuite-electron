@@ -102,17 +102,19 @@ It costs one thing: `source_db_url` is a workflow **input**, and GitHub echoes
 inputs in full in the job's env group. Secrets are masked; inputs are not. So every
 app-triggered run prints the password in its log.
 
-Once the credentials settle, switch it off in code — one line in
-`src/shared/lib/backup/githubDispatch.ts`:
+Once the credentials settle, comment out one block in each of:
 
-```ts
-export const USE_REPO_DB_URL: boolean = true;
-```
+- `src/app/api/settings/backup/route.ts`
+- `src/app/api/cron/backup/route.ts`
 
-Deliberately not an env var: it changes once, and a deployment toggle for a one-time
-decision is a setting nobody remembers exists. The app then sends **no URL and no
-file name**; the runner dumps whatever `DIRECT_DATABASE_URL` points at and builds
-the name itself.
+Each is marked `IN PRODUCTION, COMMENT OUT THIS BLOCK` and ends with
+`end of block to comment out`. Nothing else changes — the workflow already prefers
+the input and falls back to the secret, so removing the input is the whole switch.
+
+No flag and no env var on purpose: a boolean would mean two live code paths forever,
+and a deployment toggle for a one-time decision is a setting nobody remembers exists.
+The app then sends **no URL and no file name**; the runner dumps whatever
+`DIRECT_DATABASE_URL` points at and builds the name itself.
 
 The name has to move to the runner because the secret may point at a **different
 database** than the app uses. The app cannot read that database's project ref, so a

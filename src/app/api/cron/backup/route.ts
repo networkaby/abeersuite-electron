@@ -1,4 +1,4 @@
-import { triggerWorkflow, USE_REPO_DB_URL } from "@/shared/lib/backup/githubDispatch";
+import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
@@ -33,33 +33,29 @@ export async function GET(req: Request) {
         );
     }
 
-    // Repo-secret mode: send no URL and no file name — see the settings route for
-    // why the runner has to build the name in that case.
-    let inputs: Record<string, string>;
-    let fileName: string | null = null;
+    // Vercel Cron calls this directly, so there is no browser Host header to read.
+    const domain = process.env.VERCEL_URL?.trim() ?? "";
+    const inputs: Record<string, string> = { source: "cron", domain };
 
-    if (USE_REPO_DB_URL) {
-        inputs = { source: "cron", domain: process.env.VERCEL_URL?.trim() ?? "" };
-    } else {
-        // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
-        // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
-        // rejects any URI param it does not know, so pg_dump exits immediately with
-        // "invalid URI query parameter" and the run uploads a 0-byte dump.
-        const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
-        if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
-            return Response.json(
-                { error: "Active database URL is missing or invalid in server environment." },
-                { status: 500 },
-            );
-        }
-        // Vercel Cron calls this directly, so there is no browser Host header to read.
-        fileName = makeBackupFileName({
-            domain: process.env.VERCEL_URL?.trim(),
-            projectRef: projectRefFromDbUrl(dbUrl),
-            source: "cron",
-        });
-        inputs = { file_name: fileName, source_db_url: dbUrl };
+    // ── The app supplies the database URL ───────────────────────────────────────
+    // IN PRODUCTION, COMMENT OUT THIS BLOCK — same as the settings route. The runner
+    // then dumps whatever the DIRECT_DATABASE_URL repo secret points at and names the
+    // file there, and the password stops appearing in the run log.
+    //
+    // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
+    // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
+    // rejects any URI param it does not know, so pg_dump exits immediately with
+    // "invalid URI query parameter" and the run uploads a 0-byte dump.
+    const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
+    if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
+        return Response.json(
+            { error: "Active database URL is missing or invalid in server environment." },
+            { status: 500 },
+        );
     }
+    inputs.source_db_url = dbUrl;
+    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "cron" });
+    // ── end of block to comment out ─────────────────────────────────────────────
 
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
@@ -67,5 +63,6 @@ export async function GET(req: Request) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    return Response.json({ ok: true, fileName, triggeredAt: new Date().toISOString() });
+    // null once the block above is commented out — this side cannot know the name then.
+    return Response.json({ ok: true, fileName: inputs.file_name ?? null, triggeredAt: new Date().toISOString() });
 }

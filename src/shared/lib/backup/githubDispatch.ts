@@ -58,29 +58,6 @@ export async function triggerWorkflow(workflowFile: string, inputs: Record<strin
 }
 
 /**
- * Where the backup gets its database URL from. Flip this constant — it is not an env
- * var on purpose, because it changes once, at the move to production, and a
- * deployment-time toggle for a one-time decision is a setting nobody remembers.
- *
- *   false  the app sends its own DIRECT_URL with every manual and cron backup.
- *          Right while credentials rotate often: the app always holds the current
- *          one, and a rotation needs no repo change.
- *
- *   true   the app sends no URL and no file name. The runner dumps whatever the
- *          DIRECT_DATABASE_URL repo secret points at and builds the name there —
- *          it has to, because that database may not be the one this app uses and
- *          only the side holding the URL can read its project ref.
- *
- * The reason to switch: `source_db_url` is a workflow INPUT, and GitHub echoes
- * inputs in full in the job's env group. Secrets are masked; inputs are not. So
- * every app-triggered run currently prints the database password in its log.
- *
- * When switching, set DIRECT_DATABASE_URL to the new database's DIRECT url — port
- * 5432, no `pgbouncer=true` — or pg_dump writes a 0-byte dump.
- */
-export const USE_REPO_DB_URL: boolean = false;
-
-/**
  * The workflow that owns the backup timetable. Separate from backup.yml on purpose:
  * enabling/disabling acts on a whole workflow, and the manual "Back up now" button
  * dispatches backup.yml — so pointing the switch at that file would stop the button

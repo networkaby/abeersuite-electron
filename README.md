@@ -242,4 +242,5 @@ its own file name (`…-git-<timestamp>-IST.dump`). Two consequences:
 - `docs/modules/<module>.md` — per-module reference (URLs, permissions, models, key components, gotchas).
 - `docs/completed-and-protected.md` — behaviour-guarded surfaces (accounting math, POS GL, BS/P&L/Day Book).
 - `docs/seeds.md` — seed lifecycle (bootstrap / dummy / hard-clean).
-- `docs/backup-schedule-activation.md` — switching on the in-app backup schedule UI (built, not live).
+- `docs/backup-schedule-activation.md` — how the automatic backup schedule works, and its setup.
+- `docs/production-cleanup.md` — **read before going live.** Things left in a development-friendly state on purpose.
