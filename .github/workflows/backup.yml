@@ -76,7 +76,12 @@ jobs:
           # Same shape as istStamp()/makeBackupFileName() in
           # src/shared/lib/backup/dropbox.ts — segments dropped when unknown, and
           # only [a-z0-9.-] kept, so the two generators cannot drift apart.
-          clean() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9.-' '-' | sed 's/^[-.]*//; s/[-.]*$//'; }
+          # Mirrors segment() in dropbox.ts exactly, INCLUDING the 40-character cap —
+          # without it a long domain would name the same backup differently depending
+          # on which side generated it.
+          clean() {
+            printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9.-' '-'               | sed 's/^[-.]*//; s/[-.]*$//' | cut -c1-40
+          }
           SRC=$(clean "${SOURCE:-git}"); [ -n "$SRC" ] || SRC="git"
           DOM=$(clean "${DOMAIN:-}")
           # The ref goes through clean() too. Supabase refs are lowercase in practice,
