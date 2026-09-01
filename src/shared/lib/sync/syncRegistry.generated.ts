@@ -82,7 +82,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "Phone": { model: "Phone", delegate: "phone", pk: ["id"], exact: [], dates: ["createdAt"] },
     "Pipeline": { model: "Pipeline", delegate: "pipeline", pk: ["id"], exact: [], dates: ["createdAt"] },
     "pos_cash_drops": { model: "PosCashDrop", delegate: "posCashDrop", pk: ["id"], exact: ["amountPaise"], dates: ["droppedAt"] },
-    "pos_counters": { model: "PosCounter", delegate: "posCounter", pk: ["id"], exact: [], dates: ["boundAt"] },
+    "pos_counters": { model: "PosCounter", delegate: "posCounter", pk: ["id"], exact: [], dates: ["boundAt", "releasedAt"] },
     "pos_counter_payment_accounts": { model: "PosCounterPaymentAccount", delegate: "posCounterPaymentAccount", pk: ["id"], exact: [], dates: [] },
     "pos_expenditures": { model: "PosExpenditure", delegate: "posExpenditure", pk: ["id"], exact: ["amountPaise"], dates: ["createdAt"] },
     "pos_handovers": { model: "PosHandover", delegate: "posHandover", pk: ["id"], exact: ["carryOverPaise", "countedByBPaise", "declaredByAPaise"], dates: ["acceptedAt", "initiatedAt", "updatedAt"] },

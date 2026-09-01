@@ -7,7 +7,7 @@
 //        the previous close). Only the `vaultTopUpPaise` portion triggers a Contra
 //        (Vault → Counter till). If 0, no Contra is posted.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -134,11 +134,13 @@ export async function POST(req: NextRequest) {
 
     // Resolve the counter + verify it belongs to this branch.
     //
-    // Authoritative: this row carries the device lock checked just below, and the
-    // replica lags live by up to a sync cycle. Reading it from the replica meant an
-    // admin's "release counter" (a live write) stayed invisible here, so a released
-    // counter kept refusing to open — the release looked broken when it had worked.
-    const counter = await prisma.posCounter.findUnique({
+    // Authoritative, and it must actually BE authoritative — `prisma` is the replica
+    // on a counter PC, and the replica lags live by up to a sync cycle. This row
+    // carries the device lock checked just below, so reading it locally is exactly
+    // wrong on the path that matters most: an admin releases a dead PC's counter and
+    // sets a replacement up on it, and the replacement's own replica still shows the
+    // old lock, so the open is refused and the device swap fails.
+    const counter = await prismaAuthoritative.posCounter.findUnique({
         where:   { id: body.counterId },
         include: { tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } },
     });
@@ -166,7 +168,7 @@ export async function POST(req: NextRequest) {
 
     // Resolve the branch vault (needed only if vaultTopUpPaise > 0). Authoritative —
     // it names the account an opening Contra is posted to.
-    const branch = await prisma.branch.findUnique({
+    const branch = await prismaAuthoritative.branch.findUnique({
         where:  { id: branchId },
         select: { id: true, name: true, vaultAccountId: true },
     });
@@ -178,8 +180,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Check whether the counter already has an active shift. Authoritative — a shift
-    // closed on another terminal seconds ago must not still look open here.
-    const existing = await prisma.posShift.findFirst({
+    // closed on another terminal seconds ago must not still look open here, and an
+    // admin's force-close (see CounterReconciler) must be visible immediately so the
+    // cashier is offered a FRESH shift rather than handed back a shift the DB closed.
+    const existing = await prismaAuthoritative.posShift.findFirst({
         where:   { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
         include: {
             counter: { include: { tillAccount: { select: { id: true, name: true } } } },
@@ -270,7 +274,11 @@ export async function POST(req: NextRequest) {
                 await tx.posCounter.update({
                     where: { id: counter.id },
                     data: {
-                        ...(needsBind ? { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date() } : {}),
+                        // Clearing `releasedAt` alongside is what makes a rebind final:
+                        // it is the marker the push uses to refuse a STALE bind from a
+                        // machine that was released while offline, so a fresh, deliberate
+                        // bind must retire it or the counter's own next push is refused.
+                        ...(needsBind ? { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date(), releasedAt: null } : {}),
                         ...(needsRange ? { idRangeStart } : {}),
                     },
                 });

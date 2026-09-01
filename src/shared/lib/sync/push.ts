@@ -65,35 +65,91 @@ function whereFor(entry: SyncRegistryEntry, rowKey: Record<string, unknown>): Re
  * `updatedAt`, so ordinary last-write-wins cannot arbitrate — a counter that had been
  * offline would simply overwrite whatever the office had decided.
  *
- * So the binding fields are taken from the server whenever the server already names a
- * DIFFERENT device: an offline machine cannot take a counter that someone else now
- * holds. The rest of the payload still applies, and the counter converges on the
- * server's answer at the next pull.
+ * Two ways the office can win, and the second one used to be missed entirely:
+ *
+ *  1. The server already names a DIFFERENT device. An offline machine cannot take a
+ *     counter that someone else now holds.
+ *  2. The server names NOBODY because the counter was RELEASED. `boundDeviceId = null`
+ *     alone cannot say this — an unclaimed counter looks the same — so the release
+ *     stamps `releasedAt`, and a bind minted before that stamp is a stale replay from
+ *     a machine that has not yet learnt it was released. Refusing it is the whole
+ *     point of a release: the machine must go back through the setup wizard and take
+ *     a new counter number, not quietly reclaim the one it lost. A genuine first bind
+ *     (no `releasedAt`) and a rebind made after the release both still apply.
+ *
+ * The rest of the payload always applies, and the counter converges on the server's
+ * answer at the next pull.
  */
 async function reconcileCounterBinding(
     payload: Record<string, unknown>,
     where: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
     const server = await (prismaLive as unknown as {
-        posCounter: { findUnique: (a: unknown) => Promise<{ boundDeviceId: string | null; boundDeviceLabel: string | null; boundAt: Date | null } | null> };
+        posCounter: { findUnique: (a: unknown) => Promise<{ boundDeviceId: string | null; boundDeviceLabel: string | null; boundAt: Date | null; releasedAt: Date | null } | null> };
     }).posCounter.findUnique({
         where,
-        select: { boundDeviceId: true, boundDeviceLabel: true, boundAt: true },
+        select: { boundDeviceId: true, boundDeviceLabel: true, boundAt: true, releasedAt: true },
     });
 
-    if (!server?.boundDeviceId) return payload;
-    if (server.boundDeviceId === payload.boundDeviceId) return payload;
+    if (!server) return payload;
 
-    console.warn(
-        `[SyncPush] pos_counters ${JSON.stringify(where)}: refusing to move the device lock from ` +
-        `${server.boundDeviceId} to ${String(payload.boundDeviceId)} — keeping the server's binding.`,
-    );
-    return {
+    const keepServerBinding = () => ({
         ...payload,
         boundDeviceId: server.boundDeviceId,
         boundDeviceLabel: server.boundDeviceLabel,
         boundAt: server.boundAt,
-    };
+        releasedAt: server.releasedAt,
+    });
+
+    // (1) Someone else holds it.
+    if (server.boundDeviceId && server.boundDeviceId !== payload.boundDeviceId) {
+        console.warn(
+            `[SyncPush] pos_counters ${JSON.stringify(where)}: refusing to move the device lock from ` +
+            `${server.boundDeviceId} to ${String(payload.boundDeviceId)} — keeping the server's binding.`,
+        );
+        return keepServerBinding();
+    }
+
+    // (2) It was released, and this bind predates the release.
+    if (!server.boundDeviceId && server.releasedAt && payload.boundDeviceId) {
+        const boundAt = payload.boundAt instanceof Date ? payload.boundAt
+            : typeof payload.boundAt === "string" ? new Date(payload.boundAt)
+            : null;
+        const stale = !boundAt || Number.isNaN(boundAt.getTime()) || boundAt <= server.releasedAt;
+        if (stale) {
+            console.warn(
+                `[SyncPush] pos_counters ${JSON.stringify(where)}: refusing to re-bind to ` +
+                `${String(payload.boundDeviceId)} — the counter was released at ` +
+                `${server.releasedAt.toISOString()} and this binding is older. ` +
+                `That PC must run counter setup again.`,
+            );
+            return keepServerBinding();
+        }
+    }
+
+    return payload;
+}
+
+/**
+ * A shift the office has already CLOSED can never be re-opened or re-closed by a replay.
+ *
+ * The counter is offline; an admin force-closes its shift on the office's request (a
+ * PC died, or the day has to be shut). Later the counter wakes and pushes what it
+ * wrote against a shift it still believed was open. Ordinary last-write-wins settles
+ * that on timestamps, and both answers are wrong: a newer local close overwrites the
+ * admin's declared cash and variance and points the row at a SECOND closing Contra —
+ * the same cash swept to the vault twice — while an older one is dropped silently and
+ * the counter's replica keeps disagreeing with live until the next pull.
+ *
+ * The close is a physical cash count made by a person. It stands. The counter's job on
+ * recovery is to start a FRESH shift (see CounterReconciler), not to re-litigate this
+ * one, so the replay is dropped as superseded and the counter converges on the pull.
+ */
+async function shiftIsAlreadyClosed(where: Record<string, unknown>): Promise<boolean> {
+    const server = await (prismaLive as unknown as {
+        posShift: { findUnique: (a: unknown) => Promise<{ status: string } | null> };
+    }).posShift.findUnique({ where, select: { status: true } });
+    return server?.status === "CLOSED";
 }
 
 /**
@@ -206,6 +262,17 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
 
             if (rec.table_name === "pos_counters") {
                 payload = await reconcileCounterBinding(payload, where);
+            }
+
+            // A closed shift is closed. Dropping counts as success — the counter must
+            // stop carrying this row, not retry it forever.
+            if (rec.table_name === "pos_shifts" && await shiftIsAlreadyClosed(where)) {
+                console.warn(
+                    `[SyncPush] pos_shifts ${JSON.stringify(where)}: dropping a replayed write — ` +
+                    `the office has already closed this shift.`,
+                );
+                pushedIds.push(rec.id);
+                continue;
             }
 
             // Always upsert, never a bare update: the payload is a complete row image,

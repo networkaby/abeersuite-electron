@@ -2578,6 +2578,7 @@ CREATE TABLE IF NOT EXISTS "pos_counters" (
     "boundDeviceId" TEXT,
     "boundDeviceLabel" TEXT,
     "boundAt" TIMESTAMP(3),
+    "releasedAt" TIMESTAMP(3),
 
     CONSTRAINT "pos_counters_pkey" PRIMARY KEY ("id")
 );
@@ -2593,6 +2594,7 @@ ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "idRangeStart" INTEGER;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceId" TEXT;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceLabel" TEXT;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundAt" TIMESTAMP(3);
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3);
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "pos_counter_payment_accounts" (
@@ -5788,6 +5790,13 @@ DO $$ BEGIN
     IF to_regclass('public."AuditLog"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "AuditLog";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "AuditLog"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BackupConfig"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BackupConfig";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BackupConfig"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

@@ -351,7 +351,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     // ── POS setup ──
     const paymentGateways = (await prisma.paymentGateway.findMany()).map((g) => omit(g, ["id", "createdAt", "updatedAt"]));
     const posCounters = (await prisma.posCounter.findMany()).map((c) => {
-        const base = externalize(omit(c, ["id", "createdAt", "boundDeviceId", "boundDeviceLabel", "boundAt", "idRangeStart"]), { tillAccountId: "account" }, idx);
+        const base = externalize(omit(c, ["id", "createdAt", "boundDeviceId", "boundDeviceLabel", "boundAt", "releasedAt", "idRangeStart"]), { tillAccountId: "account" }, idx);
         // allowedExpenseAccountIds is a JSON number[] of Account ids → externalize each.
         const allowed = Array.isArray(c.allowedExpenseAccountIds) ? (c.allowedExpenseAccountIds as number[]) : [];
         base.allowedExpenseAccountIds = allowed.map((id) => idx.account.toRef(id)).filter(Boolean);

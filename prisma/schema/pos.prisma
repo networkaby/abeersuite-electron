@@ -62,6 +62,16 @@ model PosCounter {
   boundDeviceId            String?
   boundDeviceLabel         String? // friendly name shown to admin (e.g. shop/company name)
   boundAt                  DateTime?
+  // When the binding was last cleared — by an admin (Admin → POS Counters) or by the
+  // PC itself (Settings → Thermal Printer → Forget). `boundDeviceId = null` alone
+  // cannot say WHY it is null: a counter nobody has ever claimed and one an admin
+  // just released look identical, and this table carries no `updatedAt` for
+  // last-write-wins to arbitrate with. Without this, a counter that was offline when
+  // it was released wakes up, pushes its queued row, and silently takes itself back.
+  // The push compares it against the incoming `boundAt` (see reconcileCounterBinding):
+  // a bind minted BEFORE the release is a stale replay and is refused; a genuine
+  // first bind, or a rebind made after it, still applies. Cleared on every bind.
+  releasedAt               DateTime?
   shifts                   PosShift[]
 
   @@unique([branchId, name])

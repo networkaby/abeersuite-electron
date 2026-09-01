@@ -44,7 +44,11 @@ export default function CounterReconciler() {
             releasing.current = true;
 
             await window.electronAPI?.clearCounterSetup?.();
-            toast.error("This PC is no longer set as a counter. Sign in again and pick an available counter.");
+            // Wording matters here: the usual reason is a DEVICE SWAP, not a closure.
+            // The counter, its shift and its drawer are untouched and have moved to
+            // another PC — this machine is simply not that counter any more, and must
+            // go through setup again to take a different counter number.
+            toast.error("This PC no longer holds its counter — it has been released or moved to another computer. The shift and drawer are unaffected. Sign in again to set this PC up on an available counter.");
             await signOut({ redirect: false });
             // A full load, not router.push: the session cookie is gone and every
             // cached page in memory was rendered for a counter this machine no

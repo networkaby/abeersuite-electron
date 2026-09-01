@@ -211,8 +211,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     // one, whichever PC happens to be sitting at it. idRangeStart is derived
                     // from that number, so it stays correct too; only a counterNumber CHANGE
                     // invalidates it, which the branch above already handles.
+                    // `releasedAt` is what separates "released" from "never claimed" —
+                    // both leave boundDeviceId null, and without the stamp a counter
+                    // that was offline when it was released wakes up, pushes its queued
+                    // row and quietly takes itself back (see reconcileCounterBinding).
                     ...(data.releaseLock
-                        ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null }
+                        ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() }
                         : {}),
                 },
                 include: counterInclude,

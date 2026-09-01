@@ -75,6 +75,8 @@ const COLUMN_MIGRATIONS: Array<{ table: string; column: string; ddl: string }> =
       ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceLabel" TEXT` },
     { table: "pos_counters", column: "boundAt",
       ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundAt" TIMESTAMP(3)` },
+    { table: "pos_counters", column: "releasedAt",
+      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3)` },
     { table: "TicketRepair", column: "ticketNo",
       ddl: `ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketNo" TEXT` },
 ];
