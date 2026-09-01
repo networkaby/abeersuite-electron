@@ -1,13 +1,15 @@
 // GET  /api/pos/counters
 //   - Default: active counters in current user's active branch (consumed by ShiftOpenDialog).
 //   - ?scope=all (admin only): every counter in every branch + assigned shift counts. Used by /office/admin/counters.
+//   - ?scope=all&authoritative=1: same list, but the device-lock fields are re-read from
+//     the DB rather than the counter's replica. Used by /setup/counter.
 //
 // POST /api/pos/counters  (admin)
 //   - Body: { branchId, name }
 //   - Auto-creates the till GL account ("Cash – <name> – <branch>") under Cash-in-Hand if missing.
 //   - Returns the created counter with tillAccount.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
@@ -60,7 +62,35 @@ export async function GET(req: NextRequest) {
                     },
                 },
             });
-            return NextResponse.json(counters.map((c) => ({
+            // ── Who actually holds each counter ───────────────────────────────
+            // `prisma` above is the REPLICA on a counter PC, and the device-lock
+            // fields are the one part of this row a counter writes itself. So the
+            // replica can carry a binding the DB has since cleared — a released
+            // counter, or this machine's own binding from before a reinstall changed
+            // its installation id — and /setup/counter would then grey out a counter
+            // that is genuinely free, or offer one another PC really holds. Deciding
+            // which counter this PC becomes has to be read from the source of truth,
+            // the same reasoning as /api/pos/counters/my-binding.
+            //
+            // Only the lock fields are re-read; the heavy includes stay local. A
+            // failure is reported as `locksReachable: false` rather than silently
+            // falling back to replica values — the caller must be able to tell "free"
+            // from "cannot check", and setup is an online-by-nature action.
+            const authoritative = searchParams.get("authoritative") === "1";
+            let locks: Map<number, { boundDeviceId: string | null; boundDeviceLabel: string | null; boundAt: Date | null }> | null = null;
+            let locksReachable = true;
+            if (authoritative) {
+                try {
+                    const rows = await prismaAuthoritative.posCounter.findMany({
+                        select: { id: true, boundDeviceId: true, boundDeviceLabel: true, boundAt: true },
+                    });
+                    locks = new Map(rows.map((r) => [r.id, r]));
+                } catch {
+                    locksReachable = false;
+                }
+            }
+
+            const list = counters.map((c) => ({
                 id: c.id,
                 counterNumber: c.counterNumber,
                 name: c.name,
@@ -78,10 +108,14 @@ export async function GET(req: NextRequest) {
                 totalShifts: c._count.shifts,
                 activeShift: c.shifts[0] ?? null,
                 // Device lock — which PC is bound to this counter (null = free).
-                boundDeviceId: c.boundDeviceId,
-                boundDeviceLabel: c.boundDeviceLabel,
-                boundAt: c.boundAt,
-            })));
+                boundDeviceId: locks ? (locks.get(c.id)?.boundDeviceId ?? null) : c.boundDeviceId,
+                boundDeviceLabel: locks ? (locks.get(c.id)?.boundDeviceLabel ?? null) : c.boundDeviceLabel,
+                boundAt: locks ? (locks.get(c.id)?.boundAt ?? null) : c.boundAt,
+            }));
+
+            // The array shape is what every existing caller expects; only the
+            // authoritative mode gets the wrapper, so nothing else has to change.
+            return NextResponse.json(authoritative ? { counters: list, locksReachable } : list);
         }
 
         // ── Default: active counters in current user's active branch ──────────

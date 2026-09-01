@@ -47,6 +47,9 @@ function CounterSetupForm() {
     const [selectedId, setSelectedId] = useState<string>("");
     const [submitting, setSubmitting] = useState(false);
     const [loadError, setLoadError] = useState("");
+    // Whether the DB could be reached to check the device locks. False means the list
+    // is shown but nothing may be claimed — see the fetch below.
+    const [locksReachable, setLocksReachable] = useState(true);
     const [currentDeviceId, setCurrentDeviceId] = useState<string>("");
 
     useEffect(() => {
@@ -61,8 +64,17 @@ function CounterSetupForm() {
             setCurrentDeviceId(devId);
         });
 
-        axios.get<CounterOption[]>("/api/pos/counters?scope=all")
-            .then((res) => setCounters(res.data))
+        // `authoritative=1` — the device-lock fields come from the DB, not from this
+        // machine's replica. The replica's copy is the one THIS PC writes at shift
+        // open, so trusting it here greys out counters an admin has already released
+        // (and this machine's own binding from before a reinstall changed its
+        // installation id), while a counter another PC genuinely holds could look free.
+        axios.get<{ counters: CounterOption[]; locksReachable: boolean }>(
+            "/api/pos/counters?scope=all&authoritative=1")
+            .then((res) => {
+                setCounters(res.data.counters);
+                setLocksReachable(res.data.locksReachable);
+            })
             .catch(() => setLoadError("Could not load the counter list. Check the connection and reload."));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -74,6 +86,10 @@ function CounterSetupForm() {
 
     const submit = async () => {
         if (!selected) { toast.error("Select which counter this PC is"); return; }
+        if (!locksReachable) {
+            toast.error("Cannot check which counters are free while the cloud is unreachable. Connect and try again.");
+            return;
+        }
         if (isSelectedLockedToOther) {
             toast.error("This counter is already locked to another PC. An admin must release it in Counter Settings.");
             return;
@@ -138,9 +154,17 @@ function CounterSetupForm() {
                 <CardContent className="space-y-4">
                     {loadError && <p className="text-sm text-destructive">{loadError}</p>}
 
+                    {!locksReachable && !loadError && (
+                        <p className="text-sm text-destructive">
+                            Cannot reach the cloud to check which counters are already taken.
+                            Setting up on a guess could put two PCs on one counter, so this
+                            screen will not claim one until the connection is back.
+                        </p>
+                    )}
+
                     <div className="space-y-2">
                         <Label>Counter</Label>
-                        <Select value={selectedId} onValueChange={setSelectedId} disabled={!counters}>
+                        <Select value={selectedId} onValueChange={setSelectedId} disabled={!counters || !locksReachable}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder={counters ? "Select a counter…" : "Loading…"} />
                             </SelectTrigger>
@@ -188,7 +212,7 @@ function CounterSetupForm() {
 
                     <Button
                         className="w-full"
-                        disabled={!selected || isSelectedLockedToOther || submitting}
+                        disabled={!selected || isSelectedLockedToOther || submitting || !locksReachable}
                         onClick={submit}
                     >
                         {submitting ? "Saving…" : "Save and Continue"}
