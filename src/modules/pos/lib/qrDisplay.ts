@@ -1,17 +1,28 @@
-// Fire-and-forget client for the customer-facing DQ11 display.
+// Client for the customer-facing DQ11 display, over whichever transport this machine has.
 //
-// Commands go over Electron IPC (preload `electronAPI.qr` → main → hardware-bridge/qr.js).
-// This used to POST to a local HTTP relay on :9192, a shape inherited from when the app
-// ran in a plain browser; inside Electron that port bought nothing and left the display
-// drivable by anything on the shop LAN.
+// **In Electron** — commands go over IPC (preload `electronAPI.qr` → main →
+// hardware-bridge/qr.js). The bundled bridge has no HTTP port: that shape was inherited
+// from when the app ran in a plain browser and HTTP was the only way to reach a local
+// process, and inside Electron it only left the display drivable by anything that could
+// reach the port.
 //
-// **Every call must be best-effort** — if the bridge is down, POS must keep working.
-// Never surface a failure to the cashier; never throw into the React render path.
-// Outside Electron (the app opened from another PC's browser) there is no bridge to
-// reach, so every call is a silent no-op — same outcome as the old fetch to a localhost
-// that was never this counter.
+// **In a browser** — falls back to the standalone combined-bridge on :9192, exactly as
+// the app worked before Electron absorbed it. Note this reaches the bridge on the
+// BROWSER's own PC, never the counter's: an admin opening the app from their desk drives
+// their own hardware, which is the design the combined bridge always had (every PC its
+// own bridge, its own printer, its own display). If that PC has no combined-bridge
+// install there is nothing to reach, and every call is a silent no-op.
+//
+// Chosen per call from `window.electronAPI`, so there is no flag to set and nothing to
+// rebuild — a browser simply never has it. Command names deliberately mirror the old
+// HTTP paths so one small `switch` covers the fallback.
+//
+// **Every `qrDisplay.*` call must be best-effort** — if the bridge is down, POS must keep
+// working. Never surface a failure to the cashier; never throw into the React render path.
 
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
+
+const RELAY = "http://localhost:9192";
 
 type QrReply = { ok: boolean; result?: unknown; error?: string };
 
@@ -27,22 +38,58 @@ function bridge(): QrBridge["qr"] | undefined {
     return (window as unknown as { electronAPI?: QrBridge }).electronAPI?.qr;
 }
 
+/** Command → the HTTP shape a standalone combined-bridge expects. */
+function httpShape(cmd: string): { method: "GET" | "POST"; path: string } {
+    switch (cmd) {
+        case "health":     return { method: "GET",  path: "/health" };
+        case "config:get": return { method: "GET",  path: "/config" };
+        case "config:set": return { method: "POST", path: "/config" };
+        case "ports":      return { method: "GET",  path: "/ports"  };
+        // The rest — pos/cart, idle/start, clear … — are POSTs whose path is the command.
+        default:           return { method: "POST", path: `/${cmd}` };
+    }
+}
+
+async function httpCall(cmd: string, payload: unknown, timeoutMs: number): Promise<Response> {
+    const { method, path } = httpShape(cmd);
+    return fetch(`${RELAY}${path}`, {
+        method,
+        headers: method === "POST" ? { "Content-Type": "application/json" } : undefined,
+        body:    method === "POST" ? JSON.stringify(payload ?? {}) : undefined,
+        signal:  AbortSignal.timeout(timeoutMs),
+        credentials: "omit",
+        cache:       "no-store",
+    });
+}
+
 /**
  * Command that needs an answer — the settings page (config, COM ports, test screens).
- * Unlike `qrDisplay.*` this **throws**, because the settings page has a human waiting
- * on a toast and a silent failure there is just confusing.
+ * Unlike `qrDisplay.*` this **throws**, because the settings page has a human waiting on
+ * a toast and a silent failure there is just confusing.
  */
 export async function qrRequest<T>(cmd: string, payload?: unknown): Promise<T> {
     const qr = bridge();
-    if (!qr) throw new Error("Display bridge is only available in the desktop app.");
-    const reply = await qr.request(cmd, payload);
-    if (!reply?.ok) throw new Error(reply?.error || `"${cmd}" failed.`);
-    return reply.result as T;
+    if (qr) {
+        const reply = await qr.request(cmd, payload);
+        if (!reply?.ok) throw new Error(reply?.error || `"${cmd}" failed.`);
+        return reply.result as T;
+    }
+
+    const r = await httpCall(cmd, payload, 5000);
+    if (!r.ok) {
+        // The bridge answers errors as { error }, but a 502 from something else on the
+        // port may not be JSON at all — never let the parse failure mask the real status.
+        const detail = await r.json().catch(() => null);
+        throw new Error(detail?.error || `"${cmd}" failed (HTTP ${r.status}).`);
+    }
+    return (await r.json()) as T;
 }
 
 function send(cmd: string, payload: unknown): void {
     try {
-        bridge()?.send(cmd, payload);
+        const qr = bridge();
+        if (qr) return qr.send(cmd, payload);
+        void httpCall(cmd, payload, 2000).catch(() => {});
     } catch {
         // Bridge unreachable — silent, by contract.
     }
