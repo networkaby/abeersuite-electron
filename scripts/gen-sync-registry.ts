@@ -78,14 +78,37 @@ function renderTsMirror(tables: Record<string, TableEntry>, models: Model[]): st
             .sort();
     };
 
+    /**
+     * DateTime fields, which cross the wire WITHOUT a time zone.
+     *
+     * Prisma maps every `DateTime` to `timestamp(3) without time zone`, and the capture
+     * trigger stores `to_jsonb(NEW)` — so the payload carries `2026-09-01T17:02:24.286`,
+     * no `Z`. Prisma rejects that on the way up ("premature end of input. Expected
+     * ISO-8601 DateTime"), and a counter's row sat retrying until it dead-lettered.
+     * The push path stamps `Z` on exactly these columns; the stored values are already
+     * UTC by Prisma's own convention, so that is a spelling change, not a shift.
+     *
+     * Driven off the schema rather than a shape test on the value, because a text
+     * column holding a date-shaped string would be rewritten by the latter.
+     */
+    const dateFieldsFor = (modelName: string): string[] => {
+        const m = byName.get(modelName);
+        if (!m) return [];
+        return m.fields
+            .filter((f) => /^DateTime(\?|\[|$)/.test(f.type.trim()))
+            .map((f) => f.name)
+            .sort();
+    };
+
     const rows = Object.entries(tables)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([model, t]) => {
             const pk = t.pk.map((c) => JSON.stringify(c)).join(", ");
             const exact = exactFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
+            const dates = dateFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
             return `    ${JSON.stringify(t.table)}: { model: ${JSON.stringify(model)}, `
                 + `delegate: ${JSON.stringify(model.charAt(0).toLowerCase() + model.slice(1))}, `
-                + `pk: [${pk}], exact: [${exact}] },`;
+                + `pk: [${pk}], exact: [${exact}], dates: [${dates}] },`;
         });
 
     return `// GENERATED FILE — DO NOT EDIT BY HAND.
@@ -105,6 +128,8 @@ export interface SyncRegistryEntry {
     pk: string[];
     /** Decimal/BigInt fields — must be parsed as strings to keep their value. */
     exact: string[];
+    /** DateTime fields — stored without a zone, so the push path stamps a Z on them. */
+    dates: string[];
 }
 
 export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {

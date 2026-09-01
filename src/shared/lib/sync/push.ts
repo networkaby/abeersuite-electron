@@ -96,6 +96,46 @@ async function reconcileCounterBinding(
     };
 }
 
+/**
+ * A local datetime, exactly as `to_jsonb` renders `timestamp(3) without time zone`.
+ * Anchored at both ends: a value carrying an offset or a `Z` is already complete and
+ * must be left alone.
+ */
+const BARE_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/;
+
+/**
+ * Stamps `Z` on the payload's DateTime columns.
+ *
+ * The counter's capture trigger stores `to_jsonb(NEW)`, and Prisma maps every
+ * `DateTime` to `timestamp(3) WITHOUT time zone` — so a captured row carries
+ * `2026-09-01T17:02:24.286` with no zone at all. Prisma rejects that upstream
+ * ("premature end of input. Expected ISO-8601 DateTime"), and the row retried until it
+ * dead-lettered. It looked table-specific because a counter that writes little else
+ * only ever queued view-markers, but EVERY model with a date was exposed.
+ *
+ * The stored value is already UTC — Prisma writes UTC into these columns — so this
+ * completes the spelling and moves no clock. Columns come from the registry rather
+ * than a shape test, so a text column holding a date-shaped string is never touched.
+ *
+ * Runs before the last-write-wins check as well as the upsert, because `new Date()` on
+ * a zone-less string parses as LOCAL time: comparing that against the cloud's
+ * `updatedAt` was wrong by the machine's offset, and on IST that is five and a half
+ * hours in which a counter could overwrite a newer edit from the office.
+ */
+function withZonedDates(
+    payload: Record<string, unknown>,
+    dates: readonly string[],
+): Record<string, unknown> {
+    let out: Record<string, unknown> | null = null;
+    for (const col of dates) {
+        const v = payload[col];
+        if (typeof v !== "string" || !BARE_DATETIME.test(v)) continue;
+        out ??= { ...payload };
+        out[col] = `${v.replace(" ", "T")}Z`;
+    }
+    return out ?? payload;
+}
+
 export interface PushOutcome {
     /** Ids applied (or deliberately discarded as superseded), in order. */
     pushedIds: number[];
@@ -129,7 +169,7 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
                 throw new PermanentPushError(`Prisma has no delegate '${entry.delegate}' for ${entry.model}`);
             }
 
-            let payload = rec.payload;
+            let payload = withZonedDates(rec.payload, entry.dates);
             const where = whereFor(entry, rec.row_key);
 
             // Last-write-wins for models that carry a timestamp. A counter that was
