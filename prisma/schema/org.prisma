@@ -235,32 +235,31 @@ model OrgDefaults {
 
 /// Scheduled-backup settings, edited from Settings → Backup & Restore.
 ///
-/// NOT WIRED UP YET. Nothing reads this table: /api/cron/backup still dispatches
-/// unconditionally, exactly as before. It is here so the production-start commit
-/// can switch scheduling on without a schema change. See the activation checklist
-/// in docs/backup-schedule-activation.md.
+/// Why a table rather than the cron in the workflow file: a cron can only be changed
+/// by committing and pushing. This row is read by the hourly tick in
+/// backup-scheduled.yml, so the shop can change when backups happen without touching
+/// the repo.
 ///
-/// Why a table at all: Vercel Cron schedules live in vercel.json and are fixed at
-/// deploy time — there is no runtime API to toggle or re-time them. So the plan is
-/// to let Vercel fire a dumb tick and keep the real decision here, where the UI can
-/// change it with no redeploy.
+/// Everything is stored in IST, the timezone the shop thinks in. The tick converts
+/// once, when it compares. Storing UTC would mean every read and every edit had to
+/// remember to shift, and "Sunday" would sometimes mean Saturday.
 model BackupConfig {
   id      Int     @id @default(1) // singleton — always row id=1
   /// Master switch. false = the tick fires and does nothing.
   enabled Boolean @default(true)
 
-  /// "daily" | "weekly". Kept as text, not an enum, so adding "hourly" later is a
-  /// code change and not a migration.
-  frequency String @default("daily")
-  /// When to run, in UTC — the tick compares against these. Stored UTC and shown
-  /// as IST in the UI, so the schedule does not drift when the server timezone does.
-  hourUtc   Int    @default(21) // 21:00 UTC = 02:30 IST, matching today's vercel.json
-  minuteUtc Int    @default(0)
-  /// 0 = Sunday .. 6 = Saturday. Only read when frequency = "weekly".
-  weekday   Int?
+  /// Which days, 0 = Sunday .. 6 = Saturday. All seven = daily; one = weekly.
+  /// Empty = never, which the API rejects: an empty list is indistinguishable from
+  /// a mis-save, and it silently stops backups.
+  weekdays Int[] @default([0, 1, 2, 3, 4, 5, 6])
 
-  /// Set after a successful dispatch. Guards a double-fire when the tick runs more
-  /// often than the configured schedule.
+  /// Which hours of those days, 0-23. The tick is hourly, so hours are the finest
+  /// granularity that can be honoured — a minute field would be a promise the
+  /// schedule cannot keep.
+  hours Int[] @default([22])
+
+  /// Set after a dispatch. The tick refuses to fire twice in the same hour, so a
+  /// GitHub retry cannot produce a second dump.
   lastRunAt DateTime?
 
   updatedAt DateTime @updatedAt

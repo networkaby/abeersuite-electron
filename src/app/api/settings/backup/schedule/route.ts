@@ -6,17 +6,15 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { backupConfigUpdateSchema } from "@/shared/lib/schemas/backupSchemas";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
- * The scheduled-backup settings behind Settings → Backup & Restore.
+ * When automatic backups run — the days and hours behind Settings → Backup & Restore.
  *
- * NOT LIVE YET. /api/cron/backup ignores this row and still dispatches on every
- * tick — reading or writing here changes nothing until the activation checklist in
- * docs/backup-schedule-activation.md is done.
+ * Read once an hour by the GitHub tick through /api/cron/backup-due. Editing here
+ * takes effect on the next tick: no commit, no deploy.
  *
- * settings:manage on both verbs, not just read-for-any-user: the row says when this
- * database gets copied out to Dropbox, which is the same class of secret as the
- * backup button next to it.
+ * settings:manage on both verbs — this row decides whether the business has backups.
  */
 
 // GET /api/settings/backup/schedule — singleton; auto-creates row id=1 if missing.
@@ -28,7 +26,7 @@ export async function GET() {
     return NextResponse.json(row);
 }
 
-// PATCH /api/settings/backup/schedule — toggle scheduling, or change when it runs.
+// PATCH /api/settings/backup/schedule — change the days, the hours, or the switch.
 export async function PATCH(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
@@ -37,9 +35,11 @@ export async function PATCH(req: Request) {
     if (error) return error;
 
     try {
-        // Switching back to daily clears the weekday, so a stale value cannot sit in
-        // the row and reappear the next time someone picks weekly.
-        const patch = data.frequency === "daily" ? { ...data, weekday: null } : data;
+        // Sorted and de-duplicated so the stored row reads the way the UI shows it,
+        // and so two saves of the same schedule are byte-identical.
+        const tidy = (xs: number[] | undefined) => (xs ? [...new Set(xs)].sort((a, b) => a - b) : undefined);
+        const patch = { ...data, weekdays: tidy(data.weekdays), hours: tidy(data.hours) };
+
         const row = await prisma.backupConfig.upsert({
             where: { id: 1 },
             create: { id: 1, ...patch },
@@ -47,6 +47,6 @@ export async function PATCH(req: Request) {
         });
         return NextResponse.json(row);
     } catch (e) {
-        return handleApiError(e, "Failed to update backup schedule");
+        return handleApiError(e, "Failed to update the backup schedule");
     }
 }

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Download, Upload, AlertTriangle, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { BackupScheduleCard } from "@/modules/settings/components/BackupScheduleCard";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -241,7 +242,7 @@ export function BackupRestorePanel() {
                             <Label className="text-xs font-medium">Automatic backup</Label>
                             <p className="text-[11px] leading-snug text-muted-foreground">
                                 {scheduleOn
-                                    ? "On — backs up five times a day (10 AM, 1, 4, 7 and 10 PM). Times are set in the workflow file, not here."
+                                    ? "On — runs on the days and times set below."
                                     : "Off — nothing backs up on its own. The button above still works."}
                             </p>
                             {scheduleState === "disabled_inactivity" && (
@@ -259,6 +260,9 @@ export function BackupRestorePanel() {
                         />
                     </div>
                 )}
+
+                {/* Only worth showing when something is going to run. */}
+                {scheduleOn === true && <BackupScheduleCard />}
             </section>
 
             {/* Restore */}

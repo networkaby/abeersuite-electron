@@ -153,151 +153,66 @@ smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-02-00004
 |---|---|---|
 | `manual` | **Back up now**, Settings → Backup & Restore | — |
 | `cron` | Vercel Cron → `/api/cron/backup` | `vercel.json` |
-| `git` | GitHub Actions | `.github/workflows/backup.yml` |
+| `git` | GitHub Actions, hourly | Settings → Backup & Restore |
 
-### Where the daily backup comes from
+### Where backups come from
 
-`vercel.json` ships with an empty `crons` array, so Vercel starts no backups —
-and on the free plan there is little reason to change that. **The daily midnight
-backup runs from GitHub Actions instead**, on the `schedule:` in
-`.github/workflows/backup.yml`.
+`vercel.json` ships with no `crons`, so Vercel starts nothing. Automatic backups run
+from GitHub Actions, which is free, unlimited in schedule count, and — the deciding
+argument — keeps working when the deployment does not.
 
-GitHub is the better host for it here: schedules are free and unlimited, not
-capped at once a day like Vercel Hobby, and the run does not depend on Vercel, on
-the app being up, or on the database being reachable from the app. That last part
-is the real argument — it still works on the night the deployment is broken.
-
-The Vercel section below is kept for the case where you want a backup triggered
-*through the app* (so it uses the app's own `DIRECT_URL` rather than the repo
-secret). It is not needed for ordinary scheduled backups.
-
-### Optional: also backing up from Vercel
-
-Not needed for the daily backup — GitHub already does that. Use this only if you
-want a backup triggered *through the app*, which makes it use the deployment's
-own `DIRECT_URL` instead of the repo secret.
-
-Replace the whole of `vercel.json` with this, commit, and push. Vercel picks up
-the schedule on the next deploy.
-
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["bom1"],
-  "crons": [{ "path": "/api/cron/backup", "schedule": "30 18 * * *" }]
-}
-```
-
-`30 18 * * *` is 18:30 UTC = **00:00 IST**, i.e. midnight tonight, every night.
-Cron has no timezone setting, so the time is always written in UTC.
-
-Before pushing, check two things:
-
-1. **`CRON_SECRET` is set** in the Vercel project's environment variables. The
-   route only checks the Authorization header when that variable exists — unset,
-   anyone who knows the URL can trigger a backup.
-2. **`DIRECT_URL` is set** in the same place, holding the direct Postgres URL
-   (port 5432, no `pgbouncer=true`). The pooled URL fails: `pg_dump` rejects
-   connection parameters it does not recognise, and the run uploads a 0-byte
-   dump.
-
-To stop Vercel backups again, set `"crons": []` and deploy.
-
-#### What to expect on the free plan
-
-This project is on Vercel **Hobby**, which limits cron jobs to:
-
-- **2 cron jobs** per project.
-- **Once per day** each — no hourly or twice-daily schedule.
-- Fired **within the hour** of the stated time, not exactly on it. A midnight
-  backup may actually run any time between 00:00 and 01:00 IST. For a backup
-  that is fine; do not build anything time-critical on it.
-
-So on the night you switch this on, expect the dump to appear in Dropbox
-somewhere in that window, named:
-
-```
-smx-backup-<your-domain>-gphtzbejvpijcfmvqpqo-cron-2026-09-02-0007xx-IST.dump
-```
-
-Times in the file name and in `backup-log.txt` are **Indian time**, marked `IST`.
-Dumps taken before 1 September 2026 carry an unmarked **UTC** stamp instead — for
-those, add 5:30 to get Indian time. The `IST` suffix is how you tell the two
-apart.
-
-### Setting a different Vercel cron time
-
-Edit the `schedule` field above. Fields are
-`minute hour day-of-month month day-of-week`, day-of-week runs `0`–`6` from
-Sunday, and the time is **always UTC** — subtract 5:30 from IST:
+Vercel Cron is still wired up (`/api/cron/backup`) if you ever want a backup
+triggered *through* the app, so that it uses the deployment's own `DIRECT_URL`
+rather than the repo secret. It is not needed for ordinary scheduled backups, and on
+the free plan it is a poor fit anyway: Hobby allows 2 cron jobs, once a day each,
+fired at an approximate time within the hour. To use it, add a `crons` array to
+`vercel.json` with a UTC schedule and deploy. Cron has no timezone, so subtract 5:30
+from the IST time you want:
 
 | Wanted (IST) | UTC | `schedule` |
 |---|---|---|
 | Midnight daily | 18:30 previous day | `30 18 * * *` |
-| 2:30 AM daily | 21:00 previous day | `0 21 * * *` |
-| 11:30 PM daily | 18:00 | `0 18 * * *` |
-| 5:30 AM daily | 00:00 | `0 0 * * *` |
-| Midnight Sundays | 18:30 Saturday | `30 18 * * 6` |
+| 10:00 AM daily | 04:30 | `30 4 * * *` |
+| 10:00 PM daily | 16:30 | `30 16 * * *` |
+| 10:00 PM Sundays | 16:30 Sunday | `30 16 * * 0` |
 
-**Do not set an hourly tick** (`0 * * * *`) — quite apart from Hobby rejecting
-it, `/api/cron/backup` dispatches on every tick with no schedule check of its
-own, so an hourly cron would mean 24 full dumps a day. Per-hour control is what
-the unfinished in-app schedule UI is for — see
-`docs/backup-schedule-activation.md`.
+### The automatic backup — set from the settings page
 
-### The automatic backup — schedule and on/off switch
+Days, times and the on/off switch all live in Settings → Backup & Restore. Changes
+take effect on the next hourly tick — no commit, no redeploy.
 
-Two separate controls, in two different places.
+`backup-scheduled.yml` fires hourly and asks the app whether that hour is one you
+picked; almost every tick therefore does nothing and ends in seconds. The times you
+choose are IST, and hours are the finest granularity available, since the tick is
+hourly.
 
-**When it runs** lives in `.github/workflows/backup-scheduled.yml`. Edit, commit,
-push:
+Two crons live in that file, and neither is the schedule:
 
 ```yaml
 on:
   schedule:
-    - cron: "30 4 * * *"    # 10:00 IST
-    - cron: "30 7 * * *"    # 13:00 IST
-    - cron: "30 10 * * *"   # 16:00 IST
-    - cron: "30 13 * * *"   # 19:00 IST
-    - cron: "30 16 * * *"   # 22:00 IST
+    - cron: "0 * * * *"     # the tick — gated by the app
+    - cron: "30 16 * * 0"   # Sunday 22:00 IST — always runs, gate or no gate
 ```
 
-Unlike Vercel, GitHub puts no limit on how many schedules a workflow has; each
-entry fires its own run. Three things to get right:
+The Sunday run is the safety net. The gate fails closed, so an app outage would
+otherwise stop backups silently; this bounds the worst case at one backup a week
+rather than none. Failing open was the alternative, and it would turn one outage
+into 24 full dumps a day.
 
-1. **Push it.** GitHub reads the schedule from the pushed file, not your working
-   copy.
-2. **It must be on `main`.** Scheduled workflows only run from the default branch.
-3. **The value is UTC** — subtract 5:30 from the IST time you want, using the
-   table above.
-
-**Whether it runs at all** is the *Automatic backup* switch on
-Settings → Backup & Restore. That calls GitHub's enable/disable API for this
-workflow, so it takes effect immediately — no commit, no deploy.
-
-The consequence to remember: **the off state lives in GitHub, not in the repo.**
-`backup-scheduled.yml` keeps listing its cron times while switched off, so the
-file alone will tell you backups are running when they may not be. The settings
-page, and the Actions tab, are where the truth is.
-
-#### Why the schedule is its own file
-
-Enable/disable acts on a whole workflow. If the schedule sat in `backup.yml`,
-switching it off would also disable **Back up now**, which dispatches that same
-file. `backup-scheduled.yml` holds nothing but the timetable and calls
-`backup.yml` to do the work, so the switch reaches the schedule and nothing else.
+Setup steps, secrets and verification are in
+`docs/backup-schedule-activation.md`.
 
 #### Cost of running it often
 
-Every run is a full `pg_dump` — there are no incremental backups here, and
-nothing deletes old dumps. At five a day, watch three things as the database
-grows:
+Every run is a full `pg_dump` — there are no incremental backups, and nothing
+deletes old dumps. Three things to watch as the database grows:
 
 - **Supabase egress.** The dump is compressed *after* leaving the database, so a
   1 MB file is more like 5–10 MB of metered egress. Five a day is roughly
   0.8–1.5 GB/month against 5 GB on the free plan.
-- **Dropbox space.** 150 dumps a month accumulate with no retention policy.
-- **Actions minutes.** About 2 minutes a run, against 2000 free per month.
+- **Dropbox space.** No retention policy exists yet.
+- **Actions minutes.** About 2 minutes per real run; a skipped tick costs seconds.
 
 #### What a scheduled run does differently
 
@@ -305,9 +220,8 @@ It takes no inputs. It reads the `DIRECT_DATABASE_URL` **repo secret** and build
 its own file name (`…-git-<timestamp>-IST.dump`). Two consequences:
 
 - That secret must hold the **direct** URL — port 5432, no `pgbouncer=true`. The
-  pooled URL fails: `pg_dump` rejects connection parameters it does not
-  recognise and the run writes a 0-byte dump. Set it at
-  **Settings → Secrets and variables → Actions**.
+  pooled URL fails: `pg_dump` rejects connection parameters it does not recognise
+  and the run writes a 0-byte dump.
 - Because it is a secret rather than a workflow input, the password is masked in
   the run log. Backups triggered from the app pass the URL as an input, which
   GitHub echoes in full — so the scheduled path is also the safer one.
@@ -315,11 +229,10 @@ its own file name (`…-git-<timestamp>-IST.dump`). Two consequences:
 #### Two GitHub-specific traps
 
 - **Scheduled runs start late.** GitHub queues them, usually by minutes and
-  sometimes much more at the top of the hour. `:30` is chosen partly to dodge the
-  worst of it.
+  sometimes much more at the top of the hour. Treat the times as "around".
 - **Schedules are disabled after 60 days without repository activity.** GitHub
-  emails first, and the settings page shows this as a distinct reason. Turning
-  the switch back on fixes it.
+  emails first, and the settings page shows this as a distinct reason. Turning the
+  switch back on fixes it.
 
 ## Documentation Map
 

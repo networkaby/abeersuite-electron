@@ -1,31 +1,80 @@
 name: Scheduled Database Backup
 
-# The clock for automatic backups. It holds nothing but the schedule and calls
-# backup.yml to do the work.
+# The clock for automatic backups. It holds no backup logic — it decides whether this
+# hour is a backup hour, and if so calls backup.yml to do the work.
 #
-# Why this is a separate file: Settings → Backup & Restore can switch automatic
-# backups off, and it does that through GitHub's enable/disable API, which acts on
-# a WHOLE workflow. If the schedule lived in backup.yml, turning it off would also
-# disable the "Back up now" button, since that dispatches the same file. Splitting
-# them means the switch reaches the schedule and nothing else.
+# Why the cron is a dumb hourly tick: a cron can only be changed by committing and
+# pushing. Asking the app instead lets the shop pick days and times in
+# Settings → Backup & Restore and have them take effect on the next tick.
 #
-# Times are UTC — cron has no timezone. Subtract 5:30 from the IST time you want.
+# Why this is a separate file from backup.yml: the settings page can switch automatic
+# backups off, and it does that through GitHub's enable/disable API, which acts on a
+# WHOLE workflow. If the schedule lived in backup.yml, turning it off would also
+# disable the "Back up now" button, which dispatches that same file.
 
 on:
   schedule:
-    - cron: "30 4 * * *"    # 10:00 IST
-    - cron: "30 7 * * *"    # 13:00 IST
-    - cron: "30 10 * * *"   # 16:00 IST
-    - cron: "30 13 * * *"   # 19:00 IST
-    - cron: "30 16 * * *"   # 22:00 IST
+    # Hourly tick. Gated below — most of these do nothing and finish in seconds.
+    - cron: "0 * * * *"
 
-  # Lets you test the scheduled path without waiting for a cron, and without
-  # dispatching backup.yml directly (which would take the input path instead).
+    # The safety net, and the reason it exists: everything above depends on the app
+    # answering. If Vercel is down, the database URL is wrong, or the config row is
+    # broken, the gate fails closed and backups stop silently. This one run ignores
+    # the gate entirely, so the worst case is one backup a week rather than none.
+    - cron: "30 16 * * 0"   # 22:00 IST Sunday
+
   workflow_dispatch:
 
 jobs:
+  # Split from the backup itself so a skipped hour costs seconds, not a runner spin-up
+  # with Postgres client installed.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      due: ${{ steps.check.outputs.due }}
+    steps:
+      - id: check
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -uo pipefail
+
+          # The weekly safety net, and a hand-started run, both bypass the app.
+          if [ "$SCHEDULE" = "30 16 * * 0" ]; then
+            echo "weekly safety-net run — backing up regardless of the schedule"
+            echo "due=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -z "${SCHEDULE:-}" ]; then
+            echo "started by hand — backing up regardless of the schedule"
+            echo "due=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          if [ -z "${APP_BASE_URL:-}" ]; then
+            echo "APP_BASE_URL secret is not set — cannot ask the app, skipping."
+            echo "due=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          BODY=$(curl -sS --max-time 30 \
+            -H "Authorization: Bearer ${CRON_SECRET:-}" \
+            "${APP_BASE_URL%/}/api/cron/backup-due" || echo '')
+
+          # Fail CLOSED. Failing open would turn an app outage into 24 full dumps a
+          # day, which is worse than the missed backups — and the Sunday run above is
+          # what stops "closed" meaning "never".
+          case "$BODY" in
+            *'"due":true'*)  echo "due this hour: $BODY"; echo "due=true"  >> "$GITHUB_OUTPUT" ;;
+            *'"due":false'*) echo "not due: $BODY";       echo "due=false" >> "$GITHUB_OUTPUT" ;;
+            *)               echo "app did not answer (got: ${BODY:-nothing}) — skipping this hour";
+                             echo "due=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
   backup:
-    # No inputs: the called workflow finds github.event.inputs empty and falls back
-    # to the DIRECT_DATABASE_URL secret, building its own "…-git-…" file name.
+    needs: gate
+    if: needs.gate.outputs.due == 'true'
+    # No inputs: backup.yml finds github.event.inputs empty, falls back to the
+    # DIRECT_DATABASE_URL secret, and builds its own "…-git-…" file name.
     uses: ./.github/workflows/backup.yml
     secrets: inherit

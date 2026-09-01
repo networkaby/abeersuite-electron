@@ -6,9 +6,9 @@
  * this script alone changes no behaviour: nothing reads the table until the cron
  * route is wired up. See docs/backup-schedule-activation.md for the full checklist.
  *
- * Defaults deliberately mirror what vercel.json does today — enabled, daily, 21:00
- * UTC (02:30 IST) — so that on the day scheduling is switched on, the schedule the
- * UI shows is the schedule that was already running. No surprise change of time.
+ * Defaults are every day at 10 PM IST — a schedule that is safe rather than clever,
+ * on the reasoning that a row created by accident should still back the shop up.
+ * Change it from Settings → Backup & Restore, not here.
  *
  * Idempotent: upsert on id=1, and update does nothing. Safe to re-run, and safe on
  * live — it will not overwrite a schedule an admin has since edited.
@@ -41,7 +41,7 @@ async function main() {
             update: {},
         });
         console.log(
-            `✓ BackupConfig ready — enabled=${row.enabled} ${row.frequency} at ${String(row.hourUtc).padStart(2, "0")}:${String(row.minuteUtc).padStart(2, "0")} UTC`,
+            `✓ BackupConfig ready — enabled=${row.enabled} days=[${row.weekdays.join(",")}] hours=[${row.hours.join(",")}] (IST)`,
         );
     } finally {
         await pool.end();

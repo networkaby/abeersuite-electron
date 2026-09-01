@@ -1,116 +1,85 @@
-# Scheduled backup — activation checklist
+# Automatic backup — how the schedule works, and how to switch it on
 
-Status: **built, not switched on.** Nothing in this feature runs yet.
+The days and times are edited in Settings → Backup & Restore and take effect on the
+next tick. No commit, no redeploy.
 
-`vercel.json` now ships `"crons": []`, so Vercel starts no backups at all. The
-GitHub schedule in `.github/workflows/backup.yml` (09:00 UTC / 14:30 IST daily) is
-what keeps automatic backups running meanwhile. To set a Vercel cron time by hand,
-see the Backup Schedule section of `README.md`.
+This replaces an earlier design built on Vercel Cron. That is gone: Hobby crons run
+once a day at an approximate time, which cannot honour an hour the shop picks.
+GitHub schedules are free, unlimited, and — the deciding argument — keep working when
+the deployment does not.
 
-**The on/off half is already solved, elsewhere.** Settings → Backup & Restore now
-carries an *Automatic backup* switch that enables/disables `backup-scheduled.yml`
-through GitHub's API — no table, no tick, no redeploy. What remains unbuilt here is
-only editing the *times* from the UI; those live in that workflow file today.
+## How it works
 
-So read the rest of this as: worth doing if changing the schedule from the UI ever
-becomes a real need, and not before.
-
-Work through this at the production-start commit.
-
-## Why it is built this way
-
-Vercel Cron schedules live in `vercel.json` and are fixed when the deployment is
-built. There is no runtime API to toggle one or move its time. So the schedule
-cannot be edited from a settings page directly.
-
-The design inverts it. Vercel fires a dumb **tick**; the real decision lives in the
-`BackupConfig` row, which the UI can change with no redeploy:
+`backup-scheduled.yml` fires hourly and asks the app whether this hour is one the
+shop asked for:
 
 ```
-Vercel Cron (fixed tick) → /api/cron/backup → read BackupConfig
-                                              ├ enabled = false        → skip
-                                              ├ not the scheduled slot → skip
-                                              └ else                   → dispatch
+hourly tick → GET /api/cron/backup-due → read BackupConfig
+              ├ switched off, wrong day, wrong hour → skip (run ends in seconds)
+              ├ already ran this hour                → skip
+              └ otherwise                            → call backup.yml, dump as usual
 ```
 
-The tick has to fire at least as often as the finest schedule you want to offer.
-Hourly (`0 * * * *`) gives the UI any hour of the day.
+Three deliberate choices:
 
-## The plan is Hobby — read this before building on it
+- **The gate fails closed.** If the app cannot be reached, the hour is skipped.
+  Failing open would turn one outage into 24 full dumps a day, which is worse than
+  the missed backups.
+- **Because it fails closed, there is a safety net.** A second cron
+  (`30 16 * * 0`, Sunday 22:00 IST) bypasses the gate entirely. With the app dead
+  for a month the worst case is four backups, not zero — which is the whole reason
+  scheduling lives on GitHub rather than in the app.
+- **`lastRunAt` is stamped when the gate says yes**, not when the dump finishes.
+  A late or retried tick in the same hour then cannot produce a second dump.
 
-This project is on Vercel **Hobby** (free), where crons run **once per day** and
-fire at an approximate time within the hour. That breaks the central assumption of
-the design above: there is no hourly tick to gate, so **the time picker cannot
-work**. The tick happens once a day at whatever `vercel.json` says, and moving it
-needs a deploy.
+Everything is stored and compared in IST. Monday 00:30 IST is Sunday 19:00 UTC, so
+comparing in UTC would put a Monday backup on Sunday.
 
-What still works on Hobby:
+## Switching it on
 
-- **The on/off toggle.** The tick fires; the route reads `enabled` and does
-  nothing. That is a genuine in-app switch with no redeploy, and it is most of the
-  value.
-- **Weekly.** A daily tick can be gated down to one weekday.
-
-What does not:
-
-- **Choosing the hour.** Ship the time field read-only, showing the `vercel.json`
-  time with a note that changing it needs a deploy — or leave it out entirely and
-  keep `README.md` as the place where the time is set.
-
-If per-hour control is genuinely wanted later, the cheaper route is not a Vercel
-upgrade: `.github/workflows/backup.yml` can hold any schedule, on any plan, free.
-Move the tick there and have it call the app, or let it keep dumping directly.
-
-## What already exists
-
-| Piece | File | State |
-|---|---|---|
-| Table | `prisma/schema/org.prisma` → `model BackupConfig` | in schema, **not pushed** |
-| Row creator | `prisma/seeds/apply-backup-config.ts` | written, **not run** |
-| Validation | `src/shared/lib/schemas/backupSchemas.ts` | done |
-| API | `src/app/api/settings/backup/schedule/route.ts` | done, live but unread |
-| UI card | `src/modules/settings/components/BackupScheduleCard.tsx` | done, **not mounted** |
-
-## Checklist
-
-1. **Decide the time-picker question** (above) — on Hobby it must be read-only or
-   dropped. `BackupScheduleCard.tsx` currently renders it as editable, so this is a
-   real edit to that file, not just a decision.
-
-2. **Create the table.**
+1. **Create the table** (once):
    ```bash
    pnpm prisma db push && pnpm tsx prisma/seeds/apply-backup-config.ts
    ```
-   Defaults mirror today's schedule (enabled, daily, 21:00 UTC), so nothing about
-   when backups happen changes on the day you switch this on.
+   Defaults to every day at 10 PM IST.
 
-3. **Add the seed script** to `package.json`:
-   `"seed:apply-backup-config": "tsx prisma/seeds/apply-backup-config.ts"`
+2. **Add two repo secrets** at Settings → Secrets and variables → Actions:
 
-4. **Set the tick** in `vercel.json` — on Hobby this stays a once-daily schedule
-   (see `README.md` for the syntax). An hourly tick is neither allowed on this plan
-   nor safe before step 5, since the route would dispatch on every one.
+   | Secret | Value | Why |
+   |---|---|---|
+   | `APP_BASE_URL` | `https://office.networkservice.in` | where the tick asks. Unset = every gated hour skips, leaving only the Sunday run |
+   | `CRON_SECRET` | same value as the Vercel env var | without it the endpoint is open, and anyone could stamp `lastRunAt` to suppress a real backup |
 
-5. **Gate the cron route.** In `src/app/api/cron/backup/route.ts`, before
-   dispatching: read `BackupConfig`, return early unless `enabled` and the current
-   UTC hour/minute matches (and weekday, when weekly). Then set `lastRunAt` after a
-   successful dispatch and use it to refuse a second run inside the same slot —
-   without that guard a retried tick backs up twice.
+   `DIRECT_DATABASE_URL` must already be set, holding the **direct** URL — port 5432,
+   no `pgbouncer=true`. The pooled URL makes `pg_dump` write a 0-byte dump.
 
-6. **Mount the card.** Add `<BackupScheduleCard />` to
-   `src/modules/settings/components/BackupRestorePanel.tsx`.
+3. **Push.** GitHub only runs schedules from the default branch, and only from the
+   pushed file.
 
-7. **Seeds and docs**, per AGENTS §5–6: add `BackupConfig` to
-   `lib/personalSnapshot.ts` (it is real config, not code-owned catalog), update
-   `PROJECT_BRAIN.md`, and run `/sync-docs-with-code`.
+4. **Verify.** Set an hour a few minutes ahead, wait for the tick, and check the
+   Actions tab: a skipped run says why in the gate step's log, a due one calls
+   `backup.yml`. Then confirm the dump reaches Dropbox.
 
-8. **Verify** — set the time a few minutes ahead, wait for the tick, confirm a dump
-   named `smx-backup-<domain>-<ref>-cron-<timestamp>-IST.dump` lands in Dropbox.
-   Then switch the toggle off and confirm the next tick does nothing.
+## What is where
 
-## Leave the GitHub schedule alone
+| Piece | File |
+|---|---|
+| The rule | `src/shared/lib/backup/schedule.ts` — `isDue()` |
+| Asked by the tick | `src/app/api/cron/backup-due/route.ts` |
+| Read/write from the UI | `src/app/api/settings/backup/schedule/route.ts` |
+| On/off switch | `src/app/api/settings/backup/workflow/route.ts` — GitHub's enable/disable API |
+| The card | `src/modules/settings/components/BackupScheduleCard.tsx` |
+| The tick and the safety net | `.github/workflows/backup-scheduled.yml` |
+| The work | `.github/workflows/backup.yml` |
 
-`.github/workflows/backup.yml` has its own daily `schedule:` (09:00 UTC / 14:30
-IST) that does not depend on Vercel, on the app being up, or on this config row.
-That independence is the point — it is the backstop for exactly the case where the
-deployment is broken. Do not fold it into this toggle.
+## Known rough edges
+
+- **The off state lives in GitHub, not the repo.** `backup-scheduled.yml` keeps
+  listing its crons while the workflow is disabled, so the file alone will tell you
+  backups run when they may not. The settings page and the Actions tab are the truth.
+- **Hours only.** The tick is hourly, so a minute field would be a promise the
+  schedule cannot keep.
+- **No retention.** Every run is a full dump and nothing deletes old ones. Worth
+  solving before the database grows.
+- **GitHub disables schedules after 60 days without a push.** The settings page
+  surfaces this as its own reason; turning the switch back on fixes it.
