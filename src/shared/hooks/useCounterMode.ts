@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { setWritesGoLocal } from "@/shared/lib/realtime/appChannel";
 
 /** Mirror of `counterStatus()` in shared/lib/prisma/counterMode.ts. */
 export type CounterStatus = {
@@ -57,6 +58,11 @@ export function useCounterMode(): CounterStatus | null {
         const read = async () => {
             try {
                 const { data } = await axios.get<CounterStatus>("/api/counter/status");
+                // Where writes land decides who announces them. Under WRITE_MODE=local
+                // the browser must stay quiet: its response means "in this counter's
+                // _outbox", not "in Supabase", and the flusher announces once the push
+                // lands instead. See setWritesGoLocal.
+                setWritesGoLocal(data.writePreference === "local");
                 if (!cancelled) setStatus(data);
             } catch {
                 // Leave the last known status in place rather than flashing "unknown".

@@ -27,6 +27,21 @@ export type Topic =
     | "chat";       // a new DM room came into existence (messages ride their own broadcast)
 
 /**
+ * Every topic, for a publisher that genuinely cannot narrow it down.
+ *
+ * The only caller is the outbox flusher: it announces after a counter's rows reach
+ * Supabase, and all it has at that point is table names from `_outbox`. Mapping those
+ * back to topics would mean a second hand-maintained map, which is exactly how the sync
+ * worker's own topic map rotted to 60-of-113 coverage before it was deleted. Announcing
+ * everything cannot rot, and the cost is bounded: pushes are debounced and batched, and
+ * a counter's writes are overwhelmingly ledger/stock, which is what the busiest screens
+ * subscribe to anyway.
+ */
+export const ALL_TOPICS: readonly Topic[] = [
+    "ledger", "stock", "tickets", "parties", "catalogue", "tasks", "settings", "chat",
+];
+
+/**
  * Path prefix → topics. First match wins per rule; ALL matching rules
  * contribute, so `/api/inventory/vouchers/12/post` yields both ledger and stock.
  *

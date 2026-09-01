@@ -217,11 +217,39 @@ function flush() {
     })();
 }
 
+/**
+ * Where this machine's writes land, as reported by `/api/counter/status`.
+ *
+ * Under WRITE_MODE=local a successful response means the row reached this counter's
+ * OWN Postgres — it is in `_outbox` and has not left the building. Announcing then is
+ * worse than useless: every other machine pulls Supabase about a second before the
+ * flusher puts anything there, finds nothing, and is never told again. So the counter
+ * stays silent and the flusher announces once the push actually succeeds
+ * (`flusher.ts`), which is the moment the row exists for anyone else to read.
+ *
+ * Under WRITE_MODE=live — office, web, and a till on the documented escape hatch — the
+ * response already trails the Supabase commit, so the announcement below is correct and
+ * is the only one there is.
+ *
+ * Defaults to "live" so a machine that never reports behaves exactly as it always has;
+ * a counter simply goes quiet a few seconds into its session, and those first few
+ * premature announcements cost one wasted cycle each. Deliberately NOT inferred from
+ * `window.electronAPI`: WRITE_MODE=live is how a misbehaving till is reverted without a
+ * rebuild, and a till on that path must keep announcing.
+ */
+let writesGoLocal = false;
+
+/** Called by `useCounterMode` each time the status endpoint answers. */
+export function setWritesGoLocal(local: boolean) {
+    writesGoLocal = local;
+}
+
 /** Announce that these topics changed. Coalesced; safe to call as often as you like.
  *  Supabase broadcast does not echo to the sender, so the acting tab is untouched —
  *  it already knows, and updates through its own save path. */
 export function publishChange(topics: readonly Topic[]) {
     if (typeof window === "undefined" || topics.length === 0) return;
+    if (writesGoLocal) return; // the flusher announces instead — see setWritesGoLocal
     pending ??= new Set<Topic>();
     for (const t of topics) pending.add(t);
     if (flushTimer) return;

@@ -36,6 +36,8 @@
 import { getPendingOutbox, markOutboxPushed, markOutboxFailure } from "./outbox";
 import { pushMutations } from "./push";
 import { setOutboxKick } from "./kick";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
+import { ALL_TOPICS } from "@/shared/lib/realtime/topics";
 
 /** The safety net, not the mechanism — see the note above. */
 const FLUSH_INTERVAL_MS = 60_000;
@@ -93,6 +95,18 @@ export async function flushOnce(localUrl: string): Promise<number> {
 
         if (pushedIds.length > 0) {
             console.log(`[OutboxFlusher] pushed ${pushedIds.length} mutation(s).`);
+            // THE announcement for a counter's writes. The browser stayed silent when it
+            // saved (see appChannel.setWritesGoLocal), because at that moment the row was
+            // only in this machine's _outbox — anyone acting on it would have pulled
+            // Supabase about a second too early, found nothing, and never been told
+            // again. Now the row genuinely exists for others to read, so say so: their
+            // workers pull, and their screens are woken by their OWN replica landing the
+            // rows (`__SYNC_APPLIED__`), while an office reading Supabase directly
+            // refetches straight away.
+            //
+            // Best-effort by contract — a missed announcement costs latency, never data,
+            // because every consumer still has its own interval and reconcile pass.
+            void publishChangeServer(ALL_TOPICS);
         }
         return pushedIds.length;
     } catch (err) {
