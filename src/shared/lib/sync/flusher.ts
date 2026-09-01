@@ -16,15 +16,35 @@
  * ── Lifecycle ───────────────────────────────────────────────────────────────
  * Started once from `instrumentation.ts`, and only on a counter (LOCAL_DATABASE_URL
  * set). A single in-flight guard means a slow batch cannot overlap the next tick.
+ *
+ * ── Why a write kicks it, instead of a short poll ───────────────────────────
+ * The interval used to be 15s, and nothing justified that number: it was copied
+ * verbatim from `electron/outboxFlusher.ts`, the predecessor that answered 401 on every
+ * push and therefore never retired a single row, so the cadence was never once observed
+ * doing anything. Fifteen seconds is pure latency on the only path that gets a
+ * counter's sale into the cloud, and it buys nothing: `getPendingOutbox` reads the LOCAL
+ * database, so polling is free, and `pushMutations` costs per ROW, not per tick.
+ *
+ * So the write path kicks instead (`kick.ts`, called from `createLocal`'s extension),
+ * debounced by `KICK_DEBOUNCE_MS` so one save's several writes become one push rather
+ * than being caught mid-transaction by an arbitrary tick. The interval stays as the
+ * safety net at a minute, because the kick sits at the Prisma layer and cannot see raw
+ * SQL — the same blind spot that moved outbox CAPTURE onto Postgres triggers. Capture is
+ * still exact; only the prompt is best-effort.
  */
 
 import { getPendingOutbox, markOutboxPushed, markOutboxFailure } from "./outbox";
 import { pushMutations } from "./push";
+import { setOutboxKick } from "./kick";
 
-const FLUSH_INTERVAL_MS = 15_000;
+/** The safety net, not the mechanism — see the note above. */
+const FLUSH_INTERVAL_MS = 60_000;
+/** Long enough to gather one save's writes, short enough that a sale is up in ~1s. */
+const KICK_DEBOUNCE_MS = 1_000;
 const BATCH_SIZE = 50;
 
 let timer: NodeJS.Timeout | null = null;
+let kickTimer: NodeJS.Timeout | null = null;
 let inFlight = false;
 
 /**
@@ -95,9 +115,25 @@ export function startOutboxFlusher(localUrl: string): void {
     }, FLUSH_INTERVAL_MS);
     // Must not hold the process open on its own.
     timer.unref?.();
+
+    // A local write asks for a flush soon. Debounced, and a no-op while one is
+    // already scheduled, so a burst of writes still produces a single push.
+    setOutboxKick(() => {
+        if (kickTimer) return;
+        kickTimer = setTimeout(() => {
+            kickTimer = null;
+            void flushOnce(localUrl);
+        }, KICK_DEBOUNCE_MS);
+        kickTimer.unref?.();
+    });
 }
 
 export function stopOutboxFlusher(): void {
+    if (kickTimer) {
+        clearTimeout(kickTimer);
+        kickTimer = null;
+    }
+    setOutboxKick(() => {});
     if (!timer) return;
     clearInterval(timer);
     timer = null;

@@ -29,10 +29,16 @@ const { configPath } = require("./lib/configPath");
 const CONFIG = configPath();
 
 /**
- * The safety net, not the mechanism. Long on purpose: the signal covers anything a
- * person does, so this only has to catch writes with no browser behind them.
+ * The safety net, not the mechanism. Long on purpose: boot and every Realtime signal
+ * sync regardless of this, so it only has to catch writes with no browser behind them
+ * (scripts, seeds, a restore) and any signal that never arrived.
+ *
+ * Tune it HERE. Deliberately a constant and not a config key: `electron/syncManager.ts`
+ * rewrites the worker's config.json on every boot, so a value put there would be erased
+ * on the next restart and look like the setting was ignored.
  */
-const INTERVAL_MS = 10 * 60 * 1000;
+const INTERVAL_MINUTES = 10;
+const INTERVAL_MS = INTERVAL_MINUTES * 60 * 1000;
 
 /** Backoff after a failed cycle, so a broken source is not hammered. */
 const RETRY_MS = 60 * 1000;
@@ -49,6 +55,7 @@ if (!fs.existsSync(CONFIG)) {
     process.exit(2);
 }
 const cfg = JSON.parse(fs.readFileSync(CONFIG, "utf8"));
+
 
 let running = false;
 /** A signal that arrived mid-cycle: run once more when this one finishes. */
