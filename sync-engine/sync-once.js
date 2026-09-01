@@ -22,7 +22,6 @@ const registryLib = require("./lib/registry");
 const state = require("./lib/state");
 const { pullWatermark, pullFull, pullChildren, pullByKeys, deleteByKeys } = require("./lib/pull");
 const reconcile = require("./lib/reconcile");
-const signal = require("./lib/signal");
 const schemaGuard = require("./lib/schemaGuard");
 const status = require("./lib/status");
 const { configPath } = require("./lib/configPath");
@@ -84,13 +83,6 @@ async function main() {
 
     const { tables, ignore } = registryLib.load(registryPath);
     const order = registryLib.syncOrder(tables);
-
-    // The signal topic->model map is hand-maintained; a dead entry would quietly
-    // narrow what a signal syncs rather than fail.
-    const stale = signal.staleModels(tables);
-    if (stale.length) {
-        console.error(`[signal] topic map references models that no longer exist: ${stale.join(", ")}`);
-    }
 
     const sourcePool = pool(cfg.sourceUrl, 2);
     const localPool = pool(cfg.localUrl, 2);

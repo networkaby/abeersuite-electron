@@ -2,14 +2,14 @@
 
 /**
  * Listens on the app's own change channel so a sync fires when something actually
- * changes, instead of on a timer.
+ * changes, instead of only on the timer.
  *
  * ── Why this exists ──────────────────────────────────────────────────────────
- * Polling every table on a schedule is the expensive way to notice a change, and
- * egress is the whole reason this project exists. The app ALREADY broadcasts a
- * signal on every successful write, and the counter and the office share one
- * Supabase Realtime channel -- so when office staff post a purchase on Vercel, this
- * worker can hear about it for free and sync only the topics that moved.
+ * Polling every table on a schedule is the slow way to notice a change. The app
+ * ALREADY broadcasts a signal on every successful write, and the counter and the
+ * office share one Supabase Realtime channel -- so when office staff post a purchase
+ * on Vercel, this worker hears about it for free and syncs within a second instead of
+ * waiting out the interval.
  *
  * ── The signal is a HINT, never the source of truth ──────────────────────────
  * It is published by an axios response interceptor running IN A BROWSER
@@ -22,7 +22,29 @@
  * whether a single signal is ever received.
  *
  * Payload is `{ topics, at }` and nothing else -- never a row -- so a forged or
- * duplicated message costs a wasted sync and can leak nothing.
+ * duplicated message costs a wasted cycle and can leak nothing.
+ *
+ * ── Why the topics themselves are ignored ────────────────────────────────────
+ * This module used to expand the payload's topics into a model list through a
+ * hand-written TOPIC_MODELS map and hand it to the caller, so a cycle could sync
+ * only what moved. index.js never used it: `signal.listen(cfg, () => runCycle(...))`
+ * discarded the argument and sync-once.js was spawned with no filter, so every
+ * signal synced everything anyway. The map had also drifted badly -- 60 of the 113
+ * registered tables appeared in no topic -- and because an incomplete list fails
+ * quietly (unlike an unknown topic, which fell back to "sync everything"), nobody
+ * noticed.
+ *
+ * It was removed on 2026-09-01 rather than wired up, because the saving it chased
+ * does not exist: a cycle where little moved is already close to free. A watermark
+ * table returns 0 rows from one indexed query, a child table whose parent did not
+ * move does no query at all, and a `full` table is skipped after two aggregate
+ * numbers by the fingerprint guard in sync-once.js. Filtering would have shaved a
+ * fraction off that while adding a way for the child pass -- which depends on
+ * parents actually having been pulled this cycle -- to go quietly wrong.
+ *
+ * If per-topic syncing is ever wanted for real, the honest version publishes the
+ * written tables from the SERVER, where Prisma knows what it wrote, instead of
+ * guessing them from a URL in the browser.
  */
 
 const { createClient } = require("@supabase/supabase-js");
@@ -41,54 +63,7 @@ const EVENT = "changed";
 const SETTLE_MS = 750;
 
 /**
- * Coarse topics the app publishes, expanded to the tables they cover.
- *
- * The expansion lives HERE, not on the wire. The publisher derives its topic from
- * the API path and has no idea which tables a route touched; making it emit table
- * names would mean hand-maintaining a path-to-tables map across 335 routes, and that
- * map would rot silently the first time a route changed what it writes.
- *
- * An unknown topic falls back to syncing everything, which is the safe direction:
- * over-syncing costs a cycle, under-syncing loses data.
- */
-const TOPIC_MODELS = {
-    ledger: [
-        "UniversalVoucher", "VoucherDetail", "VoucherAllocation", "Account",
-        "AccountGroup", "VoucherSeries", "PosShift", "PosHandover", "LoyaltyAccount",
-        "LoyaltyLedger", "GiftCard", "CouponRedemption", "AuditLog",
-    ],
-    stock: ["InvProduct", "InvStockLedger", "InvProductBranch", "Device"],
-    catalogue: [
-        "InvProduct", "InvBrand", "InvCategory", "InvProductGroup", "InvUnit",
-        "GstRate", "Coupon", "PosService", "StrategyPoint",
-    ],
-    tickets: ["Ticket", "TicketLog", "TicketStatus", "Work", "WorkGroup", "TicketWorker", "Call"],
-    parties: ["Person", "Company", "Phone", "Email", "PersonCompany", "CustomerGroup"],
-    tasks: ["QuickNote", "WallPost"],
-    settings: [
-        "User", "Role", "Permission", "RolePermission", "Position", "Department",
-        "Branch", "OrgDefaults", "PosCounter", "ServiceCenter",
-    ],
-    chat: ["ChatRoom", "ChatMessage", "ChatRoomMember"],
-};
-
-/**
- * Models a set of topics implies. Unknown topic => null, meaning "sync everything".
- * @returns {string[] | null}
- */
-function modelsForTopics(topics) {
-    if (!Array.isArray(topics) || topics.length === 0) return null;
-    const out = new Set();
-    for (const t of topics) {
-        const models = TOPIC_MODELS[t];
-        if (!models) return null; // unknown topic: do not guess, sync it all
-        for (const m of models) out.add(m);
-    }
-    return [...out];
-}
-
-/**
- * Subscribe and call `onChange(models | null)` after each settled burst.
+ * Subscribe and call `onChange()` once per settled burst of signals.
  *
  * Returns a stop function. Never throws: Realtime being unavailable must degrade to
  * "sync on the timer only", not take the worker down -- the timer is what makes the
@@ -103,8 +78,6 @@ function listen(cfg, onChange, log) {
     }
 
     let timer = null;
-    let pending = new Set();
-    let pendingAll = false;
     let client;
 
     try {
@@ -116,22 +89,15 @@ function listen(cfg, onChange, log) {
 
     const flush = () => {
         timer = null;
-        const models = pendingAll ? null : [...pending];
-        pending = new Set();
-        pendingAll = false;
         try {
-            onChange(models);
+            onChange();
         } catch (e) {
             log(`realtime: sync from signal failed: ${e.message}`);
         }
     };
 
     const channel = client.channel(CHANNEL);
-    channel.on("broadcast", { event: EVENT }, (msg) => {
-        const models = modelsForTopics(msg && msg.payload && msg.payload.topics);
-        if (models === null) pendingAll = true;
-        else for (const m of models) pending.add(m);
-
+    channel.on("broadcast", { event: EVENT }, () => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, SETTLE_MS);
     });
@@ -150,20 +116,4 @@ function listen(cfg, onChange, log) {
     };
 }
 
-/**
- * Names in TOPIC_MODELS that no longer exist in the registry.
- *
- * The map is hand-maintained, so a renamed or dropped model would leave a dead entry
- * that quietly narrows what a signal syncs -- no error, just a topic that stops
- * covering the table it was meant to. Checked at startup instead.
- */
-function staleModels(registryTables) {
-    const known = new Set(Object.keys(registryTables));
-    const bad = [];
-    for (const [topic, models] of Object.entries(TOPIC_MODELS)) {
-        for (const m of models) if (!known.has(m)) bad.push(`${topic} -> ${m}`);
-    }
-    return bad;
-}
-
-module.exports = { listen, modelsForTopics, staleModels, TOPIC_MODELS, CHANNEL, EVENT, SETTLE_MS };
+module.exports = { listen, CHANNEL, EVENT, SETTLE_MS };
