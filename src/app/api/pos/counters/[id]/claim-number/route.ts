@@ -14,11 +14,12 @@
 // Deliberately `requireAuth()` only — no admin permission — because this runs the first
 // time ANY staff member logs in on a freshly-installed machine. Safe to leave broad: it
 // can only bind a counter that is unbound (or already bound to this same PC); it can
-// never steal one from another device. Only /office/admin/counters (the "release"
-// action) can unbind.
+// never steal one from another device. The one unbind it does is of THIS device's own
+// previous counter, so a PC is never two counters. Anything else is released only from
+// /office/admin/counters.
 
 import { NextResponse } from "next/server";
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { blockStartFor, MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
@@ -82,15 +83,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
         const idRangeStart = blockStartFor(counter.counterNumber);
 
-        const updated = await prisma.posCounter.update({
-            where: { id: counterId },
-            data: {
-                boundDeviceId: data.deviceId,
-                boundDeviceLabel: data.deviceLabel ?? null,
-                boundAt: new Date(),
-                ...(idRangeStart !== counter.idRangeStart ? { idRangeStart } : {}),
-            },
-            select: { id: true, counterNumber: true, idRangeStart: true },
+        // Authoritative, like the read above and like release-mine: a device lock is
+        // decided in the DB or not at all. Written through `prisma` this went into the
+        // replica and out through the outbox — and on a PC that holds no counter the
+        // replica is empty (replicaWipe.ts), so there is no row there to update. The
+        // replica receives the binding through the first pull once the worker starts.
+        //
+        // One PC is one counter. A device the DB still binds to some OTHER counter
+        // (its old one, when the cashier picks a different row in the wizard) is
+        // released from it in the same transaction — otherwise this machine would be
+        // two counters at once, and its own self-check could no longer tell which.
+        const ids = [data.deviceId, data.legacyDeviceId].filter((v): v is string => !!v);
+        const updated = await prismaAuthoritative.$transaction(async (tx) => {
+            await tx.posCounter.updateMany({
+                where: { id: { not: counterId }, boundDeviceId: { in: ids } },
+                data:  { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() },
+            });
+            return tx.posCounter.update({
+                where: { id: counterId },
+                data: {
+                    boundDeviceId: data.deviceId,
+                    boundDeviceLabel: data.deviceLabel ?? null,
+                    boundAt: new Date(),
+                    releasedAt: null,
+                    ...(idRangeStart !== counter.idRangeStart ? { idRangeStart } : {}),
+                },
+                select: { id: true, counterNumber: true, idRangeStart: true },
+            });
         });
 
         return NextResponse.json(updated);

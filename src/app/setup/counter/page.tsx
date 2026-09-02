@@ -76,12 +76,18 @@ function CounterSetupForm() {
                 setCounters(res.data.counters);
                 setLocksReachable(res.data.locksReachable);
                 // The DB already binds a counter to this PC — the local file went (a
-                // reset, a reinstall) but the binding did not. Pre-select it so one click
-                // restores the file; the claim route accepts a same-PC rebind.
+                // reset, a reinstall) but the binding did not. There is nothing to ask:
+                // this PC IS that counter. Restore the file and go straight in. Only
+                // when the DB was actually consulted, though — a stale list must not
+                // re-bind a counter an admin has since moved.
+                if (!res.data.locksReachable) return;
                 resolveMachineIdentity().then((identity) => {
                     const mine = res.data.counters.find((c) =>
                         c.boundDeviceId && [identity.machineId, identity.legacyDeviceId].includes(c.boundDeviceId));
-                    if (mine) setSelectedId(String(mine.id));
+                    if (!mine) return;
+                    setSelectedId(String(mine.id));
+                    toast.info(`This PC is already "${mine.name}" — restoring its setup.`);
+                    void claim(mine);
                 });
             })
             .catch(() => setLoadError("Could not load the counter list. Check the connection and reload."));
@@ -103,7 +109,12 @@ function CounterSetupForm() {
             toast.error("This counter is already locked to another PC. An admin must release it in Counter Settings.");
             return;
         }
+        await claim(selected);
+    };
 
+    /** Binds this PC to `target` and writes the local setup file. */
+    const claim = async (target: CounterOption) => {
+        const selected = target;
         const counterNumber = selected.counterNumber;
         setSubmitting(true);
         try {
@@ -194,10 +205,10 @@ function CounterSetupForm() {
                                         >
                                             {c.name}{c.branch ? ` — ${c.branch.name}` : ""}
                                             {isLockedElsewhere
-                                                ? ` (Locked: ${c.boundDeviceLabel || "Another PC"})`
+                                                ? ` — in use by ${c.boundDeviceLabel || "another PC"}`
                                                 : isBoundHere
-                                                    ? " (This PC)"
-                                                    : " (Available)"}
+                                                    ? " — already this PC"
+                                                    : " — free"}
                                         </SelectItem>
                                     );
                                 })}
