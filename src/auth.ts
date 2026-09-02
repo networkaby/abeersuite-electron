@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
@@ -131,11 +131,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     events: {
         // Sign-out bumps tokensValidFrom → every existing token for this user is
         // rejected on its next request (logout = log out of every tab/device).
+        //
+        // Authoritative on purpose: on a counter the ordinary client writes to the
+        // replica and queues the row for push, and `User` is a model a counter must
+        // never push — so the row dead-lettered and the shell showed "Sync error (1)"
+        // after every sign-out. Revocation is best-effort anyway; offline it is skipped.
         async signOut(message) {
             const token = "token" in message ? message.token : null;
             const id = token?.id;
             if (id && token?.kind !== "customer") {
-                await prisma.user
+                await prismaAuthoritative.user
                     .update({ where: { id: Number(id) }, data: { tokensValidFrom: new Date() } })
                     .catch(() => { /* best-effort — don't block sign-out on a DB hiccup */ });
             }
