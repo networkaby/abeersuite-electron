@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
-import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, extraTogglesFor, MODULE_EXTRA_TOGGLE } from "@/modules/admin/lib/roleMatrixConfig";
+import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, extraTogglesFor, MODULE_EXTRA_TOGGLE, POOL_EXEMPT_PERMISSION_IDS } from "@/modules/admin/lib/roleMatrixConfig";
 
 // Permissions the Role editor assigns role-direct, never department-pooled:
 // Works (`work:*`), POS operations (`pos:*` — vouchers + shift/till), and the
@@ -18,8 +18,12 @@ import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, extraTogglesFor, 
 const UNPOOLED_SIDEBAR_IDS = new Set(
     SIDEBAR_MODULES.filter((m) => !m.pooled).flatMap((m) => m.childPermissionIds),
 );
+// Universal toggles the editor offers to EVERY role regardless of department
+// (`auth:login:outside-counter`, `quick-actions:more`) — same set the Role page
+// uses, so the checkbox and the save agree instead of the tick being dropped here.
 const isUnpooled = (id: string): boolean =>
-    id.startsWith("work:") || id.startsWith("pos:") || UNPOOLED_SIDEBAR_IDS.has(id);
+    id.startsWith("work:") || id.startsWith("pos:") || UNPOOLED_SIDEBAR_IDS.has(id)
+    || POOL_EXEMPT_PERMISSION_IDS.has(id);
 
 const rolePermissionsSchema = z.object({
     permissionIds: z.array(z.string().trim()),
