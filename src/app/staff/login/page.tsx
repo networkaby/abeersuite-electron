@@ -1,9 +1,8 @@
 "use client";
 
 import { signIn, signOut, getSession } from "next-auth/react";
-import { isBridgeAvailable } from "@/shared/lib/bridge";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
-import { getLocalCounterSetup, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
+import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import Link from "next/link";
@@ -44,42 +43,46 @@ function StaffLoginForm() {
                 : "Invalid email or password");
             setLoading(false);
         } else {
-            // Counter-machine gate: non-counter machines may only log in
-            // when the user holds auth:login:outside-counter.
-            const bridgePresent = await isBridgeAvailable();
-            if (!bridgePresent) {
+            const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
+
+            // ── Is this machine a counter? ──────────────────────────────────────
+            // Desktop app: the local file plus the counter row (one DB read when
+            // online, the replica when offline). Web version: is the local bridge's id
+            // bound to a counter in the DB. The two ids are never cross-matched.
+            const electron = isElectronEnvironment();
+            let isCounter: boolean;
+            if (electron) {
+                // A PC with no local file short-circuits to "not-set-up" without fetching.
+                const status = await reconcileCounterSetup(true);
+                // Released: reset the PC — no counter, no local data (replicaWipe.ts).
+                if (status === "released") await window.electronAPI?.clearCounterSetup?.();
+                // "unreachable" — the replica could not answer; trust the file, the
+                // readiness gate keeps the app covered until it can.
+                isCounter = status === "valid" || status === "unreachable";
+            } else {
+                isCounter = await isWebCounterBound();
+            }
+
+            // ── Not a counter: only "login outside counter" may proceed ─────────
+            // Same rule for both versions. On the desktop app this is also who may
+            // onboard a fresh PC — setting up a counter is an office action, not a
+            // cashier's.
+            if (!isCounter) {
                 const session = await getSession();
                 const perms = (session?.user as { permissions?: string[] })?.permissions ?? [];
                 if (!hasPermissionWithScope(perms, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
                     await signOut({ redirect: false });
-                    setError(
-                        "This machine is not a counter. " +
-                        "Contact admin to grant 'Can login outside counter' permission."
-                    );
+                    setError(electron
+                        ? "This PC is not set up as a counter yet. Only a user with 'Can login outside counter' permission can sign in here to set it up."
+                        : "This machine is not a counter. Contact admin to grant 'Can login outside counter' permission.");
                     setLoading(false);
                     return;
                 }
-            }
-            const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
-
-            // The counter self-check, before the session is used. First-launch setup,
-            // or a counter an admin has since released — both send this machine
-            // through /setup/counter instead of straight to dest. Never blocks a
-            // non-Electron login (office staff, Vercel).
-            if (isElectronEnvironment()) {
-                // Online: one row read from the DB. Offline: the replica. A PC with
-                // no local file short-circuits to "not-set-up" without fetching at all.
-                const status = await reconcileCounterSetup(true);
-                if (status === "released") {
-                    // Also resets the PC: no counter, no local data (replicaWipe.ts).
-                    await window.electronAPI?.clearCounterSetup?.();
-                }
-                if (status === "not-set-up" || status === "released") {
+                // Desktop app with no counter: onboarding, online only.
+                if (electron) {
                     router.push(`/setup/counter?next=${encodeURIComponent(dest)}`);
                     return;
                 }
-                // "valid" — go in. "unreachable" — the replica could not answer; trust
-                // the file, the readiness gate keeps the app covered until it can.
             }
 
             router.push(dest);

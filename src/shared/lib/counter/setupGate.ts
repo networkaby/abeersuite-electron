@@ -80,6 +80,27 @@ export async function getLocalCounterSetup(): Promise<{ counterId: number; count
 }
 
 /**
+ * The web version's counter check: is the local bridge's id bound to a counter in the
+ * DB? There is no local file off Electron, so this is the whole test. False when the
+ * bridge is absent, has no id, or the DB cannot be reached — a browser with no
+ * counter falls to the "login outside counter" permission gate.
+ */
+export async function isWebCounterBound(): Promise<boolean> {
+    if (isElectronEnvironment()) return false;
+    try {
+        const identity = await resolveMachineIdentity();
+        if (!identity.machineId) return false;
+        const qs = new URLSearchParams({ deviceId: identity.machineId, authoritative: "1" });
+        const res = await fetch(`/api/pos/counters/my-binding?${qs}`, { cache: "no-store" });
+        if (!res.ok) return false;
+        const body: MyBindingResponse = await res.json();
+        return body.reachable && !!body.counter;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Confirms the local setup still matches the server. Never throws — a network
  * failure resolves to "unreachable", not an error the caller has to catch.
  */
@@ -89,14 +110,12 @@ export async function reconcileCounterSetup(authoritative = false): Promise<Reco
 
     try {
         const identity = await resolveMachineIdentity();
-        // No identity to match against (bridge/Electron id not resolved yet) —
-        // cannot tell "released" from "just can't check right now", so don't
-        // guess. Treat the same as a network failure: trust the local file.
-        if (!identity.machineId && !identity.legacyDeviceId) return "unreachable";
+        // No identity to match against (Electron id not resolved yet) — cannot tell
+        // "released" from "just can't check right now", so don't guess. Treat the
+        // same as a network failure: trust the local file.
+        if (!identity.machineId) return "unreachable";
 
-        const qs = new URLSearchParams();
-        if (identity.machineId) qs.set("deviceId", identity.machineId);
-        if (identity.legacyDeviceId) qs.set("legacyDeviceId", identity.legacyDeviceId);
+        const qs = new URLSearchParams({ deviceId: identity.machineId });
         // Online, ask the DB itself: one row read per login, and a released counter is
         // caught at sign-in rather than on the next pull. Offline, the replica answers.
         if (authoritative && typeof navigator !== "undefined" && navigator.onLine) qs.set("authoritative", "1");

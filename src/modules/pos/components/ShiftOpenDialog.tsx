@@ -56,11 +56,10 @@ export function ShiftOpenDialog({
     const [counters, setCounters]         = useState<Counter[]>([]);
     const [loadingCounters, setLoadingCounters] = useState(false);
     const [selectedCounterId, setSelectedCounterId] = useState<number | null>(null);
-    // This PC's identity — Electron's installation id when available, else the local
-    // bridge's id. The counter this device is bound to server-side forces + disables
-    // the picker. legacyDeviceId only matters during the bridge->Electron migration.
+    // This PC's identity — Electron's installation id on the desktop app, the local
+    // bridge's id on the web version. The counter this device is bound to server-side
+    // forces + disables the picker.
     const [deviceId, setDeviceId]         = useState<string | null>(null);
-    const [legacyDeviceId, setLegacyDeviceId] = useState<string | null>(null);
     const [deviceLabel, setDeviceLabel]   = useState<string | null>(null);
     const [vaultTopUp, setVaultTopUp]     = useState("0");            // rupees
     const [notes, setNotes]               = useState("");
@@ -80,21 +79,19 @@ export function ShiftOpenDialog({
             .catch(() => toast.error("Failed to load counters"))
             .finally(() => setLoadingCounters(false));
 
-        // This PC's identity. The server binds the counter to it on first open; a
-        // later open elsewhere is refused. Best-effort — if neither Electron nor the
-        // bridge answers, no device lock this session (free picker).
-        resolveMachineIdentity().then(({ machineId, legacyDeviceId: legacy, deviceLabel: label }) => {
+        // This PC's identity. The server checks the counter's device lock against it;
+        // binding itself happens in counter onboarding, not here. Best-effort — if
+        // neither Electron nor the bridge answers, no device lock this session.
+        resolveMachineIdentity().then(({ machineId, deviceLabel: label }) => {
             setDeviceId(machineId);
-            setLegacyDeviceId(legacy);
             setDeviceLabel(label);
         });
     }, [open]);
 
     // The counter this PC is bound to (server-side). When set, the picker is
-    // forced to it and locked. Matches either the canonical id or, during the
-    // bridge->Electron migration, the older bridge-minted one.
-    const lockedCounter = (deviceId || legacyDeviceId)
-        ? counters.find((c) => matchesThisMachine(c.boundDeviceId, { machineId: deviceId, legacyDeviceId })) ?? null
+    // forced to it and locked.
+    const lockedCounter = deviceId
+        ? counters.find((c) => matchesThisMachine(c.boundDeviceId, { machineId: deviceId })) ?? null
         : null;
     useEffect(() => {
         if (lockedCounter) setSelectedCounterId(lockedCounter.id);
@@ -114,11 +111,8 @@ export function ShiftOpenDialog({
                 counterId:       selectedCounterId,
                 vaultTopUpPaise: Math.round(topUpRupees * 100),
                 notes:           notes.trim() || undefined,
-                // The server binds this counter to the PC on first open (device lock).
-                // legacyDeviceId lets it recognise + migrate a counter still bound
-                // under the pre-Electron bridge id.
-                deviceId:        deviceId ?? legacyDeviceId ?? undefined,
-                legacyDeviceId:  (legacyDeviceId && legacyDeviceId !== deviceId) ? legacyDeviceId : undefined,
+                // For the device-lock check only — the server never binds here.
+                deviceId:        deviceId ?? undefined,
                 deviceLabel:     deviceLabel ?? undefined,
             });
             if (data.idRangeStart && typeof window !== "undefined" && window.electronAPI?.applyIdRanges) {
@@ -179,8 +173,8 @@ export function ShiftOpenDialog({
                                         // bridge); with neither the server can't check either, so
                                         // leave it free.
                                         const boundElsewhere = !!c.boundDeviceId
-                                            && (!!deviceId || !!legacyDeviceId)
-                                            && !matchesThisMachine(c.boundDeviceId, { machineId: deviceId, legacyDeviceId });
+                                            && !!deviceId
+                                            && !matchesThisMachine(c.boundDeviceId, { machineId: deviceId });
                                         return (
                                             <SelectItem
                                                 key={c.id}

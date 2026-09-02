@@ -111,7 +111,7 @@ export default function PrinterSettingsPage() {
     // Which counter is this PC bound to? Match this PC's identity against the
     // server's counter locks so the Forget card knows what it's releasing.
     useEffect(() => {
-        if (!identity || (!identity.machineId && !identity.legacyDeviceId)) { setBoundCounter(null); return; }
+        if (!identity?.machineId) { setBoundCounter(null); return; }
         let cancelled = false;
         fetch(`/api/pos/counters`)
             .then((r) => r.ok ? r.json() : [])
@@ -172,7 +172,7 @@ export default function PrinterSettingsPage() {
     // Bound to the parked "Counter lock" card below (currently commented out).
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const forgetCounter = async () => {
-        const releaseId = identity?.machineId ?? identity?.legacyDeviceId;
+        const releaseId = identity?.machineId;
         if (!releaseId) return;
         try {
             const r = await fetch(`/api/pos/counters/release-mine`, {

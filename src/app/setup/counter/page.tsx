@@ -56,8 +56,7 @@ interface SyncStatusBody {
 const FILL_POLL_MS = 3_000;
 
 function isThisPc(c: CounterOption, identity: MachineIdentity | null): boolean {
-    return Boolean(c.boundDeviceId && identity
-        && (c.boundDeviceId === identity.machineId || c.boundDeviceId === identity.legacyDeviceId));
+    return Boolean(c.boundDeviceId && identity && c.boundDeviceId === identity.machineId);
 }
 
 function CounterSetupForm() {
@@ -123,7 +122,7 @@ function CounterSetupForm() {
     const claim = async (target: CounterOption) => {
         setPhase("claiming");
         try {
-            const deviceId = identity?.machineId ?? identity?.legacyDeviceId;
+            const deviceId = identity?.machineId;
             if (!deviceId) {
                 toast.error("Could not identify this PC. Restart the app and try again.");
                 setPhase("pick");
@@ -134,13 +133,7 @@ function CounterSetupForm() {
             //    counter's id-range block back.
             const { data } = await axios.post<{ idRangeStart: number | null }>(
                 `/api/pos/counters/${target.id}/claim-number`,
-                {
-                    deviceId,
-                    ...(identity?.legacyDeviceId && identity.legacyDeviceId !== deviceId
-                        ? { legacyDeviceId: identity.legacyDeviceId }
-                        : {}),
-                    deviceLabel: identity?.deviceLabel,
-                },
+                { deviceId, deviceLabel: identity?.deviceLabel },
             );
 
             if (data.idRangeStart !== null && window.electronAPI?.applyIdRanges) {

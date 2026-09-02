@@ -34,7 +34,7 @@ export function useMyCounterExtension(): string | null | "unknown" {
         (async () => {
             try {
                 const identity = await resolveMachineIdentity();
-                if (!identity.machineId && !identity.legacyDeviceId) throw new Error("no identity");
+                if (!identity.machineId) throw new Error("no identity");
 
                 const { data: counters } = await axios.get<Counter[]>("/api/pos/counters");
                 if (cancelled) return;

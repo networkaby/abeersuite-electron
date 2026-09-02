@@ -30,10 +30,6 @@ const openSchema = z.object({
     // from a different PC is refused (device lock). Absent when neither Electron
     // nor the bridge is present — then the lock can't be enforced (open is free).
     deviceId:        z.string().trim().min(1).max(100).optional(),
-    // The bridge's older id for this same PC, sent alongside deviceId only during
-    // the bridge->Electron migration — lets a counter already bound to it be
-    // recognised and silently rebound to the canonical id instead of refused.
-    legacyDeviceId:  z.string().trim().min(1).max(100).optional(),
     deviceLabel:     z.string().trim().max(100).optional(), // friendly name for the admin list
 });
 
@@ -156,10 +152,9 @@ export async function POST(req: NextRequest) {
     // a different PC is refused until an admin (Admin → POS Counters) or that PC
     // (Settings → Thermal Printer → Forget) releases the lock. When the caller
     // sends no id at all (neither Electron nor the bridge present) the lock can't
-    // be checked — open free. A match on legacyDeviceId (the pre-Electron bridge
-    // id) counts as this PC too — see the rebind below.
-    const candidateIds = [body.deviceId, body.legacyDeviceId].filter((id): id is string => !!id);
-    if (counter.boundDeviceId && candidateIds.length > 0 && !candidateIds.includes(counter.boundDeviceId)) {
+    // be checked — open free. The desktop app's id and the web bridge's id are never
+    // cross-matched: a counter bound under the other one is another PC's.
+    if (counter.boundDeviceId && body.deviceId && counter.boundDeviceId !== body.deviceId) {
         return NextResponse.json(
             { error: "This counter is locked to another computer. Ask an admin to release it (Admin → POS Counters)." },
             { status: 409 },

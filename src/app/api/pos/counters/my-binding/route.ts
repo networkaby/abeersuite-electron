@@ -1,4 +1,4 @@
-// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…[&authoritative=1]
+// GET /api/pos/counters/my-binding?deviceId=…[&authoritative=1]
 //
 // "Does this PC still hold a counter, and is its shift still open?" — answered from
 // the replica, except at login while online (`authoritative=1`), where one row is read
@@ -33,9 +33,9 @@ export async function GET(req: NextRequest) {
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
-    const ids = [searchParams.get("deviceId"), searchParams.get("legacyDeviceId")]
-        .map((v) => v?.trim())
-        .filter((v): v is string => !!v);
+    // One id per app version (Electron installation id, or the web bridge's id), never
+    // cross-matched — see shared/lib/counter/identity.ts.
+    const ids = [searchParams.get("deviceId")?.trim()].filter((v): v is string => !!v);
 
     // No identity resolved yet (Electron id not ready, bridge not running). We cannot
     // tell "released" from "cannot check", so say so rather than guess.

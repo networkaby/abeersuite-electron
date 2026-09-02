@@ -25,12 +25,11 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { blockStartFor, MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
 import { z } from "zod";
 
-// Identity is resolved in the renderer (Electron installation id, with the old
-// bridge-minted id alongside it for counters bound under the previous scheme) —
-// see shared/lib/counter/identity.ts. Same shape POST /api/pos/shifts accepts.
+// Identity is resolved in the renderer — the Electron installation id on the desktop
+// app, the bridge id on the web version, never cross-matched — see
+// shared/lib/counter/identity.ts.
 const claimSchema = z.object({
     deviceId: z.string().min(1, "Device id is required to bind this counter"),
-    legacyDeviceId: z.string().min(1).nullish(),
     deviceLabel: z.string().nullish(),
 });
 
@@ -60,10 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         // Re-running setup on the SAME machine is fine (and is how a counter recovers
         // after its local counter.json is lost). Only another PC's binding blocks it.
-        const boundElsewhere =
-            counter.boundDeviceId !== null &&
-            counter.boundDeviceId !== data.deviceId &&
-            counter.boundDeviceId !== data.legacyDeviceId;
+        const boundElsewhere = counter.boundDeviceId !== null && counter.boundDeviceId !== data.deviceId;
         if (boundElsewhere) {
             return NextResponse.json(
                 { error: "This counter is already in use by another PC — an admin must release it first.", code: "ALREADY_BOUND" },
@@ -93,7 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // (its old one, when the cashier picks a different row in the wizard) is
         // released from it in the same transaction — otherwise this machine would be
         // two counters at once, and its own self-check could no longer tell which.
-        const ids = [data.deviceId, data.legacyDeviceId].filter((v): v is string => !!v);
+        const ids = [data.deviceId];
 
         // Already this PC's — a resumed onboarding (the replica fill or the local file
         // never completed last time). Nothing to write: touching `boundAt` would only
