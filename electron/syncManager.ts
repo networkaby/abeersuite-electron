@@ -115,7 +115,13 @@ export function startSyncWorker(syncUrl: string): void {
 
     const relay = (buf: Buffer) => {
         for (const line of String(buf).split("\n")) {
-            if (line.trim()) console.log(`[sync] ${line.trimEnd()}`);
+            if (!line.trim()) continue;
+            console.log(`[sync] ${line.trimEnd()}`);
+            // The one line that means "the rows are queryable now" — see below. This
+            // call was missing, so `sync:applied` never reached a window and every
+            // screen (and the counter reconciler) kept waiting for an event that
+            // never came.
+            notifyIfApplied(line);
         }
     };
     worker.stdout?.on("data", relay);

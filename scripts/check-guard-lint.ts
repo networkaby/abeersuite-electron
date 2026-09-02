@@ -30,6 +30,9 @@ const GUARD_PATTERNS = [
     /\bauth\s*\(/,
     /\bverifyWebhookSignature\b/,
     /\bverifyRazorpaySignature\b/,
+    // Vercel Cron endpoints: guarded by the Bearer <CRON_SECRET> header check, not by
+    // a staff session — there is no user behind a scheduled call.
+    /\bCRON_SECRET\b/,
 ];
 
 function findRouteFiles(dir: string, out: string[] = []): string[] {
