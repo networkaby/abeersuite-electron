@@ -1,35 +1,30 @@
-// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…[&prefer=local]
+// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…
 //
 // "Does this PC still hold a counter, and is its shift still open?" — answered from
-// the DB, not from the counter's own replica.
+// the replica, never from Supabase.
 //
-// The reconciler used to ask this by fetching the whole counter list, which goes
-// through `prisma` — the replica on a counter PC. That made the check circular: the
-// row it consulted is the one this same machine writes at shift open, so an admin's
-// release only became visible after a pull, and never at all while the machine was
-// offline. A check that decides whether to throw a cashier out of the till has to read
-// the source of truth, which is exactly what `prismaAuthoritative` is for.
+// ── Why the replica is enough ───────────────────────────────────────────────
+// The replica is kept honest by the sync worker: an admin's release on live reaches it
+// through the Realtime signal, and the worker's interval cycle is the safety net for a
+// signal that was missed. So the row here IS the DB's answer, a cycle late at most. The
+// reconciler (CounterReconciler.tsx) re-asks exactly when a pull touched PosCounter, so
+// nothing polls the cloud and nothing costs egress. This used to read authoritatively
+// on a five-minute timer — the timer is gone, and so is the authoritative read.
 //
-// Unreachable is NOT released. When Supabase cannot be reached this returns
-// `reachable: false` and the caller keeps trusting its local file — a network blip
-// must never sign anyone out mid-shift.
+// ── Not ready is not released ───────────────────────────────────────────────
+// Before the worker's first cycle, or while the replica is being wiped, the replica
+// cannot answer. Reading through `prisma` then would fall through to Supabase — the
+// egress this exists to avoid — so this says `reachable: false` instead, and the caller
+// keeps trusting its local file. Only a POSITIVE "no row carries this PC's id" from a
+// ready replica means released.
 //
-// ── prefer=local: the login path ────────────────────────────────────────────
-// Login should not wait on the cloud for a machine that plainly already holds a
-// counter. With `prefer=local` the replica is consulted FIRST: a binding found there
-// is good enough to let the cashier in, because a release is not urgent — the
-// reconciler asks authoritatively every five minutes and signs them out when the DB
-// says the counter is gone.
-//
-// Only when the replica knows of no binding does this fall through to the DB, which
-// is also the "sync the table before running the wizard" step: a machine whose replica
-// is simply behind must not be sent through counter setup it does not need.
-//
-// The reconciler itself never passes `prefer=local` — a check that can eject someone
-// from the till reads the source of truth, always.
+// Off a counter PC (a browser, Vercel) there is no replica and `prisma` is live; the
+// route still works, it just is not what Electron calls in practice.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { IS_COUNTER_PC, isReplicaReady } from "@/shared/lib/prisma/counterMode";
+import { refreshReplicaReadiness } from "@/shared/lib/prisma/replicaReadiness";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 
 export async function GET(req: NextRequest) {
@@ -46,54 +41,36 @@ export async function GET(req: NextRequest) {
     if (ids.length === 0) return NextResponse.json({ reachable: false, counter: null });
 
     try {
-        // Local-first, for login only. `prisma` is the replica on a counter PC; a
-        // binding it already carries is this machine's own, written when it claimed
-        // the counter, so finding it here is a positive answer and not a guess.
-        if (searchParams.get("prefer") === "local") {
-            // Every row the replica thinks this device holds — not just the first.
-            // A replica can carry a stale binding beside the real one (a counter this
-            // PC held before, whose release has not been pulled down yet), and
-            // findFirst would have answered with whichever sorted first: this machine
-            // would then be told it is the counter it used to be. Two answers means
-            // the replica is not trustworthy on this question, so ask the DB.
-            const localMatches = await prisma.posCounter.findMany({
-                where:  { boundDeviceId: { in: ids } },
-                select: { id: true, counterNumber: true, name: true },
-                take:   2,
-            });
-            const local = localMatches.length === 1 ? localMatches[0] : null;
-            if (local) {
-                const localShift = await prisma.posShift.findFirst({
-                    where:  { counterId: local.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
-                    select: { id: true, status: true, userId: true },
-                });
-                return NextResponse.json({ reachable: true, counter: local, openShift: localShift });
-            }
-            // Nothing locally — fall through and ask the DB, so a replica that is
-            // merely behind does not push this PC into the setup wizard.
+        if (IS_COUNTER_PC) {
+            // Rate-limited internally; one query per TTL, not per call.
+            await refreshReplicaReadiness();
+            if (!isReplicaReady()) return NextResponse.json({ reachable: false, counter: null });
         }
 
-        const counter = await prismaAuthoritative.posCounter.findFirst({
+        // Every row that carries this device — not just the first. A replica can hold a
+        // stale binding beside the real one (a counter this PC held before, whose release
+        // has not landed yet); picking one would tell this machine it is the counter it
+        // used to be. Two answers means "cannot tell" — the next pull settles it.
+        const matches = await prisma.posCounter.findMany({
             where:  { boundDeviceId: { in: ids } },
             select: { id: true, counterNumber: true, name: true },
+            take:   2,
         });
-        if (!counter) return NextResponse.json({ reachable: true, counter: null });
+        if (matches.length > 1) return NextResponse.json({ reachable: false, counter: null });
+        if (matches.length === 0) return NextResponse.json({ reachable: true, counter: null });
+        const counter = matches[0];
 
-        // The counter's currently live shift, if any. A recovering PC needs this to
-        // know whether to resume (still OPEN — the ordinary device swap) or to start a
-        // fresh shift (the office force-closed it while this machine was down).
-        const openShift = await prismaAuthoritative.posShift.findFirst({
-            where:   { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
-            select:  { id: true, status: true, userId: true },
+        // The counter's currently live shift, if any. A recovering PC needs this to know
+        // whether to resume (still OPEN — the ordinary device swap) or to start a fresh
+        // shift (the office force-closed it while this machine was down).
+        const openShift = await prisma.posShift.findFirst({
+            where:  { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
+            select: { id: true, status: true, userId: true },
         });
 
-        return NextResponse.json({
-            reachable: true,
-            counter: { id: counter.id, counterNumber: counter.counterNumber, name: counter.name },
-            openShift,
-        });
+        return NextResponse.json({ reachable: true, counter, openShift });
     } catch {
-        // Supabase unreachable — the counter keeps billing on its local file.
+        // The replica could not be read — silence, not a release.
         return NextResponse.json({ reachable: false, counter: null });
     }
 }

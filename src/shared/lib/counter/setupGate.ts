@@ -18,21 +18,17 @@
  * to boot". The check only ever *invalidates* something on a POSITIVE
  * confirmation that it was released; it never invalidates on mere silence.
  *
- * ── Asked of the DB, not of the counter's own replica ───────────────────────
- * This used to fetch the whole counter list, which is served through `prisma` — the
- * replica on a counter PC. The row it consulted is the one this same machine stamps
- * at shift open, so the check was circular: an admin's release only surfaced after a
- * pull, and never while the machine was offline. It now asks
- * `/api/pos/counters/my-binding`, which reads authoritatively. "Cannot reach the DB"
- * still resolves to `unreachable`, so the trust-the-local-file rule above is intact.
+ * ── Asked of the replica, never of the cloud ────────────────────────────────
+ * `/api/pos/counters/my-binding` reads this PC's binding from the replica. The replica
+ * is kept honest by the sync worker (Realtime signal + interval safety net), so an
+ * admin's release reaches it a cycle late at most, and the reconciler re-asks exactly
+ * when a pull touched PosCounter. No timer, no authoritative read, no egress. A replica
+ * that is not ready yet (before its first pull, or mid-wipe) resolves to `unreachable`,
+ * so the trust-the-local-file rule above is intact.
  *
- * ── Login is local-first; the periodic check is not ─────────────────────────
- * `reconcileCounterSetup(true)` lets the replica answer when it already carries this
- * machine's binding, so signing in does not wait on the cloud for a PC that plainly
- * holds a counter. A release is not urgent at that moment — the periodic reconcile
- * asks authoritatively and signs the cashier out when the DB says the counter is gone.
- * Only when the replica knows of no binding does login consult the DB, which doubles
- * as "refresh before deciding to run the wizard".
+ * ── Login runs the same check ───────────────────────────────────────────────
+ * Signing in on a bound PC asks the replica once, offline or online. A PC with no
+ * local file never gets this far: it is sent to the wizard, which binds online only.
  *
  * ── Reassignment is not the same as release ──────────────────────────────────
  * An admin can also REBIND this device to a different counter row rather than
@@ -65,8 +61,8 @@ interface MyBindingResponse {
 }
 
 /**
- * The live shift on the counter this PC holds, straight from the DB. Null when there
- * is none, or when the DB could not be reached — the caller must not read "no shift"
+ * The live shift on the counter this PC holds, as the replica sees it. Null when there
+ * is none, or when the replica could not answer — the caller must not read "no shift"
  * into silence, so this is only ever acted on alongside a `valid` reconcile.
  */
 let lastOpenShift: BoundShift | null = null;
@@ -81,7 +77,7 @@ export async function getLocalCounterSetup(): Promise<{ counterId: number; count
  * Confirms the local setup still matches the server. Never throws — a network
  * failure resolves to "unreachable", not an error the caller has to catch.
  */
-export async function reconcileCounterSetup(preferLocal = false): Promise<ReconcileResult> {
+export async function reconcileCounterSetup(): Promise<ReconcileResult> {
     const local = await getLocalCounterSetup();
     if (!local) return "not-set-up";
 
@@ -95,17 +91,14 @@ export async function reconcileCounterSetup(preferLocal = false): Promise<Reconc
         const qs = new URLSearchParams();
         if (identity.machineId) qs.set("deviceId", identity.machineId);
         if (identity.legacyDeviceId) qs.set("legacyDeviceId", identity.legacyDeviceId);
-        // Login answers from the replica when it already knows this machine's
-        // binding; the periodic reconcile never does. See the route's header.
-        if (preferLocal) qs.set("prefer", "local");
 
         const res = await fetch(`/api/pos/counters/my-binding?${qs}`, { cache: "no-store" });
         if (!res.ok) return "unreachable";
         const body: MyBindingResponse = await res.json();
-        // The DB could not be reached — silence, not a release.
+        // The replica could not answer (not ready, or ambiguous) — silence, not a release.
         if (!body.reachable) return "unreachable";
 
-        // Which counter is THIS device actually bound to, right now, per the DB —
+        // Which counter is THIS device actually bound to, per the replica —
         // independent of what the local cache says. The BINDING is the whole signal.
         if (!body.counter) { lastOpenShift = null; return "released"; }
         lastOpenShift = body.openShift ?? null;

@@ -3,7 +3,7 @@
 import { signIn, signOut, getSession } from "next-auth/react";
 import { isBridgeAvailable } from "@/shared/lib/bridge";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
-import { reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
+import { getLocalCounterSetup, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import Link from "next/link";
@@ -35,7 +35,13 @@ function StaffLoginForm() {
         });
 
         if (res?.error) {
-            setError("Invalid email or password");
+            // A PC with no counter has an empty replica, so the user lookup goes to the
+            // cloud — offline, that fails and reads as a wrong password. Say what it is:
+            // this machine must be online to bind a counter before it can sign in offline.
+            const unbound = isElectronEnvironment() && !(await getLocalCounterSetup());
+            setError(unbound
+                ? "Sign-in failed. This PC is not set up as a counter yet, so it needs the internet to sign in and bind a counter. Check the connection, or the email and password."
+                : "Invalid email or password");
             setLoading(false);
         } else {
             // Counter-machine gate: non-counter machines may only log in
@@ -56,15 +62,16 @@ function StaffLoginForm() {
             }
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
 
-            // First-launch counter setup, or a counter an admin has since released —
-            // both send this machine through /setup/counter instead of straight to
-            // dest. Never blocks a non-Electron login (office staff, Vercel).
+            // The counter self-check, before the session is used. First-launch setup,
+            // or a counter an admin has since released — both send this machine
+            // through /setup/counter instead of straight to dest. Never blocks a
+            // non-Electron login (office staff, Vercel).
             if (isElectronEnvironment()) {
-                // Local-first: a binding the replica already carries is enough to
-                // let this PC in. Only a machine the replica knows nothing about
-                // waits on the DB, and that is exactly the one that may need setup.
-                const status = await reconcileCounterSetup(true);
+                // Replica only, offline or online — no cloud call. A PC with no local
+                // file short-circuits to "not-set-up" without fetching at all.
+                const status = await reconcileCounterSetup();
                 if (status === "released") {
+                    // Also resets the PC: no counter, no local data (replicaWipe.ts).
                     await window.electronAPI?.clearCounterSetup?.();
                 }
                 if (status === "not-set-up" || status === "released") {
@@ -73,7 +80,7 @@ function StaffLoginForm() {
                 }
                 // "valid" — unchanged. "reassigned" — already self-healed inside
                 // reconcileCounterSetup (local cache + title rewritten). "unreachable"
-                // — trust the local file. All three proceed to dest as-is.
+                // — replica not ready yet, trust the local file. All three proceed.
             }
 
             router.push(dest);

@@ -21,6 +21,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -74,6 +75,14 @@ function CounterSetupForm() {
             .then((res) => {
                 setCounters(res.data.counters);
                 setLocksReachable(res.data.locksReachable);
+                // The DB already binds a counter to this PC — the local file went (a
+                // reset, a reinstall) but the binding did not. Pre-select it so one click
+                // restores the file; the claim route accepts a same-PC rebind.
+                resolveMachineIdentity().then((identity) => {
+                    const mine = res.data.counters.find((c) =>
+                        c.boundDeviceId && [identity.machineId, identity.legacyDeviceId].includes(c.boundDeviceId));
+                    if (mine) setSelectedId(String(mine.id));
+                });
             })
             .catch(() => setLoadError("Could not load the counter list. Check the connection and reload."));
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +167,8 @@ function CounterSetupForm() {
                         <p className="text-sm text-destructive">
                             Cannot reach the cloud to check which counters are already taken.
                             Setting up on a guess could put two PCs on one counter, so this
-                            screen will not claim one until the connection is back.
+                            screen will not claim one until the connection is back. A counter
+                            can only be bound online; once bound, this PC signs in offline too.
                         </p>
                     )}
 
@@ -216,6 +226,16 @@ function CounterSetupForm() {
                         onClick={submit}
                     >
                         {submitting ? "Saving…" : "Save and Continue"}
+                    </Button>
+                    {/* A live session behind a screen that cannot proceed is a dead end —
+                        offline, or the wrong person signed in. Let them out. */}
+                    <Button
+                        variant="ghost"
+                        className="w-full"
+                        disabled={submitting}
+                        onClick={() => signOut({ callbackUrl: "/staff/login" })}
+                    >
+                        Sign out
                     </Button>
                 </CardContent>
             </Card>

@@ -470,6 +470,13 @@ function counterSetupFilePath(): string {
  */
 let pendingSyncUrl: string | null = null;
 
+/**
+ * The embedded cluster's superuser url, held from boot for the replica wipe: emptying
+ * every table needs more than the app role has, and the wipe runs after the setup file
+ * is gone, long after the boot path returned.
+ */
+let localAdminUrl: string | null = null;
+
 /** Does this PC hold a counter? Sync is gated on this — see the boot path. */
 function hasCounterSetup(): boolean {
     try {
@@ -497,6 +504,9 @@ ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
 ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     try {
         fs.writeFileSync(counterSetupFilePath(), JSON.stringify(setup, null, 2));
+        // A wipe still waiting on the outbox must not run now that this PC is a counter
+        // again — the worker would refill a replica the wipe then empties under it.
+        cancelReplicaWipe();
         // This PC now has a counter, so it has something to sync for. No-op when the
         // worker is already up (a reassignment rather than a first claim).
         if (pendingSyncUrl) startSyncWorker(pendingSyncUrl);
@@ -512,8 +522,11 @@ ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     }
 });
 
-// Called when the server reports this counter was released — the local file is
-// stale and must not be trusted on the next launch.
+// Called when the replica reports this counter was released — the local file is
+// stale and must not be trusted on the next launch. This PC is no longer a counter,
+// so it stops syncing AND lets go of the data it pulled while it was one: a machine
+// without a counter holds no business data. The wipe waits for the outbox to drain
+// first (replicaWipe.ts), so a sale made offline still reaches the cloud.
 ipcMain.handle("counter:clear-setup", (): boolean => {
     try {
         const file = counterSetupFilePath();
@@ -523,6 +536,7 @@ ipcMain.handle("counter:clear-setup", (): boolean => {
         currentSyncStatus = "";
         currentConnectionStatus = "";
         mainWindow?.setTitle(APP_TITLE);
+        if (localAdminUrl) requestReplicaWipe(localAdminUrl);
         return true;
     } catch (err) {
         console.error("[main] Could not clear counter-setup.json:", err);
@@ -675,6 +689,7 @@ function setupAutoUpdater(): void {
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
+import { requestReplicaWipe, cancelReplicaWipe } from "./replicaWipe";
 import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
@@ -1058,8 +1073,15 @@ app.whenReady().then(async () => {
                 // to show sync failures on a screen the cashier cannot act on. The url is
                 // kept so the wizard can start the worker the moment a counter is claimed.
                 pendingSyncUrl = replica.syncUrl;
-                if (hasCounterSetup()) startSyncWorker(replica.syncUrl);
-                else console.log("[main] No counter claimed yet — sync worker stays down until setup completes.");
+                localAdminUrl = localDbUrl;
+                const isCounter = hasCounterSetup();
+                if (isCounter) startSyncWorker(replica.syncUrl);
+                else {
+                    console.log("[main] No counter claimed yet — sync worker stays down until setup completes.");
+                    // A counter released while this PC was switched off: the file went at
+                    // the last run but the data may still be here. No-op on a fresh install.
+                    requestReplicaWipe(localDbUrl);
+                }
                 // The outbox flusher runs INSIDE the Next server (see src/instrumentation.ts):
                 // pushing needs the Supabase client, which lives there. Driving it from here
                 // meant an HTTP hop that requireAuth() rejected with 401 on every attempt.
@@ -1075,7 +1097,9 @@ app.whenReady().then(async () => {
                 // Hold the splash until the replica has actually filled. An empty replica
                 // does not error, it returns fewer rows — see waitForReplica.ts. Instant
                 // on every launch after the first, because `ready` is already true.
-                await waitForReplicaReady(localDbUrl, sendBootProgress);
+                // Not on a PC with no counter: nothing is filling that replica, so this
+                // would sit on the splash for the whole timeout before showing the wizard.
+                if (isCounter) await waitForReplicaReady(localDbUrl, sendBootProgress);
             } else {
                 // The server is up but the replica is not usable. Clear the URL
                 // postgresManager set: leaving it would make prismaClient.ts build a
