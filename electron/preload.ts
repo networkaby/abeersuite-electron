@@ -23,6 +23,12 @@ export interface ElectronAPI {
     getCounterSetup: () => Promise<{ counterId: number; counterNumber: number } | null>;
     saveCounterSetup: (setup: { counterId: number; counterNumber: number }) => Promise<boolean>;
     clearCounterSetup: () => Promise<boolean>;
+    /**
+     * Starts the sync worker before `counter-setup.json` exists. Onboarding binds the
+     * counter in the DB, fills the replica, and only THEN writes the file — so the
+     * worker has to be startable from the wizard, not only from the boot gate.
+     */
+    startSync: () => Promise<boolean>;
     updateWindowStatus: (status: { sync: string; connection: string }) => Promise<void>;
     /**
      * Shop hardware: the DQ11 customer display (hardware-bridge/qr.js) and the thermal
@@ -57,6 +63,7 @@ const electronAPI: ElectronAPI = {
     getCounterSetup: () => ipcRenderer.invoke("counter:get-setup"),
     saveCounterSetup: (setup) => ipcRenderer.invoke("counter:save-setup", setup),
     clearCounterSetup: () => ipcRenderer.invoke("counter:clear-setup"),
+    startSync: () => ipcRenderer.invoke("counter:start-sync"),
     updateWindowStatus: (status) => ipcRenderer.invoke("app:update-window-status", status),
     bridge: {
         send:      (mod, cmd, payload) => { void ipcRenderer.invoke("bridge:send", mod, cmd, payload); },

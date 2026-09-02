@@ -30,22 +30,28 @@
  * Signing in on a bound PC asks the replica once, offline or online. A PC with no
  * local file never gets this far: it is sent to the wizard, which binds online only.
  *
- * ── Reassignment is not the same as release ──────────────────────────────────
- * An admin can also REBIND this device to a different counter row rather than
- * releasing it outright (boundDeviceId moved from counter A to counter B). The
- * old check — "does my counterId still carry my counterNumber" — is blind to
- * this: counter A's own number never changed, so it would keep reporting
- * "valid" while this PC is actually now sitting on counter B. Resolving this
- * device's *actual* bound counter (same device-identity match
- * useMyCounterExtension uses) catches that and updates the local cache in
- * place, rather than forcing a manual re-setup for a change the server already
- * knows about.
+ * ── No reassignment ─────────────────────────────────────────────────────────
+ * A counter must be released before any PC can onboard on it, and binding happens in
+ * onboarding only. So the only question is "does the file's counter still carry this
+ * PC's id": yes → in, no → not bound → clean → onboard again. There is nothing to heal
+ * in place.
  */
 
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 import { resolveMachineIdentity } from "@/shared/lib/counter/identity";
 
-export type ReconcileResult = "valid" | "reassigned" | "released" | "unreachable" | "not-set-up";
+/**
+ * `valid`       — the replica's row for the file's counter still carries this PC.
+ * `released`    — a ready replica says it does not. Clean and onboard again.
+ * `unreachable` — the replica could not answer (not ready, ambiguous). Keep the file;
+ *                 the readiness gate keeps the app covered while that lasts.
+ * `not-set-up`  — no local file. Onboarding.
+ *
+ * There is no "reassigned": a counter must be released before any PC can onboard on
+ * it, so a file that names counter A while the DB binds this PC to counter B is simply
+ * not bound — same outcome as released.
+ */
+export type ReconcileResult = "valid" | "released" | "unreachable" | "not-set-up";
 
 /** The counter's live shift as the DB sees it — null when there is none. */
 export interface BoundShift {
@@ -77,7 +83,7 @@ export async function getLocalCounterSetup(): Promise<{ counterId: number; count
  * Confirms the local setup still matches the server. Never throws — a network
  * failure resolves to "unreachable", not an error the caller has to catch.
  */
-export async function reconcileCounterSetup(): Promise<ReconcileResult> {
+export async function reconcileCounterSetup(authoritative = false): Promise<ReconcileResult> {
     const local = await getLocalCounterSetup();
     if (!local) return "not-set-up";
 
@@ -91,6 +97,9 @@ export async function reconcileCounterSetup(): Promise<ReconcileResult> {
         const qs = new URLSearchParams();
         if (identity.machineId) qs.set("deviceId", identity.machineId);
         if (identity.legacyDeviceId) qs.set("legacyDeviceId", identity.legacyDeviceId);
+        // Online, ask the DB itself: one row read per login, and a released counter is
+        // caught at sign-in rather than on the next pull. Offline, the replica answers.
+        if (authoritative && typeof navigator !== "undefined" && navigator.onLine) qs.set("authoritative", "1");
 
         const res = await fetch(`/api/pos/counters/my-binding?${qs}`, { cache: "no-store" });
         if (!res.ok) return "unreachable";
@@ -100,16 +109,8 @@ export async function reconcileCounterSetup(): Promise<ReconcileResult> {
 
         // Which counter is THIS device actually bound to, per the replica —
         // independent of what the local cache says. The BINDING is the whole signal.
-        if (!body.counter) { lastOpenShift = null; return "released"; }
+        if (!body.counter || body.counter.id !== local.counterId) { lastOpenShift = null; return "released"; }
         lastOpenShift = body.openShift ?? null;
-
-        if (body.counter.id !== local.counterId || body.counter.counterNumber !== local.counterNumber) {
-            // Rebound to a different counter (or the same counter's number
-            // changed) — update the local cache/title in place rather than
-            // forcing a re-setup flow for something the server already knows.
-            await window.electronAPI?.saveCounterSetup?.({ counterId: body.counter.id, counterNumber: body.counter.counterNumber });
-            return "reassigned";
-        }
         return "valid";
     } catch {
         return "unreachable";

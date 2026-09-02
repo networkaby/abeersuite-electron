@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCounterMode } from "@/shared/hooks/useCounterMode";
 import { useSyncStatus } from "@/shared/hooks/useSyncStatus";
+import { replicaProgressStep } from "@/shared/lib/sync";
 import { COUNTER_FREE_ROUTES } from "@/shared/components/CounterSetupGuard";
 
 /**
@@ -55,15 +56,7 @@ export default function ReplicaReadyGate() {
     if (status.replicaReady) return null;
 
     const halted = status.replicaSchemaOk === false;
-    const replica = sync?.replica ?? null;
-    const step = !replica
-        ? "Checking the local copy…"
-        : replica.failing.length > 0
-            ? `Retrying ${replica.failing.length} table(s): ${replica.failing.slice(0, 3).join(", ")}`
-            : replica.tablesTotal > 0
-                ? `Copying tables: ${replica.tablesSynced} of ${replica.tablesTotal}` +
-                  (replica.neverSynced.length > 0 ? ` — next: ${replica.neverSynced.slice(0, 3).join(", ")}` : "")
-                : "Waiting for the first sync cycle to start…";
+    const step = replicaProgressStep(sync?.replica);
 
     return (
         <div

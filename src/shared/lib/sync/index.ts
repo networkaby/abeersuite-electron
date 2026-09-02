@@ -20,3 +20,4 @@
 // worker was already on `app:changes`. A design the sync-engine move superseded, left
 // subscribing to silence.
 export * from "./types";
+export * from "./replicaProgress";

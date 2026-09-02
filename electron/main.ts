@@ -477,16 +477,7 @@ let pendingSyncUrl: string | null = null;
  */
 let localAdminUrl: string | null = null;
 
-/** Does this PC hold a counter? Sync is gated on this — see the boot path. */
-function hasCounterSetup(): boolean {
-    try {
-        return fs.existsSync(counterSetupFilePath());
-    } catch {
-        return false;
-    }
-}
-
-ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
+function readCounterSetup(): CounterSetup | null {
     try {
         const file = counterSetupFilePath();
         if (!fs.existsSync(file)) return null;
@@ -499,16 +490,15 @@ ipcMain.handle("counter:get-setup", (): CounterSetup | null => {
         console.error("[main] Could not read counter-setup.json:", err);
         return null;
     }
-});
+}
+
+ipcMain.handle("counter:get-setup", (): CounterSetup | null => readCounterSetup());
 
 ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     try {
         fs.writeFileSync(counterSetupFilePath(), JSON.stringify(setup, null, 2));
-        // A wipe still waiting on the outbox must not run now that this PC is a counter
-        // again — the worker would refill a replica the wipe then empties under it.
-        cancelReplicaWipe();
-        // This PC now has a counter, so it has something to sync for. No-op when the
-        // worker is already up (a reassignment rather than a first claim).
+        // Written LAST in onboarding, after the wizard already started the worker and
+        // waited for the replica to fill (counter:start-sync). No-op when it is up.
         if (pendingSyncUrl) startSyncWorker(pendingSyncUrl);
         // Reflect the (possibly new) counter number in the title immediately —
         // called both at first-launch setup and whenever the renderer discovers
@@ -522,26 +512,38 @@ ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     }
 });
 
-// Called when the replica reports this counter was released — the local file is
-// stale and must not be trusted on the next launch. This PC is no longer a counter,
-// so it stops syncing AND lets go of the data it pulled while it was one: a machine
-// without a counter holds no business data. The wipe waits for the outbox to drain
-// first (replicaWipe.ts), so a sale made offline still reaches the cloud.
-ipcMain.handle("counter:clear-setup", (): boolean => {
+/**
+ * This PC is no longer a counter: drop the file, stop syncing, and empty the replica —
+ * a machine without a counter holds no business data. Called when the app learns of a
+ * release (counter:clear-setup) and at boot when the replica says the file's counter
+ * no longer carries this PC.
+ */
+async function resetCounter(reason: string): Promise<boolean> {
     try {
+        console.log(`[main] Resetting this PC's counter — ${reason}.`);
         const file = counterSetupFilePath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
-        // No counter, no sync — the mirror image of the boot gate above.
+        // No counter, no sync — the mirror image of the boot gate.
         stopSyncWorker();
         currentSyncStatus = "";
         currentConnectionStatus = "";
         mainWindow?.setTitle(APP_TITLE);
-        if (localAdminUrl) requestReplicaWipe(localAdminUrl);
+        if (localAdminUrl) await wipeReplica(localAdminUrl);
         return true;
     } catch (err) {
-        console.error("[main] Could not clear counter-setup.json:", err);
+        console.error("[main] Could not reset the counter:", err);
         return false;
     }
+}
+
+ipcMain.handle("counter:clear-setup", () => resetCounter("released by the office"));
+
+// Onboarding starts the worker BEFORE the file exists: bind in the DB, fill the
+// replica, and only then write counter-setup.json. The boot gate stays on the file.
+ipcMain.handle("counter:start-sync", (): boolean => {
+    if (!pendingSyncUrl) return false;
+    startSyncWorker(pendingSyncUrl);
+    return true;
 });
 
 ipcMain.handle("app:update-window-status", (_, status: { sync: string; connection: string }): void => {
@@ -689,7 +691,7 @@ function setupAutoUpdater(): void {
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
-import { requestReplicaWipe, cancelReplicaWipe } from "./replicaWipe";
+import { wipeReplica, replicaBindsThisPc } from "./replicaWipe";
 import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
@@ -1074,13 +1076,14 @@ app.whenReady().then(async () => {
                 // kept so the wizard can start the worker the moment a counter is claimed.
                 pendingSyncUrl = replica.syncUrl;
                 localAdminUrl = localDbUrl;
-                const isCounter = hasCounterSetup();
-                if (isCounter) startSyncWorker(replica.syncUrl);
+                const setup = readCounterSetup();
+                if (setup) startSyncWorker(replica.syncUrl);
                 else {
-                    console.log("[main] No counter claimed yet — sync worker stays down until setup completes.");
-                    // A counter released while this PC was switched off: the file went at
-                    // the last run but the data may still be here. No-op on a fresh install.
-                    requestReplicaWipe(localDbUrl);
+                    console.log("[main] No counter claimed yet — sync worker stays down until onboarding completes.");
+                    // A PC without a counter holds no business data. A release learned
+                    // of at the last run, or an onboarding that never finished, may have
+                    // left the dataset here. No-op on a fresh install.
+                    await wipeReplica(localDbUrl);
                 }
                 // The outbox flusher runs INSIDE the Next server (see src/instrumentation.ts):
                 // pushing needs the Supabase client, which lives there. Driving it from here
@@ -1099,7 +1102,27 @@ app.whenReady().then(async () => {
                 // on every launch after the first, because `ready` is already true.
                 // Not on a PC with no counter: nothing is filling that replica, so this
                 // would sit on the splash for the whole timeout before showing the wizard.
-                if (isCounter) await waitForReplicaReady(localDbUrl, sendBootProgress);
+                if (setup) {
+                    const wait = await waitForReplicaReady(localDbUrl, sendBootProgress);
+                    // Verify the binding before the app opens. Online, the worker has
+                    // just pulled pos_counters, so the replica IS the DB's answer; offline
+                    // it is the last answer the DB gave. No cloud call either way.
+                    //
+                    // "timeout" means the replica never completed a first pull — an
+                    // onboarding that did not finish. Onboarding ends with the file, so a
+                    // file without a filled replica is not a counter: reset, and the
+                    // wizard resumes on the row the DB still binds to this PC.
+                    //
+                    // "error" is schema drift after an upgrade: the replica WAS ready and
+                    // holds real data. Keep it — the app shows its update screen — because
+                    // an offline PC could never onboard again if it were wiped here.
+                    if (wait === "timeout") {
+                        await resetCounter("the replica never finished its first sync");
+                    } else if (wait === "ready") {
+                        const bound = await replicaBindsThisPc(localDbUrl, setup.counterId, [counterInstallationId]);
+                        if (bound === false) await resetCounter(`counter ${setup.counterNumber} no longer carries this PC`);
+                    }
+                }
             } else {
                 // The server is up but the replica is not usable. Clear the URL
                 // postgresManager set: leaving it would make prismaClient.ts build a

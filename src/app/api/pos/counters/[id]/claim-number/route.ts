@@ -94,6 +94,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // released from it in the same transaction — otherwise this machine would be
         // two counters at once, and its own self-check could no longer tell which.
         const ids = [data.deviceId, data.legacyDeviceId].filter((v): v is string => !!v);
+
+        // Already this PC's — a resumed onboarding (the replica fill or the local file
+        // never completed last time). Nothing to write: touching `boundAt` would only
+        // move a timestamp the push side compares against `releasedAt`.
+        if (counter.boundDeviceId === data.deviceId && counter.idRangeStart === idRangeStart) {
+            return NextResponse.json({ id: counter.id, counterNumber: counter.counterNumber, idRangeStart });
+        }
+
         const updated = await prismaAuthoritative.$transaction(async (tx) => {
             await tx.posCounter.updateMany({
                 where: { id: { not: counterId }, boundDeviceId: { in: ids } },

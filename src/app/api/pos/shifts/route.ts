@@ -264,23 +264,17 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            // Bind the counter to this PC on first open, or migrate it when it was
-            // bound under the old legacyDeviceId and this open presents the
-            // canonical one instead. Also stamp idRangeStart if newly computed.
-            const needsBind = Boolean(body.deviceId && counter.boundDeviceId !== body.deviceId);
+            // Stamp idRangeStart if newly computed. Shift open does NOT bind the counter
+            // to this PC any more: binding happens in counter onboarding only
+            // (/setup/counter → claim-number), which is online, verified against the
+            // DB, and followed by a full replica fill. A shift opened on an unbound
+            // counter used to bind it silently — a second onboarding path with none of
+            // those guarantees. The lock CHECK above stays; only the write is gone.
             const needsRange = Boolean(idRangeStart && idRangeStart !== counter.idRangeStart);
-
-            if (needsBind || needsRange) {
+            if (needsRange) {
                 await tx.posCounter.update({
                     where: { id: counter.id },
-                    data: {
-                        // Clearing `releasedAt` alongside is what makes a rebind final:
-                        // it is the marker the push uses to refuse a STALE bind from a
-                        // machine that was released while offline, so a fresh, deliberate
-                        // bind must retire it or the counter's own next push is refused.
-                        ...(needsBind ? { boundDeviceId: body.deviceId, boundDeviceLabel: body.deviceLabel ?? null, boundAt: new Date(), releasedAt: null } : {}),
-                        ...(needsRange ? { idRangeStart } : {}),
-                    },
+                    data:  { idRangeStart },
                 });
             }
 

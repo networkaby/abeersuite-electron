@@ -22,9 +22,8 @@
 // not ready yet) still trusts the local file, so a boot before the first pull never
 // throws anyone out of the till.
 //
-// The reset itself (electron/replicaWipe.ts) empties the replica once the outbox has
-// drained: a PC without a counter holds no business data, but a sale made offline
-// still gets pushed first.
+// The reset itself (electron/replicaWipe.ts) empties the replica at once: a PC without
+// a counter holds no business data, and the outbox is not consulted.
 //
 // No render output, no cost off a counter PC (reconcileCounterSetup short-circuits to
 // "not-set-up" before ever fetching when there's no local cache to check).
@@ -49,24 +48,15 @@ export default function CounterReconciler() {
             if (status !== "released" || releasing.current) return;
             releasing.current = true;
 
-            // Ask before signing out: the status route needs a session. Best-effort —
-            // the message is just more useful with the number in it.
-            const pending = await fetch("/api/sync/status", { cache: "no-store" })
-                .then((r) => (r.ok ? r.json() : null))
-                .then((b: { pending?: number } | null) => b?.pending ?? 0)
-                .catch(() => 0);
-
+            // Clears the file, stops the worker and empties the replica at once — a PC
+            // without a counter holds no business data (electron/replicaWipe.ts).
             await window.electronAPI?.clearCounterSetup?.();
             // Wording matters here: the usual reason is a DEVICE SWAP, not a closure.
-            // The counter, its shift and its drawer are untouched and have moved to
-            // another PC — this machine is simply not that counter any more, and must
-            // go through setup again to take a different counter number.
+            // The counter, its shift and its drawer are untouched — this machine is
+            // simply not that counter any more, and must be onboarded again.
             toast.error(
-                "This PC no longer holds its counter — it has been released or moved to another computer. " +
-                "The shift and drawer are unaffected. " +
-                (pending > 0
-                    ? `${pending} pending record(s) will be pushed to the cloud, then this PC's local data is cleared. `
-                    : "This PC's local data is being cleared. ") +
+                "This PC no longer holds its counter — an admin released it. " +
+                "The shift and drawer are unaffected. This PC's local data has been cleared. " +
                 "Sign in again, online, to set this PC up on an available counter.",
                 { duration: 15_000 },
             );

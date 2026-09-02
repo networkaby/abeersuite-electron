@@ -1,7 +1,8 @@
-// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…
+// GET /api/pos/counters/my-binding?deviceId=…&legacyDeviceId=…[&authoritative=1]
 //
 // "Does this PC still hold a counter, and is its shift still open?" — answered from
-// the replica, never from Supabase.
+// the replica, except at login while online (`authoritative=1`), where one row is read
+// from Supabase so a release is caught at sign-in.
 //
 // ── Why the replica is enough ───────────────────────────────────────────────
 // The replica is kept honest by the sync worker: an admin's release on live reaches it
@@ -22,7 +23,7 @@
 // route still works, it just is not what Electron calls in practice.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC, isReplicaReady } from "@/shared/lib/prisma/counterMode";
 import { refreshReplicaReadiness } from "@/shared/lib/prisma/replicaReadiness";
 import { requireAuth } from "@/shared/lib/auth/permissions";
@@ -41,6 +42,27 @@ export async function GET(req: NextRequest) {
     if (ids.length === 0) return NextResponse.json({ reachable: false, counter: null });
 
     try {
+        // ── authoritative=1: the login path, when the PC is online ──────────────
+        // One row read from Supabase so a released counter is caught at sign-in rather
+        // than on the next pull. Unreachable falls through to the replica below —
+        // "cannot reach the cloud" is not "released".
+        if (searchParams.get("authoritative") === "1") {
+            try {
+                const counter = await prismaAuthoritative.posCounter.findFirst({
+                    where:  { boundDeviceId: { in: ids } },
+                    select: { id: true, counterNumber: true, name: true },
+                });
+                if (!counter) return NextResponse.json({ reachable: true, counter: null });
+                const openShift = await prismaAuthoritative.posShift.findFirst({
+                    where:  { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
+                    select: { id: true, status: true, userId: true },
+                });
+                return NextResponse.json({ reachable: true, counter, openShift });
+            } catch {
+                // Offline after all — the replica answers.
+            }
+        }
+
         if (IS_COUNTER_PC) {
             // Rate-limited internally; one query per TTL, not per call.
             await refreshReplicaReadiness();

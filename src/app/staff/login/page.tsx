@@ -67,9 +67,9 @@ function StaffLoginForm() {
             // through /setup/counter instead of straight to dest. Never blocks a
             // non-Electron login (office staff, Vercel).
             if (isElectronEnvironment()) {
-                // Replica only, offline or online — no cloud call. A PC with no local
-                // file short-circuits to "not-set-up" without fetching at all.
-                const status = await reconcileCounterSetup();
+                // Online: one row read from the DB. Offline: the replica. A PC with
+                // no local file short-circuits to "not-set-up" without fetching at all.
+                const status = await reconcileCounterSetup(true);
                 if (status === "released") {
                     // Also resets the PC: no counter, no local data (replicaWipe.ts).
                     await window.electronAPI?.clearCounterSetup?.();
@@ -78,9 +78,8 @@ function StaffLoginForm() {
                     router.push(`/setup/counter?next=${encodeURIComponent(dest)}`);
                     return;
                 }
-                // "valid" — unchanged. "reassigned" — already self-healed inside
-                // reconcileCounterSetup (local cache + title rewritten). "unreachable"
-                // — replica not ready yet, trust the local file. All three proceed.
+                // "valid" — go in. "unreachable" — the replica could not answer; trust
+                // the file, the readiness gate keeps the app covered until it can.
             }
 
             router.push(dest);
