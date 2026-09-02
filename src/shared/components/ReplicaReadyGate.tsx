@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useCounterMode } from "@/shared/hooks/useCounterMode";
+import { useSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { COUNTER_FREE_ROUTES } from "@/shared/components/CounterSetupGuard";
 
 /**
@@ -43,6 +44,9 @@ import { COUNTER_FREE_ROUTES } from "@/shared/components/CounterSetupGuard";
  */
 export default function ReplicaReadyGate() {
     const status = useCounterMode();
+    // Progress, so the wait is not a blank spinner: the replica's own count of tables
+    // copied, and which are still to come. Same poll the shell badge already runs.
+    const sync = useSyncStatus();
     const pathname = usePathname();
 
     if (COUNTER_FREE_ROUTES.some((p) => pathname?.startsWith(p))) return null;
@@ -51,6 +55,15 @@ export default function ReplicaReadyGate() {
     if (status.replicaReady) return null;
 
     const halted = status.replicaSchemaOk === false;
+    const replica = sync?.replica ?? null;
+    const step = !replica
+        ? "Checking the local copy…"
+        : replica.failing.length > 0
+            ? `Retrying ${replica.failing.length} table(s): ${replica.failing.slice(0, 3).join(", ")}`
+            : replica.tablesTotal > 0
+                ? `Copying tables: ${replica.tablesSynced} of ${replica.tablesTotal}` +
+                  (replica.neverSynced.length > 0 ? ` — next: ${replica.neverSynced.slice(0, 3).join(", ")}` : "")
+                : "Waiting for the first sync cycle to start…";
 
     return (
         <div
@@ -81,6 +94,11 @@ export default function ReplicaReadyGate() {
                         ? "This PC's app is older than the office data, so it has stopped copying rather than save against records it does not fully understand. Billing is paused."
                         : "This PC's local copy of the data is still catching up. Billing is paused until it finishes, so nothing is entered against incomplete records."}
                 </p>
+                {!halted && (
+                    <p className="font-mono text-xs text-foreground/80" aria-live="polite">
+                        {step}
+                    </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                     {halted
                         ? "Waiting will not clear this screen. Tell the office that this counter needs the latest app installed."
