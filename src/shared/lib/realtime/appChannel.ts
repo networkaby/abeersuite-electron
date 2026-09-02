@@ -244,6 +244,28 @@ export function setWritesGoLocal(local: boolean) {
     writesGoLocal = local;
 }
 
+/**
+ * Where this machine's READS come from, as reported by `/api/counter/status`.
+ *
+ * On a counter serving screens from its replica (READ_MODE local or shadow), the
+ * `app:changes` signal arrives while the worker is still pulling, so a refetch it
+ * schedules reads the old rows. The worker's own `sync:applied` (see syncApplied.ts)
+ * is the signal that means the rows are queryable here; `useRealtimeTopics` uses this
+ * flag to wait for that one instead of refetching twice, once stale.
+ *
+ * Defaults to false so a browser, Vercel, or a till on READ_MODE=live keeps refetching
+ * on the Supabase signal exactly as before.
+ */
+let readsGoLocal = false;
+
+export function setReadsGoLocal(local: boolean) {
+    readsGoLocal = local;
+}
+
+export function getReadsGoLocal(): boolean {
+    return readsGoLocal;
+}
+
 /** Announce that these topics changed. Coalesced; safe to call as often as you like.
  *  Supabase broadcast does not echo to the sender, so the acting tab is untouched —
  *  it already knows, and updates through its own save path. */

@@ -5,8 +5,9 @@
 // Lists shifts in the active branch by default. Filters: status, counter,
 // date range, branch scope (admin). Variance column color-coded.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronRight, ArrowDownUp, Clock, AlertTriangle, Users } from "lucide-react";
@@ -45,9 +46,10 @@ export default function ShiftsReportPage() {
     });
     const [to, setTo] = useState(() => toIsoDate(new Date()));
 
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLoading(true);
+    // `spinner` only on the first load / filter change; a live re-read keeps the
+    // table in place rather than blinking it.
+    const load = useCallback((spinner: boolean) => {
+        if (spinner) setLoading(true);
         const q = new URLSearchParams();
         if (status) q.set("status", status);
         if (branchScope === "all") q.set("branchId", "all");
@@ -61,6 +63,11 @@ export default function ShiftsReportPage() {
             })
             .finally(() => setLoading(false));
     }, [status, branchScope, from, to]);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => { load(true); }, [load]);
+    // Shifts open, drop and close from the tills — re-read when the books move.
+    useRealtimeTopics(["ledger"], () => load(false));
 
     return (
         <ScrollArea className="h-full" type="always">

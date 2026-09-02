@@ -42,6 +42,7 @@ import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
 import CompanyProfileTab from "@/modules/customer/components/CompanyProfileTab";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type AccountRef = { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
 
@@ -164,6 +165,8 @@ export default function AllCustomersPage() {
         axios.get<CompanyRow[]>("/api/companies", { params }).then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
     }, [debouncedSearch, canSeeCreditors, showInactive]);
     useEffect(() => { reloadLists(); }, [reloadLists]);
+    // A customer created or edited on another PC appears in the list without F5.
+    useRealtimeTopics(["parties"], reloadLists);
 
     // Pre-select a row from URL query params on mount.  Day Book / register
     // tables link here as /office/customers/all?personId=<id> or ?companyId=<id>
@@ -249,6 +252,9 @@ export default function AllCustomersPage() {
             .catch(() => { })
             .finally(() => setTxLoading(false));
     }, [selected]);
+    // The open party's statement follows the books; `reloadTransactions` is a
+    // no-op with nothing selected.
+    useRealtimeTopics(["ledger"], reloadTransactions);
 
     useEffect(() => {
         if (!selected) return;

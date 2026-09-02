@@ -25,6 +25,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import UniversalCustomerPanel from "@/modules/home/UniversalCustomerPanel";
+import LiveRefresh from "@/modules/home/LiveRefresh";
 import {
     RepairBriefing,
     ShowroomBriefing,
@@ -71,6 +72,8 @@ export default async function OfficePage() {
     return (
         <ScrollArea className="h-full" type="always">
         <div className="space-y-6 px-6 pt-3 pb-6">
+            {/* Briefing cards are server-rendered; re-render when the floor moves. */}
+            <LiveRefresh topics={["ledger", "stock", "tickets", "tasks"]} />
             {/* Greeting */}
             <div>
                 <h1 className="text-2xl font-bold text-foreground">

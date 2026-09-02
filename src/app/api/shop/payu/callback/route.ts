@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { payuCreds, verifyPayuResponse, payuAmount } from "@/shared/lib/payments/payu";
 import { markOrderPaid } from "@/modules/order/lib/markOrderPaid";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 // PayU posts the payment result (application/x-www-form-urlencoded) to this URL as
 // both surl (success) and furl (failure). We verify the reverse hash, confirm the
@@ -60,6 +61,9 @@ export async function POST(req: Request) {
     });
     if (!result.ok) return backToOrder(req, order.ticketId, true);
 
+    // PayU posted straight here — no browser, so no axios interceptor to announce
+    // the write. Published after markOrderPaid returned, i.e. after commit.
+    void publishChangeServer(["ledger", "stock"]);
     return backToOrder(req, order.ticketId, false);
 }
 

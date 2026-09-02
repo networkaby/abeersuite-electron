@@ -11,6 +11,8 @@
  *   node sync-once.js --dry-run     report what would move, write nothing
  *   node sync-once.js               sync
  *   node sync-once.js --only Ticket sync one model (and its children)
+ *   node sync-once.js --reason signal   what woke this cycle (index.js passes it);
+ *                                       signal|queued may trust a recent schema check
  *
  * Config: config.json beside this file (see config.example.json).
  */
@@ -30,6 +32,41 @@ const args = process.argv.slice(2);
 const DRY = args.includes("--dry-run");
 const onlyIdx = args.indexOf("--only");
 const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1] : null;
+const reasonIdx = args.indexOf("--reason");
+/** Why this cycle runs: startup | interval | signal | queued | manual (default). */
+const REASON = reasonIdx >= 0 ? args[reasonIdx + 1] : "manual";
+
+/**
+ * Tables in flight at once, per pass.
+ *
+ * An idle cycle is ~80 small Supabase round-trips, and run one after another on a
+ * single connection they cost ~0.6 s of pure latency. The tables inside a pass are
+ * independent of each other (foreign keys are suspended per transaction, and
+ * `_sync_state` is one row per table), so nothing but the connection count stops them
+ * overlapping. Four is enough to hide the latency without leaning on the pooler.
+ */
+const CONCURRENCY = 4;
+
+/**
+ * How long a passed schema check stays trusted for a cycle woken by a signal.
+ *
+ * Drift is a deploy event, and the interval cycle (see index.js, same 10 minutes)
+ * always re-checks. Re-running two `information_schema` scans on every signal — one
+ * of them against Supabase — bought nothing between those checks.
+ */
+const SCHEMA_TRUST_MS = 10 * 60 * 1000;
+
+/** Run `fn` over `items`, at most `limit` at a time, in order of start. */
+async function runLimited(items, limit, fn) {
+    let next = 0;
+    const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (next < items.length) {
+            const item = items[next++];
+            await fn(item);
+        }
+    });
+    await Promise.all(lanes);
+}
 
 /** Rows per page. Bounds both memory and the size of one transaction. */
 const PAGE = 2000;
@@ -44,11 +81,17 @@ const MAX_PAGES = 50;
 /**
  * How stale a table's equality proof may get before it is re-checked.
  *
- * Only `watermark` and `append` tables are reconciled at all. `full` is exact by
- * construction (replaced wholesale) and `child` is exact for any parent that moved,
- * so spending queries on them would buy nothing.
+ * `watermark`, `append` AND `child` tables are reconciled. `full` is exact by
+ * construction (replaced wholesale). `child` was excluded on the argument that it is
+ * exact for any parent that moved — true, but a child row inserted WITHOUT touching
+ * its parent's `updatedAt` never moves the parent, so it is never pulled, and nothing
+ * else looks at that table again. Found on a real replica (2026-09-03): 26
+ * `LoyaltyLedger` and 24 `LoyaltyLot` rows in Supabase, 0 here, every cycle "0 failed".
+ * The fingerprint is two numbers per side, so proving a child table costs the same as
+ * any other.
  */
 const VERIFY_INTERVAL_MS = 60 * 60 * 1000;
+const VERIFY_STRATEGIES = ["watermark", "append", "child"];
 
 /** Tables reconciled per cycle. Spreads the cost instead of a periodic stall. */
 const VERIFY_BUDGET = 12;
@@ -84,8 +127,10 @@ async function main() {
     const { tables, ignore } = registryLib.load(registryPath);
     const order = registryLib.syncOrder(tables);
 
-    const sourcePool = pool(cfg.sourceUrl, 2);
-    const localPool = pool(cfg.localUrl, 2);
+    // One long-lived client per side for the bookkeeping (guard, state, reconcile,
+    // status), plus one per lane for the table passes below.
+    const sourcePool = pool(cfg.sourceUrl, CONCURRENCY + 1);
+    const localPool = pool(cfg.localUrl, CONCURRENCY + 1);
     const source = await sourcePool.connect();
     const local = await localPool.connect();
 
@@ -131,7 +176,19 @@ async function main() {
 
         // Checked before anything is written: syncing into a replica of the wrong
         // shape produces rows that are quietly incomplete rather than an error.
-        const schema = await schemaGuard.compare(source, local, ignore);
+        //
+        // A signal-woken cycle may reuse the verdict of a recent full check instead:
+        // startup, interval and retry cycles always compare, so drift is still caught
+        // within the interval, and a missing or failed status row always compares.
+        let schema = null;
+        if (REASON === "signal" || REASON === "queued") {
+            const last = await status.read(local).catch(() => null);
+            const age = last && last.last_cycle_at ? Date.now() - new Date(last.last_cycle_at).getTime() : Infinity;
+            if (last && last.schema_ok && age < SCHEMA_TRUST_MS) {
+                schema = { ok: true, detail: last.schema_detail || "in step with source" };
+            }
+        }
+        if (!schema) schema = await schemaGuard.compare(source, local, ignore);
         if (!schema.ok) {
             console.error("");
             console.error("SCHEMA DRIFT - refusing to sync.");
@@ -159,9 +216,24 @@ async function main() {
 
         const want = (model) => !ONLY || model === ONLY || tables[model].parent === ONLY;
 
-        // Pass 1: tables that stand on their own.
-        for (const model of order.independent) {
-            if (!want(model)) continue;
+        /**
+         * Run one table on its own pair of connections. Lanes overlap; the bookkeeping
+         * (`moved`, counters, `changedModels`) is plain JS state touched between awaits,
+         * which is safe on one thread.
+         */
+        const withLane = async (fn) => {
+            const src = await sourcePool.connect();
+            const loc = await localPool.connect();
+            try {
+                await fn(src, loc);
+            } finally {
+                src.release();
+                loc.release();
+            }
+        };
+
+        // Pass 1: tables that stand on their own, CONCURRENCY at a time.
+        await runLimited(order.independent.filter(want), CONCURRENCY, (model) => withLane(async (source, local) => {
             const entry = tables[model];
             try {
                 let res;
@@ -178,7 +250,7 @@ async function main() {
                         // Still record the pass so every table has a freshness stamp.
                         if (!DRY) await state.recordSuccess(local, entry, model, null);
                         moved.set(model, []);
-                        continue;
+                        return;
                     }
                     res = DRY ? { pulled: -1, ids: [] } : await pullFull(source, local, entry);
                 } else {
@@ -225,39 +297,49 @@ async function main() {
                 console.error(`  ${model.padEnd(28)} FAILED: ${e.message}`);
                 if (!DRY) await state.recordFailure(local, entry, model, e).catch(() => {});
             }
-        }
+        }));
 
         // Pass 2: children, shallowest first, so a parent's rewritten ids are already
-        // known by the time its own children ask which parents moved.
+        // known by the time its own children ask which parents moved. Each depth runs
+        // CONCURRENCY-wide; depths run one after another, because a depth-2 child
+        // filters on ids its depth-1 parent has only just finished writing.
+        const byDepth = new Map();
         for (const model of order.children) {
             if (!want(model)) continue;
-            const entry = tables[model];
-            const parentIds = moved.get(entry.parent) || [];
-            if (parentIds.length === 0) {
-                moved.set(model, []);
-                // Record the pass anyway. Without this a child whose parent did not
-                // move has NO row in _sync_state, and "never synced" becomes
-                // indistinguishable from "nothing to do" - which is exactly the
-                // question the replicaReady gate has to answer.
-                if (!DRY) await state.recordSuccess(local, entry, model, null).catch(() => {});
-                continue;
-            }
-            try {
-                const res = DRY
-                    ? { pulled: parentIds.length, ids: [] }
-                    : await pullChildren(source, local, entry, parentIds);
-                moved.set(model, res.ids);
-                if (res.pulled !== 0) changedModels.add(model);
-                pulledTotal += res.pulled;
-                if (!DRY) await state.recordSuccess(local, entry, model, null);
-                if (res.pulled !== 0) {
-                    console.log(`  ${model.padEnd(28)} child     ${res.pulled} (for ${parentIds.length} parent(s))`);
+            const d = registryLib.depthOf(model, tables, new Set());
+            if (!byDepth.has(d)) byDepth.set(d, []);
+            byDepth.get(d).push(model);
+        }
+        for (const depth of [...byDepth.keys()].sort((a, b) => a - b)) {
+            await runLimited(byDepth.get(depth), CONCURRENCY, (model) => withLane(async (source, local) => {
+                const entry = tables[model];
+                const parentIds = moved.get(entry.parent) || [];
+                if (parentIds.length === 0) {
+                    moved.set(model, []);
+                    // Record the pass anyway. Without this a child whose parent did not
+                    // move has NO row in _sync_state, and "never synced" becomes
+                    // indistinguishable from "nothing to do" - which is exactly the
+                    // question the replicaReady gate has to answer.
+                    if (!DRY) await state.recordSuccess(local, entry, model, null).catch(() => {});
+                    return;
                 }
-            } catch (e) {
-                failed++;
-                console.error(`  ${model.padEnd(28)} FAILED: ${e.message}`);
-                if (!DRY) await state.recordFailure(local, entry, model, e).catch(() => {});
-            }
+                try {
+                    const res = DRY
+                        ? { pulled: parentIds.length, ids: [] }
+                        : await pullChildren(source, local, entry, parentIds);
+                    moved.set(model, res.ids);
+                    if (res.pulled !== 0) changedModels.add(model);
+                    pulledTotal += res.pulled;
+                    if (!DRY) await state.recordSuccess(local, entry, model, null);
+                    if (res.pulled !== 0) {
+                        console.log(`  ${model.padEnd(28)} child     ${res.pulled} (for ${parentIds.length} parent(s))`);
+                    }
+                } catch (e) {
+                    failed++;
+                    console.error(`  ${model.padEnd(28)} FAILED: ${e.message}`);
+                    if (!DRY) await state.recordFailure(local, entry, model, e).catch(() => {});
+                }
+            }));
         }
         // ---- Pass 3: reconcile a few tables against the source ----------------
         //
@@ -267,9 +349,9 @@ async function main() {
         // Both directions are repaired.
         if (!DRY) {
             const nowMs = Date.now();
-            const due = order.independent
+            const due = [...order.independent, ...order.children]
                 .filter((m) => want(m))
-                .filter((m) => ["watermark", "append"].includes(tables[m].strategy))
+                .filter((m) => VERIFY_STRATEGIES.includes(tables[m].strategy))
                 .filter((m) => {
                     const st = prior.get(tables[m].n);
                     const last = st && st.last_verify_at ? new Date(st.last_verify_at).getTime() : 0;
@@ -302,6 +384,9 @@ async function main() {
                     const removed = await deleteByKeys(local, entry, diff.onlyLocal);
                     const added = await pullByKeys(source, local, entry, diff.onlySource);
                     repaired += removed + added;
+                    // A repair changes what this replica serves just as a pull does, so
+                    // the screens must hear about it (see __SYNC_APPLIED__ below).
+                    if (removed + added > 0) changedModels.add(model);
                     console.log(
                         `  ${model.padEnd(28)} repair    -${removed} +${added}`,
                     );
@@ -362,9 +447,10 @@ async function main() {
     // committed and the pools are closed, so a reader that acts on it is guaranteed the
     // rows are already queryable -- which is the entire point: the app's screens used to
     // re-read the replica in parallel with this process and routinely beat it there.
-    // Silent when nothing moved, so a no-op cycle wakes nobody.
-    if (!DRY && pulledTotal > 0) {
-        console.log(`__SYNC_APPLIED__ ${JSON.stringify({ rows: pulledTotal, models: [...changedModels] })}`);
+    // Silent when nothing moved, so a no-op cycle wakes nobody. Rows repaired by the
+    // reconcile pass count: they change what the replica serves exactly as a pull does.
+    if (!DRY && pulledTotal + repaired > 0) {
+        console.log(`__SYNC_APPLIED__ ${JSON.stringify({ rows: pulledTotal + repaired, models: [...changedModels] })}`);
     }
     process.exit(failed === 0 ? 0 : 1);
 }

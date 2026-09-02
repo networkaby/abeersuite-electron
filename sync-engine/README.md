@@ -149,6 +149,15 @@ row changed" but never "this row is gone". Nesting is handled — `TicketOrderLi
 sits at depth 2 behind `TicketOrder` behind `Ticket`, so its parent's ids are already
 known by the time it runs.
 
+**Four tables at a time (2026-09-03).** An idle cycle is ~80 small round-trips to
+Supabase; run one after another on a single connection they cost ~0.6 s of pure
+latency. Tables inside a pass are independent of each other — foreign keys are
+suspended per transaction, and `_sync_state` is one row per table — so each pass now
+runs `CONCURRENCY` (4) tables in parallel, each on its own pair of pooled connections.
+Pass 2 keeps its ordering by running one depth at a time: a depth-2 child filters on
+ids its depth-1 parent has only just finished writing. Pass 3 is unchanged (already
+budgeted). `__SYNC_APPLIED__` still prints once, after every lane has committed.
+
 ### Two things that keep it cheap
 
 **A `full` table is fingerprinted before it is copied.** Replacing 22 reference
@@ -195,9 +204,13 @@ A watermark reports that a row **changed**; it can never report that a row is
 **gone**. So each cycle re-proves a few tables equal to the source, oldest proof
 first, budgeted so the cost is spread rather than arriving as a periodic stall.
 
-Only `watermark` and `append` tables are reconciled. `full` is exact by construction
-(replaced wholesale) and `child` is exact for any parent that moved, so spending
-queries on them would buy nothing.
+`watermark`, `append` and `child` tables are reconciled; `full` is exact by construction
+(replaced wholesale). `child` used to be skipped on the argument that it is exact for
+any parent that moved — which is true, and not enough: a child row inserted without
+touching its parent's `updatedAt` never moves the parent, so it is never pulled, and
+nothing else ever looked at that table. Found on a real replica on 2026-09-03: 26
+`LoyaltyLedger` and 24 `LoyaltyLot` rows in Supabase, 0 locally, every cycle reporting
+"0 failed". A child table costs the same two numbers to prove as any other.
 
 The cheap check runs first (count + key hash, two numbers per side). Only a mismatch
 pays to move keys, and then both directions are repaired:
@@ -297,6 +310,14 @@ There are no Prisma migrations here (schema is applied with `db push`), so there
 no migration hash to compare. The worker instead compares `information_schema`
 column-by-column on both sides, over SQL — no HTTP hop, no endpoint to secure, since
 it already holds a connection to each.
+
+**A signal-woken cycle may trust the last check.** `index.js` passes `--reason` to
+each cycle. For `signal` and `queued` cycles the worker reuses the verdict in
+`_sync_status` when `schema_ok` is true and `last_cycle_at` is within the 10-minute
+interval, instead of re-scanning `information_schema` on both sides — one of them on
+Supabase — for every keystroke's worth of signals. Startup, interval and retry cycles
+always compare, and so does any cycle where that row is missing or says not-ok, so
+drift is still caught within one interval.
 
 **Missing or retyped columns halt the sync** (exit 4). A column added upstream but
 absent locally means rows arrive quietly incomplete — a report renders with a field

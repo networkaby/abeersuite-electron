@@ -81,7 +81,12 @@ function runCycle(reason) {
     running = true;
     log(`cycle start (${reason})`);
 
-    const child = spawn(process.execPath, [path.resolve(__dirname, "sync-once.js")], {
+    // Tell the cycle what woke it: a signal-woken cycle may trust a recent schema
+    // check (see SCHEMA_TRUST_MS in sync-once.js); every other kind re-checks.
+    const reasonArg = reason === "change signal" ? "signal"
+        : reason === "queued signal" ? "queued"
+            : reason;
+    const child = spawn(process.execPath, [path.resolve(__dirname, "sync-once.js"), "--reason", reasonArg], {
         cwd: __dirname,
         stdio: ["ignore", "pipe", "pipe"],
     });

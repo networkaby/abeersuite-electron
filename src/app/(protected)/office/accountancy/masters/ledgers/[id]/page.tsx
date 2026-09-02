@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
@@ -114,6 +115,8 @@ export default function GroupLedgersPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(1, ""); }, [load]);
+    // Balances move with every voucher; re-read the page the user is on.
+    useRealtimeTopics(["ledger"], () => load(page, search));
 
     const handleSearch = (value: string) => {
         setSearch(value);

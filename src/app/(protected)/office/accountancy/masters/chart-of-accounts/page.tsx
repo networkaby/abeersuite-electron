@@ -11,6 +11,7 @@ import {
 import { fmt, GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/utils/constants";
 import { CreateGlAccountDialog } from "@/modules/accountancy/components/CreateGlAccountDialog";
 import type { GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type NormalBalance = "DEBIT" | "CREDIT";
 
@@ -58,6 +59,8 @@ export default function ChartOfAccountsPage() {
     };
 
     useEffect(load, []);
+    // Balances move with every voucher — re-read without the spinner.
+    useRealtimeTopics(["ledger"], load);
 
     // Group accounts by their parent group's type. Rows with no group fall
     // into a separate "Ungrouped" bucket so they're visible (post-seed there

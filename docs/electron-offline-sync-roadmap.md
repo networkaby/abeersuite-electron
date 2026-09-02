@@ -83,8 +83,8 @@
   `next dev` can be adopted into the POS window. (The serving port itself is 786.)
 - **The installer ships `node_modules` twice** — the 2026-08-24 size audit measured
   ~646 MB extracted loose that nothing at runtime loads.
-- **`schemaCheck.ts` has zero callers** — superseded in practice by the sync engine's own
-  `schemaGuard.js`, which does halt on drift.
+- ~~`schemaCheck.ts` has zero callers~~ — deleted 2026-09-03; the sync engine's own
+  `schemaGuard.js` is the guard and does halt on drift.
 
 ---
 
@@ -182,23 +182,39 @@ Two facts that were previously glossed over:
 
 ---
 
-## 4. Synchronization strategy (design intention)
+## 4. Synchronization strategy (as built, 2026-09-03)
 
 ### 4.1 Event-driven realtime flow
 
-1. **Local mutation** commits to local PostgreSQL with no network wait.
-2. **Outbox** records it durably — this must be a **table in the local database**. The
-   old `src/shared/lib/sync/outbox.ts` was an in-process array with no callers and was
-   deleted on 2026-08-26 rather than left looking implemented; it has no replacement yet.
-   Whatever replaces it must enqueue in the **same local transaction** as the row it
-   describes, or a crash between the two silently loses the write.
-3. **Flush and broadcast** — the worker pushes to Supabase and publishes a small event:
-   ```json
-   { "n": 12, "ts": "2026-08-23T06:05:00.000Z", "originId": "counter-pos-01" }
-   ```
-4. **Selective delta pull elsewhere** — other terminals receive the event, filter out their own
-   `originId`, map table number `n` through `prisma/sync-tables.json`, and query Supabase for
-   **only that table** where `updatedAt >= ts`.
+The signal vocabulary is **topics**, not table numbers — eight coarse buckets in
+[`src/shared/lib/realtime/topics.ts`](../src/shared/lib/realtime/topics.ts), published on
+one Supabase Realtime channel (`app:changes`) as `{ topics, at }` and never a row. A signal
+always means **"the rows are in Supabase now"**; correctness never depends on it (watermarks
+and reconcile run regardless), it only makes things happen sooner.
+
+1. **Local mutation** commits to the counter's PostgreSQL (`WRITE_MODE=local`). The
+   `_outbox_capture` trigger records it in `_outbox` in the same transaction and ends with
+   `pg_notify('outbox_changed')`, delivered only at commit.
+2. **Push** — the in-process flusher ([`flusher.ts`](../src/shared/lib/sync/flusher.ts))
+   holds `LISTEN outbox_changed`, pushes the batch through Prisma to Supabase, and only
+   after `markOutboxPushed` retires a non-empty batch does it publish `ALL_TOPICS`. The
+   counter's own browser stays silent under `WRITE_MODE=local` (`setWritesGoLocal`), so
+   nothing announces before Supabase holds the row.
+3. **Other writers announce themselves too.** A browser on Vercel or `WRITE_MODE=live`
+   publishes from the axios response interceptor (after the server's commit). Writes with
+   no browser behind them call `publishChangeServer` after their DB work returns: the
+   epbx bridge (`/api/calls`), the payment callbacks (Razorpay, PayU) and the courier
+   webhooks (Shiprocket, Shipway).
+4. **Pull** — every counter's `sync-engine` hears the signal, settles 750 ms, and runs a
+   cycle (four tables at a time, schema guard trusted from the last full check). When a
+   cycle actually wrote rows it prints `__SYNC_APPLIED__`, which `syncManager.ts` forwards
+   to every window as `sync:applied`.
+5. **Screens** — `useRealtimeTopics(topics, reload)` re-reads after a 600 ms settle. On a
+   counter that reads its replica (`READ_MODE` local/shadow) the hook ignores the early
+   Supabase signal and waits for `sync:applied`, so it refetches once, after the rows have
+   landed, never a stale read first. A server-rendered page (the office home) uses
+   [`LiveRefresh`](../src/modules/home/LiveRefresh.tsx), which calls `router.refresh()` on
+   the same hook.
 
 ### 4.2 Table strategies — actual registry contents
 
@@ -214,11 +230,14 @@ Two facts that were previously glossed over:
 
 ### 4.3 Offline resilience
 
-- **Durable outbox** drained sequentially on reconnect.
-- **Heartbeat catch-up** every 5–10 minutes to cover brief drops.
-- **Collision-free IDs** — vouchers are already prefixed by the counter's EPBX extension.
-- **Schema drift guard** — `schemaCheck.ts` already exists and works; it must become a
-  precondition of syncing rather than dead code.
+- **Durable outbox** drained in `_outbox.id` order on reconnect, stopping at the first
+  failure; a stuck row backs off and is dead-lettered so the queue behind it moves.
+- **Interval catch-up** every 10 minutes (worker) and 60 s (flusher) as safety nets for
+  writes that emitted no signal — scripts, seeds, a restore.
+- **Collision-free IDs** — per-counter autoincrement ranges applied at setup
+  (`_apply_id_range`), gating every local write.
+- **Schema drift guard** — `sync-engine/lib/schemaGuard.js` compares `information_schema`
+  on both sides and halts the cycle (exit 4) on a missing or retyped column.
 
 ---
 

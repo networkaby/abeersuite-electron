@@ -23,6 +23,7 @@ import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { VoucherActionsMenu, editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,12 @@ export default function InventoryDetailsPage() {
     useEffect(() => {
         loadProducts();
     }, [loadProducts]);
+    // Stock vouchers announce `stock`, product edits `catalogue`: refresh the list and
+    // the open product's movements in place.
+    useRealtimeTopics(["stock", "catalogue"], () => {
+        loadProducts();
+        if (selectedId) loadDetail(selectedId, from, to);
+    });
 
     const loadDetail = useCallback((id: number, f: string, t: string) => {
         setDetailLoading(true);

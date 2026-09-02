@@ -22,6 +22,7 @@ import { InvProductDialog } from "@/modules/inventory/components/InvProductDialo
 import { useEscape } from "@/shared/hooks";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { TableScrollArea } from "@/shared/components/TableScrollArea";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,8 @@ export default function StockSummaryPage() {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { reload(); }, [reload]);
+    // Every stock voucher announces `stock`; re-read so the summary follows the floor.
+    useRealtimeTopics(["stock"], () => { void reload(); });
 
     // ── Group + roll up (client side) ─────────────────────────────────────────
     const grouped = useMemo(() => {

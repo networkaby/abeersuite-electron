@@ -62,6 +62,7 @@ import { SortHeader } from "@/shared/components/SortHeader";
 import { useTableSort, useEscape } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api";
 import { gridRowClass } from "@/shared/lib/format";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { fmt } from "@/utils/constants";
 
 type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
@@ -278,6 +279,8 @@ export default function ReorderPage() {
     }, [branchId, tab, tolerance]);
 
     useEffect(() => { void load(); }, [load]);
+    // Sales and inward move `stock`; floors and lead times move `catalogue`.
+    useRealtimeTopics(["stock", "catalogue"], () => { void load(); });
 
     // Inline edit of leadTimeDays / lowStockThreshold — PATCH then reload so
     // the computed level/threshold columns stay server-authoritative.

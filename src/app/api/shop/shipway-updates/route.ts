@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { shipwayStatusToStage } from "@/modules/delivery/lib/shipwayStatus";
 import { mirrorStageToOrder } from "@/modules/delivery/lib/mirrorOrderStage";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 // POST /api/shop/shipway-updates — Shipway tracking webhook.
 //
@@ -49,6 +50,9 @@ export async function POST(req: Request) {
         if (stage) {
             await prisma.ticket.update({ where: { id: del.ticketId }, data: { status: stage } });
             await mirrorStageToOrder(del, stage, awb).catch(() => undefined);
+            // Shipway posted straight here — no browser, so no axios interceptor to
+            // announce the write. Published after both writes returned.
+            void publishChangeServer(["tickets", "ledger"]);
         }
         return NextResponse.json({ ok: true, statusId: stage });
     } catch {

@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 /**
  * Razorpay webhook — PARKED.
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
             data: { razorpayPaymentId: paymentId ?? null },
         });
 
+        // Razorpay posted straight here — no browser, so no axios interceptor to
+        // announce the write. Published after the update returned, i.e. after commit.
+        void publishChangeServer(["ledger", "stock"]);
         return NextResponse.json({ ok: true, parked: true });
     } catch (e) {
         console.error(e);

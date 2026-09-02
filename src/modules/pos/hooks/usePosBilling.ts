@@ -28,6 +28,7 @@ import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { scoreProductSearch, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -204,6 +205,17 @@ export function usePosBilling(opts: {
         })();
         return () => { cancelled = true; };
     }, []);
+
+    // Keep that in-memory catalogue current while the till sits open: a price
+    // re-freeze, a new SKU or a stock voucher elsewhere announces `catalogue` /
+    // `stock`, and the same delta top-up runs again. Cart lines stay snapshotted,
+    // so a sale in progress never shifts.
+    useRealtimeTopics(["catalogue", "stock"], () => {
+        void (async () => {
+            const synced = await syncProducts<ProductOption>();
+            if (synced) setAllProducts(synced);
+        })();
+    });
 
     // Load the active POS services once — added via the "+ Add service charge"
     // button in the cart (not the product search — services have no barcode).

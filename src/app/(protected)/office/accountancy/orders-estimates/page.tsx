@@ -22,6 +22,7 @@ import {
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { ConvertVoucherButton } from "@/modules/accountancy/components/ConvertVoucherButton";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // The convertible commercial documents this register lists.
 const TYPES = "ESTIMATE,POS_ESTIMATE,SALES_ORDER,POS_ORDER,ONLINE_ORDER,PURCHASE_ORDER";
@@ -52,6 +53,8 @@ export default function OrdersEstimatesPage() {
     const reload                = useCallback(() => setTick((t) => t + 1), []);
 
     const filters = useRegisterFilters("reg:orders-estimates");
+    // A new estimate, order or conversion anywhere re-reads the register.
+    useRealtimeTopics(["ledger", "stock"], reload);
 
     useEffect(() => {
         setLoading(true);

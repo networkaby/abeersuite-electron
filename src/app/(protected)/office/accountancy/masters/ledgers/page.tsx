@@ -13,6 +13,7 @@ import { fmt } from "@/utils/constants";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { flattenGroups } from "@/modules/accountancy/lib/groupOptions";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -139,6 +140,8 @@ export default function LedgersPage() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+    // Balances move with every voucher; `load` keeps the spinner off after first paint.
+    useRealtimeTopics(["ledger"], load);
 
     const toggle = (id: number) =>
         setExpanded((prev) => {

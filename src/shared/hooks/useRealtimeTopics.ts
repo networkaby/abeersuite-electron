@@ -34,7 +34,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { onChangeSignal } from "@/shared/lib/realtime/appChannel";
+import { onChangeSignal, getReadsGoLocal } from "@/shared/lib/realtime/appChannel";
 import { ensureSyncAppliedBridge, SYNC_APPLIED_EVENT } from "@/shared/lib/realtime/syncApplied";
 import type { Topic } from "@/shared/lib/realtime/topics";
 
@@ -69,20 +69,25 @@ export function useRealtimeTopics(
             timer = setTimeout(run, SETTLE_MS);
         };
 
+        // On a counter the worker says when pulled rows are really queryable — see
+        // syncApplied.ts. Not filtered by topic: the worker reports models, and mapping
+        // models back to topics would mean hand-maintaining a second map that silently
+        // narrows what refreshes as the schema grows, which is exactly how the worker's
+        // own topic map rotted. A cycle that pulled nothing stays silent, so this only
+        // fires when something really did change on this machine.
+        const bridged = ensureSyncAppliedBridge();
+
         const offApp = onChangeSignal((sig) => {
             if (!sig.topics.some((t) => wanted.has(t))) return;
+            // Screens served from the replica would read the OLD rows here: the signal
+            // arrives while the worker is still pulling. Wait for `sync:applied` instead
+            // (one fresh read rather than a stale one followed by a fresh one). Only when
+            // that bridge exists and the status endpoint has said reads are local —
+            // a browser, Vercel, or READ_MODE=live keeps refetching on this signal.
+            if (bridged && getReadsGoLocal()) return;
             schedule();
         });
 
-        // On a counter the signal above fires while the replica is still being written,
-        // so the read it schedules can land before the data does. This second source is
-        // the worker saying the rows ARE there now — see syncApplied.ts. Not filtered by
-        // topic: the worker reports models, and mapping models back to topics would mean
-        // hand-maintaining a second map that silently narrows what refreshes as the
-        // schema grows, which is exactly how the worker's own topic map rotted. A cycle
-        // that pulled nothing stays silent, so this only fires when something really did
-        // change on this machine.
-        ensureSyncAppliedBridge();
         const onApplied = () => schedule();
         window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
 

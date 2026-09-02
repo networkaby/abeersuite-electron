@@ -38,6 +38,7 @@ import { resolveTicketSource, type WorkArg } from "@/modules/repairing/lib/ticke
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface Ticket {
     id: number;
@@ -253,6 +254,8 @@ export default function TicketDetailPage() {
     }, [id]);
 
     useEffect(() => { fetchTicket(); }, [fetchTicket]);
+    // A worker's status move, note or bill on another PC shows up here without F5.
+    useRealtimeTopics(["tickets"], () => { void fetchTicket(); });
 
     if (loading) return <p className="text-muted-foreground">Loading...</p>;
     if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;

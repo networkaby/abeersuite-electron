@@ -34,6 +34,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { InventoryMasterDropdownQuickDialog, type MasterKind, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import {
     buildOfflineName,
@@ -270,6 +271,9 @@ export default function InventoryProductsPage() {
     useEffect(() => {
         Promise.all([loadProducts(), loadMasters()]).finally(() => setLoading(false));
     }, [loadProducts, loadMasters]);
+    // Live in browse mode only: a re-read while cells are being edited would throw
+    // away unsaved rows. Edit mode reloads itself on save.
+    useRealtimeTopics(["stock", "catalogue"], () => { void loadProducts(); }, mode === "view");
 
     // Deep-link: /office/inventory/products?edit=<id> auto-opens the dialog.
     const handledEditRef = useRef<number | null>(null);

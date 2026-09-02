@@ -25,6 +25,7 @@ import type { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { toast } from "sonner";
 import { FileText, ExternalLink, CreditCard, Truck, Printer } from "lucide-react";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type NextPipelineStatus = {
     id: string;
@@ -176,6 +177,8 @@ export default function EcommerceOrderDetailPage() {
     useEffect(() => {
         load();
     }, [load]);
+    // Payment callbacks, courier webhooks and invoicing all land on this order.
+    useRealtimeTopics(["ledger", "stock", "tickets"], load);
 
     // One-click convert: order → posted ONLINE_INVOICE (party + lines prefilled
     // server-side, advance receipt auto-allocated). Idempotent server-side.

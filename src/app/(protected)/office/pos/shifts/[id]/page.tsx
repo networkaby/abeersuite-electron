@@ -5,8 +5,9 @@
 // Header summary, drops timeline, linked Contras, variance JE,
 // and handover chain (received from / handed to). Read-only.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -61,12 +62,16 @@ export default function ShiftDetailPage() {
     const [shift, setShift]   = useState<ShiftDetail | null>(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
+    const load = useCallback(() => {
         axios.get<ShiftDetail>(`/api/pos/shifts/${id}`)
             .then((r) => setShift(r.data))
             .catch(() => toast.error("Failed to load shift"))
             .finally(() => setLoading(false));
     }, [id]);
+
+    useEffect(() => { load(); }, [load]);
+    // Drops, handovers and the close happen at the till — re-read when the books move.
+    useRealtimeTopics(["ledger"], load);
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>;
     if (!shift)  return <div className="py-20 text-center text-muted-foreground">Shift not found.</div>;

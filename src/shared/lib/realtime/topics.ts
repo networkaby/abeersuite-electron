@@ -58,6 +58,10 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/loyalty\//,                           ["ledger"]],
     [/^\/api\/(ecommerce|shop)\/orders/,            ["ledger", "stock"]],
     [/^\/api\/orders\//,                            ["ledger"]],
+    [/^\/api\/accounts/,                            ["ledger"]],
+    [/^\/api\/pos\/(coupon-offers|coupon-validate|gift-card-lookup)/, ["ledger"]],
+    [/^\/api\/retention/,                           ["ledger"]],
+    [/^\/api\/bi\/gst-purchase-planning/,           ["ledger"]],
     // A restore rewrites everything; an audit restore can bring a voucher back.
     [/^\/api\/audit\//,                             ["ledger", "stock"]],
 
@@ -68,9 +72,12 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/coupons/,                             ["catalogue"]],
     [/^\/api\/(ecommerce|shop)\/products/,          ["catalogue"]],
     [/^\/api\/pos\/services/,                       ["catalogue"]],
+    [/^\/api\/ecommerce\/(home-layout|publish-rules|stock-policy)/, ["catalogue"]],
 
     // ── Work pipeline ────────────────────────────────────────────────────────
     [/^\/api\/(tickets|works|workers|work-groups|pipelines|ticket-statuses|help|deals|deliveries|calls|priorities)/, ["tickets"]],
+    // Courier webhooks move a ticket's stage and mirror it onto the order.
+    [/^\/api\/shop\/(delivery-updates|shipway-updates)/, ["tickets", "ledger"]],
 
     // ── Customers ────────────────────────────────────────────────────────────
     [/^\/api\/(person|companies|contacts|customer-tools|customer-tiers|customer-tier-periods|customer-quality|crm)/, ["parties"]],
@@ -80,12 +87,14 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
 
     // ── Configuration ────────────────────────────────────────────────────────
     [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart|service-centers)/, ["settings"]],
+    [/^\/api\/pos\/counters/,                       ["settings"]],
 
     // ── Chat room discovery ──────────────────────────────────────────────────
     // A new message riding an existing room delivers over its OWN "room:<id>"
     // broadcast (see GlobalInboxListener) — that only needs a topic here for the
     // FIRST message of a brand new DM, which mints the room this path creates.
     [/^\/api\/inbox\/direct/,                       ["chat"]],
+    [/^\/api\/inbox\/rooms/,                        ["chat"]],
 ];
 
 /**

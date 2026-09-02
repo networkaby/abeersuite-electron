@@ -33,12 +33,14 @@ let registered = false;
  * `ipcRenderer.on` appends a listener per call, so registering per hook instance would
  * add one for every mounted screen and fire the event N times.
  */
-export function ensureSyncAppliedBridge(): void {
-    if (registered || typeof window === "undefined") return;
+export function ensureSyncAppliedBridge(): boolean {
+    if (typeof window === "undefined") return false;
+    if (registered) return true;
     const api = (window as { electronAPI?: { onSyncApplied?: (cb: (i: SyncAppliedInfo) => void) => void } }).electronAPI;
-    if (!api?.onSyncApplied) return; // a browser, or an older shell without this channel
+    if (!api?.onSyncApplied) return false; // a browser, or an older shell without this channel
     registered = true;
     api.onSyncApplied((info) => {
         window.dispatchEvent(new CustomEvent<SyncAppliedInfo>(SYNC_APPLIED_EVENT, { detail: info }));
     });
+    return true;
 }

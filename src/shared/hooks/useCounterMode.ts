@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { setWritesGoLocal } from "@/shared/lib/realtime/appChannel";
+import { setWritesGoLocal, setReadsGoLocal } from "@/shared/lib/realtime/appChannel";
 
 /** Mirror of `counterStatus()` in shared/lib/prisma/counterMode.ts. */
 export type CounterStatus = {
@@ -68,6 +68,9 @@ export function useCounterMode(): CounterStatus | null {
                 // _outbox", not "in Supabase", and the flusher announces once the push
                 // lands instead. See setWritesGoLocal.
                 setWritesGoLocal(data.writePreference === "local");
+                // Where reads come from decides which signal a screen waits for: the
+                // replica's "rows applied" line rather than the early Supabase nudge.
+                setReadsGoLocal(data.isCounter && data.preference !== "live");
                 if (!cancelled) setStatus(data);
             } catch {
                 // Leave the last known status in place rather than flashing "unknown".
