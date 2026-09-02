@@ -10,7 +10,6 @@ import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDo
 import { toast } from "sonner";
 import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
-import CounterStatusBadge from "@/shared/components/CounterStatusBadge";
 import SyncStatusBadge from "@/shared/components/SyncStatusBadge";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
@@ -290,8 +289,8 @@ export default function FinanceTopBar({
             {/* Right: connection state + branch switcher + refresh + timestamp + bar toggle */}
             <div className="ml-auto flex items-center gap-2">
                 {/* Renders nothing unless this machine is a counter with something
-                    worth reporting — see CounterStatusBadge / SyncStatusBadge. */}
-                <CounterStatusBadge />
+                    worth reporting — see SyncStatusBadge. R/W state lives in the
+                    window title bar (see StatusTitleUpdater) so it isn't duplicated here. */}
                 <SyncStatusBadge />
                 <BranchSwitcher />
                 {canView && lastUpdated && (
