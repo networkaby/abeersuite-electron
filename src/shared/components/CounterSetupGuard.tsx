@@ -23,8 +23,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 import { getLocalCounterSetup } from "@/shared/lib/counter/setupGate";
 
-/** The two screens that must stay reachable without a counter. */
-const ALLOWED = ["/setup/counter", "/staff/login"];
+/**
+ * The two screens that must stay reachable without a counter. Shared with
+ * ReplicaReadyGate: nothing that blocks the app may block these, or a PC with no
+ * counter can never claim one.
+ */
+export const COUNTER_FREE_ROUTES = ["/setup/counter", "/staff/login"];
+const ALLOWED = COUNTER_FREE_ROUTES;
 
 export default function CounterSetupGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();

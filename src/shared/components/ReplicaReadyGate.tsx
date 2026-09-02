@@ -1,6 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCounterMode } from "@/shared/hooks/useCounterMode";
+import { COUNTER_FREE_ROUTES } from "@/shared/components/CounterSetupGuard";
 
 /**
  * Covers the app when this counter's replica is not fit to be read.
@@ -29,12 +31,21 @@ import { useCounterMode } from "@/shared/hooks/useCounterMode";
  * to wait a few minutes sends them to wait out something that cannot finish, and
  * the office never hears about it. `replicaSchemaOk` separates them.
  *
+ * ── Never in front of the wizard or the login screen ───────────────────────
+ * A PC with no counter runs no sync worker (electron/main.ts), so its replica is
+ * never ready — and the only way out is the setup wizard, which this overlay was
+ * covering. That is a deadlock: "preparing this counter" on a PC that has no
+ * counter to prepare. Those two routes are the same ones CounterSetupGuard keeps
+ * open; nothing on them reads business data, so there is nothing to protect.
+ *
  * Otherwise inert: `isCounter` is false on Vercel and on any ordinary laptop, and
  * `useCounterMode` returns null until its first answer, so it never flashes at boot.
  */
 export default function ReplicaReadyGate() {
     const status = useCounterMode();
+    const pathname = usePathname();
 
+    if (COUNTER_FREE_ROUTES.some((p) => pathname?.startsWith(p))) return null;
     if (!status || !status.isCounter) return null;
     if (status.preference === "live") return null;
     if (status.replicaReady) return null;
