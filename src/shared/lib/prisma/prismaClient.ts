@@ -10,6 +10,7 @@ import {
     reportLiveDown,
     reportLiveUp,
     setReplicaReady,
+    isReplicaReady,
     shouldReadLocal,
     shouldWriteLocal,
     localWriteIsFallback,
@@ -399,16 +400,26 @@ function createLocal(): PrismaClient {
                         return written;
                     }
 
-                    // ── Reads, when the operator wants them live ────────────────
+                    // ── Reads, when the operator wants them live — or the replica
+                    // cannot answer ──────────────────────────────────────────────
                     // The mirror image of the redirect in wrapLive: WRITE_MODE=local
                     // with READ_MODE=live means writes land here but reads should see
                     // Supabase. Only while Supabase is actually reachable — during an
                     // outage the replica is the only answer there is.
                     //
+                    // The same redirect applies while the replica is NOT READY, whatever
+                    // READ_MODE says. A replica that has never synced (a PC with no
+                    // counter — its worker does not run, and its data is wiped) returns
+                    // no rows without error: the login's `user.findUnique` came back
+                    // empty and read as a wrong password, on a PC whose only way to
+                    // become a counter is to sign in. wrapLive fails closed on readiness;
+                    // this path did not, and old leftover data was hiding that.
+                    //
                     // Reads inside a transaction are NOT redirected: `query(args)` for a
                     // transactional operation must stay on the client that opened it, and
                     // the Proxy has already chosen this one for the write.
-                    if (READ_PREFERENCE === "live" && getMode() === "LIVE") {
+                    await refreshReplicaReadinessInline();
+                    if ((READ_PREFERENCE === "live" || !isReplicaReady()) && getMode() === "LIVE") {
                         try {
                             const delegate = (baseLive as unknown as Record<string, Record<string, (a: unknown) => Promise<unknown>>>)[model ?? ""];
                             if (delegate && typeof delegate[operation] === "function") {
