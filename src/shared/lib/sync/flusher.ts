@@ -1,7 +1,7 @@
 /**
- * Drains the local `_outbox` to Supabase, on a timer, inside the Next server.
+ * Drains the local `_outbox` to Supabase, inside the Next server.
  *
- * ── Why it moved here from Electron ─────────────────────────────────────────
+ * ── Why it lives here rather than in Electron ───────────────────────────────
  * It used to live in `electron/outboxFlusher.ts`, which POSTed the batch to
  * `http://127.0.0.1:786/api/sync/push`. That endpoint calls `requireAuth()`, and the
  * Electron main process has no session cookie — so every push returned 401, the
@@ -13,41 +13,64 @@
  * authenticate and no credential to put on a shop PC. `/api/sync/push` stays for a
  * future pusher that genuinely arrives over the network.
  *
+ * ── What wakes it: the database itself, at commit ───────────────────────────
+ * The `_outbox_capture` trigger (scripts/gen-local-schema.ts) ends with
+ * `pg_notify('outbox_changed')`. Postgres delivers a NOTIFY only when the sending
+ * transaction COMMITS, and collapses identical notifications inside one transaction —
+ * so a voucher that writes twelve rows produces one wake-up, at exactly the moment the
+ * rows become visible to another connection.
+ *
+ * That replaces a Prisma-layer "kick" debounced by 1 s. The kick fired after each
+ * query, before the enclosing transaction committed, and the second was a guess at how
+ * long the commit takes: a slow commit meant the flush found nothing and the sale waited
+ * for the interval, a fast one wasted most of the second, and a kick that landed during
+ * a flush was dropped. The notification cannot be early, cannot be late, and covers raw
+ * SQL that the Prisma layer never saw.
+ *
  * ── Lifecycle ───────────────────────────────────────────────────────────────
- * Started once from `instrumentation.ts`, and only on a counter (LOCAL_DATABASE_URL
- * set). A single in-flight guard means a slow batch cannot overlap the next tick.
- *
- * ── Why a write kicks it, instead of a short poll ───────────────────────────
- * The interval used to be 15s, and nothing justified that number: it was copied
- * verbatim from `electron/outboxFlusher.ts`, the predecessor that answered 401 on every
- * push and therefore never retired a single row, so the cadence was never once observed
- * doing anything. Fifteen seconds is pure latency on the only path that gets a
- * counter's sale into the cloud, and it buys nothing: `getPendingOutbox` reads the LOCAL
- * database, so polling is free, and `pushMutations` costs per ROW, not per tick.
- *
- * So the write path kicks instead (`kick.ts`, called from `createLocal`'s extension),
- * debounced by `KICK_DEBOUNCE_MS` so one save's several writes become one push rather
- * than being caught mid-transaction by an arbitrary tick. The interval stays as the
- * safety net at a minute, because the kick sits at the Prisma layer and cannot see raw
- * SQL — the same blind spot that moved outbox CAPTURE onto Postgres triggers. Capture is
- * still exact; only the prompt is best-effort.
+ * Started once from `instrumentation.ts`, only on a counter (LOCAL_DATABASE_URL set).
+ * One dedicated `pg` client holds `LISTEN outbox_changed` and reconnects with a backoff
+ * if it drops. A notification that arrives mid-flush queues exactly one more pass, so a
+ * write that commits while the previous batch is being pushed is never left for the
+ * interval. The interval itself stays as the safety net for the reconnect gap.
  */
 
 import { getPendingOutbox, markOutboxPushed, markOutboxFailure } from "./outbox";
 import { pushMutations } from "./push";
-import { setOutboxKick } from "./kick";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { ALL_TOPICS } from "@/shared/lib/realtime/topics";
 
-/** The safety net, not the mechanism — see the note above. */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { Client: PgClient } = require("pg") as typeof import("pg");
+
+// ── Tuning ───────────────────────────────────────────────────────────────────
+
+/**
+ * Safety-net poll. Not the mechanism: the NOTIFY above is. This only has to cover the
+ * moments the listener is reconnecting. A tick reads the LOCAL database and touches
+ * Supabase only when there is something to push, so it costs no egress when idle —
+ * 30 s or 60 s are both fine.
+ */
 const FLUSH_INTERVAL_MS = 60_000;
-/** Long enough to gather one save's writes, short enough that a sale is up in ~1s. */
-const KICK_DEBOUNCE_MS = 1_000;
+
+/** Rows per push. `pushMutations` costs per row, not per call. */
 const BATCH_SIZE = 50;
 
+/** Must match `pg_notify` in the `_outbox_capture` trigger. */
+const CHANNEL = "outbox_changed";
+
+/** Wait before re-opening a dropped LISTEN connection. */
+const LISTEN_RETRY_MS = 5_000;
+
+// ── State ────────────────────────────────────────────────────────────────────
+
 let timer: NodeJS.Timeout | null = null;
-let kickTimer: NodeJS.Timeout | null = null;
+let listener: InstanceType<typeof PgClient> | null = null;
+let listenRetry: NodeJS.Timeout | null = null;
+let stopped = true;
 let inFlight = false;
+/** A notification arrived while a flush was running: go once more when it ends. */
+let queued = false;
 
 /**
  * Whether the last flush reached Supabase.
@@ -72,9 +95,15 @@ export function getPushHealth(): { cloudReachable: boolean; lastFlushAt: string 
  * The batch stops at the first failure (see push.ts on ordering), so a run can retire
  * fewer rows than it fetched. The stuck row is backed off and eventually dead-lettered,
  * which is what lets the queue behind it move.
+ *
+ * Re-entrant by design: a call that lands mid-flush does not run a second pass in
+ * parallel (two passes would push the same rows), it queues exactly one more.
  */
 export async function flushOnce(localUrl: string): Promise<number> {
-    if (inFlight) return 0;
+    if (inFlight) {
+        queued = true;
+        return 0;
+    }
     inFlight = true;
     try {
         const pending = await getPendingOutbox(localUrl, BATCH_SIZE);
@@ -108,9 +137,12 @@ export async function flushOnce(localUrl: string): Promise<number> {
             // because every consumer still has its own interval and reconcile pass.
             void publishChangeServer(ALL_TOPICS);
         }
+        // A full batch means there is probably more behind it; do not wait for a
+        // notification that already fired, or for the interval.
+        if (pending.length === BATCH_SIZE && pushedIds.length > 0) queued = true;
         return pushedIds.length;
     } catch (err) {
-        // Normal while offline. Logged once per tick rather than swallowed entirely —
+        // Normal while offline. Logged once per pass rather than swallowed entirely —
         // the previous version's empty catch is why a 401 on every single push went
         // unnoticed for the life of the feature.
         cloudReachable = false;
@@ -118,36 +150,81 @@ export async function flushOnce(localUrl: string): Promise<number> {
         return 0;
     } finally {
         inFlight = false;
+        if (queued && !stopped) {
+            queued = false;
+            setImmediate(() => { void flushOnce(localUrl); });
+        }
     }
+}
+
+/**
+ * Hold `LISTEN outbox_changed` on its own connection. A `pg` client that is listening
+ * cannot also run queries safely, so this one does nothing else.
+ *
+ * Never throws: a listener that cannot connect just retries, and the interval keeps
+ * pushing meanwhile.
+ */
+function startListener(localUrl: string): void {
+    if (stopped || listener) return;
+
+    const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5_000 });
+    listener = client;
+
+    const dropAndRetry = (why: string) => {
+        if (listener !== client) return; // already replaced or stopped
+        listener = null;
+        client.end().catch(() => { });
+        if (stopped) return;
+        console.warn(`[OutboxFlusher] listener ${why}; reconnecting in ${LISTEN_RETRY_MS / 1000}s.`);
+        listenRetry = setTimeout(() => {
+            listenRetry = null;
+            startListener(localUrl);
+        }, LISTEN_RETRY_MS);
+        listenRetry.unref?.();
+    };
+
+    client.on("notification", (msg) => {
+        if (msg.channel === CHANNEL) void flushOnce(localUrl);
+    });
+    client.on("error", (err) => dropAndRetry(`error: ${err.message}`));
+    client.on("end", () => dropAndRetry("connection closed"));
+
+    client.connect()
+        .then(() => client.query(`LISTEN ${CHANNEL}`))
+        .then(() => {
+            console.log(`[OutboxFlusher] listening on ${CHANNEL}.`);
+            // Anything that committed while we were not listening.
+            void flushOnce(localUrl);
+        })
+        .catch((err: unknown) => dropAndRetry(`could not connect: ${err instanceof Error ? err.message : String(err)}`));
 }
 
 export function startOutboxFlusher(localUrl: string): void {
     if (timer) return;
+    stopped = false;
     console.log("[OutboxFlusher] starting in-process outbox flusher.");
+
     timer = setInterval(() => {
         void flushOnce(localUrl);
     }, FLUSH_INTERVAL_MS);
     // Must not hold the process open on its own.
     timer.unref?.();
 
-    // A local write asks for a flush soon. Debounced, and a no-op while one is
-    // already scheduled, so a burst of writes still produces a single push.
-    setOutboxKick(() => {
-        if (kickTimer) return;
-        kickTimer = setTimeout(() => {
-            kickTimer = null;
-            void flushOnce(localUrl);
-        }, KICK_DEBOUNCE_MS);
-        kickTimer.unref?.();
-    });
+    startListener(localUrl);
 }
 
 export function stopOutboxFlusher(): void {
-    if (kickTimer) {
-        clearTimeout(kickTimer);
-        kickTimer = null;
+    stopped = true;
+    queued = false;
+    if (listenRetry) {
+        clearTimeout(listenRetry);
+        listenRetry = null;
     }
-    setOutboxKick(() => {});
+    if (listener) {
+        const client = listener;
+        listener = null;
+        client.end().catch(() => { });
+    }
     if (!timer) return;
     clearInterval(timer);
     timer = null;

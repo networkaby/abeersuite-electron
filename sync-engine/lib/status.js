@@ -39,8 +39,13 @@ async function ensure(client) {
     // PRIVILEGES only covers tables created by the role that owns the default. Grant
     // explicitly so a fresh replica does not leave the app unable to read readiness
     // -- which it would interpret as "not ready", permanently.
-    await client.query(`GRANT SELECT ON ${q(TABLE)} TO smx_ro`).catch(() => {});
-    await client.query(`GRANT SELECT ON ${q("_sync_state")} TO smx_ro`).catch(() => {});
+    //
+    // `smx_app` is the role the app connects as (electron/localDbProvisioner.ts). This
+    // used to say `smx_ro`, the standalone tool's read-only role, which the provisioner
+    // never creates -- so the grant failed twice per cycle, silently here and loudly in
+    // the Postgres log.
+    await client.query(`GRANT SELECT ON ${q(TABLE)} TO smx_app`).catch(() => {});
+    await client.query(`GRANT SELECT ON ${q("_sync_state")} TO smx_app`).catch(() => {});
 }
 
 /**

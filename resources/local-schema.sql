@@ -5752,6 +5752,12 @@ BEGIN
         v_row
     );
 
+    -- Wake the flusher. NOTIFY is delivered only when this transaction COMMITS, and
+    -- Postgres collapses identical notifications within one transaction, so a save
+    -- that writes twelve rows wakes the flusher once, at the exact moment the rows
+    -- become visible to it. No timer has to guess how long the commit takes.
+    PERFORM pg_notify('outbox_changed', '');
+
     RETURN NULL;
 END;
 $fn$;
@@ -5949,9 +5955,7 @@ DO $$ BEGIN
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."DepartmentPermission"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "DepartmentPermission";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "DepartmentPermission"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('departmentId', 'permissionId');
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "DepartmentPermission"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN
@@ -6166,9 +6170,7 @@ DO $$ BEGIN
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."PersonPortalCredential"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PersonPortalCredential";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PersonPortalCredential"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PersonPortalCredential"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN
@@ -6285,9 +6287,7 @@ DO $$ BEGIN
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."RolePermission"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "RolePermission";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "RolePermission"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('roleId', 'permissionId');
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "RolePermission"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN
@@ -6432,23 +6432,17 @@ DO $$ BEGIN
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."User"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "User";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "User"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "User"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."UserPermission"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserPermission";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "UserPermission"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserPermission"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."UserPosition"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserPosition";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "UserPosition"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('userId', 'positionId');
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "UserPosition"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN

@@ -26,19 +26,15 @@
 import { prismaLive } from "@/shared/lib/prisma/prismaClient";
 import { SYNC_REGISTRY, type SyncRegistryEntry } from "./syncRegistry.generated";
 import type { OutboxRecord } from "./outbox";
+import { NEVER_PUSH_MODELS } from "./neverPush";
 
 /**
- * Tables a counter has no business pushing, whatever it managed to write locally.
- *
- * A denylist rather than an allowlist, deliberately. An allowlist is what the previous
- * design used, and a model missing from it failed silently — which is how 27 models
- * came to write locally and never sync. A denylist fails OPEN, so a table added
- * tomorrow syncs by default and only the genuinely dangerous ones need remembering.
+ * Tables a counter has no business pushing. The list lives in `neverPush.ts` because
+ * the schema generator uses the same one to attach no capture trigger to these tables
+ * — so normally nothing here is ever reached. Kept as defence in depth for a replica
+ * provisioned before that change.
  */
-const NEVER_PUSH = new Set<string>([
-    "User", "Session", "Account_auth", "UserPermission", "UserPosition",
-    "RolePermission", "DepartmentPermission", "PersonPortalCredential",
-]);
+const NEVER_PUSH = new Set<string>(NEVER_PUSH_MODELS);
 
 /** Raised for a mutation that can never succeed, however many times it is retried. */
 export class PermanentPushError extends Error {}

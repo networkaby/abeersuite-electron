@@ -28,6 +28,7 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { NEVER_PUSH_MODELS } from "../src/shared/lib/sync/neverPush";
 
 const ROOT = path.join(__dirname, "..");
 const SCHEMA_DIR = path.join(ROOT, "prisma", "schema");
@@ -175,20 +176,38 @@ function generate(): string {
  *
  * DROP-then-CREATE rather than a guard: it makes a changed primary key re-point the
  * trigger's arguments on the next provision instead of leaving stale ones behind.
+ *
+ * ── Tables that never push get no trigger ────────────────────────────────────
+ * `push.ts` refuses the models in `NEVER_PUSH_MODELS` (users, sessions, permissions).
+ * Capturing them anyway meant every local `User` update became a dead-lettered outbox
+ * row that the status badge counted as a "sync error" for the life of the replica. So
+ * those tables get the DROP alone — which also removes the trigger from a replica
+ * provisioned before this rule existed.
  */
 function outboxTriggers(): string {
     const registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8")) as {
         tables: Record<string, { table: string; pk: string[] }>;
     };
+    const skip = new Set(NEVER_PUSH_MODELS);
 
     const out: string[] = [];
     for (const [model, entry] of Object.entries(registry.tables)) {
         if (!entry.pk?.length) {
             throw new Error(`sync-tables.json: ${model} has no primary key — cannot capture it`);
         }
-        const args = entry.pk.map((c) => `'${c}'`).join(", ");
         // to_regclass keeps this tolerant of a registry entry whose table the schema
         // does not (yet) create, rather than aborting the whole provision.
+        if (skip.has(model)) {
+            out.push(
+                `DO $$ BEGIN\n` +
+                `    IF to_regclass('public."${entry.table}"') IS NOT NULL THEN\n` +
+                `        DROP TRIGGER IF EXISTS "_outbox_capture" ON "${entry.table}"; -- never pushed\n` +
+                `    END IF;\n` +
+                `END $$;`,
+            );
+            continue;
+        }
+        const args = entry.pk.map((c) => `'${c}'`).join(", ");
         out.push(
             `DO $$ BEGIN\n` +
             `    IF to_regclass('public."${entry.table}"') IS NOT NULL THEN\n` +
@@ -373,6 +392,12 @@ BEGIN
         v_row
     );
 
+    -- Wake the flusher. NOTIFY is delivered only when this transaction COMMITS, and
+    -- Postgres collapses identical notifications within one transaction, so a save
+    -- that writes twelve rows wakes the flusher once, at the exact moment the rows
+    -- become visible to it. No timer has to guess how long the commit takes.
+    PERFORM pg_notify('outbox_changed', '');
+
     RETURN NULL;
 END;
 $fn$;
@@ -397,14 +422,16 @@ function main(): void {
     const enums = (generated.match(/CREATE TYPE "/g) ?? []).length;
     const triggers = (generated.match(/CREATE TRIGGER "_outbox_capture"/g) ?? []).length;
 
-    // Every replicated table must carry a capture trigger. A table in the registry with
-    // no trigger is a table whose local writes never reach the cloud — the exact
-    // failure the old hand-written model list produced, and just as quiet.
-    const registryCount = Object.keys(
+    // Every replicated table must carry a capture trigger, except the ones the push
+    // side refuses anyway. A table in the registry with no trigger is otherwise a table
+    // whose local writes never reach the cloud — the exact failure the old hand-written
+    // model list produced, and just as quiet.
+    const registryModels = Object.keys(
         (JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8")) as { tables: Record<string, unknown> }).tables,
-    ).length;
-    if (triggers !== registryCount) {
-        console.error(`[local-schema] TRIGGER GAP: ${triggers} capture triggers for ${registryCount} registry tables.`);
+    );
+    const expected = registryModels.filter((m) => !NEVER_PUSH_MODELS.includes(m)).length;
+    if (triggers !== expected) {
+        console.error(`[local-schema] TRIGGER GAP: ${triggers} capture triggers for ${expected} pushable registry tables.`);
         process.exit(1);
     }
 

@@ -19,7 +19,6 @@ import {
     IS_COUNTER_PC,
 } from "./counterMode";
 import { isVoucherTypeSafeOffline, getOfflineVoucherBlockedReason } from "@/shared/lib/accountancy/offlineVoucherSafety";
-import { kickOutboxFlush } from "@/shared/lib/sync/kick";
 
 // ── Two databases, or one ───────────────────────────────────────────────────
 // DATABASE_URL is Supabase — the source of truth, and on Vercel the only database
@@ -391,13 +390,11 @@ function createLocal(): PrismaClient {
                             }
                         }
 
-                        // The row is captured by a Postgres trigger as it commits, so
-                        // the queue is already correct by the time this returns. Asking
-                        // the flusher to run soon only shortens the wait — see kick.ts
-                        // on why a missed kick is latency and never a lost mutation.
-                        const written = await query(args);
-                        kickOutboxFlush();
-                        return written;
+                        // The row is captured by a Postgres trigger, and the same trigger
+                        // wakes the flusher with NOTIFY at commit (see flusher.ts). Nothing
+                        // to do here: the database announces the write itself, so raw SQL
+                        // and Prisma writes are treated identically.
+                        return query(args);
                     }
 
                     // ── Reads, when the operator wants them live — or the replica
