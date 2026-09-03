@@ -45,7 +45,7 @@ git push origin main && git push production main
 
 **You finish (2 things, still manual today):**
 
-10. **Push the tag to `production` too** — `scripts/release-electron.ts` pushes `origin` only, and both source remotes must carry the released commit and its tag (`origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abbersuite-electron`), otherwise the two accounts disagree about what `v<version>` is:
+10. **Push the tag to `production` too** — `scripts/release-electron.ts` pushes `origin` only, and both source remotes must carry the released commit and its tag (`origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`), otherwise the two accounts disagree about what `v<version>` is:
 
 ```bash
 git push production main --tags
