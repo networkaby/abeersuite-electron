@@ -264,3 +264,28 @@ model BackupConfig {
 
   updatedAt DateTime @updatedAt
 }
+
+/// What a counter is allowed to write while it is cut off from Supabase, edited from
+/// Settings → Offline Policies. One row, org-wide: an offline rule that differed per
+/// machine would be no rule at all — two counters could each spend the same cash.
+///
+/// Why one Json column and not ~40 booleans: the shape is owned by the code
+/// (`DEFAULT_OFFLINE_POLICIES` in `offlineVoucherSafety.ts`), which is also what fills
+/// the gaps when this row is older than the build reading it. Adding a toggle is then
+/// a code change, not a migration, and an unknown key from a newer build is ignored
+/// rather than crashing an older counter.
+///
+/// The counter READS this (it syncs down like any other table) but never writes it:
+/// `OfflinePolicy` is on NEVER_PUSH_MODELS and the replica guard refuses it outright.
+/// The machine being restrained does not get to loosen its own restraints, and doing
+/// it offline could not be reviewed by anyone until after the damage.
+model OfflinePolicy {
+  id Int @id @default(1) // singleton — always row id=1
+
+  /// Partial `OfflinePolicies` — only the keys an admin has actually decided.
+  /// Merged over `DEFAULT_OFFLINE_POLICIES` on read, so a missing key means
+  /// "whatever the build considers safe", never `false`.
+  policies Json @default("{}")
+
+  updatedAt DateTime @updatedAt
+}

@@ -37,7 +37,7 @@
 | **Native modules under Electron** | **No rebuild needed** — `sharp` and `serialport` are N-API | verified under `ELECTRON_RUN_AS_NODE` at ABI 148 |
 | Customer QR display | **BUILT, absorbed** — `:9192` now served in-app | [`hardware-bridge/qr.js`](../hardware-bridge/qr.js) |
 | **Offline billing / writes** | **BUILT** — id-range reservation, first-launch setup, write gate, outbox | `idRange.ts`, `applyIdRanges.ts`, `/setup/counter`, `createLocal()`, `/api/sync/push`; see §6 |
-| Offline Policies settings page | **UI ONLY** — localStorage, no API, no enforcement | `OfflinePoliciesForm.tsx`, `offlineVoucherSafety.ts` |
+| Offline Policies settings page | **BUILT** — one DB row, enforced in the replica write guard | [`OfflinePolicy`](../prisma/schema/org.prisma), [`offlinePoliciesServer.ts`](../src/shared/lib/accountancy/offlinePoliciesServer.ts), [`offlinePolicyTargets.ts`](../src/shared/lib/accountancy/offlinePolicyTargets.ts) |
 
 ### Defects fixed in the 2026-08-26 pass
 

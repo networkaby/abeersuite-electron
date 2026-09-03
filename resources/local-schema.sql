@@ -2335,6 +2335,18 @@ ALTER TABLE "BackupConfig" ADD COLUMN IF NOT EXISTS "lastRunAt" TIMESTAMP(3);
 ALTER TABLE "BackupConfig" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "OfflinePolicy" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "policies" JSONB NOT NULL DEFAULT '{}',
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "OfflinePolicy_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "OfflinePolicy" ADD COLUMN IF NOT EXISTS "id" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "OfflinePolicy" ADD COLUMN IF NOT EXISTS "policies" JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE "OfflinePolicy" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Pipeline" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -6131,6 +6143,11 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyMilestoneAward";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyMilestoneAward"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."OfflinePolicy"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "OfflinePolicy"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN

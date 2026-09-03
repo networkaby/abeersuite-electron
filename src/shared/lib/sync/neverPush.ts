@@ -21,4 +21,8 @@
 export const NEVER_PUSH_MODELS: readonly string[] = [
     "User", "Session", "Account_auth", "UserPermission", "UserPosition",
     "RolePermission", "DepartmentPermission", "PersonPortalCredential",
+    // The offline policy is the office's decision ABOUT the counter. The replica
+    // guard already refuses to write it locally; this is the second lock, so even a
+    // raw-SQL write on a counter can never travel up and loosen the rule for everyone.
+    "OfflinePolicy",
 ];

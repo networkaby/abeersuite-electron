@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import axios from "axios";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -8,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import {
-    getOfflinePolicies,
-    saveOfflinePolicies,
     DEFAULT_OFFLINE_POLICIES,
     type OfflinePolicies,
 } from "@/shared/lib/accountancy/offlineVoucherSafety";
@@ -92,35 +92,50 @@ const POLICY_ITEMS: PolicyItemDef[] = [
     { key: "allowCustomerEdit", label: "Contacts — Edit Existing Customer Profiles", description: "Allow editing customer addresses, GSTIN numbers, and phone numbers offline.", safe: true, category: "masters" },
 ];
 
+type PolicyResponse = { policies: OfflinePolicies };
+
 export function OfflinePoliciesForm() {
+    // `saved` is what the server holds; `policies` is the draft on screen. Keeping
+    // both is what makes "Save Changes" meaningful — the toggles used to write
+    // straight to localStorage, where nothing on the server ever read them.
+    const [saved, setSaved] = useState<OfflinePolicies>(DEFAULT_OFFLINE_POLICIES);
     const [policies, setPolicies] = useState<OfflinePolicies>(DEFAULT_OFFLINE_POLICIES);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState("");
 
     useEffect(() => {
-        setPolicies(getOfflinePolicies());
+        axios.get<PolicyResponse>("/api/settings/offline-policies")
+            .then((res) => { setSaved(res.data.policies); setPolicies(res.data.policies); })
+            .catch((err) => toast.error(extractApiError(err, "Failed to load offline policies")))
+            .finally(() => setLoading(false));
     }, []);
 
     const updateField = (field: keyof OfflinePolicies, value: boolean) => {
         setPolicies((prev) => ({ ...prev, [field]: value }));
     };
 
-    const handleSave = () => {
+    // Every path that changes policy goes through here, so there is exactly one place
+    // that talks to the server and exactly one place that can fail.
+    const persist = async (next: OfflinePolicies, message: string) => {
         setSaving(true);
         try {
-            saveOfflinePolicies(policies);
-            toast.success("Offline policies saved and applied across all modules!");
-        } catch {
-            toast.error("Failed to save offline policies");
+            const { data } = await axios.patch<PolicyResponse>("/api/settings/offline-policies", next);
+            setSaved(data.policies);
+            setPolicies(data.policies);
+            toast.success(message);
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to save offline policies"));
         } finally {
             setSaving(false);
         }
     };
 
+    const handleSave = () => persist(policies, "Offline policies saved — every counter picks them up within a minute.");
+
     const handleReset = () => {
         setPolicies(DEFAULT_OFFLINE_POLICIES);
-        saveOfflinePolicies(DEFAULT_OFFLINE_POLICIES);
-        toast.info("Reset to recommended default policies");
+        void persist(DEFAULT_OFFLINE_POLICIES, "Reset to recommended default policies");
     };
 
     const handleEnableAllSafe = () => {
@@ -129,9 +144,10 @@ export function OfflinePoliciesForm() {
             if (item.safe) next[item.key] = true;
         }
         setPolicies(next);
-        saveOfflinePolicies(next);
-        toast.success("All safe offline operations enabled!");
+        void persist(next, "All safe offline operations enabled");
     };
+
+    const dirty = JSON.stringify(policies) !== JSON.stringify(saved);
 
     const filteredItems = useMemo(() => {
         if (!search.trim()) return POLICY_ITEMS;
@@ -169,6 +185,7 @@ export function OfflinePoliciesForm() {
             </div>
             <Switch
                 checked={policies[item.key]}
+                disabled={loading || saving}
                 onCheckedChange={(v) => updateField(item.key, v)}
             />
         </div>
@@ -188,17 +205,17 @@ export function OfflinePoliciesForm() {
                     />
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                    <Button variant="outline" size="sm" onClick={handleEnableAllSafe}>
+                    <Button variant="outline" size="sm" onClick={handleEnableAllSafe} disabled={loading || saving}>
                         <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
                         Enable All Safe
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleReset}>
+                    <Button variant="outline" size="sm" onClick={handleReset} disabled={loading || saving}>
                         <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                         Defaults
                     </Button>
-                    <Button size="sm" onClick={handleSave} disabled={saving} className="bg-primary text-primary-foreground">
+                    <Button size="sm" onClick={handleSave} disabled={loading || saving || !dirty} className="bg-primary text-primary-foreground">
                         <Save className="w-3.5 h-3.5 mr-1.5" />
-                        Save Changes
+                        {saving ? "Saving…" : dirty ? "Save Changes" : "Saved"}
                     </Button>
                 </div>
             </div>
@@ -212,6 +229,7 @@ export function OfflinePoliciesForm() {
                     <div>
                         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Offline Safety Protocol</div>
                         <div className="text-sm font-medium">All enabled masters and vouchers commit locally and automatically push to Supabase upon reconnection.</div>
+                        <div className="text-xs text-muted-foreground">One setting for the whole shop, stored in the database — not per browser. Counters read it from their own copy, so it still applies with the internet down.</div>
                     </div>
                 </div>
             </div>

@@ -19,6 +19,8 @@ import {
     IS_COUNTER_PC,
 } from "./counterMode";
 import { isVoucherTypeSafeOffline, getOfflineVoucherBlockedReason } from "@/shared/lib/accountancy/offlineVoucherSafety";
+import { loadOfflinePolicies } from "@/shared/lib/accountancy/offlinePoliciesServer";
+import { checkOfflinePolicyForWrite } from "@/shared/lib/accountancy/offlinePolicyTargets";
 
 // ── Two databases, or one ───────────────────────────────────────────────────
 // DATABASE_URL is Supabase — the source of truth, and on Vercel the only database
@@ -373,20 +375,50 @@ function createLocal(): PrismaClient {
                             );
                         }
 
-                        // 3. Offline voucher policy — only when a local write means
-                        // "Supabase is unreachable" (WRITE_MODE=live). Those types were
-                        // held back because they need live validation and the outage is
-                        // temporary. Under WRITE_MODE=local the replica is simply where
-                        // writes go, so enforcing this would refuse them permanently and
-                        // break the counter rather than protect anything.
-                        if (model === "UniversalVoucher" && localWriteIsFallback()) {
-                            const data = (args as { data?: { type?: string } })?.data;
-                            if (data?.type && !isVoucherTypeSafeOffline(data.type)) {
-                                throw new OfflineWriteBlockedError(
-                                    model,
-                                    operation,
-                                    getOfflineVoucherBlockedReason(data.type),
+                        // 3. The policy row itself is never written here. It is the
+                        // org's decision about what THIS machine may do while it is
+                        // cut off; letting the cut-off machine edit it would let a
+                        // counter lift its own restraints with nobody able to see it
+                        // until the damage was already synced up. Office machines
+                        // write it live, and it syncs down like any other table.
+                        if (model === "OfflinePolicy") {
+                            throw new OfflineWriteBlockedError(
+                                model,
+                                operation,
+                                "Offline policies are set from an office machine, not from a counter.",
+                            );
+                        }
+
+                        // 4. Offline policy — only when a local write means "Supabase is
+                        // unreachable" (WRITE_MODE=live). Those kinds were held back
+                        // because they need live validation and the outage is temporary.
+                        // Under WRITE_MODE=local the replica is simply where writes go,
+                        // so enforcing this would refuse them permanently and break the
+                        // counter rather than protect anything.
+                        //
+                        // The policies come from the DB (cached), not from the browser's
+                        // localStorage as they once did: a per-browser copy the server
+                        // could not see meant every check here silently used the built-in
+                        // defaults, so the settings page changed nothing.
+                        if (localWriteIsFallback()) {
+                            const policies = await loadOfflinePolicies(basePrisma);
+
+                            if (model === "UniversalVoucher") {
+                                const data = (args as { data?: { type?: string } })?.data;
+                                if (data?.type && !isVoucherTypeSafeOffline(data.type, policies)) {
+                                    throw new OfflineWriteBlockedError(
+                                        model,
+                                        operation,
+                                        getOfflineVoucherBlockedReason(data.type),
+                                    );
+                                }
+                            } else if (model) {
+                                // Master data + ticket intake. Returns null for the
+                                // overwhelming majority of models, which are not gated.
+                                const refusal = await checkOfflinePolicyForWrite(
+                                    basePrisma, model, operation, args, policies,
                                 );
+                                if (refusal) throw new OfflineWriteBlockedError(model, operation, refusal);
                             }
                         }
 

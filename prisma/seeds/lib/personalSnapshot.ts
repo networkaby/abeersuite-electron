@@ -241,7 +241,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const idx = await buildRefIndex(prisma);
 
     // ── Config singletons (id=1) ──
-    const [orgDefaults, invNamingConfig, loyaltyConfig, couponConfig, creditLimitConfig, booksConfig, biGstPlanningConfig] =
+    const [orgDefaults, invNamingConfig, loyaltyConfig, couponConfig, creditLimitConfig, booksConfig, biGstPlanningConfig, offlinePolicy] =
         await Promise.all([
             prisma.orgDefaults.findFirst(),
             prisma.invNamingConfig.findFirst(),
@@ -250,6 +250,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
             prisma.creditLimitConfig.findFirst(),
             prisma.booksConfig.findFirst(),
             prisma.biGstPlanningConfig.findFirst(),
+            prisma.offlinePolicy.findFirst(),
         ]);
 
     const singletons: Record<string, Row | null> = {
@@ -266,6 +267,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         creditLimitConfig: creditLimitConfig ? omit(creditLimitConfig, ["id", "updatedAt"]) : null,
         booksConfig: booksConfig ? omit(booksConfig, ["updatedAt"]) : null,
         biGstPlanningConfig: biGstPlanningConfig ? omit(biGstPlanningConfig, ["id", "updatedAt"]) : null,
+        offlinePolicy: offlinePolicy ? omit(offlinePolicy, ["id", "updatedAt"]) : null,
     };
 
     // ── Inventory / tax masters ──
@@ -525,6 +527,7 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     if (s.creditLimitConfig) await put(prisma.creditLimitConfig, { id: 1 }, { id: 1, ...s.creditLimitConfig });
     if (s.booksConfig) await put(prisma.booksConfig, { id: s.booksConfig.id ?? 1 }, s.booksConfig);
     if (s.biGstPlanningConfig) await put(prisma.biGstPlanningConfig, { id: 1 }, { id: 1, ...s.biGstPlanningConfig });
+    if (s.offlinePolicy) await put(prisma.offlinePolicy, { id: 1 }, { id: 1, ...s.offlinePolicy });
     count("singletons", Object.values(s).filter(Boolean).length);
 
     // VoucherPrintTemplate's PK is `kind` (no `id` column), so the generic put()

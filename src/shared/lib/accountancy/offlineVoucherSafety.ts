@@ -113,43 +113,38 @@ export const DEFAULT_OFFLINE_POLICIES: OfflinePolicies = {
     allowCustomerEdit: true,
 };
 
-const STORAGE_KEY = "abeersuite_offline_policies";
+/** Every policy key, derived from the defaults so the two can never drift. */
+export const OFFLINE_POLICY_KEYS = Object.keys(DEFAULT_OFFLINE_POLICIES) as (keyof OfflinePolicies)[];
 
 /**
- * Returns current active offline policies.
+ * Turns whatever is stored in `OfflinePolicy.policies` into a complete, typed set.
+ *
+ * The stored row is deliberately partial and deliberately untrusted: it may predate
+ * a toggle this build knows about, and it may carry a key from a NEWER build that
+ * this counter has never heard of. So take only known boolean keys and let
+ * `DEFAULT_OFFLINE_POLICIES` fill the rest — a missing key means "whatever this build
+ * considers safe", never `false`, because silently refusing a sale is worse than the
+ * risk the toggle was guarding.
  */
-export function getOfflinePolicies(): OfflinePolicies {
-    if (typeof window !== "undefined") {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                return { ...DEFAULT_OFFLINE_POLICIES, ...JSON.parse(raw) };
-            }
-        } catch {
-            // Fallback to defaults
+export function mergeOfflinePolicies(stored: unknown): OfflinePolicies {
+    const merged = { ...DEFAULT_OFFLINE_POLICIES };
+    if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+        const raw = stored as Record<string, unknown>;
+        for (const key of OFFLINE_POLICY_KEYS) {
+            if (typeof raw[key] === "boolean") merged[key] = raw[key] as boolean;
         }
     }
-    return DEFAULT_OFFLINE_POLICIES;
-}
-
-/**
- * Saves updated offline policies.
- */
-export function saveOfflinePolicies(policies: OfflinePolicies): void {
-    if (typeof window !== "undefined") {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(policies));
-        } catch (err) {
-            console.error("[OfflinePolicies] Failed to save:", err);
-        }
-    }
+    return merged;
 }
 
 /**
  * Validates whether a given voucher type or ticket action is permitted offline.
+ *
+ * `policies` is required — there is no ambient source to fall back on. The old
+ * fallback read localStorage, which on the server is simply absent, so every server
+ * check silently used the hard-coded defaults and the admin's toggles did nothing.
  */
-export function isVoucherTypeSafeOffline(voucherType: string, customPolicies?: OfflinePolicies): boolean {
-    const policies = customPolicies || getOfflinePolicies();
+export function isVoucherTypeSafeOffline(voucherType: string, policies: OfflinePolicies): boolean {
     const normalized = voucherType.toUpperCase().replace(/-/g, "_");
 
     switch (normalized) {
@@ -235,15 +230,17 @@ export function isVoucherTypeSafeOffline(voucherType: string, customPolicies?: O
     }
 }
 
+/** The four master-data families the policy page offers a create/edit pair for. */
+export type MasterEntity = "product" | "account" | "taxonomy" | "customer";
+
 /**
  * Validates Master Data operation offline.
  */
 export function isMasterOperationAllowedOffline(
-    entity: "product" | "account" | "taxonomy" | "customer",
+    entity: MasterEntity,
     operation: "create" | "edit",
-    customPolicies?: OfflinePolicies
+    policies: OfflinePolicies,
 ): boolean {
-    const policies = customPolicies || getOfflinePolicies();
     if (entity === "product") {
         return operation === "create" ? policies.allowProductCreate : policies.allowProductEdit;
     }
@@ -257,6 +254,21 @@ export function isMasterOperationAllowedOffline(
         return operation === "create" ? policies.allowCustomerCreate : policies.allowCustomerEdit;
     }
     return true;
+}
+
+/** Plain-language name for a master family, for the refusal message. */
+const MASTER_ENTITY_LABEL: Record<MasterEntity, string> = {
+    product:  "products",
+    account:  "ledger accounts",
+    taxonomy: "brands, categories and units",
+    customer: "customer profiles",
+};
+
+/** Why a master-data write was refused, in words a cashier can act on. */
+export function getOfflineMasterBlockedReason(entity: MasterEntity, operation: "create" | "edit"): string {
+    const verb = operation === "create" ? "Creating" : "Editing";
+    return `${verb} ${MASTER_ENTITY_LABEL[entity]} is switched off while this counter is offline `
+        + "(Settings → Offline Policies). Do it from an office machine, or ask an admin to allow it.";
 }
 
 /**

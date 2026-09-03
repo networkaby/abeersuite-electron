@@ -73,6 +73,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "LoyaltyLot": { model: "LoyaltyLot", delegate: "loyaltyLot", pk: ["id"], exact: [], dates: ["createdAt", "earnedAt"] },
     "LoyaltyMilestone": { model: "LoyaltyMilestone", delegate: "loyaltyMilestone", pk: ["id"], exact: ["threshold"], dates: ["createdAt", "updatedAt"] },
     "LoyaltyMilestoneAward": { model: "LoyaltyMilestoneAward", delegate: "loyaltyMilestoneAward", pk: ["id"], exact: [], dates: ["awardedAt"] },
+    "OfflinePolicy": { model: "OfflinePolicy", delegate: "offlinePolicy", pk: ["id"], exact: [], dates: ["updatedAt"] },
     "OrgDefaults": { model: "OrgDefaults", delegate: "orgDefaults", pk: ["id"], exact: ["clearanceMarginCutoffPct"], dates: ["updatedAt"] },
     "payment_gateways": { model: "PaymentGateway", delegate: "paymentGateway", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"] },
     "Permission": { model: "Permission", delegate: "permission", pk: ["id"], exact: [], dates: [] },
