@@ -91,7 +91,17 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 **Release is the one exception to "never push"** — steps 5, 7 and 8 are pushes the owner has asked for as part of the word "release". Everything else in this repo still stops at the commit.
 
-Stop and ask only on: a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).
+**Ask the owner to join hand** at any step that needs their eyes or their machine, rather than guessing or skipping it. Say plainly what you need and wait:
+
+- **The notes** — show the drafted `RELEASE_NOTES.md` and the urgency tier before committing it. The owner knows which change customers care about; you only know the commits.
+- **The smoke test** — after `electron:pack`, ask them to run `dist-app/win-unpacked/AbeerSuite.exe` and confirm login, one local read, one sync round trip. You cannot do this one.
+- **The variant** — confirm `.env.counter` (`APP_MODE`, `LANDING_PAGE`) is set for the build they mean.
+- **A push they would rather run** — offer the exact command instead of running it, whenever they say so.
+- **Anything that would be a guess** — the version number when it is not an obvious bump, a schema release's publish-then-migrate ordering, a repo that failed to publish.
+
+Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
+
+Stop and ask on: a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).
 
 ### Core workflow
 
