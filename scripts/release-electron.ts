@@ -159,15 +159,18 @@ try {
 console.log("[release-electron] Publishing verified build in dist-app/win-unpacked...");
 
 const builderArgs = ["--publish", "always", "--prepackaged", prepackaged];
-if (releaseNotes) {
-    builderArgs.push(`-c.releaseInfo.releaseNotes=${JSON.stringify(releaseNotes)}`);
-}
 
 let exitCode = 0;
 for (const target of publishTargets) {
     console.log(`[release-electron] → Publishing to ${target.owner}/${target.repo}...`);
     const { tokenEnv, ...builderTarget } = target;
     pkg.build.publish = [builderTarget];
+    // releaseNotes goes through package.json rather than a `-c.releaseInfo.releaseNotes=...`
+    // CLI arg — with 80+ commits since the last tag, the escaped JSON routinely blows
+    // past Windows' ~8KB CreateProcess command-line limit ("The command line is too long").
+    if (releaseNotes) {
+        pkg.build.releaseInfo = { releaseNotes };
+    }
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
     try {
         const result = spawnSync("electron-builder", builderArgs, {
