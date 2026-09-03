@@ -40,7 +40,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const created = await prisma.$transaction(async (tx) => {
             const srcType = source.universalVoucher!.type as InvVoucherType;   // 5D-11: type on the spine
-            const reference = await invNextRef(tx, srcType, user!.id);
+            // No counter — a duplicate is raised from the office, not a till. (Was
+            // passing `user!.id` into the counter slot; see CreateGlVoucherSpec.)
+            const reference = await invNextRef(tx, srcType);
             const today = requestBusinessDate(req);
 
             // Phase 5 5.0c/5C: spine FIRST (the document anchor) — the duplicate is

@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const shift = await prisma.posShift.findUnique({
             where:  { id: shiftId },
-            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true, allowedExpenseAccountIds: true } } },
+            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true, counterNumber: true, allowedExpenseAccountIds: true } } },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "OPEN") {
@@ -92,6 +92,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 ],
                 post:      true,
                 branchId:  shift.branchId,
+                counterNumber: shift.counter.counterNumber,
             });
 
             const exp = await tx.posExpenditure.create({
