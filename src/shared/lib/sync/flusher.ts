@@ -35,8 +35,9 @@
  * interval. The interval itself stays as the safety net for the reconnect gap.
  */
 
-import { getPendingOutbox, markOutboxPushed, markOutboxFailure } from "./outbox";
+import { getPendingOutbox, markOutboxPushed, markOutboxFailure, rejectAllPending } from "./outbox";
 import { pushMutations } from "./push";
+import { isThisPcReleased } from "@/shared/lib/counter/releaseGuard";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { ALL_TOPICS } from "@/shared/lib/realtime/topics";
 
@@ -108,6 +109,20 @@ export async function flushOnce(localUrl: string): Promise<number> {
     try {
         const pending = await getPendingOutbox(localUrl, BATCH_SIZE);
         if (pending.length === 0) return 0;
+
+        // A released counter pushes NOTHING. Asked of Supabase itself, fresh — the
+        // replica still says "bound" at the moment a PC reconnects after hours offline,
+        // and this is the one place a stale answer would let refused work through. Only
+        // a positive "released" refuses; unreachable falls through to a push that fails
+        // offline exactly as it always has. See releaseGuard.ts.
+        if (await isThisPcReleased({ authoritative: true, force: true })) {
+            const refused = await rejectAllPending(localUrl, "rejected: counter released by admin");
+            console.warn(`[OutboxFlusher] rejected ${refused} pending mutation(s): this counter was released by admin.`);
+            // Supabase answered, so the cloud IS reachable — the badge must not go red.
+            cloudReachable = true;
+            lastFlushAt = Date.now();
+            return 0;
+        }
 
         const { pushedIds, failure } = await pushMutations(pending);
 

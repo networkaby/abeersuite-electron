@@ -4,32 +4,21 @@
 // the replica, except at login while online (`authoritative=1`), where one row is read
 // from Supabase so a release is caught at sign-in.
 //
-// ── Why the replica is enough ───────────────────────────────────────────────
-// The replica is kept honest by the sync worker: an admin's release on live reaches it
-// through the Realtime signal, and the worker's interval cycle is the safety net for a
-// signal that was missed. So the row here IS the DB's answer, a cycle late at most. The
-// reconciler (CounterReconciler.tsx) re-asks exactly when a pull touched PosCounter, so
-// nothing polls the cloud and nothing costs egress. This used to read authoritatively
-// on a five-minute timer — the timer is gone, and so is the authoritative read.
-//
-// ── Not ready is not released ───────────────────────────────────────────────
-// Before the worker's first cycle, or while the replica is being wiped, the replica
-// cannot answer. Reading through `prisma` then would fall through to Supabase — the
-// egress this exists to avoid — so this says `reachable: false` instead, and the caller
-// keeps trusting its local file. Only a POSITIVE "no row carries this PC's id" from a
-// ready replica means released.
+// The query itself lives in shared/lib/counter/releaseGuard.ts, because the same answer
+// also decides whether this machine's outbox may push and whether its API writes are
+// accepted — see that file for the replica-vs-DB rules and why "unreachable" is never
+// "released". This route is the renderer's window onto it.
 //
 // Off a counter PC (a browser, Vercel) there is no replica and `prisma` is live; the
 // route still works, it just is not what Electron calls in practice.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
-import { IS_COUNTER_PC, isReplicaReady } from "@/shared/lib/prisma/counterMode";
-import { refreshReplicaReadiness } from "@/shared/lib/prisma/replicaReadiness";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { resolveBinding } from "@/shared/lib/counter/releaseGuard";
 
 export async function GET(req: NextRequest) {
-    const { response } = await requireAuth();
+    // A released PC must still be able to ask — this is how it finds out.
+    const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -37,62 +26,6 @@ export async function GET(req: NextRequest) {
     // cross-matched — see shared/lib/counter/identity.ts.
     const ids = [searchParams.get("deviceId")?.trim()].filter((v): v is string => !!v);
 
-    // No identity resolved yet (Electron id not ready, bridge not running). We cannot
-    // tell "released" from "cannot check", so say so rather than guess.
-    if (ids.length === 0) return NextResponse.json({ reachable: false, counter: null });
-
-    try {
-        // ── authoritative=1: the login path, when the PC is online ──────────────
-        // One row read from Supabase so a released counter is caught at sign-in rather
-        // than on the next pull. Unreachable falls through to the replica below —
-        // "cannot reach the cloud" is not "released".
-        if (searchParams.get("authoritative") === "1") {
-            try {
-                const counter = await prismaAuthoritative.posCounter.findFirst({
-                    where:  { boundDeviceId: { in: ids } },
-                    select: { id: true, counterNumber: true, name: true },
-                });
-                if (!counter) return NextResponse.json({ reachable: true, counter: null });
-                const openShift = await prismaAuthoritative.posShift.findFirst({
-                    where:  { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
-                    select: { id: true, status: true, userId: true },
-                });
-                return NextResponse.json({ reachable: true, counter, openShift });
-            } catch {
-                // Offline after all — the replica answers.
-            }
-        }
-
-        if (IS_COUNTER_PC) {
-            // Rate-limited internally; one query per TTL, not per call.
-            await refreshReplicaReadiness();
-            if (!isReplicaReady()) return NextResponse.json({ reachable: false, counter: null });
-        }
-
-        // Every row that carries this device — not just the first. A replica can hold a
-        // stale binding beside the real one (a counter this PC held before, whose release
-        // has not landed yet); picking one would tell this machine it is the counter it
-        // used to be. Two answers means "cannot tell" — the next pull settles it.
-        const matches = await prisma.posCounter.findMany({
-            where:  { boundDeviceId: { in: ids } },
-            select: { id: true, counterNumber: true, name: true },
-            take:   2,
-        });
-        if (matches.length > 1) return NextResponse.json({ reachable: false, counter: null });
-        if (matches.length === 0) return NextResponse.json({ reachable: true, counter: null });
-        const counter = matches[0];
-
-        // The counter's currently live shift, if any. A recovering PC needs this to know
-        // whether to resume (still OPEN — the ordinary device swap) or to start a fresh
-        // shift (the office force-closed it while this machine was down).
-        const openShift = await prisma.posShift.findFirst({
-            where:  { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
-            select: { id: true, status: true, userId: true },
-        });
-
-        return NextResponse.json({ reachable: true, counter, openShift });
-    } catch {
-        // The replica could not be read — silence, not a release.
-        return NextResponse.json({ reachable: false, counter: null });
-    }
+    const answer = await resolveBinding(ids, { authoritative: searchParams.get("authoritative") === "1" });
+    return NextResponse.json(answer);
 }

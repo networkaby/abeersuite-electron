@@ -34,7 +34,8 @@ const claimSchema = z.object({
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAuth();
+    // Onboarding again after a release is exactly when this runs.
+    const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
 
     const { id } = await params;

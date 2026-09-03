@@ -22,7 +22,8 @@ import { getReplicaLag } from "@/shared/lib/sync/replicaLag";
  * the badge, same pattern as /api/counter/status.
  */
 export async function GET() {
-    const { response } = await requireAuth();
+    // The setup wizard polls this while the replica refills on a re-onboarded PC.
+    const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
 
     if (!IS_COUNTER_PC || !process.env.LOCAL_DATABASE_URL) {

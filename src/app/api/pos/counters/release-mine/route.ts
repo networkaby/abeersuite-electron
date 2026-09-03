@@ -16,7 +16,8 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-    const { response } = await requireAuth();
+    // Releasing from the PC itself must work even once the office already did.
+    const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
 
     try {

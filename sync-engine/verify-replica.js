@@ -60,10 +60,10 @@ async function main() {
         for (const model of models) {
             const entry = tables[model];
             try {
-                const [a, b] = await Promise.all([
-                    reconcile.fingerprint(source, entry),
-                    reconcile.fingerprint(local, entry),
-                ]);
+                // Source first for a full table: the local hash keeps only the source's
+                // columns (see reconcile.js), so it needs that list.
+                const a = await reconcile.fingerprint(source, entry);
+                const b = await reconcile.fingerprint(local, entry, a.columns || []);
                 checked++;
                 srcRows += Number(a.count);
                 locRows += Number(b.count);

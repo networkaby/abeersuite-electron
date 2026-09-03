@@ -21,7 +21,8 @@ import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modu
 import { z } from "zod";
 
 export async function GET(req: NextRequest) {
-    const { response } = await requireAuth();
+    // The setup wizard on a released PC reads this list to onboard again.
+    const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
 
     try {

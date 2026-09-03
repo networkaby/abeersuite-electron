@@ -241,10 +241,12 @@ async function main() {
                     // A 'full' table is replaced wholesale, so re-pulling it every
                     // cycle would re-read reference data from Supabase forever. Two
                     // numbers on the wire decide whether that is necessary at all.
-                    const [srcFp, localFp] = await Promise.all([
-                        reconcile.fingerprint(source, entry),
-                        reconcile.fingerprint(local, entry),
-                    ]);
+                    // The hash covers row CONTENT (reconcile.js): an edit in place — a
+                    // released counter, a renamed department — is the only signal a
+                    // table without a watermark can give. Source first: its column
+                    // list is what the local side hashes against.
+                    const srcFp = await reconcile.fingerprint(source, entry);
+                    const localFp = await reconcile.fingerprint(local, entry, srcFp.columns || []);
                     if (reconcile.same(srcFp, localFp)) {
                         skipped++;
                         // Still record the pass so every table has a freshness stamp.

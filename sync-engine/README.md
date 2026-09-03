@@ -163,14 +163,23 @@ budgeted). `__SYNC_APPLIED__` still prints once, after every lane has committed.
 **A `full` table is fingerprinted before it is copied.** Replacing 22 reference
 tables every cycle would re-read them from Supabase forever, for data that changes
 maybe monthly — self-defeating when egress is the entire point. A count plus a hash
-of every primary key is two numbers on the wire; only a mismatch pays for the rows.
-A steady-state cycle currently transfers **0 rows in ~0.6s**.
+is two numbers on the wire; only a mismatch pays for the rows. A steady-state cycle
+currently transfers **0 rows in ~0.6s**.
 
-**The count is not enough on its own**, which is why the key hash is there: delete
-one row and insert another between cycles and the total is unchanged while the
-contents are not. Verified both ways — the fingerprint catches a one-for-one swap,
-and reproduces exactly when the original contents are restored, so it does not cause
+**The count is not enough on its own**, which is why the hash is there: delete one
+row and insert another between cycles and the total is unchanged while the contents
+are not. Verified both ways — the fingerprint catches a one-for-one swap, and
+reproduces exactly when the original contents are restored, so it does not cause
 false re-transfers.
+
+**For a `full` table the hash covers the whole row, not just the key.** A key hash
+cannot see an edit in place — release a counter (`boundDeviceId` → null), rename a
+department — and a table without a watermark has no other way to notice, so the
+replica kept the old value forever. `reconcile.fingerprint()` hashes `to_jsonb(row)`
+for those tables; the source query also returns its column list in the same statement
+and the replica hashes only those columns, so a stale replica-only column cannot make
+the sides disagree. Both pools pin the session to UTC so time renders identically.
+Watermark tables keep the key-only hash — their edits ride `updatedAt`.
 
 ### The cursor is (timestamp, primary key), not the timestamp
 

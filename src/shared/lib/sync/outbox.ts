@@ -157,6 +157,32 @@ export async function markOutboxFailure(
 }
 
 /**
+ * Dead-letters EVERY unpushed row at once, with one reason. The released-counter
+ * rule: once the DB says this device holds no counter, nothing it queued while it
+ * believed otherwise may reach the books — a sale billed at 11:00 on a counter released
+ * at 10:30 is refused when the PC reconnects at 13:00, not accepted late. Returns how
+ * many rows were refused so the caller can say so in the log.
+ */
+export async function rejectAllPending(localUrl: string, reason: string): Promise<number> {
+    const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5000 });
+    try {
+        await client.connect();
+        const res = await client.query(
+            `UPDATE "_outbox"
+                SET dead_lettered_at = now(), error = $1
+              WHERE pushed_at IS NULL AND dead_lettered_at IS NULL`,
+            [reason],
+        );
+        return res.rowCount ?? 0;
+    } catch (err) {
+        console.error("[Outbox] Failed to reject pending rows:", err);
+        return 0;
+    } finally {
+        await client.end().catch(() => { });
+    }
+}
+
+/**
  * Marks outbox entries as pushed upon successful remote persistence.
  */
 export async function markOutboxPushed(localUrl: string, ids: number[]): Promise<void> {

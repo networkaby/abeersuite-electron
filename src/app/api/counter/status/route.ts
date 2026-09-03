@@ -25,7 +25,8 @@ import { getPushHealth } from "@/shared/lib/sync/flusher";
  * the cashier actually cares about: whether their work is leaving this machine.
  */
 export async function GET() {
-    const { response } = await requireAuth();
+    // The shell badge keeps reporting on a released PC too.
+    const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
 
     try {

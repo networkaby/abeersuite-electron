@@ -29,6 +29,11 @@ function pool(url, max) {
         max: max || 4,
         keepAlive: true,
         connectionTimeoutMillis: 15000,
+        // Both sides render time the same way. The full-table content hash
+        // (reconcile.js) compares `to_jsonb(row)::text` across the two servers, and a
+        // timestamptz renders in the SESSION zone — Supabase sits in UTC, a counter
+        // in IST. Pinned rather than assumed.
+        options: "-c timezone=UTC",
     });
 }
 

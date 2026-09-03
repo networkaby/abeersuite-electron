@@ -1145,6 +1145,14 @@ app.whenReady().then(async () => {
     // no replica still prints — so it starts regardless of what happened above.
     startHardwareBridge();
 
+    // The Next server needs to know WHICH machine it is, to refuse work for a counter
+    // this PC no longer holds (src/shared/lib/counter/releaseGuard.ts): the installation
+    // id to match against pos_counters.boundDeviceId, and where counter-setup.json lives
+    // so it can tell "released" from "never set up". Inherited through serverManager's
+    // `env: {...process.env}`.
+    process.env.COUNTER_MACHINE_ID = counterInstallationId;
+    process.env.COUNTER_USER_DATA = app.getPath("userData");
+
     sendBootProgress("Starting server…");
     let result: ServerStartResult = { url: `http://127.0.0.1:${PORT}`, ready: false };
     try {

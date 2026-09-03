@@ -5,6 +5,8 @@ import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/pe
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
 import { canDoPosVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
+import { isThisPcReleased } from "@/shared/lib/counter/releaseGuard";
 import type { VoucherType } from "@/generated/prisma/client";
 
 /**
@@ -121,13 +123,28 @@ type GuardResult =
 /**
  * Staff API gate — 401 if no session, 403 if the session belongs to a portal customer.
  */
-export async function requireAuth(): Promise<GuardResult> {
+export async function requireAuth(opts: { allowReleased?: boolean } = {}): Promise<GuardResult> {
     const session = await auth();
     if (!session || !session.user) {
         return { user: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
     }
     if ((session.user as { kind?: string }).kind === "customer") {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+    // A counter PC whose counter the office has released does no work at all until it
+    // is onboarded again — not a task, not a voucher — however long the cashier stays
+    // signed in. The reconciler signs them out within seconds of the pull landing; this
+    // is the hard stop underneath it. Inert off a counter PC and on a fresh one; the
+    // handful of routes the login/setup flow needs pass `allowReleased`. Answered from
+    // the replica, cached — no egress (see releaseGuard.ts).
+    if (!opts.allowReleased && IS_COUNTER_PC && (await isThisPcReleased())) {
+        return {
+            user: null,
+            response: NextResponse.json(
+                { error: "This counter was released by admin. Counter setup is required.", code: "COUNTER_RELEASED" },
+                { status: 403 },
+            ),
+        };
     }
     return { user: resolveFromSession(session.user as SessionUserShape), response: null };
 }

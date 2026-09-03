@@ -102,9 +102,21 @@ function listen(cfg, onChange, log) {
         timer = setTimeout(flush, SETTLE_MS);
     });
 
+    // Every SUBSCRIBED after the first is a RECONNECT: the socket was down for a while
+    // and every signal sent in that gap is gone. A counter coming back online at 13:00
+    // after a morning offline must not wait out the interval to learn what changed —
+    // a released binding above all — so a reconnect counts as one settled signal.
+    let subscribedBefore = false;
+
     channel.subscribe((status) => {
-        if (status === "SUBSCRIBED") log(`realtime: listening on ${CHANNEL}`);
-        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        if (status === "SUBSCRIBED") {
+            log(`realtime: listening on ${CHANNEL}${subscribedBefore ? " (reconnected - catching up)" : ""}`);
+            if (subscribedBefore) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(flush, SETTLE_MS);
+            }
+            subscribedBefore = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             // supabase-js retries on its own; say so once rather than every attempt.
             log(`realtime: ${status} - will keep retrying, timer still covers us`);
         }

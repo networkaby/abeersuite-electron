@@ -20,9 +20,25 @@
  * is deleted and another inserted between two cycles - the total is unchanged while
  * the contents are not. Hashing the keys catches that.
  *
+ * ── Full tables hash the ROW, not the key ──────────────────────────────────
+ * A key-only hash cannot see an edit in place: rename a Department, release a
+ * PosCounter (boundDeviceId -> null), and count and keys are both unchanged, so the
+ * table is skipped forever and the replica keeps the old value. For a watermark table
+ * that is fine - updatedAt carries the edit - but a 'full' table has no watermark, so
+ * the fingerprint IS its only change detector. Those tables therefore hash
+ * `to_jsonb(row)`: jsonb normalises key order and value rendering, so the two servers
+ * agree byte for byte.
+ *
+ * The replica may carry a column the source has dropped (schemaGuard tolerates that on
+ * purpose), which would make the two sides disagree forever. So the SOURCE fingerprint
+ * also returns its column list - in the same statement, no extra round trip - and the
+ * local fingerprint hashes only those columns. The list is not taken from the schema
+ * guard because a signal-woken cycle trusts a recent verdict and never runs it.
+ *
  * hashtextextended is stable across servers for a given input and seed, so the two
  * sides are genuinely comparable; ordering does not matter because sum() is
- * commutative.
+ * commutative. Both pools pin the session to UTC (db.js) so a timestamptz, should one
+ * ever land in a full table, renders identically on both sides.
  */
 
 const { q } = require("./db");
@@ -45,15 +61,36 @@ function keyExpression(entry) {
 }
 
 /**
- * @returns {Promise<{ count: string, checksum: string }>}
+ * @param {string[]} [columns] `full` tables only: hash just these columns (the
+ *   source's list, as returned by the source-side call). Omitted = every column, which
+ *   is right for the source itself.
+ * @returns {Promise<{ count: string, checksum: string, columns?: string[] }>}
+ *   `columns` is present for `full` tables: the table's column names on this side.
  */
-async function fingerprint(client, entry) {
-    const keyExpr = keyExpression(entry);
+async function fingerprint(client, entry, columns) {
+    if (entry.strategy !== "full") {
+        const { rows } = await client.query(
+            `SELECT count(*)::text AS count,
+                    COALESCE(sum(hashtextextended(${keyExpression(entry)}, 0)), 0)::text AS checksum
+             FROM ${q(entry.table)}`,
+        );
+        return rows[0];
+    }
 
+    // Row content. With a column list, keep only those keys so a replica-only column
+    // cannot make the sides disagree; the column list of THIS side rides along in the
+    // same statement so the caller can pass it to the other side.
+    const rowExpr = columns
+        ? `COALESCE((SELECT jsonb_object_agg(key, value) FROM jsonb_each(to_jsonb(t)) WHERE key = ANY($1::text[])), '{}'::jsonb)`
+        : `to_jsonb(t)`;
     const { rows } = await client.query(
         `SELECT count(*)::text AS count,
-                COALESCE(sum(hashtextextended(${keyExpr}, 0)), 0)::text AS checksum
-         FROM ${q(entry.table)}`,
+                COALESCE(sum(hashtextextended((${rowExpr})::text, 0)), 0)::text AS checksum,
+                (SELECT array_agg(column_name::text ORDER BY column_name)
+                   FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = $${columns ? 2 : 1}) AS columns
+         FROM ${q(entry.table)} t`,
+        columns ? [columns, entry.table] : [entry.table],
     );
     return rows[0];
 }
