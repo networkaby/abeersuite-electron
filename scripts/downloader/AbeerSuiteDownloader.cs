@@ -415,7 +415,12 @@ namespace AbeerSuite.Downloader
                     }
                 }
 
-                // 5. Launch downloaded installer
+                // 5. Pre-install audit: the embedded PostgreSQL needs the VC++ 2015-2022
+                //    x64 runtime. Doing it here saves the installer the same download.
+                EnsureVcRuntime();
+                if (_cts.IsCancellationRequested) return;
+
+                // 6. Launch downloaded installer
                 SetStatus("Starting installer...", "Launching " + assetName + "...", true, 100);
                 Thread.Sleep(500);
 
@@ -448,6 +453,90 @@ namespace AbeerSuite.Downloader
                     _actionButton.Text = ex.Message.Contains("401") || ex.Message.Contains("403") || ex.Message.Contains("404") ? "Enter Token" : "Retry";
                 }));
             }
+        }
+
+        // ── Visual C++ runtime pre-install audit ─────────────────────────────
+        // Mirrors build/installer.nsh. The bundled PostgreSQL (initdb/postgres) is a
+        // Microsoft-toolchain build: without vcruntime140/msvcp140 initdb dies with
+        // 0xC0000135 and the counter can never fill its local replica. Not bundled
+        // (~25 MB); internet is a given at install time since a counter binds online.
+        private const string VcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
+        private const string VcRedistKey = @"SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64";
+        private const int VcRedistMinMinor = 20; // 14.20 = VS2019, the bundled PostgreSQL's floor
+
+        private static bool VcRuntimePresent()
+        {
+            try
+            {
+                using (var hklm = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64))
+                using (var key = hklm.OpenSubKey(VcRedistKey))
+                {
+                    if (key == null) return false;
+                    int installed = Convert.ToInt32(key.GetValue("Installed", 0));
+                    int major = Convert.ToInt32(key.GetValue("Major", 0));
+                    int minor = Convert.ToInt32(key.GetValue("Minor", 0));
+                    return installed == 1 && major >= 14 && minor >= VcRedistMinMinor;
+                }
+            }
+            catch { return false; }
+        }
+
+        private void EnsureVcRuntime()
+        {
+            SetStatus("Checking Visual C++ runtime...", "Required by the local database.", true, 100);
+            if (VcRuntimePresent()) return;
+
+            string redistPath = Path.Combine(Path.GetTempPath(), "vc_redist.x64.exe");
+            SetStatus("Downloading Visual C++ runtime...", "Fetching from Microsoft...", false, 0);
+
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(VcRedistUrl);
+            req.UserAgent = "AbeerSuite-Downloader";
+            req.AllowAutoRedirect = true;
+            using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+            using (Stream respStream = resp.GetResponseStream())
+            using (FileStream fileStream = new FileStream(redistPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                long totalBytes = resp.ContentLength;
+                byte[] buffer = new byte[65536];
+                long totalRead = 0;
+                DateTime lastUpdate = DateTime.MinValue;
+                int bytesRead;
+                while ((bytesRead = respStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    if (_cts.IsCancellationRequested)
+                    {
+                        fileStream.Close();
+                        try { File.Delete(redistPath); } catch { }
+                        return;
+                    }
+                    fileStream.Write(buffer, 0, bytesRead);
+                    totalRead += bytesRead;
+                    if ((DateTime.Now - lastUpdate).TotalMilliseconds > 150)
+                    {
+                        lastUpdate = DateTime.Now;
+                        int percent = totalBytes > 0 ? (int)((totalRead * 100) / totalBytes) : 0;
+                        SetStatus("Downloading Visual C++ runtime (" + percent + "%)...",
+                            (totalRead / (1024.0 * 1024.0)).ToString("0.0") + " MB downloaded", false, percent);
+                    }
+                }
+            }
+
+            SetStatus("Installing Visual C++ runtime...", "This takes under a minute.", true, 100);
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = redistPath;
+            psi.Arguments = "/install /quiet /norestart";
+            psi.UseShellExecute = true;
+            psi.Verb = "runas";
+            using (Process proc = Process.Start(psi))
+            {
+                proc.WaitForExit();
+                // 0 = ok, 3010 = ok but reboot pending, 1638 = a newer version is present.
+                if (proc.ExitCode != 0 && proc.ExitCode != 3010 && proc.ExitCode != 1638)
+                {
+                    throw new Exception("Visual C++ runtime install failed (exit " + proc.ExitCode + "). Install it from " + VcRedistUrl + " and retry.");
+                }
+            }
+            try { File.Delete(redistPath); } catch { }
         }
 
         private void SetStatus(string status, string detail, bool isMarquee, int progressVal)

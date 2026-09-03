@@ -109,7 +109,7 @@ Everything else in this document is occasional.
 | `pnpm verify:package` | The build gate — checks the packaged tree for missing `node_modules`, symlinks into the pnpm store, stray `.env` files, and secrets outside the `counter.env` allowlist |
 | `pnpm pg:fetch` | Downloads + trims the embedded PostgreSQL into `resources/pgsql` (~80 MB). **Once per build machine**, again on a version bump |
 | `pnpm icon:build` | Regenerates the app icon |
-| `pnpm build:downloader` | Compiles the small C# web-setup stub `AbeerSuite-WebSetup.exe` |
+| `pnpm build:downloader` | Compiles the small C# web-setup stub `AbeerSuite-WebSetup.exe`. It checks for the VC++ 2015-2022 x64 runtime (needed by the embedded PostgreSQL) and downloads it from Microsoft before launching the installer; `build/installer.nsh` repeats the check |
 
 ### 2.3 Guards and generators
 

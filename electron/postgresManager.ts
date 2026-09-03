@@ -351,6 +351,13 @@ async function startEmbeddedPostgres(): Promise<boolean> {
             await new Promise<void>((resolve, reject) => {
                 initProc.on("exit", (code) => {
                     if (code === 0) resolve();
+                    // 0xC0000135 = STATUS_DLL_NOT_FOUND: the VC++ 2015-2022 x64 runtime is
+                    // missing. The installer and the web setup both download it; this line
+                    // is for the PC that was set up some other way.
+                    else if (code === 0xC0000135) reject(new Error(
+                        `initdb could not load a DLL (exit ${code}) — the Microsoft Visual C++ 2015-2022 x64 runtime is missing. ` +
+                        "Install https://aka.ms/vs/17/release/vc_redist.x64.exe and start the app again.",
+                    ));
                     else reject(new Error(`initdb exited with code ${code}`));
                 });
             });
