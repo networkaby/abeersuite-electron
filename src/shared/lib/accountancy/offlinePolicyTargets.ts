@@ -67,11 +67,12 @@ const TICKET_KIND_POLICY: Record<TicketKind, keyof OfflinePolicies> = {
     task:   "allowTask",
 };
 
+/** Singular phrases — each is read back as "<label> is switched off …". */
 const TICKET_KIND_LABEL: Record<TicketKind, string> = {
     repair: "Repair ticket intake",
-    help:   "Help-desk enquiries",
-    deal:   "CRM deals",
-    task:   "Internal staff tasks",
+    help:   "Help-desk enquiry intake",
+    deal:   "CRM deal capture",
+    task:   "Internal staff task creation",
 };
 
 /** Pipelines resolve by NAME (ids are seed-dependent), so the map is looked up once. */
