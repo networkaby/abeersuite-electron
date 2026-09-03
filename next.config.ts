@@ -14,6 +14,11 @@ const { hasOfficeRoutes, indexable } = modeFlags(parseAppMode(process.env.APP_MO
 const COUNTER_BUILD = process.env.COUNTER_BUILD === "1";
 
 const nextConfig: NextConfig = {
+  // The desktop shell loads http://127.0.0.1:<port> while `next dev` treats only
+  // `localhost` as its own origin, so under `pnpm electron:dev` the HMR socket was
+  // refused and the dev client reloaded the page every ~45 s without ever hydrating.
+  // Dev-only: `next start` has no such check.
+  allowedDevOrigins: ["127.0.0.1"],
   // Standalone traces the server and its deps into one folder we can copy onto the
   // counter — no `pnpm install` on a shop machine, no node_modules to keep in sync
   // with the build.

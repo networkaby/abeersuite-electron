@@ -6,6 +6,7 @@ import CounterSetupGuard from "@/shared/components/CounterSetupGuard";
 import CounterReconciler from "@/shared/components/CounterReconciler";
 import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
 import ReplicaReadyGate from "@/shared/components/ReplicaReadyGate";
+import UpdatePrompt from "@/shared/components/UpdatePrompt";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { CANONICAL_SITE_URL, INDEXABLE } from "@/shared/lib/appMode";
 
@@ -71,6 +72,7 @@ export default function RootLayout({
         <CounterReconciler />
         <StatusTitleUpdater />
         <ReplicaReadyGate />
+        <UpdatePrompt />
         <ThemeProvider>
           <CounterSetupGuard>{children}</CounterSetupGuard>
         </ThemeProvider>

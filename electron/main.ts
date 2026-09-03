@@ -362,6 +362,13 @@ function createSystemTray(): void {
                     updateContextMenu();
                 },
             },
+            {
+                label: "Check for updates",
+                click: () => {
+                    void checkNow("tray");
+                    showMainWindow();
+                },
+            },
             { type: "separator" },
             {
                 label: "Quit AbeerSuite",
@@ -634,59 +641,12 @@ ipcMain.handle("window:control", (event, action: "minimize" | "maximize" | "clos
 });
 
 // ── Auto Updater ─────────────────────────────────────────────────────────────
-function setupAutoUpdater(): void {
-    if (isDev) return;
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { autoUpdater } = require("electron-updater");
-        autoUpdater.autoDownload = true;
-        autoUpdater.autoInstallOnAppQuit = true;
-
-        // GITHUB_DOWNLOAD_UPDATE_REPO ("owner/repo") deliberately points at a repo separate
-        // from the source — abeersuite-networkservice-update holds only release artifacts,
-        // no code. GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN (a fine-grained PAT, "Contents:
-        // Read-only", scoped to only that repo) is baked into every installer via
-        // counter.env, so a leaked installer exposes at most the artifacts every counter
-        // already has on disk, never the private codebase. Either missing, or a malformed
-        // repo string — skip update checks rather than block boot; the app just runs the
-        // version it has.
-        const updateToken = process.env.GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN;
-        const [updateOwner, updateRepo] = (process.env.GITHUB_DOWNLOAD_UPDATE_REPO || "").split("/");
-        if (!updateToken || !updateOwner || !updateRepo) {
-            console.warn("[AutoUpdater] GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN or GITHUB_DOWNLOAD_UPDATE_REPO not set — skipping update checks.");
-            return;
-        }
-        autoUpdater.setFeedURL({
-            provider: "github",
-            owner: updateOwner,
-            repo: updateRepo,
-            private: true,
-            token: updateToken,
-        });
-
-        autoUpdater.on("update-available", () => {
-            console.log("[AutoUpdater] Update available. Downloading in background...");
-        });
-
-        autoUpdater.on("update-downloaded", () => {
-            console.log("[AutoUpdater] Update downloaded. Ready to install.");
-            if (mainWindow) {
-                mainWindow.webContents.send("app:update-ready");
-            }
-        });
-
-        autoUpdater.checkForUpdatesAndNotify().catch((err: unknown) => {
-            console.warn("[AutoUpdater] Update check failed:", err);
-        });
-
-        // Check for updates every 30 minutes in background
-        setInterval(() => {
-            autoUpdater.checkForUpdatesAndNotify().catch(() => {});
-        }, 30 * 60 * 1000);
-    } catch (err) {
-        console.warn("[AutoUpdater] Failed to initialize auto-updater:", err);
-    }
-}
+// Policy and mechanics live in updateManager.ts. What stays here is the wiring: the
+// renderer's view of the update, its "Restart now", and the POS cart's busy flag.
+ipcMain.handle("update:get-state", () => getUpdateState());
+ipcMain.handle("update:install-now", () => install("restart now"));
+ipcMain.handle("update:check-now", () => checkNow("asked"));
+ipcMain.handle("update:set-busy", (_, busy: boolean) => setCartBusy(busy === true));
 
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
@@ -696,6 +656,7 @@ import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
+import { setupAutoUpdater, stopAutoUpdater, getUpdateState, install, checkNow, setCartBusy } from "./updateManager";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
 // See serverManager.ts's warmRoutes() for why this exists: preloadEntriesOnStart
@@ -1188,7 +1149,7 @@ app.whenReady().then(async () => {
     // exit. Cheap to redo periodically since it's just a Set -> JSON.stringify.
     setInterval(persistVisitedRoutes, 10 * 60 * 1000);
 
-    setupAutoUpdater();
+    setupAutoUpdater({ isDev, landingPage: LANDING_PAGE });
 
     app.on("activate", () => {
         showMainWindow();
@@ -1201,6 +1162,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
+    stopAutoUpdater();
     stopNextServer();
     stopSyncWorker();
     stopHardwareBridge();

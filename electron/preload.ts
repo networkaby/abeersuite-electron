@@ -1,4 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { UpdateState } from "./updateManager";
+
+export type { UpdateState, UpdateTier, UpdatePhase } from "./updateManager";
 
 export interface ElectronAPI {
     isElectron: true;
@@ -6,7 +9,18 @@ export interface ElectronAPI {
     getPrinters: () => Promise<Array<{ name: string; isDefault: boolean; displayName?: string }>>;
     printSilent: (options?: { printerName?: string }) => Promise<boolean>;
     windowControl: (action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => Promise<void>;
-    onUpdateReady: (callback: () => void) => void;
+    /**
+     * Auto-update, see electron/updateManager.ts. `onState` pushes every change; `getState`
+     * is for a component that mounts after the update was already found. `setBusy` is the
+     * POS cart's "has lines" flag — main never restarts the app while it is true.
+     */
+    update: {
+        getState: () => Promise<UpdateState>;
+        onState: (callback: (state: UpdateState) => void) => () => void;
+        installNow: () => Promise<void>;
+        checkNow: () => Promise<void>;
+        setBusy: (busy: boolean) => Promise<void>;
+    };
     /** Splash-screen progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
     /**
@@ -50,8 +64,16 @@ const electronAPI: ElectronAPI = {
     getPrinters: () => ipcRenderer.invoke("printer:get-list"),
     printSilent: (options) => ipcRenderer.invoke("printer:print-silent", options),
     windowControl: (action) => ipcRenderer.invoke("window:control", action),
-    onUpdateReady: (callback) => {
-        ipcRenderer.on("app:update-ready", () => callback());
+    update: {
+        getState: () => ipcRenderer.invoke("update:get-state"),
+        onState: (callback) => {
+            const handler = (_event: Electron.IpcRendererEvent, state: UpdateState) => callback(state);
+            ipcRenderer.on("update:state", handler);
+            return () => ipcRenderer.removeListener("update:state", handler);
+        },
+        installNow: () => ipcRenderer.invoke("update:install-now"),
+        checkNow: () => ipcRenderer.invoke("update:check-now"),
+        setBusy: (busy) => ipcRenderer.invoke("update:set-busy", busy),
     },
     onBootProgress: (callback) => {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));

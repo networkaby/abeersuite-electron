@@ -126,7 +126,7 @@ Same as `pack`, but `electron-builder` without `--dir`, so you get the NSIS inst
 
 ### `pnpm electron:release`
 1. `pnpm electron:pack` (everything above, gate included)
-2. `scripts/release-electron.ts` — reads `GH_TOKEN` from `.env`, then runs `electron-builder --publish always --prepackaged dist-app/win-unpacked`
+2. `scripts/release-electron.ts` — reads `GITHUB_UPDATE_REPO_N` / `GH_TOKEN_N` pairs from `.env`, then runs `electron-builder --publish always --prepackaged dist-app/win-unpacked`
 
 The `--prepackaged` part is the important design choice: it publishes the **exact tree that just passed `verify:package`**, instead of rebuilding. There is no window where an unverified build can reach the public release.
 
@@ -151,7 +151,7 @@ Use this when the release contains schema changes, new routes, new permissions, 
 pnpm install && pnpm install:git-hooks && pnpm pg:fetch
 ```
 
-`GH_TOKEN` must exist in `.env` — a fine-grained PAT scoped to only `devloperakramul/abeersuite-networkservice-update`, permission *Contents: Read and write*. It must **never** enter `scripts/counterEnv.ts`'s `COUNTER_ENV_COPIED`; a shipped counter must not be able to create releases.
+`GITHUB_UPDATE_REPO_1` + `GH_TOKEN_1` (and `_2`, …) must exist in `.env` — each token a fine-grained PAT scoped to only that repo, permission *Contents: Read and write*. Counters read from `GITHUB_DOWNLOAD_UPDATE_REPO` with `GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN` (*Contents: Read-only*), so at least one publish target must be that same repo, and it must be a releases-only repo, never the source. The write tokens must **never** enter `scripts/counterEnv.ts`'s `COUNTER_ENV_COPIED`; a shipped counter must not be able to create releases.
 
 **Step 1 — write the code**
 
@@ -187,6 +187,10 @@ pnpm lint && pnpm test:e2e
 **Step 6 — commit and bump**
 
 Bump `version` in `package.json`. This number is the release tag and what the updater compares against, so it must go up on every publish.
+
+Rewrite `RELEASE_NOTES.md` for this version. The first line decides how counters take the update (see section 9): put `[urgent]` in the heading only when every counter must restart today.
+
+**Schema change? Publish first, migrate second.** The counter build carries the new `local-schema.sql`, and the sync worker tolerates a replica that is AHEAD of Supabase (extra columns) but halts on one that is BEHIND (missing columns). Push the release, let counters pick it up, then apply the schema to Supabase. The reverse order pauses billing on every replica counter until the update lands — the app does recover on its own (the halt triggers an immediate update check and a 5-minute countdown), but nobody wants that at 6 pm.
 
 **Step 7 — pick the variant**
 
@@ -325,9 +329,33 @@ Carried over from the webapp and unchanged in spirit: `dev`, `build`, `start`, `
 
 ## 8. Release safety rules — short version
 
-1. `GH_TOKEN` lives in the build machine's `.env` only. Never in `counterEnv.ts`'s `COUNTER_ENV_COPIED`.
+1. `GH_TOKEN_N` write tokens live in the build machine's `.env` only. Never in `counterEnv.ts`'s `COUNTER_ENV_COPIED`.
 2. Never run `scripts/release-electron.ts` directly. It refuses without `dist-app/win-unpacked/AbeerSuite.exe`, but the point is that `electron:pack` must run first.
 3. Never bypass `verify:package`.
 4. Bump `version` on every publish, without exception.
 5. `resources/pgsql` missing = an installer with no local replica. Warning only, never ignore it for a real release.
 6. No `latest.yml` on the release = auto-update is dead for every counter already in the field.
+
+---
+
+## 9. How counters take an update
+
+`electron/updateManager.ts` checks the feed 20 s after boot and every 30 minutes, downloads in the background, and then picks one of three tiers. Nothing is shown until the download is complete.
+
+| Tier | Trigger | On screen | Installs |
+| --- | --- | --- | --- |
+| quiet | Every release by default | Corner card: Restart now / Later | Only at a safe moment: empty POS cart and (window in the tray, or the login page, or no input for 10 min). Never forced. Also on a clean quit. |
+| urgent | `[urgent]` in `RELEASE_NOTES.md` | Blocking dialog with a countdown | When the cart is empty and hands are off for a minute; at 30 min regardless |
+| schema | The counter's own sync worker halted on `SCHEMA DRIFT` | The same dialog, schema wording, above ReplicaReadyGate | Check runs at once; installs like urgent, at 5 min regardless |
+
+The install is silent and relaunches the app, so a counter that updated overnight is back on the login screen by morning.
+
+**Testing without a GitHub release.** A folder served over HTTP with `latest.yml` + the installer is a valid feed:
+
+```bash
+UPDATE_FEED_URL=http://127.0.0.1:8765/ UPDATE_DRY_RUN=1 pnpm electron:dev
+```
+
+`UPDATE_FEED_URL` also switches the updater on in dev. `UPDATE_DRY_RUN=1` logs the install decision instead of running the installer, so the fake `latest.yml` can point at any file (electron-updater still verifies its `sha512` and `size`). Shorten the waits with `UPDATE_IDLE_SECONDS`, `UPDATE_URGENT_IDLE_SECONDS`, `UPDATE_URGENT_GRACE_MINUTES`, `UPDATE_SCHEMA_GRACE_MINUTES`. Both vars are honoured by a packaged build too, via the per-machine `%APPDATA%/abeersuite-electron/.env`, which is how one counter can be pointed at a test feed. The tray's "Check for updates" skips the 30-minute wait.
+
+**When a counter says "checking failed".** `%APPDATA%/abeersuite-electron/logs/main.log` has every `[Updater]` line. A `404` on `/releases/latest` means the repo in `GITHUB_DOWNLOAD_UPDATE_REPO` has no release, or the baked PAT was not granted *Contents: Read* on it.

@@ -29,6 +29,7 @@ import * as path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { BrowserWindow } from "electron";
 import { app } from "electron";
+import { noteSchemaDrift } from "./updateManager";
 
 let worker: ChildProcess | null = null;
 
@@ -122,6 +123,10 @@ export function startSyncWorker(syncUrl: string): void {
             // screen (and the counter reconciler) kept waiting for an event that
             // never came.
             notifyIfApplied(line);
+            // The worker's own verdict on the replica's shape (sync-engine/index.js). A
+            // halt means only a new build can help, so the updater is told at once.
+            if (line.includes("SCHEMA DRIFT")) noteSchemaDrift(true);
+            else if (line.includes("cycle ok")) noteSchemaDrift(false);
         }
     };
     worker.stdout?.on("data", relay);

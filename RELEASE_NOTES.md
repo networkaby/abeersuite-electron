@@ -1,22 +1,12 @@
-# v5.0.0
-
-## Added
-
-- Automatic update checks for the installed desktop app — checks every 30 minutes, downloads updates in the background, and installs on next restart.
-- Permanent green/red connection indicator on the counter badge.
-- Custom sidebar images for the installer and uninstaller.
-
-## Changed
-
-- Offline writes reworked (Phase 4): sequence-ID ranges and an outbox so actions taken while offline sync reliably once connectivity returns.
-- Faster first load on the desktop app — routes are pre-warmed after startup.
+# v5.0.1
 
 ## Fixed
 
-- Local reads now engage correctly after a replica reconnects — readiness no longer gets stuck stale.
-- Startup no longer hangs waiting on PostgreSQL indefinitely; failures are now surfaced instead of silently discarded.
-- Closed several safety and correctness gaps in offline-write sync.
+- Auto-update now actually installs on a counter that lives in the tray: a downloaded update installs by itself at a safe moment (empty cart, PC idle or on the login screen) instead of waiting for a quit that never comes. A card offers "Restart now" or "Later".
+- Updates could never download: the packaged app shipped no updater config file, so the download step failed after a successful check. The app now writes its own.
+- Schema drift on a counter now triggers an immediate update check and a short countdown, instead of pausing billing until someone at the office notices.
 
-## Removed
+## Added
 
-- Default credentials removed from the e2e authentication setup (security hardening).
+- Urgent releases: `[urgent]` in these notes puts a countdown on every counter's screen.
+- Tray menu: "Check for updates".

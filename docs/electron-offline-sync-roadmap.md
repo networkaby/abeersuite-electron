@@ -250,7 +250,7 @@ and reconcile run regardless), it only makes things happen sooner.
 | COM port enumeration | Bridge `/ports` | Electron IPC |
 | Counter/device identity | Bridge `/config` deviceId, minted by the renderer | Electron installation id + stored counter extension |
 | Cash drawer kick | Not implemented | Electron main process |
-| Auto-update | Built — `electron-updater` against a separate private releases-only repo (`PAT_TOKEN` + `GITHUB_UPDATE_REPO`, both baked, configurable per counter), but **silent** — `app:update-ready` has no renderer listener | Visible prompt |
+| Auto-update | Built — `electron-updater` against a separate private releases-only repo (`GITHUB_DOWNLOAD_UPDATE_REPO` + `_PAT_TOKEN`, both baked), visible prompt, installs at a safe moment (`electron/updateManager.ts`, 2026-09-03). **Blocked on the feed repo existing** — the baked repo answers 404 | Owner creates/grants the releases-only repo; then a real release round-trip |
 
 ---
 
