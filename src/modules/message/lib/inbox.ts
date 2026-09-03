@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
+import { findUserIdsHoldingRoles } from "@/shared/lib/auth/roleHolders";
 
 const ROOM_KEY = {
     system:  (userId: number)              => `system:${userId}`,
@@ -288,6 +289,15 @@ export async function createRoomMessage({
     return message;
 }
 
+/**
+ * Fan a SYSTEM message out to every user who currently holds one of `roleIds`.
+ *
+ * Recipients come from `findUserIdsHoldingRoles`, which counts **Position
+ * appointments** as well as the legacy `User.role` override. Before 2026-09-04
+ * this matched on `User.role` alone: a user created the normal way holds their
+ * duty by appointment and has `role = null`, so shop-order, return, delivery and
+ * payment notifications reached nobody on a normally-seeded org.
+ */
 export async function createSystemInboxNotifications({
     roleIds,
     actorUserId,
@@ -301,31 +311,32 @@ export async function createSystemInboxNotifications({
     body: string;
     link?: string;
 }) {
-    const distinctRoles = [...new Set(roleIds.filter(Boolean))];
-    if (distinctRoles.length === 0) return;
+    const userIds = await findUserIdsHoldingRoles(roleIds, { excludeUserId: actorUserId });
+    if (userIds.length === 0) return;
 
-    const users = await prisma.user.findMany({
-        where: {
-            role: { in: distinctRoles },
-            ...(actorUserId ? { id: { not: actorUserId } } : {}),
-        },
-        select: { id: true, role: true },
+    // The room may not exist yet for a user who has never opened the inbox.
+    for (const id of userIds) await ensureCoreRoomsForUser({ id });
+
+    // One query for every room, then one insert — not a query per recipient.
+    const rooms = await prisma.chatRoom.findMany({
+        where: { key: { in: userIds.map((id) => ROOM_KEY.system(id)) } },
+        select: { id: true },
     });
+    if (rooms.length === 0) return;
 
-    for (const user of users) {
-        await ensureCoreRoomsForUser({ id: user.id });
-        const room = await prisma.chatRoom.findUnique({
-            where: { key: ROOM_KEY.system(user.id) },
-            select: { id: true },
-        });
-        if (!room) continue;
-
-        await createRoomMessage({
+    await prisma.chatMessage.createMany({
+        data: rooms.map((room) => ({
             roomId: room.id,
-            messageType: "SYSTEM",
+            senderUserId: null,
+            messageType: "SYSTEM" as const,
             title,
             body,
-            link,
-        });
-    }
+            link: link ?? null,
+        })),
+    });
+
+    await prisma.chatRoom.updateMany({
+        where: { id: { in: rooms.map((r) => r.id) } },
+        data: { updatedAt: new Date() },
+    });
 }
