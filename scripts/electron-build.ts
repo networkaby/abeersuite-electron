@@ -10,10 +10,16 @@ import { parseAppMode, resolveLandingPage } from "../src/shared/lib/appModeCore"
 
 const ROOT = path.join(__dirname, "..");
 
+// `.env` ONLY — `.env.local` is deliberately not loaded here.
+//
+// This is not just about the two values this file reads. Every step below is spawned
+// with `childEnv = {...process.env}`, and `generate-counter-env.ts` falls back to
+// `process.env[key]` for any key its `.env` lookup does not supply — so anything loaded
+// here can end up BAKED INTO THE INSTALLER. `.env.local` holds web-version dev
+// overrides; `.env` holds the counter/office build's real configuration. Loading the dev
+// file with `override: true` meant a `READ_MODE`/`WRITE_MODE`/`DATABASE_URL` uncommented
+// for an afternoon of web work silently decided what shipped to every counter.
 dotenv.config({ path: path.join(ROOT, ".env") });
-if (fs.existsSync(path.join(ROOT, ".env.local"))) {
-    dotenv.config({ path: path.join(ROOT, ".env.local"), override: true });
-}
 
 const mode = parseAppMode(process.env.APP_MODE);
 const landingPage = resolveLandingPage(mode, process.env);

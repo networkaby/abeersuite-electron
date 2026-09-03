@@ -44,15 +44,21 @@ function main(): void {
     const rootDir = process.cwd();
     const outFile = path.join(rootDir, "resources", COUNTER_ENV_FILE);
 
-    // Sourced from root .env (and .env.local if present)
+    // Sourced from root `.env` ONLY.
+    //
+    // `.env.local` is deliberately NOT read here, even though Next.js layers it over
+    // `.env` in dev and this script used to copy that behaviour. The two files mean
+    // opposite things in this repo: `.env` holds the counter/office build's real
+    // configuration, while `.env.local` holds the web-version dev overrides. Reading
+    // both put the DEV file last, so it won — a `READ_MODE`/`WRITE_MODE` (or worse, a
+    // `DATABASE_URL`) uncommented for an afternoon of web work would have been baked
+    // into the next installer and shipped to every counter, with nothing in the build
+    // log naming the cause. A build must not depend on which lines happen to be
+    // commented out in a developer-local file.
     const rootEnvPath = path.join(rootDir, ".env");
-    const localEnvPath = path.join(rootDir, ".env.local");
     const source = new Map<string, string>();
     if (fs.existsSync(rootEnvPath)) {
         for (const [key, value] of parseEnvFile(rootEnvPath)) source.set(key, value);
-    }
-    if (fs.existsSync(localEnvPath)) {
-        for (const [key, value] of parseEnvFile(localEnvPath)) source.set(key, value);
     }
     if (!fs.existsSync(rootEnvPath)) {
         console.warn(
@@ -96,9 +102,9 @@ function main(): void {
     const header = [
         "# AbeerSuite counter configuration — GENERATED, DO NOT EDIT.",
         "#",
-        "# Written by scripts/generate-counter-env.ts at build time from .env.counter (or the",
-        "# build machine's .env), limited to the allowlist in scripts/counterEnv.ts for this",
-        "# variant's APP_MODE. Rebuild to change it.",
+        "# Written by scripts/generate-counter-env.ts at build time from the build machine's",
+        "# .env, limited to the allowlist in scripts/counterEnv.ts for this variant's APP_MODE.",
+        "# .env.local is NOT read — it holds web-version dev overrides. Rebuild to change it.",
         "#",
         "# A counter may override any of these per machine by placing its own .env at",
         "# %APPDATA%/abeersuite-electron/.env — that file is loaded first and wins.",
