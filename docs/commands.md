@@ -13,38 +13,60 @@ One place that answers: *what does this command do, when do I run it, and can I 
 
 **"Do a release" is never one thing done by hand. It is this whole list, every time, in this order. If any line is skipped, it was not a release.**
 
-**You prepare (2 things — only these are yours):**
+**A release only ever happens on `main`.** `dev` is where the work lands; `main` is what gets tagged, published and installed on counters. Never run `pnpm electron:release` from `dev`, from `d_office`, or from a detached HEAD — the tag the script creates points at `HEAD`, so releasing off `dev` mints a `v<version>` on a commit that `main` does not contain and the two source remotes stop agreeing about what that version is.
 
-1. **Bump `version` in `package.json`.** This number *is* the tag, the GitHub release name, and what every counter's updater compares against. It goes up on every publish, no exception.
-2. **Craft `RELEASE_NOTES.md` for this version.** Hand-written, customer-readable, rewritten — not appended to, not left from last time. The first line decides how counters take the update (see §9): `[urgent]` in the heading only when every counter must restart today.
+**You prepare (4 things — only these are yours):**
+
+1. **Get on `main` with the release content:**
+
+```bash
+git checkout main && git merge --ff-only dev
+```
+
+   Not fast-forwardable means `main` carries something `dev` does not — resolve that first, never force it.
+
+2. **Bump `version` in `package.json`.** This number *is* the tag, the GitHub release name, and what every counter's updater compares against. It goes up on every publish, no exception.
+3. **Craft `RELEASE_NOTES.md` for this version.** Hand-written, customer-readable, rewritten — not appended to, not left from last time. The first line decides how counters take the update (see §9): `[urgent]` in the heading only when every counter must restart today.
+4. **Commit the bump and the notes on `main`, and push `main` to both remotes before building:**
+
+```bash
+git push origin main && git push production main
+```
+
+   Push first, so the code is on both remotes even if the build then fails.
 
 **`pnpm electron:release` then owns everything else — never do any of it by hand:**
 
-3. `pnpm electron:pack` — full build + `electron-builder --dir` + `verify:package` gate
-4. Release notes assembled = your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order
-5. Annotated git tag `v<version>` created if it does not already exist
-6. `git push origin HEAD --tags` — branch **and** tag to `origin` (`devloperakramul/abeersuite-electron`)
-7. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
+5. `pnpm electron:pack` — full build + `electron-builder --dir` + `verify:package` gate
+6. Release notes assembled = your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order
+7. Annotated git tag `v<version>` created if it does not already exist
+8. `git push origin HEAD --tags` — `main` **and** the tag to `origin` (`devloperakramul/abeersuite-electron`)
+9. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
 
-**You finish (1 thing, still manual today):**
+**You finish (2 things, still manual today):**
 
-8. **Push the same branch and tag to `production` as well:**
+10. **Push the tag to `production` too** — `scripts/release-electron.ts` pushes `origin` only, and both source remotes must carry the released commit and its tag (`origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abbersuite-electron`), otherwise the two accounts disagree about what `v<version>` is:
 
 ```bash
-git push production HEAD --tags
+git push production main --tags
 ```
 
-`scripts/release-electron.ts` pushes `origin` only. Both source remotes must carry the released commit and its tag — `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abbersuite-electron` — otherwise the two accounts disagree about what `v<version>` is.
+11. **Bring `dev` back level with `main`**, so the next day's work starts from the released tree:
+
+```bash
+git checkout dev && git merge --ff-only main && git push origin dev
+```
 
 **Never, for any reason:**
 
+- release from any branch other than `main`
 - tag by hand, or push a tag on its own
 - draft a release or upload a binary in the GitHub web UI
 - publish to one release repo and leave the other behind — the only exception is the documented retry `RELEASE_ONLY_REPO=<repo> pnpm electron:release`, used *after* a partial failure, never as the normal path
 - release without rewriting `RELEASE_NOTES.md`
 - run `scripts/release-electron.ts` directly, bypassing the `verify:package` gate
 
-**Done means:** both remotes have the commit and the tag, and every release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes.
+**Done means:** `main` and `v<version>` are on **both** remotes, `dev` is level with `main`, and every release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes.
 
 ---
 
@@ -223,7 +245,13 @@ If docs drift is the only complaint: `pnpm seed:fix-docs`, review the diff, run 
 pnpm lint && pnpm test:e2e
 ```
 
-**Step 6 — commit and bump**
+**Step 6 — land on `main`, then commit and bump**
+
+Releases only ever go out from `main` (§0). Merge the work across and stay there for the rest of this journey:
+
+```bash
+git checkout main && git merge --ff-only dev
+```
 
 Bump `version` in `package.json`. This number is the release tag and what the updater compares against, so it must go up on every publish.
 
@@ -247,9 +275,10 @@ Watch for two warnings: `resources/pgsql is missing` (the installer would ship w
 
 Run `dist-app/win-unpacked/AbeerSuite.exe`. Confirm login, one local read, and one sync round trip.
 
-**Step 10 — publish**
+**Step 10 — push `main` to both remotes, then publish**
 
 ```bash
+git push origin main && git push production main
 pnpm electron:release
 ```
 
@@ -259,18 +288,20 @@ This re-runs `electron:pack` and then publishes the verified tree.
 
 Check the release on GitHub: installer, `latest.yml`, and the blockmap must all be there. `latest.yml` missing means auto-update is broken for every existing counter.
 
-**Step 12 — push to the second remote**
+**Step 12 — the tag to `production`, and `dev` back level**
 
-`electron:release` already pushed the branch and the tag to `origin` (step 4 of the release script). `production` is still behind, so finish the convention (§0):
+`electron:release` pushed `main` and the tag to `origin` only, so finish the convention (§0):
 
 ```bash
-git push production HEAD --tags
+git push production main --tags
+git checkout dev && git merge --ff-only main && git push origin dev
 ```
 
-Verify both are level — each should print nothing:
+Verify — both should print nothing:
 
 ```bash
-git log origin/HEAD..HEAD --oneline
+git log origin/main..main --oneline
+git log production/main..main --oneline
 ```
 
 ---
@@ -282,11 +313,13 @@ For a colour change, a label fix, a spacing tweak, a copy edit — **no schema, 
 1. Edit the code
 2. `pnpm electron:dev` — see it
 3. `pnpm precommit` — still run this, it takes seconds
-4. Bump `version` in `package.json` and rewrite `RELEASE_NOTES.md` (§0 — a touch release still gets crafted notes)
-5. **Commit.** The tag `electron:release` creates points at `HEAD`, so the bump and the notes must already be committed
-6. `pnpm electron:release`
-7. Check the installer, blockmap and `latest.yml` on every release repo
-8. `git push production HEAD --tags` — `electron:release` pushed `origin` only (§0)
+4. `git checkout main && git merge --ff-only dev` — a touch release is still a release, so it goes out from `main` (§0)
+5. Bump `version` in `package.json` and rewrite `RELEASE_NOTES.md` — a touch release still gets crafted notes
+6. **Commit.** The tag `electron:release` creates points at `HEAD`, so the bump and the notes must already be committed
+7. `git push origin main && git push production main`
+8. `pnpm electron:release`
+9. Check the installer, blockmap and `latest.yml` on every release repo
+10. `git push production main --tags`, then `git checkout dev && git merge --ff-only main && git push origin dev` (§0)
 
 **What is skipped, and why it is safe:**
 
@@ -388,6 +421,7 @@ Carried over from the webapp and unchanged in spirit: `dev`, `build`, `start`, `
 7. Every release repo, or none. `RELEASE_ONLY_REPO=` is a retry after a partial failure, never the normal path.
 8. Both source remotes carry the commit and the tag. `electron:release` pushes `origin`; you push `production` yourself.
 9. `RELEASE_NOTES.md` is rewritten for every version. Stale notes ship the wrong urgency tier to every counter.
+10. Releases go out from `main` only. Check `git branch --show-current` before you type `electron:release`.
 
 ---
 
