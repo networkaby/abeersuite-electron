@@ -242,10 +242,46 @@ namespace AbeerSuite.Downloader
             }
         }
 
+        // AbeerSuite always installs per-user with a fixed directory (perMachine:false,
+        // allowToChangeInstallationDirectory:false in package.json's nsis config), so this
+        // path is stable across versions.
+        private static string FindInstalledExe()
+        {
+            try
+            {
+                string programsRoot = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs");
+                string exePath = Path.Combine(programsRoot, "AbeerSuite", "AbeerSuite.exe");
+                return File.Exists(exePath) ? exePath : null;
+            }
+            catch { return null; }
+        }
+
         private void WorkerProc()
         {
             try
             {
+                // 0. Already installed? The running app's own updater (electron-updater,
+                // differential downloads) keeps it current on its own — downloading the
+                // full offline installer again here would just waste time and data.
+                string installedExe = FindInstalledExe();
+                if (installedExe != null)
+                {
+                    SetStatus("AbeerSuite is already installed", "Launching it — it checks for updates on its own.", true, 100);
+                    Thread.Sleep(500);
+                    try
+                    {
+                        ProcessStartInfo launchPsi = new ProcessStartInfo();
+                        launchPsi.FileName = installedExe;
+                        launchPsi.UseShellExecute = true;
+                        Process.Start(launchPsi);
+                    }
+                    catch { /* best-effort; the customer can still start it from the Start Menu */ }
+
+                    this.Invoke((Action)(() => this.Close()));
+                    return;
+                }
+
                 if (string.IsNullOrEmpty(_token))
                 {
                     this.Invoke((Action)(() =>
@@ -330,97 +366,127 @@ namespace AbeerSuite.Downloader
                     throw new Exception("Could not find an installer executable (.exe) in latest release (" + (tagName ?? "unknown") + ").");
                 }
 
-                SetStatus("Downloading " + assetName + "...", "Preparing download...", false, 0);
-
-                // 3. Request download from GitHub Asset API with Accept: application/octet-stream
-                // GitHub will respond with HTTP 302 Found redirecting to AWS S3.
-                // We MUST disable AllowAutoRedirect so we don't send Authorization header to S3 (which causes HTTP 400).
-                string assetApiUrl = string.Format("https://api.github.com/repos/{0}/{1}/releases/assets/{2}", Program.RepoOwner, Program.RepoName, assetId);
-                HttpWebRequest assetReq = (HttpWebRequest)WebRequest.Create(assetApiUrl);
-                assetReq.UserAgent = "AbeerSuite-Downloader";
-                assetReq.Headers["Authorization"] = "Bearer " + _token;
-                assetReq.Accept = "application/octet-stream";
-                assetReq.AllowAutoRedirect = false;
-
-                string downloadUrl = null;
-                using (HttpWebResponse assetResp = (HttpWebResponse)assetReq.GetResponse())
-                {
-                    if (assetResp.StatusCode == HttpStatusCode.Found ||
-                        assetResp.StatusCode == HttpStatusCode.Moved ||
-                        assetResp.StatusCode == HttpStatusCode.Redirect ||
-                        assetResp.StatusCode == HttpStatusCode.TemporaryRedirect ||
-                        (int)assetResp.StatusCode == 308)
-                    {
-                        downloadUrl = assetResp.Headers["Location"];
-                    }
-                    else if (assetResp.StatusCode == HttpStatusCode.OK)
-                    {
-                        downloadUrl = assetApiUrl;
-                    }
-                }
-
-                if (string.IsNullOrEmpty(downloadUrl))
-                {
-                    throw new Exception("Did not receive download redirect location from GitHub.");
-                }
-
-                // 4. Download file from storage URL (no Authorization header sent to AWS S3)
+                // 3. Reuse a previous download if it is already complete and uncorrupted —
+                // the customer may have run this downloader before (crash, closed window,
+                // ran it twice) and re-fetching a large offline installer would waste data.
+                // An exact byte-size match against the GitHub asset is enough proof: a
+                // partial or corrupted file will not land on the exact same size.
                 string tempDir = Path.GetTempPath();
                 string targetFilePath = Path.Combine(tempDir, assetName);
+                bool reuseExisting = false;
 
-                HttpWebRequest s3Req = (HttpWebRequest)WebRequest.Create(downloadUrl);
-                s3Req.UserAgent = "AbeerSuite-Downloader";
-                s3Req.AllowAutoRedirect = true;
-
-                using (HttpWebResponse s3Resp = (HttpWebResponse)s3Req.GetResponse())
+                if (File.Exists(targetFilePath) && assetSize > 0)
                 {
-                    long totalBytes = s3Resp.ContentLength > 0 ? s3Resp.ContentLength : assetSize;
-                    byte[] buffer = new byte[65536];
-
-                    using (Stream respStream = s3Resp.GetResponseStream())
-                    using (FileStream fileStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    try
                     {
-                        long totalRead = 0;
-                        DateTime startTime = DateTime.Now;
-                        DateTime lastUpdate = DateTime.MinValue;
-
-                        int bytesRead;
-                        while ((bytesRead = respStream.Read(buffer, 0, buffer.Length)) > 0)
+                        if (new FileInfo(targetFilePath).Length == assetSize)
                         {
-                            if (_cts.IsCancellationRequested)
+                            reuseExisting = true;
+                        }
+                        else
+                        {
+                            File.Delete(targetFilePath);
+                        }
+                    }
+                    catch { /* if we can't inspect it, fall through and re-download */ }
+                }
+
+                if (reuseExisting)
+                {
+                    SetStatus("Using previously downloaded installer", assetName + " is already downloaded and complete.", true, 100);
+                    Thread.Sleep(400);
+                }
+                else
+                {
+                    SetStatus("Downloading " + assetName + "...", "Preparing download...", false, 0);
+
+                    // 4. Request download from GitHub Asset API with Accept: application/octet-stream
+                    // GitHub will respond with HTTP 302 Found redirecting to AWS S3.
+                    // We MUST disable AllowAutoRedirect so we don't send Authorization header to S3 (which causes HTTP 400).
+                    string assetApiUrl = string.Format("https://api.github.com/repos/{0}/{1}/releases/assets/{2}", Program.RepoOwner, Program.RepoName, assetId);
+                    HttpWebRequest assetReq = (HttpWebRequest)WebRequest.Create(assetApiUrl);
+                    assetReq.UserAgent = "AbeerSuite-Downloader";
+                    assetReq.Headers["Authorization"] = "Bearer " + _token;
+                    assetReq.Accept = "application/octet-stream";
+                    assetReq.AllowAutoRedirect = false;
+
+                    string downloadUrl = null;
+                    using (HttpWebResponse assetResp = (HttpWebResponse)assetReq.GetResponse())
+                    {
+                        if (assetResp.StatusCode == HttpStatusCode.Found ||
+                            assetResp.StatusCode == HttpStatusCode.Moved ||
+                            assetResp.StatusCode == HttpStatusCode.Redirect ||
+                            assetResp.StatusCode == HttpStatusCode.TemporaryRedirect ||
+                            (int)assetResp.StatusCode == 308)
+                        {
+                            downloadUrl = assetResp.Headers["Location"];
+                        }
+                        else if (assetResp.StatusCode == HttpStatusCode.OK)
+                        {
+                            downloadUrl = assetApiUrl;
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(downloadUrl))
+                    {
+                        throw new Exception("Did not receive download redirect location from GitHub.");
+                    }
+
+                    // 5. Download file from storage URL (no Authorization header sent to AWS S3)
+                    HttpWebRequest s3Req = (HttpWebRequest)WebRequest.Create(downloadUrl);
+                    s3Req.UserAgent = "AbeerSuite-Downloader";
+                    s3Req.AllowAutoRedirect = true;
+
+                    using (HttpWebResponse s3Resp = (HttpWebResponse)s3Req.GetResponse())
+                    {
+                        long totalBytes = s3Resp.ContentLength > 0 ? s3Resp.ContentLength : assetSize;
+                        byte[] buffer = new byte[65536];
+
+                        using (Stream respStream = s3Resp.GetResponseStream())
+                        using (FileStream fileStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            long totalRead = 0;
+                            DateTime startTime = DateTime.Now;
+                            DateTime lastUpdate = DateTime.MinValue;
+
+                            int bytesRead;
+                            while ((bytesRead = respStream.Read(buffer, 0, buffer.Length)) > 0)
                             {
-                                fileStream.Close();
-                                try { File.Delete(targetFilePath); } catch { }
-                                return;
-                            }
+                                if (_cts.IsCancellationRequested)
+                                {
+                                    fileStream.Close();
+                                    try { File.Delete(targetFilePath); } catch { }
+                                    return;
+                                }
 
-                            fileStream.Write(buffer, 0, bytesRead);
-                            totalRead += bytesRead;
+                                fileStream.Write(buffer, 0, bytesRead);
+                                totalRead += bytesRead;
 
-                            if ((DateTime.Now - lastUpdate).TotalMilliseconds > 150 || totalRead == totalBytes)
-                            {
-                                lastUpdate = DateTime.Now;
-                                double elapsedSec = (DateTime.Now - startTime).TotalSeconds;
-                                double speedMBps = elapsedSec > 0 ? (totalRead / (1024.0 * 1024.0)) / elapsedSec : 0;
-                                int percent = totalBytes > 0 ? (int)((totalRead * 100) / totalBytes) : 0;
+                                if ((DateTime.Now - lastUpdate).TotalMilliseconds > 150 || totalRead == totalBytes)
+                                {
+                                    lastUpdate = DateTime.Now;
+                                    double elapsedSec = (DateTime.Now - startTime).TotalSeconds;
+                                    double speedMBps = elapsedSec > 0 ? (totalRead / (1024.0 * 1024.0)) / elapsedSec : 0;
+                                    int percent = totalBytes > 0 ? (int)((totalRead * 100) / totalBytes) : 0;
 
-                                string downloadedMB = (totalRead / (1024.0 * 1024.0)).ToString("0.0");
-                                string totalMB = totalBytes > 0 ? (totalBytes / (1024.0 * 1024.0)).ToString("0.0") + " MB" : "Unknown";
+                                    string downloadedMB = (totalRead / (1024.0 * 1024.0)).ToString("0.0");
+                                    string totalMB = totalBytes > 0 ? (totalBytes / (1024.0 * 1024.0)).ToString("0.0") + " MB" : "Unknown";
 
-                                string detail = string.Format("{0} MB / {1} ({2}%) - {3:0.0} MB/s", downloadedMB, totalMB, percent, speedMBps);
+                                    string detail = string.Format("{0} MB / {1} ({2}%) - {3:0.0} MB/s", downloadedMB, totalMB, percent, speedMBps);
 
-                                SetStatus("Downloading " + assetName + " (" + percent + "%)...", detail, false, Math.Min(100, percent));
+                                    SetStatus("Downloading " + assetName + " (" + percent + "%)...", detail, false, Math.Min(100, percent));
+                                }
                             }
                         }
                     }
                 }
 
-                // 5. Pre-install audit: the embedded PostgreSQL needs the VC++ 2015-2022
+                // 6. Pre-install audit: the embedded PostgreSQL needs the VC++ 2015-2022
                 //    x64 runtime. Doing it here saves the installer the same download.
                 EnsureVcRuntime();
                 if (_cts.IsCancellationRequested) return;
 
-                // 6. Launch downloaded installer
+                // 7. Launch downloaded (or reused) installer
                 SetStatus("Starting installer...", "Launching " + assetName + "...", true, 100);
                 Thread.Sleep(500);
 
