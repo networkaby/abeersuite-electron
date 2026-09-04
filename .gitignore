@@ -126,7 +126,7 @@ out/
 # =========================
 dist-app/
 dist-app-*/
-release/
+/release/
 
 # If Electron TypeScript/JS compilation outputs here
 dist-electron/
@@ -190,7 +190,7 @@ Desktop.ini
 dist-package/
 dist-app/
 dist-app-*/
-release/
+/release/
 
 # Staged at build time by scripts/prepare-bridge-deps.ts so the bundled workers can
 # resolve their requires on a customer machine (nothing above them in a packaged
