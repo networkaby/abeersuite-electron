@@ -24,7 +24,15 @@ export async function syncVoucherLink(
 ): Promise<void> {
     if (universalVoucherId == null) return;
     if (targetId == null) {
-        await tx.voucherLink.deleteMany({ where: { universalVoucherId, kind } });
+        // Delete only when a link actually exists. Callers pass null for every kind a
+        // plain voucher does not carry, so a blind deleteMany ran on every fresh sale —
+        // and a counter's replica guard refuses any delete, which rolled the whole
+        // sale back for a row that was never there.
+        const existing = await tx.voucherLink.findUnique({
+            where: { universalVoucherId_kind: { universalVoucherId, kind } },
+            select: { id: true },
+        });
+        if (existing) await tx.voucherLink.delete({ where: { id: existing.id } });
         return;
     }
     await tx.voucherLink.upsert({

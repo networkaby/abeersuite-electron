@@ -17,8 +17,11 @@ export function handleApiError(e: unknown, fallback = "Internal server error"): 
     // API surface without touching a single route file.
     if (isOfflineWriteBlocked(e)) {
         console.warn("[api] refused write while offline:", e.message);
+        // The guard writes its messages for the person at the till ("re-open the
+        // shift", "do it from an office machine"), so pass them through instead of
+        // hiding every refusal behind one generic line.
         return NextResponse.json(
-            { error: OFFLINE_READ_ONLY, message: "Offline — read only. Reconnect to save." },
+            { error: OFFLINE_READ_ONLY, message: e.message || "Offline — read only. Reconnect to save." },
             { status: 503 },
         );
     }

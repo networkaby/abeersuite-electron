@@ -32,6 +32,18 @@ export class OfflineWriteBlockedError extends Error {
     }
 }
 
+/** Generic line for when the server sent no specific reason. */
+export const OFFLINE_READ_ONLY_FALLBACK = "Offline — read only. Reconnect to save.";
+
+/**
+ * The human reason out of a 503 body, for a toast. The guard's messages are written
+ * for the person at the till, so prefer them over the generic line.
+ */
+export function offlineReason(body: unknown): string {
+    const message = (body as { message?: unknown } | undefined)?.message;
+    return typeof message === "string" && message ? message : OFFLINE_READ_ONLY_FALLBACK;
+}
+
 /** Type guard — survives the structured-clone boundary that `instanceof` does not. */
 export function isOfflineWriteBlocked(e: unknown): e is OfflineWriteBlockedError {
     return e instanceof OfflineWriteBlockedError

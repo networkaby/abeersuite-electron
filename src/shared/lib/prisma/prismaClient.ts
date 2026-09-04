@@ -375,25 +375,12 @@ function createLocal(): PrismaClient {
                             );
                         }
 
-                        // 3. The policy row itself is never written here. It is the
-                        // org's decision about what THIS machine may do while it is
-                        // cut off; letting the cut-off machine edit it would let a
-                        // counter lift its own restraints with nobody able to see it
-                        // until the damage was already synced up. Office machines
-                        // write it live, and it syncs down like any other table.
-                        if (model === "OfflinePolicy") {
-                            throw new OfflineWriteBlockedError(
-                                model,
-                                operation,
-                                "Offline policies are set from an office machine, not from a counter.",
-                            );
-                        }
-
-                        // 4. Offline policy — only when a local write means "Supabase is
+                        // 3. Offline policy — only when a local write means "Supabase is
                         // unreachable" (WRITE_MODE=live). Those kinds were held back
                         // because they need live validation and the outage is temporary.
-                        // Under WRITE_MODE=local the replica is simply where writes go,
-                        // so enforcing this would refuse them permanently and break the
+                        // Under WRITE_MODE=local the replica is simply where writes go:
+                        // the counter is the web app, gated by roles alone, so enforcing
+                        // this would refuse those kinds permanently and break the
                         // counter rather than protect anything.
                         //
                         // The policies come from the DB (cached), not from the browser's
@@ -401,6 +388,19 @@ function createLocal(): PrismaClient {
                         // could not see meant every check here silently used the built-in
                         // defaults, so the settings page changed nothing.
                         if (localWriteIsFallback()) {
+                            // The policy row itself is never written while cut off. It
+                            // is the org's decision about what THIS machine may do
+                            // during an outage; letting the cut-off machine edit it
+                            // would let a counter lift its own restraints with nobody
+                            // able to see it until the damage was already synced up.
+                            if (model === "OfflinePolicy") {
+                                throw new OfflineWriteBlockedError(
+                                    model,
+                                    operation,
+                                    "Offline policies cannot be changed while this counter is cut off from Supabase.",
+                                );
+                            }
+
                             const policies = await loadOfflinePolicies(basePrisma);
 
                             if (model === "UniversalVoucher") {

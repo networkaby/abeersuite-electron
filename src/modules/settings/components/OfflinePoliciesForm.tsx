@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
+import { useCounterMode } from "@/shared/hooks/useCounterMode";
 import {
     DEFAULT_OFFLINE_POLICIES,
     type OfflinePolicies,
@@ -103,6 +104,7 @@ export function OfflinePoliciesForm() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState("");
+    const counter = useCounterMode();
 
     useEffect(() => {
         axios.get<PolicyResponse>("/api/settings/offline-policies")
@@ -229,7 +231,10 @@ export function OfflinePoliciesForm() {
                     <div>
                         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Offline Safety Protocol</div>
                         <div className="text-sm font-medium">All enabled masters and vouchers commit locally and automatically push to Supabase upon reconnection.</div>
-                        <div className="text-xs text-muted-foreground">One setting for the whole shop, stored in the database — not per browser. Counters read it from their own copy, so it still applies with the internet down.</div>
+                        <div className="text-xs text-muted-foreground">One setting for the whole shop, stored in the database — not per browser. It applies only to counters that write live and lose the internet; a counter that writes locally works like the web app, gated by roles alone.</div>
+                        {counter?.isCounter && counter.writePreference === "local" && (
+                            <div className="text-xs font-medium text-amber-600">This counter writes locally, so these policies do not restrict it.</div>
+                        )}
                     </div>
                 </div>
             </div>

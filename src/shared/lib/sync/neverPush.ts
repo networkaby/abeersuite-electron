@@ -21,8 +21,9 @@
 export const NEVER_PUSH_MODELS: readonly string[] = [
     "User", "Session", "Account_auth", "UserPermission", "UserPosition",
     "RolePermission", "DepartmentPermission", "PersonPortalCredential",
-    // The offline policy is the office's decision ABOUT the counter. The replica
-    // guard already refuses to write it locally; this is the second lock, so even a
-    // raw-SQL write on a counter can never travel up and loosen the rule for everyone.
-    "OfflinePolicy",
+    // `OfflinePolicy` is deliberately NOT here. A counter that writes locally
+    // (WRITE_MODE=local) is the web app for that shop, so an admin saving the policy
+    // there must reach Supabase like any other setting. The one case where the row
+    // must not be written — a live-write counter cut off from Supabase — is refused
+    // by the replica guard before anything reaches the outbox.
 ];

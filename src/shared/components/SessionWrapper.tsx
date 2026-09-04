@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import axios from "axios";
 import { stampRequestContext } from "@/shared/lib/http";
 import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
-import { OFFLINE_READ_ONLY } from "@/shared/lib/prisma/offlineError";
+import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
@@ -50,7 +50,7 @@ function SessionGuard() {
                 // so without this a save refused for being offline would surface as a
                 // bare "request failed" on every screen that still uses global axios.
                 if ((err?.response?.data as { error?: string } | undefined)?.error === OFFLINE_READ_ONLY) {
-                    toast.error("Offline — read only. Reconnect to save.");
+                    toast.error(offlineReason(err?.response?.data));
                 }
                 return Promise.reject(err);
             },

@@ -6147,7 +6147,9 @@ DO $$ BEGIN
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."OfflinePolicy"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "OfflinePolicy"; -- never pushed
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "OfflinePolicy";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "OfflinePolicy"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN
