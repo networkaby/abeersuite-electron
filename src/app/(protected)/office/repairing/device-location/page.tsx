@@ -5,6 +5,7 @@ import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
+import LiveRefresh from "@/shared/components/LiveRefresh";
 
 // Where every open device physically is — the ones still IN HAND at the shop and
 // the ones OUT at a service centre, grouped by the latest shipping-slip party.
@@ -83,6 +84,8 @@ export default async function DeviceLocationPage() {
                 labels={{ "device-location": "Device Location" }}
                 escapeBack
             />
+            {/* A device dispatched or received elsewhere moves between these columns on its own. */}
+            <LiveRefresh topics={["tickets"]} />
             <div className="space-y-6 overflow-y-auto p-4">
             <div>
                 <h1 className="text-2xl font-bold">Device Locations</h1>

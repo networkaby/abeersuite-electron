@@ -22,6 +22,7 @@ import { CouponForm, type Coupon, type RuleMasters } from "./CouponForm";
 import {
     couponHeadline, couponValueText, couponWhatsappUrl, couponWhatsappWebUrl, couponEmailUrl, type CouponShareInfo,
 } from "@/modules/coupons/lib/couponShare";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 const channelTone: Record<Coupon["channels"], string> = {
     BOTH: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
@@ -90,6 +91,8 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
             .finally(() => setLoading(false));
     }
     useEffect(load, []);
+    // A coupon created or retired elsewhere shows up here on its own.
+    useRealtimeTopics(["catalogue"], load);
 
     const counts = useMemo(() => {
         let active = 0, auto = 0;

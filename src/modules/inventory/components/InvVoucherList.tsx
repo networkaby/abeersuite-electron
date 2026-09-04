@@ -6,7 +6,7 @@
 // Renders via the shared <VoucherRegisterTable> so every register inherits
 // the same row markup, click-to-edit Reference link, and ⋮ action menu.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import {
     applyRegisterFilters,
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import type { InvVoucherKind } from "./InvVoucherForm";
 
 export type InvVoucherListKind =
@@ -87,12 +88,21 @@ export function InvVoucherList({
     const [allRows, setAllRows] = useState<InvVoucherListRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [tick, setTick]       = useState(0);
-    const reload                = useCallback(() => setTick((t) => t + 1), []);
+
+    /** A person pressing Reload should see it happen; a live signal must not blank
+     *  a register someone is reading. Only the spinner differs — both re-read. */
+    const silentRef             = useRef(false);
+    const reload                = useCallback(() => { silentRef.current = false; setTick((t) => t + 1); }, []);
+    const refreshSilently       = useCallback(() => { silentRef.current = true;  setTick((t) => t + 1); }, []);
+
+    // A voucher posted at another counter lands in this register on its own —
+    // every inventory voucher route announces both topics (see topics.ts).
+    useRealtimeTopics(["ledger", "stock"], refreshSilently);
 
     const filters = useRegisterFilters(`reg:${type}`);
 
     useEffect(() => {
-        setLoading(true);
+        if (!silentRef.current) setLoading(true);
         const params = new URLSearchParams({ type });
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
@@ -126,7 +136,12 @@ export function InvVoucherList({
                 setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load"))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                setLoading(false);
+                // Back to loud: the next read is a type switch or a person
+                // pressing Reload, and both should show the spinner.
+                silentRef.current = false;
+            });
      
     }, [type, tick]);
 

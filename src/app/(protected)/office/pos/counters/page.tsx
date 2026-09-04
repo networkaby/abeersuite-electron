@@ -24,6 +24,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { fmt } from "@/utils/constants";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type Person = { id: number; name: string };
 
@@ -107,6 +108,13 @@ export default function CountersStatusPage() {
         load(loadedOnce.current ? { silent: true } : undefined);
         loadedOnce.current = true;
     }, POS_LIVE_POLL_MS, true, branchScope);
+
+    // This is the "revisit when real counters run side by side and one terminal
+    // must notice another's shift without being told" that POS_LIVE_POLL_MS parked.
+    // A shift opened, handed over or closed announces `ledger`; the counter records
+    // themselves are `settings`. The 90-minute poll stays as the distant fallback,
+    // not the mechanism. Always silent — nobody asked for this read.
+    useRealtimeTopics(["ledger", "settings"], () => { load({ silent: true }); });
 
     const counts = {
         open:     cards.filter((c) => c.status === "OPEN").length,

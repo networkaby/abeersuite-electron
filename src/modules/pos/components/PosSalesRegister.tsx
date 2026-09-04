@@ -4,7 +4,7 @@
 // List of all POS sales (InvVoucher type=SALE, status=POSTED).
 // Lives at /vouchers/pos — mirrors SalesRegister at /vouchers/sales.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import { fmt } from "@/utils/constants";
 import { todayIso } from "@/shared/lib/format";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -184,8 +185,12 @@ export function PosSalesRegister() {
     }, [tab, activeShift, rangeFrom, rangeTo, todayISO, refreshKey]);
 
     const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
+    /** Set for a refresh nobody asked for, so the table is not torn down. */
+    const silentRef = useRef(false);
     const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string) => {
-        setLoading(true);
+        // A live refresh must not blank a register someone is reading; a person
+        // pressing Refresh still gets the spinner. Cleared once the read is done.
+        if (!silentRef.current) setLoading(true);
         try {
             const params = new URLSearchParams({
                 kind: kind,
@@ -202,6 +207,7 @@ export function PosSalesRegister() {
             toast.error(kind === "returns" ? "Failed to load POS returns" : "Failed to load POS sales");
         } finally {
             setLoading(false);
+            silentRef.current = false;
         }
     }, []);
 
@@ -211,6 +217,14 @@ export function PosSalesRegister() {
     const refreshCurrentTab = () => {
         setRefreshKey((prev) => prev + 1);
     };
+
+    // A sale or return billed at another counter shows up here on its own. The
+    // refresh key drives the list, the POS documents, the cash moves and the till
+    // ledger together, so one signal brings the whole register up to date.
+    useRealtimeTopics(["ledger", "stock"], () => {
+        silentRef.current = true;
+        refreshCurrentTab();
+    });
     const anyLoading = loading || posDocsLoading || movesLoading || ledgerLoading;
 
     return (

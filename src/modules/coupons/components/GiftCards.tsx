@@ -17,6 +17,7 @@ import {
 import { giftCardWhatsappUrl, giftCardWhatsappWebUrl, giftCardEmailUrl, giftCardMessage, type GiftCardShareInfo } from "@/modules/coupons/lib/giftCardShare";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, formatInr } from "@/shared/lib/format";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface GiftCard {
     id: number;
@@ -69,6 +70,8 @@ export function GiftCards({ brandName }: { brandName: string }) {
             .finally(() => setLoading(false));
     }
     useEffect(load, []);
+    // A gift card issued or redeemed at another counter lands here on its own.
+    useRealtimeTopics(["ledger"], load);
 
     // ACTIVE cards already past expiry with a balance — eligible for breakage.
     const breakageCount = useMemo(() => {

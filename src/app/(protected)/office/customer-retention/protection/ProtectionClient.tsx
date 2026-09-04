@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface ProtectedProduct {
     id: number;
@@ -40,6 +41,8 @@ export default function ProtectionClient() {
     }
 
     useEffect(load, []);
+    // `/api/retention/...` announces `ledger`; protected products follow it.
+    useRealtimeTopics(["ledger"], load);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();

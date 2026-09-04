@@ -212,9 +212,32 @@ and reconcile run regardless), it only makes things happen sooner.
 5. **Screens** — `useRealtimeTopics(topics, reload)` re-reads after a 600 ms settle. On a
    counter that reads its replica (`READ_MODE` local/shadow) the hook ignores the early
    Supabase signal and waits for `sync:applied`, so it refetches once, after the rows have
-   landed, never a stale read first. A server-rendered page (the office home) uses
-   [`LiveRefresh`](../src/modules/home/LiveRefresh.tsx), which calls `router.refresh()` on
-   the same hook.
+   landed, never a stale read first. A server-rendered page uses
+   [`LiveRefresh`](../src/shared/components/LiveRefresh.tsx), which calls `router.refresh()`
+   on the same hook.
+
+   **Where it is subscribed matters.** Prefer the shared component or hook that owns the
+   read over the pages that render it: one line in `InvVoucherList` makes 14 voucher
+   registers live, `GlVoucherList` 5, `BookPage` the cash/bank/loan books, and the line in
+   `useDayBook` covers both the Day Book and the "All" register. A page adds its own line
+   only when it owns its own fetch.
+
+   **Two rules every subscriber follows:**
+
+   - **Silent re-read.** A live update must not blank a screen someone is reading, so the
+     reload takes a `silent` flag that skips the spinner; the Refresh button keeps it.
+     Beware `onClick={load}` — React passes the MouseEvent as that first parameter, which
+     is what silently disabled Refresh on twelve reports in 2026-08-22. Write
+     `onClick={() => load()}`.
+   - **Editors do not subscribe.** A voucher detail/new screen, the opening-balance sheet,
+     the GST classification grid and the storefront layout designer all hold input the user
+     is part-way through; refetching under the cursor would discard it. These stay
+     fetch-once on purpose, as do Settings, Admin, BI and Pricing-strategy by owner
+     decision (BI pages are heavy aggregates), and the customer-facing shop/portal, which
+     is server-rendered.
+
+   As of 2026-09-04, 120 of 258 routes are live. The rest are the deliberate exclusions
+   above plus print-once pages (receipts, shipping labels, slips) and static menus.
 
 ### 4.2 Table strategies — actual registry contents
 

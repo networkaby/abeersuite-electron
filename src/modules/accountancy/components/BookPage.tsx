@@ -21,6 +21,7 @@ import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/li
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type LedgerNode = {
     id:      number;
@@ -124,8 +125,10 @@ export function BookPage({
     // "Credit Card") instead of merging into one alphabetical list.
     const sectioned = groupNames.length > 1;
 
-    const load = useCallback(() => {
-        setLoading(true);
+    /** `silent` keeps the table on screen while it re-reads — a live update must
+     *  not blank a book someone is reading. The Refresh button passes nothing. */
+    const load = useCallback((silent = false) => {
+        if (!silent) setLoading(true);
         axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
             .then((r) => {
                 const secs: Section[] = groupNames.map((name) => {
@@ -146,7 +149,10 @@ export function BookPage({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [from, to, groupNames.join("|"), autoSingle, router, title, onSelectLedger]);
 
-    useEffect(load, [load]);
+    useEffect(() => { load(); }, [load]);
+    // Every voucher touching a cash/bank/loan ledger moves these balances, so the
+    // book follows the floor instead of waiting for someone to press Refresh.
+    useRealtimeTopics(["ledger"], () => { load(true); });
 
     const ledgers = sections?.flatMap((s) => (s.node ? flattenLedgers(s.node) : [])) ?? null;
     const grandTotal = ledgers && sectioned ? sumSection(ledgers) : null;
@@ -230,7 +236,7 @@ export function BookPage({
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

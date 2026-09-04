@@ -9,6 +9,7 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
 import { PRIORITY_META } from "@/utils/constants";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
+import LiveRefresh from "@/shared/components/LiveRefresh";
 
 // TODO(rbac): repairing is temporarily open to all authenticated staff and shows a
 // single shared overview. The old role/permission-keyed dashboards (Admin / Technician
@@ -122,6 +123,8 @@ export default async function RepairingDashboardPage({
     return (
         <div className="flex h-full flex-col overflow-hidden">
             <PathBreadcrumb root={{ href: "/office/repairing", label: "Repair & Warranty" }} escapeBack />
+            {/* Server-rendered counts and lists: a ticket moved at another counter re-renders this. */}
+            <LiveRefresh topics={["tickets"]} />
             <div className="space-y-6 overflow-y-auto p-4">
             <div className="flex items-center justify-between">
                 <div>

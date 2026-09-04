@@ -3,7 +3,7 @@
 // Reusable Journal Entries register — used by /vouchers/journal-entries.
 // Renders via the canonical <VoucherRegisterTable> for uniform behaviour.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import {
     applyRegisterFilters,
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface RawEntry {
     id:           number | string;
@@ -39,12 +40,20 @@ export function JournalEntriesRegister() {
     const [allRows, setAllRows] = useState<VoucherRegisterRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [tick, setTick]       = useState(0);
-    const reload                = useCallback(() => setTick((t) => t + 1), []);
+
+    /** A person pressing Reload should see it happen; a live signal must not blank
+     *  a register someone is reading. Only the spinner differs — both re-read. */
+    const silentRef             = useRef(false);
+    const reload                = useCallback(() => { silentRef.current = false; setTick((t) => t + 1); }, []);
+    const refreshSilently       = useCallback(() => { silentRef.current = true;  setTick((t) => t + 1); }, []);
+
+    // A journal posted at another counter appears here on its own.
+    useRealtimeTopics(["ledger"], refreshSilently);
 
     const filters = useRegisterFilters("reg:JOURNAL");
 
     useEffect(() => {
-        setLoading(true);
+        if (!silentRef.current) setLoading(true);
         const params = new URLSearchParams();
 
         axios.get<RawEntry[] | { rows: RawEntry[] }>(`/api/accountancy/journal-entries?${params}`)
@@ -78,7 +87,12 @@ export function JournalEntriesRegister() {
                 setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load journal entries"))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                setLoading(false);
+                // Back to loud: the next read is a type switch or a person
+                // pressing Reload, and both should show the spinner.
+                silentRef.current = false;
+            });
      
     }, [tick]);
 

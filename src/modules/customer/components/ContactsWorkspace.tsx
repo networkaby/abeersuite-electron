@@ -21,6 +21,7 @@ import {
     LIFECYCLE_META, LIFECYCLES,
     type ContactDto, type ContactsResponse,
 } from "../lib/contactTypes";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 const ALL = "__all__";
 
@@ -77,8 +78,10 @@ export default function ContactsWorkspace({
         return () => clearTimeout(t);
     }, [q]);
 
-    const load = useCallback(async () => {
-        setLoading(true);
+    /** `silent` keeps the list on screen while it re-reads — a live update must
+     *  not blank a page someone is reading. Refresh passes nothing. */
+    const load = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const params = new URLSearchParams({ page: String(page), limit: String(pageSize), sort });
             if (debouncedQ) params.set("q", debouncedQ);
@@ -98,6 +101,8 @@ export default function ContactsWorkspace({
     }, [page, pageSize, sort, debouncedQ, lifecycle, owner, hasDeal, credit, tag]);
 
     useEffect(() => { load(); }, [load]);
+    // A contact added or edited at another counter appears here on its own.
+    useRealtimeTopics(["parties"], () => { void load(true); });
     // Reset to page 1 when filters change.
     useEffect(() => { setPage(1); }, [debouncedQ, lifecycle, owner, hasDeal, credit, tag, pageSize, sort]);
 
@@ -157,7 +162,7 @@ export default function ContactsWorkspace({
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-4" /> Export CSV</Button>
-                    <Button variant="outline" size="icon" onClick={load} title="Refresh"><RefreshCw className="size-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => load()} title="Refresh"><RefreshCw className="size-4" /></Button>
                 </div>
             </div>
 

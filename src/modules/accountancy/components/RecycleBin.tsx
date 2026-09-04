@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { extractApiError } from "@/shared/lib/api";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface AuditRow {
     id: number;
@@ -70,6 +71,10 @@ export function RecycleBin() {
         load({ silent: hasLoadedOnce.current });
         hasLoadedOnce.current = true;
     }, [load]);
+
+    // A voucher deleted or restored at another counter belongs in this list too;
+    // `/api/audit/...` announces both topics (a restore can bring a voucher back).
+    useRealtimeTopics(["ledger", "stock"], () => { void load({ silent: true }); });
 
     // Manual refresh keeps the table on screen and spins the button's own icon —
     // feedback without tearing the list down. (`onClick={load}` also passed the

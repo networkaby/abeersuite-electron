@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import SalesDashboard from "@/modules/ecommerce/components/SalesDashboard";
+import LiveRefresh from "@/shared/components/LiveRefresh";
 
 export default async function EcommerceDashboardPage() {
     const now = new Date();
@@ -40,6 +41,8 @@ export default async function EcommerceDashboardPage() {
 
     return (
         <div className="space-y-6">
+            {/* An online order or a stock move refreshes the overview. */}
+            <LiveRefresh topics={["ledger", "stock"]} />
             <div>
                 <h1 className="text-2xl font-semibold tracking-tight">E-commerce</h1>
                 <p className="text-muted-foreground text-sm">Sales overview and operational signals.</p>

@@ -70,6 +70,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // ─── Shape (mirrors the API response) ────────────────────────────────────────
 
@@ -232,8 +233,9 @@ export default function UsableFundPage() {
     const [groups, setGroups] = useState<FundGroup[] | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    /** `silent` keeps the figures on screen while they re-read. */
+    const load = useCallback((silent = false) => {
+        if (!silent) setLoading(true);
         axios
             .get<{ asOf: string; buckets: ApiBucket[] }>(
                 `/api/accountancy/reports/usable-fund?asOf=${asOf}`,
@@ -251,21 +253,14 @@ export default function UsableFundPage() {
     }, [asOf]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
+    useEffect(() => { load(); }, [load]);
 
-    // This page has no shared cache with the Ledgers page — a ledger saved
-    // there doesn't push an update here. Refetch when the tab regains focus
-    // (switched away and back, e.g. after creating a ledger elsewhere) so a
-    // full reload isn't the only way to see fresh data.
-    useEffect(() => {
-        const onVisible = () => { if (document.visibilityState === "visible") load(); };
-        document.addEventListener("visibilitychange", onVisible);
-        window.addEventListener("focus", onVisible);
-        return () => {
-            document.removeEventListener("visibilitychange", onVisible);
-            window.removeEventListener("focus", onVisible);
-        };
-    }, [load]);
+    // This page has no shared cache with the Ledgers page, so a ledger saved there
+    // used to reach it only via a hand-rolled focus/visibility listener — a refetch
+    // on every tab return, whether or not anything had moved. `useRealtimeTopics`
+    // replaces both halves: it re-reads when the books actually change, and it
+    // already reads once on visibility return of its own accord.
+    useRealtimeTopics(["ledger"], () => { load(true); });
 
     const drawnByKey = useMemo(() => sharedDrawnByKey(groups ?? []), [groups]);
 
@@ -307,7 +302,7 @@ export default function UsableFundPage() {
                         </div>
                         <button
                             type="button"
-                            onClick={load}
+                            onClick={() => load()}
                             title="Refresh — a ledger saved elsewhere doesn't push an update here"
                             className={`mb-[3px] text-muted-foreground hover:text-foreground transition-colors ${loading ? "animate-spin" : ""}`}
                         >

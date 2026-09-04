@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -56,8 +57,9 @@ export default function GroupDetailPage() {
     // Escape goes back to the previous page (the report you came from).
     useEscapeBack();
 
-    const load = useCallback(() => {
-        setLoading(true);
+    /** `silent` keeps the group on screen while it re-reads. */
+    const load = useCallback((silent = false) => {
+        if (!silent) setLoading(true);
         axios.get<GroupDetailData>(`/api/accountancy/groups/${id}/detail`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load group"))
@@ -65,7 +67,9 @@ export default function GroupDetailPage() {
     }, [id]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
+    useEffect(() => { load(); }, [load]);
+    // Balances under this group move with every voucher posted anywhere.
+    useRealtimeTopics(["ledger"], () => { load(true); });
 
     // Stock-in-Hand has no real GL children (Closing Stock is synthesised at
     // report time). Bounce any visit to the live stock summary instead of
