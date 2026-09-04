@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 export type GstBucket = {
     rate:         number;
@@ -41,8 +42,10 @@ export function GstSummaryView({
     const [data, setData] = useState<GstSummaryData | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
+    /** `silent` keeps the summary on screen while it re-reads — a live update
+     *  must not blank a report someone is reading. Refresh passes nothing. */
+    const load = useCallback((silent = false) => {
+        if (!silent) setLoading(true);
         axios.get<GstSummaryData>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=${direction}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error(`Failed to load ${title}`))
@@ -50,7 +53,9 @@ export function GstSummaryView({
     }, [from, to, direction, title]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
+    useEffect(() => { load(); }, [load]);
+    // Every GST-bearing voucher moves these totals.
+    useRealtimeTopics(["ledger"], () => { load(true); });
 
     return (
         <div className="max-w-5xl mx-auto space-y-5">
@@ -68,7 +73,7 @@ export function GstSummaryView({
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={load}>Refresh</Button>
+                    <Button onClick={() => load()}>Refresh</Button>
                 </div>
             </div>
 

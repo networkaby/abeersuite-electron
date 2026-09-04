@@ -7,6 +7,7 @@ import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PRE
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { slaEnteredAt, slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
+import LiveRefresh from "@/shared/components/LiveRefresh";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
 // mixed list (longest-waiting first). New tickets enter their status' entry
@@ -356,6 +357,8 @@ export default async function AssignmentsPage() {
 
     return (
         <div className="h-full overflow-y-auto px-6 py-5">
+            {/* Work assigned or passed on at another counter lands in this inbox on its own. */}
+            <LiveRefresh topics={["tickets"]} />
             <WorkInboxBoard items={visibleItems} currentUserId={userId} />
         </div>
     );

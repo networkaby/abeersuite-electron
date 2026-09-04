@@ -46,6 +46,7 @@ import {
     // SlidersHorizontal,
 } from "lucide-react";
 import { productPreviewPath } from "@/shared/lib/shop/productPublic";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,
 // with the shadcn Table's own container overflow overridden so the header stays
@@ -183,6 +184,8 @@ export default function EcommerceProductsPage() {
             .then((r) => setRules(r.data.rules))
             .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
     }, []);
+    // A product published, edited or restocked elsewhere shows up here on its own.
+    useRealtimeTopics(["catalogue", "stock"], load);
 
     // Restore the persisted view AFTER mount — sessionStorage is client-only, so
     // reading it during render would desync the first paint from the SSR HTML.

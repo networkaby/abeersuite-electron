@@ -11,6 +11,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { CreateGroupDialog } from "@/modules/accountancy/components/CreateGroupDialog";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -95,6 +96,9 @@ export default function AccountGroupsPage() {
     }, []);
 
     useEffect(load, [load]);
+    // A group added or renamed at another counter shows up here on its own.
+    // `load` never flips `loading`, so this cannot blink the tree.
+    useRealtimeTopics(["ledger"], load);
 
     const flat    = flattenVisible(tree, expanded);
     const allFlat = allGroupsFlat(tree);

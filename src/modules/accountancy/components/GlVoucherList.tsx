@@ -6,7 +6,7 @@
 // the same row markup, click-to-edit Reference link, 3-dot ⋮ action menu,
 // and deleted-row Restore + Hard-Delete UX.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
     applyRegisterFilters,
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 export type GlVoucherKind = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
@@ -55,12 +56,20 @@ export function GlVoucherList({
     const [allRows, setAllRows]   = useState<VoucherRegisterRow[]>([]);
     const [loading, setLoading]   = useState(true);
     const [tick, setTick]         = useState(0);
-    const reload                  = useCallback(() => setTick((t) => t + 1), []);
+
+    /** A person pressing Reload should see it happen; a live signal must not blank
+     *  a register someone is reading. Only the spinner differs — both re-read. */
+    const silentRef               = useRef(false);
+    const reload                  = useCallback(() => { silentRef.current = false; setTick((t) => t + 1); }, []);
+    const refreshSilently         = useCallback(() => { silentRef.current = true;  setTick((t) => t + 1); }, []);
+
+    // A receipt or payment entered at another counter appears here on its own.
+    useRealtimeTopics(["ledger"], refreshSilently);
 
     const filters = useRegisterFilters(`reg:${type}`);
 
     useEffect(() => {
-        setLoading(true);
+        if (!silentRef.current) setLoading(true);
         const params = new URLSearchParams({ type });
 
         axios.get<RawRow[]>(`/api/accountancy/vouchers?${params}`)
@@ -91,7 +100,12 @@ export function GlVoucherList({
                 setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load"))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                setLoading(false);
+                // Back to loud: the next read is a type switch or a person
+                // pressing Reload, and both should show the spinner.
+                silentRef.current = false;
+            });
      
     }, [type, tick]);
 

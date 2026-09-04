@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, parseDigitsInput, formatInr } from "@/shared/lib/format";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface Milestone {
     id: number;
@@ -44,6 +45,8 @@ export function LoyaltyMilestones() {
             .finally(() => setLoading(false));
     }
     useEffect(load, []);
+    // Points earned at another counter move these milestones.
+    useRealtimeTopics(["ledger"], load);
     useEffect(() => {
         axios.get<CouponOpt[]>("/api/coupons").then((r) => setCoupons(r.data)).catch(() => { /* optional */ });
     }, []);

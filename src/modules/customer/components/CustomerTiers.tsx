@@ -14,6 +14,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput } from "@/shared/lib/format";
 import { DEFAULT_TIER_FROM_DAY, DEFAULT_TIER_TO_DAY } from "@/shared/lib/schemas/customerTierSchemas";
 import { type TierCurrentSaleScope } from "@/shared/lib/pricing";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // A level inside a period — "Gold" of "Best of the month".
 interface Level {
@@ -60,6 +61,8 @@ export function CustomerTiers() {
             .finally(() => setLoading(false));
     }
     useEffect(load, []);
+    // Tier periods recomputed elsewhere land here on their own.
+    useRealtimeTopics(["parties"], load);
 
     async function addPeriod() {
         if (!name.trim()) return toast.error("Name the period");

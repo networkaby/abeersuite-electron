@@ -13,6 +13,7 @@ import { useDeleteWithConfirm, usePositionPicker } from "@/shared/hooks";
 import { PRIORITY_META } from "@/utils/constants";
 import RecurringTaskFormDialog from "./RecurringTaskFormDialog";
 import type { TaskRecurrenceDto } from "../lib/types";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 const UNIT_LABEL: Record<string, [string, string]> = {
     day: ["day", "days"],
@@ -66,6 +67,8 @@ export default function RecurringTaskList({
     useEffect(() => {
         load();
     }, [load]);
+    // A recurrence added or edited elsewhere appears here on its own.
+    useRealtimeTopics(["tasks"], load);
 
     const { remove, deleting } = useDeleteWithConfirm<TaskRecurrenceDto>({
         url: (id) => `/api/admin-task-recurrences/${id}`,

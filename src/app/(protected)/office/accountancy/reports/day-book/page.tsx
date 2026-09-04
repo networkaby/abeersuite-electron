@@ -25,7 +25,6 @@ import { useRegisterFilters, type DatePreset } from "@/modules/accountancy/hooks
 import { NON_REGULAR_KINDS } from "@/modules/accountancy/lib/voucherKinds";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 /** "" | "optional" | "inventory" — the two mutually-exclusive category ticks. */
 type Category = "" | "optional" | "inventory";
@@ -61,18 +60,11 @@ export default function DayBookPage() {
         search:   filters.search,
     }), [filters.from, filters.to, kind, statuses, filters.branchFilter, category, filters.search]);
 
+    // Live updates come with the data source now — `useDayBook` subscribes to
+    // `ledger` itself, so every consumer of it follows the floor, not just this page.
     const {
-        rows, loading, loadingMore, hasMore, error, stale, loadMore, reload, syncNow, branches,
+        rows, loading, loadingMore, hasMore, error, stale, loadMore, reload, branches,
     } = useDayBook(query);
-
-    // A voucher written at another counter — or in another tab — lands here on
-    // its own. No polling: the page reads only when something has actually
-    // moved, and only while it is the tab being looked at.
-    //
-    // `syncNow`, not `reload` — a signal tops up what is on screen and keeps the
-    // pages already scrolled through. Starting over is what the Refresh button
-    // means, and only a person pressing it should get it.
-    useRealtimeTopics(["ledger"], syncNow);
 
     // Escape → back
     useEffect(() => {

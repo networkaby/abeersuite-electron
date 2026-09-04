@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { localDb } from "@/shared/lib/browser/localDb";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 const API = "/api/accountancy/reports/day-book";
 /** One entry per filter view. Bounded so a session of fiddling can't grow forever. */
@@ -418,6 +419,19 @@ export function useDayBook(query: DayBookQuery) {
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key, search, cacheable, reload]);
+
+    // A voucher written at another counter — or in another tab — lands here on its
+    // own. No polling: this reads only when something has actually moved, and only
+    // while the tab is being looked at.
+    //
+    // `syncNow`, not `reload` — a signal tops up what is on screen and keeps the
+    // pages already scrolled through. Starting over is what the Refresh button
+    // means, and only a person pressing it should get it.
+    //
+    // It lives HERE rather than in the pages so every consumer of the Day Book
+    // data source is live by construction: the Day Book itself and the "All"
+    // voucher register both get it, and so will the next one.
+    useRealtimeTopics(["ledger"], syncNow);
 
     const rows = useMemo(() => joinRows(store.rows, store.refs), [store]);
 

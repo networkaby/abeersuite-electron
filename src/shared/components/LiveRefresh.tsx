@@ -7,9 +7,9 @@ import type { Topic } from "@/shared/lib/realtime/topics";
 /**
  * Re-render a SERVER component's page when the data behind it moves.
  *
- * The office home page is an `async` server component: its briefing cards are
- * computed on the server per request, so there is no `load()` to call again from the
- * browser. `router.refresh()` is the App Router's way to ask for a fresh server
+ * A server-rendered page computes its data per request, so there is no `load()`
+ * to call again from the browser — the office home, the repairing and retention
+ * hubs, the work-flow inbox and the customer detail page are all this shape. `router.refresh()` is the App Router's way to ask for a fresh server
  * render of the current route without touching client state — same settle window
  * and hidden-tab behaviour as every other live surface, via `useRealtimeTopics`.
  *

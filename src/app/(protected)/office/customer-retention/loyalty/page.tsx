@@ -6,6 +6,7 @@ import { LoyaltyConfigForm } from "@/modules/loyalty/components/LoyaltyConfigFor
 import { LoyaltyEarnRules } from "@/modules/loyalty/components/LoyaltyEarnRules";
 import { LoyaltyMilestones } from "@/modules/loyalty/components/LoyaltyMilestones";
 import { ratesFromConfig, expiryCutoff } from "@/modules/loyalty/lib";
+import LiveRefresh from "@/shared/components/LiveRefresh";
 
 export const metadata = { title: "Loyalty" };
 
@@ -31,6 +32,8 @@ export default async function LoyaltyHubPage() {
     return (
         <ScrollArea className="h-full" type="always">
             <div className="mx-auto max-w-5xl space-y-6 px-6 pt-4 pb-10">
+                {/* Points issued or expired at another counter move these figures. */}
+                <LiveRefresh topics={["ledger"]} />
                 {/* Header */}
                 {/* <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">

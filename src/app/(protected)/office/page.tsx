@@ -25,7 +25,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import UniversalCustomerPanel from "@/modules/home/UniversalCustomerPanel";
-import LiveRefresh from "@/modules/home/LiveRefresh";
+import LiveRefresh from "@/shared/components/LiveRefresh";
 import {
     RepairBriefing,
     ShowroomBriefing,
