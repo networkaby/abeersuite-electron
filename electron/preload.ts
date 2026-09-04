@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { UpdateState } from "./updateManager";
+import type { BackupAvailability, RunResult } from "./backupManager";
 
 export type { UpdateState, UpdateTier, UpdatePhase } from "./updateManager";
+export type { BackupAvailability, RunResult } from "./backupManager";
 
 export interface ElectronAPI {
     isElectron: true;
@@ -25,6 +27,20 @@ export interface ElectronAPI {
         installNow: () => Promise<void>;
         checkNow: () => Promise<void>;
         setBusy: (busy: boolean) => Promise<void>;
+    };
+    /**
+     * Backup and restore between Supabase and a file on this PC, run by the bundled
+     * pg_dump/pg_restore (electron/backupManager.ts). The database URL stays in main —
+     * the renderer only ever sees "can this machine do it", a progress line, and the
+     * result. Both calls open a native file dialog, so nothing runs unattended; a
+     * cancelled dialog comes back as `{ ok: false }` with no `error`.
+     */
+    backup: {
+        availability: () => Promise<BackupAvailability>;
+        dumpToDisk: () => Promise<RunResult>;
+        restoreFromDisk: (confirm: string) => Promise<RunResult>;
+        /** Every pg_dump/pg_restore progress line. Returns an unsubscribe function. */
+        onProgress: (callback: (line: string) => void) => () => void;
     };
     /** Splash-screen progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
@@ -80,6 +96,16 @@ const electronAPI: ElectronAPI = {
         installNow: () => ipcRenderer.invoke("update:install-now"),
         checkNow: () => ipcRenderer.invoke("update:check-now"),
         setBusy: (busy) => ipcRenderer.invoke("update:set-busy", busy),
+    },
+    backup: {
+        availability: () => ipcRenderer.invoke("backup:availability"),
+        dumpToDisk: () => ipcRenderer.invoke("backup:dump-to-disk"),
+        restoreFromDisk: (confirm) => ipcRenderer.invoke("backup:restore-from-disk", confirm),
+        onProgress: (callback) => {
+            const handler = (_event: Electron.IpcRendererEvent, line: string) => callback(line);
+            ipcRenderer.on("backup:progress", handler);
+            return () => ipcRenderer.removeListener("backup:progress", handler);
+        },
     },
     onBootProgress: (callback) => {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));

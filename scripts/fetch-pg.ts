@@ -75,8 +75,15 @@ const TRIM_DIRS = [
     path.join("share", "man"),
 ];
 
-/** Proof the trim did not remove something the server needs to start. */
-const REQUIRED_BINARIES = ["postgres.exe", "initdb.exe", "pg_ctl.exe"];
+/**
+ * Proof the trim did not remove something the app needs.
+ *
+ * The first three start the local replica. `pg_dump`/`pg_restore` are the desktop app's
+ * only copy of the client tools — `electron/backupManager.ts` runs them to back up and
+ * restore Supabase — so a future addition to TRIM_DIRS has to fail here rather than on a
+ * counter, on the day someone finally needs the backup.
+ */
+const REQUIRED_BINARIES = ["postgres.exe", "initdb.exe", "pg_ctl.exe", "pg_dump.exe", "pg_restore.exe"];
 
 function log(msg: string): void {
     console.log(`[fetch-pg] ${msg}`);

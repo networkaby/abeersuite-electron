@@ -6,6 +6,8 @@ import { Download, Upload, AlertTriangle, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { BackupScheduleCard } from "@/modules/settings/components/BackupScheduleCard";
+import { LocalBackupCard } from "@/modules/settings/components/LocalBackupCard";
+import { isElectronEnvironment } from "@/shared/lib/bridge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -61,6 +63,11 @@ export function BackupRestorePanel() {
     const [confirmText, setConfirmText] = useState("");
     const [restoring, setRestoring] = useState(false);
     const [availability, setAvailability] = useState<Availability | null>(null);
+
+    // Desktop only, and read after mount: the server render has no `electronAPI`, so
+    // deciding this during render would hydrate a mismatched tree.
+    const [isElectron, setIsElectron] = useState(false);
+    useEffect(() => setIsElectron(isElectronEnvironment()), []);
 
     const loadSchedule = useCallback(async () => {
         try {
@@ -204,18 +211,27 @@ export function BackupRestorePanel() {
 
     return (
         <div className="space-y-6">
+            {/* Supabase <-> this PC, using the pg_dump/pg_restore the installer already
+                ships. First because on a desktop app it is the path that works — the
+                Dropbox ones below need keys counter builds no longer carry. */}
+            {isElectron && <LocalBackupCard />}
+
             {/* Counter-only build — the keys this needs were not shipped in the installer */}
             {counterOnly && (
                 <section className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
                     <div className="flex items-start gap-2">
                         <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
                         <div className="space-y-1">
-                            <h2 className="text-sm font-semibold">Counter-only machine</h2>
+                            <h2 className="text-sm font-semibold">
+                                {isElectron ? "Dropbox backup is not set up here" : "Counter-only machine"}
+                            </h2>
                             <p className="text-xs text-muted-foreground">
                                 {canBackup
                                     ? "Restore is not available on this machine — it has no Dropbox keys, so it cannot list the backups to pick from."
-                                    : "Backup and restore are not available on this machine. It was installed without the Dropbox and GitHub keys."}{" "}
-                                Use the office app instead.
+                                    : "Backup and restore through Dropbox are not available on this machine. It was installed without the Dropbox and GitHub keys."}{" "}
+                                {isElectron
+                                    ? "The backup to this computer above still works and does not need them."
+                                    : "Use the office app instead."}
                             </p>
                             {missing.length > 0 && (
                                 <p className="text-[11px] text-muted-foreground/80">

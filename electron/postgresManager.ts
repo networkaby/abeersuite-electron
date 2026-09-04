@@ -101,8 +101,13 @@ export function isPortListening(port: number, timeoutMs = 1000): Promise<boolean
 
 /**
  * Resolves the directory where embedded PostgreSQL binaries are stored.
+ *
+ * Exported because `backupManager.ts` runs `pg_dump`/`pg_restore` out of the same
+ * folder — the binaries are bundled for the local replica, but they are the only
+ * copy of the client tools on a shop PC, so backup uses them rather than re-deriving
+ * the path a second time.
  */
-function getEmbeddedBinPath(): string {
+export function getEmbeddedBinPath(): string {
     const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
     if (isDev) {
         return path.join(process.cwd(), "resources", "pgsql", "bin");

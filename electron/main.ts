@@ -599,6 +599,61 @@ ipcMain.handle("dialog:select-folder", async (event, defaultPath?: string): Prom
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
 });
 
+// ── Local backup & restore ───────────────────────────────────────────────────
+// Supabase ⇄ this PC, using the bundled pg_dump/pg_restore. See backupManager.ts for
+// why this exists beside the Dropbox path and why the URL never leaves main.
+//
+// Not separately permission-gated: the only page that calls this is
+// /office/settings/backup-restore, which the nav gates on `settings:manage`, and the
+// restore additionally needs the operator to type RESTORE. Both operations are also
+// bounded by a native dialog the user has to complete by hand — nothing here can run
+// without someone picking a file on this machine.
+
+ipcMain.handle("backup:availability", (): BackupAvailability => backupAvailability());
+
+ipcMain.handle("backup:dump-to-disk", async (event): Promise<RunResult> => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const availability = backupAvailability();
+    if (!availability.available) return { ok: false, error: availability.reason };
+
+    const options: Electron.SaveDialogOptions = {
+        title: "Save database backup",
+        defaultPath: path.join(app.getPath("documents"), makeLocalBackupFileName(availability.projectRef)),
+        filters: [{ name: "Database backup", extensions: ["dump"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+    };
+    const picked = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    // Cancelled is not a failure — the card goes back to idle with no error shown.
+    if (picked.canceled || !picked.filePath) return { ok: false };
+
+    return runBackup(picked.filePath, (line) => {
+        if (!event.sender.isDestroyed()) event.sender.send("backup:progress", line);
+    });
+});
+
+ipcMain.handle("backup:restore-from-disk", async (event, confirm: string): Promise<RunResult> => {
+    // The renderer already asks for this word and confirms twice; checked again here
+    // because this is the one call in the app that replaces the live database.
+    if (confirm !== "RESTORE") return { ok: false, error: "Type RESTORE to confirm." };
+
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const availability = backupAvailability();
+    if (!availability.available) return { ok: false, error: availability.reason };
+
+    const options: Electron.OpenDialogOptions = {
+        title: "Choose the backup to restore",
+        defaultPath: app.getPath("documents"),
+        filters: [{ name: "Database backup", extensions: ["dump"] }],
+        properties: ["openFile"],
+    };
+    const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    if (picked.canceled || picked.filePaths.length === 0) return { ok: false };
+
+    return runRestore(picked.filePaths[0], (line) => {
+        if (!event.sender.isDestroyed()) event.sender.send("backup:progress", line);
+    });
+});
+
 ipcMain.handle("printer:get-list", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return [];
@@ -667,6 +722,14 @@ ipcMain.handle("update:check-now", () => checkNow("asked"));
 ipcMain.handle("update:set-busy", (_, busy: boolean) => setCartBusy(busy === true));
 
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
+import {
+    backupAvailability,
+    makeLocalBackupFileName,
+    runBackup,
+    runRestore,
+    type BackupAvailability,
+    type RunResult,
+} from "./backupManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { wipeReplica, replicaBindsThisPc } from "./replicaWipe";
