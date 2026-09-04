@@ -121,8 +121,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const workspaceCounts = (href: string): Counts =>
         href === "/office/message/inbox" ? { fresh: inboxUnread, total: 0, noun: "unread" }
-        : href === "/office/work-flow-inbox" ? fromSurface(WORK_INBOX_SURFACE)
-        : NO_COUNT;
+            : href === "/office/work-flow-inbox" ? fromSurface(WORK_INBOX_SURFACE)
+                : NO_COUNT;
 
     const moduleCounts = (moduleKey: string): Counts => {
         const surface = MODULE_SURFACE[moduleKey];
@@ -533,7 +533,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     ) : (
                         <div className="space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                                <h1 className="truncate text-base font-bold text-primary">AbeerSuite</h1>
                                 <div className="flex items-center gap-0.5 shrink-0">
                                     <button
                                         type="button"
