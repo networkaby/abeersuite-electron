@@ -1,10 +1,22 @@
 # v5.0.4 [urgent]
 
-Every counter should restart today. This build fixes the Thermal Printer page, which was
-showing a wrong update warning and losing the printer settings on the desktop app, and it
-adds a proper backup you can take from the shop PC itself.
+Every counter should restart today. A billing counter set to write locally could get stuck
+unable to save a plain sale — that is fixed here, along with the Thermal Printer page, which
+was showing a wrong update warning and losing the printer settings, and a proper backup you
+can take from the shop PC itself.
 
 Your printer and customer display settings are kept when the app updates.
+
+## Sale on a counter no longer refused
+
+- **A counter set to write locally can save a normal sale again.** Some counters were
+  getting "Offline — read only" on an ordinary sale even though nothing was wrong — a
+  bookkeeping step behind the scenes was refusing itself by mistake. Fixed.
+- **Offline Policies now apply only where they are meant to** — a counter that is cut off
+  from the internet while it should be writing live. A counter set to write locally is not
+  restricted by them; the Settings page now says so.
+- **Refusal messages are clearer.** If a save is genuinely refused for being offline, the
+  message now says why, instead of a generic code.
 
 ## Backup and Restore — now works on the shop PC
 
