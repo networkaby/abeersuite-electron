@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 id: true, userId: true, status: true, branchId: true,
                 counter: {
                     select: {
-                        tillAccountId: true, name: true,
+                        tillAccountId: true, name: true, counterNumber: true,
                         paymentAccounts: { where: { isActive: true }, select: { id: true, accountId: true, label: true } },
                     },
                 },
@@ -91,6 +91,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 userId:    user!.id,
                 branchId:  shift.branchId,
                 narration: data.note ? `POS receipt — ${data.note}` : `POS receipt from ${party.name}`,
+                counterNumber: shift.counter.counterNumber,
             });
             // Audit link: tie this receipt to the shift (which receipts on which shift).
             await tx.posReceipt.create({

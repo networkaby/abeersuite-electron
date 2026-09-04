@@ -153,7 +153,10 @@ export async function createPosQuoteVoucher(opts: {
     const firstName = lines[0]?.description?.trim();
 
     return prisma.$transaction(async (tx) => {
-        const reference = await invNextRef(tx, type, userId);
+        // POS_ESTIMATE / POS_ORDER ride the legacy prefix scheme and carry no
+        // counter (a quote can be saved with no shift open). Was passing `userId`
+        // into the counter slot; see CreateGlVoucherSpec.
+        const reference = await invNextRef(tx, type);
         // Phase 5 5.0c/5C: spine FIRST (the document anchor) so the goods lines hang
         // off it. These quotes are "issued" the moment they're saved (no GL, no
         // stock) → spine POSTED with no GL lines, gate-neutral.

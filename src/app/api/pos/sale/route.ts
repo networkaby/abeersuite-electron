@@ -1158,6 +1158,7 @@ export async function POST(req: Request) {
                     branchId: activeBranchId,
                     narration,
                     allocations,
+                    counterNumber: shift.counter.counterNumber,
                 });
                 receiptVoucherId = receipt.voucherId;
                 receiptVoucherRef = receipt.voucherRef;

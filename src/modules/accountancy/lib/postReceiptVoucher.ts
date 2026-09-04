@@ -34,6 +34,9 @@ export type PostReceiptVoucherArgs = {
     narration?:        string;
     /** Branch context stamped on the journal lines (branch-scoped GL reports). */
     branchId?:         string;
+    /** POS counter the receipt was taken at — the counter part of the reference.
+     *  Omit for office / online receipts that belong to no counter. */
+    counterNumber?:    number | null;
     /**
      * When set, a VoucherAllocation row links this receipt to the originating
      * bill's universal-voucher spine — Receivables nets the amount out. Pass
@@ -93,9 +96,10 @@ export async function postReceiptVoucher(
                 description: args.narration ?? null,
             },
         ],
-        post:     true,
-        branchId: args.branchId ?? null,
-        postedAt: args.date,
+        post:          true,
+        branchId:      args.branchId ?? null,
+        postedAt:      args.date,
+        counterNumber: args.counterNumber ?? null,
     });
     const voucherRef = voucher.reference;
 

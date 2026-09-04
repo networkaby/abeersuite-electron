@@ -13,19 +13,30 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { settlementAccountIdOf } from "@/modules/pos/lib/paymentGateways";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { businessToday } from "@/shared/lib/format/formatDate";
+import { findUserIdsHoldingRoles } from "@/shared/lib/auth/roleHolders";
 
 /** Seeded HQ branch — the online channel runs under HQ (see bootstrap §1). */
 const HQ_BRANCH_ID = "BR-HQ";
 
-/** The user auto-posted documents are attributed to: the first admin (R1). */
+/**
+ * The user auto-posted documents are attributed to: the senior-most admin (R1).
+ *
+ * Holders come from `findUserIdsHoldingRoles`, which counts **Position
+ * appointments** as well as the legacy `User.role` override. Matching on
+ * `User.role` alone — which this did until 2026-09-04 — found nobody on a
+ * normally-seeded org (an appointed admin has `role = null`) and dropped
+ * straight into the any-user fallback below, stamping the RECEIPT's
+ * `createdById` with whoever happened to be added to the system first. Same
+ * root cause as the `createSystemInboxNotifications` fix.
+ */
 async function resolveSystemActorId(): Promise<number | null> {
-    const admin = await prisma.user.findFirst({
-        where: { role: "R1" },
-        orderBy: { id: "asc" },
-        select: { id: true },
-    });
-    if (admin) return admin.id;
+    const admins = await findUserIdsHoldingRoles(["R1"]);
+    if (admins.length > 0) return Math.min(...admins);
+
+    // Genuine last resort — an org with no R1 holder at all. Loud, because every
+    // receipt booked from here then carries a creator name that is a guess.
     const any = await prisma.user.findFirst({ orderBy: { id: "asc" }, select: { id: true } });
+    if (any) console.error(`[onlineReceipt] no R1 holder — attributing receipts to user ${any.id}`);
     return any?.id ?? null;
 }
 

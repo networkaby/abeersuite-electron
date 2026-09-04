@@ -379,6 +379,18 @@ export interface CreateGlVoucherSpec {
     branchId?:        string | null;
     /** Posting timestamp when `post` is true. Defaults to now. */
     postedAt?:        Date;
+    /**
+     * POS counter the voucher was raised at — becomes the counter part of the
+     * reference (`assembleReference`). Omit for office / back-office vouchers
+     * that belong to no counter; the series then defaults to counter 1.
+     *
+     * Until 2026-09-04 this slot was fed `spec.userId` — a leftover from when
+     * the reference carried a USER number (the `"user"` token in `partOrder` is
+     * still an alias for `"counter"`). That stamped the creator's row id into
+     * every GL voucher reference, so the same series read `30012` or `70013`
+     * depending on who happened to save it.
+     */
+    counterNumber?:   number | null;
 }
 
 /** The shape engineCreateVoucher returns — Voucher table dropped (Phase 5 5E), so
@@ -446,7 +458,9 @@ export async function engineCreateVoucher(
         .filter((l) => l.type === "DEBIT")
         .reduce((s, l) => s + l.amount, 0));
 
-    const reference = await nextRefFromSeries(tx, spec.referenceSeries ?? spec.type, spec.userId);
+    const reference = await nextRefFromSeries(tx, spec.referenceSeries ?? spec.type, {
+        counterNumber: spec.counterNumber ?? null,
+    });
 
     const spineId = await engineCreateSpine(tx, {
         type:           spec.type,
