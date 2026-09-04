@@ -53,15 +53,18 @@ const TYPE_LABELS: { type: ConnectionType; label: string; icon: React.ReactNode;
 export default function PrinterSettingsPage() {
     const [relayUp, setRelayUp] = useState<boolean | null>(null);
     const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
+    // Desktop app: the bridge is bundled and updates with the app, so the standalone
+    // bridge update prompt must never show here.
+    const [isElectron, setIsElectron] = useState(false);
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config, setConfig] = useState<RelayConfig>(DEFAULT);
     // The counter this PC is bound to (server-side, keyed by this PC's identity).
     // Read only inside the parked "Counter lock" card below (currently commented out).
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [boundCounter, setBoundCounter] = useState<{ id: number; name: string } | null>(null);
-    // Electron installation id (or bridge id off-Electron) — checkRelay() below
-    // short-circuits for Electron without hitting the bridge's /config, so this is
-    // resolved independently rather than piggybacking on `config.deviceId`.
+    // Electron installation id (or bridge id off-Electron) — resolved independently
+    // rather than piggybacking on `config.deviceId`, which is only there once the
+    // bridge config has loaded.
     const [identity, setIdentity] = useState<MachineIdentity | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -71,16 +74,16 @@ export default function PrinterSettingsPage() {
     const [portsLoading, setPortsLoading] = useState(false);
 
     const checkRelay = useCallback(async () => {
-        if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
-            setRelayUp(true);
-            setBridgeVersion("Electron Desktop Native");
-            setLoading(false);
-            return;
-        }
+        // Electron reaches the bundled bridge over IPC, so the config read below works
+        // here exactly as it does in a browser — only the version prompt differs, since
+        // the desktop app updates itself and has no standalone bridge to update.
+        const onElectron = typeof window !== "undefined" && Boolean(window.electronAPI?.isElectron);
+        setIsElectron(onElectron);
         try {
             const data = await bridgeRequest<RelayConfig>("thermal", "config:get", undefined, 3000);
             setConfig({ ...DEFAULT, ...data });
             setRelayUp(true);
+            if (onElectron) return;
             // Bridge version drives the "update available" prompt. Best-effort —
             // an older bridge with no version in health just reports null.
             try {
@@ -257,7 +260,7 @@ export default function PrinterSettingsPage() {
                     </Button>
                 </div>
 
-                {relayUp && bridgeVersion && latestVersion && bridgeVersion !== latestVersion && (
+                {!isElectron && relayUp && bridgeVersion && latestVersion && bridgeVersion !== latestVersion && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-2">
                         <p className="font-medium">Bridge update available</p>
                         <p className="text-xs text-amber-700">
