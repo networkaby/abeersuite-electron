@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, CheckCircle, XCircle, RefreshCw, QrCode, Play, Smile, ScanLine, Eraser, ImageIcon } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, RefreshCw, QrCode, Play, Smile, ScanLine, Eraser, ImageIcon, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { qrRequest } from "@/modules/pos/lib/qrDisplay";
+import { isElectronEnvironment } from "@/shared/lib/bridge";
+import { HardwareStatusCard, useHardwareProbe, type HardwareProbe } from "@/modules/settings/components/HardwareStatusCard";
 
 interface RelayConfig {
     comPort:            string;
@@ -44,8 +46,12 @@ export default function QrDisplaySettingsPage() {
     const [ports,        setPorts]        = useState<PortInfo[]>([]);
     const [portsLoading, setPortsLoading] = useState(false);
     const [testing,      setTesting]      = useState<string | null>(null);
+    // Desktop app: the bridge is bundled and reached over IPC, never an HTTP service that
+    // can be up or down, so its status line says nothing there — see the card below.
+    const [isElectron,   setIsElectron]   = useState(false);
 
     const checkRelay = useCallback(async () => {
+        setIsElectron(isElectronEnvironment());
         try {
             const data = await qrRequest<RelayConfig>("config:get");
             setConfig({ ...DEFAULT, ...data });
@@ -57,7 +63,18 @@ export default function QrDisplaySettingsPage() {
         }
     }, []);
 
-    useEffect(() => { checkRelay(); }, [checkRelay]);
+    /** Native folder picker — opens at the current folder, or Pictures\shop-ads. */
+    const browseFolder = async () => {
+        const picked = await window.electronAPI?.selectFolder?.(config.idleFolder || undefined);
+        if (picked) setConfig((c) => ({ ...c, idleFolder: picked }));
+    };
+
+    // Is the display itself there? Answered by the bridge's "display:probe".
+    const doProbe = useCallback(() => qrRequest<HardwareProbe>("display:probe"), []);
+    const { result: display, probing, checking, refresh: probeDisplay } =
+        useHardwareProbe(doProbe, loading);
+
+    useEffect(() => { void checkRelay(); }, [checkRelay]);
 
     const fetchPorts = async () => {
         setPortsLoading(true);
@@ -75,6 +92,7 @@ export default function QrDisplaySettingsPage() {
         try {
             await qrRequest("config:set", config);
             toast.success("QR display settings saved");
+            void probeDisplay(); // New COM port — re-check straight away.
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Save failed");
         } finally {
@@ -156,7 +174,20 @@ export default function QrDisplaySettingsPage() {
                 <h1 className="text-xl font-bold">QR Display (DQ11)</h1>
             </div>
 
-            {/* Relay status */}
+            {/* Display status — is the DQ11 this counter is pointed at actually there,
+                and which port is it on. Shown in both app and browser. */}
+            <HardwareStatusCard
+                noun="Display"
+                probe={display}
+                probing={probing}
+                checking={checking}
+                onRefresh={probeDisplay}
+                emptyHint="Choose a COM port below, then Save."
+            />
+
+            {/* Relay status — browser only, where the bridge really is an HTTP service
+                on :9192 that can be missing. */}
+            {!isElectron && (
             <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm">
                     {loading ? (
@@ -174,6 +205,7 @@ export default function QrDisplaySettingsPage() {
                     <RefreshCw size={14} />
                 </Button>
             </div>
+            )}
 
             {!relayUp && !loading && <BridgeNotRunningNotice device="QR display" />}
 
@@ -232,14 +264,24 @@ export default function QrDisplaySettingsPage() {
                 <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Idle Slideshow</p>
                     <div className="space-y-1.5">
-                        <Label>Photos Folder</Label>
+                        <div className="flex items-center justify-between">
+                            <Label>Photos Folder</Label>
+                            {/* Desktop app only — a browser cannot open a native folder picker. */}
+                            {isElectron && (
+                                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={browseFolder}>
+                                    <FolderOpen size={13} />
+                                    Browse
+                                </Button>
+                            )}
+                        </div>
                         <Input
                             value={config.idleFolder}
                             onChange={(e) => setConfig((c) => ({ ...c, idleFolder: e.target.value }))}
-                            placeholder="D:\shop-ads"
+                            placeholder="Pictures\shop-ads"
                         />
                         <p className="text-xs text-muted-foreground">
-                            Absolute path on the shop PC. Leave empty to use the relay&apos;s bundled <span className="font-mono">assets/idle/</span> folder.
+                            <span className="font-mono">Pictures\shop-ads</span> is made on this PC automatically —
+                            just put the advert photos in it. Use Browse to pick a different folder anywhere on the PC.
                         </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3">

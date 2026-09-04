@@ -1256,6 +1256,62 @@ async function sendBuffer(cfg, buffer) {
     }
 }
 
+// ── Printer probe ─────────────────────────────────────────────────────────────
+
+/** Reachability of the configured printer. Shape: { connected, target, detail }. */
+async function probePrinter(cfg) {
+    const type = cfg.connectionType || "network";
+
+    if (type === "network") {
+        const ip = cfg.printerIp;
+        const port = Number(cfg.printerPort) || 9100;
+        if (!ip || ip === "192.168.1.x")
+            return { connected: false, target: "", detail: "No printer IP set." };
+        const ok = await canConnect(ip, port, 2000);
+        return {
+            connected: ok,
+            target: `${ip}:${port}`,
+            detail: ok ? "Answering on the network." : "No answer — check power, cable and IP.",
+        };
+    }
+
+    if (type === "com") {
+        if (!cfg.comPort) return { connected: false, target: "", detail: "No COM port set." };
+        const ports = await listComPorts();
+        const ok = ports.includes(cfg.comPort);
+        return {
+            connected: ok,
+            target: cfg.comPort,
+            detail: ok ? "Port present." : `Port not found. Available: ${ports.join(", ") || "none"}.`,
+        };
+    }
+
+    if (type === "windows") {
+        if (!cfg.windowsPrinterName)
+            return { connected: false, target: "", detail: "No Windows printer selected." };
+        const names = await listWindowsPrinters();
+        const ok = names.includes(cfg.windowsPrinterName);
+        return {
+            connected: ok,
+            target: cfg.windowsPrinterName,
+            detail: ok ? "Installed in Windows." : "Not in Printers & Scanners any more.",
+        };
+    }
+
+    return { connected: false, target: "", detail: `Unknown connectionType: ${type}` };
+}
+
+/** TCP connect test — resolves true/false, never rejects. */
+function canConnect(host, port, timeoutMs) {
+    return new Promise((resolve) => {
+        const socket = new net.Socket();
+        const done = (result) => { socket.destroy(); resolve(result); };
+        socket.setTimeout(timeoutMs, () => done(false));
+        socket.once("error", () => done(false));
+        socket.connect(port, host, () => done(true));
+    });
+}
+
 // ── List helpers ──────────────────────────────────────────────────────────────
 
 function listWindowsPrinters() {
@@ -1327,6 +1383,13 @@ function start({ getConfig, setConfig }) {
 
         "printers": async () => listWindowsPrinters(),
         "ports":    async () => listComPorts(),
+
+        // Is the configured printer actually reachable? Answers without printing, so the
+        // settings page can show it on load and after every save. What "reachable" means
+        // depends on the wiring: a TCP connect for a network printer (it is powered and on
+        // the LAN — paper it cannot tell us), and presence in the port/driver list for COM
+        // and Windows. Never throws: an unreachable printer is an answer, not a fault.
+        "printer:probe": async () => probePrinter(getConfig()),
 
         "print": async (payload) => {
             const { reference, lines } = payload || {};

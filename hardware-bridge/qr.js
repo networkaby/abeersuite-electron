@@ -12,6 +12,7 @@
 
 const fs       = require("fs");
 const path     = require("path");
+const os       = require("os");
 const { exec } = require("child_process");
 const sharp    = require("sharp");
 const QRCode   = require("qrcode");
@@ -450,9 +451,7 @@ function start({ getConfig, setConfig }) {
 
     function loadIdleFiles() {
         const cfg = getConfig();
-        const folder = cfg.idleFolder && cfg.idleFolder.trim()
-            ? cfg.idleFolder
-            : path.join(__dirname, "assets", "idle");
+        const folder = resolveIdleFolder(cfg);
         if (!fs.existsSync(folder)) return [];
         try {
             return fs.readdirSync(folder)
@@ -540,6 +539,26 @@ function start({ getConfig, setConfig }) {
         },
 
         "ports": async () => listComPorts(),
+
+        // Is the configured display actually there? Answers without drawing anything, so
+        // the settings page can show it on load and after every save. A serial display
+        // cannot be asked "are you alive?", so presence of its COM port is the honest
+        // check. Never throws: not-found is an answer, not a fault.
+        "display:probe": async () => {
+            const cfg = getConfig();
+            if (!cfg.comPort) return { connected: false, target: "", detail: "No COM port set." };
+            // listComPorts here returns { path, description } objects, unlike thermal's,
+            // which returns plain strings. Compare on path.
+            const paths = (await listComPorts()).map((p) => p.path);
+            const ok = paths.includes(cfg.comPort);
+            return {
+                connected: ok,
+                target: cfg.comPort,
+                detail: ok
+                    ? `Port present at ${cfg.baudRate || 921600} baud.`
+                    : `Port not found. Available: ${paths.join(", ") || "none"}.`,
+            };
+        },
 
         "pos/customer": async (payload) => {
             await showActive(await renderCustomer(payload || {}));
@@ -633,9 +652,55 @@ function start({ getConfig, setConfig }) {
         console.error("[qr] no IPC channel — start the bridge from Electron (hardwareBridgeManager).");
     }
     console.log(`[qr] COM port: ${cfg.comPort}  baud: ${cfg.baudRate || 921600}`);
-    const folder = cfg.idleFolder && cfg.idleFolder.trim() ? cfg.idleFolder : path.join(__dirname, "assets", "idle");
-    console.log(`[qr] idle folder: ${folder}`);
+
+    // Create the default folder and write it into the config, so the settings page shows
+    // a real path from the first run rather than an empty box the shopkeeper has to guess
+    // at. From here on it is an ordinary configured folder: Browse changes it to anywhere
+    // else on the PC, and nothing overwrites their choice.
+    if (!(cfg.idleFolder && cfg.idleFolder.trim()) && ensureDefaultIdleFolder()) {
+        const folder = defaultIdleFolder();
+        setConfig({ idleFolder: folder });
+        console.log(`[qr] idle folder defaulted to ${folder}`);
+    }
+    console.log(`[qr] idle folder: ${resolveIdleFolder(getConfig())}`);
     startIdle();
+}
+
+/**
+ * Where the idle slideshow reads its photos from.
+ *
+ * A configured folder always wins — startup writes `Pictures\shop-ads` into the config
+ * on a fresh counter, so this is normally set. The bundled `assets/idle` is the last
+ * resort, for the case where that folder could not be created at all.
+ */
+function resolveIdleFolder(cfg) {
+    if (cfg.idleFolder && cfg.idleFolder.trim()) return cfg.idleFolder.trim();
+    return path.join(__dirname, "assets", "idle");
+}
+
+/** The shop PC's own `Pictures\shop-ads` — where staff drop adverts from Explorer. */
+function defaultIdleFolder() {
+    return path.join(os.homedir(), "Pictures", "shop-ads");
+}
+
+/**
+ * Make the default folder on startup so staff find it waiting in Explorer rather than
+ * having to create it themselves. Best-effort: a read-only or redirected Pictures folder
+ * is not a reason to fail the display, and resolveIdleFolder falls back to the bundled
+ * photos anyway.
+ */
+function ensureDefaultIdleFolder() {
+    const folder = defaultIdleFolder();
+    try {
+        if (!fs.existsSync(folder)) {
+            fs.mkdirSync(folder, { recursive: true });
+            console.log(`[qr] created idle folder: ${folder}`);
+        }
+        return true;
+    } catch (e) {
+        console.warn(`[qr] could not create ${folder}: ${e.message}`);
+        return false;
+    }
 }
 
 module.exports = { start };

@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { resolveMachineIdentity, matchesThisMachine, type MachineIdentity } from "@/shared/lib/counter/identity";
 
 import { bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
+import { isElectronEnvironment } from "@/shared/lib/bridge";
+import { HardwareStatusCard, useHardwareProbe, type HardwareProbe } from "@/modules/settings/components/HardwareStatusCard";
 
 // Latest shipped bridge version is read from this static manifest in /public.
 // Bump combined-bridge.version.json (+ package.json) whenever you re-ship the
@@ -26,6 +28,12 @@ interface RelayConfig {
     printerPort: number;
     comPort: string;
     windowsPrinterName: string;
+    /**
+     * No longer editable here. The printed header comes from the print template
+     * (VoucherPrintTemplate.headerLine1) so every counter prints the same name;
+     * this stays in the saved config only as the bridge's fallback for a template
+     * with a blank header line.
+     */
     companyName: string;
     relayPort: number;
     // Stable per-PC id minted on first POS shift open. The counter lock itself now
@@ -54,7 +62,8 @@ export default function PrinterSettingsPage() {
     const [relayUp, setRelayUp] = useState<boolean | null>(null);
     const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
     // Desktop app: the bridge is bundled and updates with the app, so the standalone
-    // bridge update prompt must never show here.
+    // bridge update prompt must never show here. Resolved once on mount rather than
+    // during render, so server and first client render agree.
     const [isElectron, setIsElectron] = useState(false);
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config, setConfig] = useState<RelayConfig>(DEFAULT);
@@ -77,7 +86,7 @@ export default function PrinterSettingsPage() {
         // Electron reaches the bundled bridge over IPC, so the config read below works
         // here exactly as it does in a browser — only the version prompt differs, since
         // the desktop app updates itself and has no standalone bridge to update.
-        const onElectron = typeof window !== "undefined" && Boolean(window.electronAPI?.isElectron);
+        const onElectron = isElectronEnvironment();
         setIsElectron(onElectron);
         try {
             const data = await bridgeRequest<RelayConfig>("thermal", "config:get", undefined, 3000);
@@ -97,7 +106,16 @@ export default function PrinterSettingsPage() {
         }
     }, []);
 
-    useEffect(() => { checkRelay(); }, [checkRelay]);
+    // Is the configured printer actually reachable? Answered by the bridge's
+    // "printer:probe", which never prints — see hardware-bridge/thermal.js.
+    const doProbe = useCallback(
+        () => bridgeRequest<HardwareProbe>("thermal", "printer:probe", undefined, 5000),
+        [],
+    );
+    const { result: printer, probing, checking: probeChecking, refresh: probePrinter } =
+        useHardwareProbe(doProbe, loading);
+
+    useEffect(() => { void checkRelay(); }, [checkRelay]);
 
     // Latest shipped bridge version (from the static manifest in /public).
     useEffect(() => {
@@ -165,6 +183,7 @@ export default function PrinterSettingsPage() {
         try {
             await bridgeRequest("thermal", "config:set", config);
             toast.success("Printer settings saved");
+            void probePrinter(); // New IP or printer name — re-check straight away.
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Save failed");
         } finally {
@@ -241,7 +260,23 @@ export default function PrinterSettingsPage() {
                     </Link>
                 </div>
 
-                {/* Relay status */}
+                {/* Printer status — the one thing the cashier actually needs: is the
+                    printer this counter is pointed at reachable right now, and which one
+                    is it. Shown in both app and browser. */}
+                <HardwareStatusCard
+                    noun="Printer"
+                    probe={printer}
+                    probing={probing}
+                    checking={probeChecking}
+                    onRefresh={probePrinter}
+                    emptyHint="Choose a printer below, then Save."
+                />
+
+                {/* Relay status — browser only. In the desktop app the bridge is a bundled
+                    child process reached over IPC, not an HTTP service that can be up or
+                    down, so a permanent "Bridge connected" line says nothing. A genuine
+                    failure still surfaces through BridgeNotRunningNotice below. */}
+                {!isElectron && (
                 <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm">
                         {loading ? (
@@ -259,6 +294,7 @@ export default function PrinterSettingsPage() {
                         <RefreshCw size={14} />
                     </Button>
                 </div>
+                )}
 
                 {!isElectron && relayUp && bridgeVersion && latestVersion && bridgeVersion !== latestVersion && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-2">
@@ -293,17 +329,6 @@ export default function PrinterSettingsPage() {
                 {!relayUp && !loading && <BridgeNotRunningNotice device="printer" />}
 
                 <fieldset disabled={!relayUp || loading} className="space-y-5 disabled:opacity-50">
-                    {/* Company name */}
-                    <div className="rounded-lg border border-border bg-card p-5 space-y-1.5">
-                        <Label>Company Name</Label>
-                        <Input
-                            value={config.companyName}
-                            onChange={(e) => setConfig((c) => ({ ...c, companyName: e.target.value }))}
-                            placeholder="My Company"
-                        />
-                        <p className="text-xs text-muted-foreground">Printed at the top of every voucher receipt.</p>
-                    </div>
-
                     {/* Connection type */}
                     <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                         <p className="text-sm font-medium">Connection Type</p>

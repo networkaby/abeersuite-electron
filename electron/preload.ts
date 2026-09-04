@@ -10,6 +10,11 @@ export interface ElectronAPI {
     printSilent: (options?: { printerName?: string }) => Promise<boolean>;
     windowControl: (action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => Promise<void>;
     /**
+     * Native folder picker. Opens at `defaultPath`, or at this PC's Pictures folder
+     * when none is given. Resolves null if the user cancels.
+     */
+    selectFolder: (defaultPath?: string) => Promise<string | null>;
+    /**
      * Auto-update, see electron/updateManager.ts. `onState` pushes every change; `getState`
      * is for a component that mounts after the update was already found. `setBusy` is the
      * POS cart's "has lines" flag — main never restarts the app while it is true.
@@ -64,6 +69,7 @@ const electronAPI: ElectronAPI = {
     getPrinters: () => ipcRenderer.invoke("printer:get-list"),
     printSilent: (options) => ipcRenderer.invoke("printer:print-silent", options),
     windowControl: (action) => ipcRenderer.invoke("window:control", action),
+    selectFolder: (defaultPath) => ipcRenderer.invoke("dialog:select-folder", defaultPath),
     update: {
         getState: () => ipcRenderer.invoke("update:get-state"),
         onState: (callback) => {

@@ -581,6 +581,24 @@ ipcMain.handle("bridge:request", async (_event, mod: "qr" | "thermal", cmd: stri
 
 ipcMain.handle("bridge:connected", () => isBridgeConnected());
 
+/**
+ * Folder picker for the settings pages. Deliberately knows nothing about any one
+ * feature: it opens at whatever `defaultPath` the caller passes — the QR display
+ * page passes its saved `idleFolder`, which the bridge fills in on first start —
+ * and falls back to this PC's Pictures folder. `createDirectory` lets staff make a
+ * new one without leaving the dialog. Returns null when cancelled, so the caller
+ * keeps whatever was there.
+ */
+ipcMain.handle("dialog:select-folder", async (event, defaultPath?: string): Promise<string | null> => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
+        defaultPath: defaultPath?.trim() || app.getPath("pictures"),
+        properties: ["openDirectory", "createDirectory"],
+    };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
+});
+
 ipcMain.handle("printer:get-list", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return [];
