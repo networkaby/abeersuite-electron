@@ -1,4 +1,4 @@
-# v5.0.3
+# v5.0.3 [urgent]
 
 Fixes counter setup on a fresh PC, makes the Offline Policies page real, corrects who system messages and online receipts are attributed to, and brings live updates to every register, book and board. Install it on any counter that got stuck on the "Counter Setup" screen after 5.0.2.
 
