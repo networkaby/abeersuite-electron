@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, Printer, QrCode } from "lucide-react";
+import { Download, MonitorDown, Printer, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -22,6 +22,15 @@ const BRIDGE_DOWNLOADS: DownloadItem[] = [
         name: "Counter Bridge — Zip (advanced)",
         desc: "Code only. Unzip, run npm install, then setup-autostart.bat as administrator. For manual setups and in-place updates.",
         href: "/combined-bridge.zip",
+    },
+];
+
+const APP_DOWNLOADS: DownloadItem[] = [
+    {
+        name: "AbeerSuite — Web Setup",
+        desc: "Small downloader (37 KB). Run it on a counter PC and it fetches the latest AbeerSuite installer, checks the VC++ runtime, and starts the setup. Always installs the newest version — no need to re-share this file.",
+        href: "/AbeerSuite-WebSetup.exe",
+        primary: true,
     },
 ];
 
@@ -58,6 +67,21 @@ export default function DownloadsPage() {
                     <Download size={20} />
                     <h1 className="text-xl font-bold">Downloads</h1>
                 </div>
+
+                <section className="space-y-3">
+                    <div>
+                        <h2 className="font-semibold flex items-center gap-2">
+                            <MonitorDown size={16} /> AbeerSuite App
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                            Install the desktop app on a counter PC.
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        {APP_DOWNLOADS.map((d) => <DownloadCard key={d.href} item={d} />)}
+                    </div>
+                </section>
 
                 <section className="space-y-3">
                     <div className="flex items-end justify-between gap-3">
