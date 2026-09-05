@@ -38,8 +38,8 @@
  *
  * Open questions parked for the concept review (see chat):
  *   1. RESOLVED — all seven groups are live: Cash-in-Hand / Bank Accounts /
- *      Bank OD A/c / Credit Card were already live; BNPL A/c and Wallets were
- *      added via prisma/seeds/apply-account-groups.ts; Payment Gateway was
+ *      Bank OD A/c / Credit Card were already live; BNPL A/c and Wallets are
+ *      seeded by bootstrap-seed.ts; Payment Gateway was
  *      already a real-config group (personal.local.json) before this feature
  *      existed. The bnplJson/walletJson/gatewayJson columns are pushed.
  *   2. RESOLVED — masters/ledgers page + EditLedgerDialog both have a

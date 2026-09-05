@@ -36,7 +36,7 @@ async function main(): Promise<void> {
 
     await printKept(pool);
     console.log("\nDone. Products gone; contacts + settings untouched.");
-    console.log("Run `pnpm seed:dummy-shop` to repopulate the demo catalog.\n");
+    console.log("Products are re-entered through the UI or the product CSV importer.\n");
 
     await pool.end();
 }

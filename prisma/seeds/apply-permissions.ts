@@ -109,8 +109,9 @@ const ADDITIONS: { id: string; label: string; module: string; description: strin
     // Pricing Strategy → Update prices. Replaces the pre-split
     // `…:update-print-labels` id: that page was divided into "Update prices" and
     // "Print labels", so the combined name no longer describes either link. The
-    // old row is dropped by rename-update-prices-permission.ts; this row is what
-    // the sidebar now mints (derived from the MODULE_SECTIONS label).
+    // old row was dropped by a one-off rename script (since deleted); a reseed
+    // prunes it anyway, and this row is what the sidebar now mints (derived
+    // from the MODULE_SECTIONS label).
     {
         id: "ui:sidebar:pricing-strategy:update-prices",
         label: "Pricing Strategy → Update prices",

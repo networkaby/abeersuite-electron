@@ -39,12 +39,10 @@
 // What this does NOT seed:
 //   • Brands + Categories + Product groups (HSN/GST) → helper-inventory-masters.ts
 //     (trade-specific reference data — run `pnpm seed:helper-inventory`)
-//   • Test users (tech, front, des) → dummy-users.ts
-//   • Demo products → dummy-shop.ts
-//   • InvAttributeMaster — seeded by dummy-shop.ts (global attrs + category-specific).
-//     Production users populate attribute masters via Configure → Attribute masters.
-//   • Test customers + companies → dummy-customers.ts
-//   • Sample vouchers → dummy-vouchers.ts
+//   • Demo data of every kind — users, customers, products, vouchers, tasks, deals.
+//     The dummy-*.ts seeds that used to make it were deleted; write a fresh one
+//     under prisma/seeds/ if a demo is needed again.
+//   • InvAttributeMaster — populate via Configure → Attribute masters.
 //   • Opening balances on accounts/products → set via UI
 
 import { PrismaClient, Prisma } from "../../src/generated/prisma/client";
@@ -1254,8 +1252,8 @@ async function main() {
     //
     // FRESH DEPLOYMENTS ONLY. If anything is configured already, this leaves it
     // completely alone — no adopting, no re-pointing, no amount edits. An install that
-    // predates periods is migrated once, deliberately, by:
-    //     pnpm tsx prisma/seeds/migrate-tier-periods.ts
+    // predates periods was migrated once by migrate-tier-periods / migrate-tier-brackets;
+    // both are deleted now (git history has them if an ancient DB ever turns up).
     const [tierPeriodCount, tierLevelCount] = await Promise.all([
         prisma.customerTierPeriod.count(),
         prisma.customerTier.count(),
@@ -1359,7 +1357,7 @@ async function main() {
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");
-    console.log("    Run `pnpm seed:dummy-all` to populate demo data, or skip for a clean prod start.\n");
+    console.log("    Run `pnpm seed:helper-all` for the trade masters (roles, brands, categories).\n");
 }
 
 main()

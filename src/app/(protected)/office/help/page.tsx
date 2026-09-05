@@ -22,7 +22,7 @@ export default async function HelpDeskPage() {
             <div className="px-6 py-5">
                 <h1 className="text-xl font-semibold">Help Desk</h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                    Help Desk pipeline missing — run <code className="text-foreground">pnpm seed:apply-help-pipeline</code>.
+                    Help Desk pipeline missing — run <code className="text-foreground">pnpm prisma db seed</code>.
                 </p>
             </div>
         );

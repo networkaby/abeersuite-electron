@@ -31,7 +31,7 @@ async function main(): Promise<void> {
 
     await printKept(pool);
     console.log("\nDone. Contacts gone; products + settings untouched.");
-    console.log("Run `pnpm seed:dummy-customers` to repopulate demo contacts.\n");
+    console.log("Contacts are re-entered through the UI or the customer CSV importer.\n");
 
     await pool.end();
 }

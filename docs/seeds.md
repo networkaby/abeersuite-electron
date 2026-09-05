@@ -4,31 +4,39 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 
 ```
 prisma/seeds/
-├─ bootstrap-seed.ts            GENERIC — new-client installer (demo world; run via `pnpm seed:generic`)
+├─ bootstrap-seed.ts            GENERIC — new-client installer (run via `pnpm seed:generic`)
 ├─ export-personal.ts           PERSONAL — reverse-create YOUR config snapshot from the live DB
 ├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
+├─ apply-permissions.ts         APPLY — add just the `ADDITIONS` permissions + grant to R1 (live; the normal way to ship a permission)
+├─ apply-backup-config.ts       APPLY — create the BackupConfig singleton (the ONLY thing that creates it)
+├─ apply-voucher-series-counters.ts APPLY — give every VoucherSeries its counter-1 row
+├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
-├─ purge-demo-contacts.ts       OPS — wipes demo contacts (+ transactions), keeps products + settings
-├─ purge-demo-products.ts       OPS — wipes demo products (+ transactions), keeps contacts + settings
+├─ purge-demo-contacts.ts       OPS — wipes contacts (+ transactions), keeps products + settings
+├─ purge-demo-products.ts       OPS — wipes products (+ transactions), keeps contacts + settings
 ├─ recompute-balances.ts        OPS — recompute Account.balance drift from JournalLine
-├─ dummy-users.ts               DEV — 3 demo non-admin staff logins + basic Posts
-├─ dummy-org-rich.ts     DEV — 36 users, 36 posts, 5 branches, 10 depts (org chart demo)
-├─ dummy-customers.ts    DEV — demo customers + companies
-├─ dummy-shop.ts         DEV — demo product catalog (consumes data/demoCatalogSeed.ts)
-├─ dummy-vouchers.ts     DEV — demo vouchers + journal entries
 ├─ lib/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
+│  ├─ assertNotCounter.ts SHARED — refuse to run a destructive seed against a counter machine
 │  ├─ positionSeedSync.ts SHARED — upsert a position + its role-template links
 │  ├─ codeOwnedCatalog.ts SHARED — code-owned data both bootstraps use: the permission catalog, XOR CHECK constraints, voucher series. ADD NEW PERMISSIONS HERE.
 │  ├─ personalSnapshot.ts SHARED — export/import engine for the personal snapshot
 │  └─ personalSnapshotPath.ts SHARED — on-disk path of the snapshot (git-tracked in this private repo)
 └─ data/
-   └─ demoCatalogSeed.ts FIXTURE — hardcoded product list used by dummy-shop
+   └─ personal.local.json YOUR CONFIG — the captured snapshot personal-bootstrap replays
 ```
+
+> **There are no `dummy-*` seeds any more.** The demo-data scripts (users, org-rich,
+> customers, shop, vouchers, tasks, deals) and their `demoCatalogSeed.ts` fixture were
+> deleted — they had drifted behind the schema and nobody was running them. If a demo
+> is needed again, write a fresh script here and wire it into `package.json`; do not
+> resurrect the old ones from git history without checking them against the schema first.
+>
+> Every seed left in this folder is one you would actually run on a real install.
 
 ## The official seed — `pnpm prisma db seed` = PERSONAL
 
@@ -69,7 +77,7 @@ normal development** — re-running it resets tuned settings back to generic.
 
 > **Universal vs trade-specific.** Bootstrap seeds only masters common to **every** trade (units, GST slabs, warranty terms, chart of accounts, the `R1` Admin role, workflow). Masters that are **specific to the computer/CCTV/printer trade** — brands, categories, the HSN/GST product-group spine, and the `R2`–`R7` starter roles — are NOT in bootstrap; they live in the helper seeds below. A different trade would ship its own helpers (or just build roles in the Role Matrix).
 
-> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-brands`, `pnpm seed:helper-inventory` and `pnpm seed:helper-roles`. Do not run any `dummy-*` script in production.
+> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-all` (roles → brands → inventory masters).
 
 ## Personal bootstrap — self-complete restore of YOUR install
 
@@ -176,18 +184,25 @@ Each role is homed in a department (`R2`→`DEP-REPAIR`, `R6`→`DEP-FIN`, `R7`�
 
 Wiped by `hard-clean` (it deletes every non-system role back to the R1-only bootstrap state, and clears all `DepartmentPermission` pool rows) — re-run this helper to restore.
 
-## Dummy seeds (dev only)
+## Targeted appliers — a small change without a full seed
 
-Manual, idempotent, **never** auto-run by Prisma. Use for demos, screenshots, local testing.
+Manual, idempotent, **never** auto-run by Prisma. A full `pnpm prisma db seed` re-touches
+every master and prunes — wasteful and risky on live when a change only ADDS a few rows.
+These do just the one job.
 
 | Script | Purpose |
 |---|---|
-| `pnpm seed:dummy-users` | 3 demo logins (`tech@`, `front@`, `des@networkservice.in`) with predictable passwords + 3 basic Posts (Tech HQ, Front HQ, Despatch HQ) |
-| `pnpm seed:dummy-org-rich` | Full org chart demo: 36 users, 36 posts, 5 branches (BR-HQ + 4 regional), 10 departments — Board/CEO/C-Level/Central + 4 regional branch managers + staff. Stand-alone; does **not** conflict with dummy-users (different emails). |
-| `pnpm seed:dummy-customers` | Demo persons + companies with phones/emails + party-linked Account ledgers |
-| `pnpm seed:dummy-shop` | Demo product catalog (laptops, desktops, etc.) — reads from `data/demoCatalogSeed.ts` |
-| `pnpm seed:dummy-vouchers` | Demo invoices, payments, journal entries |
-| `pnpm seed:dummy-all` | Runs in dependency order: customers → **helper-roles** → users → **helper-brands** → **helper-inventory** → shop → vouchers (helper-roles runs before users so demo positions resolve their `R2`/`R3`/`R4` templates; helper-brands + helper-inventory run before shop so demo products resolve their brand / category / group) |
+| `pnpm seed:apply-permissions` | Upserts the `ADDITIONS` permission list and grants the non-`systemOnly` ones to R1. **The normal way to ship a permission** (AGENTS.md §5) — run it after adding the rows to `lib/codeOwnedCatalog.ts` and `src/shared/lib/constants/permissions.ts`. |
+| `pnpm seed:apply-backup-config` | Creates the `BackupConfig` singleton (id=1, daily 10 PM IST). **The only thing that creates it** — it is in neither bootstrap nor the personal snapshot, so a fresh install has no backup schedule until this runs. |
+| `pnpm seed:apply-voucher-series-counters` | Gives every `VoucherSeries` its counter-1 row in `VoucherSeriesCounter`, carrying the legacy `nextSeq` / `fyStartYear` across. Needed once per DB after the 2026-09-05 per-counter numbering change. |
+| `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names, and strips junk name prefixes. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import. |
+
+> These are the only appliers left. A long tail of one-shot `apply-*` / `migrate-*`
+> scripts — spent patches for schema shapes that no longer exist — was deleted; what
+> they changed is recorded in `bootstrap-seed.ts` and `PROJECT_BRAIN.md`, which is where
+> a future reader should look. **Do not add a new one-shot script here unless it will be
+> run more than once**; a targeted change that ships with a schema change belongs in
+> `bootstrap-seed.ts` plus a note in the commit.
 
 ## Cleaner — return to bootstrap state
 
@@ -199,7 +214,7 @@ pnpm seed:hard-clean
 
 - All transactions: vouchers, journal entries, invoices, payments, allocations, audits
 - All inventory data: stock-ledger, vouchers, products, **brands, categories, product groups** (trade-specific helper data)
-- All attribute masters (InvAttributeMaster — seeded by dummy-shop)
+- All attribute masters (InvAttributeMaster — added via Configure → Attribute masters)
 - All shop orders, repair tickets, CRM leads, social posts, chat messages
 - All non-admin Users (only `admin@networkservice.in` survives)
 - All Persons / Companies / Phones / Emails
@@ -219,7 +234,8 @@ pnpm seed:hard-clean
 
 > **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.
 
-After cleaning, repopulate demo data with `pnpm seed:dummy-all`.
+After cleaning, restore the trade masters with `pnpm seed:helper-all`. There is no demo
+data to repopulate — contacts and products are re-entered through the UI or the CSV importers.
 
 ## Narrower cleaner
 
@@ -252,44 +268,45 @@ The shared transaction table list and the purge steps live in **`lib/purgeDemo.t
 
 > **Products are removed with `DELETE`, never `TRUNCATE … CASCADE`.** `Coupon.freeProductId` / `.buyProductId` are `onDelete: SetNull`, but Postgres `TRUNCATE … CASCADE` cascades on FK *existence*, ignoring the `onDelete` action — it would truncate the whole `Coupon` table. A `DELETE` fires the SET NULL instead, so coupons survive with their product links blanked.
 
-Repopulate with `pnpm seed:dummy-customers` and `pnpm seed:dummy-shop`.
+Re-enter contacts and products through the UI or the customer / product CSV importers.
 
-## Fixture data (`prisma/seeds/data/`)
-
-Pure data — TS objects exported as constants, no DB or runtime logic. Each file is consumed by exactly one dummy seed script.
+## `prisma/seeds/data/`
 
 | File | Consumed by |
 |---|---|
-| `data/demoCatalogSeed.ts` | `dummy-shop.ts` |
+| `data/personal.local.json` | `personal-bootstrap.ts` (written by `export-personal.ts`) |
 
-Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rather than being inlined into the dummy-* script.
+This folder is for seed **input**, not for scratch data. Keep it to files a seed actually
+reads — a stray 827 KB spreadsheet that nothing imported lived here for months. If a new
+seed needs a hardcoded list, put it here as a `.ts` constant rather than inlining it into
+the script, and add the row above.
 
 ## Update rules — when to touch what
 
 | Change | Update |
 |---|---|
-| Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` AND any `dummy-*.ts` that writes to the table — same commit as the schema change |
+| Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` — same commit as the schema change |
 | Add a new **permission** | `lib/codeOwnedCatalog.ts` (definition — both bootstraps import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply to the DB with `pnpm seed:apply-permissions`, not a full seed. |
 | Add a new role / pipeline / status / worker | `bootstrap-seed.ts` (generic) + `data/personal.local.json` (our config) |
 | Add a new account group or default GL ledger | `bootstrap-seed.ts` |
 | Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |
-| Add a new demo user / customer / product type | the relevant `dummy-*.ts` |
 | Add a new fixture data file | `prisma/seeds/data/<name>.ts`; document the consumer here |
-| Add a new dummy script | wire into `package.json` `scripts` and into `seed:dummy-all` |
-| Hard-clean must remove a new dummy table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
-| Data moves from a dummy seed into bootstrap | **remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES`** in `hard-clean.ts` — bootstrap data must survive a hard-clean |
+| Hard-clean must remove a new non-bootstrap table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
+| Data moves into bootstrap | **remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES`** in `hard-clean.ts` — bootstrap data must survive a hard-clean |
 | Add a config table (settings / master / org / RBAC / workflow / POS) | add it to `lib/personalSnapshot.ts` (`exportPersonal` + `importPersonal`) so the personal snapshot stays complete |
 
-> **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` (production) and the matching `dummy-*.ts` (dev) in the same commit. The dummy scripts are the canonical demo for that schema; if they break after a schema change, future agents have no working reference.
+> **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` in the same commit. It is now the single seed that describes the schema — if it drifts, a new install is broken and nobody finds out until go-live.
 
-## Demo logins (after `seed:dummy-users`)
+## The admin login
 
 | Email | Role | Password |
 |---|---|---|
-| `admin@networkservice.in` | R1 Admin (seeded by **bootstrap**, not dummy) | `admin123` |
-| `tech@networkservice.in` | R2 Technician | `tech123` |
-| `front@networkservice.in` | R3 Front Desk | `front123` |
-| `des@networkservice.in` | R4 Despatch | `des123` |
+| `admin@networkservice.in` | R1 Admin (seeded by **bootstrap**) | `admin123` |
+
+Staff logins come from `data/personal.local.json` via `pnpm prisma db seed`. A user the
+overlay *creates* gets the default password `changeme123` (reported in the run summary) —
+change it after seeding. The old `tech@` / `front@` / `des@` demo logins are gone with the
+`dummy-users` seed.
 
 ## Schema invariants enforced by seeds
 

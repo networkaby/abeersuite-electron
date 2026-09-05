@@ -138,14 +138,17 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-permissions` | Applies the `ADDITIONS` permission list | yes |
-| `pnpm seed:apply-*` (delivery-methods, help-pipeline, status-entered-at, credit-card-group, account-groups, workgroup-name) | Small targeted idempotent fixes | yes |
+| `pnpm seed:apply-backup-config` | Creates the `BackupConfig` singleton — the only thing that does | yes |
+| `pnpm seed:apply-voucher-series-counters` | Gives every voucher series its counter-1 row | yes |
+| `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
 | `pnpm seed:helper-brands` / `-inventory` / `-roles` | Trade master data | demo |
-| `pnpm seed:dummy-*` (users, org-rich, shop, customers, vouchers, tasks, deals) | Individual dummy data sets | demo only |
-| `pnpm seed:dummy-all` | All dummy seeds in order, then `seed:check-docs` | demo only |
+| `pnpm seed:helper-all` | All three helpers in order, then `seed:check-docs` | demo |
 | `pnpm seed:purge-demo` | `purge-demo-contacts` + `purge-demo-products` | demo only |
-| `pnpm seed:purge-vouchers` | Removes dummy vouchers | demo only |
-| `pnpm seed:hard-clean` | Removes dummy/helper data only | demo only |
+| `pnpm seed:purge-vouchers` | Removes vouchers | demo only |
+| `pnpm seed:hard-clean` | Removes everything bootstrap does not seed | demo only |
 | `pnpm seed:recompute-balances` | Recomputes account balances | yes |
+
+> **No `seed:dummy-*` any more.** Those scripts were deleted — see `docs/seeds.md`.
 
 ### 2.5 Tests and one-off utilities
 
@@ -194,8 +197,11 @@ The `--prepackaged` part is the important design choice: it publishes the **exac
 ### `pnpm precommit`
 `check-doc-sync --strict` → `check-nav-icons` → `gen-sync-registry --check` → `gen-local-schema --check` → `check-counter-mode vercel` → `check-counter-mode counter` → `check-guard-lint`
 
-### `pnpm seed:dummy-all`
-`dummy-customers` → `helper-roles` → `dummy-users` → `helper-brands` → `helper-inventory` → `dummy-shop` → `dummy-vouchers` → `dummy-tasks` → `dummy-deals` → `seed:check-docs`
+### `pnpm seed:helper-all`
+`helper-roles` → `helper-brands` → `helper-inventory` → `seed:check-docs`
+
+Roles run first: brands and inventory masters do not depend on them, but a later
+department-pool change would, and the order costs nothing.
 
 ### `pnpm seed:purge-demo`
 `seed:purge-demo-contacts` → `seed:purge-demo-products`
@@ -342,7 +348,7 @@ It is not disorganisation. Four separate causes stack up:
 
 1. **One source tree, four products.** The same `src/` builds the Vercel public site, the Vercel office app, the desktop office build, and the desktop counter. Every variant needs its own build wrapper — that is `strip-build`, `counter-build`, `electron-build`, `generate-counter-env`.
 2. **The counter has a local database.** A replica means a table registry, a DDL generator, and drift checks for both — four commands (`sync:tables`, `sync:tables:check`, `db:local-schema`, `db:local-schema:check`) that a plain web app simply does not have.
-3. **The seed layer is split by ownership on purpose.** Code-owned, generic-demo, trade-helper, personal-real, dummy, purge — six categories, and each needed its own entry point so a small change never forces a full reset.
+3. **The seed layer is split by ownership on purpose.** Code-owned, generic-demo, trade-helper, personal-real, purge — five categories, and each needed its own entry point so a small change never forces a full reset. (A sixth, `dummy`, was deleted in 2026-09 — demo data that nobody ran.)
 4. **Past bugs became permanent guards.** `verify:package`, `check:counter-mode`, `check:guard-lint`, `check:nav-icons` all exist because something shipped broken once. They look like clutter; they are the reason the same thing has not shipped twice.
 
 **The honest fix is not fewer scripts — it is fewer scripts you have to *remember*.** That is already true today: `precommit` hides seven, `electron:release` hides ten. Realistically you type six commands (§1) and the chains do the rest.
@@ -357,7 +363,7 @@ It is not disorganisation. Four separate causes stack up:
 
 ### 7.2 Combined (they run other commands)
 
-`build` · `electron:build` · `electron:pack` · `electron:dist` · `electron:release` · `precommit` · `seed:dummy-all` · `seed:purge-demo` — all expanded in §3.
+`build` · `electron:build` · `electron:pack` · `electron:dist` · `electron:release` · `precommit` · `seed:helper-all` · `seed:purge-demo` — all expanded in §3.
 
 ### 7.3 Run once per machine
 
@@ -373,28 +379,33 @@ It is not disorganisation. Four separate causes stack up:
 - `seed:fix-docs` — only after `seed:check-docs` complains
 - `sync:tables`, `db:local-schema` — only after a schema change
 - `test:e2e:ui`, `test:e2e:report` — debugging aids
-- All `seed:dummy-*` and `seed:purge-*` — demo DB only
+- All `seed:purge-*` — demo DB only
 - `reconcile:shop-orders`, `validate:account-linked-flow` — data repair, not a workflow step
 
-### 7.5 Spent — keep the file, almost never run it
+### 7.5 Spent scripts — deleted, not kept
 
-These are one-shot migrations already applied everywhere. Keep them (they are idempotent and they document what changed), but they are not part of any journey.
+This section used to list six one-shot appliers as "keep the file, almost never run it".
+**That was the wrong call and they are now deleted**, along with seven `migrate-*` scripts,
+two duplicated voucher-series appliers, a debug scratchpad, all seven `dummy-*` seeds, and
+an 827 KB spreadsheet in `prisma/seeds/data/` that nothing read. `prisma/seeds/` went from
+41 files to 15.
 
-| Command | Last touched |
-| --- | --- |
-| `seed:apply-delivery-methods` | 2026-07-22 |
-| `seed:apply-help-pipeline` | 2026-07-24 |
-| `seed:apply-status-entered-at` | 2026-07-24 |
-| `seed:apply-credit-card-group` | 2026-07-29 |
-| `seed:apply-account-groups` | 2026-07-29 |
-| `seed:apply-workgroup-name` | 2026-07-30 |
+A spent patch is not documentation. What changed is recorded in `bootstrap-seed.ts` (the
+data) and `PROJECT_BRAIN.md` (the reasoning); a dead script alongside them only raises the
+question "should I run this?" every time somebody reads the folder. Git history keeps them
+if a body is ever needed.
 
-`seed:apply-permissions` is **not** in this list — it is live, and required whenever `ADDITIONS` changes.
+The rule going forward: **a script earns a place in `prisma/seeds/` only if it will be run
+more than once.** A one-time fix that ships with a schema change goes into
+`bootstrap-seed.ts` plus a line in the commit message — not into a new file.
 
-**Loose ends worth cleaning (not done in this doc):**
+Still live and genuinely re-runnable: `seed:apply-permissions` (whenever `ADDITIONS`
+changes), `seed:apply-backup-config`, `seed:apply-voucher-series-counters`,
+`seed:apply-taxonomy`.
 
-- `prisma/seeds/apply-taxonomy.ts` and `apply-test-shop-products.ts` exist but have **no `pnpm` script** — either add one or fold them in.
-- `scripts/` still holds obvious throwaways: `tmp-check-apportioned-vouchers.ts`, `tmp-check-unit-cols.ts`, `inspect-call-raw.ts`, `survey-call-keys.ts`, `test-tally-date.ts`, `drop-rguest.sql`.
+**Loose end still worth cleaning (not done here):** `scripts/` holds obvious throwaways —
+`tmp-check-apportioned-vouchers.ts`, `tmp-check-unit-cols.ts`, `inspect-call-raw.ts`,
+`survey-call-keys.ts`, `test-tally-date.ts`, `drop-rguest.sql`.
 
 ### 7.6 New in this repo — not in the webapp
 

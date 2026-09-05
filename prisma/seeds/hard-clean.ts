@@ -9,7 +9,7 @@
 //   • All party-linked Account rows (customer/company personal ledgers)
 //   • All InvProduct catalog + InvCategory/Group/Brand (trade-specific
 //     reference data — seeded by helper-inventory-masters.ts, not bootstrap)
-//   • InvAttributeMaster rows (category-specific attrs seeded by dummy-shop)
+//   • InvAttributeMaster rows (added via Configure → Attribute masters)
 //   • ServiceCenter, PortalCredentials
 //
 // Preserves (everything bootstrap-seed.ts wrote, plus user-set config):
@@ -222,7 +222,7 @@ async function main(): Promise<void> {
     console.log(`  users=${r.users}  roles=${r.roles}  account-groups=${r.groups}  accounts=${r.accounts}  pipelines=${r.pipelines}`);
     console.log(`  products=${r.products}  units=${r.units}  warranty-terms=${r.warranty}`);
     console.log("\nDone. DB matches bootstrap-seed.ts state.");
-    console.log("Run `pnpm seed:dummy-all` to repopulate demo data.\n");
+    console.log("Run `pnpm seed:helper-all` to restore the trade masters (roles, brands, categories).\n");
 
     await pool.end();
 }
