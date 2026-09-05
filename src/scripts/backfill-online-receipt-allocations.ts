@@ -136,7 +136,8 @@ async function main(): Promise<void> {
         const reference = receipt.voucherNo ?? `RCPT-${receiptSpineId}`;
 
         if (!existing) {
-            if (correct <= EPS) continue;             // nothing to apply
+            // A zero-value receipt with no allocation is already correct, not missing.
+            if (correct <= EPS) { rows.push({ ...base, verdict: "OK", correct, found: null }); continue; }
             rows.push({ ...base, verdict: "MISSING", correct, found: null });
             if (FIX) {
                 await prisma.voucherAllocation.create({
