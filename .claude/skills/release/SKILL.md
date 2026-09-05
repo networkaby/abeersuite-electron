@@ -109,6 +109,10 @@ One command owns all of this — never do any part of it by hand:
 
 > Please run `dist-app/win-unpacked/AbeerSuite.exe` and confirm login, one local read, and one sync round trip.
 
+Best done on a **clean Windows profile or a VM** — no repo, no pnpm store, no PostgreSQL
+installed. Every packaging blocker so far came from the packaged environment differing
+from the dev tree, so a pass on a dev machine proves less than it looks.
+
 ### 7. Push the tag to `production` too
 
 ```bash
