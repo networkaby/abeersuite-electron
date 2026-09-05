@@ -25,7 +25,6 @@
     "reconcile:shop-orders": "tsx src/scripts/reconcile-shop-order-accounts.ts",
     "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts",
     "seed:helper-brands": "tsx prisma/seeds/helper-brands.ts",
-    "seed:helper-roles": "tsx prisma/seeds/helper-roles.ts",
     "seed:helper-all": "pnpm seed:helper-brands && pnpm seed:check-docs",
     "seed:generic": "tsx prisma/seeds/bootstrap-seed.ts",
     "seed:personal:capture": "tsx prisma/seeds/export-personal.ts",

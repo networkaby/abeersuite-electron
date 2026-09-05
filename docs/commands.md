@@ -197,10 +197,12 @@ The `--prepackaged` part is the important design choice: it publishes the **exac
 ### `pnpm seed:helper-all`
 `helper-brands` → `seed:check-docs`
 
-Only one helper is left in the chain. `helper-roles` was dropped from it because its
-`R2`/`R3` collide with our real roles, and `helper-inventory-masters` was deleted
-outright — it seeded a rival taxonomy that shared exactly one name with ours. Our
-categories and product groups now come from the personal snapshot; see
+`helper-brands` is the only helper left. The other two were deleted for the same
+reason — each described a **different business using our ids**. `helper-roles`
+upserted `R2` / `R3` as "Role-Service Engineer" / "Role-Counter / Cashier" in other
+departments and rewrote their grants every run; `helper-inventory-masters` seeded a
+rival taxonomy sharing exactly one name with ours. Roles, grants, department pools,
+categories and product groups all come from the personal snapshot now; see
 `docs/seeds.md`.
 
 ### `pnpm seed:purge-demo`

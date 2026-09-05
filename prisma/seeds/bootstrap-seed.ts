@@ -90,11 +90,14 @@ const prisma = new PrismaClient({ adapter });
 // receive a role directly — `User.role` is null until a Position appointment
 // promotes them. See `PositionRole` and `authorizeStaff.ts`.
 //
-// Bootstrap seeds ONLY R1 (Admin) — the one role universal to every trade. All
-// other roles (Service Engineer, Cashier, Accountant, …) are trade-specific and
-// vary per business, so they are NOT seeded here. A starter set lives in the
-// `helper-roles.ts` seed (`pnpm seed:helper-roles`), and admins create or edit
-// the rest from the Role Matrix UI as the business needs.
+// The three roles this business runs on, captured from the live DB. Their GRANTS
+// are not seeded here — those are config and live in the personal snapshot; this
+// only guarantees the rows exist with the right department homes. Any further role
+// is created from the Role Matrix UI.
+//
+// There is no starter-role helper any more: helper-roles.ts seeded R2 as
+// "Role-Service Engineer" and R3 as "Role-Counter / Cashier" in other departments
+// and rewrote their grants on every run, so it would have renamed two live roles.
 const ROLES = [
     // R1 is the cross-cutting admin role — homed in the all-access department
     // (DEP-ADMIN) so the Role Matrix offers it the full permission list.
@@ -113,8 +116,8 @@ const PERMISSIONS = PERMISSION_CATALOG;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R1 — Owner / Admin: every permission except system-only sentinels.
-    // This is the ONLY bootstrap role. Trade-specific starter roles live in
-    // `helper-roles.ts` (`pnpm seed:helper-roles`); admins build the rest.
+    // Only R1's grants are seeded. R2 / R3 exist as rows (see ROLES above) but
+    // their grants are the owner's config and come from the personal snapshot.
     R1: (PERMISSIONS as readonly { id: string; systemOnly?: boolean }[])
         .filter((p) => !p.systemOnly)
         .map((p) => p.id),

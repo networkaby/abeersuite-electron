@@ -8,7 +8,6 @@ prisma/seeds/
 ├─ export-personal.ts           PERSONAL — reverse-create YOUR config snapshot from the live DB
 ├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
-├─ helper-roles.ts              ⛔ DO NOT RUN — new-client starter roles; its R2/R3 collide with ours
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
@@ -84,12 +83,11 @@ a re-run never overwrites tuned settings. It seeds:
 > automation layer staff had already abandoned. The 5 **work groups** are real and
 > stay. If workers are adopted later, build them in the UI and mirror them back.
 
-> ⛔ **Do not run `pnpm seed:helper-roles` on our install.** It is a new-client
-> starter set that upserts `R2` as "Role-Service Engineer" and `R3` as
-> "Role-Counter / Cashier" and rewrites their grants — it would rename two live
-> roles, move them to the wrong departments, and replace permissions real staff
-> depend on. It has been removed from `pnpm seed:helper-all` for that reason and is
-> kept only as raw material for the public build.
+> **`helper-roles.ts` is deleted.** It was a new-client starter set that upserted
+> `R2` as "Role-Service Engineer" and `R3` as "Role-Counter / Cashier" in other
+> departments, and rewrote their grants on every run — so running it would have
+> renamed two live roles and replaced permissions real staff depend on. Bootstrap
+> now carries the real `R2` / `R3` rows and the snapshot carries their grants.
 
 ## Personal bootstrap — self-complete restore of YOUR install
 
@@ -213,28 +211,28 @@ and then curated by hand, so it is **config, not a generic master**. It lives in
 > Because these live only in the snapshot and not in `bootstrap-seed.ts`, they are
 > one more reason `personal-bootstrap` cannot retire yet.
 
-## ⛔ `helper-roles.ts` — quarantined, do not run
+## Roles — where they come from
 
-`helper-roles.ts` creates `R2`–`R7` (Service Engineer, Counter/Cashier, Stores &
-Despatch, Branch Manager, Accountant, Sales Executive) plus their grants, for a
-brand-new client of this trade.
+**`helper-roles.ts` is deleted.** It created `R2`–`R7` (Service Engineer,
+Counter/Cashier, Stores & Despatch, Branch Manager, Accountant, Sales Executive)
+for a brand-new client of this trade — and it was unsafe here, for the same reason
+`helper-inventory-masters` was: it described a different business using **our ids**.
 
-**It is unsafe on our install.** We run `R2` = **Branch Manager** (`DEP-OP`) and
-`R3` = **Counter Operator** (`DEP-SALES`), both seeded by `bootstrap-seed.ts` from
-the live DB. This helper upserts those same two ids with different labels and
-different departments, and **rewrites their grants on every run** — so running it
-would rename two live roles, re-home them, and replace the permissions real staff
-depend on.
+We run `R2` = **Branch Manager** (`DEP-OP`) and `R3` = **Counter Operator**
+(`DEP-SALES`). The helper upserted those same two ids with different labels, in
+different departments, and **rewrote their grants on every run** — so a single run
+would have renamed two live roles, re-homed them, and replaced the permissions real
+staff depend on.
 
-It has been removed from `pnpm seed:helper-all`, and the `pnpm seed:helper-roles`
-script is retained only so the file stays reachable as raw material for the public
-build. Before it is used again it needs its ids moved off `R2`/`R3`, or a guard
-that refuses to touch a role that already exists.
+| Layer | Comes from |
+|---|---|
+| The `R1` / `R2` / `R3` **rows** and their department homes | `bootstrap-seed.ts` (captured from live) |
+| `R1`'s grants | `bootstrap-seed.ts` — every non-`systemOnly` permission |
+| `R2` / `R3` grants, and **department permission pools** (241 rows) | `data/personal.local.json`, via `pnpm prisma db seed` |
 
-It also seeds **department permission pools** (`DepartmentPermission`) — each pool
-the union of its roles' permissions, so a role can never grant outside its
-department's pool (all-access `DEP-ADMIN` carries no rows; its pool is
-everything). Our real pools are in the personal snapshot (241 rows), not here.
+Department pools matter because a role can never grant outside its department's
+pool — except the all-access `DEP-ADMIN`, which carries no rows because its pool is
+everything.
 
 ## Targeted appliers — a small change without a full seed
 
@@ -340,8 +338,8 @@ pnpm seed:hard-clean
 - All party-linked Account rows
 - ServiceCenter, ShopCoupon, PortalCredentials
 - Payment gateways (`payment_gateways`, Settings → Payment Methods — operator config, bootstrap seeds none). Cleared with an explicit `DELETE` (not a `TRUNCATE … CASCADE`) so the `ON DELETE SET NULL` on `PosCounterPaymentAccount.gatewayId` fires: counter payment rails are **preserved**, just unlinked from the deleted gateways.
-- **Non-system roles** (every `Role` with `isSystem: false` — the `helper-roles.ts` starter set and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. Re-run `pnpm seed:helper-roles` to restore the starter set. `R1` (the only `isSystem` role) survives.
-- **Department permission pools** (`DepartmentPermission`) — all rows are helper-seeded (bootstrap seeds none; `DEP-ADMIN` is all-access with no rows), so they are cleared back to the bootstrap state. Department rows themselves are bootstrap-seeded and survive. Re-run `pnpm seed:helper-roles` to restore the pools.
+- **Non-system roles** (every `Role` with `isSystem: false` — our `R2` Branch Manager, `R3` Counter Operator, and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. `R1` (the only `isSystem` role) survives. Restore with `pnpm prisma db seed`: bootstrap re-creates the `R2` / `R3` rows, the snapshot restores their grants.
+- **Department permission pools** (`DepartmentPermission`) — config, not bootstrap (bootstrap seeds none; `DEP-ADMIN` is all-access with no rows), so they are cleared. Department rows themselves are bootstrap-seeded and survive. `pnpm prisma db seed` restores our 241 pool rows from the snapshot.
 
 **Preserves** everything bootstrap-seed wrote, plus user-set config:
 - `R1` role + Permissions + R1's RolePermissions, Pipelines, Statuses, Branches, Departments
@@ -354,9 +352,9 @@ pnpm seed:hard-clean
 > **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.
 
 After cleaning, restore with `pnpm seed:helper-brands` (the brand master) and
-`pnpm prisma db seed` (categories, product groups, and the rest of the config).
-**Not** `helper-roles` — see above. There is no demo data to repopulate; contacts
-and products are re-entered through the UI or the CSV importers.
+`pnpm prisma db seed` (roles, grants, department pools, categories, product groups,
+and the rest of the config). There is no demo data to repopulate; contacts and
+products are re-entered through the UI or the CSV importers.
 
 ## Narrower cleaner
 

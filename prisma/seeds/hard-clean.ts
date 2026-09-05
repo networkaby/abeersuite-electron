@@ -15,8 +15,9 @@
 // Preserves (everything bootstrap-seed.ts wrote, plus user-set config):
 //   • Admin user (admin@networkservice.in)
 //   • R1 (Admin) role, all Permissions, R1's RolePermissions
-//     (NON-system roles — the helper-roles.ts starter set + any admin-created
-//     roles — are wiped here; re-run `pnpm seed:helper-roles` to restore them)
+//     (NON-system roles — our R2 Branch Manager, R3 Counter Operator, and any
+//     admin-created role — are wiped here. Restore with `pnpm prisma db seed`:
+//     bootstrap re-creates the R2/R3 rows, the snapshot restores their grants.)
 //   • Branches, Departments, UserPositions
 //   • Pipelines, TicketStatus, TicketWorker, transitions
 //   • AccountGroup tree + pure-GL Account chart
@@ -156,10 +157,9 @@ async function main(): Promise<void> {
     console.log(`      ✓ Deleted ${u.rowCount} user(s); ${ADMIN_EMAIL} preserved\n`);
 
     // ── Phase 4b — Reset roles to bootstrap (R1 only) ──────────────────
-    // Bootstrap seeds only R1 (isSystem=true). Every other role — the
-    // helper-roles.ts starter set and any admin-created role — is non-system
-    // and trade-specific, so it's wiped here. Unlink positions first because
-    // PositionRole → Role is a restrict FK (no cascade).
+    // R1 is the only isSystem role. Every other role — our R2 / R3 and anything
+    // an admin has built — is non-system and wiped here. Unlink positions first
+    // because PositionRole → Role is a restrict FK (no cascade).
     console.log("[4b] Resetting roles to bootstrap (R1 only)");
     await pool.query(
         `DELETE FROM "PositionRole"
@@ -169,9 +169,10 @@ async function main(): Promise<void> {
         `DELETE FROM "RolePermission" WHERE "roleId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
     );
     const delRoles = await pool.query(`DELETE FROM "Role" WHERE "isSystem" = false`);
-    // Department permission pools are seeded by helper-roles.ts (bootstrap seeds
-    // none — DEP-ADMIN is all-access with no rows), so wipe them back to the
-    // bootstrap state. Department rows themselves are bootstrap-seeded → preserved.
+    // Department permission pools are config (241 rows in the personal snapshot);
+    // bootstrap seeds none, since DEP-ADMIN is all-access and carries no rows. Wipe
+    // them and let `pnpm prisma db seed` put ours back. Department rows themselves
+    // are bootstrap-seeded → preserved.
     const delPool = await pool.query(`DELETE FROM "DepartmentPermission"`);
     console.log(`      ✓ Deleted ${delRoles.rowCount} non-system role(s); R1 preserved · ${delPool.rowCount} department-pool entries cleared\n`);
 
