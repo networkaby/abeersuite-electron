@@ -234,7 +234,30 @@ These do just the one job.
 |---|---|
 | `pnpm seed:apply-permissions` | Upserts the `ADDITIONS` permission list and grants the non-`systemOnly` ones to R1. **The normal way to ship a permission** (AGENTS.md §5) — run it after adding the rows to `lib/codeOwnedCatalog.ts` and `src/shared/lib/constants/permissions.ts`. |
 | `pnpm seed:apply-voucher-series-counters` | Gives every `VoucherSeries` its counter-1 row in `VoucherSeriesCounter`, carrying the legacy `nextSeq` / `fyStartYear` across. Needed once per DB after the 2026-09-05 per-counter numbering change. |
-| `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names, and strips junk name prefixes. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import. |
+| `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
+
+### `apply-taxonomy` and the group tree
+
+It is the only thing that classifies **products** — `bootstrap-seed.ts` and the
+personal snapshot both exclude products entirely, so nothing else does this job.
+
+**Brands are read live from `InvBrand`.** There is no brand list in the script. To
+match more products, add the brand in the app (or `helper-brands.ts`) and re-run.
+
+**The group tree is not the script's to reshape.** Its hardcoded `TREE` is a sketch
+and is already behind the live tree (78 groups vs 100 live), so it gets no authority
+over a structure the owner maintains by hand:
+
+- a group the script **creates** is filed under **`auto-created-group`**, flat —
+  never straight into the live tree. Review it in Settings, drag it where it
+  belongs, delete what you don't want. Parked there it inherits no HSN/GST, which
+  is deliberate: it reads as unconfigured until a human files it.
+- an **existing** group sitting outside its `TREE` position is reported and **left
+  alone**. It used to be silently re-parented, which rearranged a live catalogue on
+  the strength of a stale list. `--adopt-strays` opts back in for one run.
+
+The quarantine parent is created lazily — a run that creates nothing leaves no
+empty group behind.
 
 > These are the only appliers left. A long tail of one-shot `apply-*` / `migrate-*`
 > scripts — spent patches for schema shapes that no longer exist — was deleted; what

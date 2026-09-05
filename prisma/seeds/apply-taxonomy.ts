@@ -21,8 +21,22 @@
  * NULL. A product that already has a group or brand is never touched, so manual
  * corrections survive re-runs.
  *
+ * THE GROUP TREE IS NOT THIS SCRIPT'S TO RESHAPE. `TREE` below is a hardcoded
+ * sketch and it is already behind the live tree (78 groups here, 100 live), so it
+ * gets no authority over a structure the owner maintains by hand:
+ *
+ *   • a group this script CREATES is filed under "auto-created-group" (AUTO_PARENT),
+ *     flat, never straight into the live tree — review and place it yourself;
+ *   • an EXISTING group sitting outside its TREE position is REPORTED AND LEFT
+ *     ALONE. It used to be silently re-parented, which rearranged a live catalogue
+ *     on the strength of a stale list. `--adopt-strays` opts back in per run.
+ *
+ * BRANDS ARE READ LIVE from InvBrand — there is no brand list in this file. To
+ * match more products, add the brand in the app (or helper-brands.ts) and re-run.
+ *
  * Run: npx tsx prisma/seeds/apply-taxonomy.ts --dry   (preview, writes nothing)
  *      npx tsx prisma/seeds/apply-taxonomy.ts          (apply)
+ *      npx tsx prisma/seeds/apply-taxonomy.ts --adopt-strays   (also move strays)
  */
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -37,6 +51,24 @@ const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const DRY = process.argv.includes("--dry");
+
+/**
+ * Name of the quarantine parent every AUTO-CREATED group is filed under.
+ *
+ * The group tree is the owner's, built by hand in the UI, and this script's `TREE`
+ * is only a rough picture of it — it currently knows 78 groups where the live tree
+ * has 100. Letting a stale hardcoded list insert groups directly into that tree is
+ * how a catalogue quietly grows branches nobody asked for.
+ *
+ * So anything this script creates lands HERE, flat, in one obvious place: review it
+ * in Settings, drag what you want into the real tree, delete the rest. A group
+ * parked here inherits no HSN/GST (nothing above it carries one), which is the
+ * point — it reads as unconfigured until a human files it.
+ */
+const AUTO_PARENT = "auto-created-group";
+
+/** `--adopt-strays` re-enables moving EXISTING groups into the TREE's positions. */
+const ADOPT_STRAYS = process.argv.includes("--adopt-strays");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TARGET TREE. Indentation = depth. Existing groups are matched by (name,parent)
@@ -255,6 +287,21 @@ async function ensureTree(): Promise<Map<string, number>> {
     const ids = new Map<string, number>();
     let created = 0;
     const moved: string[] = [];
+    const strays: string[] = [];
+    const createdNames: string[] = [];
+
+    // Resolved lazily — a run that creates nothing must not leave an empty
+    // quarantine group behind on an otherwise untouched install.
+    let autoParentId: number | null = null;
+    const quarantine = async (): Promise<number | null> => {
+        if (autoParentId !== null) return autoParentId;
+        const found = await prisma.invProductGroup.findUnique({ where: { name: AUTO_PARENT } });
+        if (found) { autoParentId = found.id; return autoParentId; }
+        if (DRY) return null;   // preview: don't mint the parent either
+        const row = await prisma.invProductGroup.create({ data: { name: AUTO_PARENT, parentId: null, isActive: true } });
+        autoParentId = row.id;
+        return autoParentId;
+    };
 
     for (const path of parseTree()) {
         const parts = path.split(" > ");
@@ -270,26 +317,46 @@ async function ensureTree(): Promise<Map<string, number>> {
 
         if (existing) {
             ids.set(path, existing.id);
-            // Same name, wrong place: adopt it into the intended position rather
-            // than leaving a stray root. Uniqueness guarantees this is the only
-            // group by that name, so re-parenting is unambiguous.
+            // An existing group sitting somewhere other than where TREE expects it.
+            //
+            // This used to be MOVED automatically ("adopt the stray"). It no longer
+            // is. TREE is a stale sketch of a tree the owner maintains by hand, so
+            // "wrong place" usually means TREE is out of date, not the database —
+            // and silently re-parenting a live group rearranges a catalogue nobody
+            // asked to have rearranged. Reported instead; pass --adopt-strays to
+            // opt back in for a run where you have checked the list first.
             if (existing.parentId !== parentId) {
-                moved.push(`${name} (parent ${existing.parentId ?? "root"} → ${parentId ?? "root"})`);
-                if (!DRY) await prisma.invProductGroup.update({ where: { id: existing.id }, data: { parentId } });
+                strays.push(`${name} (live parent ${existing.parentId ?? "root"} ≠ TREE parent ${parentId ?? "root"})`);
+                if (ADOPT_STRAYS) {
+                    moved.push(`${name} (parent ${existing.parentId ?? "root"} → ${parentId ?? "root"})`);
+                    if (!DRY) await prisma.invProductGroup.update({ where: { id: existing.id }, data: { parentId } });
+                }
             }
             continue;
         }
 
+        // NEW group → quarantine, never straight into the live tree. See AUTO_PARENT.
+        createdNames.push(name);
         if (DRY) { ids.set(path, -1 - created); created++; continue; }
-        const row = await prisma.invProductGroup.create({ data: { name, parentId, isActive: true } });
+        const row = await prisma.invProductGroup.create({
+            data: { name, parentId: await quarantine(), isActive: true },
+        });
         ids.set(path, row.id);
         created++;
     }
 
     console.log(`  groups: ${ids.size} total, ${created} ${DRY ? "would be created" : "created"}`);
+    if (createdNames.length) {
+        console.log(`  ⚠ ${createdNames.length} group(s) ${DRY ? "would be filed" : "filed"} under "${AUTO_PARENT}" for you to place by hand:`);
+        createdNames.forEach((n) => console.log(`      + ${n}`));
+    }
     if (moved.length) {
-        console.log(`  ⇄ ${moved.length} existing group(s) re-parented into the tree:`);
+        console.log(`  ⇄ ${moved.length} existing group(s) re-parented (--adopt-strays):`);
         moved.forEach((m) => console.log(`      ${m}`));
+    } else if (strays.length) {
+        console.log(`  • ${strays.length} group(s) sit outside their TREE position — LEFT ALONE:`);
+        strays.forEach((m) => console.log(`      ${m}`));
+        console.log(`      (TREE is probably just out of date. Re-run with --adopt-strays only if you want these moved.)`);
     }
     return ids;
 }
