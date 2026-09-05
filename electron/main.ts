@@ -783,7 +783,7 @@ import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
-import { setupAutoUpdater, stopAutoUpdater, getUpdateState, install, checkNow, setCartBusy } from "./updateManager";
+import { setupAutoUpdater, stopAutoUpdater, getUpdateState, install, checkNow, setCartBusy, clearUpdateSplash } from "./updateManager";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
 // See serverManager.ts's warmRoutes() for why this exists: preloadEntriesOnStart
@@ -1269,6 +1269,12 @@ app.whenReady().then(async () => {
             showBootError(result.url);
         }
     }
+
+    // If we got here by way of an update, the splash from the version before this one
+    // is still on top of the till. Take it down now that there is something behind it —
+    // including the boot-error page, which the cashier needs to be able to read.
+    // A no-op on every ordinary start.
+    clearUpdateSplash();
 
     // Counter PCs in tray/background mode can go a long time between a clean quit
     // (which is when persistVisitedRoutes() normally runs) — an abrupt power-off or

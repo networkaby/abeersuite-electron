@@ -42,7 +42,9 @@
  * instead of running the installer, so the fake feed never needs a real installer.
  */
 
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, powerMonitor } from "electron";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -213,9 +215,79 @@ function startSafePoll(): void {
 }
 
 /**
+ * The window a counter sees while the update installs.
+ *
+ * Between `quitAndInstall` and the new version's first screen the app does not exist:
+ * NSIS unpacks ~600 MB and copies it into place with nothing on the display. On a busy
+ * till that blank stretch is indistinguishable from a crash, and somebody power-cycles
+ * the PC in the middle of an install.
+ *
+ * The splash cannot be an Electron window — the binary it would run from is the one
+ * NSIS is overwriting. It is a 24 KB WinForms executable instead (see
+ * scripts/update-splash/), copied to the temp folder first so nothing holds a handle
+ * inside the program folder, and started detached so it outlives this process.
+ *
+ * It closes when SENTINEL_FILE disappears, which the next version does on boot, and
+ * gives up after its own timeout. Both matter: a splash left on top of the till would
+ * be worse than the blank screen it replaces.
+ */
+const SENTINEL_FILE = path.join(os.tmpdir(), "abeersuite-update-in-progress.flag");
+const SPLASH_EXE_NAME = "AbeerSuiteUpdateSplash.exe";
+/** Long enough for a slow counter to unpack, short enough to never look stuck. */
+const SPLASH_TIMEOUT_SECONDS = 900;
+
+function showUpdateSplash(version: string | null): void {
+    if (process.platform !== "win32") return;
+    const source = path.join(process.resourcesPath, SPLASH_EXE_NAME);
+    if (!fs.existsSync(source)) {
+        // Dev runs and any build made before the splash existed.
+        console.log("[Updater] No update splash in resources — installing without one.");
+        return;
+    }
+
+    try {
+        // Copy out of the program folder: that folder is about to be replaced.
+        const staged = path.join(os.tmpdir(), SPLASH_EXE_NAME);
+        fs.copyFileSync(source, staged);
+        fs.writeFileSync(SENTINEL_FILE, String(Date.now()), "utf8");
+
+        const child = spawn(staged, [version ?? "", SENTINEL_FILE, String(SPLASH_TIMEOUT_SECONDS)], {
+            detached: true,
+            stdio: "ignore",
+            windowsHide: false,
+        });
+        child.unref();
+        console.log("[Updater] Update splash started.");
+    } catch (err) {
+        // A missing splash is cosmetic; a blocked update is not. Never rethrow.
+        console.warn("[Updater] Could not start the update splash:", err);
+        clearUpdateSplash();
+    }
+}
+
+/**
+ * Tells a splash left over from the update we just came back from that it can go.
+ * Called once the new version has a window on screen — see electron/main.ts.
+ *
+ * Safe to call on every boot: almost always there is no sentinel to remove.
+ */
+export function clearUpdateSplash(): void {
+    try {
+        fs.rmSync(SENTINEL_FILE, { force: true });
+    } catch (err) {
+        console.warn("[Updater] Could not clear the update splash sentinel:", err);
+    }
+}
+
+/**
  * Runs the downloaded installer silently and relaunches. `isSilent` keeps the NSIS
  * wizard off the screen; `isForceRunAfter` brings the app back — a counter that went
  * down for an update must come back on its own, there may be nobody there to start it.
+ *
+ * Silent is load-bearing, not a preference: electron-builder only auto-relaunches on
+ * the ${Silent} path, and with perMachine:false a visible run would stop on an
+ * "install for me / for all users" chooser and again on a Finish button — a counter
+ * dead until somebody walks over. The splash above is what fills the screen instead.
  */
 export function install(reason: string): void {
     if (state.phase !== "ready") return;
@@ -226,10 +298,13 @@ export function install(reason: string): void {
         console.log("[Updater] UPDATE_DRY_RUN=1 — would run the installer now; staying up.");
         return;
     }
+    showUpdateSplash(state.version);
     try {
         autoUpdater.quitAndInstall(true, true);
     } catch (err) {
         console.error("[Updater] quitAndInstall failed:", err);
+        // The app is staying up after all, so the splash must not.
+        clearUpdateSplash();
         patch({ phase: "ready", error: String(err) });
         startSafePoll();
     }

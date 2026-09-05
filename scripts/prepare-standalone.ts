@@ -41,17 +41,67 @@ const SKIP_EXTENSIONS = new Set([".exe", ".zip"]);
  * means a genuine runtime need only ever has to be un-denied, never silently dropped.
  */
 const STANDALONE_DENYLIST_NAMES = new Set(["prisma", "typescript", "playwright", "playwright-core", "fast-check"]);
-const isStandaloneDenied = (name: string) => STANDALONE_DENYLIST_NAMES.has(name) || name.startsWith("@babel/");
 
-function hoistStandaloneDeps(standaloneDir: string, extraSeeds: string[] = []): void {
+/**
+ * Two more families that reach this tree through `next`'s OPTIONAL dependencies rather
+ * than through anything `server.js` requires. The pnpm store walk picks them up because
+ * it copies whole packages; Next's own tracing never asks for either.
+ *
+ * `@next/swc-*` is the Rust build compiler — 130 MB in a single file, the largest thing
+ * in the installer. Its only server-side reference is `next/dist/server/config.js`,
+ * behind `experimental.useLightningcss`, which we never set; standalone `server.js`
+ * passes `__NEXT_PRIVATE_STANDALONE_CONFIG` and skips that path regardless. Matched by
+ * PREFIX, not by one triple, so a build host on another platform cannot smuggle a
+ * different 100 MB binary in.
+ *
+ * `sharp` / `@img/*` is Next's image optimiser, dead here only while the build keeps
+ * `images.unoptimized` — hence the flag rather than a flat deny (see imagesUnoptimized).
+ * hardware-bridge ships its own copy for QR rendering; that is a separate tree, staged by
+ * prepare-bridge-deps.ts, and nothing here touches it.
+ */
+const isBuildOnlyBinary = (name: string) => name.startsWith("@next/swc-");
+const isImageOptimiser = (name: string) => name === "sharp" || name.startsWith("@img/");
+
+const makeStandaloneDenylist = (dropImageOptimiser: boolean) => (name: string) =>
+    STANDALONE_DENYLIST_NAMES.has(name) ||
+    name.startsWith("@babel/") ||
+    isBuildOnlyBinary(name) ||
+    (dropImageOptimiser && isImageOptimiser(name));
+
+/**
+ * Type declarations and source maps. Never read at runtime, present in nearly every
+ * package, and stripped from BOTH copy paths — the hoist below and the externals copy in
+ * dereferenceServerExternals, which does its own cpSync and would otherwise keep them.
+ */
+const STRIP_SUFFIXES = [".d.ts", ".d.mts", ".map"];
+const isStrippable = (file: string) => STRIP_SUFFIXES.some((suffix) => file.endsWith(suffix));
+
+/**
+ * Does this build still skip Next's image optimiser?
+ *
+ * Read from the BUILT `required-server-files.json` rather than next.config.ts, because
+ * that is the config the packaged server actually runs on. A missing or false flag means
+ * sharp is load-bearing again, so the deny must not fire — fail safe, and say so.
+ */
+function imagesUnoptimized(standaloneDir: string): boolean {
+    try {
+        const file = path.join(standaloneDir, ".next", "required-server-files.json");
+        const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { config?: { images?: { unoptimized?: boolean } } };
+        return parsed.config?.images?.unoptimized === true;
+    } catch {
+        return false;
+    }
+}
+
+function hoistStandaloneDeps(standaloneDir: string, extraSeeds: string[] = [], dropImageOptimiser = false): void {
     const nodeModulesDir = path.join(standaloneDir, "node_modules");
     if (!fs.existsSync(nodeModulesDir)) {
         console.warn("[prepare-standalone] No standalone/node_modules to hoist — skipping.");
         return;
     }
     const count = hoistNodeModules(nodeModulesDir, [nodeModulesDir, ...extraSeeds], {
-        denylist: isStandaloneDenied,
-        stripSuffixes: [".d.ts", ".map"],
+        denylist: makeStandaloneDenylist(dropImageOptimiser),
+        stripSuffixes: STRIP_SUFFIXES,
     });
     console.log(`[prepare-standalone] Hoisted ${count} packages into standalone/node_modules.`);
 }
@@ -115,7 +165,7 @@ function dereferenceServerExternals(standaloneDir: string): string[] {
             dereference: true,
             // Its dependencies come from the flat standalone/node_modules instead:
             // Node's resolution walks up from here and finds them there.
-            filter: (src) => path.basename(src) !== "node_modules",
+            filter: (src) => path.basename(src) !== "node_modules" && !isStrippable(src),
         });
         materialised++;
     }
@@ -126,6 +176,90 @@ function dereferenceServerExternals(standaloneDir: string): string[] {
         );
     }
     return seeds;
+}
+
+/** Every byte under `dir`, for the build log. */
+function dirSizeSync(dir: string): number {
+    let total = 0;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) total += dirSizeSync(full);
+        else if (entry.isFile()) total += fs.statSync(full).size;
+    }
+    return total;
+}
+
+/**
+ * Deletes payload that survives the hoist but is never read on a counter.
+ *
+ * Both items live INSIDE packages we genuinely need, so the package-level denylist
+ * cannot reach them, and `stripSuffixes` is a global unscoped suffix match — wrong tool
+ * for either. This is a scoped pass instead, run after the hoist so it also catches the
+ * second copy that `dereferenceServerExternals` materialises outside the hoister.
+ *
+ *  · Prisma ships a WASM query compiler per database engine, in two size variants and
+ *    two module formats — ~56 MB per copy, and this tree carries two copies. The provider
+ *    is fixed at generate time (src/generated/prisma/internal/class.ts imports
+ *    `query_compiler_fast_bg.postgresql.mjs` by name), so nothing dispatches at runtime
+ *    and the other four engines are unreachable.
+ *  · `next/dist/docs` is 421 markdown files a production server never opens.
+ *
+ * The prune matches by filename, so a Prisma rename could silently take the postgresql
+ * compiler too and every query on every counter would fail. Each runtime folder that had
+ * compilers must therefore still have a postgresql one afterwards, or the build stops.
+ */
+const PRISMA_COMPILER_PREFIX = "query_compiler_";
+const PRISMA_KEEP_PROVIDER = ".postgresql.";
+
+function pruneUnusedPayload(standaloneDir: string): number {
+    let freed = 0;
+
+    // Both trees: the hoisted one, and the externalised one whose package directories
+    // carry a content-hash suffix (@prisma/client-403e33a7f81c97d6).
+    const roots = [path.join(standaloneDir, "node_modules"), path.join(standaloneDir, ".next", "node_modules")];
+
+    for (const root of roots) {
+        const scope = path.join(root, "@prisma");
+        if (!isDirectory(scope)) continue;
+
+        for (const pkg of fs.readdirSync(scope)) {
+            const runtime = path.join(scope, pkg, "runtime");
+            if (!isDirectory(runtime)) continue;
+
+            let sawCompilers = false;
+            let keptPostgres = false;
+            for (const file of fs.readdirSync(runtime)) {
+                if (!file.startsWith(PRISMA_COMPILER_PREFIX)) continue;
+                sawCompilers = true;
+                if (file.includes(PRISMA_KEEP_PROVIDER)) {
+                    keptPostgres = true;
+                    continue;
+                }
+                const full = path.join(runtime, file);
+                freed += fs.statSync(full).size;
+                fs.rmSync(full, { force: true });
+            }
+
+            if (sawCompilers && !keptPostgres) {
+                console.error(
+                    `[prepare-standalone] FATAL: pruned every query compiler out of @prisma/${pkg}/runtime.
+` +
+                    `  Nothing matching "${PRISMA_KEEP_PROVIDER}" was left, so Prisma has probably renamed these
+` +
+                    "  files. Check the names in that folder and update PRISMA_KEEP_PROVIDER before packaging."
+                );
+                process.exit(1);
+            }
+        }
+    }
+
+    const docs = path.join(standaloneDir, "node_modules", "next", "dist", "docs");
+    if (isDirectory(docs)) {
+        freed += dirSizeSync(docs);
+        fs.rmSync(docs, { recursive: true, force: true });
+    }
+
+    return freed;
 }
 
 function copyFolderSync(from: string, to: string): void {
@@ -170,8 +304,16 @@ async function main() {
     console.log("[prepare-standalone] Materialising Next's server-externalised packages...");
     const externalSeeds = dereferenceServerExternals(standaloneDir);
 
+    const dropImageOptimiser = imagesUnoptimized(standaloneDir);
+    if (!dropImageOptimiser) {
+        console.log("[prepare-standalone] images.unoptimized is not set — keeping sharp for Next's image optimiser.");
+    }
+
     console.log("[prepare-standalone] Hoisting pnpm-symlinked dependencies into real directories...");
-    hoistStandaloneDeps(standaloneDir, externalSeeds);
+    hoistStandaloneDeps(standaloneDir, externalSeeds, dropImageOptimiser);
+
+    const freedMb = pruneUnusedPayload(standaloneDir) / (1024 * 1024);
+    console.log(`[prepare-standalone] Pruned ${freedMb.toFixed(1)} MB the counter never reads (unused Prisma engines, Next docs).`);
 
     // `next build` copies the build-machine .env into the standalone output. That file
     // holds production Supabase, payment-gateway and Dropbox credentials, so it must

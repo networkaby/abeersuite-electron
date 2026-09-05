@@ -25,12 +25,15 @@
 /out/
 
 # production
-# `build/` is also electron-builder's buildResources directory. The app icon there must
-# be committed, or an installer built on any other machine falls back to the default
-# Electron icon. Everything else in build/ stays ignored.
+# `build/` is also electron-builder's buildResources directory. The app icon and the
+# installer's own scripts must be committed, or an installer built on any other machine
+# falls back to the default Electron icon and silently loses the install-time setup.
+# Everything else in build/ stays ignored.
 /build/*
 !/build/icon.png
 !/build/installer.nsh
+!/build/counter-setup.ps1
+!/build/counter-teardown.ps1
 
 # misc
 .DS_Store
@@ -200,3 +203,6 @@ hardware-bridge/node_modules/
 hardware-bridge/config.json
 .sync-engine-deps-seed/
 .hardware-bridge-deps-seed/
+
+# Built by scripts/build-update-splash.ts on every electron build.
+resources/AbeerSuiteUpdateSplash.exe

@@ -110,6 +110,7 @@ Everything else in this document is occasional.
 | `pnpm pg:fetch` | Downloads + trims the embedded PostgreSQL into `resources/pgsql` (~80 MB). **Once per build machine**, again on a version bump |
 | `pnpm icon:build` | Regenerates the app icon |
 | `pnpm build:downloader` | Compiles the small C# web-setup stub `AbeerSuite-WebSetup.exe`. It checks for the VC++ 2015-2022 x64 runtime (needed by the embedded PostgreSQL) and downloads it from Microsoft before launching the installer; `build/installer.nsh` repeats the check |
+| `pnpm build:update-splash` | Compiles `resources/AbeerSuiteUpdateSplash.exe`, the window a counter shows while an update installs and the app is gone. Runs automatically as step 7 of `electron:build`; you rarely call it by hand. Shares its csc plumbing with the downloader via `scripts/lib/csc.ts` |
 
 ### 2.3 Guards and generators
 
@@ -176,9 +177,10 @@ Loads `.env.counter` **first** (this is what decides `APP_MODE` and `LANDING_PAG
 4. `pnpm electron:compile`
 5. `scripts/prepare-electron-deps.ts`
 6. `scripts/prepare-bridge-deps.ts`
+7. `scripts/build-update-splash.ts` → writes `resources/AbeerSuiteUpdateSplash.exe`
 
 ### `pnpm electron:pack`
-1. `pnpm electron:build` (all six steps above)
+1. `pnpm electron:build` (all seven steps above)
 2. `electron-builder --dir` → `dist-app/win-unpacked`
 3. `pnpm verify:package`
 

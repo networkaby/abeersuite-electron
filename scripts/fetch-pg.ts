@@ -76,6 +76,52 @@ const TRIM_DIRS = [
 ];
 
 /**
+ * Individual files removed after extraction — `TRIM_DIRS`' counterpart for the strays
+ * that sit loose in `bin/` next to binaries we genuinely run. ~15 MB across 20 files,
+ * and on a counter every one of those costs double: electron-builder's NSIS unpacks the
+ * whole payload into %TEMP% and then copies it again into the program folder.
+ *
+ * Two groups, neither reachable from this app:
+ *  · The wxWidgets GUI toolkit and `stackbuilder.exe` — leftovers of the StackBuilder
+ *    add-on downloader whose own directory TRIM_DIRS already removes. Nothing in
+ *    electron/ launches it.
+ *  · `ecpg` (the embedded-SQL C precompiler) with its three libraries, plus the
+ *    benchmarking and micro-test tools. Developer utilities, not runtime.
+ *
+ * Deliberately NOT trimmed: every `icu*67.dll` — `icudt67.dll` alone is 27.7 MB but it
+ * is ICU's collation data and `postgres.exe` links against it; `libcurl.dll` (only its
+ * import library `.lib` goes); and the small client tools (`psql`, `pg_isready`,
+ * `pg_controldata`, `pg_resetwal`, `pg_rewind`, `pg_upgrade`, `pg_dumpall`,
+ * `createdb`/`dropdb`/`vacuumdb`/`reindexdb`/…), which cost under 100 KB each and are
+ * exactly what a support call needs on the day a counter's replica will not start.
+ */
+const TRIM_FILES = [
+    // StackBuilder's GUI toolkit
+    path.join("bin", "stackbuilder.exe"),
+    path.join("bin", "wxbase328u_net_vc_x64_custom.dll"),
+    path.join("bin", "wxbase328u_vc_x64_custom.dll"),
+    path.join("bin", "wxbase328u_xml_vc_x64_custom.dll"),
+    path.join("bin", "wxmsw328u_adv_vc_x64_custom.dll"),
+    path.join("bin", "wxmsw328u_aui_vc_x64_custom.dll"),
+    path.join("bin", "wxmsw328u_core_vc_x64_custom.dll"),
+    path.join("bin", "wxmsw328u_html_vc_x64_custom.dll"),
+    path.join("bin", "wxmsw328u_xrc_vc_x64_custom.dll"),
+    // Embedded-SQL precompiler and its libraries
+    path.join("bin", "ecpg.exe"),
+    path.join("bin", "libecpg.dll"),
+    path.join("bin", "libecpg_compat.dll"),
+    path.join("bin", "libpgtypes.dll"),
+    // Developer utilities
+    path.join("bin", "libcurl.lib"),
+    path.join("bin", "oid2name.exe"),
+    path.join("bin", "pg_test_fsync.exe"),
+    path.join("bin", "pg_test_timing.exe"),
+    path.join("bin", "pgbench.exe"),
+    path.join("bin", "testplug.dll"),
+    path.join("bin", "vacuumlo.exe"),
+];
+
+/**
  * Proof the trim did not remove something the app needs.
  *
  * The first three start the local replica. `pg_dump`/`pg_restore` are the desktop app's
@@ -188,6 +234,15 @@ async function main(): Promise<void> {
             log(`trimmed ${rel}`);
         }
     }
+    let trimmedFiles = 0;
+    for (const rel of TRIM_FILES) {
+        const target = path.join(extracted, rel);
+        if (fs.existsSync(target)) {
+            fs.rmSync(target, { force: true });
+            trimmedFiles++;
+        }
+    }
+    log(`trimmed ${trimmedFiles} loose file(s) from bin/`);
     const after = dirSize(extracted);
     log(`Trimmed ${humanMb(before)} → ${humanMb(after)}`);
 

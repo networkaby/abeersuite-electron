@@ -98,9 +98,15 @@ const SCANNABLE_EXTENSIONS = new Set([
  * Packages the standalone server cannot start without.
  *
  * `next`, `react` and `react-dom` are top-level entries, so they survive even a shallow
- * copy. `@next/env` and `styled-jsx` are reachable only through next's own dependency
- * list, and `@next/swc-win32-x64-msvc` is the native binary — they are the canaries that
- * prove the whole transitive tree came across, not just the first level.
+ * copy. `@next/env`, `styled-jsx` and `@swc/helpers` are reachable only through next's
+ * own dependency list — they are the canaries that prove the whole transitive tree came
+ * across, not just the first level.
+ *
+ * `@swc/helpers` replaced `@next/swc-win32-x64-msvc` here. The swc binary sat in this
+ * list purely as a canary, and being an OPTIONAL dependency it dragged 130 MB — the
+ * single largest file in the installer — into every counter for a job a 200 KB package
+ * does identically. prepare-standalone.ts now denies `@next/swc-*` outright; it is a
+ * build-time compiler the standalone server never loads.
  *
  * `@prisma/client-runtime-utils` is the canary for the second tree: it is reachable ONLY
  * as a pnpm sibling of the server-externalised `@prisma/client`, so its absence means
@@ -113,7 +119,7 @@ const REQUIRED_STANDALONE_PACKAGES = [
     "react-dom",
     "@next/env",
     "styled-jsx",
-    "@next/swc-win32-x64-msvc",
+    "@swc/helpers",
     "@prisma/client-runtime-utils",
 ];
 
@@ -420,7 +426,14 @@ function checkDependencyClosure(packageDir: string, failures: string[]): void {
  * land comfortably under this ceiling; a regression back toward 1.4 GB means the
  * duplication crept back in.
  */
-const RESOURCES_SIZE_CEILING_MB = 800;
+/*
+ * Lowered from 800 after the 2026-09-06 install-time audit cut ~280 MB: the unused
+ * Prisma engine compilers (both copies), the `@next/swc-*` build binary, standalone's
+ * dead `sharp`, and StackBuilder's leftovers in pgsql/bin. Every MB here costs the
+ * counter TWO — electron-builder's NSIS extracts to %TEMP% and then copies the whole
+ * tree into the program folder — so this ceiling is what keeps update downtime down.
+ */
+const RESOURCES_SIZE_CEILING_MB = 650;
 
 function dirSizeSync(dir: string): number {
     let total = 0;

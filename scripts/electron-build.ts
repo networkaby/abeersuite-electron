@@ -65,5 +65,8 @@ step("generate-counter-env", "pnpm", ["exec", "tsx", "scripts/generate-counter-e
 step("electron:compile", "pnpm", ["run", "electron:compile"]);
 step("prepare-electron-deps", "pnpm", ["exec", "tsx", "scripts/prepare-electron-deps.ts"]);
 step("prepare-bridge-deps", "pnpm", ["exec", "tsx", "scripts/prepare-bridge-deps.ts"]);
+// The window a counter shows while an update installs and the app itself is gone.
+// Built here rather than by hand so the splash in a package always matches its source.
+step("build-update-splash", "pnpm", ["exec", "tsx", "scripts/build-update-splash.ts"]);
 
 console.log(`[electron-build] Done — APP_MODE=${mode} build ready.`);
