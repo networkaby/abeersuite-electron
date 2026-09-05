@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import { auth } from "@/auth";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 
@@ -17,6 +18,7 @@ export default async function VouchersLayout({ children }: { children: React.Rea
     const user = session?.user as { kind?: string } | undefined;
     if (!user) redirect("/staff/login?callbackUrl=%2Fvouchers");
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers");
+    redirectIfPcWithoutCounter();
 
     return <SessionWrapper session={session}>{children}</SessionWrapper>;
 }

@@ -128,6 +128,24 @@ export function readCounterSetup(): CounterSetupFile | null {
     }
 }
 
+/**
+ * Is this a counter PC with NO counter at all — no `counter-setup.json`?
+ *
+ * A fresh install, or a PC the office released and the reconciler wiped. Distinct from
+ * `isThisPcReleased()`, which answers for a file that the DB has positively disowned:
+ * that one is deliberately silent when there is no file, because the flusher has
+ * nothing to refuse on a PC with no outbox. The API and page gates need the opposite
+ * rule — a PC without a counter has no id block, so anything it saved would be numbered
+ * in the cloud's range and never synced; it may do nothing but onboard. No cache: one
+ * `existsSync`, no DB read.
+ */
+export function isThisPcWithoutCounter(): boolean {
+    if (!IS_COUNTER_PC) return false;
+    // Identity not forwarded (should not happen on Electron) — cannot tell, stay inert.
+    if (!process.env.COUNTER_USER_DATA) return false;
+    return readCounterSetup() === null;
+}
+
 /** Same TTL as the replica-readiness cache. */
 const CACHE_TTL_MS = 30_000;
 let cachedReleased: { value: boolean; at: number } | null = null;

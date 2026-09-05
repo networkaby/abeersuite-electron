@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import LabTopBar from "@/modules/lab/components/LabTopBar";
@@ -24,6 +25,7 @@ export default async function LabLayout({
     if (kind === "customer") {
         redirect("/portal");
     }
+    redirectIfPcWithoutCounter();
 
     const user = session.user as {
         name?: string | null;

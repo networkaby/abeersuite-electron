@@ -6,7 +6,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
 import { canDoPosVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { isThisPcReleased } from "@/shared/lib/counter/releaseGuard";
+import { isThisPcReleased, isThisPcWithoutCounter } from "@/shared/lib/counter/releaseGuard";
 import type { VoucherType } from "@/generated/prisma/client";
 
 /**
@@ -137,11 +137,18 @@ export async function requireAuth(opts: { allowReleased?: boolean } = {}): Promi
     // is the hard stop underneath it. Inert off a counter PC and on a fresh one; the
     // handful of routes the login/setup flow needs pass `allowReleased`. Answered from
     // the replica, cached — no egress (see releaseGuard.ts).
-    if (!opts.allowReleased && IS_COUNTER_PC && (await isThisPcReleased())) {
+    //
+    // The same stop applies to a counter PC with NO setup file at all — fresh, or just
+    // wiped after a release. The login page sends such a PC to /setup/counter, but that
+    // is client-side only; a signed-in admin could reach any route by URL. Its replica
+    // was truncated with RESTART IDENTITY, so anything saved there would take ids in the
+    // cloud's range with no worker to carry it up. Without a counter there is no id
+    // block, and nothing can beat that conflict — so the only allowed work is onboarding.
+    if (!opts.allowReleased && IS_COUNTER_PC && (isThisPcWithoutCounter() || (await isThisPcReleased()))) {
         return {
             user: null,
             response: NextResponse.json(
-                { error: "This counter was released by admin. Counter setup is required.", code: "COUNTER_RELEASED" },
+                { error: "This PC holds no counter. Counter setup is required.", code: "COUNTER_RELEASED" },
                 { status: 403 },
             ),
         };
@@ -158,6 +165,17 @@ export async function requireStaffPage(): Promise<void> {
     const session = await auth();
     if (!session?.user) redirect("/staff/login");
     if ((session.user as { kind?: string }).kind === "customer") redirect("/office");
+    redirectIfPcWithoutCounter();
+}
+
+/**
+ * A counter PC without a counter has one page: the setup wizard. The login page
+ * already routes there, but only client-side; the (protected) layouts and
+ * `requireStaffPage` call this so a typed URL cannot reach a page either. Inert off a
+ * counter PC. Same rule as the API stop in `requireAuth`.
+ */
+export function redirectIfPcWithoutCounter(): void {
+    if (IS_COUNTER_PC && isThisPcWithoutCounter()) redirect("/setup/counter");
 }
 
 /** Restrict by primary role label (e.g. `"R1"`, `"R2"`). */

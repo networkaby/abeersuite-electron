@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import Sidebar from "@/shared/components/Sidebar";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
@@ -22,6 +23,7 @@ export default async function ProtectedLayout({
     if (kind === "customer") {
         redirect("/portal");
     }
+    redirectIfPcWithoutCounter();
 
     const user = session.user as {
         id?: string | null;
