@@ -8,13 +8,17 @@
 //     `applyCodeOwnedCatalog()` so a hard-reset DB gets everything the personal
 //     snapshot deliberately does NOT carry, without touching generic content.
 //
-// The personal snapshot excludes exactly three code-owned things (see the
-// audit note in docs/seeds.md):
+// This module owns the things the personal snapshot deliberately does NOT carry
+// (see the audit note in docs/seeds.md):
 //   1. The Permission catalog (definitions — grants live in the snapshot)
 //   2. VoucherSeries + BooksConfig (voucher numbering; seedVoucherSeries)
 //   3. The Phone/Email XOR CHECK constraints (raw DDL, not data)
-// This module owns all three. Add new permissions HERE (single source), never
-// inline in either seed.
+//   4. The EXISTENCE of the BackupConfig row. The schedule inside it is the
+//      owner's config and does ride the snapshot — but "a row is there at all"
+//      is an invariant the code must guarantee, because a missing row means no
+//      backups and says nothing about it. Created here with the schema defaults;
+//      the snapshot overlay re-asserts the real schedule right afterwards.
+// Add new permissions HERE (single source), never inline in either seed.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import type { PrismaClient } from "../../../src/generated/prisma/client";
@@ -244,6 +248,20 @@ export async function applyCodeOwnedCatalog(prisma: PrismaClient, pool: Pool): P
     await ensureXorCheck(pool, "Email", "Email_owner_xor");
 
     await seedVoucherSeries(prisma);
+
+    // The scheduled-backup row must EXIST from the first boot — `/api/cron/backup-due`
+    // reads it hourly, and no row means no backup, silently, which nobody discovers
+    // until the day they need one. Its existence is a code-owned invariant even though
+    // the schedule inside it is the owner's config (carried by the personal snapshot):
+    // this runs in Step 1 of personal-bootstrap, BEFORE the snapshot overlay and before
+    // the no-snapshot early return, so a fresh DB is covered whether or not a capture
+    // has happened yet.
+    //
+    // Create-only. The schema defaults (every weekday, hour 22 — daily 10 PM IST) are
+    // the safe-not-clever fallback; an admin's edit from Settings → Backup & Restore
+    // is never overwritten, and the snapshot overlay re-asserts their real schedule
+    // moments later in Step 2.
+    await prisma.backupConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
 
     return { permissions: PERMISSION_CATALOG.length, pruned: pruned.count };
 }

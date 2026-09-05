@@ -65,7 +65,7 @@ async function main() {
     if (!overlayOnly) {
         console.log("━━━ Step 1/3 — code-owned catalog (permissions · constraints · series) ━━");
         const { permissions, pruned } = await applyCodeOwnedCatalog(prisma, pool);
-        console.log(`      ✓ ${permissions} permissions upserted · ${pruned} retired pruned · XOR checks · voucher series\n`);
+        console.log(`      ✓ ${permissions} permissions upserted · ${pruned} retired pruned · XOR checks · voucher series · backup row\n`);
     } else {
         console.log("━━━ --overlay-only — skipping the code-owned catalog step ━━━━━━━━━\n");
     }

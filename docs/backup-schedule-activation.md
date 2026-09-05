@@ -39,9 +39,14 @@ comparing in UTC would put a Monday backup on Sunday.
 
 1. **Create the table** (once):
    ```bash
-   pnpm prisma db push && pnpm tsx prisma/seeds/apply-backup-config.ts
+   pnpm prisma db push && pnpm prisma db seed
    ```
-   Defaults to every day at 10 PM IST.
+   Defaults to every day at 10 PM IST. The seed creates the row if it is missing
+   and never touches it again, so this is safe on live and safe to re-run — the
+   schedule is then edited from Settings → Backup & Restore, not from a script.
+   (There used to be a dedicated `apply-backup-config.ts` for this step; the row
+   is now part of the code-owned catalog every seed applies, so that script is
+   gone — see [seeds.md](seeds.md).)
 
 2. **Add two repo secrets** at Settings → Secrets and variables → Actions:
 

@@ -11,7 +11,6 @@ prisma/seeds/
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
 ├─ apply-permissions.ts         APPLY — add just the `ADDITIONS` permissions + grant to R1 (live; the normal way to ship a permission)
-├─ apply-backup-config.ts       APPLY — create the BackupConfig singleton (the ONLY thing that creates it)
 ├─ apply-voucher-series-counters.ts APPLY — give every VoucherSeries its counter-1 row
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
@@ -85,13 +84,27 @@ The personal bootstrap does **not** run the generic installer. It stands up a
 working install from two sources and nothing else:
 
 1. **Code-owned catalog** (`lib/codeOwnedCatalog.ts`) — the permission catalog
-   (upsert + prune of retired ids), the Phone/Email XOR CHECK constraints, and
-   the voucher numbering series. Exactly the three things the snapshot
-   deliberately never carries because they belong to the code.
+   (upsert + prune of retired ids), the Phone/Email XOR CHECK constraints, the
+   voucher numbering series, and the **existence** of the `BackupConfig` row.
+   The things the snapshot deliberately never carries because they belong to
+   the code.
 2. **Your snapshot** (`data/personal.local.json`) — every piece of real config.
 3. **R1 top-up** — R1 (Admin) is granted any catalog permission it doesn't
    already hold, so code-added permissions reach the admin role without waiting
    for a re-capture.
+
+> **`BackupConfig` is split on purpose, and the split is the whole point.**
+> `/api/cron/backup-due` reads that row every hour to decide whether a backup is
+> due, so **a missing row means no backups, silently** — the failure says nothing
+> about itself until the day you need a restore. The *schedule* is your config and
+> rides the snapshot like any other setting; the *row existing at all* is a code
+> invariant, created in step 1 with the schema defaults (every weekday, hour 22 —
+> daily 10 PM IST). Step 1 runs **before** the snapshot overlay and before the
+> no-snapshot early return, so a fresh DB is covered whether or not a capture has
+> happened yet; step 2 then puts your real schedule back. Both halves are
+> create-only, so an admin's edit in Settings → Backup & Restore always survives.
+> (The old `apply-backup-config.ts`, which used to be the only thing that made this
+> row, is deleted — it is now redundant on every path except `--overlay-only`.)
 
 The dev loop — **capture → edit → seed**:
 
@@ -115,7 +128,7 @@ demo clutter. Reset staff passwords after (new users get `changeme123`).
 
 | Included (config / structure / masters) | Excluded |
 |---|---|
-| Config singletons — `OrgDefaults`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig` | `Ticket*` (tickets) |
+| Config singletons — `OrgDefaults`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig`, `BiGstPlanningConfig`, `OfflinePolicy`, `BackupConfig` (schedule only — `lastRunAt` is runtime state and is never exported) | `Ticket*` (tickets) |
 | Inventory/tax masters — `GstRate`, `InvUnit`, `InvWarrantyTerm`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvAttributeMaster`, `StrategyPoint`, `VoucherPrintTemplate` | `UniversalVoucher*` / journal / invoice / payment / stock-ledger (vouchers) |
 | Chart of accounts — `AccountGroup` + `Account` (+ its `AccountAlias` rows) **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
 | Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |
@@ -193,7 +206,6 @@ These do just the one job.
 | Script | Purpose |
 |---|---|
 | `pnpm seed:apply-permissions` | Upserts the `ADDITIONS` permission list and grants the non-`systemOnly` ones to R1. **The normal way to ship a permission** (AGENTS.md §5) — run it after adding the rows to `lib/codeOwnedCatalog.ts` and `src/shared/lib/constants/permissions.ts`. |
-| `pnpm seed:apply-backup-config` | Creates the `BackupConfig` singleton (id=1, daily 10 PM IST). **The only thing that creates it** — it is in neither bootstrap nor the personal snapshot, so a fresh install has no backup schedule until this runs. |
 | `pnpm seed:apply-voucher-series-counters` | Gives every `VoucherSeries` its counter-1 row in `VoucherSeriesCounter`, carrying the legacy `nextSeq` / `fyStartYear` across. Needed once per DB after the 2026-09-05 per-counter numbering change. |
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names, and strips junk name prefixes. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import. |
 

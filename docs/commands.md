@@ -138,7 +138,6 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-permissions` | Applies the `ADDITIONS` permission list | yes |
-| `pnpm seed:apply-backup-config` | Creates the `BackupConfig` singleton — the only thing that does | yes |
 | `pnpm seed:apply-voucher-series-counters` | Gives every voucher series its counter-1 row | yes |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
 | `pnpm seed:helper-brands` / `-inventory` / `-roles` | Trade master data | demo |
@@ -400,7 +399,7 @@ more than once.** A one-time fix that ships with a schema change goes into
 `bootstrap-seed.ts` plus a line in the commit message — not into a new file.
 
 Still live and genuinely re-runnable: `seed:apply-permissions` (whenever `ADDITIONS`
-changes), `seed:apply-backup-config`, `seed:apply-voucher-series-counters`,
+changes), `seed:apply-voucher-series-counters`,
 `seed:apply-taxonomy`.
 
 **Loose end still worth cleaning (not done here):** `scripts/` holds obvious throwaways —

@@ -24,7 +24,6 @@
     "test:e2e:report": "playwright show-report",
     "reconcile:shop-orders": "tsx src/scripts/reconcile-shop-order-accounts.ts",
     "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts",
-    "seed:apply-backup-config": "tsx prisma/seeds/apply-backup-config.ts",
     "seed:helper-brands": "tsx prisma/seeds/helper-brands.ts",
     "seed:helper-inventory": "tsx prisma/seeds/helper-inventory-masters.ts",
     "seed:helper-roles": "tsx prisma/seeds/helper-roles.ts",

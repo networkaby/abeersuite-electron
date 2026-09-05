@@ -241,7 +241,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const idx = await buildRefIndex(prisma);
 
     // ── Config singletons (id=1) ──
-    const [orgDefaults, invNamingConfig, loyaltyConfig, couponConfig, creditLimitConfig, booksConfig, biGstPlanningConfig, offlinePolicy] =
+    const [orgDefaults, invNamingConfig, loyaltyConfig, couponConfig, creditLimitConfig, booksConfig, biGstPlanningConfig, offlinePolicy, backupConfig] =
         await Promise.all([
             prisma.orgDefaults.findFirst(),
             prisma.invNamingConfig.findFirst(),
@@ -251,6 +251,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
             prisma.booksConfig.findFirst(),
             prisma.biGstPlanningConfig.findFirst(),
             prisma.offlinePolicy.findFirst(),
+            prisma.backupConfig.findFirst(),
         ]);
 
     const singletons: Record<string, Row | null> = {
@@ -268,6 +269,12 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         booksConfig: booksConfig ? omit(booksConfig, ["updatedAt"]) : null,
         biGstPlanningConfig: biGstPlanningConfig ? omit(biGstPlanningConfig, ["id", "updatedAt"]) : null,
         offlinePolicy: offlinePolicy ? omit(offlinePolicy, ["id", "updatedAt"]) : null,
+        // `lastRunAt` is deliberately NOT carried. It is runtime state, not config —
+        // the hourly tick refuses to fire twice in the same hour, so restoring a
+        // stale stamp into a fresh DB could suppress the first backup after a
+        // reseed. Dropping it means the next due hour actually fires. No secrets in
+        // this table (schedule only), so nothing needs scrubbing.
+        backupConfig: backupConfig ? omit(backupConfig, ["id", "updatedAt", "lastRunAt"]) : null,
     };
 
     // ── Inventory / tax masters ──
@@ -528,6 +535,7 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     if (s.booksConfig) await put(prisma.booksConfig, { id: s.booksConfig.id ?? 1 }, s.booksConfig);
     if (s.biGstPlanningConfig) await put(prisma.biGstPlanningConfig, { id: 1 }, { id: 1, ...s.biGstPlanningConfig });
     if (s.offlinePolicy) await put(prisma.offlinePolicy, { id: 1 }, { id: 1, ...s.offlinePolicy });
+    if (s.backupConfig) await put(prisma.backupConfig, { id: 1 }, { id: 1, ...s.backupConfig });
     count("singletons", Object.values(s).filter(Boolean).length);
 
     // VoucherPrintTemplate's PK is `kind` (no `id` column), so the generic put()

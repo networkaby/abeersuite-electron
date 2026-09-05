@@ -1245,6 +1245,26 @@ async function main() {
     });
     console.log(`      ✓ CreditLimitConfig singleton seeded (auto OFF; 10% of last-90-day sales when enabled)\n`);
 
+    // ── BackupConfig singleton (id=1) ──────────────────────────────────
+    // The scheduled-backup row `/api/cron/backup-due` reads every hour to decide
+    // whether this hour is due. It MUST exist from the first boot: no row means no
+    // backup, silently, and nobody finds out until they need one. The defaults come
+    // from the schema (every weekday, hour 22 — daily at 10 PM IST): a schedule that
+    // is safe rather than clever, on the reasoning that a shop nobody has configured
+    // should still be backed up. Change it from Settings → Backup & Restore.
+    //
+    // Create-only (`update: {}`) so a schedule an admin has since edited survives a
+    // reseed untouched — same rule as CreditLimitConfig above.
+    await prisma.backupConfig.upsert({
+        where: { id: 1 },
+        create: { id: 1 },
+        update: {},
+    });
+    const backupCfg = await prisma.backupConfig.findUniqueOrThrow({ where: { id: 1 } });
+    console.log(
+        `      ✓ BackupConfig singleton seeded (enabled=${backupCfg.enabled} days=[${backupCfg.weekdays.join(",")}] hours=[${backupCfg.hours.join(",")}] IST)\n`,
+    );
+
     // Spend-tier periods + their levels — admin-owned (rename / add / remove / toggle /
     // retune amounts). A period is a title customers compete for over a bracket of the
     // past; each carries its own copy of the ladder, so a customer can hold a title in
