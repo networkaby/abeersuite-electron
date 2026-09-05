@@ -143,16 +143,30 @@ export async function giftCardRefundableForSale(
     return { giftCardId: draw.giftCardId, code: draw.giftCard.code, drawn, refunded, refundable };
 }
 
-/// Restore balance on a return (proportional amount computed by the caller).
+/// Restore balance on a return or a cancel (amount computed by the caller).
+///
+/// The database does the addition, in one statement, exactly as `redeemGiftCard`
+/// lets it do the subtraction — so two refunds of the same card queue up and both
+/// are counted. Reading the balance, adding, then writing it back lost one of the
+/// two whenever they overlapped: the `GiftCardTxn` rows were both written, so the
+/// history said one thing and the card said another, and nothing put it right
+/// (`recomputeGiftCardBalances` runs only on the sync path, so an office-only
+/// database never re-sums it).
 export async function refundGiftCard(
     tx: Tx, args: { giftCardId: number; amount: number; universalVoucherId: number; createdById: number },
 ): Promise<number> {
-    const gc = await tx.giftCard.findUniqueOrThrow({ where: { id: args.giftCardId }, select: { balance: true, status: true } });
-    const newBal = round2(moneyNumber(gc.balance) + args.amount);
-    await tx.giftCard.update({
-        where: { id: args.giftCardId },
-        data: { balance: newBal, status: gc.status === "REDEEMED" ? "ACTIVE" : gc.status },
+    const gc = await tx.giftCard.update({
+        where:  { id: args.giftCardId },
+        data:   { balance: { increment: args.amount } },
+        select: { balance: true, status: true },
     });
+    const newBal = round2(moneyNumber(gc.balance));
+
+    // A card the sale emptied went REDEEMED; money back on it makes it spendable
+    // again. DRAFT / EXPIRED / VOID are the office's decisions and stay put.
+    if (gc.status === "REDEEMED" && newBal > 0.005) {
+        await tx.giftCard.update({ where: { id: args.giftCardId }, data: { status: "ACTIVE" } });
+    }
     await tx.giftCardTxn.create({
         data: { giftCardId: args.giftCardId, type: "REFUND", amount: args.amount, universalVoucherId: args.universalVoucherId, balanceAfter: newBal, createdById: args.createdById },
     });
