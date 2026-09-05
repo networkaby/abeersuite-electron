@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": 1,
-    "exportedAt": "2026-08-27T06:12:25.800Z",
+    "exportedAt": "2026-09-05T16:38:17.783Z",
     "note": "Personal config snapshot — everything except tickets, vouchers, customers, products."
   },
   "singletons": {
@@ -295,33 +295,6 @@
           "enabled": false,
           "priority": -1,
           "sectionNo": 90
-        },
-        {
-          "id": "1787725664667-jm9cp8",
-          "type": "hero",
-          "label": "Hero banner",
-          "content": {},
-          "enabled": true,
-          "priority": 0,
-          "sectionNo": 100
-        },
-        {
-          "id": "1787726134367-od70hu",
-          "type": "hero",
-          "label": "Hero banner",
-          "content": {},
-          "enabled": true,
-          "priority": 0,
-          "sectionNo": 110
-        },
-        {
-          "id": "1787726135835-qo4ohs",
-          "type": "hero",
-          "label": "Hero banner",
-          "content": {},
-          "enabled": true,
-          "priority": 0,
-          "sectionNo": 120
         }
       ],
       "labelTemplateJson": {
@@ -481,6 +454,16 @@
       "bankAccountIds": [
         10402,
         3
+      ]
+    },
+    "offlinePolicy": null,
+    "backupConfig": {
+      "enabled": true,
+      "weekdays": [
+        0
+      ],
+      "hours": [
+        2
       ]
     }
   },
@@ -1484,10 +1467,290 @@
       "description": null
     },
     {
-      "name": "CP Plus",
+      "name": "Portronics",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "ANT ESPORTS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Itel",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "OSCOO",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "IK",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Ambrane",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "M Skill",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Xcess",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "CP Pluse",
       "isActive": true,
       "slug": "cp-plus",
       "imageUrl": "https://cpplusworld.com/assets/img/logo.png",
+      "description": null
+    },
+    {
+      "name": "K7",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Simmtronics",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "CyberX",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "GAMDIAS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "SCUDA",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Viewsonic",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Stellular",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "VMS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "TNPL",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Numeric",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "ELNOVA",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "POWERX",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Clarion",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "NOVA",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "HYPERX",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Krystaa",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Lexar",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Crosshair",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Tally",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Mantra",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "MRS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "ZEBRONIC",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Quick Heal",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Secureye",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Hypergen",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Ivoomi",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Cyberpower",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "AVERTEK",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Frontech",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Asrock",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "Tiandy",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null
+    },
+    {
+      "name": "ESYPOS",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
       "description": null
     }
   ],
@@ -2991,6 +3254,34 @@
       "nonMovingAfterDays": null,
       "deadAfterDays": null,
       "parentName": "Laptop Accessories"
+    },
+    {
+      "name": "auto-created-group",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": null
+    },
+    {
+      "name": "Converter & Adapter",
+      "isActive": true,
+      "slug": null,
+      "imageUrl": null,
+      "description": null,
+      "gstRateId": null,
+      "hsnCode": null,
+      "taxability": null,
+      "slowAfterDays": null,
+      "nonMovingAfterDays": null,
+      "deadAfterDays": null,
+      "parentName": "auto-created-group"
     }
   ],
   "invAttributeMasters": [],
@@ -5413,58 +5704,6 @@
       "aliases": []
     },
     {
-      "name": "Exp Freight Inward (Purchase Courier)",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Additional Purchase Cost"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "income Other Revenue",
-      "code": "4900",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Incomes"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
       "name": "Miscellaneous Expense",
       "code": "6900",
       "normalBalance": "DEBIT",
@@ -5517,13 +5756,13 @@
       "aliases": []
     },
     {
-      "name": "Exp Advertisement",
-      "code": null,
-      "normalBalance": "DEBIT",
+      "name": "income Other Revenue",
+      "code": "4900",
+      "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Indirect Expenses"
+        "name": "Indirect Incomes"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -5550,6 +5789,58 @@
       "isActive": true,
       "groupId": {
         "name": "Fixed Assets"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Exp Advertisement",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Exp Freight Inward (Purchase Courier)",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Additional Purchase Cost"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -5602,58 +5893,6 @@
       "isActive": true,
       "groupId": {
         "name": "Payment Gateway"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Bandhan Bank Loan 0193",
-      "code": null,
-      "normalBalance": null,
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Unsecured Loans"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": "341564",
-      "openingBalanceType": "CREDIT",
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Exp Tea & Donation (Counter)",
-      "code": null,
-      "normalBalance": null,
-      "description": "Daily Tea and Donation Exp",
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -5749,32 +5988,6 @@
       "aliases": []
     },
     {
-      "name": "Sales Returns",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
       "name": "Purchase Returns",
       "code": null,
       "normalBalance": "CREDIT",
@@ -5782,32 +5995,6 @@
       "isActive": true,
       "groupId": {
         "name": "Purchase Accounts"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Sales Ecommerce A/c",
-      "code": "4150",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -5860,32 +6047,6 @@
       "isActive": true,
       "groupId": {
         "name": "Sundry Creditors"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Purchase A/c",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Purchase Accounts"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -6016,32 +6177,6 @@
       "isActive": true,
       "groupId": {
         "name": "Provisions"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Laptop Servicing",
-      "code": "4000",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Direct Incomes"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -6217,7 +6352,7 @@
       "aliases": []
     },
     {
-      "name": "Electricity Charges",
+      "name": "Loyalty Points Redeemed",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -6240,12 +6375,59 @@
       "reconciledAt": null,
       "reconciledById": null,
       "parentName": null,
-      "aliases": [
-        "electricity bill",
-        "power bill",
-        "apdcl",
-        "line bill"
-      ]
+      "aliases": []
+    },
+    {
+      "name": "Sales Returns",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Consumables & Spares",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
     },
     {
       "name": "Telephone / Internet",
@@ -6277,7 +6459,33 @@
       ]
     },
     {
-      "name": "Loyalty Points Redeemed",
+      "name": "Bandhan Bank Loan 0193",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Unsecured Loans"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "341564",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Repair & Maintenance",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -6329,91 +6537,13 @@
       "aliases": []
     },
     {
-      "name": "Exp Bad Debts",
-      "code": null,
-      "normalBalance": "DEBIT",
+      "name": "Sales Ecommerce A/c",
+      "code": "4150",
+      "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Coupon Discounts",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Consumables & Spares",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Repair & Maintenance",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
+        "name": "Sales Accounts"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -6485,30 +6615,107 @@
       "aliases": []
     },
     {
-      "name": "Bandhan Bank SB 4022",
+      "name": "Exp Bad Debts",
       "code": null,
-      "normalBalance": null,
+      "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Bank Accounts"
+        "name": "Indirect Expenses"
       },
-      "updatedAt": "2026-08-19T16:06:36.360Z",
+      "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
-      "bankJson": {
-        "ifsc": "BDBL0002540",
-        "branch": "Abhayapuri",
-        "bankName": "Bandhan Bank",
-        "beneficiary": "Sahanas Parbin",
-        "accountNumber": "20200081634022"
-      },
+      "bankJson": null,
       "loanJson": null,
       "creditCardJson": null,
       "bnplJson": null,
       "walletJson": null,
       "gatewayJson": null,
-      "openingBalance": "9144",
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Cash – Counter 21 naba – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "updatedAt": "2026-09-01T18:51:51.227Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "25109",
       "openingBalanceType": "DEBIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Electricity Charges",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": [
+        "electricity bill",
+        "power bill",
+        "apdcl",
+        "line bill"
+      ]
+    },
+    {
+      "name": "Exp Tea & Donation (Counter)",
+      "code": null,
+      "normalBalance": null,
+      "description": "Daily Tea and Donation Exp",
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
       "openingBalanceDate": null,
       "reconciledThrough": null,
       "reconciledAt": null,
@@ -6543,114 +6750,7 @@
       "aliases": []
     },
     {
-      "name": "Tax Payable",
-      "code": "2100",
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "updatedAt": "2026-08-19T16:57:21.399Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Cash – Counter 24 aka – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "updatedAt": "2026-08-25T02:17:03.587Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Cash – Counter 23 rakesh – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": "2026-07-26T00:00:00.000Z",
-      "reconciledAt": "2026-07-29T17:22:19.203Z",
-      "reconciledById": 7,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Printing & Stationery (Office Exp/Packaging Materials)",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": [
-        "polithin",
-        "carry bag"
-      ]
-    },
-    {
-      "name": "Exp Bank Charges",
+      "name": "Coupon Discounts",
       "code": null,
       "normalBalance": "DEBIT",
       "description": null,
@@ -6988,58 +7088,6 @@
       "aliases": []
     },
     {
-      "name": "Prepaid Expenses",
-      "code": "1300",
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Loans & Advances (Asset)"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Exp Audit Fees",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Indirect Expenses"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
       "name": "SBI POS",
       "code": null,
       "normalBalance": null,
@@ -7083,32 +7131,6 @@
       "walletJson": null,
       "gatewayJson": null,
       "openingBalance": "98419.44",
-      "openingBalanceType": "CREDIT",
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "KreditBee",
-      "code": null,
-      "normalBalance": null,
-      "description": "sum of total emi",
-      "isActive": true,
-      "groupId": {
-        "name": "Unsecured Loans"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": "92952",
       "openingBalanceType": "CREDIT",
       "openingBalanceDate": null,
       "reconciledThrough": null,
@@ -7196,13 +7218,13 @@
       "aliases": []
     },
     {
-      "name": "Cash Over",
-      "code": "4950",
-      "normalBalance": "CREDIT",
+      "name": "Exp Audit Fees",
+      "code": null,
+      "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Suspense A/c"
+        "name": "Indirect Expenses"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -7222,8 +7244,8 @@
       "aliases": []
     },
     {
-      "name": "Cash Short",
-      "code": "6950",
+      "name": "Printing & Stationery (Office Exp/Packaging Materials)",
+      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7231,6 +7253,191 @@
         "name": "Indirect Expenses"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": [
+        "polithin",
+        "carry bag"
+      ]
+    },
+    {
+      "name": "Exp Bank Charges",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "KreditBee",
+      "code": null,
+      "normalBalance": null,
+      "description": "sum of total emi",
+      "isActive": true,
+      "groupId": {
+        "name": "Unsecured Loans"
+      },
+      "updatedAt": "2026-08-17T22:01:59.593Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "92952",
+      "openingBalanceType": "CREDIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Prepaid Expenses",
+      "code": "1300",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Loans & Advances (Asset)"
+      },
+      "updatedAt": "2026-09-02T20:48:40.778Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Laptop Servicing",
+      "code": "4000",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Direct Incomes"
+      },
+      "updatedAt": "2026-09-02T20:51:51.257Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Cash – Counter 24 aka – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "updatedAt": "2026-09-02T20:53:16.761Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Tax Payable",
+      "code": "2100",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "updatedAt": "2026-09-02T20:53:16.768Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Purchase A/c",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Purchase Accounts"
+      },
+      "updatedAt": "2026-09-03T13:00:26.799Z",
       "creditLimit": null,
       "bankJson": null,
       "loanJson": null,
@@ -7300,58 +7507,6 @@
       "aliases": []
     },
     {
-      "name": "Petty Cash",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "updatedAt": "2026-08-19T16:52:27.123Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Cash – Counter 21 naba – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "updatedAt": "2026-08-20T06:26:16.413Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": "25109",
-      "openingBalanceType": "DEBIT",
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
       "name": "Accrued Expenses",
       "code": "2200",
       "normalBalance": "CREDIT",
@@ -7359,32 +7514,6 @@
       "isActive": true,
       "groupId": {
         "name": "Provisions"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Cash – Counter 22 Prokash – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -7432,6 +7561,84 @@
       "reconciledThrough": "2026-08-09T00:00:00.000Z",
       "reconciledAt": "2026-08-10T11:55:27.225Z",
       "reconciledById": 7,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Cash – Counter 22 Prokash – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "updatedAt": "2026-09-02T20:48:12.087Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Petty Cash",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "updatedAt": "2026-09-02T20:48:40.763Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Cash Short",
+      "code": "6950",
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Expenses"
+      },
+      "updatedAt": "2026-09-02T20:55:26.864Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
       "parentName": null,
       "aliases": []
     },
@@ -7488,84 +7695,6 @@
       "aliases": []
     },
     {
-      "name": "Sales A/c",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Sales Accounts"
-      },
-      "updatedAt": "2026-08-23T02:51:23.285Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "CGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "updatedAt": "2026-08-23T02:51:23.398Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "SGST",
-      "code": null,
-      "normalBalance": "CREDIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Duties & Taxes"
-      },
-      "updatedAt": "2026-08-23T02:51:23.483Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
       "name": "Discount Allowed",
       "code": null,
       "normalBalance": "DEBIT",
@@ -7592,32 +7721,6 @@
       "aliases": []
     },
     {
-      "name": "Cash – Vault – Head Office",
-      "code": null,
-      "normalBalance": "DEBIT",
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Cash-in-Hand"
-      },
-      "updatedAt": "2026-08-25T02:17:03.486Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": "9503",
-      "openingBalanceType": "DEBIT",
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
       "name": "Exp Commission Paid",
       "code": null,
       "normalBalance": "DEBIT",
@@ -7625,32 +7728,6 @@
       "isActive": true,
       "groupId": {
         "name": "Indirect Expenses"
-      },
-      "updatedAt": "2026-08-17T22:01:59.593Z",
-      "creditLimit": null,
-      "bankJson": null,
-      "loanJson": null,
-      "creditCardJson": null,
-      "bnplJson": null,
-      "walletJson": null,
-      "gatewayJson": null,
-      "openingBalance": null,
-      "openingBalanceType": null,
-      "openingBalanceDate": null,
-      "reconciledThrough": null,
-      "reconciledAt": null,
-      "reconciledById": null,
-      "parentName": null,
-      "aliases": []
-    },
-    {
-      "name": "Printer Servicing",
-      "code": null,
-      "normalBalance": null,
-      "description": null,
-      "isActive": true,
-      "groupId": {
-        "name": "Direct Incomes"
       },
       "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
@@ -7696,15 +7773,15 @@
       "aliases": []
     },
     {
-      "name": "Round Off",
+      "name": "Printer Servicing",
       "code": null,
-      "normalBalance": "CREDIT",
+      "normalBalance": null,
       "description": null,
       "isActive": true,
       "groupId": {
-        "name": "Indirect Incomes"
+        "name": "Direct Incomes"
       },
-      "updatedAt": "2026-08-23T02:51:23.763Z",
+      "updatedAt": "2026-08-17T22:01:59.593Z",
       "creditLimit": null,
       "bankJson": null,
       "loanJson": null,
@@ -7878,6 +7955,32 @@
       "aliases": []
     },
     {
+      "name": "Cash Over",
+      "code": "4950",
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Suspense A/c"
+      },
+      "updatedAt": "2026-09-01T18:59:05.157Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
       "name": "SBI CC A/c 873",
       "code": "1010",
       "normalBalance": "CREDIT",
@@ -7886,7 +7989,7 @@
       "groupId": {
         "name": "Bank OD A/c"
       },
-      "updatedAt": "2026-08-23T02:54:48.851Z",
+      "updatedAt": "2026-09-01T19:07:15.381Z",
       "creditLimit": null,
       "bankJson": {
         "ifsc": "SBIN0008462",
@@ -7907,6 +8010,194 @@
       "openingBalanceDate": null,
       "reconciledThrough": "2026-08-09T00:00:00.000Z",
       "reconciledAt": "2026-08-09T19:10:27.827Z",
+      "reconciledById": 7,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Bandhan Bank SB 4022",
+      "code": null,
+      "normalBalance": null,
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Bank Accounts"
+      },
+      "updatedAt": "2026-09-02T20:55:26.844Z",
+      "creditLimit": null,
+      "bankJson": {
+        "ifsc": "BDBL0002540",
+        "branch": "Abhayapuri",
+        "bankName": "Bandhan Bank",
+        "beneficiary": "Sahanas Parbin",
+        "accountNumber": "20200081634022"
+      },
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "9144",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Sales A/c",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Sales Accounts"
+      },
+      "updatedAt": "2026-09-03T12:55:52.053Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "CGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "updatedAt": "2026-09-03T13:00:26.899Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "SGST",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Duties & Taxes"
+      },
+      "updatedAt": "2026-09-03T13:00:26.989Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Round Off",
+      "code": null,
+      "normalBalance": "CREDIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Indirect Incomes"
+      },
+      "updatedAt": "2026-09-03T13:00:27.093Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Cash – Vault – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "updatedAt": "2026-09-04T21:07:05.449Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": "9503",
+      "openingBalanceType": "DEBIT",
+      "openingBalanceDate": null,
+      "reconciledThrough": null,
+      "reconciledAt": null,
+      "reconciledById": null,
+      "parentName": null,
+      "aliases": []
+    },
+    {
+      "name": "Cash – Counter 23 rakesh – Head Office",
+      "code": null,
+      "normalBalance": "DEBIT",
+      "description": null,
+      "isActive": true,
+      "groupId": {
+        "name": "Cash-in-Hand"
+      },
+      "updatedAt": "2026-09-04T21:22:49.039Z",
+      "creditLimit": null,
+      "bankJson": null,
+      "loanJson": null,
+      "creditCardJson": null,
+      "bnplJson": null,
+      "walletJson": null,
+      "gatewayJson": null,
+      "openingBalance": null,
+      "openingBalanceType": null,
+      "openingBalanceDate": null,
+      "reconciledThrough": "2026-07-26T00:00:00.000Z",
+      "reconciledAt": "2026-07-29T17:22:19.203Z",
       "reconciledById": 7,
       "parentName": null,
       "aliases": []
@@ -8165,7 +8456,7 @@
       "gstin": "18AXEPJ4673R1ZO",
       "gstStateCode": "18",
       "isActive": true,
-      "updatedAt": "2026-08-17T22:01:59.723Z",
+      "updatedAt": "2026-08-28T15:34:26.990Z",
       "vaultAccountId": {
         "code": null,
         "name": "Cash – Vault – Head Office"
@@ -9013,12 +9304,336 @@
       "permissionId": "ui:sidebar:e-commerce:customize-home"
     },
     {
+      "roleId": "R3",
+      "permissionId": "auth:login:outside-counter"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:gift-cards"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:loyalty"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:protection"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:retention:spend-tiers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:workspace:work-flow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:units"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:warranty-terms"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pricing-strategy:costing"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pricing-strategy:print-labels"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pricing-strategy:strategies"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:pricing-strategy:update-prices"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:coupons"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:gift-cards"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:loyalty"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:protection"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:retention:spend-tiers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:offline-policies"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:inbox"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:pos"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:workspace:work-flow"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "users:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "accountancy:masters:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "branches:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "compliance:tax:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "coupons:delete"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "customers:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "customers:view:creditors"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "deals:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:contra"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:credit-note"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:debit-note"
+    },
+    {
       "roleId": "R2",
       "permissionId": "finance:voucher:cancel:journal"
     },
     {
       "roleId": "R2",
+      "permissionId": "finance:voucher:cancel:payment"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "finance:voucher:cancel:receipt"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "gift-cards:delete"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "help:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "inventory:masters:delete"
     },
     {
       "roleId": "R2",
@@ -9078,6 +9693,78 @@
     },
     {
       "roleId": "R2",
+      "permissionId": "loyalty:delete"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos-counters:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:close"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:drop"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:force-close"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:shift:open"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:cancel:estimate"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:cancel:expense"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:cancel:order"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:cancel:receipt"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:cancel:sale"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pos:voucher:cancel:sale-return"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pricing:costing:manage"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "pricing:strategy:set"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "products:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "tasks:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "tickets:edit"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "tiers:delete"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "ui:sidebar:accountancy:account-groups"
     },
     {
@@ -9103,330 +9790,6 @@
     {
       "roleId": "R2",
       "permissionId": "ui:sidebar:accountancy:cash-flow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:administration:work-board"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:gift-cards"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:abc-analysis"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:basket-analysis"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:bill-profit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:branch-comparison"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:customer-profit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:discount-impact"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:inactive-customers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:item-by-party"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:item-profit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:movement-register"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:party-sale-purchase"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:price-variance"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:rfm-segmentation"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:sales-trend"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:stock-health"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:stock-turnover"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:supplier-purchases"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:bi:top-customers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:hsn-summary"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:inward-supplies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:net-gst-liability"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:outward-supplies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:compliance:tax-classification"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:crm:call-log"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:crm:deals"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:crm:reconnect"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:customers:companies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:customers:person"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:e-commerce:orders"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:e-commerce:products"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:help:help-desk"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:attribute-masters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:boms"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:brands"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:categories"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:groups"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:gst-rates"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:item-ledger"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:masters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:products"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:reorder"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:units"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:inventory:warranty-terms"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pos:counters"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pos:shift-reports"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pricing-strategy:costing"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pricing-strategy:needs-attention"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pricing-strategy:strategies"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:pricing-strategy:update-prices"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:repair:all-repair"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:repair:device-location"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:retention:coupons"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:retention:gift-cards"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:retention:loyalty"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:retention:spend-tiers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:backup-restore"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:couriers"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:credit-limit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-groups"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-import"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-tools"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:e-commerce"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:org-defaults"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:payment-methods"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:pos-services"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:standard-courier"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:cancel:payment"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:cancel:contra"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:cancel:credit-note"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "finance:voucher:cancel:debit-note"
     },
     {
       "roleId": "R2",
@@ -9522,103 +9885,35 @@
     },
     {
       "roleId": "R2",
-      "permissionId": "ui:sidebar:e-commerce:masters"
+      "permissionId": "ui:sidebar:administration:work-board"
     },
     {
       "roleId": "R2",
-      "permissionId": "ui:sidebar:e-commerce:customize-home"
+      "permissionId": "ui:sidebar:bi:abc-analysis"
     },
     {
       "roleId": "R2",
-      "permissionId": "ui:sidebar:pricing-strategy:print-labels"
+      "permissionId": "ui:sidebar:bi:basket-analysis"
     },
     {
       "roleId": "R2",
-      "permissionId": "ui:sidebar:retention:protection"
+      "permissionId": "ui:sidebar:bi:bill-profit"
     },
     {
       "roleId": "R2",
-      "permissionId": "tasks:edit"
+      "permissionId": "ui:sidebar:bi:branch-comparison"
     },
     {
       "roleId": "R2",
-      "permissionId": "deals:edit"
+      "permissionId": "ui:sidebar:bi:customer-profit"
     },
     {
       "roleId": "R2",
-      "permissionId": "help:edit"
+      "permissionId": "ui:sidebar:bi:discount-impact"
     },
     {
       "roleId": "R2",
-      "permissionId": "tickets:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "customers:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:work-flow"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:pos"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:open"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:close"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:drop"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:cancel:expense"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:cancel:receipt"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:cancel:estimate"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:cancel:order"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:cancel:sale-return"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:voucher:cancel:sale"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:workspace:inbox"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pos:shift:force-close"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "customers:view:creditors"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "products:edit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "accountancy:masters:edit"
+      "permissionId": "ui:sidebar:bi:fsn-dead-stock"
     },
     {
       "roleId": "R2",
@@ -9626,334 +9921,158 @@
     },
     {
       "roleId": "R2",
-      "permissionId": "inventory:masters:delete"
+      "permissionId": "ui:sidebar:bi:inactive-customers"
     },
     {
       "roleId": "R2",
-      "permissionId": "pricing:strategy:set"
+      "permissionId": "ui:sidebar:bi:item-by-party"
     },
     {
       "roleId": "R2",
-      "permissionId": "pricing:costing:manage"
+      "permissionId": "ui:sidebar:bi:item-profit"
     },
     {
       "roleId": "R2",
-      "permissionId": "coupons:delete"
+      "permissionId": "ui:sidebar:bi:movement-register"
     },
     {
       "roleId": "R2",
-      "permissionId": "gift-cards:delete"
+      "permissionId": "ui:sidebar:bi:party-sale-purchase"
     },
     {
       "roleId": "R2",
-      "permissionId": "loyalty:delete"
+      "permissionId": "ui:sidebar:bi:price-variance"
     },
     {
       "roleId": "R2",
-      "permissionId": "tiers:delete"
+      "permissionId": "ui:sidebar:bi:rfm-segmentation"
     },
     {
       "roleId": "R2",
-      "permissionId": "compliance:tax:edit"
+      "permissionId": "ui:sidebar:bi:sales-trend"
     },
     {
       "roleId": "R2",
-      "permissionId": "users:edit"
+      "permissionId": "ui:sidebar:bi:stock-health"
     },
     {
       "roleId": "R2",
-      "permissionId": "branches:edit"
+      "permissionId": "ui:sidebar:bi:stock-turnover"
     },
     {
       "roleId": "R2",
-      "permissionId": "pos-counters:edit"
+      "permissionId": "ui:sidebar:bi:supplier-purchases"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:loyalty"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:bi:top-customers"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:protection"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:hsn-summary"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:retention:spend-tiers"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:inward-supplies"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:backup-restore"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:net-gst-liability"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:couriers"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:outward-supplies"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:credit-limit"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:compliance:tax-classification"
     },
     {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:customer-groups"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:customer-import"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:customer-tools"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:e-commerce"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:org-defaults"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:payment-methods"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:pos-services"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:standard-courier"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:workspace:inbox"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:workspace:pos"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:workspace:work-flow"
-    }
-  ],
-  "departmentPermissions": [
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "finance:voucher:cancel:receipt"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "finance:voucher:create:receipt"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "finance:voucher:delete:receipt"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "finance:voucher:post:receipt"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:cancel:sale"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:create:sale"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:delete:sale"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:post:sale"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:administration:work-board"
-    },
-    {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:call-log"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:deals"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:crm:reconnect"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:customers:companies"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:customers:person"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:e-commerce:customize-home"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:e-commerce:masters"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:e-commerce:orders"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:e-commerce:products"
     },
     {
-      "departmentId": "DEP-SALES",
+      "roleId": "R2",
       "permissionId": "ui:sidebar:help:help-desk"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:pos:counters"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:attribute-masters"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:pos:shift-reports"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:boms"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:repair:all-repair"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:brands"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:repair:device-location"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:categories"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:backup-restore"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:groups"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:couriers"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:gst-rates"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:credit-limit"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:item-ledger"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-groups"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:masters"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-import"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:products"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-tools"
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:inventory:reorder"
     },
     {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:downloads"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:e-commerce"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:item-import"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:naming-convention"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:org-defaults"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:payment-methods"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:pos-services"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:standard-courier"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:thermal-printer"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:voucher-templates"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:workflow"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:year-ending"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:create:sale-return"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:post:sale-return"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:cancel:sale-return"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "inventory:voucher:delete:sale-return"
-    },
+      "roleId": "R2",
+      "permissionId": "auth:login:outside-counter"
+    }
+  ],
+  "departmentPermissions": [
     {
       "departmentId": "DEP-OP",
       "permissionId": "inventory:voucher:create:purchase"
@@ -10733,6 +10852,198 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:retention:protection"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:offline-policies"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "finance:voucher:cancel:receipt"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "finance:voucher:create:receipt"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "finance:voucher:delete:receipt"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "finance:voucher:post:receipt"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:cancel:sale"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:create:sale"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:delete:sale"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:post:sale"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:administration:work-board"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:crm:call-log"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:crm:deals"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:crm:reconnect"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:customers:companies"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:customers:person"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:customize-home"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:masters"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:orders"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:e-commerce:products"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:help:help-desk"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:pos:counters"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:pos:shift-reports"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:repair:all-repair"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:repair:device-location"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:backup-restore"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:couriers"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:credit-limit"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:customer-groups"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:customer-import"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:customer-tools"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:downloads"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:e-commerce"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:item-import"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:naming-convention"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:org-defaults"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:payment-methods"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:pos-services"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:standard-courier"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:thermal-printer"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:voucher-templates"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:workflow"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:year-ending"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:create:sale-return"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:post:sale-return"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:cancel:sale-return"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "inventory:voucher:delete:sale-return"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:offline-policies"
     }
   ],
   "positions": [
@@ -10810,30 +11121,12 @@
       "managerEmail": null
     },
     {
-      "name": "Nabajyoty Das",
-      "email": "naba@networkservice.in",
-      "role": null,
-      "title": null,
-      "scope": "OWN",
-      "updatedAt": "2026-08-21T12:46:37.563Z",
-      "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159211/avatars/o838yvq0dzpoyzdf77x6.jpg",
-      "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159249/avatars/ne07bpdtkbchjm9dtcoq.jpg",
-      "phone": null,
-      "birthday": "2002-07-20T00:00:00.000Z",
-      "bio": null,
-      "linkedIn": null,
-      "twitter": null,
-      "instagram": "nabajyoti__27",
-      "facebook": "Nabajyoti Das",
-      "managerEmail": null
-    },
-    {
       "name": "Akramul Jakir",
       "email": "admin@networkservice.in",
       "role": "R1",
       "title": null,
       "scope": "OWN",
-      "updatedAt": "2026-08-25T15:13:42.995Z",
+      "updatedAt": "2026-09-05T09:17:18.719Z",
       "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785528672/avatars/awyjapkigh8crzrz3gd6.png",
       "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785528664/avatars/stvblrz6iezdm44astbg.jpg",
       "phone": null,
@@ -10846,12 +11139,30 @@
       "managerEmail": null
     },
     {
+      "name": "Nabajyoty Das",
+      "email": "naba@networkservice.in",
+      "role": null,
+      "title": null,
+      "scope": "OWN",
+      "updatedAt": "2026-09-05T10:18:31.664Z",
+      "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159211/avatars/o838yvq0dzpoyzdf77x6.jpg",
+      "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159249/avatars/ne07bpdtkbchjm9dtcoq.jpg",
+      "phone": null,
+      "birthday": "2002-07-20T00:00:00.000Z",
+      "bio": null,
+      "linkedIn": null,
+      "twitter": null,
+      "instagram": "nabajyoti__27",
+      "facebook": "Nabajyoti Das",
+      "managerEmail": null
+    },
+    {
       "name": "Rakesh Biswas",
       "email": "rakesh@networkservice.in",
       "role": null,
       "title": null,
       "scope": "OWN",
-      "updatedAt": "2026-08-21T12:56:53.315Z",
+      "updatedAt": "2026-09-05T09:14:47.545Z",
       "avatarUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159809/avatars/poznqp5y1z80flqohp0f.jpg",
       "coverUrl": "https://res.cloudinary.com/dolxss5ha/image/upload/v1785159942/avatars/w0ayctwfdqllis1udufu.tiff",
       "phone": null,
@@ -10869,7 +11180,7 @@
       "role": null,
       "title": null,
       "scope": "OWN",
-      "updatedAt": "2026-08-20T18:30:02.574Z",
+      "updatedAt": "2026-09-05T09:15:08.954Z",
       "avatarUrl": null,
       "coverUrl": null,
       "phone": null,
@@ -11245,7 +11556,7 @@
     {
       "branchId": "BR-HQ",
       "name": "Counter 22 Prokash",
-      "counterNumber": 22,
+      "counterNumber": 92,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 22 Prokash – Head Office"
@@ -11261,26 +11572,41 @@
         }
       ],
       "isActive": true,
-      "epbxExtension": "22",
-      "counterNumber": null
+      "epbxExtension": "22"
+    },
+    {
+      "branchId": "BR-HQ",
+      "name": "Counter 24 aka",
+      "counterNumber": 94,
+      "tillAccountId": {
+        "code": null,
+        "name": "Cash – Counter 24 aka – Head Office"
+      },
+      "allowedExpenseAccountIds": [
+        {
+          "code": null,
+          "name": "Exp Tea & Donation (Counter)"
+        }
+      ],
+      "isActive": true,
+      "epbxExtension": "24"
     },
     {
       "branchId": "BR-HQ",
       "name": "Counter 23 rakesh",
-      "counterNumber": 23,
+      "counterNumber": 93,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 23 rakesh – Head Office"
       },
       "allowedExpenseAccountIds": [],
       "isActive": true,
-      "epbxExtension": "23",
-      "counterNumber": null
+      "epbxExtension": "23"
     },
     {
       "branchId": "BR-HQ",
       "name": "Counter 21 naba",
-      "counterNumber": 21,
+      "counterNumber": 91,
       "tillAccountId": {
         "code": null,
         "name": "Cash – Counter 21 naba – Head Office"
@@ -11300,104 +11626,13 @@
         }
       ],
       "isActive": true,
-      "epbxExtension": "21",
-      "counterNumber": null
-    },
-    {
-      "branchId": "BR-HQ",
-      "name": "Counter 24 aka",
-      "counterNumber": 24,
-      "tillAccountId": {
-        "code": null,
-        "name": "Cash – Counter 24 aka – Head Office"
-      },
-      "allowedExpenseAccountIds": [
-        {
-          "code": null,
-          "name": "Exp Tea & Donation (Counter)"
-        }
-      ],
-      "isActive": true,
-      "epbxExtension": "24",
-      "counterNumber": null
+      "epbxExtension": "21"
     }
   ],
   "posPaymentAccounts": [
     {
       "counterId": {
         "branchId": "BR-HQ",
-        "name": "Counter 24 aka"
-      },
-      "channel": "UPI",
-      "label": "PhonePe",
-      "accountId": {
-        "code": null,
-        "name": "PhonePe"
-      },
-      "vpa": "Q001860615@ybl",
-      "configJson": {},
-      "sortOrder": 0,
-      "isActive": true,
-      "defaultVisible": true,
-      "gatewayId": null
-    },
-    {
-      "counterId": {
-        "branchId": "BR-HQ",
-        "name": "Counter 24 aka"
-      },
-      "channel": "CARD",
-      "label": "SBI Swipe",
-      "accountId": {
-        "code": null,
-        "name": "SBI POS"
-      },
-      "vpa": null,
-      "configJson": {},
-      "sortOrder": 1,
-      "isActive": true,
-      "defaultVisible": true,
-      "gatewayId": null
-    },
-    {
-      "counterId": {
-        "branchId": "BR-HQ",
-        "name": "Counter 23 rakesh"
-      },
-      "channel": "UPI",
-      "label": "PhonePe",
-      "accountId": {
-        "code": null,
-        "name": "PhonePe"
-      },
-      "vpa": "Q001860615@ybl",
-      "configJson": {},
-      "sortOrder": 0,
-      "isActive": true,
-      "defaultVisible": true,
-      "gatewayId": null
-    },
-    {
-      "counterId": {
-        "branchId": "BR-HQ",
-        "name": "Counter 23 rakesh"
-      },
-      "channel": "CARD",
-      "label": "SBI Swipe",
-      "accountId": {
-        "code": null,
-        "name": "SBI POS"
-      },
-      "vpa": null,
-      "configJson": {},
-      "sortOrder": 1,
-      "isActive": true,
-      "defaultVisible": true,
-      "gatewayId": null
-    },
-    {
-      "counterId": {
-        "branchId": "BR-HQ",
         "name": "Counter 21 naba"
       },
       "channel": "UPI",
@@ -11453,6 +11688,78 @@
       "counterId": {
         "branchId": "BR-HQ",
         "name": "Counter 22 Prokash"
+      },
+      "channel": "CARD",
+      "label": "SBI Swipe",
+      "accountId": {
+        "code": null,
+        "name": "SBI POS"
+      },
+      "vpa": null,
+      "configJson": {},
+      "sortOrder": 1,
+      "isActive": true,
+      "defaultVisible": true,
+      "gatewayId": null
+    },
+    {
+      "counterId": {
+        "branchId": "BR-HQ",
+        "name": "Counter 24 aka"
+      },
+      "channel": "UPI",
+      "label": "PhonePe",
+      "accountId": {
+        "code": null,
+        "name": "PhonePe"
+      },
+      "vpa": "Q001860615@ybl",
+      "configJson": {},
+      "sortOrder": 0,
+      "isActive": true,
+      "defaultVisible": true,
+      "gatewayId": null
+    },
+    {
+      "counterId": {
+        "branchId": "BR-HQ",
+        "name": "Counter 24 aka"
+      },
+      "channel": "CARD",
+      "label": "SBI Swipe",
+      "accountId": {
+        "code": null,
+        "name": "SBI POS"
+      },
+      "vpa": null,
+      "configJson": {},
+      "sortOrder": 1,
+      "isActive": true,
+      "defaultVisible": true,
+      "gatewayId": null
+    },
+    {
+      "counterId": {
+        "branchId": "BR-HQ",
+        "name": "Counter 23 rakesh"
+      },
+      "channel": "UPI",
+      "label": "PhonePe",
+      "accountId": {
+        "code": null,
+        "name": "PhonePe"
+      },
+      "vpa": "Q001860615@ybl",
+      "configJson": {},
+      "sortOrder": 0,
+      "isActive": true,
+      "defaultVisible": true,
+      "gatewayId": null
+    },
+    {
+      "counterId": {
+        "branchId": "BR-HQ",
+        "name": "Counter 23 rakesh"
       },
       "channel": "CARD",
       "label": "SBI Swipe",
