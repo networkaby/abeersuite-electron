@@ -137,7 +137,6 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:personal` | Same script, called directly | yes |
 | `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
-| `pnpm seed:apply-voucher-series-counters` | Gives every voucher series its counter-1 row | yes |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
 | `pnpm seed:helper-brands` / `-inventory` / `-roles` | Trade master data | demo |
 | `pnpm seed:helper-all` | All three helpers in order, then `seed:check-docs` | demo |
@@ -397,10 +396,13 @@ The rule going forward: **a script earns a place in `prisma/seeds/` only if it w
 more than once.** A one-time fix that ships with a schema change goes into
 `bootstrap-seed.ts` plus a line in the commit message — not into a new file.
 
-Still live and genuinely re-runnable: `seed:apply-voucher-series-counters` and
-`seed:apply-taxonomy`. `seed:apply-permissions` is gone — the permission catalog is
-the source of truth and both seeds apply it in full, so shipping a permission is now
-a plain `pnpm prisma db seed`.
+`seed:apply-taxonomy` is the **only** applier left, and the only one with work still
+in front of it. The others were deleted once it was clear the code already did their
+job: `seed:apply-permissions` (the permission catalog is the source of truth and both
+seeds apply it in full) and `seed:apply-voucher-series-counters` (`seedVoucherSeries`
+creates the counter-1 rows, and `GET /api/accountancy/voucher-series` runs it on
+every request, so the rows self-heal just by opening the page). Shipping a permission
+is now a plain `pnpm prisma db seed`.
 
 **Loose end still worth cleaning (not done here):** `scripts/` holds obvious throwaways —
 `tmp-check-apportioned-vouchers.ts`, `tmp-check-unit-cols.ts`, `inspect-call-raw.ts`,

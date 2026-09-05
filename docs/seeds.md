@@ -10,7 +10,6 @@ prisma/seeds/
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              ⛔ DO NOT RUN — new-client starter roles; its R2/R3 collide with ours
-├─ apply-voucher-series-counters.ts APPLY — give every VoucherSeries its counter-1 row
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
@@ -231,7 +230,6 @@ These do just the one job.
 
 | Script | Purpose |
 |---|---|
-| `pnpm seed:apply-voucher-series-counters` | Gives every `VoucherSeries` its counter-1 row in `VoucherSeriesCounter`, carrying the legacy `nextSeq` / `fyStartYear` across. Needed once per DB after the 2026-09-05 per-counter numbering change. |
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
 
 ### Shipping a permission
