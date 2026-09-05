@@ -10,7 +10,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Search, Loader2, RotateCcw, Banknote, CreditCard, Check, Minus, Plus, User,
+    Search, Loader2, RotateCcw, Banknote, CreditCard, Check, Minus, Plus, User, Gift,
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -47,11 +47,14 @@ type FoundInvoice = {
     issueDate:   string;
     totalAmount: string;
     account:     { id: number; name: string } | null;
+    /// Present only when this sale still has gift-card value that can go back on
+    /// the card; `refundable` is the most the return may put back (₹, 2dp).
+    giftCard:    { id: number; code: string; refundable: string } | null;
     lines:       ReturnLine[];
     returns:     { id: number; number: string; totalAmount: string }[];
 };
 
-type ReturnMode = "CASH" | "CREDIT";
+type ReturnMode = "CASH" | "CREDIT" | "GIFT_CARD";
 type Selection = Record<number, number>;   // invoiceLineId → return qty
 type Tab = "invoice" | "customer";
 
@@ -91,38 +94,59 @@ function InvoiceResultList({
 }
 
 function RefundModeToggle({
-    mode, onMode,
+    mode, onMode, giftCard, returnTotal,
 }: {
-    mode:   ReturnMode;
-    onMode: (m: ReturnMode) => void;
+    mode:        ReturnMode;
+    onMode:      (m: ReturnMode) => void;
+    /// The card this sale drew, when anything is still refundable to it.
+    giftCard:    { code: string; refundable: string } | null;
+    returnTotal: number;
 }) {
+    // Offered only when a card actually paid, and only for as much as it paid —
+    // a mixed-tender return still goes back as cash or credit.
+    const cardCap  = giftCard ? Number(giftCard.refundable) : 0;
+    const overCap  = returnTotal > cardCap + 0.005;
+    const cardOff  = !giftCard || overCap;
+    const btn = (active: boolean) =>
+        `flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors ${
+            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+        }`;
+
     return (
         <div className="space-y-1.5">
             <Label className="text-xs">Refund method</Label>
             <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-                <button
-                    type="button"
-                    onClick={() => onMode("CASH")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors ${
-                        mode === "CASH" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                    }`}
-                >
+                <button type="button" onClick={() => onMode("CASH")} className={btn(mode === "CASH")}>
                     <Banknote size={13} /> Cash back
                 </button>
                 <button
                     type="button"
                     onClick={() => onMode("CREDIT")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 transition-colors border-l border-border ${
-                        mode === "CREDIT" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                    }`}
+                    className={`${btn(mode === "CREDIT")} border-l border-border`}
                 >
                     <CreditCard size={13} /> Credit note
                 </button>
+                {giftCard && (
+                    <button
+                        type="button"
+                        disabled={cardOff}
+                        onClick={() => onMode("GIFT_CARD")}
+                        title={overCap ? `Only ₹${giftCard.refundable} of this sale was paid by gift card` : undefined}
+                        className={`${btn(mode === "GIFT_CARD")} border-l border-border disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
+                    >
+                        <Gift size={13} /> Back to card
+                    </button>
+                )}
             </div>
             <p className="text-xs text-muted-foreground">
                 {mode === "CASH"
                     ? "Cash is paid out from the counter till. Requires an open shift."
+                    : mode === "GIFT_CARD"
+                    ? `Value goes back on gift card ${giftCard?.code ?? ""}. No cash leaves the till.`
                     : "A credit balance is added to the customer's account for future purchases."}
+                {giftCard && overCap && (
+                    <> Only ₹{giftCard.refundable} of this sale was paid by gift card, so it cannot cover this return.</>
+                )}
             </p>
         </div>
     );
@@ -225,6 +249,12 @@ export function PosReturnDialog({
     const handleSubmit = async () => {
         if (!selected) return;
         if (selectedLines.length === 0) { toast.error("Select at least one item to return"); return; }
+        // The cashier can pick "Back to card" and then add more lines. The server
+        // refuses that too, but say it here rather than after a round trip.
+        if (mode === "GIFT_CARD" && returnTotal > Number(selected.giftCard?.refundable ?? 0) + 0.005) {
+            toast.error(`Only ₹${selected.giftCard?.refundable ?? "0.00"} of this sale was paid by gift card. Refund by cash or credit.`);
+            return;
+        }
         setSubmitting(true);
         try {
             const { data } = await axios.post<{
@@ -239,7 +269,9 @@ export function PosReturnDialog({
             });
             toast.success(
                 `Return ${data.returnNumber} · ₹${fmt(data.returnTotal)} — ` +
-                (mode === "CASH" ? "cash refunded from till" : "credit note issued") +
+                (mode === "CASH" ? "cash refunded from till"
+                 : mode === "GIFT_CARD" ? "put back on the gift card"
+                 : "credit note issued") +
                 ` · JE ${data.journalEntryRef}`
             );
             onDone();
@@ -448,7 +480,7 @@ export function PosReturnDialog({
                                 </div>
                             )}
 
-                            <RefundModeToggle mode={mode} onMode={setMode} />
+                            <RefundModeToggle mode={mode} onMode={setMode} giftCard={selected?.giftCard ?? null} returnTotal={returnTotal} />
 
                             <div className="space-y-1.5">
                                 <Label htmlFor="return-notes" className="text-xs">

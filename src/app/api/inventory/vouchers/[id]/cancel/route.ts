@@ -6,6 +6,8 @@ import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureCancelable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { reverseCouponRedemption, refundGiftCard } from "@/modules/coupons/lib";
+import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -21,7 +23,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const userId = user!.id;
 
-    const voucherRow = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true } } } });   // 5D-6/5D-8/5D-11/5D-12
+    const voucherRow = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true, partyAccountId: true } } } });   // 5D-6/5D-8/5D-11/5D-12 + 5D-4 party (loyalty reversal)
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
@@ -96,6 +98,60 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     await setSpineLifecycle(tx, voucher.universalVoucherId, {
                         status: "CANCELLED", cancelledAt: new Date(), cancelledById: userId,
                         cancelReason: `Voucher ${voucher.universalVoucher?.voucherNo ?? ""} cancelled: ${reason.trim()}`,
+                    });
+                }
+            }
+
+            // ── 2b. Reverse the rewards the sale consumed ──────────────────────
+            // Cancel used to reverse stock and the GL and stop there: the gift card
+            // stayed drawn, the coupon stayed used and the loyalty lots stayed
+            // credited/consumed. The customer lost card value with no ledger behind
+            // it and the coupon was burnt on a sale that no longer exists (audit C2).
+            // Every helper below no-ops when the sale carried nothing of its kind, so
+            // this runs for all voucher kinds without a per-kind branch.
+            if (voucher.universalVoucherId) {
+                const spineId = voucher.universalVoucherId;
+
+                // Gift card — put back exactly what this sale drew. A REFUND row
+                // against the same spine means an earlier pass already did it.
+                const draws = await tx.giftCardTxn.findMany({
+                    where:  { universalVoucherId: spineId, type: "REDEEM" },
+                    select: { giftCardId: true, amount: true },
+                });
+                if (draws.length > 0) {
+                    const refunded = await tx.giftCardTxn.findMany({
+                        where:  { universalVoucherId: spineId, type: "REFUND" },
+                        select: { giftCardId: true },
+                    });
+                    const alreadyRefunded = new Set(refunded.map((r) => r.giftCardId));
+                    for (const draw of draws) {
+                        if (alreadyRefunded.has(draw.giftCardId)) continue;
+                        const amount = Math.abs(toNumber(draw.amount));   // REDEEM is stored negative
+                        if (amount <= 0.005) continue;
+                        await refundGiftCard(tx, { giftCardId: draw.giftCardId, amount, universalVoucherId: spineId, createdById: userId });
+                    }
+                }
+
+                // Coupon — free the usage slot. Idempotent on its own `reversedAt: null`.
+                await reverseCouponRedemption(tx, { originalUniversalVoucherId: spineId, returnFraction: 1 });
+
+                // Loyalty — a cancel is a full return with no credit note, so the sale's
+                // own spine carries the reversal rows. The claw-back is capped at the
+                // earn lot's remaining points and the restore at the original redeem net
+                // of what earlier partial returns already gave back, so a sale returned
+                // in part and then cancelled reverses once, never twice.
+                const partyAccountId = voucher.universalVoucher?.partyAccountId ?? null;
+                if (partyAccountId != null) {
+                    const loyaltyConfig = await tx.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+                    await reverseLoyaltyForReturn(tx, {
+                        accountId:                  partyAccountId,
+                        originalUniversalVoucherId: spineId,
+                        originalVoucherId:          voucher.id,
+                        returnUniversalVoucherId:   spineId,
+                        returnVoucherId:            voucher.id,
+                        returnFraction:             1,
+                        rates:                      ratesFromConfig(loyaltyConfig),
+                        createdById:                userId,
                     });
                 }
             }

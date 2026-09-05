@@ -114,6 +114,12 @@ export async function GET(req: NextRequest) {
                 .map((a) => [a.id, a.name]),
         );
 
+        // The Gift Card Liability ledger identifies a "back to card" refund: that
+        // tender is neither the till nor the customer's AR. Singleton, one read.
+        const giftCardLiabilityAccountId = (
+            await prisma.couponConfig.findUnique({ where: { id: 1 }, select: { giftCardLiabilityAccountId: true } })
+        )?.giftCardLiabilityAccountId ?? null;
+
         return NextResponse.json({
             total,
             items: vouchers.map((v) => {
@@ -129,9 +135,12 @@ export async function GET(req: NextRequest) {
                 const methods = [...new Set(tenders.map((t) => t.method).filter((m): m is NonNullable<typeof m> => !!m))];
                 const paymentMode = methods.length > 1 ? "MIXED" : (methods[0] ?? null);
                 // Return refund channel — the settlement tender's account is the
-                // customer AR on a credit note, the counter till on a cash refund.
+                // customer AR on a credit note, the Gift Card Liability ledger when the
+                // value went back on the card, and the counter till on a cash refund.
                 const refundMode = tenders.length === 0 ? null
-                    : tenders.some((t) => t.accountId === v.universalVoucher?.partyAccountId) ? "CREDIT" : "CASH";
+                    : tenders.some((t) => t.accountId === v.universalVoucher?.partyAccountId) ? "CREDIT"
+                    : giftCardLiabilityAccountId != null && tenders.some((t) => t.accountId === giftCardLiabilityAccountId) ? "GIFT_CARD"
+                    : "CASH";
                 return {
                     id: v.id,
                     reference: v.universalVoucher?.voucherNo ?? "",

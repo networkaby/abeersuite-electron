@@ -98,6 +98,42 @@ export async function GET(req: NextRequest) {
                 return sum + (byProduct?.get(productId) ?? 0);
             }, 0);
 
+        // Gift card drawn on each sale, net of what has already gone back — the
+        // dialog offers "back to card" only when there is something left to return.
+        // A refund is recorded against whatever caused it, so both the sale's own
+        // spine (a cancel) and its SALE_RETURN spines (a credit note) count.
+        // Same rule as `giftCardRefundableForSale`, computed in batch for the list.
+        const cardSpineIds = [...uvIds, ...returnUvIds];
+        const cardTxns = cardSpineIds.length === 0 ? [] : await prisma.giftCardTxn.findMany({
+            where:  { universalVoucherId: { in: cardSpineIds }, type: { in: ["REDEEM", "REFUND"] } },
+            select: { universalVoucherId: true, giftCardId: true, type: true, amount: true, giftCard: { select: { code: true } } },
+        });
+        // Every return spine maps back to the sale it came from.
+        const saleSpineByReturnSpine = new Map<number, number>();
+        for (const v of vouchers) {
+            if (v.universalVoucherId == null) continue;
+            for (const r of v.refReturns) {
+                if (r.universalVoucherId != null) saleSpineByReturnSpine.set(r.universalVoucherId, v.universalVoucherId);
+            }
+        }
+        const cardBySaleSpine = new Map<number, { giftCardId: number; code: string; drawn: number; refunded: number }>();
+        for (const t of cardTxns) {
+            if (t.universalVoucherId == null) continue;
+            const saleSpine = saleSpineByReturnSpine.get(t.universalVoucherId) ?? t.universalVoucherId;
+            const amount = Number(t.amount);
+            const entry = cardBySaleSpine.get(saleSpine)
+                ?? { giftCardId: t.giftCardId, code: t.giftCard.code, drawn: 0, refunded: 0 };
+            if (t.type === "REDEEM") { entry.giftCardId = t.giftCardId; entry.code = t.giftCard.code; entry.drawn += Math.abs(amount); }
+            else                     { entry.refunded += amount; }
+            cardBySaleSpine.set(saleSpine, entry);
+        }
+        const giftCardFor = (v: { universalVoucherId: number | null }) => {
+            const e = v.universalVoucherId != null ? cardBySaleSpine.get(v.universalVoucherId) : undefined;
+            if (!e || e.drawn <= 0) return null;
+            const refundable = Math.round((e.drawn - e.refunded) * 100) / 100;
+            return refundable > 0.005 ? { id: e.giftCardId, code: e.code, refundable: refundable.toFixed(2) } : null;
+        };
+
         return NextResponse.json(vouchers.map((v) => ({
             id:          v.id,
             number:      v.universalVoucher?.voucherNo ?? "",
@@ -105,6 +141,7 @@ export async function GET(req: NextRequest) {
             status:      "PAID", // legacy field — POS sales are always settled at counter; UI uses it as a "OK to return" sentinel
             totalAmount: v.totalAmount.toString(),
             account:     v.universalVoucher?.partyAccountId != null ? (partyAcctById.get(v.universalVoucher.partyAccountId) ?? null) : null,
+            giftCard:    giftCardFor(v),
             lines:       linesFor(v).map((l) => ({
                 id:            l.id,
                 productId:     l.productId,
