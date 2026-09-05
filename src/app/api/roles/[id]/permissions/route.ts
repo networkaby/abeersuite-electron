@@ -120,6 +120,12 @@ export async function PUT(
         });
         const knownIds = new Set(known.map((p) => p.id));
         const permissionIds = pooledIds.filter((id) => knownIds.has(id));
+        // Tell the editor what was NOT persisted, so it can warn instead of
+        // toasting "saved" while a tick silently vanishes on reload. Two buckets:
+        // unseeded (no Permission row — run `pnpm seed:apply-permissions`) and
+        // outside the department pool.
+        const unseeded = pooledIds.filter((id) => !knownIds.has(id));
+        const outsidePool = data.permissionIds.filter((id) => !pooledIds.includes(id));
 
         // Replace full permission set for this role — atomically, so a rejected id
         // can never leave the role emptied by the delete half of the swap.
@@ -135,7 +141,7 @@ export async function PUT(
         // The role's grants changed — every holder's JWT is now stale; revoke so
         // they pick up the new set on next login.
         await revokeRoleSessions(roleId);
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, dropped: { unseeded, outsidePool } });
     } catch (e) {
         return handleApiError(e, "Failed to update role permissions");
     }

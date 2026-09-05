@@ -278,14 +278,24 @@ export default function RolePage() {
 
         setSavingPerms(true);
         try {
-            await axios.put(`/api/roles/${activeRole.id}/permissions`, {
-                // Persist only the highest CRUD rung per resource — ticked lowers
-                // are implied at check time, so storing them would just bloat
-                // grants + the session token.
-                permissionIds: [...normalizeCrudGrants(selected)],
-            });
+            const res = await axios.put<{ dropped?: { unseeded: string[]; outsidePool: string[] } }>(
+                `/api/roles/${activeRole.id}/permissions`,
+                {
+                    // Persist only the highest CRUD rung per resource — ticked lowers
+                    // are implied at check time, so storing them would just bloat
+                    // grants + the session token.
+                    permissionIds: [...normalizeCrudGrants(selected)],
+                },
+            );
             setOriginal(new Set(selected));
-            toast.success("Permissions saved");
+            const { unseeded = [], outsidePool = [] } = res.data.dropped ?? {};
+            if (unseeded.length > 0) {
+                toast.warning(`Not saved — not seeded in DB (run pnpm seed:apply-permissions): ${unseeded.join(", ")}`, { duration: 10000 });
+            } else if (outsidePool.length > 0) {
+                toast.warning(`Not saved — outside the department pool: ${outsidePool.join(", ")}`, { duration: 10000 });
+            } else {
+                toast.success("Permissions saved");
+            }
             await loadData(activeRole.id);
         } catch {
             toast.error("Failed to save permissions");
