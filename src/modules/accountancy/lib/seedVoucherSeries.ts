@@ -103,6 +103,15 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
 
     await prisma.voucherSeries.createMany({ data: rows, skipDuplicates: true });
 
+    // The number lives per counter (VoucherSeriesCounter). Counter 1 — the office —
+    // takes over the legacy `nextSeq` so numbering continues; other counters create
+    // their own row on first use. Idempotent: existing rows are never touched.
+    const existing = await prisma.voucherSeries.findMany({ select: { kind: true, nextSeq: true, fyStartYear: true } });
+    await prisma.voucherSeriesCounter.createMany({
+        data: existing.map((r) => ({ kind: r.kind, counterNumber: 1, nextSeq: r.nextSeq, fyStartYear: r.fyStartYear })),
+        skipDuplicates: true,
+    });
+
     // Keep labels in sync — `skipDuplicates` above means existing rows don't
     // pick up label tweaks (e.g. "Sale Voucher" → "Sale Invoice"). Update
     // labels idempotently so renames propagate without a manual migration.
@@ -135,5 +144,6 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
 
     // Phase 5 5D-14: retire the orphaned GL_POSTING series — the engine stopped
     // minting GL- references (the spine `id` IS the Universal Voucher No since 5D-7).
+    await prisma.voucherSeriesCounter.deleteMany({ where: { kind: "GL_POSTING" } });
     await prisma.voucherSeries.deleteMany({ where: { kind: "GL_POSTING" } });
 }

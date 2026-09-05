@@ -21,6 +21,9 @@ export async function GET() {
                 // Fixed display order matching Tally convention
                 { kind: "asc" },
             ],
+            // The number itself is per counter (see VoucherSeriesCounter); the page
+            // shows counter 1's on the row and the rest as a list.
+            include: { counters: { orderBy: { counterNumber: "asc" }, select: { counterNumber: true, nextSeq: true, fyStartYear: true } } },
         });
 
         // Sort in logical order rather than alphabetical.

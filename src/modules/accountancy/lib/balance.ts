@@ -1,5 +1,7 @@
 import { defaultNormalBalanceForGroupType } from "./groupNature";
 import { dateOnOrBefore, businessToday } from "@/shared/lib/format/formatDate";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
+import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
 
 export type LineForBalance = {
     type: "DEBIT" | "CREDIT";
@@ -139,6 +141,24 @@ export function computeBalance(
  *
  * Throws if the VoucherSeries row is missing — visit Settings → Year Ending.
  */
+/**
+ * Which counter this save numbers under.
+ *
+ * An explicit context wins (the POS sale passes its shift's counter). Otherwise a
+ * counter PC numbers under the counter it is set up as, and the office — no counter
+ * at all — numbers as counter 1. Same fallback `assembleReference` renders, so the
+ * printed reference and the series row it came from always agree.
+ */
+export function resolveCounterNumber(ctx?: import("./voucherRef").ReferenceContext): number {
+    const explicit = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;
+    if (explicit != null && explicit > 0) return explicit;
+    if (IS_COUNTER_PC) {
+        const setup = readCounterSetup();
+        if (setup && setup.counterNumber > 0) return setup.counterNumber;
+    }
+    return 1;
+}
+
 export async function nextRefFromSeries(
     tx: import("@/generated/prisma/client").Prisma.TransactionClient,
     kind: string,
@@ -154,12 +174,29 @@ export async function nextRefFromSeries(
         update: {},
     });
 
-    // Read once to check rollover. We do this BEFORE the atomic increment so
-    // that the reset (nextSeq → 0) and the increment can happen together.
+    // The format lives on the kind's row; the NUMBER lives on this counter's row.
     const current = await tx.voucherSeries.findUnique({ where: { kind } });
     if (!current) {
         throw new Error(`VoucherSeries for kind '${kind}' not found. Visit Settings → Year Ending to initialise.`);
     }
+
+    const counterNumber = resolveCounterNumber(ctx);
+    const key = { kind_counterNumber: { kind, counterNumber } };
+
+    // One row per (kind, counter), so only this machine ever writes it — which is
+    // what makes the increment safe under sync's last-write-wins. Counter 1 (the
+    // office) inherits the legacy `VoucherSeries.nextSeq` the first time so numbering
+    // continues; every other counter starts its own run at `startFrom`.
+    const row = await tx.voucherSeriesCounter.upsert({
+        where: key,
+        create: {
+            kind,
+            counterNumber,
+            nextSeq: counterNumber === 1 ? current.nextSeq : 0,
+            fyStartYear: current.fyStartYear,
+        },
+        update: {},
+    });
 
     // Compare CALENDAR DAYS, not instants. `fyClosingDate` returns UTC midnight
     // of the last day of the FY, so an instant-valued "today" tested `>` the
@@ -168,25 +205,35 @@ export async function nextRefFromSeries(
     // vouchers under the wrong FY. `businessToday()` is UTC midnight of the
     // SHOP's day, so 31 Mar is not > 31 Mar and the roll happens on 1 April.
     const today = businessToday();
-    if (current.fyStartYear != null) {
-        const closing = fyClosingDate(current.fyStartYear, config.restartMonth, config.restartDay);
+    const fyStartYear = row.fyStartYear ?? current.fyStartYear;
+    if (fyStartYear != null) {
+        const closing = fyClosingDate(fyStartYear, config.restartMonth, config.restartDay);
         if (today > closing) {
-            await tx.voucherSeries.update({
-                where: { kind },
-                data: {
-                    fyStartYear: current.fyStartYear + 1,
-                    nextSeq: 0,
-                },
+            await tx.voucherSeriesCounter.update({
+                where: key,
+                data: { fyStartYear: fyStartYear + 1, nextSeq: 0 },
             });
         }
     }
 
-    // Atomic post-increment
-    const series = await tx.voucherSeries.update({
-        where: { kind },
+    // Atomic post-increment on this counter's own row.
+    const advanced = await tx.voucherSeriesCounter.update({
+        where: key,
         data: { nextSeq: { increment: 1 } },
     });
 
-    return assembleReference(series, ctx);
+    // The Year Ending page still reads the legacy column for counter 1. Mirrored,
+    // not read: allocation never depends on it, and only the office writes it.
+    if (counterNumber === 1) {
+        await tx.voucherSeries.update({
+            where: { kind },
+            data: { nextSeq: advanced.nextSeq, fyStartYear: advanced.fyStartYear },
+        });
+    }
+
+    return assembleReference(
+        { ...current, nextSeq: advanced.nextSeq, fyStartYear: advanced.fyStartYear ?? current.fyStartYear },
+        counterNumber,
+    );
 }
 

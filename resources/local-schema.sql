@@ -1199,6 +1199,22 @@ ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "partOrder" TEXT NOT NULL D
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "VoucherSeriesCounter" (
+    "kind" TEXT NOT NULL,
+    "counterNumber" INTEGER NOT NULL,
+    "nextSeq" INTEGER NOT NULL DEFAULT 0,
+    "fyStartYear" INTEGER,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "VoucherSeriesCounter_pkey" PRIMARY KEY ("kind","counterNumber")
+);
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "counterNumber" INTEGER NOT NULL;
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "nextSeq" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "fyStartYear" INTEGER;
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "VoucherPrintTemplate" (
     "kind" TEXT NOT NULL,
     "headerLine1" TEXT NOT NULL DEFAULT '',
@@ -4559,6 +4575,13 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
+    ALTER TABLE "VoucherSeriesCounter" ADD CONSTRAINT "VoucherSeriesCounter_kind_fkey" FOREIGN KEY ("kind") REFERENCES "VoucherSeries"("kind") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
     ALTER TABLE "ChatRoom" ADD CONSTRAINT "ChatRoom_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -6543,6 +6566,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherSeries";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherSeries"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."VoucherSeriesCounter"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "VoucherSeriesCounter";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "VoucherSeriesCounter"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind', 'counterNumber');
     END IF;
 END $$;
 DO $$ BEGIN

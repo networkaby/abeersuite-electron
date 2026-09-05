@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
+import { resolveCounterNumber } from "@/modules/accountancy/lib/balance";
 import { InvVoucherType } from "@/generated/prisma/client";
 
 // GET /api/inventory/vouchers/next-ref?type=SALE|PURCHASE|ESTIMATE
@@ -48,10 +49,15 @@ export async function GET(req: Request) {
     if (!series) return NextResponse.json({ reference: "" });
 
     const counterParam = searchParams.get("counterNumber") ?? searchParams.get("counter");
-    const counterNumber = counterParam ? Number(counterParam) : 1;
+    const counterNumber = resolveCounterNumber(counterParam ? Number(counterParam) : null);
+    // The number is per counter; a counter with no row yet starts where the
+    // allocator will start it (counter 1 inherits the legacy column).
+    const own = await prisma.voucherSeriesCounter.findUnique({ where: { kind_counterNumber: { kind, counterNumber } } });
+    const nextSeq = own ? own.nextSeq : counterNumber === 1 ? series.nextSeq : 0;
+    const fyStartYear = own?.fyStartYear ?? series.fyStartYear;
 
     const reference = assembleReference(
-        { ...series, nextSeq: series.nextSeq + 1 },
+        { ...series, nextSeq: nextSeq + 1, fyStartYear },
         { counterNumber },
     );
     return NextResponse.json({ reference });

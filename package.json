@@ -46,6 +46,8 @@
     "seed:hard-clean": "tsx prisma/seeds/hard-clean.ts",
     "seed:recompute-balances": "tsx prisma/seeds/recompute-balances.ts",
     "recompute:caches": "tsx src/scripts/recompute-caches.ts",
+    "check:voucher-duplicates": "tsx src/scripts/check-voucher-duplicates.ts",
+    "seed:apply-voucher-series-counters": "tsx prisma/seeds/apply-voucher-series-counters.ts",
     "seed:apply-permissions": "tsx prisma/seeds/apply-permissions.ts",
     "seed:apply-delivery-methods": "tsx prisma/seeds/apply-delivery-methods.ts",
     "seed:apply-help-pipeline": "tsx prisma/seeds/apply-help-pipeline.ts",

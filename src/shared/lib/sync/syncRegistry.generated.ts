@@ -130,6 +130,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "VoucherLink": { model: "VoucherLink", delegate: "voucherLink", pk: ["id"], exact: [], dates: [], cache: [] },
     "VoucherPrintTemplate": { model: "VoucherPrintTemplate", delegate: "voucherPrintTemplate", pk: ["kind"], exact: [], dates: ["updatedAt"], cache: [] },
     "VoucherSeries": { model: "VoucherSeries", delegate: "voucherSeries", pk: ["kind"], exact: [], dates: ["updatedAt"], cache: [] },
+    "VoucherSeriesCounter": { model: "VoucherSeriesCounter", delegate: "voucherSeriesCounter", pk: ["kind", "counterNumber"], exact: [], dates: ["updatedAt"], cache: [] },
     "WallPost": { model: "WallPost", delegate: "wallPost", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "WallPostComment": { model: "WallPostComment", delegate: "wallPostComment", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "WallPostLike": { model: "WallPostLike", delegate: "wallPostLike", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },

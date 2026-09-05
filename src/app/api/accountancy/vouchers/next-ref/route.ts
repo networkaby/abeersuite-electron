@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
+import { resolveCounterNumber } from "@/modules/accountancy/lib/balance";
 
 // GET /api/accountancy/vouchers/next-ref?type=JOURNAL
 // Preview the next voucher reference (e.g. JOURNAL/26-27/0042) WITHOUT
@@ -24,13 +25,18 @@ export async function GET(req: Request) {
     }
 
     const counterParam = searchParams.get("counterNumber") ?? searchParams.get("counter");
-    const counterNumber = counterParam ? Number(counterParam) : 1;
+    const counterNumber = resolveCounterNumber(counterParam ? Number(counterParam) : null);
+    // The number is per counter; a counter with no row yet starts where the
+    // allocator will start it (counter 1 inherits the legacy column).
+    const own = await prisma.voucherSeriesCounter.findUnique({ where: { kind_counterNumber: { kind, counterNumber } } });
+    const nextSeq = own ? own.nextSeq : counterNumber === 1 ? series.nextSeq : 0;
+    const fyStartYear = own?.fyStartYear ?? series.fyStartYear;
 
     // Mirror what nextRefFromSeries does at save time: it post-increments
     // nextSeq, then calls assembleReference. To preview the same value,
     // pass a shape with nextSeq + 1.
     const reference = assembleReference(
-        { ...series, nextSeq: series.nextSeq + 1 },
+        { ...series, nextSeq: nextSeq + 1, fyStartYear },
         { counterNumber },
     );
 

@@ -213,6 +213,11 @@ export async function POST(req: NextRequest) {
         // directly in the offline-safe numeric PK formula (shared/lib/id/numericId.ts)
         // for Tickets/PosShifts/UniversalVoucher, so two counters in different
         // branches must never share a number or their offline-minted ids collide.
+        // Counter 1 is the OFFICE's numbering slot: a save with no counter (the web
+        // app) numbers vouchers as counter 1 (see resolveCounterNumber). A PC on
+        // number 1 would share that series row with the office and the two would
+        // overwrite each other's next number.
+        if (counterNumber === 1) return NextResponse.json({ error: "Counter number 1 is reserved for the office. Use 2 or higher." }, { status: 422 });
         const dupNum = await prisma.posCounter.findFirst({ where: { counterNumber }, select: { id: true, name: true, branch: { select: { name: true } } } });
         if (dupNum) return NextResponse.json({ error: `Counter number ${counterNumber} is already used by "${dupNum.name}" in ${dupNum.branch.name}` }, { status: 409 });
 

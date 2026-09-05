@@ -292,6 +292,30 @@ model VoucherSeries {
   partOrder String @default("type,-,year,-,counter,number")
 
   updatedAt DateTime @updatedAt
+
+  counters VoucherSeriesCounter[]
+}
+
+/// The running number of one series on ONE counter.
+///
+/// `VoucherSeries` holds the format (prefix, year, padding, part order) and is the
+/// office's to edit. The number itself lives here, one row per (kind, counter), so
+/// that only the machine numbering on that row ever writes it: two counters that
+/// shared a row would each increment from the value they last pulled and overwrite
+/// each other under last-write-wins, re-issuing invoice numbers. The office numbers
+/// as counter 1. `VoucherSeries.nextSeq` is the legacy column, kept in step for
+/// counter 1 only for the Year Ending page; allocation never reads it.
+model VoucherSeriesCounter {
+  kind          String
+  counterNumber Int
+  nextSeq       Int  @default(0)
+  /// Per-row FY tracker, same rollover rule as the series (BooksConfig restart day).
+  fyStartYear   Int?
+  updatedAt     DateTime @updatedAt
+
+  series VoucherSeries @relation(fields: [kind], references: [kind])
+
+  @@id([kind, counterNumber])
 }
 
 // ── Print templates ─────────────────────────────────────────────────────────
