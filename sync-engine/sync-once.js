@@ -23,6 +23,7 @@ const { pool, canSuspendForeignKeys } = require("./lib/db");
 const registryLib = require("./lib/registry");
 const state = require("./lib/state");
 const { pullWatermark, pullFull, pullChildren, pullByKeys, deleteByKeys } = require("./lib/pull");
+const totals = require("./lib/rebuildTotals");
 const reconcile = require("./lib/reconcile");
 const schemaGuard = require("./lib/schemaGuard");
 const status = require("./lib/status");
@@ -407,6 +408,28 @@ async function main() {
                 }
             }
         }
+        // ---- Pass 4: re-sum the running totals this cycle's ledger rows touched -
+        //
+        // Pulled rows leave Account.balance / stock / GiftCard.balance alone (see
+        // rebuildTotals.js); this is where the replica's own copies catch up. Runs
+        // after every pass, including reconcile repairs, so a repaired GL line is
+        // counted the same cycle it arrives.
+        if (!DRY && totals.pending() > 0) {
+            try {
+                const changed = await totals.rebuildTouched(local, console.log);
+                // A changed total changes what a balance screen shows, exactly as a
+                // pulled row does — and only the models a screen can name are useful.
+                if (changed > 0) {
+                    changedModels.add("Account");
+                    changedModels.add("InvProduct");
+                    changedModels.add("GiftCard");
+                }
+            } catch (e) {
+                failed++;
+                console.error(`  totals                       REBUILD FAILED: ${e.message}`);
+            }
+        }
+
         // ---- Publish readiness ------------------------------------------------
         if (!DRY) {
             const after = await state.readAll(local);

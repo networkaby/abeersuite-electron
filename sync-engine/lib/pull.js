@@ -13,6 +13,7 @@
 
 const { q, inReplicaTransaction } = require("./db");
 const { keyExpression } = require("./reconcile");
+const totals = require("./rebuildTotals");
 
 /** Rows per INSERT. Postgres caps a statement at 65535 parameters. */
 const CHUNK = 500;
@@ -70,16 +71,23 @@ function chunk(arr, size) {
  * row with no `updatedAt` (most append/full reference tables) keeps the previous
  * unconditional behaviour.
  */
-async function upsert(client, table, pk, rows, jsonCols) {
+async function upsert(client, table, pk, rows, jsonCols, cacheCols) {
     if (rows.length === 0) return 0;
     const json = jsonCols || new Set();
+    const cache = new Set(cacheCols || []);
 
     const cols = Object.keys(rows[0]);
     const colSql = cols.map(q).join(", ");
     const conflict = pk.map(q).join(", ");
     // Every non-key column is refreshed. Listing them explicitly (rather than using
     // EXCLUDED.*) keeps the statement valid if the row shape ever narrows.
-    const updates = cols.filter((c) => !pk.includes(c));
+    //
+    // Except a running total (`cacheColumns` in the registry): the source's
+    // Account.balance is the SOURCE's sum, and this replica may hold sales the source
+    // has not received yet. The total is inserted with a new row (NOT NULL) but never
+    // overwritten on an existing one; rebuildTotals.js re-sums it from the local
+    // ledger once this cycle's ledger rows are in.
+    const updates = cols.filter((c) => !pk.includes(c) && !cache.has(c));
     const hasUpdatedAt = cols.includes("updatedAt");
     const setSql = updates.length
         ? updates.map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(", ")
@@ -108,6 +116,7 @@ async function upsert(client, table, pk, rows, jsonCols) {
         await client.query(sql, params);
         written += batch.length;
     }
+    totals.noteRows(table, rows);
     return written;
 }
 
@@ -159,7 +168,7 @@ async function pullWatermark(source, local, entry, since, sinceId, limit) {
     if (rows.length === 0) return { pulled: 0, watermark: null, watermarkId: null, ids: [], more: false };
 
     const jsonCols = jsonColumnsOf(res.fields);
-    await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, rows, jsonCols));
+    await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, rows, jsonCols, entry.cacheColumns));
 
     const last = rows[rows.length - 1];
     return {
@@ -187,7 +196,7 @@ async function pullFull(source, local, entry) {
         // DELETE, not TRUNCATE: TRUNCATE on a referenced table demands CASCADE, and
         // CASCADE would silently empty the tables pointing at it.
         await local.query(`DELETE FROM ${q(entry.table)}`);
-        await upsert(local, entry.table, entry.pk, rows, jsonCols);
+        await upsert(local, entry.table, entry.pk, rows, jsonCols, entry.cacheColumns);
     });
     const idCol = entry.pk[0];
     return {
@@ -219,8 +228,10 @@ async function pullChildren(source, local, entry, parentIds) {
     const jsonCols = jsonColumnsOf(res.fields);
 
     await inReplicaTransaction(local, async () => {
+        // The lines about to be replaced may point at accounts the new set does not.
+        await totals.noteBeforeDelete(local, entry.table, `${q(entry.fk)} = ANY($1)`, [parentIds]);
         await local.query(`DELETE FROM ${q(entry.table)} WHERE ${q(entry.fk)} = ANY($1)`, [parentIds]);
-        await upsert(local, entry.table, entry.pk, rows, jsonCols);
+        await upsert(local, entry.table, entry.pk, rows, jsonCols, entry.cacheColumns);
     });
 
     const idCol = entry.pk[0];
@@ -252,7 +263,7 @@ async function pullByKeys(source, local, entry, keys) {
         );
         if (res.rows.length === 0) continue;
         const jsonCols = jsonColumnsOf(res.fields);
-        await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, res.rows, jsonCols));
+        await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, res.rows, jsonCols, entry.cacheColumns));
         written += res.rows.length;
     }
     return written;
@@ -266,8 +277,10 @@ async function deleteByKeys(local, entry, keys) {
 
     let removed = 0;
     for (const batch of chunk(keys, CHUNK)) {
-        const r = await inReplicaTransaction(local, () =>
-            local.query(`DELETE FROM ${q(entry.table)} WHERE ${keyExpr} = ANY($1)`, [batch]));
+        const r = await inReplicaTransaction(local, async () => {
+            await totals.noteBeforeDelete(local, entry.table, `${keyExpr} = ANY($1)`, [batch]);
+            return local.query(`DELETE FROM ${q(entry.table)} WHERE ${keyExpr} = ANY($1)`, [batch]);
+        });
         removed += r.rowCount || 0;
     }
     return removed;

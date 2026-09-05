@@ -15,6 +15,9 @@
  *   node verify-replica.js            count + key checksum for every table
  *   node verify-replica.js --keys     also list the differing ids (transfers keys)
  *   node verify-replica.js --only Person
+ *   node verify-replica.js --totals   also prove each side's running totals against
+ *                                     its OWN ledger (totals never travel — see
+ *                                     lib/rebuildTotals.js)
  */
 
 const fs = require("node:fs");
@@ -23,9 +26,11 @@ const { configPath } = require("./lib/configPath");
 const { pool } = require("./lib/db");
 const registryLib = require("./lib/registry");
 const reconcile = require("./lib/reconcile");
+const totals = require("./lib/rebuildTotals");
 
 const args = process.argv.slice(2);
 const SHOW_KEYS = args.includes("--keys");
+const TOTALS = args.includes("--totals");
 const onlyIdx = args.indexOf("--only");
 const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1] : null;
 
@@ -81,8 +86,21 @@ async function main() {
             }
         }
 
+        if (TOTALS) {
+            // Each side against ITS OWN ledger. The two sides' totals legitimately
+            // differ while a sale is still in this counter's outbox; what must never
+            // happen is a total disagreeing with the ledger beneath it.
+            for (const [label, client] of [["source", source], ["replica", local]]) {
+                const d = await totals.driftReport(client);
+                const n = d.accounts + d.products + d.branches + d.giftCards;
+                console.log(`  totals   ${label.padEnd(28)} ${n === 0 ? "in step with ledger" : `DRIFT accounts=${d.accounts} products=${d.products} branches=${d.branches} giftCards=${d.giftCards}`}`);
+                if (n > 0) bad.push({ model: `totals@${label}`, entry: null, error: "running totals drift from ledger" });
+            }
+        }
+
         if (SHOW_KEYS) {
             for (const b of bad) {
+                if (!b.entry) continue;
                 if (b.error) continue;
                 const extra = await reconcile.missingLocally(source, local, b.entry);
                 if (extra.length) {
