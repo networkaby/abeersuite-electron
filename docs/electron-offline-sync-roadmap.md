@@ -262,6 +262,30 @@ and reconcile run regardless), it only makes things happen sooner.
 - **Schema drift guard** — `sync-engine/lib/schemaGuard.js` compares `information_schema`
   on both sides and halts the cycle (exit 4) on a missing or retyped column.
 
+### 4.4 Running totals never travel (2026-09-05)
+
+`Account.balance`, `InvProduct.stock` / `InvProductBranch.stock` and `GiftCard.balance`
+are caches kept by increments. Shipped as row images under last-write-wins, two machines
+adding to the same total from the value each last pulled overwrote each other's
+increments. The rule now: **a running total is never sent on an update; each side re-sums
+it from its own ledger after ledger rows land.** One list, `cacheColumns` in
+`prisma/sync-tables.json` (`overrides`), drives all three places: the capture trigger
+ships no outbox row when only a total (and `updatedAt`) changed; `push.ts` leaves the
+columns out of the UPDATE half of its upsert and re-sums the touched accounts / products /
+gift cards on Supabase after the flush (`rebuildTotals.ts`); the engine does the same on
+the replica in pass 4 of every cycle (`sync-engine/lib/rebuildTotals.js`). Totals still
+ride a row's CREATE (the columns are NOT NULL). `verify-replica.js --totals` proves each
+side against its own ledger; `pnpm recompute:caches` is the one-shot repair.
+
+Voucher numbers are the one total that is an allocator, not a sum: they live per
+`(kind, counterNumber)` in `VoucherSeriesCounter`, and only the machine numbering on a
+row writes it. The office is counter 1; a PC cannot take number 1.
+
+Gift cards are the residual: a single till cannot overdraw a card (conditional draw), but
+two tills apart can each spend the same card. After the rebuild the balance is negative,
+`/api/sync/status` reports `overdrawnGiftCards`, the badge and title show it, and the
+card refuses further draws until an admin posts an ADJUST txn.
+
 ---
 
 ## 5. Desktop & hardware capabilities
