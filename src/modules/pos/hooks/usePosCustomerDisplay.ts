@@ -8,7 +8,7 @@
 // and printing stay in each screen — only this live coordinator is shared.
 
 import { useEffect } from "react";
-import { calcLineTotals } from "@/modules/inventory/lib/stock";
+import { calcLineTotals } from "@/modules/inventory/lib/voucherMath";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { Snapshot, CartLine, ProductOption } from "@/modules/pos/lib/posDraftTypes";

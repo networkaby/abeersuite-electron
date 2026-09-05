@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
-import { calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
+import { calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/voucherMath";
 import { type PartySearchAndCreateHandle, type PickedParty } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
