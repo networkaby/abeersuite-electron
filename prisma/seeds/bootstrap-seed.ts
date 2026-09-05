@@ -42,15 +42,14 @@
 //   • Inventory Warranty Term master: ~10 common terms (No Warranty, 7-day
 //     DOA, 6-month, 1/2/3/5-year) — universal across trades, so kept here.
 //
-// Universal-vs-trade-specific rule: bootstrap seeds only masters common to
-// EVERY trade (units, GST slabs, warranty terms, chart of accounts, RBAC,
-// workflow). Trade-specific masters (brands, categories, product groups /
-// HSN-GST spine) live in helper-inventory-masters.ts — a different trade
-// would ship its own helper instead.
-//
 // What this does NOT seed:
-//   • Brands + Categories + Product groups (HSN/GST) → helper-inventory-masters.ts
-//     (trade-specific reference data — run `pnpm seed:helper-inventory`)
+//   • Brands → helper-brands.ts (`pnpm seed:helper-brands`)
+//   • Categories + Product groups (the HSN/GST spine) → the personal snapshot,
+//     applied by `pnpm prisma db seed`. Our real tree (6 categories, 102 groups)
+//     was built by apply-taxonomy and then curated by hand, so it is config, not
+//     a generic master. The old helper-inventory-masters.ts seeded a rival
+//     taxonomy ("Computer Mice" / "Memory (RAM)" against our "Mouse" / "RAM")
+//     and was deleted — it would have created ~76 duplicate groups.
 //   • Demo data of every kind — users, customers, products, vouchers, tasks, deals.
 //     The dummy-*.ts seeds that used to make it were deleted; write a fresh one
 //     under prisma/seeds/ if a demo is needed again.
@@ -1332,8 +1331,8 @@ async function main() {
 
     // ── Section 10: Inventory Warranty Term master ─────────────────────
     // Universal across trades (every business sells things with some warranty
-    // window), so it lives in bootstrap — unlike brands / categories / product
-    // groups, which are trade-specific and live in helper-inventory-masters.ts.
+    // window), so it lives in bootstrap — unlike brands (helper-brands.ts) and
+    // categories / product groups (the personal snapshot).
     // Duration is in days (0 = no fixed duration). InvWarrantyTerm.name is NOT
     // unique in the schema, so we idempotently match on name.
     console.log("[10/11] Inventory Warranty Term master");

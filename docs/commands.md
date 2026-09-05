@@ -138,8 +138,8 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
-| `pnpm seed:helper-brands` / `-inventory` / `-roles` | Trade master data | demo |
-| `pnpm seed:helper-all` | All three helpers in order, then `seed:check-docs` | demo |
+| `pnpm seed:helper-brands` | The brand master (~60 brands) | demo |
+| `pnpm seed:helper-all` | `helper-brands`, then `seed:check-docs` | demo |
 | `pnpm seed:purge-demo` | `purge-demo-contacts` + `purge-demo-products` | demo only |
 | `pnpm seed:purge-vouchers` | Removes vouchers | demo only |
 | `pnpm seed:hard-clean` | Removes everything bootstrap does not seed | demo only |
@@ -195,10 +195,13 @@ The `--prepackaged` part is the important design choice: it publishes the **exac
 `check-doc-sync --strict` → `check-nav-icons` → `gen-sync-registry --check` → `gen-local-schema --check` → `check-counter-mode vercel` → `check-counter-mode counter` → `check-guard-lint`
 
 ### `pnpm seed:helper-all`
-`helper-roles` → `helper-brands` → `helper-inventory` → `seed:check-docs`
+`helper-brands` → `seed:check-docs`
 
-Roles run first: brands and inventory masters do not depend on them, but a later
-department-pool change would, and the order costs nothing.
+Only one helper is left in the chain. `helper-roles` was dropped from it because its
+`R2`/`R3` collide with our real roles, and `helper-inventory-masters` was deleted
+outright — it seeded a rival taxonomy that shared exactly one name with ours. Our
+categories and product groups now come from the personal snapshot; see
+`docs/seeds.md`.
 
 ### `pnpm seed:purge-demo`
 `seed:purge-demo-contacts` → `seed:purge-demo-products`

@@ -7,8 +7,8 @@
 //   • All non-admin Users (only admin@networkservice.in survives)
 //   • All Persons / Companies / Phones / Emails (test customers)
 //   • All party-linked Account rows (customer/company personal ledgers)
-//   • All InvProduct catalog + InvCategory/Group/Brand (trade-specific
-//     reference data — seeded by helper-inventory-masters.ts, not bootstrap)
+//   • All InvProduct catalog + InvCategory/Group/Brand (InvBrand comes back from
+//     helper-brands.ts; categories + groups come back from the personal snapshot)
 //   • InvAttributeMaster rows (added via Configure → Attribute masters)
 //   • ServiceCenter, PortalCredentials
 //
@@ -99,11 +99,14 @@ const TRANSACTION_TABLES = [
 // Phase 5 — inventory masters that are NOT bootstrap data.
 // NOTE: InvUnit + InvWarrantyTerm are intentionally excluded — they are
 // universal masters seeded by bootstrap-seed.ts (sections 9 + 10) and must
-// survive a hard-clean. InvBrand / InvCategory / InvProductGroup are
-// trade-specific reference data seeded by the helper seeds (NOT bootstrap):
-// InvBrand → helper-brands.ts, InvCategory / InvProductGroup →
-// helper-inventory-masters.ts. They are wiped here and restored by
-// `pnpm seed:helper-brands` + `pnpm seed:helper-inventory`.
+// survive a hard-clean. InvBrand / InvCategory / InvProductGroup are wiped here.
+// Restore them with:
+//   • InvBrand                        → `pnpm seed:helper-brands`
+//   • InvCategory / InvProductGroup   → `pnpm prisma db seed` (the personal
+//     snapshot carries our real 6 categories + 102 groups). The old
+//     helper-inventory-masters.ts seeded a DIFFERENT taxonomy — "Computer Mice",
+//     "Memory (RAM)", "Surveillance Cameras" against our "Mouse", "RAM",
+//     "HD Dome" — so it was deleted rather than left to re-create a parallel tree.
 const INVENTORY_MASTERS = [
     "InvStockLedger", "VoucherInventoryLine", "VoucherDetail",  // re-listed defensively
     "InvBomLine", "InvBom",

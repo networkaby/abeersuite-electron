@@ -8,7 +8,6 @@ prisma/seeds/
 ├─ export-personal.ts           PERSONAL — reverse-create YOUR config snapshot from the live DB
 ├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
-├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              ⛔ DO NOT RUN — new-client starter roles; its R2/R3 collide with ours
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
@@ -186,18 +185,33 @@ pnpm seed:helper-brands   # after `pnpm prisma db seed`
 
 Wiped by `hard-clean` (`InvBrand` is in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
 
-## Helper seed (trade-specific reference data)
+## Categories and product groups — where they come from
 
-```bash
-pnpm seed:helper-inventory   # after `pnpm prisma db seed`
-```
+**`helper-inventory-masters.ts` is deleted.** It seeded a taxonomy this business
+never adopted. Of the 77 names it declared, exactly **one** ("Photo Paper") exists
+in our tree — it spoke of "Computer Mice", "Memory (RAM)", "Surveillance Cameras",
+"Desktop Systems", where we run "Mouse", "RAM", "HD Dome", "Desktop & CPU". Its
+categories (Laptops / Desktops / Printers / …) had **zero** overlap with ours
+(Retails Solution, Professional & Office, Small Business, Home Security, Industrial
+security system, IT Products), which are a merchandising axis, not a parts list.
 
-`helper-inventory-masters.ts` is **real, production-usable** reference data — not demo/fake — but trade-specific, so it's kept out of bootstrap. Idempotent (upsert-by-name). Seeds:
+Running it would have created **~76 duplicate groups** beside our real 102 — a
+second parallel tree, straight into the live catalogue with nothing to isolate it.
+Nothing would have stopped it either: `@@unique([name])` never trips, because the
+names differ. (It would *not* have corrupted tax data — measured against live, only
+2 rows matched and both merely gained an HSN code, with 0 GST changes.)
 
-- **InvCategory** — 7 use-case categories (Laptops, Desktops, Printers, CCTV & Security, Components, Monitors, Networking)
-- **InvProductGroup** — HSN/GST tax-spine tree (~66 groups; each leaf carries an HSN code + GST slab so products inherit tax classification by walking up the parent chain)
+Our real taxonomy — **6 categories, 102 groups** — was built by `apply-taxonomy`
+and then curated by hand, so it is **config, not a generic master**. It lives in
+`data/personal.local.json` and is applied by `pnpm prisma db seed`.
 
-Wiped by `hard-clean` (both are in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
+| Master | Restored by |
+|---|---|
+| `InvBrand` | `pnpm seed:helper-brands` |
+| `InvCategory`, `InvProductGroup` | `pnpm prisma db seed` (personal snapshot) |
+
+> Because these live only in the snapshot and not in `bootstrap-seed.ts`, they are
+> one more reason `personal-bootstrap` cannot retire yet.
 
 ## ⛔ `helper-roles.ts` — quarantined, do not run
 
@@ -339,9 +353,10 @@ pnpm seed:hard-clean
 
 > **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.
 
-After cleaning, restore the trade masters with `pnpm seed:helper-all` (brands +
-inventory masters; **not** helper-roles — see above). There is no demo
-data to repopulate — contacts and products are re-entered through the UI or the CSV importers.
+After cleaning, restore with `pnpm seed:helper-brands` (the brand master) and
+`pnpm prisma db seed` (categories, product groups, and the rest of the config).
+**Not** `helper-roles` — see above. There is no demo data to repopulate; contacts
+and products are re-entered through the UI or the CSV importers.
 
 ## Narrower cleaner
 
