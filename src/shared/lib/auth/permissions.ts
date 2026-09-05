@@ -126,6 +126,21 @@ type GuardResult =
 export async function requireAuth(opts: { allowReleased?: boolean } = {}): Promise<GuardResult> {
     const session = await auth();
     if (!session || !session.user) {
+        // A REVOKED token is not the same as no session, and the difference is worth
+        // one field: the user was signed in a moment ago and their token was pulled
+        // out from under them — a sign-out elsewhere on the same login, or an admin
+        // editing their role or position (see auth/revokeSessions.ts). The browser
+        // turns this code into a sentence before it redirects (SessionWrapper), so the
+        // cashier is told why instead of the screen silently jumping to the login page.
+        if ((session as { revoked?: boolean } | null)?.revoked) {
+            return {
+                user: null,
+                response: NextResponse.json(
+                    { error: "Your access was updated. Please sign in again.", code: "SESSION_REVOKED" },
+                    { status: 401 },
+                ),
+            };
+        }
         return { user: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
     }
     if ((session.user as { kind?: string }).kind === "customer") {

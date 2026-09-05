@@ -10,6 +10,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { normalizeExtension } from "@/shared/lib/counter/idRange";
 import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 // One payment account on the counter. `id` present = update that row; absent =
 // create. `accountId` is the bank/cash-style ledger debited when collected here.
@@ -158,6 +159,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (active) return NextResponse.json({ error: "Cannot deactivate counter with an active shift" }, { status: 400 });
         }
 
+        // ── The release, on its own, authoritative ───────────────────────────────
+        // Not part of the transaction below, and not through `prisma`. On a counter PC
+        // `prisma` is the replica: a release written there goes up through the outbox,
+        // and the push sees the server still naming a device and RESTORES the binding
+        // (reconcileCounterBinding in sync/push.ts). The admin would see "released"
+        // while the counter kept billing, until the next pull put the binding back on
+        // screen too. Same rule, and the same reasoning, as release-mine/route.ts and
+        // claim-number/route.ts: a device lock is decided in the DB or not at all. If
+        // Supabase is unreachable the caller gets the error rather than a local write
+        // that will be reverted.
+        //
+        // Release clears the DEVICE BINDING only. counterNumber is permanent counter
+        // config, set at creation and NOT NULL — a counter always has one, whichever PC
+        // happens to be sitting at it. idRangeStart is derived from that number, so it
+        // stays correct too; only a counterNumber CHANGE invalidates it, which the
+        // transaction below handles.
+        //
+        // `releasedAt` is what separates "released" from "never claimed" — both leave
+        // boundDeviceId null, and without the stamp a counter that was offline when it
+        // was released wakes up, pushes its queued row and quietly takes itself back.
+        const released = data.releaseLock
+            ? await prismaAuthoritative.posCounter.update({
+                where:  { id },
+                data:   { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() },
+                select: { boundDeviceId: true, boundDeviceLabel: true, boundAt: true },
+            })
+            : null;
+
         const updated = await prisma.$transaction(async (tx) => {
             // Keep the till account name in sync if the counter is renamed.
             if (data.name && data.name !== existing.name) {
@@ -206,22 +235,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     // on next offline setup. Mismatched counterNumber/idRangeStart would reserve
                     // the wrong id-range block for offline writes.
                     ...(data.counterNumber && data.counterNumber !== existing.counterNumber ? { idRangeStart: null } : {}),
-                    // Release clears the DEVICE BINDING only. counterNumber is permanent
-                    // counter config, set at creation and NOT NULL — a counter always has
-                    // one, whichever PC happens to be sitting at it. idRangeStart is derived
-                    // from that number, so it stays correct too; only a counterNumber CHANGE
-                    // invalidates it, which the branch above already handles.
-                    // `releasedAt` is what separates "released" from "never claimed" —
-                    // both leave boundDeviceId null, and without the stamp a counter
-                    // that was offline when it was released wakes up, pushes its queued
-                    // row and quietly takes itself back (see reconcileCounterBinding).
-                    ...(data.releaseLock
-                        ? { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() }
-                        : {}),
+                    // The release itself is NOT here — it is applied authoritatively
+                    // above, before this transaction. See the comment there.
                 },
                 include: counterInclude,
             });
         });
+
+        // A release must reach every other machine at once — the counter that just lost
+        // its binding above all. It cannot ride the browser's own publisher: on a
+        // counter PC that stays silent under WRITE_MODE=local and leaves announcing to
+        // the outbox flusher, and the authoritative write above never enters the
+        // outbox. So say it from here, the way /api/calls does. Best-effort.
+        if (released) await publishChangeServer(["settings"]);
 
         return NextResponse.json({
             id: updated.id,
@@ -238,9 +264,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
             paymentAccounts: updated.paymentAccounts,
             allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
-            boundDeviceId: updated.boundDeviceId,
-            boundDeviceLabel: updated.boundDeviceLabel,
-            boundAt: updated.boundAt,
+            // The DB's answer, not the replica's: on a counter PC `updated` came from
+            // the local copy, which does not carry the release applied above.
+            boundDeviceId: (released ?? updated).boundDeviceId,
+            boundDeviceLabel: (released ?? updated).boundDeviceLabel,
+            boundAt: (released ?? updated).boundAt,
         });
     } catch (e) {
         const conflict = prismaUniqueError(e, { epbxExtension: "That extension number is already used by another counter" });

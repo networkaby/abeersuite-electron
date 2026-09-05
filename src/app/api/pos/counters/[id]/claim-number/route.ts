@@ -23,6 +23,7 @@ import { prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { blockStartFor, MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { z } from "zod";
 
 // Identity is resolved in the renderer — the Electron installation id on the desktop
@@ -116,6 +117,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 select: { id: true, counterNumber: true, idRangeStart: true },
             });
         });
+
+        // A bind moves a device lock exactly as a release does, and it can free another
+        // counter in the same transaction — so the office's counter list and any PC
+        // that held that other counter must hear it now, not on the next pull. Said
+        // from the server because the authoritative write above never enters the
+        // outbox, and a counter's browser does not publish. Best-effort.
+        await publishChangeServer(["settings"]);
 
         return NextResponse.json(updated);
     } catch (e: unknown) {

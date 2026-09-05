@@ -78,8 +78,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async session({ session, token }) {
             // Revoked server-side → present a session with no user so requireAuth()
             // (which checks `!session.user`) rejects it with 401.
+            //
+            // The `revoked` flag rides along so that 401 can say WHY. Without it the
+            // rejection is indistinguishable from "never signed in", and the browser
+            // simply jumped to the login screen mid-work with nothing on it — which is
+            // what a permission change looks like to a cashier: a random logout. The
+            // token is still refused either way; only the silence goes.
             if (token?.revoked) {
-                (session as unknown as { user?: unknown }).user = undefined;
+                const s = session as unknown as { user?: unknown; revoked?: boolean };
+                s.user = undefined;
+                s.revoked = true;
                 return session;
             }
             if (token) {

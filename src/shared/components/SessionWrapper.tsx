@@ -24,12 +24,17 @@ import { toast } from "sonner";
 // inherit the `http` instance's interceptors — hence the global registration.
 
 let redirecting = false;
-function goLogin() {
+
+/** Long enough to read the line, short enough not to feel stuck. */
+const REVOKED_NOTICE_MS = 2_500;
+
+function goLogin(afterMs = 0) {
     if (redirecting || typeof window === "undefined") return;
     if (window.location.pathname.startsWith("/staff/login")) return;
     redirecting = true;
     const back = window.location.pathname + window.location.search;
-    window.location.assign(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
+    const go = () => window.location.assign(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
+    if (afterMs > 0) setTimeout(go, afterMs); else go();
 }
 
 function SessionGuard() {
@@ -45,7 +50,18 @@ function SessionGuard() {
         const id = axios.interceptors.response.use(
             (r) => r,
             (err) => {
-                if (err?.response?.status === 401) goLogin();
+                if (err?.response?.status === 401) {
+                    // A token pulled out from under a working session (a sign-out on
+                    // this same login elsewhere, or an admin changing this person's
+                    // role or position) says so — otherwise the screen just jumps to
+                    // the login page mid-work and reads as a random logout. Sign-out
+                    // still happens either way; the pause only buys time to read it.
+                    const revoked = (err?.response?.data as { code?: string } | undefined)?.code === "SESSION_REVOKED";
+                    if (revoked && !redirecting) {
+                        toast.error("Your access was updated by an admin — please sign in again.", { duration: REVOKED_NOTICE_MS });
+                    }
+                    goLogin(revoked ? REVOKED_NOTICE_MS : 0);
+                }
                 // Bare `axios` does not inherit the `http` instance's interceptors,
                 // so without this a save refused for being offline would surface as a
                 // bare "request failed" on every screen that still uses global axios.

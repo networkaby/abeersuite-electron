@@ -15,11 +15,17 @@
  *
  * ── Replica by default, the DB itself only where it must be ────────────────
  * Owner rule: the DB binding is the truth and the replica is the DB's answer one cycle
- * late at most — so the API gate reads the replica (no egress). The flusher is the one
- * place that reads Supabase: it is about to write there anyway, and at the moment a
- * counter reconnects after hours offline the replica still says "bound" because the
- * worker has not pulled yet. One row read before a push is what keeps a sale billed
- * after the release out of the books.
+ * late at most — so the API gate reads the replica (no egress). Two callers ask the DB
+ * itself, both for the same reason — the replica has not been told yet:
+ *
+ *   • the flusher — it is about to write to Supabase anyway, and at the moment a counter
+ *     reconnects after hours offline the replica still says "bound" because the worker
+ *     has not pulled. One row read before a push keeps a sale billed after the release
+ *     out of the books.
+ *   • the reconciler, on the `settings` change signal only (`authoritative=1`) — the
+ *     signal arrives ahead of the worker's pull, so the replica would answer "still
+ *     bound" and the release would wait out a whole sync cycle. One row per real event,
+ *     never on a timer.
  *
  * ── Never refuse on silence ─────────────────────────────────────────────────
  * Unreachable — replica not ready, cloud down — is `reachable: false`, never released.
@@ -113,19 +119,50 @@ export async function resolveBinding(ids: string[], opts: { authoritative?: bool
 
 interface CounterSetupFile { counterId: number; counterNumber: number }
 
-/** The local shortcut electron/main.ts writes at the end of onboarding. Null off Electron. */
-export function readCounterSetup(): CounterSetupFile | null {
+/**
+ * What the setup file says, and — the part that matters — whether it said anything.
+ *
+ *   absent     — there is genuinely no counter here: no file, or a file whose contents
+ *                are not a setup (empty, truncated mid-write, wrong shape). A positive
+ *                answer, and the one the gates may act on.
+ *   unreadable — the file is there but this read failed: locked by the writer, a
+ *                permission blip, the disk busy. Silence, not an answer. Acting on it
+ *                would send a perfectly good till to the setup wizard, which is exactly
+ *                what "never refuse on silence" exists to prevent.
+ */
+type SetupRead =
+    | { state: "present"; setup: CounterSetupFile }
+    | { state: "absent" }
+    | { state: "unreadable" };
+
+function readCounterSetupState(): SetupRead {
     const dir = process.env.COUNTER_USER_DATA;
-    if (!dir) return null;
+    if (!dir) return { state: "absent" };
+    const file = path.join(dir, "counter-setup.json");
+    let raw: string;
     try {
-        const file = path.join(dir, "counter-setup.json");
-        if (!fs.existsSync(file)) return null;
-        const data = JSON.parse(fs.readFileSync(file, "utf-8")) as Partial<CounterSetupFile>;
-        if (typeof data.counterId !== "number" || typeof data.counterNumber !== "number") return null;
-        return { counterId: data.counterId, counterNumber: data.counterNumber };
+        if (!fs.existsSync(file)) return { state: "absent" };
+        raw = fs.readFileSync(file, "utf-8");
     } catch {
-        return null;
+        // The file is there and could not be read — the one case that must stay silent.
+        return { state: "unreadable" };
     }
+    try {
+        const data = JSON.parse(raw) as Partial<CounterSetupFile>;
+        if (typeof data.counterId !== "number" || typeof data.counterNumber !== "number") return { state: "absent" };
+        return { state: "present", setup: { counterId: data.counterId, counterNumber: data.counterNumber } };
+    } catch {
+        // Read fine, holds no setup. That IS an answer: this PC has no counter.
+        return { state: "absent" };
+    }
+}
+
+/** The local shortcut electron/main.ts writes at the end of onboarding. Null off Electron,
+ *  and null when the file could not be read — every caller here treats null as "nothing to
+ *  act on", never as "released". */
+export function readCounterSetup(): CounterSetupFile | null {
+    const read = readCounterSetupState();
+    return read.state === "present" ? read.setup : null;
 }
 
 /**
@@ -138,12 +175,17 @@ export function readCounterSetup(): CounterSetupFile | null {
  * rule — a PC without a counter has no id block, so anything it saved would be numbered
  * in the cloud's range and never synced; it may do nothing but onboard. No cache: one
  * `existsSync`, no DB read.
+ *
+ * Only a POSITIVE "there is no setup here" counts. A file that exists but could not be
+ * read this instant is silence — this gate stops every API write and every protected
+ * page, so answering true on a locked file would throw a working till into the setup
+ * wizard for the length of one bad read.
  */
 export function isThisPcWithoutCounter(): boolean {
     if (!IS_COUNTER_PC) return false;
     // Identity not forwarded (should not happen on Electron) — cannot tell, stay inert.
     if (!process.env.COUNTER_USER_DATA) return false;
-    return readCounterSetup() === null;
+    return readCounterSetupState().state === "absent";
 }
 
 /** Same TTL as the replica-readiness cache. */

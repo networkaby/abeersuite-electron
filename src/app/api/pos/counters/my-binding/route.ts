@@ -1,8 +1,10 @@
 // GET /api/pos/counters/my-binding?deviceId=…[&authoritative=1]
 //
-// "Does this PC still hold a counter, and is its shift still open?" — answered from
-// the replica, except at login while online (`authoritative=1`), where one row is read
-// from Supabase so a release is caught at sign-in.
+// "Does this PC still hold a counter, and is its shift still open?" — answered from the
+// replica, except on two events while online (`authoritative=1`), where one row is read
+// from Supabase: at login, so a release is caught at sign-in; and when the `settings`
+// change signal announces a counter setting moved, so a release lands in seconds rather
+// than waiting for the sync worker to pull it (see CounterReconciler.tsx).
 //
 // The query itself lives in shared/lib/counter/releaseGuard.ts, because the same answer
 // also decides whether this machine's outbox may push and whether its API writes are

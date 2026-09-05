@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 const schema = z.object({
     deviceId: z.string().trim().min(1).max(100),
@@ -34,6 +35,12 @@ export async function POST(req: NextRequest) {
             where: { boundDeviceId: data.deviceId },
             data:  { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() },
         });
+        // Tell every other machine at once. The browser's own publisher stays silent on
+        // a counter (WRITE_MODE=local) and leaves announcing to the outbox flusher —
+        // and the authoritative write above never enters the outbox, so without this
+        // the office learns the counter is free only on its next poll. Best-effort.
+        if (count > 0) await publishChangeServer(["settings"]);
+
         return NextResponse.json({ released: count });
     } catch (e) {
         return handleApiError(e, "Failed to release counter lock");

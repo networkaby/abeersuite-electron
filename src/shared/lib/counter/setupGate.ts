@@ -18,13 +18,20 @@
  * to boot". The check only ever *invalidates* something on a POSITIVE
  * confirmation that it was released; it never invalidates on mere silence.
  *
- * ── Asked of the replica, never of the cloud ────────────────────────────────
+ * ── The replica by default, the cloud on one event ──────────────────────────
  * `/api/pos/counters/my-binding` reads this PC's binding from the replica. The replica
  * is kept honest by the sync worker (Realtime signal + interval safety net), so an
  * admin's release reaches it a cycle late at most, and the reconciler re-asks exactly
- * when a pull touched PosCounter. No timer, no authoritative read, no egress. A replica
- * that is not ready yet (before its first pull, or mid-wipe) resolves to `unreachable`,
- * so the trust-the-local-file rule above is intact.
+ * when a pull touched PosCounter. No timer, no poll, no egress. A replica that is not
+ * ready yet (before its first pull, or mid-wipe) resolves to `unreachable`, so the
+ * trust-the-local-file rule above is intact.
+ *
+ * `authoritative` is the exception, and it is asked for at exactly two moments: at
+ * login, and when the `settings` change signal announces that a counter setting moved
+ * (CounterReconciler). Both are single events, not schedules — and at the second one
+ * the replica CANNOT answer yet, because the signal arrives ahead of the worker's pull.
+ * One row read, only when something really changed, is what makes a release land in
+ * seconds instead of waiting out a sync cycle. Offline it is skipped by itself below.
  *
  * ── Login runs the same check ───────────────────────────────────────────────
  * Signing in on a bound PC asks the replica once, offline or online. A PC with no
