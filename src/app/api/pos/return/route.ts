@@ -5,8 +5,12 @@
 // Body: { originalInvoiceId, lines: [{ invoiceLineId, qty }], refundMode, notes? }
 //   originalInvoiceId  — InvVoucher.id of the original POS/SALE (legacy field name)
 //   invoiceLineId      — InvVoucherLine.id (legacy field name)
-//   refundMode "CASH"  — refunds cash from the counter till (requires OPEN shift)
-//   refundMode "CREDIT"— leaves a credit balance on the customer's AR account
+//   refundMode "CASH"     — refunds cash from the counter till (requires OPEN shift)
+//   refundMode "CREDIT"   — leaves a credit balance on the customer's AR account
+//   refundMode "GIFT_CARD"— puts the money back on the card the sale drew, up to
+//                           what that card actually paid (audit C2). Refused when
+//                           the sale used no card, or the refund exceeds the draw —
+//                           a mixed-tender return still refunds by CASH or CREDIT.
 //
 // Steps (one $transaction):
 //   1. Validate qtys against the original InvVoucher's lines (cap per line).
@@ -38,7 +42,7 @@ import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
-import { reverseCouponRedemption } from "@/modules/coupons/lib";
+import { reverseCouponRedemption, refundGiftCard, giftCardRefundableForSale } from "@/modules/coupons/lib";
 import * as Sentry from "@sentry/nextjs";
 
 const returnLineSchema = z.object({
@@ -49,7 +53,7 @@ const returnLineSchema = z.object({
 const returnSchema = z.object({
     originalInvoiceId: z.number().int().positive(),
     lines:             z.array(returnLineSchema).min(1),
-    refundMode:        z.enum(["CASH", "CREDIT"]),
+    refundMode:        z.enum(["CASH", "CREDIT", "GIFT_CARD"]),
     notes:             z.string().trim().max(500).optional(),
 });
 
@@ -173,11 +177,55 @@ export async function POST(req: Request) {
         const returnTotal     = returnGoodsNet + returnTaxAmount;
         if (returnTotal <= 0) return NextResponse.json({ error: "Return total must be > 0" }, { status: 400 });
 
+        // ── Gift-card refund context ──────────────────────────────────────────
+        // Until now every return paid out cash or parked a credit, even when the
+        // customer had paid with a gift card — real money left the drawer for value
+        // that was never cash (audit C2). GIFT_CARD mode puts it back where it came
+        // from. The cap is what the card actually paid, net of refunds already made
+        // against this sale, so two partial returns cannot together give back more
+        // than the card put in.
+        let giftCardRefund: { giftCardId: number; code: string; refundable: number } | null = null;
+        let giftCardLiabilityAccountId: number | null = null;
+        if (data.refundMode === "GIFT_CARD") {
+            const spineId = original.universalVoucherId;
+            giftCardRefund = spineId == null ? null
+                : await giftCardRefundableForSale(prisma, { saleSpineId: spineId, saleDetailId: original.id });
+            if (!giftCardRefund) {
+                return NextResponse.json(
+                    { error: "This sale has no gift-card payment left to refund. Use Cash or Credit.", code: "GIFT_CARD_NOT_REFUNDABLE" },
+                    { status: 422 },
+                );
+            }
+            if (returnTotal > giftCardRefund.refundable + 0.005) {
+                return NextResponse.json(
+                    {
+                        error: `Only ₹${giftCardRefund.refundable.toFixed(2)} of this sale was paid by gift card ${giftCardRefund.code}. Refund ₹${returnTotal.toFixed(2)} by Cash or Credit instead.`,
+                        code:  "GIFT_CARD_REFUND_EXCEEDS_DRAW",
+                    },
+                    { status: 422 },
+                );
+            }
+            const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+            giftCardLiabilityAccountId = couponConfig.giftCardLiabilityAccountId;
+            if (giftCardLiabilityAccountId == null) {
+                return NextResponse.json(
+                    { error: "Gift Card Liability ledger not configured. Re-run the bootstrap seed.", code: "GIFT_CARD_LEDGER_MISSING" },
+                    { status: 422 },
+                );
+            }
+        }
+
         // ── Refund tender row — single Cr leg on the SALE_RETURN JE ─────
-        // CASH refund → tender.accountId = till (money leaves the drawer).
-        // CREDIT note → tender.accountId = customer AR (sits as a credit
-        //               on their ledger until next sale draws it down).
-        const refundAccountId = data.refundMode === "CASH" ? tillAccountId! : partyAccountId!;
+        // CASH refund  → tender.accountId = till (money leaves the drawer).
+        // CREDIT note  → tender.accountId = customer AR (sits as a credit
+        //                on their ledger until next sale draws it down).
+        // GIFT_CARD    → tender.accountId = the Gift Card Liability ledger, the
+        //                same one the original sale debited when the card was
+        //                tendered — so the liability goes back up by what the
+        //                card gets back, and no cash moves.
+        const refundAccountId = data.refundMode === "CASH" ? tillAccountId!
+                              : data.refundMode === "GIFT_CARD" ? giftCardLiabilityAccountId!
+                              : partyAccountId!;
 
         // ── Mirror partyType/partyId for legacy GL resolver fallbacks ────
         const partyType = account?.personId !== null && account?.personId !== undefined ? "customer"
@@ -314,6 +362,19 @@ export async function POST(req: Request) {
                 originalUniversalVoucherId: original.universalVoucherId,
                 returnFraction,
             });
+
+            // 2d. Gift-card refund — the Cr leg above put the liability back on the
+            // books; this puts the money back on the card itself, so the two agree.
+            // Recorded against THIS credit note's spine, which is what makes the
+            // remaining-draw sum on a later partial return come out right.
+            if (giftCardRefund) {
+                await refundGiftCard(tx, {
+                    giftCardId:         giftCardRefund.giftCardId,
+                    amount:             returnTotal,
+                    universalVoucherId: spineId,
+                    createdById:        user!.id,
+                });
+            }
 
             // 3. Stock IN for each returned product.
             for (const { voucherLine, qty } of stockLines) {

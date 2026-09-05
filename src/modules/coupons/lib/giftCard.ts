@@ -98,6 +98,51 @@ export async function recomputeGiftCardBalances(tx: Tx, giftCardIds: number[]): 
     }
 }
 
+/**
+ * How much of a sale's gift-card draw can still be put back on the card.
+ *
+ *   refundable = Σ|REDEEM on the sale| − Σ REFUND already made against that sale
+ *
+ * A refund is recorded against the spine of whatever caused it — the sale's own
+ * spine when the sale was cancelled, the credit note's spine when goods came back
+ * — so "already refunded" has to look at the sale AND every SALE_RETURN hanging
+ * off it. This is the definition; the return-search endpoint computes the same
+ * thing in batch for its list.
+ *
+ * Returns null when the sale drew no card, or when nothing is left to give back.
+ */
+export async function giftCardRefundableForSale(
+    tx: Tx, args: { saleSpineId: number; saleDetailId: number },
+): Promise<{ giftCardId: number; code: string; drawn: number; refunded: number; refundable: number } | null> {
+    const draws = await tx.giftCardTxn.findMany({
+        where:  { universalVoucherId: args.saleSpineId, type: "REDEEM" },
+        select: { giftCardId: true, amount: true, giftCard: { select: { code: true } } },
+    });
+    if (draws.length === 0) return null;
+
+    // POS draws at most one card per sale; if that ever changes, the first is the
+    // one we can reason about, so refuse rather than guess.
+    if (draws.length > 1) return null;
+    const draw = draws[0];
+    const drawn = round2(Math.abs(moneyNumber(draw.amount)));
+
+    const returns = await tx.voucherDetail.findMany({
+        where:  { refVoucherId: args.saleDetailId, universalVoucher: { type: "SALE_RETURN" } },
+        select: { universalVoucherId: true },
+    });
+    const spineIds = [args.saleSpineId, ...returns.map((r) => r.universalVoucherId).filter((x): x is number => x != null)];
+
+    const refunds = await tx.giftCardTxn.aggregate({
+        where:  { universalVoucherId: { in: spineIds }, type: "REFUND", giftCardId: draw.giftCardId },
+        _sum:   { amount: true },
+    });
+    const refunded = round2(moneyNumber(refunds._sum.amount ?? 0));
+    const refundable = round2(drawn - refunded);
+    if (refundable <= 0.005) return null;
+
+    return { giftCardId: draw.giftCardId, code: draw.giftCard.code, drawn, refunded, refundable };
+}
+
 /// Restore balance on a return (proportional amount computed by the caller).
 export async function refundGiftCard(
     tx: Tx, args: { giftCardId: number; amount: number; universalVoucherId: number; createdById: number },

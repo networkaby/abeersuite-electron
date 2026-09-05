@@ -79,6 +79,7 @@ const PAY_COLORS: Record<string, string> = {
 const REFUND_COLORS: Record<string, string> = {
     CASH: "bg-green-50 text-green-700",
     CREDIT: "bg-blue-50 text-blue-700",
+    GIFT_CARD: "bg-purple-50 text-purple-700",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
