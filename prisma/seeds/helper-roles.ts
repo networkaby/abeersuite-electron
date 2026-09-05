@@ -1,5 +1,17 @@
 // HELPER SEED — trade-specific starter roles.
 //
+// ⛔ DO NOT RUN THIS ON OUR INSTALL. It is a NEW-CLIENT starter set, and it now
+// COLLIDES with our real roles. We run R2 = "Branch Manager" (DEP-OP) and
+// R3 = "Counter Operator" (DEP-SALES), both seeded by bootstrap-seed.ts from the
+// live DB. This file upserts R2 as "Role-Service Engineer" (DEP-REPAIR) and R3 as
+// "Role-Counter / Cashier" (DEP-DESK) and REWRITES THEIR GRANTS every run — so
+// running it would rename two live roles, move them to the wrong departments, and
+// replace the permissions real staff depend on.
+//
+// Kept only as raw material for the public/generic build. Before it is ever used
+// again it needs its ids moved off R2/R3, or a guard that refuses to touch a role
+// that already exists.
+//
 // These roles are SPECIFIC to a computer / CCTV / printer / networking retail
 // business. They are deliberately kept OUT of bootstrap-seed.ts (which seeds
 // only R1 — the Admin role universal to every trade). A different trade would

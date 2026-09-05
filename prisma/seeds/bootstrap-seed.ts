@@ -5,19 +5,31 @@
 // Run: `pnpm prisma db seed` (the standard Prisma command). Wired in
 // `prisma.config.ts → migrations.seed`. Idempotent — safe to re-run.
 //
+// ⚠️ THIS FILE DESCRIBES **OUR** BUSINESS, NOT A GENERIC ONE.
+// AbeerSuite is our company's app. The workflow, roles, org, couriers and
+// gateways below are the ones we actually run — captured from the live database,
+// not invented defaults. When you change the setup in the UI, mirror it back here
+// in the same commit: **the live DB is the source of truth for this file.**
+// A separate code-owned generic installer for the public build comes later.
+//
 // ⚠️ MAINTENANCE RULE
 // When you change `prisma/schema/*.prisma` (add / rename / drop a column or
-// table), update THIS file in the same commit. Dummy-*.ts files describe demo
-// data; only this file describes the production-required state.
+// table), update THIS file in the same commit — it is the only file that
+// describes the production-required state.
 //
 // What this seeds (kept on hard-clean):
-//   • RBAC: 1 Role (R1 Admin — only isSystem role; R2+ via helper-roles.ts),
+//   • RBAC: 3 Roles — R1 Role-Admin (the only isSystem role), R2 Branch Manager,
+//     R3 Counter Operator. Their GRANTS are the owner's config and live in the
+//     personal snapshot, not here; this only guarantees the rows and their homes.
 //     130+ Permissions (incl. per-kind voucher gates — GL `finance:voucher:*`
-//     + inventory `inventory:voucher:*`, generated from voucherMatrix.ts),
-//     R1's RolePermission grants
-//   • Workflow: 9 Pipelines, 63 TicketStatuses, 8 Works (1 gated → work:*
-//     permissions), 43 Workers, status + worker transitions
-//   • Org structure: 1 Branch (HQ), 8 Departments, Role ranks
+//     + inventory `inventory:voucher:*`, generated from voucherMatrix.ts)
+//   • Workflow: 9 Pipelines, 61 TicketStatuses, 5 WorkGroups, 48 status
+//     transitions. NO Works and NO TicketWorkers — the live DB has zero of both
+//     and the board runs on statuses alone (see the note above SECTION 2).
+//   • Couriers: our 6 real delivery methods, including Local delivery's
+//     per-neighbourhood pricing for the pincodes we serve
+//   • Payment: 4 gateways, each linked to its settlement ledger BY NAME
+//   • Org structure: 1 Branch (HQ, branch number 9), 9 Departments, Role ranks
 //   • Chart of accounts: 29 AccountGroups (Tally tree) + ~50 GL ledgers
 //     **Stock-in-Hand group is intentionally empty** — closing-stock value is
 //     derived live by `getClosingStockValue` and injected as a synthetic
@@ -47,7 +59,6 @@
 
 import { PrismaClient, Prisma } from "../../src/generated/prisma/client";
 import { seedVoucherSeries } from "../../src/modules/accountancy/lib/seedVoucherSeries";
-import { DELIVERY_METHOD_DEFAULTS } from "../../src/modules/delivery/lib/deliveryMethodConfig";
 import {
     VOUCHER_TEMPLATE_KINDS,
     buildVoucherTemplateDefaults,
@@ -89,6 +100,12 @@ const ROLES = [
     // R1 is the cross-cutting admin role — homed in the all-access department
     // (DEP-ADMIN) so the Role Matrix offers it the full permission list.
     { id: "R1", label: "Role-Admin", color: "bg-red-100 text-red-600", isSystem: true, rank: 100, departmentId: "DEP-ADMIN" },
+    // R2 / R3 are the two roles this business actually runs on, captured from the
+    // live DB. Non-system, so they stay editable and deletable from the Role Matrix.
+    // Their GRANTS are not seeded here — they are the owner's and live in the
+    // personal snapshot; this only guarantees the rows exist with the right home.
+    { id: "R2", label: "Branch Manager", color: "bg-blue-100 text-blue-600", isSystem: false, rank: 20, departmentId: "DEP-OP" },
+    { id: "R3", label: "Counter Operator", color: "bg-blue-100 text-blue-600", isSystem: false, rank: 20, departmentId: "DEP-SALES" },
 ] as const;
 
 // The permission catalog is CODE-OWNED and shared with personal-bootstrap —
@@ -143,6 +160,8 @@ const PIPELINES: PipelineSeed[] = [
             { id: "S8", label: "Closed - No Fix", color: "bg-red-100 text-red-600", order: 8, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
             { id: "S9", label: "Cancelled", color: "bg-gray-100 text-gray-400", order: 9, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
             { id: "S63", label: "Scrap", color: "bg-gray-100 text-gray-600", order: 12, isEntryPoint: false, isTerminal: true, pipelineId: "P1" },
+            { id: "S65", label: "Sent To Service", color: "#455FD3", order: 60, isEntryPoint: false, isTerminal: false, pipelineId: "P1", resolveTimeHours: 48 },
+            { id: "S66", label: "Rejected by Technician", color: "#D3458A", order: 120, isEntryPoint: false, isTerminal: false, pipelineId: "P1", resolveTimeHours: 48 },
         ],
     },
     {
@@ -259,113 +278,49 @@ const PIPELINES: PipelineSeed[] = [
 // `name` is the internal admin-facing name (Settings → Groups); `label` is the
 // display name shown to staff / the merge key. They match here since the generic
 // catalog has no same-label duplicates yet — a real install can add more later.
+// Real hex colours, as configured in Settings → Workflow → Groups. They used to be
+// Tailwind classes here, which the seeder replaced with a RANDOM hex on every run —
+// so a reseed silently repainted the owner's groups. Storing the real values keeps a
+// reseed a no-op for colour.
 const WORK_GROUPS = [
-    { id: "G1", name: "Calling", label: "Calling", order: 1, color: "bg-blue-100 text-blue-600" },
-    { id: "G2", name: "Repairing", label: "Repairing", order: 2, color: "bg-green-100 text-green-700" },
-    { id: "G3", name: "Admin", label: "Admin", order: 3, color: "bg-orange-100 text-orange-600" },
-    { id: "G4", name: "Parts & Courier", label: "Parts & Courier", order: 4, color: "bg-purple-100 text-purple-600" },
-    { id: "G5", name: "Orders", label: "Orders", order: 5, color: "bg-amber-100 text-amber-700" },
+    { id: "G1", name: "Calling", label: "Calling", order: 1, color: "#268D8A" },
+    { id: "G2", name: "Repairing", label: "Repairing", order: 2, color: "#0D7FC2" },
+    { id: "G3", name: "Admin", label: "Admin", order: 3, color: "#15C9CB" },
+    { id: "G4", name: "Parts & Courier", label: "Parts & Courier", order: 4, color: "#B3D534" },
+    { id: "G5", name: "Orders", label: "Orders", order: 5, color: "#8D085B" },
 ] as const;
 
-// Works — the activity each worker represents. Gated works mint a
-// permission ("work:<id>") that gates who may set their workers; the
-// state-like works (escalated / ready / no_fix) stay ungated (any staff).
-// Opaque ids (W1…W7) so the id never encodes the label — renames stay safe.
-// groupIds → WorkGroup[] (above), via the WorkGroupWork join table.
-const WORKS = [
-    { id: "W1", label: "Tele Calling", order: 1, color: "bg-blue-100 text-blue-600", gated: true, groupIds: ["G1"], successLabel: "Reachable", failLabel: "Unreachable", prompt: "Add alternative number of customer if you know", startLabel: "Make a call", args: [{ key: "number", label: "Call number", source: "customer.phone" }, { key: "reason", label: "Reason", source: "user", kind: "text", on: "fail" }] },
-    { id: "W2", label: "Repairing", order: 2, color: "bg-green-100 text-green-700", gated: false, groupIds: ["G2"], successLabel: "Fixed", failLabel: "Can't fix", args: [] },
-    { id: "W3", label: "Admin Approval", order: 3, color: "bg-orange-100 text-orange-600", gated: false, groupIds: ["G3"], successLabel: "Approved", failLabel: "Rejected", args: [] },
-    { id: "W4", label: "Order Parts", order: 4, color: "bg-purple-100 text-purple-600", gated: false, groupIds: ["G4"], successLabel: "Ordered", failLabel: "Unavailable", args: [{ key: "part", label: "Part needed", source: "user", kind: "text" }] },
-    { id: "W5", label: "Waiting & Follow Up", order: 5, color: "bg-teal-100 text-teal-600", gated: false, groupIds: ["G1"], successLabel: null, failLabel: null, args: [] },
-    { id: "W6", label: "Escalated To EC", order: 6, color: "bg-red-100 text-red-600", gated: false, groupIds: ["G3"], successLabel: null, failLabel: null, args: [] },
-    { id: "W7", label: "Incoming Courier", order: 7, color: "bg-orange-100 text-orange-600", gated: false, groupIds: ["G4"], successLabel: "Received", failLabel: "Lost", args: [{ key: "tracking", label: "Tracking #", source: "user", kind: "text", on: "success" }, { key: "lost_reason", label: "Lost reason", source: "user", kind: "text", on: "fail" }] },
-    { id: "W8", label: "Order", order: 8, color: "bg-orange-100 text-orange-600", gated: false, groupIds: ["G5"], successLabel: null, failLabel: null, args: [] },
-    // Demo ACTION (kind:"auto") — runs the open_tab tool instead of a human. Reports
-    // Success (tab opened) / Unsuccess (blocked); saves the opened URL to context.lookup_url.
-    { id: "W9", label: "IMEI Lookup", order: 9, color: "bg-violet-100 text-violet-600", gated: false, groupIds: [], successLabel: "Opened", failLabel: "Blocked", args: [], kind: "auto", toolType: "open_tab", toolConfig: { bindings: { url: { mode: "fixed", value: "https://www.imei.info" } }, outputs: { openedUrl: "lookup_url" } } },
-] as const;
-
-type WorkerSeed = {
-    id: string; label: string; order: number; color: string;  // color is a Tailwind class OR a #hex
-    workId: string | null; statusId: string | null;
-    pipelineId: string;
-    publicLabel?: string;   // customer-portal label; omit to fall back to the status name
-
-    triggerMap?: Record<string, string>;
-    warrantyScope?: string; actionLabel?: string;
-    // Entry-time popup (on worker change): auto transition note + optional note popup.
-    transitionNote?: string;
-    skipNoteOnEntry?: boolean;
-    requireNoteOnEntry?: boolean;
-    entryQuestion?: string;
-    // Hybrid retry schedule: a "waiting" worker re-arms its work on a front-loaded
-    // schedule (1st attempt immediate, then densest phase first). After the last
-    // phase's last attempt it routes to failWorkerId (the unsuccess route = give-up).
-    // [] = no retry.
-    retrySchedule?: { unit: string; every: number; times: number }[];
-    successWorkerId?: string;   // outcome routing (set in a second pass; self/forward FK)
-    failWorkerId?: string;
-    spawnPipelineId?: string;      // 5th power: entering here spawns a child ticket on this pipeline
-    parentSignal?: string;         // on a CHILD worker: "success"|"fail" report-back to the parent
-    actions?: { type: string; on?: "success" | "fail" | "always"; config?: Record<string, string> }[]; // 6th power: action hooks + args
-};
-
-const WORKERS_SEED: WorkerSeed[] = [
-    { id: "SS45", label: "Working", order: 1, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1" },
-    { id: "SS38", label: "New Repair Wating", order: 1, color: "bg-gray-100 text-gray-600", workId: "W2", statusId: "S1", pipelineId: "P1", actionLabel: "Dear Technician, Accept or Reject this ticket as per device condition, down waste time !! ", successWorkerId: "SS39", failWorkerId: "SS40" },
-    { id: "SS1", label: "Working", order: 1, color: "bg-yellow-50 text-yellow-700", workId: null, statusId: "S2", pipelineId: "P1" },
-    { id: "SS47", label: "Call Log", order: 1, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS39", label: "Start", order: 2, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: { "S1": "S2" } },
-    { id: "SS40", label: "Reject", order: 3, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S1", pipelineId: "P1", triggerMap: { "S1": "S8" } },
-    { id: "SS42", label: "Calling: Customer Info", order: 11, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS4", failWorkerId: "SS3" },
-    { id: "SS10", label: "Need Parts", order: 11, color: "#B5D345", workId: "W6", statusId: "S3", pipelineId: "P1", actionLabel: "Hi, Dear Manager, Service need 3rd Party Help. Should we proceed or Reject and close ?", retrySchedule: [{ "unit": "hour", "every": 3, "times": 100 }], successWorkerId: "SS58", failWorkerId: "SS51" },
-    { id: "SS58", label: "Order Parts", order: 12, color: "bg-orange-50 text-orange-600", workId: "W4", statusId: "S3", pipelineId: "P1", actionLabel: "Dear Purchase Manager, Please order the item need for complete the repair  . ", retrySchedule: [{ "unit": "hour", "every": 3, "times": 100 }], successWorkerId: "SS50", failWorkerId: "SS51" },
-    { id: "SS3", label: "Unreachable: Customer Info", order: 12, color: "bg-red-50 text-red-600", workId: null, statusId: "S2", pipelineId: "P1", actionLabel: "Dear Tele Caller, Please Call the Customer Reason given in Note !!", triggerMap: { "S2": "S8" }, successWorkerId: "SS4", failWorkerId: "SS3" },
-    { id: "SS4", label: "Customer Responded", order: 13, color: "bg-green-50 text-green-700", workId: "W2", statusId: "S2", pipelineId: "P1", actionLabel: "Dear Technician, Customer Responded if Happy Start Work Again, if Not Happy Close the Ticket !!", successWorkerId: "SS1", failWorkerId: "SS3" },
-    { id: "SS50", label: "Waiting for parts", order: 13, color: "bg-teal-100 text-teal-600", workId: "W5", statusId: "S3", pipelineId: "P1", successWorkerId: "SS52", failWorkerId: "SS50" },
-    { id: "SS18", label: "Engineer Visit Requested", order: 18, color: "bg-orange-50 text-orange-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS19", label: "Engineer Visit Scheduled", order: 19, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS20", label: "Engineer On-Site", order: 20, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS21", label: "Engineer Work Complete", order: 21, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: { "S4": "S3" } },
-    { id: "SS43", label: "Calling: Customer to Bring Accessories", order: 21, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS2", failWorkerId: "SS53" },
-    { id: "SS2", label: "Waiting: Customer to Bring Accessories", order: 22, color: "bg-orange-100 text-orange-600", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{ "unit": "day", "every": 1, "times": 3 }], successWorkerId: "SS1", failWorkerId: "SS54" },
-    { id: "SS22", label: "Pending Despatch", order: 22, color: "bg-orange-50 text-orange-700", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS54", label: "Calling: Customer to Bring Accessories 2nd Attempt", order: 23, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS55", failWorkerId: "SS53" },
-    { id: "SS23", label: "Dispatched", order: 23, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS24", label: "Received by Service Centre", order: 24, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS25", label: "Being Repaired", order: 25, color: "bg-blue-50 text-blue-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS55", label: "Waiting: Customer to Bring Accessories 2nd Attempt", order: 25, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{ "unit": "day", "every": 1, "times": 3 }], successWorkerId: "SS1", failWorkerId: "SS56" },
-    { id: "SS26", label: "Service Centre Delayed", order: 26, color: "bg-red-50 text-red-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS56", label: "Calling: Customer to Bring Accessories 3rd Attempt", order: 26, color: "bg-gray-100 text-gray-600", workId: "W1", statusId: "S2", pipelineId: "P1", publicLabel: "Calling: Customer to Bring Accessories", actionLabel: "Calling: Customer to Bring Accessories", retrySchedule: [{ "unit": "minute", "every": 60, "times": 1 }, { "unit": "hour", "every": 6, "times": 2 }, { "unit": "day", "every": 1, "times": 3 }, { "unit": "week", "every": 1, "times": 3 }, { "unit": "month", "every": 1, "times": 3 }, { "unit": "year", "every": 1, "times": 2 }], successWorkerId: "SS57", failWorkerId: "SS53" },
-    { id: "SS27", label: "Shipped Back to Us", order: 27, color: "bg-purple-50 text-purple-600", workId: null, statusId: "S4", pipelineId: "P1" },
-    { id: "SS57", label: "Waiting: Customer to Bring Accessories 3rd Attempt", order: 27, color: "bg-yellow-50 text-yellow-700", workId: "W5", statusId: "S2", pipelineId: "P1", retrySchedule: [{ "unit": "year", "every": 2, "times": 1 }], successWorkerId: "SS1", failWorkerId: "SS53" },
-    { id: "SS28", label: "Received by Us", order: 28, color: "bg-green-50 text-green-700", workId: null, statusId: "S4", pipelineId: "P1", triggerMap: { "S4": "S5" } },
-    { id: "SS29", label: "Customer Notified", order: 29, color: "bg-green-50 text-green-700", workId: null, statusId: "S6", pipelineId: "P1" },
-    { id: "SS30", label: "Reminder Sent", order: 30, color: "bg-yellow-50 text-yellow-700", workId: null, statusId: "S6", pipelineId: "P1" },
-    { id: "SS53", label: "move to scrap", order: 31, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S2", pipelineId: "P1", triggerMap: { "S2": "S63" } },
-    { id: "SS31", label: "Uncollected - Action Needed", order: 31, color: "bg-red-50 text-red-600", workId: null, statusId: "S6", pipelineId: "P1" },
-    { id: "SS32", label: "Beyond Economical Repair", order: 32, color: "bg-red-50 text-red-600", workId: null, statusId: "S8", pipelineId: "P1" },
-    { id: "SS33", label: "Customer Informed", order: 33, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1" },
-    { id: "SS34", label: "Collecting Unrepaired", order: 34, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1", triggerMap: { "S8": "S7" } },
-    { id: "SS35", label: "Scrapped with Consent", order: 35, color: "bg-gray-50 text-gray-600", workId: null, statusId: "S8", pipelineId: "P1" },
-    { id: "SS36", label: "Warranty Voided - Customer Approval Needed", order: 36, color: "bg-red-100 text-red-600", workId: "W1", statusId: null, pipelineId: "P1", actionLabel: "Call customer - warranty void, confirm paid repair" },
-    { id: "SS37", label: "Confirmed Under Warranty - Proceeding", order: 37, color: "bg-green-100 text-green-700", workId: "W1", statusId: null, pipelineId: "P1", actionLabel: "Inform customer - covered under warranty, no charge" },
-    { id: "SS46", label: "Need 3rd Party Help", order: 46, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: { "S3": "S61" } },
-    { id: "SS48", label: "Find Help and Call Log", order: 48, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S61", pipelineId: "P1" },
-    { id: "SS52", label: "End Wait", order: 52, color: "bg-gray-100 text-gray-600", workId: "W5", statusId: "S3", pipelineId: "P1", successWorkerId: "SS45", failWorkerId: "SS51" },
-    { id: "SS51", label: "Parts Not Avilable - Close", order: 100, color: "bg-gray-100 text-gray-600", workId: null, statusId: "S3", pipelineId: "P1", triggerMap: { "S3": "S8" } },
-];
 
 const STATUS_TRANSITIONS = [
-    // P1 service (captured from the live workflow)
-    { fromStatusId: "S2", toStatusId: "S3" },
-    { fromStatusId: "S2", toStatusId: "S9" },
+    // P1 Service & Repair — the live board, exactly as the workflow runs today.
+    // Note there is no step OUT of S2 (Diagnosing): intake goes straight to S3,
+    // and S2 is only reached by an explicit move. Captured from the live DB.
+    { fromStatusId: "S1", toStatusId: "S3" },
+    { fromStatusId: "S1", toStatusId: "S61" },
+    { fromStatusId: "S1", toStatusId: "S66" },
+    { fromStatusId: "S1", toStatusId: "S9" },
+    { fromStatusId: "S3", toStatusId: "S6" },
     { fromStatusId: "S3", toStatusId: "S61" },
+    { fromStatusId: "S3", toStatusId: "S62" },
+    { fromStatusId: "S3", toStatusId: "S8" },
     { fromStatusId: "S3", toStatusId: "S9" },
+    { fromStatusId: "S5", toStatusId: "S6" },
+    { fromStatusId: "S5", toStatusId: "S8" },
+    { fromStatusId: "S6", toStatusId: "S63" },
+    { fromStatusId: "S6", toStatusId: "S7" },
+    { fromStatusId: "S61", toStatusId: "S62" },
+    { fromStatusId: "S61", toStatusId: "S65" },
+    { fromStatusId: "S61", toStatusId: "S8" },
+    { fromStatusId: "S62", toStatusId: "S65" },
+    { fromStatusId: "S65", toStatusId: "S5" },
+    { fromStatusId: "S66", toStatusId: "S63" },
+    { fromStatusId: "S66", toStatusId: "S7" },
+    { fromStatusId: "S8", toStatusId: "S63" },
+    { fromStatusId: "S8", toStatusId: "S7" },
+    { fromStatusId: "S9", toStatusId: "S63" },
+    { fromStatusId: "S9", toStatusId: "S7" },
+    // P7 Sales Orders
     { fromStatusId: "S42", toStatusId: "S43" },
-    // New → Confirmed directly: the board's Review popup confirms a New order in one
-    // click (skipping the manual Under Review hop). Under Review → Confirmed still exists.
     { fromStatusId: "S42", toStatusId: "S44" },
     { fromStatusId: "S42", toStatusId: "S48" },
     { fromStatusId: "S43", toStatusId: "S44" },
@@ -375,7 +330,7 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S45", toStatusId: "S46" },
     { fromStatusId: "S46", toStatusId: "S47" },
     { fromStatusId: "S46", toStatusId: "S49" },
-    // P8 delivery sub-pipeline
+    // P8 Delivery
     { fromStatusId: "S50", toStatusId: "S51" },
     { fromStatusId: "S50", toStatusId: "S56" },
     { fromStatusId: "S51", toStatusId: "S52" },
@@ -386,54 +341,24 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S53", toStatusId: "S56" },
     { fromStatusId: "S54", toStatusId: "S55" },
     { fromStatusId: "S54", toStatusId: "S56" },
-    // P9 refund sub-pipeline: Requested → Approved → Refunded; reject from either.
+    // P9 Refund
     { fromStatusId: "S57", toStatusId: "S58" },
     { fromStatusId: "S57", toStatusId: "S60" },
     { fromStatusId: "S58", toStatusId: "S59" },
     { fromStatusId: "S58", toStatusId: "S60" },
 ];
 
-// Real from→to step transitions only. Entry (which sub auto-applies on entering a
-// status) is no longer encoded as a `null →` row — it's hand-picked per status via
-// TicketStatus.startWorkerId (see STATUS_STARTS below).
-const SUB_STATUS_TRANSITIONS = [
-    { fromWorkerId: "SS18", toWorkerId: "SS19" },
-    { fromWorkerId: "SS19", toWorkerId: "SS20" },
-    { fromWorkerId: "SS20", toWorkerId: "SS21" },
-    { fromWorkerId: "SS22", toWorkerId: "SS23" },
-    { fromWorkerId: "SS23", toWorkerId: "SS24" },
-    { fromWorkerId: "SS24", toWorkerId: "SS25" },
-    { fromWorkerId: "SS25", toWorkerId: "SS26" },
-    { fromWorkerId: "SS25", toWorkerId: "SS27" },
-    { fromWorkerId: "SS26", toWorkerId: "SS27" },
-    { fromWorkerId: "SS27", toWorkerId: "SS28" },
-    { fromWorkerId: "SS29", toWorkerId: "SS30" },
-    { fromWorkerId: "SS30", toWorkerId: "SS31" },
-    { fromWorkerId: "SS32", toWorkerId: "SS33" },
-    { fromWorkerId: "SS33", toWorkerId: "SS34" },
-    { fromWorkerId: "SS33", toWorkerId: "SS35" },
-    { fromWorkerId: "SS2", toWorkerId: "SS1" },
-    { fromWorkerId: "SS1", toWorkerId: "SS42" },
-    { fromWorkerId: "SS1", toWorkerId: "SS43" },
-    { fromWorkerId: "SS50", toWorkerId: "SS45" },
-    { fromWorkerId: "SS45", toWorkerId: "SS10" },
-    { fromWorkerId: "SS45", toWorkerId: "SS46" },
-] as const;
-
-// Hand-picked start worker per parent status — the one auto-applied on entry.
-// Each status starts on its OWN work-type's first node (so the shared pool yields a
-// different start per status, e.g. SS1 is the start of S2 but S3 starts on SS10).
-// Statuses absent here (S1/S5/S7/S9, and all of P2–P9) have no applicable worker,
-// so they start with none. Applied in a pass AFTER workers exist (FK ordering).
-const STATUS_STARTS: Record<string, string> = {
-    S1: "SS38",  // Received   → New Repair Wating
-    S2: "SS1",   // Diagnosing → Working
-    S3: "SS45",  // Repairing  → Working
-    S4: "SS47",  // Escalated  → Call Log
-    S6: "SS29",  // Ready      → Customer Notified
-    S8: "SS32",  // No Fix     → Beyond Economical Repair
-    S61: "SS48", // Need Help  → Find Help and Call Log
-};
+// Works · TicketWorkers · worker transitions · per-status start workers:
+// DELIBERATELY NOT SEEDED. The live database has ZERO rows in Work, WorkGroupWork,
+// TicketWorker and WorkerTransition, and no TicketStatus carries a startWorkerId —
+// the business runs its board on statuses alone. This file used to seed 9 works and
+// 43 workers that nothing used, which made every reseed re-create an automation
+// layer staff had already abandoned.
+//
+// The 5 WorkGroups above ARE used (they tag and filter the Work Inbox) and stay.
+//
+// If works/workers are adopted later: build them in the UI first, then mirror them
+// back here in the same commit — live DB is the source of truth for this section.
 
 // ════════════════════════════════════════════════════════════════════════════
 // SECTION 3 — Org structure: Branches + Departments
@@ -451,7 +376,9 @@ const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
     {
         id: "BR-HQ",
-        number: 1,
+        // 9 is the live branch number — it prefixes voucher numbers, so seeding 1
+        // on a reseed would renumber the whole shop's documents.
+        number: 9,
         name: "Head Office",
         // Legacy single-line — kept for old list rows that still consult it.
         address: `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
@@ -469,6 +396,318 @@ const BRANCHES = [
     },
 ];
 
+// Couriers the storefront offers at checkout, exactly as configured in
+// Settings → Couriers. These are OUR real rates, not generic placeholders:
+// Local delivery carries per-neighbourhood pricing for the pincodes we actually
+// serve (783384 Abhayapuri / Lengtisinga, 783380 Barpara), Standard courier
+// carries the INDIA POST zone rates, and Shiprocket / Shipway carry our pickup
+// pincode. Seeding is create-only per kind, so rate edits in the UI survive a
+// reseed — change a rate in the app, then re-capture; do not hand-edit here.
+const DELIVERY_METHODS = [
+    {
+        kind: "OWN_BOY",
+        displayName: "Local delivery",
+        isActive: true,
+        sortOrder: 0,
+        configJson: {
+            "pincodes": [],
+            "vehicles": [
+                {
+                    "name": "Quick Delivery 30 Minutes",
+                    "isActive": true,
+                    "baseGrams": 30000,
+                    "stepGrams": 10000,
+                    "freeAbovePaise": 500000,
+                    "maxWeightGrams": 50000,
+                    "neighbourhoods": {
+                        "783380": {
+                            "Barpara": {
+                                "addlPaise": 2000,
+                                "basePaise": 5000,
+                                "neighbourhoods": [
+                                    {
+                                        "name": "LIC Office"
+                                    }
+                                ]
+                            }
+                        },
+                        "783384": {
+                            "Abhayapuri": {
+                                "addlPaise": 1000,
+                                "basePaise": 2000,
+                                "neighbourhoods": [
+                                    {
+                                        "name": "Nama bazar"
+                                    },
+                                    {
+                                        "name": "College Market"
+                                    },
+                                    {
+                                        "name": "Rajib Bhawan"
+                                    }
+                                ]
+                            },
+                            "Lengtisinga": {
+                                "addlPaise": 1000,
+                                "basePaise": 2000,
+                                "neighbourhoods": [
+                                    {
+                                        "name": "Lockdown Bazar"
+                                    },
+                                    {
+                                        "name": "BoroBhanga"
+                                    },
+                                    {
+                                        "name": "Lengtisinga Bazar"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Same Day Delivery",
+                    "isActive": true,
+                    "baseGrams": 500,
+                    "stepGrams": 500,
+                    "freeAbovePaise": 0,
+                    "neighbourhoods": {
+                        "783380": {
+                            "Barpara": {
+                                "addlPaise": 10000,
+                                "basePaise": 10000,
+                                "neighbourhoods": [
+                                    {
+                                        "name": "LIC Office"
+                                    }
+                                ]
+                            }
+                        },
+                        "783384": {
+                            "Abhayapuri": {
+                                "addlPaise": 3000,
+                                "basePaise": 3000,
+                                "neighbourhoods": [
+                                    {
+                                        "name": "Nama bazar"
+                                    },
+                                    {
+                                        "name": "College Market"
+                                    },
+                                    {
+                                        "name": "Rajib Bhawan"
+                                    }
+                                ]
+                            },
+                            "Lengtisinga": {
+                                "addlPaise": 5000,
+                                "basePaise": 5000,
+                                "neighbourhoods": [
+                                    {
+                                        "name": "Lockdown Bazar"
+                                    },
+                                    {
+                                        "name": "BoroBhanga"
+                                    },
+                                    {
+                                        "name": "Lengtisinga Bazar"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Store Pickup",
+                    "isActive": true,
+                    "baseGrams": 500,
+                    "stepGrams": 500,
+                    "freeAbovePaise": 0,
+                    "neighbourhoods": {}
+                }
+            ],
+            "baseGrams": 50000,
+            "flatPaise": 0,
+            "stepGrams": 50000,
+            "freeAbovePaise": 500000,
+            "neighbourhoods": {}
+        },
+    },
+    {
+        kind: "CUSTOM",
+        displayName: "Standard courier",
+        isActive: true,
+        sortOrder: 1,
+        configJson: {
+            "mode": "FLAT",
+            "services": [
+                {
+                    "mode": "ZONE",
+                    "name": "INDIA POST",
+                    "zones": [
+                        {
+                            "name": "All India",
+                            "states": [],
+                            "addlPaise": 3800,
+                            "basePaise": 13600,
+                            "isDefault": true,
+                            "pincodePrefixes": []
+                        }
+                    ],
+                    "isActive": true,
+                    "baseGrams": 2000,
+                    "stepGrams": 1000,
+                    "codPercent": 1.6,
+                    "codFlatPaise": 2000,
+                    "freeAbovePaise": 0
+                }
+            ],
+            "flatPaise": 9900,
+            "codPercent": 0,
+            "codFlatPaise": 0,
+            "freeAbovePaise": 500000
+        },
+    },
+    {
+        kind: "SHIPROCKET",
+        displayName: "Shiprocket",
+        isActive: true,
+        sortOrder: 2,
+        configJson: {
+            "height": 10,
+            "length": 15,
+            "breadth": 15,
+            "exclude": {
+                "states": [],
+                "pincodePrefixes": [
+                    "783384"
+                ]
+            },
+            "pickupPincode": "783384",
+            "pickupLocation": "Primary",
+            "defaultItemWeightGrams": 500
+        },
+    },
+    {
+        kind: "SHIPWAY",
+        displayName: "Shipway",
+        isActive: true,
+        sortOrder: 3,
+        configJson: {
+            "height": 10,
+            "length": 15,
+            "breadth": 15,
+            "exclude": {
+                "states": [],
+                "pincodePrefixes": [
+                    "783384"
+                ]
+            },
+            "pickupPincode": "783384",
+            "pickupLocation": "Primary",
+            "defaultItemWeightGrams": 500
+        },
+    },
+    {
+        kind: "STORE_PICKUP",
+        displayName: "Pickup from store",
+        isActive: true,
+        sortOrder: 4,
+        configJson: {
+            "note": "Collect Within 3 Working Days , 10AM to 8PM, Saturday to Thursday, Friday Close.",
+            "include": {
+                "states": [],
+                "pincodePrefixes": [
+                    "783384"
+                ]
+            }
+        },
+    },
+    {
+        kind: "FREE_DELIVERY",
+        displayName: "Free delivery",
+        isActive: false,
+        sortOrder: 5,
+        configJson: {
+            "exclude": {
+                "states": [],
+                "pincodePrefixes": [
+                    "783384"
+                ]
+            },
+            "include": {
+                "states": [],
+                "pincodePrefixes": [
+                    "783384"
+                ]
+            }
+        },
+    },
+] as const;
+
+// Online payment gateways. `settlementLedger` is the NAME of the GL ledger each
+// gateway settles into (seeded in Section 4 under the "Payment Gateway" group).
+//
+// It is a name and not an id ON PURPOSE. The live rows store the settlement account
+// as a raw integer inside configJson, and integer ids do not survive a reseed into a
+// fresh database — they would point at whatever ledger happened to take that id, or
+// at nothing. The seeder resolves the name to the local id at run time instead.
+//
+// Credentials are NEVER seeded. Keys live in env / the gateway settings UI; a seeded
+// row carries only the routing and the settlement link.
+const GATEWAYS = [
+    {
+        provider: "pay_on_delivery",
+        displayName: "Pay on delivery",
+        environment: "TEST",
+        enabledForCounter: false,
+        enabledForOnline: false,
+        isActive: true,
+        sortOrder: 0,
+        settlementLedger: "ShipRoket COD",
+        configJson: {
+            "area": {
+                "mode": "except",
+                "states": [],
+                "pincodePrefixes": []
+            }
+        },
+    },
+    {
+        provider: "razorpay",
+        displayName: "Razorpay",
+        environment: "LIVE",
+        enabledForCounter: false,
+        enabledForOnline: true,
+        isActive: true,
+        sortOrder: 10,
+        settlementLedger: "Razorpay",
+        configJson: {},
+    },
+    {
+        provider: "payu",
+        displayName: "PayU",
+        environment: "TEST",
+        enabledForCounter: false,
+        enabledForOnline: true,
+        isActive: false,
+        sortOrder: 20,
+        settlementLedger: "Payu",
+        configJson: {},
+    },
+    {
+        provider: "cashfree",
+        displayName: "Cashfree",
+        environment: "TEST",
+        enabledForCounter: false,
+        enabledForOnline: true,
+        isActive: false,
+        sortOrder: 30,
+        settlementLedger: "Cashfree",
+        configJson: {},
+    },
+] as const;
+
 const DEPARTMENTS: { id: string; name: string; description: string; isAllAccess?: boolean }[] = [
     // All-access department — home for cross-cutting roles (R1 Admin). Its
     // permission pool is "every permission" (computed live; no DepartmentPermission
@@ -482,6 +721,9 @@ const DEPARTMENTS: { id: string; name: string; description: string; isAllAccess?
     { id: "DEP-HR", name: "HR", description: "People operations and recruitment" },
     { id: "DEP-IT", name: "IT / Admin", description: "Systems, infrastructure, and admin" },
     { id: "DEP-DESP", name: "Despatch", description: "Courier, logistics, and shipping" },
+    // Home of R2 Branch Manager. Spelling "Managment" is what the live row says —
+    // matched deliberately so a reseed does not rename the owner's department.
+    { id: "DEP-OP", name: "Managment", description: "Day To Day Business Work" },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -650,7 +892,7 @@ async function main() {
     console.log(`      ✓ ${ROLES.length} roles · ${PERMISSIONS.length} permissions · ${grants.length} grants · pruned ${pruned.count} retired\n`);
 
     // ── Section 2: Workflow ────────────────────────────────────────────
-    console.log("[2/7] Workflow — Pipelines, Statuses, Workers, Transitions");
+    console.log("[2/7] Workflow — Pipelines, Statuses, Work groups, Transitions");
     for (const pl of PIPELINES) {
         await prisma.pipeline.upsert({
             where: { id: pl.id },
@@ -665,59 +907,12 @@ async function main() {
             });
         }
     }
-    // Colors are random hex (no legacy Tailwind-class presets). A class-valued color
-    // in the arrays is filled with a fresh random hex ("fill random for backward").
-    const seedColor = (c: string) => /^#/.test(c) ? c : "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0").toUpperCase();
     for (const g of WORK_GROUPS) {
         await prisma.workGroup.upsert({
             where: { id: g.id },
-            update: { name: g.name, label: g.label, color: seedColor(g.color), order: g.order },
-            create: { id: g.id, name: g.name, label: g.label, color: seedColor(g.color), order: g.order },
+            update: { name: g.name, label: g.label, color: g.color, order: g.order },
+            create: { id: g.id, name: g.name, label: g.label, color: g.color, order: g.order },
         });
-    }
-    for (const w of WORKS) {
-        const permissionId = w.gated ? `work:${w.id}` : null;
-        const color = seedColor(w.color);
-        // Work-shape fields are optional in the seed rows — default them here.
-        const shape = w as { prompt?: string | null; startLabel?: string | null; successPopup?: boolean; failPopup?: boolean; kind?: string; toolType?: string | null; toolConfig?: unknown };
-        const shapeFields = {
-            prompt: shape.prompt ?? null, startLabel: shape.startLabel ?? null,
-            successPopup: shape.successPopup ?? false, failPopup: shape.failPopup ?? false,
-            kind: shape.kind ?? "human", toolType: shape.toolType ?? null,
-            toolConfig: (shape.toolConfig ?? {}) as Prisma.InputJsonValue,
-        };
-        await prisma.work.upsert({
-            where: { id: w.id },
-            update: { label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields, groups: { deleteMany: {}, create: w.groupIds.map((workGroupId) => ({ workGroupId })) } },
-            create: { id: w.id, label: w.label, color, order: w.order, permissionId, successLabel: w.successLabel, failLabel: w.failLabel, args: w.args as unknown as Prisma.InputJsonValue, ...shapeFields, groups: { create: w.groupIds.map((workGroupId) => ({ workGroupId })) } },
-        });
-    }
-    for (const ss of WORKERS_SEED) {
-        const retry = { retrySchedule: ss.retrySchedule ?? [], publicLabel: ss.publicLabel ?? null, spawnPipelineId: ss.spawnPipelineId ?? null, parentSignal: ss.parentSignal ?? null, actions: (ss.actions ?? []) as unknown as Prisma.InputJsonValue, transitionNote: ss.transitionNote ?? null, skipNoteOnEntry: ss.skipNoteOnEntry ?? false, requireNoteOnEntry: ss.requireNoteOnEntry ?? false, entryQuestion: ss.entryQuestion ?? null };
-        const color = seedColor(ss.color);
-        await prisma.ticketWorker.upsert({
-            where: { id: ss.id },
-            update: { label: ss.label, color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
-            create: { id: ss.id, label: ss.label, color, order: ss.order, statusId: ss.statusId, triggerMap: ss.triggerMap ?? {}, actionLabel: ss.actionLabel ?? null, autoRevertOnClear: true, warrantyScope: ss.warrantyScope ?? "any", workId: ss.workId, pipelineId: ss.pipelineId, ...retry },
-        });
-    }
-    // Hand-picked start worker per status — set now that both statuses and
-    // workers exist (FK TicketStatus.startWorkerId → TicketWorker).
-    for (const [statusId, workerId] of Object.entries(STATUS_STARTS)) {
-        await prisma.ticketStatus.update({ where: { id: statusId }, data: { startWorkerId: workerId } });
-    }
-    // Outcome routing (success / unsuccess give-up target) — set in a second pass
-    // (self-FK; the target may be defined later in WORKERS_SEED than the source).
-    for (const ss of WORKERS_SEED) {
-        if (ss.successWorkerId || ss.failWorkerId) {
-            await prisma.ticketWorker.update({
-                where: { id: ss.id },
-                data: {
-                    ...(ss.successWorkerId && { successWorkerId: ss.successWorkerId }),
-                    ...(ss.failWorkerId && { failWorkerId: ss.failWorkerId }),
-                },
-            });
-        }
     }
     for (const t of STATUS_TRANSITIONS) {
         await prisma.statusTransition.upsert({
@@ -726,14 +921,7 @@ async function main() {
             create: t,
         });
     }
-    for (const t of SUB_STATUS_TRANSITIONS) {
-        const exists = await prisma.workerTransition.findFirst({
-            where: { fromWorkerId: t.fromWorkerId, toWorkerId: t.toWorkerId },
-            select: { id: true },
-        });
-        if (!exists) await prisma.workerTransition.create({ data: t });
-    }
-    console.log(`      ✓ ${PIPELINES.length} pipelines · ${PIPELINES.reduce((s, p) => s + p.statuses.length, 0)} statuses · ${WORKERS_SEED.length} workers\n`);
+    console.log(`      ✓ ${PIPELINES.length} pipelines · ${PIPELINES.reduce((s, p) => s + p.statuses.length, 0)} statuses · ${WORK_GROUPS.length} work groups · ${STATUS_TRANSITIONS.length} transitions\n`);
 
     // ── Section 3: Org structure ────────────────────────────────────────
     console.log("[3/7] Org structure — Branches, Departments");
@@ -800,15 +988,24 @@ async function main() {
     await upsertGroup("Cash-in-Hand", "ASSET", 50, currentAssetsId);
     await upsertGroup("Bank Accounts", "ASSET", 60, currentAssetsId);
     await upsertGroup("Wallets", "ASSET", 65, currentAssetsId);
-    // "Payment Gateway" (ASSET, under Current Assets) is NOT seeded generically —
-    // it's real-config only (see personal.local.json); a new client adds it
-    // themselves via Accountancy → Masters → Account Groups if they take
-    // payments through a gateway.
+    // Payment Gateway — the settlement bucket every online collection lands in.
+    // It used to be left out as "real-config only", but Section 17 seeds the
+    // gateways themselves and each one needs a settlement ledger that lives HERE,
+    // so the group has to exist before them.
+    await upsertGroup("Payment Gateway", "ASSET", 66, currentAssetsId);
 
     // GL ledgers — Stock-in-Hand intentionally has NO children.
     await upsertLedger("Cash", "Cash-in-Hand", "DEBIT", "1000");
     await upsertLedger("Petty Cash", "Cash-in-Hand", "DEBIT");
     await upsertLedger("Bank Account", "Bank Accounts", "DEBIT", "1010");
+    // Gateway settlement ledgers. Section 17 points each PaymentGateway at one of
+    // these BY NAME — the live rows carry no account code, so the name is the key.
+    // Rename one here and you must rename it in GATEWAYS too, or the link silently
+    // fails to resolve and that gateway is skipped.
+    await upsertLedger("Razorpay", "Payment Gateway", "DEBIT");
+    await upsertLedger("Payu", "Payment Gateway", "DEBIT");
+    await upsertLedger("Cashfree", "Payment Gateway", "DEBIT");
+    await upsertLedger("ShipRoket COD", "Payment Gateway", "DEBIT");
     await upsertLedger("Accounts Receivable", "Sundry Debtors", "DEBIT", "1100");
     await upsertLedger("Accounts Payable", "Sundry Creditors", "CREDIT", "2000");
     await upsertLedger("Walk-in Cash Customer", "Sundry Debtors", "DEBIT", "CASH-WALKIN");
@@ -1355,25 +1552,59 @@ async function main() {
     console.log("      ✓ StrategyPoint BASE row present\n");
 
     // ── Section 16: Delivery methods (courier options at checkout) ────────────
-    // Three couriers the storefront offers; the customer picks one at checkout and
-    // its rate becomes the order's shipping charge. create-only per kind so an
-    // admin's rate edits (Settings → Couriers) survive a reseed.
-    //   CUSTOM    – a manually-run courier, flat ₹99 (free above ₹5,000).
-    //   OWN_BOY   – in-house delivery boy; starts with no pincodes (admin adds the
-    //               serviceable list), flat ₹49.
-    //   SHIPROCKET – live API rates; seeded INACTIVE until creds + pickup are set.
-    console.log("[16/16] Delivery methods (courier options)");
-    // The hard-coded courier catalog is code-owned (deliveryMethodConfig.ts) and the
-    // app self-heals it on load; this create-only pass just pre-fills a fresh DB.
+    // Our six real couriers (see DELIVERY_METHODS above). create-only per kind so
+    // rate edits in Settings → Couriers survive a reseed.
+    console.log("[16/17] Delivery methods (courier options)");
     let dmCreated = 0;
-    for (const m of DELIVERY_METHOD_DEFAULTS) {
+    for (const m of DELIVERY_METHODS) {
         const exists = await prisma.deliveryMethod.findFirst({ where: { kind: m.kind }, select: { id: true } });
         if (!exists) {
-            await prisma.deliveryMethod.create({ data: { ...m, configJson: m.configJson as Prisma.InputJsonValue } });
+            await prisma.deliveryMethod.create({
+                data: {
+                    kind: m.kind, displayName: m.displayName, isActive: m.isActive,
+                    sortOrder: m.sortOrder, configJson: m.configJson as unknown as Prisma.InputJsonValue,
+                },
+            });
             dmCreated++;
         }
     }
-    console.log(`      ✓ ${DELIVERY_METHOD_DEFAULTS.length} delivery methods ensured (${dmCreated} new)\n`);
+    console.log(`      ✓ ${DELIVERY_METHODS.length} delivery methods ensured (${dmCreated} new)\n`);
+
+    // ── Section 17: Payment gateways ──────────────────────────────────────────
+    // create-only per provider: an admin's keys, environment and on/off switches
+    // (Settings → Payment Gateways) are never overwritten by a reseed.
+    //
+    // The settlement ledger is resolved BY NAME to a local id here, which is the
+    // whole point — see the note on GATEWAYS above. A name that does not resolve
+    // is reported and that gateway is skipped rather than written with a dangling
+    // account, because a gateway pointing at the wrong ledger would silently post
+    // real money into the wrong place.
+    console.log("[17/17] Payment gateways");
+    let gwCreated = 0;
+    const gwSkipped: string[] = [];
+    for (const g of GATEWAYS) {
+        const exists = await prisma.paymentGateway.findFirst({ where: { provider: g.provider }, select: { id: true } });
+        if (exists) continue;
+        let settlementAccountId: number | null = null;
+        if (g.settlementLedger) {
+            const acct = await prisma.account.findFirst({ where: { name: g.settlementLedger }, select: { id: true } });
+            if (!acct) { gwSkipped.push(`${g.provider} (no ledger "${g.settlementLedger}")`); continue; }
+            settlementAccountId = acct.id;
+        }
+        await prisma.paymentGateway.create({
+            data: {
+                provider: g.provider, displayName: g.displayName, environment: g.environment,
+                enabledForCounter: g.enabledForCounter, enabledForOnline: g.enabledForOnline,
+                isActive: g.isActive, sortOrder: g.sortOrder,
+                configJson: { ...g.configJson, ...(settlementAccountId ? { settlementAccountId } : {}) } as unknown as Prisma.InputJsonValue,
+            },
+        });
+        gwCreated++;
+    }
+    console.log(`      ✓ ${GATEWAYS.length} gateways ensured (${gwCreated} new)`);
+    for (const s of gwSkipped) console.log(`      • skipped: ${s}`);
+    console.log("");
+
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

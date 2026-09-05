@@ -9,7 +9,7 @@ prisma/seeds/
 ├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
-├─ helper-roles.ts              HELPER — trade-specific starter roles (R2–R7, non-system / admin-editable)
+├─ helper-roles.ts              ⛔ DO NOT RUN — new-client starter roles; its R2/R3 collide with ours
 ├─ apply-permissions.ts         APPLY — add just the `ADDITIONS` permissions + grant to R1 (live; the normal way to ship a permission)
 ├─ apply-voucher-series-counters.ts APPLY — give every VoucherSeries its counter-1 row
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
@@ -56,27 +56,43 @@ retired from code), so re-running it on the live DB re-asserts your config
 without touching transactions. The dev loop is **capture → edit → seed** (see
 the Personal bootstrap section below).
 
-## Generic bootstrap — the new-client installer
+## `bootstrap-seed.ts` — OUR installer, not a generic one
 
-`bootstrap-seed.ts` runs via `pnpm seed:generic` and is ONLY for a brand-new
-client with no captured config: it creates the generic demo world (baseline GST
-18%, ₹, starter tier ladder …). **Do not run it during
-normal development** — re-running it resets tuned settings back to generic.
+Runs via `pnpm seed:generic`. **It describes this company's real setup**, captured
+from the live database — the workflow we run, our roles, our couriers, our
+gateways. It is no longer a generic demo world, and it is no longer "starter
+values someone should tune later".
 
-`bootstrap-seed.ts` is **idempotent** — safe to re-run on a fresh install. It seeds:
+> **The live DB is the source of truth for this file.** Configure in the UI first,
+> then mirror the change back into `bootstrap-seed.ts` in the same commit. A
+> code-owned *generic* installer for the public build is a separate, later job.
 
-- **RBAC** — **1 role** (`R1` Admin, the only `isSystem` role; homed in the all-access `DEP-ADMIN` department so its Role Matrix shows the full permission list), 130+ permissions, R1's RolePermission grants. Permissions include a **per-kind voucher gate** for every hand-created voucher kind — GL kinds in the `finance:voucher:<action>:<kind>` namespace, inventory kinds in `inventory:voucher:<action>:<kind>` — generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts. The other starter roles (`R2`–`R7`) are trade-specific and live in `helper-roles.ts` (see below); admins build the rest from the Role Matrix.
-- **Workflow** — 6 pipelines, 49 ticket statuses, 7 worker groups, 38 workers, transitions
-- **Org structure** — 1 branch (HQ; admins add regional / online branches via the UI), 8 cross-branch departments (incl. `DEP-ADMIN`, the all-access dept — `Department.isAllAccess`, whose permission pool is "everything"), role ranks. Department rows are seeded in the RBAC section because `Role.departmentId` is a required FK that needs `DEP-ADMIN` to exist before roles.
-- **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; per-branch Vault accounts + POS counter till accounts
-- **Inventory Unit master** — 13 units (PCS, NOS, BOX, SET, UNIT, MTR, ROLL, PKT, PAIR, KG, BAG, REAM, DAY)
-- **Inventory Warranty Term master** — ~10 terms (No Warranty, 7/15-day, 1/3/6-month, 1/2/3/5-year)
-- **Org Defaults** — default GST rate (18%), default unit (UNIT), taxability (TAXABLE), currency (₹), credit periods (0 days)
-- **DB constraints** — `Phone_owner_xor`, `Email_owner_xor` CHECK constraints (Prisma can't express XOR; applied via raw SQL inside the seed)
+Idempotent, and every write is create-only where an admin can edit the value, so
+a re-run never overwrites tuned settings. It seeds:
 
-> **Universal vs trade-specific.** Bootstrap seeds only masters common to **every** trade (units, GST slabs, warranty terms, chart of accounts, the `R1` Admin role, workflow). Masters that are **specific to the computer/CCTV/printer trade** — brands, categories, the HSN/GST product-group spine, and the `R2`–`R7` starter roles — are NOT in bootstrap; they live in the helper seeds below. A different trade would ship its own helpers (or just build roles in the Role Matrix).
+- **RBAC** — **3 roles**: `R1` Role-Admin (the only `isSystem` role, homed in the all-access `DEP-ADMIN`), `R2` Branch Manager (`DEP-OP`), `R3` Counter Operator (`DEP-SALES`). Their **grants are not seeded here** — those are config and live in the personal snapshot; bootstrap only guarantees the rows and their department homes. Plus 130+ permissions, including a **per-kind voucher gate** for every hand-created voucher kind (GL `finance:voucher:<action>:<kind>`, inventory `inventory:voucher:<action>:<kind>`) generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts.
+- **Workflow** — 9 pipelines, 61 ticket statuses, 5 work groups, 48 status transitions. **No works and no ticket workers** (see below).
+- **Couriers** — our 6 real delivery methods, including Local delivery's per-neighbourhood pricing for the pincodes we serve (783384 Abhayapuri / Lengtisinga, 783380 Barpara), INDIA POST zone rates, and the Shiprocket / Shipway pickup pincode.
+- **Payment** — 4 gateways (Pay-on-delivery, Razorpay, PayU, Cashfree), each linked to its settlement ledger **by name**, plus the `Payment Gateway` account group and those four ledgers.
+- **Org structure** — 1 branch (HQ, **branch number 9** — it prefixes voucher numbers, so this must not change), 9 cross-branch departments incl. the all-access `DEP-ADMIN`. Departments are seeded in the RBAC section because `Role.departmentId` is a required FK needing `DEP-ADMIN` first.
+- **Chart of accounts** — AccountGroups (Tally tree) + GL ledgers; per-branch Vault accounts + POS counter till accounts
+- **Inventory masters** — units, warranty terms, GST slabs
+- **Org Defaults** — default GST rate, unit, taxability, currency, credit periods
+- **DB constraints** — `Phone_owner_xor`, `Email_owner_xor` CHECK constraints (Prisma can't express XOR; raw SQL inside the seed)
 
-> Production deployments run `pnpm prisma db seed` (mandatory) then, for this trade, `pnpm seed:helper-all` (roles → brands → inventory masters).
+> **Works and TicketWorkers are deliberately not seeded.** The live DB has **zero**
+> rows in `Work`, `WorkGroupWork`, `TicketWorker` and `WorkerTransition`, and no
+> status carries a `startWorkerId` — the board runs on statuses alone. This file
+> used to seed 9 works and 43 workers that nothing used, so every reseed rebuilt an
+> automation layer staff had already abandoned. The 5 **work groups** are real and
+> stay. If workers are adopted later, build them in the UI and mirror them back.
+
+> ⛔ **Do not run `pnpm seed:helper-roles` on our install.** It is a new-client
+> starter set that upserts `R2` as "Role-Service Engineer" and `R3` as
+> "Role-Counter / Cashier" and rewrites their grants — it would rename two live
+> roles, move them to the wrong departments, and replace permissions real staff
+> depend on. It has been removed from `pnpm seed:helper-all` for that reason and is
+> kept only as raw material for the public build.
 
 ## Personal bootstrap — self-complete restore of YOUR install
 
@@ -185,17 +201,28 @@ pnpm seed:helper-inventory   # after `pnpm prisma db seed`
 
 Wiped by `hard-clean` (both are in its `INVENTORY_MASTERS` list) — re-run this helper to restore.
 
-## Helper seed (trade-specific starter roles)
+## ⛔ `helper-roles.ts` — quarantined, do not run
 
-```bash
-pnpm seed:helper-roles   # after `pnpm prisma db seed`
-```
+`helper-roles.ts` creates `R2`–`R7` (Service Engineer, Counter/Cashier, Stores &
+Despatch, Branch Manager, Accountant, Sales Executive) plus their grants, for a
+brand-new client of this trade.
 
-`helper-roles.ts` creates `R2`–`R7` (Service Engineer, Counter/Cashier, Stores & Despatch, Branch Manager, Accountant, Sales Executive) plus their permission grants. They are **non-system** (`isSystem: false`), so admins can rename, re-grant, or delete them from the Role Matrix — unlike the locked `R1`. Idempotent (upsert-by-id; grants fully rewritten each run). Permission rows come from bootstrap, so run this **after** `pnpm prisma db seed`.
+**It is unsafe on our install.** We run `R2` = **Branch Manager** (`DEP-OP`) and
+`R3` = **Counter Operator** (`DEP-SALES`), both seeded by `bootstrap-seed.ts` from
+the live DB. This helper upserts those same two ids with different labels and
+different departments, and **rewrites their grants on every run** — so running it
+would rename two live roles, re-home them, and replace the permissions real staff
+depend on.
 
-Each role is homed in a department (`R2`→`DEP-REPAIR`, `R6`→`DEP-FIN`, `R7`→`DEP-SALES`, `R3`→`DEP-DESK`, `R4`→`DEP-DESP`; `R5` Branch Manager → `DEP-ADMIN`). This helper also seeds the **department permission pools** (`DepartmentPermission`) for those functional departments — each pool = the union of its roles' permissions, so a role can never grant outside its department's pool (the all-access `DEP-ADMIN` carries no rows; its pool is everything). Pools are trade-specific (they depend on the helper roles), which is why they live here, not in bootstrap.
+It has been removed from `pnpm seed:helper-all`, and the `pnpm seed:helper-roles`
+script is retained only so the file stays reachable as raw material for the public
+build. Before it is used again it needs its ids moved off `R2`/`R3`, or a guard
+that refuses to touch a role that already exists.
 
-Wiped by `hard-clean` (it deletes every non-system role back to the R1-only bootstrap state, and clears all `DepartmentPermission` pool rows) — re-run this helper to restore.
+It also seeds **department permission pools** (`DepartmentPermission`) — each pool
+the union of its roles' permissions, so a role can never grant outside its
+department's pool (all-access `DEP-ADMIN` carries no rows; its pool is
+everything). Our real pools are in the personal snapshot (241 rows), not here.
 
 ## Targeted appliers — a small change without a full seed
 
@@ -246,7 +273,8 @@ pnpm seed:hard-clean
 
 > **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.
 
-After cleaning, restore the trade masters with `pnpm seed:helper-all`. There is no demo
+After cleaning, restore the trade masters with `pnpm seed:helper-all` (brands +
+inventory masters; **not** helper-roles — see above). There is no demo
 data to repopulate — contacts and products are re-entered through the UI or the CSV importers.
 
 ## Narrower cleaner
