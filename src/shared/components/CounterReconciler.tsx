@@ -32,6 +32,12 @@
 // not a poll. Offline, `reconcileCounterSetup` skips the authoritative hop by itself
 // and the replica answers, so this costs nothing on a counter that is cut off.
 //
+// `settings` is a coarse bucket — it also covers users, roles, positions, branches and
+// org settings — so an admin saving any of those costs each counter one row read too.
+// That is the price of a vocabulary that cannot rot (see topics.ts): those writes are
+// rare admin actions, and one row is cheaper than the narrower map that would need
+// maintaining. If it ever stops being rare, split the topic, not this listener.
+//
 // ── Acting on the answer ────────────────────────────────────────────────────
 // The answer is the DB's own on trigger 2, and the replica's — one cycle late at most —
 // on 1 and 3. Either way: if it says this machine is not that counter, sign the cashier
