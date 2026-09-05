@@ -106,3 +106,7 @@ Stop and ask on: a non-fast-forward merge, a failing `verify:package`, or a publ
 ### Core workflow
 
 **Understand → Repeat back → Explain plan → Wait for approval → Edit → Check impact → Update seeds/docs → Validate.**
+
+### Worktrees
+
+Every worktree task starts from `main` (`git merge --ff-only main` before editing) and merges back into `main`. If the checkout is currently on `dev`, merge it into `dev` as well — `dev` is not a substitute for `main`.
