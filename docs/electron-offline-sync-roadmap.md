@@ -286,6 +286,41 @@ two tills apart can each spend the same card. After the rebuild the balance is n
 `/api/sync/status` reports `overdrawnGiftCards`, the badge and title show it, and the
 card refuses further draws until an admin posts an ADJUST txn.
 
+### 4.5 Restoring a backup stops everything that writes, then restarts the app (2026-09-05)
+
+A restore replaces Supabase, and three things on the till kept writing straight through
+one — each of them undoing it:
+
+1. **The sync worker** pulls Supabase into the replica. `stopSyncWorker()` sends SIGTERM
+   and returns; `sync-engine/index.js` deliberately lets a cycle already in flight
+   finish, so stopping the scheduler alone is not enough.
+2. **The outbox flusher** pushes the till's pending writes UP. It lives inside the forked
+   Next server (`instrumentation.ts`) and main has no channel to it, so within the minute
+   it pushed pre-restore rows back over the restore.
+3. **The replica** keeps the pre-restore values for ever: restored rows carry an *older*
+   `updatedAt` than the watermark, and the pull's last-write-wins guard refuses them.
+
+`backup:restore-from-disk` now stops the worker, restores, wipes the replica
+(`wipeReplica` — rows, `_outbox` and `_sync_state` together) and calls
+`app.relaunch()` + `app.quit()`. The relaunch is what answers all three: `will-quit`
+stops the Next server and takes the flusher and any in-flight sync child with it, and the
+next boot sees a never-synced replica and pulls the restored database in full with the
+readiness gate closed until it has. A restore that FAILS restarts the worker and changes
+nothing else.
+
+The wipe discards `_outbox`, which is real work, so the card names the number first:
+`countPendingOutbox()` rides on `backup:availability` and the restore panel and its
+confirm dialog both say how many writes this till will lose. They also say the PC
+restarts by itself, and that **every other counter must be released and onboarded
+again** — their replicas hold rows newer than the backup and will never pull the restored
+figures on their own. The hourly key-reconcile eventually removes rows the restore
+deleted and pulls rows it added, but a row whose *values* were rolled back keeps the
+newer local `updatedAt` and is never repaired.
+
+Still open (audit D1): the restore itself runs `pg_restore --clean --jobs=4` through the
+pgBouncer *transaction* pooler on a packaged counter, because `DIRECT_URL` is excluded
+from `counter.env`.
+
 ---
 
 ## 5. Desktop & hardware capabilities

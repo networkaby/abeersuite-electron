@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /**
- * Mirrors `BackupAvailability` from electron/backupManager.ts, declared here so this
+ * Mirrors `RestoreReadiness` from electron/backupManager.ts, declared here so this
  * client component does not import out of `electron/` — the same reason BackupRestorePanel
  * repeats its own server types.
  */
@@ -29,6 +29,8 @@ interface Availability {
     available: boolean;
     projectRef: string;
     reason: string;
+    /** Local writes this till has not synced yet. The restore discards them. */
+    pendingWrites: number;
 }
 
 function formatSize(bytes: number) {
@@ -53,7 +55,7 @@ export function LocalBackupCard() {
             .catch(() => {
                 // An older shell without these handlers: leave the card hidden rather
                 // than showing controls whose failure the operator cannot act on.
-                if (!cancelled) setAvailability({ available: false, projectRef: "", reason: "" });
+                if (!cancelled) setAvailability({ available: false, projectRef: "", reason: "", pendingWrites: 0 });
             });
         return () => {
             cancelled = true;
@@ -94,10 +96,23 @@ export function LocalBackupCard() {
 
     async function handleRestore() {
         if (confirmText !== "RESTORE") return;
+
+        // The unsynced count is named here, not just in the panel above, because this is
+        // the last screen before the work is gone: the restore ends with a replica wipe,
+        // and that wipe empties `_outbox`. Leaving those rows would be worse — the
+        // flusher would push pre-restore data straight back over the restore — but it is
+        // still real work, so it is spelt out with a number rather than a warning.
+        const unsynced = availability?.pendingWrites ?? 0;
         if (
             !window.confirm(
                 "Last chance: this REPLACES the whole live database with the backup file you pick next. " +
-                    "Every counter sees the change. Continue?",
+                    "Every counter sees the change.\n\n" +
+                    (unsynced > 0
+                        ? `This till has ${unsynced} write${unsynced === 1 ? "" : "s"} that Supabase has not accepted yet. ` +
+                          "They will be DISCARDED.\n\n"
+                        : "") +
+                    "This PC restarts by itself when it finishes, and re-downloads everything.\n\n" +
+                    "Continue?",
             )
         ) {
             return;
@@ -111,10 +126,10 @@ export function LocalBackupCard() {
             if (!result.ok) throw new Error(result.error);
 
             setConfirmText("");
-            toast.success(
-                "Restore finished. Sign out and back in so your session is fresh, and check the other counters.",
-                { duration: 15_000 },
-            );
+            // No "sign out and back in" any more: main relaunches the app the moment the
+            // restore succeeds, so this toast is only ever seen for the second or two
+            // before the window goes.
+            toast.success("Restore finished. Restarting the app…", { duration: 15_000 });
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Restore failed", { duration: 20_000 });
         } finally {
@@ -192,6 +207,33 @@ export function LocalBackupCard() {
                             undone. Use a backup taken with this version of the app — an older one may not have the
                             columns the app now reads; for those, restore from the office instead.
                         </p>
+                        <ul className="mt-2 space-y-1 text-xs text-muted-foreground list-disc pl-4">
+                            <li>
+                                <span className="font-medium text-foreground">This PC restarts by itself</span> when the
+                                restore finishes, then re-downloads the whole database. Everything it had stored locally
+                                is cleared first — otherwise it would keep showing the old figures and push them back up.
+                            </li>
+                            <li>
+                                {availability.pendingWrites > 0 ? (
+                                    <>
+                                        <span className="font-medium text-destructive">
+                                            {availability.pendingWrites} write
+                                            {availability.pendingWrites === 1 ? "" : "s"} on this till
+                                        </span>{" "}
+                                        {availability.pendingWrites === 1 ? "has" : "have"} not reached the server yet and{" "}
+                                        {availability.pendingWrites === 1 ? "will" : "will"} be discarded. Wait for the sync
+                                        badge to go clear first if you want to keep {availability.pendingWrites === 1 ? "it" : "them"}.
+                                    </>
+                                ) : (
+                                    <>Everything on this till has reached the server, so nothing local is lost.</>
+                                )}
+                            </li>
+                            <li>
+                                <span className="font-medium text-foreground">Every other counter must be re-set-up</span>{" "}
+                                afterwards — release it from Admin → Counters and onboard it again. Their stored copies
+                                are newer than the backup, so they will never pull the restored figures on their own.
+                            </li>
+                        </ul>
                     </div>
                 </div>
 

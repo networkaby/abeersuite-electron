@@ -609,7 +609,15 @@ ipcMain.handle("dialog:select-folder", async (event, defaultPath?: string): Prom
 // bounded by a native dialog the user has to complete by hand — nothing here can run
 // without someone picking a file on this machine.
 
-ipcMain.handle("backup:availability", (): BackupAvailability => backupAvailability());
+/**
+ * `pendingWrites` rides along so the restore card can name what a restore costs THIS
+ * till before the operator commits to it — see the restore handler below for why the
+ * outbox has to go.
+ */
+ipcMain.handle("backup:availability", async (): Promise<RestoreReadiness> => ({
+    ...backupAvailability(),
+    pendingWrites: localAdminUrl ? await countPendingOutbox(localAdminUrl) : 0,
+}));
 
 ipcMain.handle("backup:dump-to-disk", async (event): Promise<RunResult> => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -649,9 +657,47 @@ ipcMain.handle("backup:restore-from-disk", async (event, confirm: string): Promi
     const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     if (picked.canceled || picked.filePaths.length === 0) return { ok: false };
 
-    return runRestore(picked.filePaths[0], (line) => {
+    // ── Everything that writes has to stop, and stay stopped ────────────────
+    // A restore replaces Supabase. Three things on THIS machine keep writing straight
+    // through one, and each of them undoes it:
+    //
+    //   1. The sync worker pulls Supabase into the replica. Stopping the scheduler is
+    //      necessary but not sufficient — `stopSyncWorker()` sends SIGTERM and returns,
+    //      and sync-engine/index.js deliberately lets a cycle already in flight finish.
+    //   2. The outbox flusher pushes this PC's pending writes UP. It lives inside the
+    //      forked Next server (instrumentation.ts) and main has no channel to it, so it
+    //      would push pre-restore rows back over the restore within the minute.
+    //   3. The replica itself keeps the pre-restore values for ever: restored rows
+    //      carry an OLDER updatedAt than the watermark, and the pull's last-write-wins
+    //      guard refuses to apply them.
+    //
+    // Relaunching answers all three with what already exists. `app.quit()` runs the
+    // will-quit handler, which stops the Next server and takes the flusher and any
+    // in-flight sync child down with it; the wipe before it empties `_sync_state` so
+    // the next boot's worker sees a never-synced replica and pulls the restored data
+    // in full, with the readiness gate closed until it has.
+    stopSyncWorker();
+
+    const result = await runRestore(picked.filePaths[0], (line) => {
         if (!event.sender.isDestroyed()) event.sender.send("backup:progress", line);
     });
+
+    if (!result.ok) {
+        // Nothing was replaced (or only partly — the card says to check). Either way
+        // this PC carries on as a counter, so put the worker back.
+        if (pendingSyncUrl) startSyncWorker(pendingSyncUrl);
+        return result;
+    }
+
+    // The wipe takes `_outbox` with it. That is the point: those rows were written
+    // against the database that has just been replaced, and the flusher would push
+    // them back over it. The card names the count before the operator gets here.
+    if (localAdminUrl) await wipeReplica(localAdminUrl);
+
+    if (!event.sender.isDestroyed()) event.sender.send("backup:progress", "Restarting the app…");
+    app.relaunch();
+    app.quit();
+    return result;
 });
 
 ipcMain.handle("printer:get-list", async (event) => {
@@ -727,12 +773,12 @@ import {
     makeLocalBackupFileName,
     runBackup,
     runRestore,
-    type BackupAvailability,
+    type RestoreReadiness,
     type RunResult,
 } from "./backupManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
-import { wipeReplica, replicaBindsThisPc } from "./replicaWipe";
+import { wipeReplica, replicaBindsThisPc, countPendingOutbox } from "./replicaWipe";
 import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";

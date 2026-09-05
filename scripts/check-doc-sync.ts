@@ -159,6 +159,13 @@ const HISTORICAL_RE = /\b(removed|deleted|dropped|gone|no longer|never existed|l
 // broken path on disk — skip it.
 const EXTERNAL_RE = /\b(external|out-of-repo|out of repo|separate (?:git )?repo|not under this app|own (?:git )?repo)\b/i;
 
+// A citation may carry a line anchor — `push.ts:248-277`, `route.ts:36,106-110`,
+// `local-schema.sql:5729-5765`. The FILE is the claim this check verifies; the lines
+// are a pointer into it and move with every edit, so they are stripped before asking
+// the disk. Without this every such citation was reported as a broken path, which is
+// how `docs/audit-2026-09-05.md` alone put 24 false positives into `pnpm precommit`.
+const LINE_ANCHOR_RE = /:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/;
+
 const broken: { doc: string; refPath: string }[] = [];
 
 for (const docRel of docFiles) {
@@ -173,7 +180,9 @@ for (const docRel of docFiles) {
         candidates.push(...findLinkPaths(line));
 
         for (const raw of candidates) {
-            const ref = raw.split("#")[0].split("?")[0].replace(/[.,;:!?]+$/, "");
+            const ref = raw.split("#")[0].split("?")[0]
+                .replace(/[.,;:!?]+$/, "")
+                .replace(LINE_ANCHOR_RE, "");
             if (ref.includes("*") || /<[a-z]/i.test(ref) || ref.endsWith("/")) continue;
             const abs = path.join(REPO, ref);
             if (existsSync(abs)) continue;

@@ -1,5 +1,5 @@
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
-import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries, resolveCounterNumber } from "@/modules/accountancy/lib/balance";
 import { round2 } from "@/shared/lib/format";
 
 // ── Reference number generation ───────────────────────────────────────────────
@@ -75,11 +75,14 @@ export async function invNextRef(
     // Legacy fallback — calendar-year prefix scheme.
     const year = new Date().getFullYear();
     const prefix = PREFIX[type];
-    // Same counter derivation assembleReference uses, so the legacy scheme stays
-    // counter-prefixed too — two counters on the legacy fallback would otherwise
-    // count the same `startsWith` and mint identical refs.
-    const rawCounter = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;
-    const counterNumber = rawCounter != null && rawCounter > 0 ? rawCounter : 1;
+    // The SAME counter the series path numbers under — not a second derivation.
+    // This used to default to 1 whenever the caller passed no context, which is every
+    // POS_ESTIMATE and POS_ORDER (posQuoteVoucher.ts passes none): two tills each
+    // counted the same `startsWith` on their own replica and both minted
+    // `01-POSEV-2026-0001`. `resolveCounterNumber` falls back to this PC's own
+    // counter-setup.json, so the prefix separates the machines the way it always
+    // claimed to, and the office still numbers as 1.
+    const counterNumber = resolveCounterNumber(ctx);
     const startsWith = `${String(counterNumber).padStart(2, "0")}-${prefix}-${year}-`;
     const count = await tx.voucherDetail.count({ where: { universalVoucher: { voucherNo: { startsWith } } } });   // 5D-6: ref on spine
     return `${startsWith}${String(count + 1).padStart(4, "0")}`;
