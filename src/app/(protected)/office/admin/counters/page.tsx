@@ -296,14 +296,16 @@ export default function CountersAdminPage() {
     };
 
     // Release the device lock so any PC can claim this counter on the next open.
-    // Also clears this counter's offline-write identity (counterNumber/idRangeStart)
-    // — the next machine that claims it must go through setup again and get a fresh
-    // reserved id range, rather than inheriting one it never actually applied.
+    // Only the binding goes — boundDeviceId/boundDeviceLabel/boundAt, plus a releasedAt
+    // stamp. The counter's number and the offline-write id block reserved from it are
+    // left alone: counterNumber is permanent config and idRangeStart is derived from it,
+    // so the range stays correct for whichever PC claims the counter next. Only a
+    // counterNumber CHANGE invalidates it, and the route clears it there.
     const handleRelease = async (c: Counter) => {
-        if (!confirm(`Release "${c.name}" (${c.branch.name})? The next computer to open a shift here becomes the bound PC and must complete counter setup again — its offline-write id range is cleared too.`)) return;
+        if (!confirm(`Release "${c.name}" (${c.branch.name})? The bound PC loses this counter, and the next computer to open a shift here claims it through counter setup. The counter number and its reserved offline id range stay unchanged.`)) return;
         try {
             await axios.patch(`/api/pos/counters/${c.id}`, { releaseLock: true });
-            toast.success("Counter released — device lock and offline id range cleared");
+            toast.success("Counter released — device lock cleared");
             void load();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error ?? "Failed to release counter" : "Failed to release counter");
