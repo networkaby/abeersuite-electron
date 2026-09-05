@@ -399,20 +399,88 @@ async function main() {
     // ── [3] Brand classification ──────────────────────────────────────────────
     console.log("\n[3/4] Classifying brands…");
     const brands = await prisma.invBrand.findMany({ select: { id: true, name: true } });
-    brands.sort((a, b) => b.name.length - a.name.length); // longest name wins
+
+    // Every brand is matched by a SEPARATOR-FLEXIBLE pattern, because the catalogue
+    // and the brand master disagree about punctuation constantly:
+    //
+    //     brand "D-Link"   name says "Dlink" / "D Link"
+    //     brand "M Skill"  name says "M.SKILL"
+    //     brand "TP-Link"  name says "TP Link"
+    //     brand "DishTV"   name says "Dish TV"
+    //
+    // A literal \bD-Link\b matches none of those, so those products stayed unbranded
+    // forever. buildBrandPattern lets any run of space/dot/hyphen/underscore stand in
+    // for a separator the brand name has, and also for the seam in a CamelCase brand
+    // (DishTV → Dish TV).
+    //
+    // The \b anchors are KEPT ON PURPOSE. Fully normalising both sides (strip
+    // everything, compare) would make short brands catastrophic — "HP" would match
+    // inside "graph paper". Flexible separators plus real word boundaries is the
+    // narrow fix; do not widen it to a bare `includes`.
+    const SEP = "[\\s._-]*";
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+    const buildBrandPattern = (name: string): RegExp => {
+        const body = name
+            .trim()
+            // split on existing separators → each becomes an optional separator
+            .split(/[\s._-]+/)
+            .filter(Boolean)
+            // split a CamelCase seam too, so DishTV also matches "Dish TV"
+            .flatMap((part) => part.split(/(?<=[a-z])(?=[A-Z])/))
+            .map(esc)
+            .join(SEP);
+        return new RegExp(`\\b${body}\\b`, "i");
+    };
+
+    /**
+     * Genuine MISSPELLINGS — not separator differences, which the pattern above
+     * already handles. Key = the wrong spelling as it appears in product names or as
+     * a junk InvBrand row; value = the correct brand's name in InvBrand.
+     *
+     * Kept in code rather than a table because it is a short, reviewed list. Add to
+     * it only after eyeballing the rows: near-identical names are NOT proof of a
+     * typo. "Intel", "Intex" and "Itel" are one character apart and are three real,
+     * different companies — merging them on similarity would destroy real data.
+     */
+    const BRAND_ALIASES: Record<string, string> = {
+        Kingstone: "Kingston",
+    };
+
+    const byName = new Map(brands.map((b) => [b.name.toLowerCase(), b]));
+    const aliasKeys = new Set(Object.keys(BRAND_ALIASES).map((k) => k.toLowerCase()));
+
+    // Match targets: every real brand, plus one entry per alias pointing at the
+    // canonical brand's id. A brand row that is ITSELF a known misspelling is left
+    // out, so a junk "Kingstone" row can never win a match over "Kingston".
+    type Target = { brandId: number; label: string; re: RegExp; len: number };
+    const targets: Target[] = [];
+    for (const b of brands) {
+        if (aliasKeys.has(b.name.toLowerCase())) continue;
+        targets.push({ brandId: b.id, label: b.name, re: buildBrandPattern(b.name), len: b.name.length });
+    }
+    const unresolved: string[] = [];
+    for (const [wrong, right] of Object.entries(BRAND_ALIASES)) {
+        const canonical = byName.get(right.toLowerCase());
+        if (!canonical) { unresolved.push(`${wrong} → ${right} (no such brand)`); continue; }
+        targets.push({ brandId: canonical.id, label: `${right} (via "${wrong}")`, re: buildBrandPattern(wrong), len: wrong.length });
+    }
+    targets.sort((a, b) => b.len - a.len); // longest name wins
+    for (const u of unresolved) console.log(`  • alias skipped: ${u}`);
+
     const toBrand = new Map<number, number[]>();
+    const viaAlias = new Map<string, number>();
     for (const p of products) {
         if (p.brandId !== null) continue;
-        const hit = brands.find((b) =>
-            new RegExp(`\\b${b.name.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")}\\b`, "i").test(p.name)
-        );
+        const hit = targets.find((t) => t.re.test(p.name));
         if (!hit) continue;
-        const arr = toBrand.get(hit.id) ?? [];
+        if (hit.label.includes("(via ")) viaAlias.set(hit.label, (viaAlias.get(hit.label) ?? 0) + 1);
+        const arr = toBrand.get(hit.brandId) ?? [];
         arr.push(p.id);
-        toBrand.set(hit.id, arr);
+        toBrand.set(hit.brandId, arr);
     }
     const branded = [...toBrand.values()].reduce((s, a) => s + a.length, 0);
     console.log(`  ${branded} brands assigned from name`);
+    for (const [label, n] of viaAlias) console.log(`      ${n} matched by misspelling alias: ${label}`);
     if (!DRY) {
         for (const [bid, pids] of toBrand) {
             await prisma.invProduct.updateMany({ where: { id: { in: pids } }, data: { brandId: bid } });

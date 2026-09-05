@@ -265,6 +265,30 @@ personal snapshot both exclude products entirely, so nothing else does this job.
 **Brands are read live from `InvBrand`.** There is no brand list in the script. To
 match more products, add the brand in the app (or `helper-brands.ts`) and re-run.
 
+**Brand matching is separator-flexible.** The catalogue and the brand master disagree
+about punctuation constantly, and a literal `\bD-Link\b` matches none of these:
+
+| Product name says | Brand row is |
+|---|---|
+| `Dlink`, `D Link` | `D-Link` |
+| `M.SKILL`, `M.Skill` | `M Skill` |
+| `TP Link` | `TP-Link` |
+| `Dish TV` | `DishTV` |
+
+So each brand becomes a pattern where any run of space / dot / hyphen / underscore
+can stand in for a separator the brand name has, including the seam in a CamelCase
+name. **The `\b` word boundaries are kept on purpose** — fully normalising both sides
+would make short brands catastrophic (`HP` would match inside "graph paper"). Do not
+widen this to a bare `includes`.
+
+**Genuine misspellings** are a separate, short, hand-reviewed `BRAND_ALIASES` map in
+the script (`Kingstone → Kingston`). A brand row that is itself a known misspelling is
+excluded as a match target, so a junk row can never beat the real brand.
+
+> ⚠️ **Never add an alias on similarity alone.** `Intel`, `Intex` and `Itel` are one
+> character apart and are three real, different companies. Fuzzy distance is for
+> *suggesting* a merge to a human, never for deciding one.
+
 **The group tree is not the script's to reshape.** Its hardcoded `TREE` is a sketch
 and is already behind the live tree (78 groups vs 100 live), so it gets no authority
 over a structure the owner maintains by hand:
