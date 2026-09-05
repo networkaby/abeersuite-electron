@@ -87,6 +87,26 @@ the file alone will tell you backups run when they may not.
 **Do:** before go-live, check the Actions tab rather than the file, and make sure
 whoever runs the shop knows the settings page is the source of truth.
 
+## 9. Buy a code-signing certificate
+
+**Why:** the installer is unsigned, so every shop PC shows a SmartScreen "unknown
+publisher" warning that staff must click through. Teaching staff to click past that
+warning is teaching them to install anything.
+
+**Do:** buy an OV certificate before wide rollout and set `win.certificateFile` /
+`certificatePassword` in `package.json`. Nothing in the repo configures signing today.
+
+## 10. Decide three office pages: surface them or delete them
+
+**Why:** they exist under `src/app/(protected)/office/` but no nav links to them, so
+they are reachable only by typing the URL. Either is fine — being neither is what rots.
+
+- `office/customers/dashboard` — customer analytics
+- `office/accountancy/dashboard` — accountancy overview
+- `office/inventory/configuration` — inventory master config (likely belongs under Settings)
+
+**Do:** for each, add it to `src/utils/constants.ts` nav or delete the route.
+
 ## Not clean-up, but verify on the day
 
 - Scheduled workflows only run from the **default branch**, and only from the pushed
