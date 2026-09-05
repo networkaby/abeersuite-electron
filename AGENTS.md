@@ -30,9 +30,10 @@ Before creating shared code: check `src/shared/` → extend existing if possible
 
 Read `docs/seeds.md` first — it owns the scripts and the dev loop. The rules that live here:
 
-- Every schema / permission / master-data / config change updates **generic catalog, personal snapshot and the DB in the same commit**. Permissions: add to `ADDITIONS` → `pnpm seed:apply-permissions`.
-- Small change → **targeted idempotent script, never a full seed**. Full `pnpm prisma db seed` only for reset, drift recovery, or full config reassertion.
-- Ownership: code → `codeOwnedCatalog.ts`; universal demo → `bootstrap-seed.ts`; trade → `helper-inventory-masters.ts`; real config → `personal.local.json`. **Never capture passwords.**
+- Every schema / permission / master-data / config change updates **generic catalog, personal snapshot and the DB in the same commit**. Permissions: add to `lib/codeOwnedCatalog.ts` + `src/shared/lib/constants/permissions.ts`, then `pnpm prisma db seed`. (There is no `apply-permissions` script any more — the catalog IS the source of truth and both seeds apply it in full.)
+- A full `pnpm prisma db seed` also runs the **R1 top-up**: it grants R1 every non-`systemOnly` permission in the catalog. If a permission has been deliberately taken away from R1 in the Role Matrix, a reseed puts it back.
+- Small change → **targeted idempotent script, never a full seed**. Full `pnpm prisma db seed` for reset, drift recovery, full config reassertion — and now for shipping a permission.
+- Ownership: code → `codeOwnedCatalog.ts`; our real setup → `bootstrap-seed.ts`; trade → `helper-inventory-masters.ts`; real config → `personal.local.json`. **Never capture passwords.**
 - DB inconsistent: **fix seeds → reset → reseed**.
 
 ## 6. Documentation

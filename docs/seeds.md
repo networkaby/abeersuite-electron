@@ -10,7 +10,6 @@ prisma/seeds/
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ helper-inventory-masters.ts  HELPER — trade-specific masters (categories, HSN/GST groups)
 ├─ helper-roles.ts              ⛔ DO NOT RUN — new-client starter roles; its R2/R3 collide with ours
-├─ apply-permissions.ts         APPLY — add just the `ADDITIONS` permissions + grant to R1 (live; the normal way to ship a permission)
 ├─ apply-voucher-series-counters.ts APPLY — give every VoucherSeries its counter-1 row
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
@@ -232,9 +231,31 @@ These do just the one job.
 
 | Script | Purpose |
 |---|---|
-| `pnpm seed:apply-permissions` | Upserts the `ADDITIONS` permission list and grants the non-`systemOnly` ones to R1. **The normal way to ship a permission** (AGENTS.md §5) — run it after adding the rows to `lib/codeOwnedCatalog.ts` and `src/shared/lib/constants/permissions.ts`. |
 | `pnpm seed:apply-voucher-series-counters` | Gives every `VoucherSeries` its counter-1 row in `VoucherSeriesCounter`, carrying the legacy `nextSeq` / `fyStartYear` across. Needed once per DB after the 2026-09-05 per-counter numbering change. |
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
+
+### Shipping a permission
+
+There is **no `apply-permissions` script any more.** It existed to write a handful of
+rows without a full seed, but every row it wrote was already in
+`lib/codeOwnedCatalog.ts`, and **both** seeds apply that catalog in full with the
+identical upsert (`bootstrap-seed.ts` line ~865, and `applyCodeOwnedCatalog()` for
+`pnpm prisma db seed`). Its `ADDITIONS` list had become a third copy of the same
+data, guarded by nothing, and all 12 entries were finished work.
+
+The flow is now:
+
+1. Add the permission to `lib/codeOwnedCatalog.ts` **and** mirror the constant in
+   `src/shared/lib/constants/permissions.ts` (`pnpm seed:check-docs` enforces that
+   these two agree).
+2. `pnpm prisma db seed`.
+
+> **A full seed does one thing the old script did not: the R1 top-up.** Step 3 of
+> `personal-bootstrap.ts` grants R1 every non-`systemOnly` permission in the catalog.
+> R1 currently holds 177 of 286, so the next reseed will add roughly 108 grants — and
+> if a permission was deliberately removed from R1 in the Role Matrix, it comes back.
+> Decide which you want before reseeding. (`admin:bypass` is `systemOnly` and stays
+> excluded.)
 
 ### `apply-taxonomy` and the group tree
 
@@ -349,7 +370,7 @@ the script, and add the row above.
 | Change | Update |
 |---|---|
 | Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` — same commit as the schema change |
-| Add a new **permission** | `lib/codeOwnedCatalog.ts` (definition — both bootstraps import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply to the DB with `pnpm seed:apply-permissions`, not a full seed. |
+| Add a new **permission** | `lib/codeOwnedCatalog.ts` (definition — both seeds import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply with `pnpm prisma db seed` — see "Shipping a permission" above, including what the R1 top-up does. |
 | Add a new role / pipeline / status / worker | `bootstrap-seed.ts` (generic) + `data/personal.local.json` (our config) |
 | Add a new account group or default GL ledger | `bootstrap-seed.ts` |
 | Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |

@@ -41,7 +41,6 @@
     "backfill:receipt-allocations": "tsx src/scripts/backfill-online-receipt-allocations.ts",
     "check:voucher-duplicates": "tsx src/scripts/check-voucher-duplicates.ts",
     "seed:apply-voucher-series-counters": "tsx prisma/seeds/apply-voucher-series-counters.ts",
-    "seed:apply-permissions": "tsx prisma/seeds/apply-permissions.ts",
     "seed:apply-taxonomy": "tsx prisma/seeds/apply-taxonomy.ts",
     "check:counter-mode": "tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-counter-mode.ts counter-write-local",
     "sync:tables": "tsx scripts/gen-sync-registry.ts",
