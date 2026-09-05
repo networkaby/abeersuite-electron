@@ -39,6 +39,7 @@ export default function StatusTitleUpdater() {
         if (syncStatus.isCounter) {
             const replica = syncStatus.replica;
             if (syncStatus.failed > 0) sync = `Sync error (${syncStatus.failed})`;
+            else if (syncStatus.overdrawnGiftCards > 0) sync = `Gift card overdrawn (${syncStatus.overdrawnGiftCards})`;
             else if (replica && (replica.failing.length || replica.neverSynced.length)) sync = "Copy incomplete";
             else if (syncStatus.pending > 0) sync = `Upload (${syncStatus.pending})`;
             else if (syncStatus.downloading.length > 0) sync = "Download";

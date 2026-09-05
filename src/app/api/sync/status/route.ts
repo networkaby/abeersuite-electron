@@ -4,6 +4,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOutboxStatus } from "@/shared/lib/sync/outbox";
 import { getReplicaLag } from "@/shared/lib/sync/replicaLag";
+import { countOverdrawnGiftCards } from "@/shared/lib/sync/integrity";
 
 /**
  * GET /api/sync/status — both directions of this PC's sync, for the shell badge.
@@ -29,17 +30,19 @@ export async function GET() {
     if (!IS_COUNTER_PC || !process.env.LOCAL_DATABASE_URL) {
         return NextResponse.json({
             isCounter: false, pending: 0, failed: 0, retrying: 0, lastSyncedAt: null, replica: null,
+            overdrawnGiftCards: 0,
         });
     }
 
     try {
         // Both hit the LOCAL database only, so running them together costs one
         // round trip's latency rather than two and no egress either way.
-        const [status, replica] = await Promise.all([
+        const [status, replica, overdrawnGiftCards] = await Promise.all([
             getOutboxStatus(process.env.LOCAL_DATABASE_URL),
             getReplicaLag(process.env.LOCAL_DATABASE_URL),
+            countOverdrawnGiftCards(process.env.LOCAL_DATABASE_URL),
         ]);
-        return NextResponse.json({ isCounter: true, ...status, replica });
+        return NextResponse.json({ isCounter: true, ...status, replica, overdrawnGiftCards });
     } catch (e) {
         return handleApiError(e, "Failed to read sync status");
     }

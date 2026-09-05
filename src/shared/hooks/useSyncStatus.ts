@@ -48,6 +48,11 @@ export type ApiSyncStatus = {
     lastSyncedAt: string | null;
     /** Null off a counter PC, where there is no replica to describe. */
     replica: ReplicaHealth | null;
+    /**
+     * Gift cards whose balance has gone below zero: two tills drew the same card
+     * while apart, and the rebuild from the txn ledger summed both. Needs a person.
+     */
+    overdrawnGiftCards: number;
 };
 
 /**

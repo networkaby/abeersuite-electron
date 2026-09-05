@@ -49,6 +49,20 @@ export default function SyncStatusBadge() {
         );
     }
 
+    // 1b. A gift card spent twice: two tills drew the same card while apart, the
+    //     ledger rebuild summed both, and the balance is now below zero. Only an
+    //     admin's ADJUST txn clears it; redeeming the card is refused meanwhile.
+    if (status.overdrawnGiftCards > 0) {
+        return (
+            <span className={`${base} ${rose}`}
+                title={`${status.overdrawnGiftCards} gift card(s) were drawn below zero by more than one counter. An admin must adjust them; those cards cannot be redeemed until then.`}
+                aria-label={`Gift card overdrawn — ${status.overdrawnGiftCards}`}>
+                <CloudOff className="size-3.5" aria-hidden />
+                Gift card overdrawn ({status.overdrawnGiftCards})
+            </span>
+        );
+    }
+
     // 2. The replica is not whole. Deliberately ranked above queued writes: a
     //    missing upload is visible work waiting, whereas missing ROWS look like
     //    data that never existed.

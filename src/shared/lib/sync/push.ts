@@ -27,6 +27,7 @@ import { prismaLive } from "@/shared/lib/prisma/prismaClient";
 import { SYNC_REGISTRY, type SyncRegistryEntry } from "./syncRegistry.generated";
 import type { OutboxRecord } from "./outbox";
 import { NEVER_PUSH_MODELS } from "./neverPush";
+import { emptyTouches, noteTouches, rebuildTotalsAfterPush } from "./rebuildTotals";
 
 /**
  * Tables a counter has no business pushing. The list lives in `neverPush.ts` because
@@ -219,6 +220,7 @@ export interface PushOutcome {
  */
 export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcome> {
     const pushedIds: number[] = [];
+    const touches = emptyTouches();
 
     for (const rec of records) {
         try {
@@ -274,11 +276,19 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
             // Always upsert, never a bare update: the payload is a complete row image,
             // and an update whose target is missing in the cloud (a create that failed
             // and was dead-lettered, a row the office deleted) would fail forever.
-            await delegate.upsert({ where, create: payload, update: payload });
+            //
+            // A running total (`entry.cache`) rides the CREATE half only — the column
+            // is NOT NULL, so a new row needs a value — and never the UPDATE half: the
+            // cloud re-sums its own from the ledger rows this batch carries (below).
+            // The trigger already ships no row when only a total changed; this covers
+            // a replica provisioned before that rule, and a row that changed both.
+            await delegate.upsert({ where, create: payload, update: withoutCache(payload, entry.cache) });
+            noteTouches(touches, entry.model, payload);
             pushedIds.push(rec.id);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[SyncPush] mutation ${rec.id} on ${rec.table_name} failed:`, message);
+            await rebuildTotalsAfterPush(touches);
             return {
                 pushedIds,
                 failure: { id: rec.id, error: message, permanent: err instanceof PermanentPushError },
@@ -286,5 +296,14 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
         }
     }
 
+    await rebuildTotalsAfterPush(touches);
     return { pushedIds, failure: null };
+}
+
+/** The payload minus its running-total columns, for the UPDATE half of an upsert. */
+function withoutCache(payload: Record<string, unknown>, cache: readonly string[]): Record<string, unknown> {
+    if (cache.length === 0) return payload;
+    const out = { ...payload };
+    for (const col of cache) delete out[col];
+    return out;
 }

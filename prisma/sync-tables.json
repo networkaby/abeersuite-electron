@@ -5,11 +5,31 @@
     "_prisma_migrations"
   ],
   "overrides": {
+    "Account": {
+      "cacheColumns": [
+        "balance"
+      ]
+    },
     "CustomerGroup": {
       "strategy": "full"
     },
     "Department": {
       "strategy": "full"
+    },
+    "GiftCard": {
+      "cacheColumns": [
+        "balance"
+      ]
+    },
+    "InvProduct": {
+      "cacheColumns": [
+        "stock"
+      ]
+    },
+    "InvProductBranch": {
+      "cacheColumns": [
+        "stock"
+      ]
     },
     "Pipeline": {
       "strategy": "full"
@@ -20,13 +40,13 @@
     "ServiceCenter": {
       "strategy": "full"
     },
-    "WorkGroup": {
-      "strategy": "full"
-    },
     "UserPermission": {
       "strategy": "full"
     },
     "UserPosition": {
+      "strategy": "full"
+    },
+    "WorkGroup": {
       "strategy": "full"
     }
   },
@@ -39,7 +59,10 @@
         "id"
       ],
       "strategy": "watermark",
-      "column": "updatedAt"
+      "column": "updatedAt",
+      "cacheColumns": [
+        "balance"
+      ]
     },
     "AccountAlias": {
       "n": 2,
@@ -309,7 +332,10 @@
         "id"
       ],
       "strategy": "watermark",
-      "column": "updatedAt"
+      "column": "updatedAt",
+      "cacheColumns": [
+        "balance"
+      ]
     },
     "GiftCardTxn": {
       "n": 31,
@@ -391,7 +417,10 @@
         "id"
       ],
       "strategy": "watermark",
-      "column": "updatedAt"
+      "column": "updatedAt",
+      "cacheColumns": [
+        "stock"
+      ]
     },
     "InvProductBranch": {
       "n": 40,
@@ -401,7 +430,10 @@
         "branchId"
       ],
       "strategy": "watermark",
-      "column": "updatedAt"
+      "column": "updatedAt",
+      "cacheColumns": [
+        "stock"
+      ]
     },
     "InvProductCode": {
       "n": 41,

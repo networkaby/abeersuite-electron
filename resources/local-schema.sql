@@ -5733,27 +5733,52 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-    v_row jsonb;
-    v_key jsonb := '{}'::jsonb;
-    v_pk  text;
-    v_col text;
+    v_row     jsonb;
+    v_key     jsonb  := '{}'::jsonb;
+    v_pk      text;
+    v_col     text;
+    v_pk_cols text[] := '{}';
+    v_cache   text[] := '{}';
+    v_in_cache boolean := false;
 BEGIN
     -- Prisma writes no-op updates in a few places; there is nothing to ship.
     IF TG_OP = 'UPDATE' AND OLD IS NOT DISTINCT FROM NEW THEN
         RETURN NULL;
     END IF;
 
+    -- Arguments: the primary-key columns, then optionally '--cache' followed by the
+    -- table's running-total columns. One function serves every table.
+    FOREACH v_col IN ARRAY TG_ARGV LOOP
+        IF v_col = '--cache' THEN
+            v_in_cache := true;
+        ELSIF v_in_cache THEN
+            v_cache := v_cache || v_col;
+        ELSE
+            v_pk_cols := v_pk_cols || v_col;
+        END IF;
+    END LOOP;
+
+    -- A running total (Account.balance, stock, a gift card's balance) is rebuilt
+    -- from the ledger on each side and never shipped as a change: an UPDATE that
+    -- moved nothing else is not a write the cloud needs to hear about. Shipping it
+    -- would put one outbox row per touched account behind every sale, and each of
+    -- them would carry a total another machine may since have moved on from.
+    -- updatedAt is ignored alongside: Prisma stamps it on every increment, so
+    -- without that the comparison would never be equal.
+    IF TG_OP = 'UPDATE' AND cardinality(v_cache) > 0
+       AND (to_jsonb(OLD) - v_cache - 'updatedAt') = (to_jsonb(NEW) - v_cache - 'updatedAt') THEN
+        RETURN NULL;
+    END IF;
+
     v_row := to_jsonb(NEW);
 
-    -- PK column names arrive as trigger arguments, so one function serves every
-    -- table, compound keys included.
-    FOREACH v_col IN ARRAY TG_ARGV LOOP
+    FOREACH v_col IN ARRAY v_pk_cols LOOP
         v_key := v_key || jsonb_build_object(v_col, v_row -> v_col);
     END LOOP;
 
     SELECT string_agg(v_row ->> u.col, chr(31) ORDER BY u.ord)
       INTO v_pk
-      FROM unnest(TG_ARGV) WITH ORDINALITY AS u(col, ord);
+      FROM unnest(v_pk_cols) WITH ORDINALITY AS u(col, ord);
 
     INSERT INTO "_outbox" (table_name, row_pk, row_key, operation, payload)
     VALUES (
@@ -5780,7 +5805,7 @@ DO $$ BEGIN
     IF to_regclass('public."Account"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Account";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Account"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id', '--cache', 'balance');
     END IF;
 END $$;
 DO $$ BEGIN
@@ -5988,7 +6013,7 @@ DO $$ BEGIN
     IF to_regclass('public."GiftCard"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "GiftCard";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "GiftCard"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id', '--cache', 'balance');
     END IF;
 END $$;
 DO $$ BEGIN
@@ -6051,14 +6076,14 @@ DO $$ BEGIN
     IF to_regclass('public."InvProduct"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvProduct";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvProduct"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id', '--cache', 'stock');
     END IF;
 END $$;
 DO $$ BEGIN
     IF to_regclass('public."inv_product_branches"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "inv_product_branches";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "inv_product_branches"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('productId', 'branchId');
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('productId', 'branchId', '--cache', 'stock');
     END IF;
 END $$;
 DO $$ BEGIN

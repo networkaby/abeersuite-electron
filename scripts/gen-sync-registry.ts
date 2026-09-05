@@ -106,9 +106,10 @@ function renderTsMirror(tables: Record<string, TableEntry>, models: Model[]): st
             const pk = t.pk.map((c) => JSON.stringify(c)).join(", ");
             const exact = exactFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
             const dates = dateFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
+            const cache = (t.cacheColumns ?? []).map((c) => JSON.stringify(c)).join(", ");
             return `    ${JSON.stringify(t.table)}: { model: ${JSON.stringify(model)}, `
                 + `delegate: ${JSON.stringify(model.charAt(0).toLowerCase() + model.slice(1))}, `
-                + `pk: [${pk}], exact: [${exact}], dates: [${dates}] },`;
+                + `pk: [${pk}], exact: [${exact}], dates: [${dates}], cache: [${cache}] },`;
         });
 
     return `// GENERATED FILE — DO NOT EDIT BY HAND.
@@ -130,6 +131,8 @@ export interface SyncRegistryEntry {
     exact: string[];
     /** DateTime fields — stored without a zone, so the push path stamps a Z on them. */
     dates: string[];
+    /** Running totals rebuilt from the ledger on each side — never sent on an UPDATE. */
+    cache: string[];
 }
 
 export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
@@ -161,6 +164,20 @@ type TableEntry = {
     parent?: string;
     /** local FK column pointing at the parent — `child` strategy only. */
     fk?: string;
+    /**
+     * Running-total columns that must NEVER travel between machines on an UPDATE.
+     *
+     * `Account.balance`, `InvProduct.stock`, `InvProductBranch.stock` and
+     * `GiftCard.balance` are caches kept by increments. Two machines that each add to
+     * the same total from the value they last pulled would overwrite each other under
+     * last-write-wins, so each side rebuilds these from its own ledger instead: the
+     * capture trigger ships no outbox row when only these changed, the push and the
+     * pull leave them out of the UPDATE half of their upserts, and both recompute
+     * after ledger rows land. They still travel on a row's CREATE (NOT NULL columns).
+     * Hand-maintained in `overrides`; the trigger generator, `push.ts` and the sync
+     * engine all read this one list.
+     */
+    cacheColumns?: string[];
 };
 
 type Registry = {
@@ -322,9 +339,10 @@ function classify(model: Model): TableEntry | { error: string } {
  * replace wholesale.
  */
 function normalize(t: TableEntry): TableEntry {
-    const base = { n: t.n, table: t.table, pk: t.pk, strategy: t.strategy };
-    if (t.strategy === "child") return { ...base, parent: t.parent, fk: t.fk };
-    if (t.strategy === "watermark" || t.strategy === "append") return { ...base, column: t.column };
+    const base: TableEntry = { n: t.n, table: t.table, pk: t.pk, strategy: t.strategy };
+    if (t.strategy === "child") Object.assign(base, { parent: t.parent, fk: t.fk });
+    if (t.strategy === "watermark" || t.strategy === "append") Object.assign(base, { column: t.column });
+    if (t.cacheColumns?.length) base.cacheColumns = [...t.cacheColumns].sort();
     return base;
 }
 

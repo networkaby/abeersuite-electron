@@ -44,6 +44,7 @@ import {
     recordCouponRedemption,
     lookupActiveGiftCard,
     redeemGiftCard,
+    GiftCardBalanceChangedError,
     type CartLineLite,
     type EvalInput,
     type CouponSelection,
@@ -1286,6 +1287,9 @@ export async function POST(req: Request) {
         }
         if (err instanceof GlPostFailedError) {
             return NextResponse.json({ error: err.message, notes: err.notes }, { status: 500 });
+        }
+        if (err instanceof GiftCardBalanceChangedError) {
+            return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });
         }
         console.error("[pos sale]", err);
         const msg = err instanceof Error ? err.message : "Failed to create POS sale";
