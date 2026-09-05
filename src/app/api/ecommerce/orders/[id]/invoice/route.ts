@@ -7,9 +7,8 @@ import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { stateCodeForName } from "@/shared/lib/gst/indianStates";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
-import { toNumber } from "@/modules/accountancy/lib/balance";
 import { invNextRef, calcLineTotals, calcVoucherTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
-import { engineCreateSpine, enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { engineCreateSpine, enginePost, voucherDebitTotal } from "@/modules/accountancy/lib/transactionEngine";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
@@ -554,12 +553,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                       })
                     : null;
                 if (!liveTarget) {
-                    const receipt = await tx.voucherDetail.findUnique({
-                        where: { id: receiptVoucherId },
-                        select: { totalAmount: true, universalVoucher: { select: { voucherNo: true } } },
+                    // `receiptVoucherId` IS the advance receipt's spine id — onlineReceipt.ts
+                    // stamps what engineCreateVoucher returned, and the prior-allocation read
+                    // above and the create below both treat it as one. A RECEIPT is spine-only
+                    // (no VoucherDetail sidecar; that table is the inventory document), so its
+                    // total comes from the DEBIT GL legs. Guarded on kind/status so a stale id
+                    // cannot allocate some unrelated voucher's money onto this invoice.
+                    const receipt = await tx.universalVoucher.findFirst({
+                        where: { id: receiptVoucherId, type: "RECEIPT", status: "POSTED", deletedAt: null },
+                        select: { voucherNo: true },
                     });
                     if (receipt) {
-                        const amount = Math.min(toNumber(receipt.totalAmount), totalAmount);
+                        const amount = Math.min(await voucherDebitTotal(tx, receiptVoucherId), totalAmount);
                         if (amount > 0.005) {
                             await tx.voucherAllocation.create({
                                 data: {
@@ -569,7 +574,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                                     sourceId: receiptVoucherId,
                                     amount,
                                     method: "AGAINST_REF",
-                                    reference: receipt.universalVoucher?.voucherNo ?? `RCPT-${receiptVoucherId}`,
+                                    reference: receipt.voucherNo ?? `RCPT-${receiptVoucherId}`,
                                     createdById: user!.id,
                                 },
                             });

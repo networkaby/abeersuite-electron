@@ -445,6 +445,25 @@ export async function enginePostSpine(
 }
 
 /**
+ * Read a financial voucher's total back from the DB — the sum of its DEBIT legs,
+ * the same rule `engineCreateVoucher` applies when it stamps `totalAmount` at
+ * creation (below).
+ *
+ * Financial vouchers are spine-only: Phase 5 5E dropped Voucher/VoucherLine, and a
+ * RECEIPT/PAYMENT/CONTRA has NO `VoucherDetail` sidecar — that table is the
+ * inventory document (renamed InvVoucher). Summing the GL lines is therefore the
+ * only way to read a receipt's total, and any code reaching into `voucherDetail`
+ * with a spine id is looking in the wrong table.
+ */
+export async function voucherDebitTotal(tx: Prisma.TransactionClient, spineId: number): Promise<number> {
+    const agg = await tx.voucherGlLine.aggregate({
+        where: { universalVoucherId: spineId, type: "DEBIT" },
+        _sum: { amount: true },
+    });
+    return round2(toNumber(agg._sum.amount ?? 0));
+}
+
+/**
  * Create a financial voucher — the UniversalVoucher spine IS the voucher (Phase 5
  * 5E dropped the Voucher table). Writes a DRAFT spine + its VoucherGlLine lines
  * (gated out of balances until POSTED); when `spec.post`, flips it POSTED + applies

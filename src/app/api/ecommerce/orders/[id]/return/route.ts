@@ -305,17 +305,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     ? (o.totalPaise ?? 0) + (o.shippingChargePaise ?? 0)
                     : Math.round(returnTotal * 100);
             const addr = (o.shippingAddress ?? {}) as { receiptVoucherId?: unknown };
-            const receiptDetailId = Number(addr.receiptVoucherId) || null;
-            const receiptSpine = receiptDetailId
-                ? await prisma.voucherDetail.findUnique({
-                      where: { id: receiptDetailId },
-                      select: { universalVoucherId: true },
-                  })
-                : null;
+            // Already the advance receipt's SPINE id — onlineReceipt.ts stamps what
+            // engineCreateVoucher returned, and spawnShopRefund wants exactly that
+            // (getRefundForPayout reads it back off UniversalVoucher). A RECEIPT has no
+            // VoucherDetail row, so there is nothing to resolve through.
+            const receiptSpineId = Number(addr.receiptVoucherId) || null;
             const spawned = await spawnShopRefund({
                 orderId: oid,
                 amountPaise: refundPaise,
-                sourceSpineId: receiptSpine?.universalVoucherId ?? null,
+                sourceSpineId: receiptSpineId,
                 reason: data.mode === "RTO" ? "Delivery failed — RTO received back" : "Customer return",
             });
             refundTicketId = spawned?.refundTicketId ?? null;
