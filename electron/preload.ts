@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { UpdateState } from "./updateManager";
-import type { BackupAvailability, RunResult } from "./backupManager";
+import type { RestoreReadiness, RunResult } from "./backupManager";
 
 export type { UpdateState, UpdateTier, UpdatePhase } from "./updateManager";
-export type { BackupAvailability, RunResult } from "./backupManager";
+export type { BackupAvailability, RestoreReadiness, RunResult } from "./backupManager";
 
 export interface ElectronAPI {
     isElectron: true;
@@ -36,7 +36,7 @@ export interface ElectronAPI {
      * cancelled dialog comes back as `{ ok: false }` with no `error`.
      */
     backup: {
-        availability: () => Promise<BackupAvailability>;
+        availability: () => Promise<RestoreReadiness>;
         dumpToDisk: () => Promise<RunResult>;
         restoreFromDisk: (confirm: string) => Promise<RunResult>;
         /** Every pg_dump/pg_restore progress line. Returns an unsubscribe function. */

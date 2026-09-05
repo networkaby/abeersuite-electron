@@ -99,3 +99,32 @@ export async function replicaBindsThisPc(
         await client.end().catch(() => {});
     }
 }
+
+/**
+ * How many local writes this PC has made that Supabase has not accepted yet.
+ *
+ * Asked before a restore, and only to TELL the operator. `wipeReplica` empties
+ * `_outbox` along with everything else, which is the right thing — those rows carry
+ * pre-restore data and the flusher would push them straight back over the restore —
+ * but it is work the till really did, so nobody should discard it without being shown
+ * the number first.
+ *
+ * Returns 0 when the question cannot be answered (no replica, table missing, blip).
+ * A restore is already gated behind a typed word and two dialogs; failing to count is
+ * not a reason to block it.
+ */
+export async function countPendingOutbox(adminUrl: string): Promise<number> {
+    const client = new PgClient({ connectionString: adminUrl, connectionTimeoutMillis: 5_000 });
+    try {
+        await client.connect();
+        const res = await client.query<{ n: string }>(
+            `SELECT count(*) AS n FROM "_outbox" WHERE pushed_at IS NULL AND dead_lettered_at IS NULL`,
+        );
+        return parseInt(res.rows[0]?.n ?? "0", 10);
+    } catch (err) {
+        console.error("[ReplicaWipe] Could not count pending outbox rows:", err);
+        return 0;
+    } finally {
+        await client.end().catch(() => {});
+    }
+}

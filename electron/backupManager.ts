@@ -37,6 +37,18 @@ export interface BackupAvailability {
     reason: string;
 }
 
+/**
+ * What the restore card needs: availability, plus what a restore costs THIS till.
+ *
+ * Separate from `BackupAvailability` because `backupAvailability()` answers from env
+ * alone and stays synchronous; the pending count is a query against the local replica,
+ * and only main knows its URL. Assembled in the `backup:availability` IPC handler.
+ */
+export interface RestoreReadiness extends BackupAvailability {
+    /** Local writes Supabase has not accepted yet — discarded by the restore's replica wipe. */
+    pendingWrites: number;
+}
+
 export interface RunResult {
     ok: boolean;
     /** Absolute path written (backup) or read (restore). */
