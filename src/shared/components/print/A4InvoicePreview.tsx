@@ -21,7 +21,6 @@
  */
 
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
@@ -531,7 +530,9 @@ type A4ChromeProps = { template: VoucherTemplateDefaults; sample: ThermalReceipt
 
 /** Template-driven letterhead (logo · brand · address · GSTIN · phone) + banner. */
 function A4Header({ template, sample }: A4ChromeProps) {
-    const brand = template.headerLine1 || COMPANY_DETAILS.brandName;
+    // headerLine1 is always filled by mergeTemplateWithOrg (Organisation brand
+    // fallback) — one brand source, no second fallback here.
+    const brand = template.headerLine1;
     const addrLines = template.addressBlock.split("\n").map((l) => l.trim()).filter(Boolean);
     // The configured lines often already carry their own label ("GSTIN: 18AX…",
     // "Ph: +91 …") because that's how they read in the settings field. Strip it
@@ -671,7 +672,7 @@ function MoneyReceiptMiddle({ template, sample }: A4ChromeProps) {
 
             <div className="mr-amt-row">
                 <div className="mr-amt-box">{fmtINR(total)}</div>
-                {(sample.balanceBefore || sample.balanceAfter) && (
+                {template.showPartyBalance && (sample.balanceBefore || sample.balanceAfter) && (
                     <div className="mr-bal">
                         {sample.balanceBefore && (
                             <div className="mr-bal-row">

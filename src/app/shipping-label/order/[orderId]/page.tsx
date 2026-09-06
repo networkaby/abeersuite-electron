@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import OrderParcelLabel, { type ParcelLabelData, type ParcelLabelSize } from "@/shared/components/print/OrderParcelLabel";
 
 // Parcel label for a shop order shipped by OUR couriers (local delivery /
@@ -71,7 +70,7 @@ export default async function OrderParcelLabelPage({
     // FROM — our shop identity, from the customisable label template.
     const template = await getVoucherTemplate("DELIVERY_SHIPPING_LABEL");
     const from = {
-        name: template.headerLine1 || COMPANY_DETAILS.brandName,
+        name: template.headerLine1,
         address: template.addressBlock?.trim() || null,
         phone: template.phoneLine?.replace(/^Ph:\s*/i, "").trim() || null,
     };

@@ -21,21 +21,15 @@ export interface PaymentSlipPrint {
     sample:    ThermalReceiptSample;
     /** Org-merged, NOT format-resolved — the caller resolves for its format. */
     template:  VoucherTemplateDefaults;
-    /** Ready payload for the bridge `print/payment` command (thermal-resolved). */
+    /** Ready payload for the bridge `print/voucher` command (thermal-resolved). */
     relayPayload: PaymentRelayPayload;
 }
 
 export interface PaymentRelayPayload {
-    reference:  string;
-    date:       string;
-    party:      string;
-    tenders:    { label: string; amount: number }[];
-    total:      number;
-    note:       string | null;
-    title:      string;
-    partyLabel: string;
-    totalLabel: string;
-    template:   VoucherTemplateDefaults;
+    kind:     "RECEIPT" | "PAYMENT";
+    title:    string;
+    sample:   ThermalReceiptSample;
+    template: VoucherTemplateDefaults;
 }
 
 const fmtAmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -147,16 +141,10 @@ export async function buildPaymentSlipPrint(voucherId: number): Promise<PaymentS
     };
 
     const relayPayload: PaymentRelayPayload = {
-        reference,
-        date:       spine.date.toISOString(),
-        party:      counterparty,
-        tenders:    tenderLines.map((l) => ({ label: l.account.name, amount: Number(l.amount) })),
-        total,
-        note:       spine.narration ?? null,
-        title:      isReceipt ? "PAYMENT RECEIPT" : "PAYMENT VOUCHER",
-        partyLabel: isReceipt ? "Received from" : "Paid for",
-        totalLabel: isReceipt ? "Received" : "Paid",
-        template:   resolveTemplateForFormat(template, "THERMAL_80MM"),
+        kind:     spine.type,
+        title:    template.headerLine2,
+        sample,
+        template: resolveTemplateForFormat(template, "THERMAL_80MM"),
     };
 
     return { kind: spine.type, reference, date: spine.date, sample, template, relayPayload };

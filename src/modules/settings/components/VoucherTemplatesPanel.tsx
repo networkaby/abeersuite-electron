@@ -579,13 +579,13 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                     onCommit={(n) => setField("paperWidthMm", n)}
                                 />
                             </Field>
-                            <Field label="Thermal font family">
+                            <Field label="Thermal font family" hint="Browser print only — the thermal printer uses its built-in font.">
                                 <Input
                                     value={current.fontFamily}
                                     onChange={(e) => setField("fontFamily", e.target.value)}
                                 />
                             </Field>
-                            <Field label="Thermal font size (px)">
+                            <Field label="Thermal font size (px)" hint="Browser print only — the thermal printer uses its built-in font.">
                                 <NumberField
                                     value={current.fontSizePx}
                                     min={8}

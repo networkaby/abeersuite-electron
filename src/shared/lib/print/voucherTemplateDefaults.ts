@@ -166,6 +166,15 @@ const BARCODE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateK
     "SALE_RETURN",
 ]);
 
+// Money slips (RECEIPT / PAYMENT) show the party's running balance
+// (before / after) by default — it is the customer's own account on a slip
+// handed to them. Every other kind keeps it off: a goods invoice may be seen
+// by anyone. Both A4 + thermal seeds; tunable per format afterwards.
+const PARTY_BALANCE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
+    "RECEIPT",
+    "PAYMENT",
+]);
+
 // Per-kind default footer / terms overrides (blank kinds fall back to the
 // generic footer and empty terms). The repair ticket seeds the shop's standard
 // service terms so they render out-of-the-box AND stay editable on the
@@ -430,7 +439,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showBank: false,                                 showBankThermal: false,
-        showPartyBalance: false,                         showPartyBalanceThermal: false,
+        showPartyBalance: PARTY_BALANCE_KINDS.has(kind), showPartyBalanceThermal: PARTY_BALANCE_KINDS.has(kind),
         showQrCode: false,
         // Label meta — device hidden by default (theft), the rest shown.
         showTicket: true,                                showTicketThermal: true,          showTicketTl: true,

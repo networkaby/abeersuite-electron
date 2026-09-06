@@ -79,6 +79,17 @@ export default async function InvoiceReceipt({
     );
     const charges = settlement.charges.map((c) => ({ ...c, account: chargeAcctById.get(c.accountId) ?? null }));
 
+    // Tenders that settled the bill (cash / UPI / card ledgers) — the counter
+    // slip's payment rows. The party's own ledger is not a tender (credit sale /
+    // overpayment settled to the account; the money then lives on the RV-… slip).
+    const partyAcctId = voucher.universalVoucher?.partyAccountId ?? null;
+    const tenderRows  = settlement.tenders.filter((t) => Math.abs(t.amount) > 0.005 && t.accountId !== partyAcctId);
+    const tenderAcctById = new Map(
+        (tenderRows.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: [...new Set(tenderRows.map((t) => t.accountId))] } }, select: { id: true, name: true } }))
+            .map((a) => [a.id, a.name]),
+    );
+    const receipts = tenderRows.map((t) => ({ label: tenderAcctById.get(t.accountId) ?? "Received", amount: t.amount }));
+
     const owner = voucher.account?.person ?? voucher.account?.company ?? null;
     const partyName  = owner?.name ?? voucher.account?.name ?? readPartyName(voucher.partyJson) ?? "Walk-in";
     const partyPhone = owner?.phones[0]?.phone ?? null;
@@ -270,6 +281,11 @@ export default async function InvoiceReceipt({
         total:     Number(voucher.totalAmount),
         notes:     null,
         taxBreakdown,
+        receipts:   receipts.length ? receipts : null,
+        balanceDue: (() => {
+            const due = round2(Number(voucher.totalAmount) - receipts.reduce((s, r) => s + r.amount, 0));
+            return due > 0.005 ? due : null;
+        })(),
         branchAddress: voucher.universalVoucher?.branch
             ? formatStructuredAddressBlock(voucher.universalVoucher.branch) || null
             : null,
@@ -307,6 +323,9 @@ export default async function InvoiceReceipt({
         // Thermal-resolved template rides along so the bridge has the shop's
         // current config (logo/header/GSTIN toggles) on every job.
         template:       resolveTemplateForFormat(template, "THERMAL_80MM"),
+        branchAddress:  sample.branchAddress ?? null,
+        receipts:       sample.receipts ?? null,
+        balanceDue:     sample.balanceDue ?? null,
         lines: voucher.lines.map((l, i) => {
             const lad = ladder?.lines[i];
             const qty = Number(l.quantity);

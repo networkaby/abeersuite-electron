@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import ShippingLabel, { type ShippingLabelData, type LabelSize, type LabelFieldFlags } from "@/shared/components/print/ShippingLabel";
 
 // Packet address label for a device sent to a service centre — its own postcard
@@ -73,7 +72,7 @@ export default async function ShippingLabelPage({
     // FROM + footer — our shop identity, from the customisable label template.
     const template = await getVoucherTemplate("SERVICE_SHIPPING_LABEL");
     const from = {
-        name: template.headerLine1 || COMPANY_DETAILS.brandName,
+        name: template.headerLine1,
         address: template.addressBlock?.trim() || null,
         phone: template.phoneLine?.replace(/^Ph:\s*/i, "").trim() || null,
     };

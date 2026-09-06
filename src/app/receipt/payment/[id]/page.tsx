@@ -8,7 +8,7 @@ import { requireStaffPage } from "@/shared/lib/auth/permissions";
 // Payment slip for a GL cash voucher — a RECEIPT (money collected from a party
 // at the counter, the POS "Rcv" flow) or a PAYMENT (cash paid out, the "Exp"
 // flow). It is the counter cash slip, so it prints thermal-first: the combined
-// bridge (/print/payment) fires on mount with a browser fallback that offers
+// bridge (/print/voucher) fires on mount with a browser fallback that offers
 // the A4 / thermal picker — each format rendering its own template.
 //
 // All slip data comes from buildPaymentSlipPrint(), the same builder the POS
@@ -41,7 +41,7 @@ export default async function PaymentReceiptPage({
             toolbar={
                 <PrintToolbar
                     bridge={isThermal && autoPrint
-                        ? { endpoint: "/print/payment", payload: slip.relayPayload }
+                        ? { endpoint: "/print/voucher", payload: slip.relayPayload }
                         : undefined}
                     autoPrint={autoPrint}
                     showFormatPicker

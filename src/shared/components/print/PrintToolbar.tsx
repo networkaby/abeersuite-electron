@@ -51,7 +51,7 @@ const FORMAT_OPTIONS = [
     { value: "THERMAL_80MM|", label: "Thermal 80mm" },
 ] as const;
 
-export type BridgeEndpoint = "/print/pos" | "/print/payment" | "/print/voucher";
+export type BridgeEndpoint = "/print/pos" | "/print/voucher";
 
 export interface PrintToolbarBridge {
     /** Relay route for this document kind. If the bridge doesn't implement it
