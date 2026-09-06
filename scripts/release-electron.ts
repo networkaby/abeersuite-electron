@@ -53,13 +53,28 @@ if (publishTargets.length === 0) {
 }
 
 // Retry a single target that failed (e.g. a bad token) without re-publishing a
-// repo that already succeeded: RELEASE_ONLY_REPO=abeersuite-electron pnpm ...
+// repo that already succeeded: RELEASE_ONLY_REPO=owner/abeersuite-electron pnpm ...
 if (process.env.RELEASE_ONLY_REPO) {
-    const only = publishTargets.filter(t => t.repo === process.env.RELEASE_ONLY_REPO);
+    // Accepts either the bare repo name or the full "owner/repo". The full form is
+    // the only one that works when two targets share a repo name - as ours do,
+    // akramuljakir/abeersuite-electron and devloperakramul/abeersuite-electron.
+    // Matching on the bare name there kept BOTH targets while the log claimed it
+    // was publishing to one, so a retry silently re-published the repo that had
+    // already succeeded.
+    const wanted = process.env.RELEASE_ONLY_REPO;
+    const only = publishTargets.filter(t => (wanted.includes("/") ? `${t.owner}/${t.repo}` : t.repo) === wanted);
     if (only.length === 0) {
         console.error(
-            `[release-electron] FATAL: RELEASE_ONLY_REPO="${process.env.RELEASE_ONLY_REPO}" matches no target in package.json build.publish.\n` +
-            `  Known repos: ${publishTargets.map(t => t.repo).join(", ")}`
+            `[release-electron] FATAL: RELEASE_ONLY_REPO="${wanted}" matches no target in package.json build.publish.\n` +
+            `  Known repos: ${publishTargets.map(t => `${t.owner}/${t.repo}`).join(", ")}`
+        );
+        process.exit(1);
+    }
+    if (only.length > 1) {
+        console.error(
+            `[release-electron] FATAL: RELEASE_ONLY_REPO="${wanted}" matches ${only.length} targets: ` +
+            `${only.map(t => `${t.owner}/${t.repo}`).join(", ")}.\n` +
+            "  Give the full owner/repo so exactly one is chosen."
         );
         process.exit(1);
     }
