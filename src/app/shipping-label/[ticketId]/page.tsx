@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
-import ShippingLabel, { type ShippingLabelData, type LabelSize, type LabelFieldFlags } from "@/shared/components/print/ShippingLabel";
+import ShippingLabel, { type ShippingLabelData, type LabelSize } from "@/shared/components/print/ShippingLabel";
+import { labelSender, labelFooter } from "@/shared/lib/print/mergeTemplateWithOrg";
 
 // Packet address label for a device sent to a service centre — its own postcard
 // document (SERVICE_SHIPPING_LABEL template kind, customisable in Settings →
@@ -71,11 +72,7 @@ export default async function ShippingLabelPage({
 
     // FROM + footer — our shop identity, from the customisable label template.
     const template = await getVoucherTemplate("SERVICE_SHIPPING_LABEL");
-    const from = {
-        name: template.headerLine1,
-        address: template.addressBlock?.trim() || null,
-        phone: template.phoneLine?.replace(/^Ph:\s*/i, "").trim() || null,
-    };
+    const from = labelSender(template);
 
     const dev = slip?.device ?? {
         type: ticket.repair.device.type,
@@ -91,17 +88,10 @@ export default async function ShippingLabelPage({
         date:     formatDate(slip?.date ?? ticket.createdAt),
         ref:      slip?.ref ?? null,
         device:   `${dev.brand} ${dev.model}`.trim() + (dev.type ? ` (${dev.type})` : ""),
-        footer:   template.footerLine?.trim() || null,
+        footer:   labelFooter(template),
     };
 
-    // Which meta lines print — from the template (per format).
-    const fields: LabelFieldFlags = {
-        showTicket: template.showTicket,   showTicketThermal: template.showTicketThermal,   showTicketTl: template.showTicketTl,
-        showDate:   template.showDate,     showDateThermal:   template.showDateThermal,     showDateTl:   template.showDateTl,
-        showRef:    template.showRef,      showRefThermal:    template.showRefThermal,      showRefTl:    template.showRefTl,
-        showDevice: template.showDevice,   showDeviceThermal: template.showDeviceThermal,   showDeviceTl: template.showDeviceTl,
-        showFooter: template.showFooter,   showFooterThermal: template.showFooterThermal,   showFooterTl: template.showFooterTl,
-    };
-
-    return <ShippingLabel data={data} autoPrint={sp.autoprint !== "0"} initialSize={initialSize} fields={fields} />;
+    // Which meta lines print — the template carries the per-format flags
+    // (Sheet / Thermal / TL); the label resolves them for the chosen size.
+    return <ShippingLabel data={data} autoPrint={sp.autoprint !== "0"} initialSize={initialSize} fields={template} />;
 }

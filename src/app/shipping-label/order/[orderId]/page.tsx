@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
+import { labelSender, labelFooter } from "@/shared/lib/print/mergeTemplateWithOrg";
 import OrderParcelLabel, { type ParcelLabelData, type ParcelLabelSize } from "@/shared/components/print/OrderParcelLabel";
 
 // Parcel label for a shop order shipped by OUR couriers (local delivery /
@@ -69,11 +70,7 @@ export default async function OrderParcelLabelPage({
 
     // FROM — our shop identity, from the customisable label template.
     const template = await getVoucherTemplate("DELIVERY_SHIPPING_LABEL");
-    const from = {
-        name: template.headerLine1,
-        address: template.addressBlock?.trim() || null,
-        phone: template.phoneLine?.replace(/^Ph:\s*/i, "").trim() || null,
-    };
+    const from = labelSender(template);
 
     const toAddress = [
         [addr.line1, addr.line2].filter(Boolean).join(", "),
@@ -105,7 +102,7 @@ export default async function OrderParcelLabelPage({
         payment: { cod, amountLabel: cod ? formatRupeesFromPaise(grandPaise) : null },
         weightGrams,
         items: o.lines.reduce((n, l) => n + l.quantity, 0),
-        footer: template.footerLine?.trim() || null,
+        footer: labelFooter(template),
     };
 
     return <OrderParcelLabel data={data} autoPrint={sp.autoprint !== "0"} initialSize={initialSize} />;

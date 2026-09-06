@@ -25,7 +25,7 @@ import {
     type VoucherTemplateKind,
     type PaperFormat,
 } from "@/shared/lib/print/voucherTemplateDefaults";
-import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
+import { mergeTemplateWithOrg, labelSender, labelFooter } from "@/shared/lib/print/mergeTemplateWithOrg";
 import type { OrganisationView } from "@/shared/lib/org/organisationView";
 import {
     buildSampleForKind,
@@ -196,37 +196,19 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const isLabel = selectedKind === "SERVICE_SHIPPING_LABEL";
     // The parcel label (order shipped by our own courier) — also standalone.
     const isParcelLabel = selectedKind === "DELIVERY_SHIPPING_LABEL";
-    const parcelLabelData = {
-        ...SAMPLE_PARCEL_LABEL,
-        from: {
-            name:    mergedPreview.headerLine1 || SAMPLE_PARCEL_LABEL.from.name,
-            address: mergedPreview.addressBlock?.trim() || SAMPLE_PARCEL_LABEL.from.address,
-            phone:   mergedPreview.phoneLine?.replace(/^Ph:\s*/i, "").trim() || SAMPLE_PARCEL_LABEL.from.phone,
-        },
-        footer: mergedPreview.footerLine?.trim() || SAMPLE_PARCEL_LABEL.footer,
-    };
-    const labelData = {
-        ...SAMPLE_SHIPPING_LABEL,
-        from: {
-            name:    mergedPreview.headerLine1 || SAMPLE_SHIPPING_LABEL.from.name,
-            address: mergedPreview.addressBlock?.trim() || SAMPLE_SHIPPING_LABEL.from.address,
-            phone:   mergedPreview.phoneLine?.replace(/^Ph:\s*/i, "").trim() || SAMPLE_SHIPPING_LABEL.from.phone,
-        },
-        footer: mergedPreview.footerLine?.trim() || SAMPLE_SHIPPING_LABEL.footer,
-    };
-    // Field visibility flags fed to the label preview so the Fields toggles show live.
-    const labelFields = {
-        showTicket: mergedPreview.showTicket,   showTicketThermal: mergedPreview.showTicketThermal,   showTicketTl: mergedPreview.showTicketTl,
-        showDate:   mergedPreview.showDate,     showDateThermal:   mergedPreview.showDateThermal,     showDateTl:   mergedPreview.showDateTl,
-        showRef:    mergedPreview.showRef,      showRefThermal:    mergedPreview.showRefThermal,      showRefTl:    mergedPreview.showRefTl,
-        showDevice: mergedPreview.showDevice,   showDeviceThermal: mergedPreview.showDeviceThermal,   showDeviceTl: mergedPreview.showDeviceTl,
-        showFooter: mergedPreview.showFooter,   showFooterThermal: mergedPreview.showFooterThermal,   showFooterTl: mergedPreview.showFooterTl,
-    };
+    // Same sender / footer derivation the label pages use, so the preview IS
+    // the print. The Fields toggles come straight off the merged template.
+    const parcelLabelData = { ...SAMPLE_PARCEL_LABEL,   from: labelSender(mergedPreview), footer: labelFooter(mergedPreview) };
+    const labelData       = { ...SAMPLE_SHIPPING_LABEL, from: labelSender(mergedPreview), footer: labelFooter(mergedPreview) };
+    const labelFields     = mergedPreview;
     const previewSample = bespokeBody
         ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
         : sample;
     const visibleElements = (() => {
         if (!BESPOKE_KINDS.has(selectedKind)) return SHOW_HIDE_ELEMENTS;
+        // The parcel label reads no show/hide flag at all (sender, receiver,
+        // order, courier and payment always print) — no inert rows.
+        if (isParcelLabel) return [];
         const hidden = new Set(BESPOKE_HIDDEN_ELEMENTS);
         // The slip has its own Sent/Received/Prepared toggles, so drop the
         // generic Signature row for it (it never drove the slip anyway).
@@ -446,6 +428,11 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 <span className="text-center">Thermal</span>
                                 {isLabel && <span className="text-center">TL 100×50</span>}
                             </div>
+                            {!isLabel && visibleElements.length === 0 && (
+                                <div className="px-3 py-2 text-[10px] text-muted-foreground">
+                                    This label has no toggleable elements — sender, receiver, order, courier and payment always print.
+                                </div>
+                            )}
                             {/* One typed row shape (tl optional) so the ternary is a single
                                 array type — mapping a union of arrays would degrade el.tl to unknown. */}
                             {((isLabel ? LABEL_FIELD_ELEMENTS : visibleElements) as {
