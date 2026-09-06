@@ -22,6 +22,7 @@ import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import type { PaymentRelayPayload } from "@/modules/accountancy/lib/paymentSlip";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, todayIso, toDateOnly } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
@@ -269,7 +270,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             }
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: PaymentRelayPayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: toDateOnly(due),   // local day, same reason as `today`
@@ -417,23 +418,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     // Overpayment booked a separate Receipt voucher (RV-…). On a
                     // relay setup it prints on the SAME thermal printer — the tender
                     // breakdown lives here, not on the sale slip above.
-                    if (data.receiptVoucherId) {
-                        const rcvTenders: { label: string; amount: number }[] = [];
-                        if (b.cashNet > 0) rcvTenders.push({ label: "Cash", amount: b.cashNet });
-                        for (const s of splits) {
-                            if (s.amount <= 0) continue;
-                            rcvTenders.push({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount });
-                        }
-                        void bridgeRequest("thermal", "print/payment", {
-                            reference: data.receiptVoucherRef,
-                            date: today,
-                            party: snapshot?.party.name ?? null,
-                            tenders: rcvTenders,
-                            total: b.collected,
-                            arrear: data.arrearCleared,
-                            advance: data.advanceCredited,
-                        note: `Against ${data.voucherRef}`,
-                        }).catch(() => toast.error("Receipt voucher print failed"));
+                    if (data.receiptPrint) {
+                        void bridgeRequest("thermal", "print/payment", data.receiptPrint)
+                            .catch(() => toast.error("Receipt voucher print failed"));
                     }
                 } else {
                     window.open(`/receipt/invoice/${data.voucherId}?kind=POS&autoprint=1`, "_blank", "noopener");

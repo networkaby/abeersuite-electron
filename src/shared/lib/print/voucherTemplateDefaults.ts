@@ -5,7 +5,7 @@
  * documents (repair ticket, shipping slip) all live here.
  *
  * Used by:
- *   • prisma/seeds/bootstrap-seed.ts        — initial upsert of all 25 rows
+ *   • prisma/seeds/bootstrap-seed.ts        — initial upsert of every kind in VOUCHER_TEMPLATE_KINDS
  *   • /api/settings/voucher-templates/...   — list-auto-upsert, reset-to-default
  *   • /office/settings/voucher-templates    — UI grouping (Accounting / Inventory / Repair)
  *   • src/shared/lib/print/voucherTemplate.ts — runtime fallback if a row is missing
@@ -405,9 +405,9 @@ export interface VoucherTemplateDefaults {
  * Returns the canonical default row for a kind. Reused by both seed and the
  * reset-to-default endpoint so the two stay in sync by construction.
  *
- * `headerLine1` is intentionally left blank — the renderer falls back to
- * COMPANY_DETAILS.brandName so the seeded output matches the current
- * hardcoded receipts without baking the brand into the DB.
+ * `headerLine1` is intentionally left blank — mergeTemplateWithOrg() fills it
+ * from the Organisation brand at print time, so the brand is never baked into
+ * the DB and a rename in Organisation settings reaches every document.
  */
 export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): VoucherTemplateDefaults {
     return {

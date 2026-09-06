@@ -16,7 +16,8 @@ import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
-import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
+import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
+import { buildPaymentSlipPrint } from "@/modules/accountancy/lib/paymentSlip";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -1274,13 +1275,19 @@ export async function POST(req: Request) {
             });
         });
 
-        // Resolved POS print template — the cashier lacks `settings:manage`, so
-        // PosScreen can't fetch it directly. It rides the sale response and is
-        // forwarded to the thermal relay so the printed slip respects the admin's
-        // template and matches /receipt/invoice/[id]?kind=POS. Display-only.
-        const posTemplate = await getVoucherTemplate("POS");
+        // Thermal-resolved POS print template — the cashier lacks `settings:manage`,
+        // so PosScreen can't fetch it directly. It rides the sale response and is
+        // forwarded to the thermal relay so the printed slip obeys the template's
+        // *Thermal* toggles and matches /receipt/invoice/[id]?kind=POS. The
+        // overpayment Receipt voucher (RV-…) rides along the same way, built by
+        // the same helper as /receipt/payment/[id]. Display-only.
+        const [posTemplate, receiptSlip] = await Promise.all([
+            getThermalTemplate("POS"),
+            result.receiptVoucherId ? buildPaymentSlipPrint(result.receiptVoucherId) : null,
+        ]);
+        const receiptPrint = receiptSlip?.relayPayload ?? null;
         console.log(`[pos-timing] ${result.invoiceNumber}: preTx=${Math.round(_tPreTx - _t0)}ms tx=${Math.round(_tTx - _tPreTx)}ms post=${Math.round(performance.now() - _tTx)}ms total=${Math.round(performance.now() - _t0)}ms (lines=${body.lines.length})`);
-        return NextResponse.json({ ...result, posTemplate }, { status: 201 });
+        return NextResponse.json({ ...result, posTemplate, receiptPrint }, { status: 201 });
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });

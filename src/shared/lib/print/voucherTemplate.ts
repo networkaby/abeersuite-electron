@@ -3,6 +3,7 @@ import {
     buildVoucherTemplateDefaults,
     isVoucherTemplateKind,
     isPaperFormat,
+    resolveTemplateForFormat,
     rowToVoucherTemplateDefaults,
     type PaperFormat,
     type VoucherTemplateDefaults,
@@ -40,6 +41,17 @@ export async function getVoucherTemplate(kind: string): Promise<VoucherTemplateD
         getOrganisation(),
     ]);
     return mergeTemplateWithOrg(raw, org);
+}
+
+/**
+ * Template for a silent thermal print — org-merged AND resolved to the 80mm
+ * roll's toggles. Every bridge payload must be built from this (or from
+ * resolveTemplateForFormat(..., "THERMAL_80MM") on a page that already holds
+ * the merged template) so the paper obeys the *Thermal* column of the editor,
+ * never the A4 one.
+ */
+export async function getThermalTemplate(kind: string): Promise<VoucherTemplateDefaults> {
+    return resolveTemplateForFormat(await getVoucherTemplate(kind), "THERMAL_80MM");
 }
 
 /**
