@@ -131,12 +131,25 @@
   ${AndIf} $1 >= 14
   ${AndIf} $2 >= ${VCREDIST_MIN_MINOR}
     DetailPrint "Visual C++ runtime $1.$2 already installed — skipping."
+  ${ElseIf} ${Silent}
+    ; An auto-update runs silently, with NO window on screen. Every call below can
+    ; block on a click nobody is there to give: inetc's own progress dialog, the UAC
+    ; prompt raised by ExecShellWait "runas", and the two MessageBoxes. A blocked
+    ; silent update is the worst outcome there is - the app is already replaced, the
+    ; installer waits for ever, and the till shows nothing at all.
+    ;
+    ; Skipping is safe here. Reaching an update at all means the first install already
+    ; dealt with the runtime, so a missing one now means something outside this app
+    ; removed it - and postgresManager.ts already catches exactly that at startup
+    ; (initdb exit 0xC0000135) and names the download. A counter that boots and
+    ; explains itself beats one that hangs mid-update.
+    DetailPrint "Visual C++ runtime missing, but this is a silent update - skipping so the update cannot hang. The app reports it at startup."
   ${Else}
   !insertmacro sayStep "Downloading the Microsoft Visual C++ runtime (about 25 MB)..."
   inetc::get /USERAGENT "AbeerSuite-Setup" /RESUME "" "${VCREDIST_URL}" "$PLUGINSDIR\vc_redist.x64.exe" /END
   Pop $0
   ${If} $0 != "OK"
-    MessageBox MB_OK|MB_ICONSTOP "AbeerSuite needs the Microsoft Visual C++ 2015-2022 (x64) runtime for its local database, and it could not be downloaded ($0).$\r$\n$\r$\nConnect to the internet and run this setup again, or install it yourself from:$\r$\n${VCREDIST_URL}"
+    MessageBox MB_OK|MB_ICONSTOP "AbeerSuite needs the Microsoft Visual C++ 2015-2022 (x64) runtime for its local database, and it could not be downloaded ($0).$\r$\n$\r$\nConnect to the internet and run this setup again, or install it yourself from:$\r$\n${VCREDIST_URL}" /SD IDOK
     Abort "Visual C++ runtime download failed: $0"
   ${EndIf}
 
@@ -151,7 +164,7 @@
   ${OrIf} $0 == 1638
     DetailPrint "Visual C++ runtime installed (exit $0)."
   ${Else}
-    MessageBox MB_OK|MB_ICONSTOP "The Visual C++ runtime installer failed (exit code $0). AbeerSuite's local database cannot start without it.$\r$\n$\r$\nInstall it yourself from:$\r$\n${VCREDIST_URL}$\r$\nthen run this setup again."
+    MessageBox MB_OK|MB_ICONSTOP "The Visual C++ runtime installer failed (exit code $0). AbeerSuite's local database cannot start without it.$\r$\n$\r$\nInstall it yourself from:$\r$\n${VCREDIST_URL}$\r$\nthen run this setup again." /SD IDOK
     Abort "Visual C++ runtime install failed: $0"
   ${EndIf}
   ${EndIf}
