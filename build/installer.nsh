@@ -237,6 +237,41 @@
   ${EndIf}
 !macroend
 
+; ── Finish page: start the app into the system tray ──────────────────────────
+;
+; electron-builder's own finish page launches the app with no arguments, which
+; opens a window. A counter PC wants the opposite: the app up and warm — Postgres
+; started, server listening, sync running — with nothing on screen until somebody
+; asks for it. `--hidden` does exactly that (isHiddenLaunch in electron/main.ts),
+; and it is the same argument Windows uses to auto-start the app every morning,
+; so the very first start behaves like every one after it.
+;
+; Replacing the whole page is the supported route: assistedInstaller.nsh checks
+; `!ifmacrodef customFinishPage` and only falls back to its own StartApp +
+; MUI_PAGE_FINISH block when we have not defined one. Because we take that
+; branch, `nsis.runAfterFinish` in package.json no longer governs this page — it
+; is set true there so the config does not contradict what happens here.
+;
+; The default StartApp also passes `--updated` on a re-install. Nothing in this
+; app has ever read that flag, so dropping it loses nothing.
+;
+; $launchLink is the Start Menu shortcut, set by installSection.nsh well before
+; this page is reached. ShellExecute appends our argument to the shortcut's own,
+; and ExecShellAsUser sheds the installer's elevation first — so the app runs as
+; the cashier, not as whoever approved the UAC prompt.
+!macro customFinishPage
+  Function StartApp
+    ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--hidden"
+  FunctionEnd
+
+  !define MUI_FINISHPAGE_RUN
+  !define MUI_FINISHPAGE_RUN_FUNCTION "StartApp"
+  ; Say where it goes. Ticked, clicked Finish, and no window appearing looks like
+  ; a failed install unless the box itself explains the tray.
+  !define MUI_FINISHPAGE_RUN_TEXT "Start AbeerSuite now (it waits in the system tray)"
+  !insertmacro MUI_PAGE_FINISH
+!macroend
+
 !macro customInstall
   !insertmacro ensureVcRuntime
   !insertmacro ensureCounterSetup

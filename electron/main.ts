@@ -1265,9 +1265,15 @@ app.whenReady().then(async () => {
         }
         await loadApp(result.url);
     } else {
-        if (!isHiddenLaunch) {
-            showBootError(result.url);
-        }
+        // A hidden start normally stays hidden — but a boot failure is the one thing
+        // nobody can act on from an invisible window, and the tray icon alone gives no
+        // clue what went wrong. So break the rule here and put the window up.
+        //
+        // This matters most right after setup: the installer now starts the app into
+        // the tray, and that very first boot is the slow, risky one (initdb, then
+        // provisioning the replica). Silence there would read as a failed install.
+        if (isHiddenLaunch) showMainWindow();
+        showBootError(result.url);
     }
 
     // If we got here by way of an update, the splash from the version before this one

@@ -225,7 +225,7 @@
     "nsis": {
       "oneClick": false,
       "allowElevation": true,
-      "runAfterFinish": false,
+      "runAfterFinish": true,
       "installerHeaderIcon": "build/icon.ico",
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
