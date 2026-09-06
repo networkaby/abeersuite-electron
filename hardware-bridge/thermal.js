@@ -294,7 +294,10 @@ async function printFooter(printer, t, reference, tag) {
     // Scannable CODE128 of the voucher number (matches the browser slip's
     // BarcodeSvg) — gated by the template. Best-effort: never block the slip.
     if (t.showBarcode && reference) {
-        try { printer.code128(String(reference), { height: 60, text: 2 }); }
+        // HRI text (`text: 2`) is ignored by some heads (RETSOL TP806), so the
+        // number is printed as a plain centred line under the bars, like the
+        // preview's BarcodeSvg caption.
+        try { printer.code128(String(reference), { height: 60, text: 0 }); printer.println(String(reference)); }
         catch (err) { console.warn(`[thermal:${tag}] barcode skipped:`, err.message); }
     }
     printer.cut();
@@ -364,7 +367,7 @@ function printMoneyMiddle(printer, sample, t, fmt, formattedDate) {
     printer.bold(true);
     printer.tableCustom([
         { text: isPayment ? "PAID" : "RECEIVED", align: "LEFT",  width: 0.5 },
-        { text: "Rs. " + fmt(total),             align: "RIGHT", width: 0.5 },
+        { text: fmt(total),                      align: "RIGHT", width: 0.5 },
     ]);
     printer.bold(false);
     printer.alignCenter();
@@ -407,7 +410,6 @@ async function buildPosBuffer(data) {
     const mm        = Number(t.paperWidthMm) || 80;
     const cols      = mm >= 70 ? 48 : 32;
     const charWidth = cols - 2;
-    const nameWidth = Math.floor(charWidth * 0.5) - 1;
     t._cols = cols;
 
     const printer = new ThermalPrinter({
@@ -454,7 +456,8 @@ async function buildPosBuffer(data) {
     printer.drawLine();
 
     for (const line of lines || []) {
-        const name = String(line.name || "").slice(0, nameWidth);
+        // Full name — tableCustom wraps it inside the column, like the preview.
+        const name = String(line.name || "");
         const qty  = Number(line.qty) || 0;
         // Ladder mode shows the public tag (barcode) total as the line amount; the
         // real per-item price stays pooled in "Counter discount" below.
@@ -833,7 +836,6 @@ async function buildVoucherBuffer(data) {
     const mm        = Number(t.paperWidthMm) || 80;
     const cols      = mm >= 70 ? 48 : 32;
     const charWidth = cols - 2;
-    const nameWidth = Math.floor(charWidth * 0.5) - 1;
     t._cols = cols;
 
     const printer = new ThermalPrinter({
@@ -891,7 +893,7 @@ async function buildVoucherBuffer(data) {
     ]);
     printer.drawLine();
     for (const line of sample.lines || []) {
-        const name = String(line.description || "").slice(0, nameWidth);
+        const name = String(line.description || "");
         printer.tableCustom([
             { text: name,                        align: "LEFT",  width: 0.5 },
             { text: String(line.quantity ?? ""), align: "RIGHT", width: 0.15 },

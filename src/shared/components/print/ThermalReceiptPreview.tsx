@@ -176,8 +176,10 @@ export interface ThermalReceiptSample {
     branchAddress?: string | null;
 }
 
+// Plain figures, no "Rs." — the ESC/POS slip prints amounts bare (the column
+// header says Amount), and the paper is the reference for this preview.
 const fmtINR = (n: number) =>
-    `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Class used to scope the inline <style> block when rendered inline in the
 // host page (previewMode=true). MUST stay in sync with the wrapper div below.
@@ -272,8 +274,9 @@ function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults
                 </div>
             )}
 
+            {/* Brand at double size, like the ESC/POS brand line (setTextSize 1,1 = 2× width and height). */}
             {template.showHeaderText && brand && (
-                <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx + 2 }}>
+                <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx * 2, lineHeight: 1.15 }}>
                     {brand}
                 </div>
             )}
