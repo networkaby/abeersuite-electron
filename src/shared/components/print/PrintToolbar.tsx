@@ -2,23 +2,39 @@
 
 // Unified print toolbar — the SINGLE toolbar for every printable document
 // (except barcode labels / QR cards, which keep their own real-size browser
-// print). Implements the house print rule:
+// print). Implements the house print rule — there are exactly two print ways:
 //
-//   1. Thermal print ALWAYS tries the combined bridge (relay on :9191) first.
-//   2. On bridge offline / failure → fall back to the browser print dialog.
-//   3. The browser fallback offers a FORMAT PICKER (A4 / thermal 80mm).
-//   4. Each format re-renders through its own template (via ?paper=/?width=,
-//      resolved server-side by the page → ReceiptPreview).
+//   1. SILENT THERMAL: the page arrived by the thermal way (`bridge` prop set)
+//      → the bridge is tried ONCE on mount. No printer configured in Printer
+//      Settings, or the bridge fails → nothing prints; this page simply stays
+//      open as the format-selection page (2).
+//   2. FORMAT-SELECTION PAGE: the user picks the format (A4 / thermal 80mm —
+//      each re-rendered through its own template via ?paper=/?width=) and the
+//      PRINTER, in the browser print dialog. Never the bridge, never a silent
+//      print — cross-format there is the user's own choice.
 //
-// Replaces the old split between <ThermalAutoPrint> (bridge + fallback, no
-// picker) and <ReceiptButtons> (picker, no bridge). The page decides the
-// starting mode: pass `bridge` when the resolved format is thermal (so the
-// bridge is tried on mount); omit it for a plain browser document.
+// The page decides the starting way: pass `bridge` for the thermal way; omit
+// it for the selection page.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
+
+/** True when Printer Settings names a printer of any type (LAN ip / COM port /
+ *  Windows printer). Blank everywhere → the counter has no thermal printer. */
+async function thermalPrinterConfigured(): Promise<boolean> {
+    try {
+        const cfg = await bridgeRequest<{ connectionType?: string; printerIp?: string; comPort?: string; windowsPrinterName?: string }>("thermal", "config:get", undefined, 1500);
+        switch (cfg?.connectionType) {
+            case "com":     return !!cfg.comPort?.trim();
+            case "windows": return !!cfg.windowsPrinterName?.trim();
+            default:        return !!cfg?.printerIp?.trim();
+        }
+    } catch {
+        return false;
+    }
+}
 
 // Self-contained toolbar styling. This bar lives inside a STANDALONE print
 // document (its own <html>, no app chrome / shadcn), so it carries its own
@@ -62,13 +78,13 @@ export interface PrintToolbarBridge {
 }
 
 export interface PrintToolbarProps {
-    /** When set, this document is in THERMAL mode: try the bridge on mount,
-     *  then fall back to browser print. Omit for a plain browser document. */
+    /** When set, this document arrived by the THERMAL way: try the bridge once
+     *  on mount; no printer / failure → stay as the selection page (no dialog).
+     *  Omit for the format-selection page. */
     bridge?: PrintToolbarBridge;
-    /** Browser-mode: fire the print dialog on mount (default true). The
+    /** Selection page only: fire the print dialog on mount (default true). The
      *  "Print after save" / format-switch flows pass false so the user can
-     *  pick a format first. Ignored in bridge/thermal mode (we auto-fire the
-     *  bridge, then window.print() only if it falls back). */
+     *  pick a format first. Ignored in the thermal way. */
     autoPrint?: boolean;
     /** Render the A4 / thermal format dropdown once we're on the browser path. */
     showFormatPicker?: boolean;
@@ -100,6 +116,9 @@ export default function PrintToolbar({
         if (!bridge) return false;
         try {
             if (!await bridgeOk("thermal", 1200)) return false;
+            // Point 4 of the print rule: no printer selected in Printer Settings
+            // (any type — LAN / COM / Windows) → no silent print at all.
+            if (!await thermalPrinterConfigured()) return false;
             // `endpoint` keeps its leading slash: it is a public prop set by five receipt
             // pages, and the bridge command is the same string without it.
             await bridgeRequest("thermal", bridge.endpoint.slice(1), bridge.payload);
@@ -109,33 +128,19 @@ export default function PrintToolbar({
         }
     };
 
-    // Thermal path: bridge relay FIRST, then Electron native silent print, then
-    // the browser dialog.
-    //
-    // Order matters. The bridge sends real ESC-POS text straight to the printer
-    // (LAN :9100 / COM / Windows spooler), so it is sharp and can never be
-    // mis-sized. Electron's silent print goes through the Windows driver as a
-    // rasterised picture — acceptable as a backup, but it was previously tried
-    // first and always succeeded, which silently killed the good LAN path.
+    // Thermal way: the bridge, once. It sends real ESC-POS text straight to the
+    // printer (LAN :9100 / COM / Windows spooler), so it is sharp and can never
+    // be mis-sized. Anything else (no printer configured, bridge down, send
+    // failed) leaves this page as the format-selection page — no automatic
+    // dialog, no Electron silent print (that went to whatever Windows default
+    // printer was set, which is how an 80mm slip could land on an A4 sheet).
     const runThermal = async () => {
         setStatus("trying");
         if (await sendToRelay()) {
             setStatus("thermal");
             return;
         }
-        if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
-            try {
-                const printed = await window.electronAPI.printSilent();
-                if (printed) {
-                    setStatus("thermal");
-                    return;
-                }
-            } catch (err) {
-                console.warn("[PrintToolbar] Electron silent print failed, falling back:", err);
-            }
-        }
         setStatus("browser");
-        window.print();
     };
 
     useEffect(() => {
@@ -207,7 +212,7 @@ export default function PrintToolbar({
             {status === "trying"  && <span style={STATUS("#666")}>Sending to thermal printer…</span>}
             {status === "thermal" && <span style={STATUS("#16a34a")}>✓ Sent to thermal printer</span>}
             {bridge && status === "browser" && (
-                <span style={STATUS("#d97706")}>Relay offline — using browser print</span>
+                <span style={STATUS("#d97706")}>No thermal printer — pick a format and print</span>
             )}
         </div>
     );

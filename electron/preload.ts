@@ -9,7 +9,6 @@ export interface ElectronAPI {
     isElectron: true;
     getCounterId: () => Promise<string>;
     getPrinters: () => Promise<Array<{ name: string; isDefault: boolean; displayName?: string }>>;
-    printSilent: (options?: { printerName?: string; widthMm?: number }) => Promise<boolean>;
     windowControl: (action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => Promise<void>;
     /**
      * Native folder picker. Opens at `defaultPath`, or at this PC's Pictures folder
@@ -83,7 +82,6 @@ const electronAPI: ElectronAPI = {
     isElectron: true,
     getCounterId: () => ipcRenderer.invoke("app:get-counter-id"),
     getPrinters: () => ipcRenderer.invoke("printer:get-list"),
-    printSilent: (options) => ipcRenderer.invoke("printer:print-silent", options),
     windowControl: (action) => ipcRenderer.invoke("window:control", action),
     selectFolder: (defaultPath) => ipcRenderer.invoke("dialog:select-folder", defaultPath),
     update: {

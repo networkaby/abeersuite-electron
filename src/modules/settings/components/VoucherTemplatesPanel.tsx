@@ -20,6 +20,7 @@ import OrderParcelLabel from "@/shared/components/print/OrderParcelLabel";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     resolveTemplateForFormat,
+    REPAIR_DOCUMENT_KINDS,
     type VoucherTemplateDefaults,
     type VoucherTemplateKind,
     type PaperFormat,
@@ -154,9 +155,16 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         return <div className="text-sm text-muted-foreground">No templates loaded.</div>;
     }
 
+    // "Default paper" only means something for the repair family — their forms
+    // have no Print / Thermal ticks. Every voucher form decides per save
+    // (Thermal tick → silent bridge print; else the format-selection page), so
+    // the field is hidden there and the preview opens on A4.
+    const hasDefaultPaper = (REPAIR_DOCUMENT_KINDS as readonly string[]).includes(selectedKind);
+    const kindDefaultPaper: PaperFormat = hasDefaultPaper ? current.defaultPaper : "A4";
+
     // Which paper the preview shows, and the org-merged template both the inline
     // preview and the full-size popup render.
-    const previewFormat = previewOverride ?? current.defaultPaper;
+    const previewFormat = previewOverride ?? kindDefaultPaper;
     const mergedPreview = mergeTemplateWithOrg(current, organisation);
 
     // Bespoke documents carry their OWN body (not the invoice line-items layout),
@@ -554,7 +562,8 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Paper
                         </legend>
-                        <Field label="Default paper format" hint="Used when the print button doesn't pass a paper override.">
+                        {hasDefaultPaper && (
+                        <Field label="Default paper format" hint="Format this document opens on (its form has no Print / Thermal ticks).">
                             <div className="flex gap-2">
                                 <PaperRadio
                                     label="A4"
@@ -570,6 +579,12 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 />
                             </div>
                         </Field>
+                        )}
+                        {!hasDefaultPaper && (
+                            <p className="text-[10px] text-muted-foreground">
+                                No default paper here: the voucher form&apos;s Print / Thermal ticks decide per save — Thermal prints silently on the counter printer, otherwise the format-selection page opens.
+                            </p>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <Field label="Thermal width (mm)" hint="Used only for thermal printing.">
                                 <NumberField
@@ -624,7 +639,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                 <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
                                     <PreviewToggle
                                         label="As default"
-                                        hint={`Showing ${current.defaultPaper === "A4" ? "A4" : "Thermal"} (default)`}
+                                        hint={`Showing ${kindDefaultPaper === "A4" ? "A4" : "Thermal"} (default)`}
                                         active={previewOverride === null}
                                         onClick={() => setPreviewOverride(null)}
                                     />

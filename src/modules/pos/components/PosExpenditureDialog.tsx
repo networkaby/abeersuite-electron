@@ -59,7 +59,7 @@ export function PosExpenditureDialog({
             });
             toast.success(`Expenditure ${data.voucherRef} · ₹${rupees.toFixed(2)}`);
             // Open the printable payment voucher (auto-prints on load) in a new tab.
-            window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
+            window.open(`/receipt/payment/${data.voucherId}?mode=thermal`, "_blank", "noopener");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {

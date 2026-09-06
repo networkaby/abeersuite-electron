@@ -14,7 +14,7 @@ export default async function PosReceiptPage({
     searchParams,
 }: {
     params:        Promise<{ id: string }>;
-    searchParams?: Promise<{ kind?: string; paper?: string; placeOfSupply?: string; autoprint?: string }>;
+    searchParams?: Promise<{ kind?: string; paper?: string; placeOfSupply?: string; autoprint?: string; mode?: string }>;
 }) {
     await requireStaffPage();
 
@@ -27,6 +27,7 @@ export default async function PosReceiptPage({
             kindParam={sp.kind ?? "SALE"}
             placeOfSupplyParam={(sp.placeOfSupply ?? "").trim()}
             paper={sp.paper}
+            mode={sp.mode}
             autoprint={sp.autoprint}
         />
     );

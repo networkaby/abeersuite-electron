@@ -436,7 +436,7 @@ export function PosSalesRegister() {
                                                     <button
                                                         type="button"
                                                         title={tab === "returns" ? "Print return voucher" : "Print receipt (thermal → browser fallback)"}
-                                                        onClick={() => window.open(tab === "returns" ? `/receipt/voucher/inv/${s.id}` : `/receipt/invoice/${s.id}?kind=POS`, "_blank", "noopener")}
+                                                        onClick={() => window.open(tab === "returns" ? `/receipt/voucher/inv/${s.id}?mode=thermal` : `/receipt/invoice/${s.id}?kind=POS&mode=thermal`, "_blank", "noopener")}
                                                         className="inline-flex text-muted-foreground hover:text-foreground"
                                                     >
                                                         <Printer size={14} />
@@ -604,7 +604,7 @@ export function PosSalesRegister() {
                                                 <button
                                                     type="button"
                                                     title="Print voucher (thermal → browser fallback)"
-                                                    onClick={() => window.open(`/receipt/payment/${m.voucherId}`, "_blank", "noopener")}
+                                                    onClick={() => window.open(`/receipt/payment/${m.voucherId}?mode=thermal`, "_blank", "noopener")}
                                                     className="inline-flex text-muted-foreground hover:text-foreground"
                                                 >
                                                     <Printer size={14} />

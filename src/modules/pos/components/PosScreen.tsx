@@ -426,11 +426,11 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                             .catch(() => toast.error("Receipt voucher print failed"));
                     }
                 } else {
-                    window.open(`/receipt/invoice/${data.voucherId}?kind=POS&autoprint=1`, "_blank", "noopener");
-                    // No relay → print the Receipt voucher in the browser too
-                    // (/receipt/payment/[id] auto-prints on mount).
+                    // No thermal printer → the format-selection page (opens on the
+                    // 80mm view; the cashier picks the format + printer and prints).
+                    window.open(`/receipt/invoice/${data.voucherId}?kind=POS&paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
                     if (data.receiptVoucherId) {
-                        window.open(`/receipt/payment/${data.receiptVoucherId}`, "_blank", "noopener");
+                        window.open(`/receipt/payment/${data.receiptVoucherId}?paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
                     }
                 }
             }

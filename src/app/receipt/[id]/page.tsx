@@ -23,7 +23,7 @@ export default async function ReceiptPage({
     searchParams,
 }: {
     params:        Promise<{ id: string }>;
-    searchParams?: Promise<{ paper?: string; autoprint?: string }>;
+    searchParams?: Promise<{ paper?: string; autoprint?: string; mode?: string }>;
 }) {
     await requireStaffPage();
 
@@ -56,7 +56,9 @@ export default async function ReceiptPage({
     // per-kind registry the vouchers use, so the shop's branding is configured
     // once on the Print Templates settings page.
     const template = await getVoucherTemplate("REPAIR_TICKET");
-    const format = resolvePaperFormat(template, sp.paper);
+    // Repair family: the template's default paper decides (no ticks on the
+    // form) — thermal default = the thermal way (bridge once on mount).
+    const format = resolvePaperFormat(template, sp.paper, sp.mode);
     const isThermal = format === "THERMAL_80MM";
     const autoPrint = sp.autoprint !== "0";
 

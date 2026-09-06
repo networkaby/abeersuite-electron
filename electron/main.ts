@@ -790,40 +790,6 @@ ipcMain.handle("printer:get-list", async (event) => {
     }
 });
 
-ipcMain.handle("printer:print-silent", async (event, options?: { printerName?: string; widthMm?: number }) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) return false;
-    return new Promise((resolve) => {
-        win.webContents.print(
-            {
-                silent: true,
-                printBackground: true,
-                deviceName: options?.printerName || "",
-                // The driver otherwise adds its own margin ON TOP of the document's
-                // @page margin, which on an 80mm roll pushes the receipt off the
-                // right edge. The template owns the margin; the driver adds none.
-                margins: { marginType: "none" },
-                // Thermal heads are 203 dpi. Rasterising at the screen's 96 dpi is
-                // what made the Windows-printer path look washed out.
-                dpi: { horizontal: 203, vertical: 203 },
-                // A custom width only when the caller knows the roll size; otherwise
-                // the document's own @page rule decides.
-                ...(options?.widthMm
-                    ? { pageSize: { width: Math.round(options.widthMm * 1000), height: 297_000 } }
-                    : {}),
-            },
-            (success, errorType) => {
-                if (!success) {
-                    console.error("Silent print failed:", errorType);
-                    resolve(false);
-                } else {
-                    resolve(true);
-                }
-            }
-        );
-    });
-});
-
 // Acts on the window that actually sent the request, the same way the printer handlers
 // above do. Resolving to `mainWindow` instead would mean a titlebar button in any
 // secondary window minimised or closed the main one.

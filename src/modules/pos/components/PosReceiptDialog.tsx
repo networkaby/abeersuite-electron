@@ -90,7 +90,7 @@ export function PosReceiptDialog({
                 note:      note.trim() || undefined,
             });
             toast.success(`Receipt ${data.voucherRef} · ${formatInr(total)} from ${party.name}`);
-            if (printAfter) window.open(`/receipt/payment/${data.voucherId}`, "_blank", "noopener");
+            if (printAfter) window.open(`/receipt/payment/${data.voucherId}?mode=thermal`, "_blank", "noopener");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {

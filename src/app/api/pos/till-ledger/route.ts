@@ -71,8 +71,8 @@ export async function GET(req: NextRequest) {
             const je  = l.universalVoucher;
             const inv = invByUv.get(je.id);
             const printUrl =
-                inv                                                   ? `/receipt/invoice/${inv.id}?kind=POS`
-              : je.type === "RECEIPT" || je.type === "PAYMENT"        ? `/receipt/payment/${je.id}`
+                inv                                                   ? `/receipt/invoice/${inv.id}?kind=POS&mode=thermal`
+              : je.type === "RECEIPT" || je.type === "PAYMENT"        ? `/receipt/payment/${je.id}?mode=thermal`
               :                                                         null;
             return {
                 id:          l.id,

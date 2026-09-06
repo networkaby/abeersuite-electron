@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
+    REPAIR_DOCUMENT_KINDS,
     buildVoucherTemplateDefaults,
     isVoucherTemplateKind,
     isPaperFormat,
@@ -54,11 +55,27 @@ export async function getThermalTemplate(kind: string): Promise<VoucherTemplateD
     return resolveTemplateForFormat(await getVoucherTemplate(kind), "THERMAL_80MM");
 }
 
+// Kinds whose form has NO "Print / Thermal" ticks (repair ticket, slip,
+// labels). Only these still read the template's stored `defaultPaper`.
+const USES_DEFAULT_PAPER: ReadonlySet<string> = new Set(REPAIR_DOCUMENT_KINDS);
+
 /**
- * Decide which paper format to render. URL override wins (so the print
- * button can force one); otherwise use the kind's stored default.
+ * Decide which paper format the format-selection page opens on.
+ *
+ *   1. `?paper=` (the picker / a format switch) always wins.
+ *   2. `?mode=thermal` — the document arrived by the thermal way (a form's
+ *      Thermal tick, the 3-dot "Print (thermal)", a counter fallback) → 80mm.
+ *   3. Repair-family kinds (no ticks on their forms) → the stored default.
+ *   4. Everything else → A4. For those kinds the form's Print / Thermal ticks
+ *      decide per save, so the template's "Default paper" has no say.
  */
-export function resolvePaperFormat(template: VoucherTemplateDefaults, override?: string): PaperFormat {
+export function resolvePaperFormat(
+    template: VoucherTemplateDefaults,
+    override?: string,
+    mode?: string,
+): PaperFormat {
     if (override && isPaperFormat(override)) return override;
-    return template.defaultPaper;
+    if (mode === "thermal") return "THERMAL_80MM";
+    if (USES_DEFAULT_PAPER.has(template.kind)) return template.defaultPaper;
+    return "A4";
 }

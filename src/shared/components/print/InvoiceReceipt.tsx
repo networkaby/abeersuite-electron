@@ -26,12 +26,15 @@ export default async function InvoiceReceipt({
     kindParam = "SALE",
     placeOfSupplyParam = "",
     paper,
+    mode,
     autoprint,
 }: {
     id: string;
     kindParam?: string;
     placeOfSupplyParam?: string;
     paper?: string;
+    /** "thermal" when the document arrived by the thermal way (fires the bridge). */
+    mode?: string;
     autoprint?: string;
 }) {
     // ?kind=POS for counter sales, everything else defaults to SALE.
@@ -117,8 +120,8 @@ export default async function InvoiceReceipt({
         // the "Level Discount (Name)" row.
         prisma.customerTier.findMany({ where: { enabled: true }, select: { name: true, discountPct: true } }),
     ]);
-    // ?paper= override wins; otherwise the kind's stored default.
-    const format = resolvePaperFormat(template, paper);
+    // ?paper= override wins; then ?mode=thermal; otherwise A4.
+    const format = resolvePaperFormat(template, paper, mode);
 
     // Compute CGST/SGST/IGST split for the totals box. Only when a valid
     // place-of-supply was passed; otherwise we render the legacy single
@@ -353,11 +356,11 @@ export default async function InvoiceReceipt({
         hsnSummary:     ladder?.hsn ?? null,
     } : null;
 
-    // Print rule: POS counter slips fire the combined bridge first (browser
-    // fallback), everything else prints in the browser; both offer the A4 /
-    // thermal picker so each format renders its own template. `?autoprint=0`
-    // (set by a format switch) suppresses the auto-fire.
-    const isThermal = format === "THERMAL_80MM";
+    // Print rule (two ways): the thermal way (`?mode=thermal`, POS reprint /
+    // 3-dot "Print (thermal)") fires the bridge once; no printer / bridge down
+    // leaves this page open as the format-selection page. Any other way in is
+    // the selection page from the start. `?autoprint=0` suppresses auto-fire.
+    const isThermal = format === "THERMAL_80MM" && mode === "thermal";
     const autoPrint = autoprint !== "0";
 
     return (
