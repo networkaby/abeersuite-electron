@@ -89,6 +89,13 @@ export function blockEndFor(counterNumber: number): number {
  * PostgreSQL catalogue instead, so a table added tomorrow is covered with nothing to
  * remember. It also steps each sequence past any id already present inside this
  * counter's block, because the pull inserts rows with their ids and Postgres does not
- * advance a sequence for those. BLOCK_SIZE above is repeated as a literal inside that
- * function; keep the two in step.
+ * advance a sequence for those. Inside its own block a sequence never moves backwards;
+ * one found above the block (the counter was renumbered lower, so the old lane now
+ * belongs to whoever takes that number next) is pulled down into the new block.
+ * BLOCK_SIZE above is repeated as a literal inside that function; keep the two in step.
+ *
+ * A change of counterNumber is what moves a counter between blocks, and the PC only
+ * learns of it when it next runs counter setup — so `PATCH /api/pos/counters/[id]`
+ * refuses to renumber a counter that is bound to a device unless the same request
+ * releases the lock, which sends that PC back through setup.
  */

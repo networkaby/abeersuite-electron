@@ -209,9 +209,9 @@ export async function POST(req: NextRequest) {
         const dupName = await prisma.posCounter.findFirst({ where: { branchId, name } });
         if (dupName) return NextResponse.json({ error: `Counter "${name}" already exists in ${branch.name}` }, { status: 409 });
 
-        // counterNumber is GLOBALLY unique (not just per-branch) — it's embedded
-        // directly in the offline-safe numeric PK formula (shared/lib/id/numericId.ts)
-        // for Tickets/PosShifts/UniversalVoucher, so two counters in different
+        // counterNumber is GLOBALLY unique (not just per-branch) — the offline id-range
+        // block a counter PC mints every autoincrement id in is derived from it
+        // (blockStartFor in shared/lib/counter/idRange.ts), so two counters in different
         // branches must never share a number or their offline-minted ids collide.
         // Counter 1 is the OFFICE's numbering slot: a save with no counter (the web
         // app) numbers vouchers as counter 1 (see resolveCounterNumber). A PC on

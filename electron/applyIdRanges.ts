@@ -17,7 +17,9 @@
  * function means the app role needs nothing but EXECUTE.
  *
  * It also discovers the sequence list from the catalogue rather than a hand-kept
- * constant, and never moves a sequence backwards, so calling this repeatedly is safe.
+ * constant, and never moves a sequence backwards inside its own block, so calling this
+ * repeatedly is safe. A sequence found above the block — the counter was renumbered
+ * lower and the old lane is no longer its own — is pulled down into the new block.
  *
  * Never throws — returns `false` on any failure, same contract as
  * `localDbProvisioner.ts`.

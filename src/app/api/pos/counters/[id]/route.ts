@@ -143,11 +143,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (dup) return NextResponse.json({ error: `Counter "${data.name}" already exists in this branch` }, { status: 409 });
         }
 
-        // counterNumber is GLOBALLY unique (not just per-branch) — see the POST
-        // route for why (offline-safe numeric PK formula).
+        // counterNumber is GLOBALLY unique (not just per-branch): the offline id-range
+        // block a counter PC mints its ids in is derived from it (blockStartFor in
+        // shared/lib/counter/idRange.ts), and the per-counter voucher-number series is
+        // keyed by it. Two counters on one number would share both.
         if (data.counterNumber && data.counterNumber !== existing.counterNumber) {
+            // Same rule as POST: number 1 is the office's voucher-series slot.
+            if (data.counterNumber === 1) return NextResponse.json({ error: "Counter number 1 is reserved for the office. Use 2 or higher." }, { status: 422 });
             const dup = await prisma.posCounter.findFirst({ where: { counterNumber: data.counterNumber, NOT: { id } }, select: { name: true, branch: { select: { name: true } } } });
             if (dup) return NextResponse.json({ error: `Counter number ${data.counterNumber} is already used by "${dup.name}" in ${dup.branch.name}` }, { status: 409 });
+            // A PC set up on this counter has its sequences parked in the block of the
+            // OLD number, and its own `_id_ranges` still names that block. Clearing
+            // idRangeStart below never reaches the PC: it keeps minting in the old lane
+            // until it next runs counter setup, and meanwhile the old number is free —
+            // a new counter given it would mint in the same lane, and the push would
+            // overwrite one machine's rows with the other's. So a bound counter is only
+            // renumbered together with a release of its device lock: the released PC is
+            // sent back to /setup/counter, which claims the new range and moves the
+            // sequences into it (`_apply_id_range`).
+            if (existing.boundDeviceId && !data.releaseLock) {
+                return NextResponse.json(
+                    { error: `"${existing.name}" is set up on a PC (${existing.boundDeviceLabel ?? existing.boundDeviceId}). Release its device lock first, then change the number — the PC will run counter setup again and take the new id range.`, code: "BOUND" },
+                    { status: 409 },
+                );
+            }
         }
 
         // Block deactivation while a shift is OPEN or AWAITING_HANDOVER.

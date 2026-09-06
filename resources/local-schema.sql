@@ -5742,10 +5742,13 @@ BEGIN
                        col_name, tbl_name, col_name)
             INTO in_block_max USING p_block_start::bigint, block_end;
 
-        -- Never backwards, never below an id the table already holds.
+        -- Never backwards inside the block, never below an id the table already
+        -- holds. A position ABOVE the block is the old lane of a counter that was
+        -- renumbered lower and is dropped (see the header note); one below it is the
+        -- untouched default or a lower old lane, and GREATEST lifts it to the start.
         new_start := GREATEST(
             p_block_start::bigint,
-            cur_next,
+            CASE WHEN cur_next <= block_end THEN cur_next ELSE 0 END,
             COALESCE(in_block_max, 0) + 1
         );
 

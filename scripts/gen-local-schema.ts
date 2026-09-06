@@ -260,12 +260,23 @@ function outboxTriggers(): string {
  * tables are counter-local bookkeeping (`_outbox`, `_provision`, `_sync_state`) whose
  * ids must stay local and small — they are excluded.
  *
- * ── Why it never moves a sequence backwards ──────────────────────────────────
+ * ── Why it never moves a sequence backwards inside its own block ─────────────
  * A plain `RESTART WITH block_start` is only safe the first time. Re-applying it after
  * the counter has already minted ids inside its block would hand out the same ids a
  * second time — locally-unique, silently duplicated once pushed. Taking the greater of
  * the block start and the sequence's current position makes a re-apply a no-op instead,
  * so the operation is safe to repeat and safe to run on an already-working counter.
+ *
+ * ── Why a sequence found ABOVE the block is pulled down into it ──────────────
+ * A counter renumbered to a LOWER number gets a lower block, and its sequences are
+ * still sitting in the old, higher one. "Never backwards" used to keep them there: the
+ * function only warned "block exhausted" and left the sequence alone, `_id_ranges` was
+ * stamped with the new block anyway, and the PC went on minting ids in a lane that no
+ * longer belonged to it — the moment a new counter took the old number, the two shared
+ * one lane and overwrote each other's rows in cloud. So a position above the block is
+ * not kept: the sequence restarts at the block start, or above whatever this block
+ * already holds (next note). The ids minted in the old lane are not reissued by this —
+ * they live in the old block, not the new one.
  *
  * ── Why it also looks at the rows already in the table ───────────────────────
  * The sync pull inserts rows WITH their id (`INSERT … ON CONFLICT (id)` in
@@ -372,10 +383,13 @@ BEGIN
                        col_name, tbl_name, col_name)
             INTO in_block_max USING p_block_start::bigint, block_end;
 
-        -- Never backwards, never below an id the table already holds.
+        -- Never backwards inside the block, never below an id the table already
+        -- holds. A position ABOVE the block is the old lane of a counter that was
+        -- renumbered lower and is dropped (see the header note); one below it is the
+        -- untouched default or a lower old lane, and GREATEST lifts it to the start.
         new_start := GREATEST(
             p_block_start::bigint,
-            cur_next,
+            CASE WHEN cur_next <= block_end THEN cur_next ELSE 0 END,
             COALESCE(in_block_max, 0) + 1
         );
 

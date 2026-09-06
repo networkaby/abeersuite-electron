@@ -26,12 +26,13 @@ model PosCounter {
   branchId                 String
   branch                   Branch                     @relation("BranchCounters", fields: [branchId], references: [id])
   name                     String // "Counter 1", "Billing Desk", "Service Counter"
-  // GLOBALLY unique (not just per-branch) — embedded directly in the offline-safe
-  // numeric PK formula for Tickets/PosShifts/UniversalVoucher (see
-  // shared/lib/id/numericId.ts). Two branches must never share a counterNumber,
-  // or their offline-minted ids would collide. Enforced at creation (see
-  // /api/pos/counters) AND here at the DB level (@unique, not @@unique with
-  // branchId) so a race can't slip a duplicate through either.
+  // GLOBALLY unique (not just per-branch) — the offline id-range block a counter PC
+  // mints every autoincrement id in is derived from it (blockStartFor in
+  // shared/lib/counter/idRange.ts), and the voucher-number series is keyed by it.
+  // Two branches must never share a counterNumber, or their offline-minted ids would
+  // collide. Enforced at creation and renumber (see /api/pos/counters) AND here at
+  // the DB level (@unique, not @@unique with branchId) so a race can't slip a
+  // duplicate through either.
   counterNumber            Int                        @unique
   tillAccountId            Int                        @unique
   tillAccount              Account                    @relation("CounterTill", fields: [tillAccountId], references: [id])
