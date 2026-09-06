@@ -14,6 +14,15 @@
 !define UPDATER_CACHE_DIR "$LOCALAPPDATA\abeersuite-electron-updater"
 !define PS_EXE "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
 
+; Where this file and its two .ps1 siblings live, at COMPILE time.
+;
+; NOT the __FILEDIR__ macro: electron-builder feeds the whole script to makensis on
+; stdin, so that macro resolves to app-builder-lib's own templates directory and every
+; command below fails with "no files found" — in the uninstaller pass first, because
+; that one is built first. BUILD_RESOURCES_DIR is electron-builder's own define for the
+; buildResources folder (build/), and it is supplied to both passes.
+!define NSH_DIR "${BUILD_RESOURCES_DIR}"
+
 ; ── Saying what is happening ─────────────────────────────────────────────────
 ;
 ; DetailPrint on its own is invisible in this installer, and always has been:
@@ -159,7 +168,7 @@
 ; -CheckOnly first, unelevated: when everything is already in place — which is
 ; every update after the first install — nothing is asked of the counter.
 !macro ensureCounterSetup
-  File "/oname=$PLUGINSDIR\counter-setup.ps1" "${__FILEDIR__}\counter-setup.ps1"
+  File "/oname=$PLUGINSDIR\counter-setup.ps1" "${NSH_DIR}\counter-setup.ps1"
 
   !insertmacro sayStep "Checking Windows Firewall and Defender settings..."
   nsExec::Exec '"${PS_EXE}" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\counter-setup.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}" -CheckOnly'
@@ -189,7 +198,7 @@
 !macroend
 
 !macro customUnInstall
-  File "/oname=$PLUGINSDIR\counter-teardown.ps1" "${__FILEDIR__}\counter-teardown.ps1"
+  File "/oname=$PLUGINSDIR\counter-teardown.ps1" "${NSH_DIR}\counter-teardown.ps1"
 
   !insertmacro sayStep "Removing AbeerSuite's firewall rule and Defender exclusions..."
   ; Elevates because both were added with administrator rights. Declining leaves
