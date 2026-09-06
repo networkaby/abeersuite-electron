@@ -544,9 +544,11 @@
     !insertmacro sayStep "Removing AbeerSuite's firewall rule and Defender exclusions..."
     ; Elevates, because both were added with administrator rights. Declining the prompt
     ; leaves two harmless entries behind rather than blocking the uninstall.
+    ; No Pop after this: ExecShellWait pushes nothing on the stack and has no exit-code
+    ; form at all (unlike nsExec::Exec below). Popping here used to take back the $0 this
+    ; macro saved on entry, print it as an "exit code", and leave the stack one short.
     ExecShellWait "runas" "${PS_EXE}" '${TEARDOWN_ARGS}'
-    Pop $0
-    DetailPrint "Firewall/Defender cleanup finished (exit $0)."
+    DetailPrint "Firewall/Defender cleanup finished."
   ${Else}
     ; Silent, so `runas` must never be reached: it would raise a UAC prompt with nobody
     ; there to answer and ExecShellWait has no timeout.
