@@ -77,7 +77,10 @@
   IntOp $2 $2 * 2
   IntOp $2 $2 + 300
   ${If} $1 < $2
-    MessageBox MB_OK|MB_ICONSTOP "AbeerSuite needs about $2 MB free on drive $0 to install, and only $1 MB is free.$\r$\n$\r$\nIt needs roughly twice its own size because Windows unpacks the app first and then copies it into place.$\r$\n$\r$\nFree up some space and run this setup again."
+    ; /SD IDOK: an auto-update runs this silently. Without a default answer the
+    ; box would hang the update forever; with one it falls straight through to
+    ; the Abort below, so a short-drive counter simply keeps the version it has.
+    MessageBox MB_OK|MB_ICONSTOP /SD IDOK "AbeerSuite needs about $2 MB free on drive $0 to install, and only $1 MB is free.$\r$\n$\r$\nIt needs roughly twice its own size because Windows unpacks the app first and then copies it into place.$\r$\n$\r$\nFree up some space and run this setup again."
     Abort
   ${EndIf}
   Pop $2
@@ -176,6 +179,14 @@
 
   ${If} $0 == 0
     DetailPrint "Firewall rule and Defender exclusions already in place."
+  ${ElseIf} ${Silent}
+    ; An auto-update runs this section with nobody sitting at the counter, and
+    ; ExecShellWait has no timeout - the UAC prompt would wait for a click that
+    ; never comes, behind a blank screen, with the old app already shut down.
+    ; Neither the firewall rule nor the exclusions are needed for AbeerSuite to
+    ; run; they only make it faster. So skip them here and let the next attended
+    ; install put them in.
+    DetailPrint "Silent update - skipping Firewall/Defender setup (needs an administrator)."
   ${Else}
     !insertmacro sayStep "Setting up Windows Firewall and Defender for AbeerSuite..."
     ExecShellWait "runas" "${PS_EXE}" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\counter-setup.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}"'
@@ -200,10 +211,21 @@
 !macro customUnInstall
   File "/oname=$PLUGINSDIR\counter-teardown.ps1" "${NSH_DIR}\counter-teardown.ps1"
 
-  !insertmacro sayStep "Removing AbeerSuite's firewall rule and Defender exclusions..."
-  ; Elevates because both were added with administrator rights. Declining leaves
-  ; two harmless entries behind rather than blocking the uninstall.
-  ExecShellWait "runas" "${PS_EXE}" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\counter-teardown.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}"'
+  ; Check first, exactly as the install side does. Without this every uninstall
+  ; raised a UAC prompt even on a PC that had nothing of ours to take off it.
+  nsExec::Exec '"${PS_EXE}" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\counter-teardown.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}" -CheckOnly'
   Pop $0
-  DetailPrint "Firewall/Defender cleanup finished (exit $0)."
+
+  ${If} $0 == 0
+    DetailPrint "No firewall rule or Defender exclusions to remove."
+  ${ElseIf} ${Silent}
+    DetailPrint "Silent uninstall - leaving firewall rule and Defender exclusions in place."
+  ${Else}
+    !insertmacro sayStep "Removing AbeerSuite's firewall rule and Defender exclusions..."
+    ; Elevates because both were added with administrator rights. Declining leaves
+    ; two harmless entries behind rather than blocking the uninstall.
+    ExecShellWait "runas" "${PS_EXE}" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\counter-teardown.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}"'
+    Pop $0
+    DetailPrint "Firewall/Defender cleanup finished (exit $0)."
+  ${EndIf}
 !macroend
