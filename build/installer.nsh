@@ -77,10 +77,12 @@
   IntOp $2 $2 * 2
   IntOp $2 $2 + 300
   ${If} $1 < $2
-    ; /SD IDOK: an auto-update runs this silently. Without a default answer the
-    ; box would hang the update forever; with one it falls straight through to
-    ; the Abort below, so a short-drive counter simply keeps the version it has.
-    MessageBox MB_OK|MB_ICONSTOP /SD IDOK "AbeerSuite needs about $2 MB free on drive $0 to install, and only $1 MB is free.$\r$\n$\r$\nIt needs roughly twice its own size because Windows unpacks the app first and then copies it into place.$\r$\n$\r$\nFree up some space and run this setup again."
+    ; An auto-update runs this silently, and a MessageBox with no default answer
+    ; would wait for a click that never comes. /SD IDOK gives it one, so a silent
+    ; run falls straight through to the Abort and a short-drive counter simply
+    ; keeps the version it has. NSIS wants /SD after the message text, not before
+    ; it - put it before and makensis reads the text as a jump label and dies.
+    MessageBox MB_OK|MB_ICONSTOP "AbeerSuite needs about $2 MB free on drive $0 to install, and only $1 MB is free.$\r$\n$\r$\nIt needs roughly twice its own size because Windows unpacks the app first and then copies it into place.$\r$\n$\r$\nFree up some space and run this setup again." /SD IDOK
     Abort
   ${EndIf}
   Pop $2
