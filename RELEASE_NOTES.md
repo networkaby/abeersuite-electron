@@ -1,47 +1,47 @@
-# v1.0.2
+# v1.0.3
 
-A setup-and-update release. Nothing about billing, stock, or reports changes — every
-screen works exactly as it did in 1.0.1. What changes is how AbeerSuite installs on a
-counter PC and how it takes its updates afterwards.
+A setup, update and counter-numbering fixes release. Nothing about billing, stock, or
+reports changes. There is no database change in this version, so your office server
+needs nothing done to it before counters take this build — install it when convenient.
 
-There is no database change in this version, so your office server needs nothing done to
-it before counters take this build. Install it when convenient; there is no hurry.
+## Counter numbering
+
+- Fixed a bug that could let two counters mint the same bill/voucher number after a
+  counter's number was changed (renumbered) to a lower value, or after old rows were
+  brought back into a counter's range. This could have caused two different bills to
+  quietly overwrite each other when syncing to the office server.
+- Changing a counter's number is now blocked while that counter's PC is still checked
+  in — it must first be released from `Setup > Counter` before it can be given to a
+  different counter number. This closes the same gap from the other side.
+
+## Uninstalling AbeerSuite from a counter
+
+- Uninstalling now removes the local copy of the shop database and its settings files
+  from the PC. Until this version, uninstalling only removed the program itself and
+  left behind a full copy of your shop's data — about 300 MB, including the database
+  password — sitting unprotected on the machine. This matters most when a counter PC
+  is being retired, sold, or handed to someone else. (Printer, customer-display and
+  slideshow setup is kept, so a reinstall on the same PC does not need it redone.)
+  An update is not affected by this — a counter simply carries on as before.
+- The "start automatically with Windows" entry is now swept properly on uninstall, so
+  a removed counter no longer leaves a dangling startup item behind.
 
 ## Putting AbeerSuite on a counter
 
-- Setup now tells you what it is doing at each step, instead of showing a progress bar
-  that sits still and looks stuck. It opens on a short welcome screen — click Next.
-- Setup now checks the free space on the drive before it starts. AbeerSuite needs about
-  1.9 GB free, because Windows unpacks the app first and then copies it into place. On a
-  counter with a full C: drive, setup now stops and tells you to free some space, instead
-  of failing half way with a message nobody could act on.
-- **A blue Windows permission box may come up during setup.** It says "Windows
-  PowerShell" and does not mention AbeerSuite anywhere — that is normal, and it is not a
-  virus. Click Yes. It is asking permission for the two things below. If somebody clicks
-  No, AbeerSuite still installs and still runs, only slower.
-- AbeerSuite now adds its own Windows Firewall rule properly. Until now that rule was
-  never really being created, so Windows used to pop its own "Allow AbeerSuite to
-  communicate on these networks?" alert the first time the counter started — and on any
-  counter where somebody clicked Cancel, opening that counter from another PC on the shop
-  network quietly stopped working. From this build the rule goes in correctly.
-- AbeerSuite also asks Windows Defender to skip scanning its own program folder and its
-  update folder. This is the main reason installing and updating are now much faster. We
-  are saying it plainly because it is a change to the PC's virus protection. Removing
-  AbeerSuite removes both entries again.
+- After setup finishes, AbeerSuite now starts straight into the tray instead of
+  opening a window — the counter is ready (database up, sync running) with nothing on
+  screen until someone needs it, matching how it behaves every day after.
+- The "start automatically with Windows" setting now keeps re-checking itself every
+  time the app starts, instead of only being set once. If it was ever cleared by a
+  Windows reset, a cleanup tool, or a reinstall, it now puts itself back — unless you
+  had switched it off yourself from AbeerSuite's own tray menu, which is always
+  respected.
+- Fixed a rare cause of setup or a silent update hanging with nothing on screen: if
+  the Visual C++ runtime AbeerSuite depends on was missing or damaged, the check now
+  looks at the actual files instead of just a Windows setting that could be wrong, and
+  a silent background update no longer waits forever for a click that nobody is there
+  to give.
 
 ## Updating a counter
 
-- The update download is smaller than before. A large part of what used to be sent to
-  every counter was never used by it, and that has been taken out of the package.
-- An update never stops to ask for permission. The firewall and Defender settings
-  above need an administrator's "Yes", and there is nobody sitting at the counter when
-  it updates at night — so an update quietly skips them and carries on. That means a
-  counter which reaches this version by updating keeps working exactly as before, but
-  gets the faster install and the firewall rule only the next time somebody installs
-  AbeerSuite on it by hand.
-- **From the next update onwards**, a counter taking an update will show a small
-  "Updating AbeerSuite — please wait" window with a moving bar, and that window closes by
-  itself once the counter comes back up. It cannot show up on this update, because it is
-  the version already running that has to put it on the screen, and 1.0.1 does not know
-  how. So this one update still looks the way updates always looked — the counter goes
-  blank for a few minutes. Please do not switch the PC off during it.
+- No action needed — updates continue to apply automatically as before.
