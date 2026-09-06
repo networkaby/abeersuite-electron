@@ -14,6 +14,31 @@
 !define UPDATER_CACHE_DIR "$LOCALAPPDATA\abeersuite-electron-updater"
 !define PS_EXE "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
 
+; app.getPath("userData") — named from package.json "name", NOT the "AbeerSuite"
+; productName (see the comment above loadEnvFiles in electron/main.ts). Keep the two
+; in step, the same way UPDATER_CACHE_DIR tracks updateManager.ts.
+!define APPDATA_DIR_NAME "abeersuite-electron"
+
+; The one thing an uninstall keeps out of that folder. The counter's hardware is
+; physical and does not change when the app is reinstalled: the thermal printer
+; (thermal.windowsPrinterName), the customer display (qr.comPort + qr.relayPort) and
+; the slideshow folder (qr.idleFolder) all live in this single file, so keeping it
+; saves setting all three up again by hand. Safe to keep on its own —
+; hardwareBridgeManager.ts treats an absent file as a fresh machine and the settings
+; page rewrites it, so nothing depends on the rest of the folder being there.
+; A second file to keep is a one-word edit here plus one line in wipeCounterData.
+!define KEEP_ON_UNINSTALL "hardware-bridge.json"
+
+; Electron writes auto-start as "electron.app.<executable name>" under HKCU Run
+; (app.setLoginItemSettings, see setAutoStart in electron/main.ts). PRODUCT_FILENAME is
+; electron-builder's own define for that name — "AbeerSuite".
+!define AUTOSTART_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
+!define AUTOSTART_REG_VALUE "electron.app.${PRODUCT_FILENAME}"
+
+; One argument list for counter-teardown.ps1, used by all three ways it can be run
+; (check, silent-in-place, attended).
+!define TEARDOWN_ARGS '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\counter-teardown.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}"'
+
 ; Where this file and its two .ps1 siblings live, at COMPILE time.
 ;
 ; NOT the __FILEDIR__ macro: electron-builder feeds the whole script to makensis on
@@ -34,15 +59,23 @@
 ; to it directly — the same SendMessage electron-builder itself uses for
 ; one-click mode. DetailPrint is kept alongside so a silent or logged install
 ; still records the identical line.
+;
+; Only when there is a window to write to. A silent run has no page and $hwndparent is
+; 0, which turns both FindWindow calls into TOP-LEVEL searches for any "#32770" — that
+; is every dialog on the machine, so the SendMessage below could relabel a control in
+; some other program's dialog. Nothing has been seen to go wrong, but silent runs now
+; do real work in the uninstaller, so close it rather than leave it.
 !macro sayStep TEXT
-  Push $R8
-  Push $R9
-  FindWindow $R8 "#32770" "" $hwndparent
-  FindWindow $R8 "#32770" "" $hwndparent $R8
-  GetDlgItem $R9 $R8 1000
-  SendMessage $R9 ${WM_SETTEXT} 0 "STR:${TEXT}"
-  Pop $R9
-  Pop $R8
+  ${IfNot} ${Silent}
+    Push $R8
+    Push $R9
+    FindWindow $R8 "#32770" "" $hwndparent
+    FindWindow $R8 "#32770" "" $hwndparent $R8
+    GetDlgItem $R9 $R8 1000
+    SendMessage $R9 ${WM_SETTEXT} 0 "STR:${TEXT}"
+    Pop $R9
+    Pop $R8
+  ${EndIf}
   DetailPrint "${TEXT}"
 !macroend
 
@@ -278,24 +311,227 @@
   !insertmacro sayStep "Finishing up..."
 !macroend
 
-!macro customUnInstall
+; ══ Taking AbeerSuite off the PC ═════════════════════════════════════════════
+;
+; Until now an uninstall removed the program folder and the shortcuts and stopped
+; there. Three things were always left behind:
+;
+;   %APPDATA%\abeersuite-electron  ~155 MB — pgdata (a full local copy of the shop
+;                                  database, 116 tables, no password on it),
+;                                  sync-config.json with the LIVE database password in
+;                                  plain text, update-config.yml with the GitHub token,
+;                                  the session signing key and the signed-in cookies
+;   %LOCALAPPDATA%\...-updater     ~160 MB — one whole downloaded installer
+;   HKCU ...\Run                   a startup entry pointing at an exe that is gone
+;
+; The credentials are the real problem; the 300 MB is secondary.
+;
+; ── The one rule everything here obeys ───────────────────────────────────────
+; An UPDATE also runs this uninstaller. installUtil.nsh hands the old uninstaller
+; `/S /KEEP_APP_DATA --updated _?=<dir>` purely to clear the program folder before the
+; new version is written into it. Removing any of the three above at that moment would
+; break the version being installed: the replica would be pulled down again over the
+; shop's internet, the staged installer taken from under electron-updater, auto-start
+; lost for good (setAutoStart only re-runs when autostart-initialized.json is missing,
+; and that file survives an update), and the firewall rule the new version wants
+; deleted. So every removal below sits behind $UninstallIsUpdate.
+;
+; The flag is read off the command line rather than through electron-builder's own
+; ${isUpdated}: it is the same `--updated` that installUtil.nsh promises, and reading it
+; here keeps this file standing on its own instead of on an internal define.
+
+; $APPDATA and $LOCALAPPDATA mean the CURRENT user's folders — but an all-users
+; uninstall runs with the shell context set to "all", where the same two variables point
+; at ProgramData and every path below would be wrong. electron-builder's uninstaller.nsh
+; flips the context exactly this way before it touches app data.
+!macro useUserFolders
+  ${If} $installMode == "all"
+    SetShellVarContext current
+  ${EndIf}
+!macroend
+
+!macro restoreFolders
+  ${If} $installMode == "all"
+    SetShellVarContext all
+  ${EndIf}
+!macroend
+
+; ── Stop the embedded PostgreSQL ─────────────────────────────────────────────
+;
+; Runs on the update path too, unlike everything else here: postgres.exe lives in
+; $INSTDIR\resources\pgsql\bin, which is being emptied either way.
+;
+; electron-builder does not reliably stop it. CHECK_APP_RUNNING only reaches postgres.exe
+; on its PowerShell branch, which matches every process whose path is under $INSTDIR;
+; where PowerShell is missing or its execution policy is Restricted it falls back to
+; `taskkill /IM AbeerSuite.exe` and nothing more — and a live postgres.exe then holds
+; files open so `RMDir /r $INSTDIR` leaves half the program folder behind.
+;
+; `pg_ctl stop -m fast` is the same graceful stop the app uses when it quits
+; (stopEmbeddedPostgres in electron/postgresManager.ts): the server closes its files
+; instead of being killed mid-write.
+!macro stopEmbeddedPostgres
+  Push $0
+  Push $1
+
+  !insertmacro useUserFolders
+  StrCpy $1 "$APPDATA\${APPDATA_DIR_NAME}\pgdata"
+  !insertmacro restoreFolders
+
+  ${If} ${FileExists} "$INSTDIR\resources\pgsql\bin\pg_ctl.exe"
+  ${AndIf} ${FileExists} "$1\postmaster.pid"
+    !insertmacro sayStep "Stopping the local database..."
+    nsExec::Exec '"$INSTDIR\resources\pgsql\bin\pg_ctl.exe" stop -D "$1" -m fast -t 20'
+    Pop $0
+    ${If} $0 != 0
+      ; A crashed cluster, a stale postmaster.pid, anything. Kill what is running OUT OF
+      ; $INSTDIR — the same test electron-builder itself uses. Never `taskkill /IM
+      ; postgres.exe`: a shop PC may run an unrelated PostgreSQL and that would stop it.
+      DetailPrint "pg_ctl stop returned $0 - stopping anything still running from the program folder."
+      nsExec::Exec `"${PS_EXE}" -NoProfile -ExecutionPolicy Bypass -C "Get-CimInstance -ClassName Win32_Process | ? { $$_.Path -and $$_.Path.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase') } | % { Stop-Process -Id $$_.ProcessId -Force }"`
+      Pop $0
+    ${EndIf}
+  ${EndIf}
+
+  Pop $1
+  Pop $0
+!macroend
+
+; ── The counter's own folder, minus the keep-list ────────────────────────────
+;
+; Deliberately not electron-builder's `deleteAppDataOnUninstall`: that flag is
+; all-or-nothing and would take the hardware settings with it.
+!macro wipeCounterData
+  Push $0
+  !insertmacro useUserFolders
+
+  ${If} ${FileExists} "$APPDATA\${APPDATA_DIR_NAME}\*.*"
+    !insertmacro sayStep "Removing this counter's data..."
+
+    StrCpy $0 "0"
+    ${If} ${FileExists} "$APPDATA\${APPDATA_DIR_NAME}\${KEEP_ON_UNINSTALL}"
+      CopyFiles /SILENT "$APPDATA\${APPDATA_DIR_NAME}\${KEEP_ON_UNINSTALL}" "$PLUGINSDIR"
+      StrCpy $0 "1"
+    ${EndIf}
+
+    RMDir /r "$APPDATA\${APPDATA_DIR_NAME}"
+
+    ${If} $0 == "1"
+      CreateDirectory "$APPDATA\${APPDATA_DIR_NAME}"
+      CopyFiles /SILENT "$PLUGINSDIR\${KEEP_ON_UNINSTALL}" "$APPDATA\${APPDATA_DIR_NAME}"
+      Delete "$PLUGINSDIR\${KEEP_ON_UNINSTALL}"
+      DetailPrint "Counter data removed, hardware settings kept (${KEEP_ON_UNINSTALL})."
+    ${Else}
+      ; No hardware was ever set up on this PC, so there is nothing to put back and no
+      ; reason to leave an empty folder behind.
+      DetailPrint "Counter data removed."
+    ${EndIf}
+  ${EndIf}
+
+  !insertmacro restoreFolders
+  Pop $0
+!macroend
+
+; ── The updater's staging folder ─────────────────────────────────────────────
+;
+; counter-teardown.ps1 drops the Defender exclusion for this path but has never deleted
+; the folder, and nothing else did either.
+!macro removeUpdaterCache
+  !insertmacro useUserFolders
+  ${If} ${FileExists} "${UPDATER_CACHE_DIR}\*.*"
+    !insertmacro sayStep "Removing the downloaded update files..."
+    RMDir /r "${UPDATER_CACHE_DIR}"
+  ${EndIf}
+  !insertmacro restoreFolders
+!macroend
+
+; ── The auto-start entry ─────────────────────────────────────────────────────
+;
+; The app writes this itself on its first packaged start, not the installer, so
+; electron-builder does not know it exists and its uninstaller never touches it.
+;
+; Reaches only the user running the uninstaller. On an all-users install another Windows
+; user who also ran the app keeps their own copy of this value — there is no clean way
+; to reach it from here, and a Run entry pointing at a missing exe does nothing.
+!macro removeAutoStart
+  DeleteRegValue HKCU "${AUTOSTART_REG_KEY}" "${AUTOSTART_REG_VALUE}"
+!macroend
+
+; ── Firewall rule and Defender exclusions ────────────────────────────────────
+;
+; The mirror of ensureCounterSetup. Both were added with administrator rights, so
+; removing them needs them too.
+!macro removeCounterSetup
+  Push $0
   File "/oname=$PLUGINSDIR\counter-teardown.ps1" "${NSH_DIR}\counter-teardown.ps1"
 
   ; Check first, exactly as the install side does. Without this every uninstall
   ; raised a UAC prompt even on a PC that had nothing of ours to take off it.
-  nsExec::Exec '"${PS_EXE}" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\counter-teardown.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}" -CheckOnly'
+  nsExec::Exec '"${PS_EXE}" ${TEARDOWN_ARGS} -CheckOnly'
   Pop $0
 
   ${If} $0 == 0
     DetailPrint "No firewall rule or Defender exclusions to remove."
-  ${ElseIf} ${Silent}
-    DetailPrint "Silent uninstall - leaving firewall rule and Defender exclusions in place."
-  ${Else}
+  ${ElseIfNot} ${Silent}
     !insertmacro sayStep "Removing AbeerSuite's firewall rule and Defender exclusions..."
-    ; Elevates because both were added with administrator rights. Declining leaves
-    ; two harmless entries behind rather than blocking the uninstall.
-    ExecShellWait "runas" "${PS_EXE}" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\counter-teardown.ps1" -InstallDir "$INSTDIR" -UpdaterCacheDir "${UPDATER_CACHE_DIR}" -FirewallRuleName "${FIREWALL_RULE_NAME}"'
+    ; Elevates, because both were added with administrator rights. Declining the prompt
+    ; leaves two harmless entries behind rather than blocking the uninstall.
+    ExecShellWait "runas" "${PS_EXE}" '${TEARDOWN_ARGS}'
     Pop $0
     DetailPrint "Firewall/Defender cleanup finished (exit $0)."
+  ${Else}
+    ; Silent, so `runas` must never be reached: it would raise a UAC prompt with nobody
+    ; there to answer and ExecShellWait has no timeout.
+    ;
+    ; This used to give up at that point. It no longer does, because a silent uninstall
+    ; is normally ALREADY elevated — an all-users install records
+    ; "...\Uninstall AbeerSuite.exe" /allusers — and then the script needs no prompt at
+    ; all. nsExec runs it in place: it never shows a window and never prompts, so it
+    ; cannot hang, and counter-teardown.ps1 is written to report its problems and still
+    ; exit 0. So when the rights are there the PC gets cleaned, and when they are not the
+    ; attempt costs a logged failure and nothing else — strictly better than skipping.
+    ;
+    ; Not UserInfo::GetAccountType: that answers "is this user an administrator", which is
+    ; still true for an admin running WITHOUT elevation, so it would claim rights we do
+    ; not have. Trying and reading the result is the honest test.
+    nsExec::Exec '"${PS_EXE}" ${TEARDOWN_ARGS}'
+    Pop $0
+    DetailPrint "Silent uninstall - firewall/Defender cleanup attempted in place (exit $0)."
+  ${EndIf}
+
+  Pop $0
+!macroend
+
+!macro customUnInstall
+  ; Declared here, not at file scope: this file is compiled into the installer as well,
+  ; and a variable only the uninstaller uses would draw a "never set" warning out of
+  ; every build. Inside the section is where electron-builder's own uninstaller.nsh
+  ; declares $isDeleteAppData, for the same reason.
+  Var /GLOBAL UninstallIsUpdate
+
+  Push $R0
+  Push $R1
+  ClearErrors
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "--updated" $R1
+  ${If} ${Errors}
+    StrCpy $UninstallIsUpdate "0"
+  ${Else}
+    StrCpy $UninstallIsUpdate "1"
+  ${EndIf}
+  ClearErrors
+  Pop $R1
+  Pop $R0
+
+  ; First either way — it holds files in the folder that is about to be emptied.
+  !insertmacro stopEmbeddedPostgres
+
+  ${If} $UninstallIsUpdate == "1"
+    DetailPrint "Update in progress - keeping the counter's data, the update files, auto-start and the firewall rule."
+  ${Else}
+    !insertmacro wipeCounterData
+    !insertmacro removeUpdaterCache
+    !insertmacro removeAutoStart
+    !insertmacro removeCounterSetup
   ${EndIf}
 !macroend
