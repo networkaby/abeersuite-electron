@@ -219,14 +219,14 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowElevation": true,
       "runAfterFinish": false,
-      "installerHeaderIcon": "build/icon.png",
+      "installerHeaderIcon": "build/icon.ico",
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
