@@ -52,9 +52,10 @@ export type ReceiptVariant = "thermal" | "pdf";
 /**
  * URL to open a voucher's printable receipt — the two print ways:
  *
- *   • `thermal` → `?mode=thermal`: the page fires the bridge once on mount
- *     (silent thermal print). No printer configured / bridge down → the same
- *     page stays open as the format-selection page, nothing auto-prints.
+ *   • `thermal` → `?mode=thermal`: the page fires the bridge once on mount.
+ *     The 3-dot menu no longer opens this (it prints silently through
+ *     `printVoucherThermalSilently` and falls back to the `pdf` page on the
+ *     80mm view); kept for links that want the page-based thermal way.
  *   • `pdf` → `?autoprint=0`: the format-selection page from the start. The
  *     user picks A4 / thermal and the printer in the browser dialog.
  *

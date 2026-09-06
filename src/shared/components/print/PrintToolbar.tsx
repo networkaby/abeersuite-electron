@@ -19,22 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
-import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
-
-/** True when Printer Settings names a printer of any type (LAN ip / COM port /
- *  Windows printer). Blank everywhere → the counter has no thermal printer. */
-async function thermalPrinterConfigured(): Promise<boolean> {
-    try {
-        const cfg = await bridgeRequest<{ connectionType?: string; printerIp?: string; comPort?: string; windowsPrinterName?: string }>("thermal", "config:get", undefined, 1500);
-        switch (cfg?.connectionType) {
-            case "com":     return !!cfg.comPort?.trim();
-            case "windows": return !!cfg.windowsPrinterName?.trim();
-            default:        return !!cfg?.printerIp?.trim();
-        }
-    } catch {
-        return false;
-    }
-}
+import { bridgeOk, bridgeRequest, thermalPrinterConfigured } from "@/shared/lib/bridge/hardwareBridge";
 
 // Self-contained toolbar styling. This bar lives inside a STANDALONE print
 // document (its own <html>, no app chrome / shadcn), so it carries its own
