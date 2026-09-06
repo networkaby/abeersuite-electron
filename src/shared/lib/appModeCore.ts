@@ -96,7 +96,7 @@ export function isSafeLandingPage(value: string): boolean {
 
 /**
  * Resolves the landing page for a given mode + env. Falls back to the per-mode default,
- * silently ignoring (not throwing on) an unsafe override — a bad value in `.env.counter`
+ * silently ignoring (not throwing on) an unsafe override — a bad value in `.env`
  * must not crash the app, it must fail safe to the known-good default.
  */
 export function resolveLandingPage(mode: AppMode, env: NodeJS.ProcessEnv = process.env): string {

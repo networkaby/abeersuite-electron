@@ -102,7 +102,7 @@ Everything else in this document is occasional.
 | Command | What it does |
 | --- | --- |
 | `pnpm build` | `strip-build` → `prisma generate` → `counter-build` (wraps `next build`) |
-| `pnpm electron:build` | Loads `.env.counter`, then runs the whole desktop build chain (see §3) |
+| `pnpm electron:build` | Loads `.env`, then runs the whole desktop build chain (see §3) |
 | `pnpm electron:pack` | `electron:build` → `electron-builder --dir` → `verify:package` — unpacked folder, no installer |
 | `pnpm electron:dist` | `electron:build` → `electron-builder` → `verify:package` — makes the real installer |
 | `pnpm electron:release` | `electron:pack` → `release-electron.ts` — publishes the **already verified** tree to GitHub |
@@ -170,7 +170,7 @@ These are the ones people trip over, because one word hides six steps.
 3. `scripts/counter-build.ts` — renames desktop-useless routes out of `src/app` for the duration of `next build`, then restores them in a `finally`.
 
 ### `pnpm electron:build`
-Loads `.env.counter` **first** (this is what decides `APP_MODE` and `LANDING_PAGE`), warns if `resources/pgsql` is missing, then:
+Loads `.env` **first** (this is what decides `APP_MODE` and `LANDING_PAGE`), warns if `resources/pgsql` is missing, then:
 1. `pnpm build` (the three steps above)
 2. `scripts/prepare-standalone.ts`
 3. `scripts/generate-counter-env.ts` → writes `resources/counter.env`
@@ -271,7 +271,9 @@ Rewrite `RELEASE_NOTES.md` for this version. The first line decides how counters
 
 **Step 7 — pick the variant**
 
-`.env.counter` decides `APP_MODE` and `LANDING_PAGE`. Set it before building — it is read at the top of `electron:build` and nowhere later.
+`.env` decides `APP_MODE` and `LANDING_PAGE`. Set them there before building — the file is read at the top of `electron:build` and nowhere later.
+
+`.env.local` is deliberately **not** loaded, and that is a safety property rather than an oversight: every build step is spawned with a copy of this environment, and `generate-counter-env.ts` falls back to `process.env` for any key `.env` does not supply, so anything loaded here can be baked into the installer. `.env.local` holds web-version dev overrides — a `READ_MODE` or `DATABASE_URL` uncommented for an afternoon's web work would otherwise decide what ships to every counter. See the comment at the top of `scripts/electron-build.ts`.
 
 **Step 8 — build and gate**
 

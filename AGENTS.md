@@ -70,6 +70,6 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 8. `git checkout dev && git merge --ff-only main && git push origin dev`.
 9. Report: both remotes level, and installer + blockmap + `latest.yml` + notes present on every release repo.
 
-**Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier, the smoke test (you cannot run the packaged exe), the `.env.counter` variant (`APP_MODE`, `LANDING_PAGE`), a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
+**Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier, the smoke test (you cannot run the packaged exe), the `.env` variant (`APP_MODE`, `LANDING_PAGE`), a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
 
 **Stop and ask** on a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).
