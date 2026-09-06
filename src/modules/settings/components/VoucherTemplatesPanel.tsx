@@ -17,6 +17,8 @@ import { RepairTicketBody } from "@/shared/components/print/RepairTicketBody";
 import { ShippingSlipBody } from "@/shared/components/print/ShippingSlipBody";
 import ShippingLabel from "@/shared/components/print/ShippingLabel";
 import OrderParcelLabel from "@/shared/components/print/OrderParcelLabel";
+import CouponCard from "@/shared/components/print/CouponCard";
+import GiftCardCard from "@/shared/components/print/GiftCardCard";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     resolveTemplateForFormat,
@@ -34,6 +36,8 @@ import {
     SAMPLE_SHIPPING_SLIP,
     SAMPLE_SHIPPING_LABEL,
     SAMPLE_PARCEL_LABEL,
+    SAMPLE_COUPON_CARD,
+    SAMPLE_GIFT_CARD,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
@@ -117,7 +121,12 @@ const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: Bool
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
     "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
 ]);
-const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL"]);
+const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD"]);
+// The cards read only logo / brand / phone (foot) — the rest of the chrome has no place on them.
+const CARD_KINDS = new Set<VoucherTemplateKind>(["COUPON", "GIFT_CARD"]);
+const CARD_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
+    "showAddress", "showGstin", "showSignature", "showBank", "showPartyBalance",
+]);
 
 export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props) {
     const byKind = useMemo(() => {
@@ -196,6 +205,8 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const isLabel = selectedKind === "SERVICE_SHIPPING_LABEL";
     // The parcel label (order shipped by our own courier) — also standalone.
     const isParcelLabel = selectedKind === "DELIVERY_SHIPPING_LABEL";
+    // Coupon / gift card — a fixed card face, previewed standalone too.
+    const isCard = CARD_KINDS.has(selectedKind);
     // Same sender / footer derivation the label pages use, so the preview IS
     // the print. The Fields toggles come straight off the merged template.
     const parcelLabelData = { ...SAMPLE_PARCEL_LABEL,   from: labelSender(mergedPreview), footer: labelFooter(mergedPreview) };
@@ -210,6 +221,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         // order, courier and payment always print) — no inert rows.
         if (isParcelLabel) return [];
         const hidden = new Set(BESPOKE_HIDDEN_ELEMENTS);
+        if (isCard) for (const k of CARD_HIDDEN_ELEMENTS) hidden.add(k);
         // The slip has its own Sent/Received/Prepared toggles, so drop the
         // generic Signature row for it (it never drove the slip anyway).
         if (isSlip) hidden.add("showSignature");
@@ -302,6 +314,15 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                 <KindGroup
                     title="Repair"
                     kinds={VOUCHER_TEMPLATE_KIND_GROUPS.repair}
+                    selected={selectedKind}
+                    onSelect={setSelectedKind}
+                    workingMap={working}
+                    savedMap={saved}
+                />
+                <div className="my-2 border-t" />
+                <KindGroup
+                    title="Marketing"
+                    kinds={VOUCHER_TEMPLATE_KIND_GROUPS.marketing}
                     selected={selectedKind}
                     onSelect={setSelectedKind}
                     workingMap={working}
@@ -542,9 +563,9 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                         )}
                     </fieldset>
 
-                    {/* Paper — irrelevant for the label: it picks its own A4/A5/A6
-                        (and qty) on the print page, and has no thermal mode yet. */}
-                    {!isLabel && (
+                    {/* Paper — irrelevant for the label (it picks its own A4/A5/A6
+                        and qty on the print page) and for the cards (fixed face). */}
+                    {!isLabel && !isCard && (
                     <fieldset className="space-y-2.5">
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Paper
@@ -622,7 +643,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             )}
                             {/* The parcel label previews its 4×6 face only (its A4/roll
                                 variants share the same face). */}
-                            {!isLabel && !isParcelLabel && (
+                            {!isLabel && !isParcelLabel && !isCard && (
                                 <div className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-xs">
                                     <PreviewToggle
                                         label="As default"
@@ -653,7 +674,13 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                             </Button>
                         </div>
                     </div>
-                    {isParcelLabel ? (
+                    {isCard ? (
+                        <div className="flex justify-center rounded-md bg-muted/20 p-4">
+                            {selectedKind === "COUPON"
+                                ? <CouponCard template={mergedPreview} data={SAMPLE_COUPON_CARD} />
+                                : <GiftCardCard template={mergedPreview} data={SAMPLE_GIFT_CARD} />}
+                        </div>
+                    ) : isParcelLabel ? (
                         <div className="flex justify-center rounded-md bg-muted/20 p-4">
                             <OrderParcelLabel data={parcelLabelData} previewMode />
                         </div>

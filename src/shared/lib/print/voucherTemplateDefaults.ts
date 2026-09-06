@@ -78,10 +78,19 @@ export const REPAIR_DOCUMENT_KINDS = [
     "DELIVERY_SHIPPING_LABEL",
 ] as const;
 
+// Marketing cards — the printable coupon and gift card. Not vouchers: a QR +
+// code card with its own face (CouponCard / GiftCardCard), but the brand line,
+// small label, terms and foot come from the same per-kind template registry.
+export const MARKETING_DOCUMENT_KINDS = [
+    "COUPON",
+    "GIFT_CARD",
+] as const;
+
 export const VOUCHER_TEMPLATE_KINDS = [
     ...ACCOUNTING_VOUCHER_KINDS,
     ...INVENTORY_VOUCHER_KINDS,
     ...REPAIR_DOCUMENT_KINDS,
+    ...MARKETING_DOCUMENT_KINDS,
 ] as const;
 
 export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
@@ -90,6 +99,7 @@ export const VOUCHER_TEMPLATE_KIND_GROUPS = {
     accounting: ACCOUNTING_VOUCHER_KINDS,
     inventory: INVENTORY_VOUCHER_KINDS,
     repair: REPAIR_DOCUMENT_KINDS,
+    marketing: MARKETING_DOCUMENT_KINDS,
 } as const;
 
 // Human-readable per-kind sub-titles that go into headerLine2 by default.
@@ -127,6 +137,8 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     SHIPPING_SLIP: "Service Slip / Delivery Challan",
     SERVICE_SHIPPING_LABEL: "Service Shipping Label",
     DELIVERY_SHIPPING_LABEL: "Parcel Shipping Label",
+    COUPON: "Coupon",
+    GIFT_CARD: "Gift Card",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -146,6 +158,8 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     "SHIPPING_SLIP",
     "SERVICE_SHIPPING_LABEL",
     "DELIVERY_SHIPPING_LABEL",
+    "COUPON",
+    "GIFT_CARD",
 ]);
 
 // Repair-shop documents that show customer + staff signature lines by default.
@@ -257,6 +271,9 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     // The parcel label's real sizes (4×6 roll / A4 2-up / 80mm strip) live on its
     // own print page; this default only satisfies the shared registry.
     DELIVERY_SHIPPING_LABEL: "A4",
+    // Cards print as a fixed 360px face in the browser; A4 only satisfies the registry.
+    COUPON: "A4",
+    GIFT_CARD: "A4",
 };
 
 // Per-kind default for the voucher form's "Print after save" toggle
@@ -299,6 +316,8 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     SHIPPING_SLIP: false,
     SERVICE_SHIPPING_LABEL: false,
     DELIVERY_SHIPPING_LABEL: false,
+    COUPON:                false,
+    GIFT_CARD:             false,
 };
 
 /** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
@@ -345,6 +364,8 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     SHIPPING_SLIP:         false,
     SERVICE_SHIPPING_LABEL: false,
     DELIVERY_SHIPPING_LABEL: false,
+    COUPON:                false,
+    GIFT_CARD:             false,
 };
 
 /** Initial "Thermal" toggle state for a voucher kind (false → browser print). */
