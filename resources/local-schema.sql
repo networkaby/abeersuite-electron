@@ -5701,24 +5701,32 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-    seq_name  text;
-    cur_last  bigint;
+    seq_name   text;
+    tbl_name   text;
+    col_name   text;
+    block_end  bigint;
+    cur_last   bigint;
     cur_called boolean;
-    new_start bigint;
-    altered   integer := 0;
+    cur_next   bigint;
+    in_block_max bigint;
+    new_start  bigint;
+    altered    integer := 0;
 BEGIN
     IF p_block_start IS NULL OR p_block_start < 1 THEN
         RAISE EXCEPTION 'block start must be a positive integer, got %', p_block_start;
     END IF;
+    -- BLOCK_SIZE in src/shared/lib/counter/idRange.ts; keep in step.
+    block_end := p_block_start::bigint + 10000000 - 1;
 
-    FOR seq_name IN
-        SELECT s.oid::regclass::text
+    FOR seq_name, tbl_name, col_name IN
+        SELECT s.oid::regclass::text, t.oid::regclass::text, a.attname
         FROM pg_class s
         JOIN pg_depend d
           ON d.objid = s.oid
          AND d.classid = 'pg_class'::regclass
          AND d.deptype = 'a'
         JOIN pg_class t ON t.oid = d.refobjid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
         JOIN pg_namespace n ON n.oid = s.relnamespace
         WHERE s.relkind = 'S'
           AND n.nspname = 'public'
@@ -5726,15 +5734,30 @@ BEGIN
     LOOP
         EXECUTE format('SELECT last_value, is_called FROM %s', seq_name)
             INTO cur_last, cur_called;
+        cur_next := CASE WHEN cur_called THEN cur_last + 1 ELSE cur_last END;
 
-        -- Never backwards: see the header note on re-application.
+        -- Rows already in this counter's block (pulled back after a reinstall).
+        -- Rows outside it belong to cloud or another counter and must not count.
+        EXECUTE format('SELECT max(%I) FROM %s WHERE %I BETWEEN $1 AND $2',
+                       col_name, tbl_name, col_name)
+            INTO in_block_max USING p_block_start::bigint, block_end;
+
+        -- Never backwards, never below an id the table already holds.
         new_start := GREATEST(
             p_block_start::bigint,
-            CASE WHEN cur_called THEN cur_last + 1 ELSE cur_last END
+            cur_next,
+            COALESCE(in_block_max, 0) + 1
         );
 
-        EXECUTE format('ALTER SEQUENCE %s RESTART WITH %s', seq_name, new_start);
-        altered := altered + 1;
+        IF new_start > block_end THEN
+            RAISE WARNING 'id block exhausted for % (next % is past %)', tbl_name, new_start, block_end;
+            CONTINUE;
+        END IF;
+
+        IF new_start <> cur_next THEN
+            EXECUTE format('ALTER SEQUENCE %s RESTART WITH %s', seq_name, new_start);
+            altered := altered + 1;
+        END IF;
     END LOOP;
 
     INSERT INTO "_id_ranges" (only_row, block_start)

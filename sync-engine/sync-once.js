@@ -430,6 +430,30 @@ async function main() {
             }
         }
 
+        // ---- Pass 5: step the id sequences over the rows this cycle pulled ----
+        //
+        // Pulled rows arrive WITH their id, and Postgres does not advance a sequence
+        // for an id supplied by hand. After a reinstall the pull brings this counter's
+        // own earlier rows back into its block while every sequence still sits at the
+        // block start — the next local insert then fails on the id unique constraint.
+        // `_apply_id_range` (resources/local-schema.sql) restarts each sequence above
+        // the highest id already present inside this counter's block, and only that
+        // block, so it can never wander into another counter's range. No-op when
+        // nothing needs moving; skipped on a replica that has no range yet.
+        if (!DRY) {
+            try {
+                const { rows } = await local.query(`SELECT block_start FROM "_id_ranges" LIMIT 1`);
+                const blockStart = rows[0]?.block_start;
+                if (blockStart != null) {
+                    const { rows: r } = await local.query(`SELECT _apply_id_range($1) AS moved`, [blockStart]);
+                    if (r[0]?.moved > 0) console.log(`  id ranges                    stepped ${r[0].moved} sequence(s) past pulled rows`);
+                }
+            } catch (e) {
+                failed++;
+                console.error(`  id ranges                    APPLY FAILED: ${e.message}`);
+            }
+        }
+
         // ---- Publish readiness ------------------------------------------------
         if (!DRY) {
             const after = await state.readAll(local);

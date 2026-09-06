@@ -44,7 +44,7 @@ export async function applyIdRanges(localUrl: string, blockStart: number): Promi
         );
         const altered = rows[0]?.altered ?? 0;
 
-        console.log(`[IdRanges] blockStart ${blockStart} applied across ${altered} sequences.`);
+        console.log(`[IdRanges] blockStart ${blockStart} applied; ${altered} sequence(s) moved.`);
         return true;
     } catch (err) {
         console.error("[IdRanges] Failed to apply id ranges:", err);

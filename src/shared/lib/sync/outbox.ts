@@ -22,10 +22,10 @@ const { Client: PgClient } = require("pg") as typeof import("pg");
  * (`prismaClient.ts`, which enqueues) and `/api/sync/push` (which replays) — a
  * model missing from here is a model the outbox pipeline does not know about.
  *
- * 7 are id-range-protected (`OFFLINE_SEQUENCE_MAP` in `idRange.ts`); PosShift/
- * PosCashDrop/PosExpenditure/PosReceipt are also autoincrement and protected the
- * same way; TicketRepair/TicketHelp/TicketDeal share their parent Ticket's id
- * (no separate sequence, so no collision risk of their own).
+ * Every autoincrement model here is id-range-protected — `_apply_id_range()` finds
+ * them all from the catalogue (see `idRange.ts`). TicketRepair/TicketHelp/TicketDeal
+ * share their parent Ticket's id (no separate sequence, so no collision risk of
+ * their own).
  */
 export const OUTBOX_MODEL_DELEGATES: Record<string, string> = {
     UniversalVoucher: "universalVoucher",

@@ -275,6 +275,34 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<Provisio
         // `_apply_id_range` is SECURITY DEFINER and owned by postgres, so EXECUTE on it
         // is the whole grant — see the note in scripts/gen-local-schema.ts.
         await client.query(`GRANT EXECUTE ON FUNCTION _apply_id_range(integer) TO ${APP_ROLE}`);
+        // The sync worker calls it after every pull cycle (sync-once.js, pass 5).
+        await client.query(`GRANT EXECUTE ON FUNCTION _apply_id_range(integer) TO ${SYNC_ROLE}`);
+
+        // A replica that already has a range re-applies it at every boot. Sequences are
+        // only ever moved forward, and only past rows inside this counter's own block,
+        // so this is a no-op on a healthy counter and the repair on one that was
+        // reinstalled and then pulled its own earlier rows back down (the
+        // "Unique constraint failed on (id)" error seen on counter 93, 2026-09-06).
+        // Running here means a machine heals the moment the new version starts, without
+        // waiting for the next shift open or sync tick.
+        try {
+            const { rows: range } = await client.query<{ block_start: number }>(
+                `SELECT block_start FROM "_id_ranges" LIMIT 1`,
+            );
+            const blockStart = range[0]?.block_start;
+            if (blockStart != null) {
+                const { rows: r } = await client.query<{ moved: number }>(
+                    `SELECT _apply_id_range($1) AS moved`, [blockStart],
+                );
+                if ((r[0]?.moved ?? 0) > 0) {
+                    console.log(`[Provisioner] Stepped ${r[0].moved} sequence(s) past rows already in this counter's block.`);
+                }
+            }
+        } catch (err) {
+            // Not fatal: the shift-open path and the sync worker apply it again.
+            console.warn("[Provisioner] Could not re-apply the id range at boot:",
+                err instanceof Error ? err.message : err);
+        }
 
         // The sync engine creates _sync_state itself and suspends foreign keys per
         // transaction while replaying a table. The app role is deliberately NOT given

@@ -84,24 +84,11 @@ export function blockEndFor(counterNumber: number): number {
  * id, so a colliding row overwrites an unrelated cloud record.
  *
  * `_apply_id_range()` (defined in `resources/local-schema.sql`, called by
- * `electron/applyIdRanges.ts`) reads the sequences out of the PostgreSQL catalogue
- * instead, so a table added tomorrow is covered with nothing to remember.
+ * `electron/applyIdRanges.ts`, `electron/localDbProvisioner.ts` at boot, and
+ * `sync-engine/sync-once.js` after every pull) reads the sequences out of the
+ * PostgreSQL catalogue instead, so a table added tomorrow is covered with nothing to
+ * remember. It also steps each sequence past any id already present inside this
+ * counter's block, because the pull inserts rows with their ids and Postgres does not
+ * advance a sequence for those. BLOCK_SIZE above is repeated as a literal inside that
+ * function; keep the two in step.
  */
-
-/**
- * Maps a Prisma model name to its PostgreSQL sequence name.
- * Only models with `@default(autoincrement())` are listed.
- */
-export const OFFLINE_SEQUENCE_MAP: Record<string, string> = {
-    UniversalVoucher: "universal_vouchers_id_seq",
-    VoucherDetail: "voucher_details_id_seq",
-    VoucherGlLine: "voucher_gl_lines_id_seq",
-    VoucherInventoryLine: "voucher_inventory_lines_id_seq",
-    VoucherLink: "voucher_links_id_seq",
-    Ticket: "tickets_id_seq",
-    TicketLog: "ticket_logs_id_seq",
-    PosShift: "pos_shifts_id_seq",
-    PosCashDrop: "pos_cash_drops_id_seq",
-    PosExpenditure: "pos_expenditures_id_seq",
-    PosReceipt: "pos_receipts_id_seq",
-};
