@@ -530,7 +530,39 @@ namespace AbeerSuite.Downloader
         private const string VcRedistKey = @"SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64";
         private const int VcRedistMinMinor = 20; // 14.20 = VS2019, the bundled PostgreSQL's floor
 
-        private static bool VcRuntimePresent()
+        // The DLLs initdb actually loads. Checked BY FILE as well as by registry key,
+        // because the two can disagree: a bad uninstall, a cleanup tool or a failed
+        // repair can leave "Installed=1" behind with the files gone. Trusting the key
+        // alone then skips the download and PostgreSQL still dies with 0xC0000135 -
+        // the exact symptom this audit exists to prevent.
+        private static readonly string[] VcRuntimeDlls = { "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll" };
+
+        // A 32-bit process on 64-bit Windows has System32 redirected to SysWOW64, which
+        // holds the x86 runtime. The x64 DLLs live in the REAL System32, reachable only
+        // through the Sysnative alias. This build is /platform:anycpu so it is normally
+        // already 64-bit, but the alias costs nothing and removes the assumption.
+        private static string System32Dir()
+        {
+            if (Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess)
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Sysnative");
+            return Environment.SystemDirectory;
+        }
+
+        private static bool VcRuntimeFilesPresent()
+        {
+            try
+            {
+                string dir = System32Dir();
+                foreach (string dll in VcRuntimeDlls)
+                {
+                    if (!File.Exists(Path.Combine(dir, dll))) return false;
+                }
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private static bool VcRuntimeRegistered()
         {
             try
             {
@@ -545,6 +577,14 @@ namespace AbeerSuite.Downloader
                 }
             }
             catch { return false; }
+        }
+
+        // Both must hold. Either one failing means download and install - the
+        // redistributable is idempotent and exits 1638 if a newer one is already there,
+        // so a needless run is cheap and a skipped one is a dead counter.
+        private static bool VcRuntimePresent()
+        {
+            return VcRuntimeRegistered() && VcRuntimeFilesPresent();
         }
 
         private void EnsureVcRuntime()

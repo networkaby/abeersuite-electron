@@ -127,10 +127,30 @@
   ReadRegDWORD $1 HKLM "${VCREDIST_KEY}" "Major"
   ReadRegDWORD $2 HKLM "${VCREDIST_KEY}" "Minor"
   SetRegView lastused
+
+  ; The registry key and the actual DLLs can disagree. A bad uninstall, a cleanup
+  ; tool or a failed repair leaves "Installed=1" behind with the files gone - and
+  ; then this audit skips the download while initdb still dies with 0xC0000135,
+  ; which is the exact failure it exists to prevent. So check both.
+  ;
+  ; NSIS runs 32-bit, so $SYSDIR is redirected to SysWOW64, which holds the x86
+  ; runtime. The x64 DLLs initdb needs are in the REAL System32 - only visible with
+  ; redirection off. Without this the check would look in the wrong folder and
+  ; report the runtime missing on every machine.
+  StrCpy $3 "0"
+  ${DisableX64FSRedirection}
+  ${If} ${FileExists} "$SYSDIR\vcruntime140.dll"
+  ${AndIf} ${FileExists} "$SYSDIR\vcruntime140_1.dll"
+  ${AndIf} ${FileExists} "$SYSDIR\msvcp140.dll"
+    StrCpy $3 "1"
+  ${EndIf}
+  ${EnableX64FSRedirection}
+
   ${If} $0 == 1
   ${AndIf} $1 >= 14
   ${AndIf} $2 >= ${VCREDIST_MIN_MINOR}
-    DetailPrint "Visual C++ runtime $1.$2 already installed — skipping."
+  ${AndIf} $3 == "1"
+    DetailPrint "Visual C++ runtime $1.$2 present, and its DLLs are in System32 — skipping."
   ${ElseIf} ${Silent}
     ; An auto-update runs silently, with NO window on screen. Every call below can
     ; block on a click nobody is there to give: inetc's own progress dialog, the UAC
