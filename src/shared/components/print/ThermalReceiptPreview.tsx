@@ -231,7 +231,18 @@ function inlineStyleFromTemplate(t: VoucherTemplateDefaults, scope: string): str
         ${s}.barcode { max-width: 100%; height: auto; margin-inline: auto; }
         @media print {
             ${s}.no-print { display: none !important; }
-        }
+${scope ? "" : `
+            /* The page box MUST be declared, or the Windows driver falls back to
+               its own default (A4/Letter). The receipt then centres itself inside
+               that A4 width — leaving the left of an 80mm roll blank and pushing
+               the body off the right edge. Same rule the shipping label already
+               carries. @page is global, so it is only emitted in standalone
+               document mode (scope === ""), never into the settings preview. */
+            @page { size: ${t.paperWidthMm}mm auto; margin: 2mm; }
+            body { padding: 0; }
+            /* On paper the roll IS the width — no centring, no max-width. */
+            .receipt { max-width: none; width: 100%; margin: 0; }
+`}        }
     `;
 }
 

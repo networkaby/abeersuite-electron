@@ -109,9 +109,20 @@ export default function PrintToolbar({
         }
     };
 
-    // Thermal path: try Electron native silent print first, then bridge relay, then browser fallback.
+    // Thermal path: bridge relay FIRST, then Electron native silent print, then
+    // the browser dialog.
+    //
+    // Order matters. The bridge sends real ESC-POS text straight to the printer
+    // (LAN :9100 / COM / Windows spooler), so it is sharp and can never be
+    // mis-sized. Electron's silent print goes through the Windows driver as a
+    // rasterised picture — acceptable as a backup, but it was previously tried
+    // first and always succeeded, which silently killed the good LAN path.
     const runThermal = async () => {
         setStatus("trying");
+        if (await sendToRelay()) {
+            setStatus("thermal");
+            return;
+        }
         if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
             try {
                 const printed = await window.electronAPI.printSilent();
@@ -123,12 +134,8 @@ export default function PrintToolbar({
                 console.warn("[PrintToolbar] Electron silent print failed, falling back:", err);
             }
         }
-        if (await sendToRelay()) {
-            setStatus("thermal");
-        } else {
-            setStatus("browser");
-            window.print();
-        }
+        setStatus("browser");
+        window.print();
     };
 
     useEffect(() => {

@@ -9,7 +9,7 @@ export interface ElectronAPI {
     isElectron: true;
     getCounterId: () => Promise<string>;
     getPrinters: () => Promise<Array<{ name: string; isDefault: boolean; displayName?: string }>>;
-    printSilent: (options?: { printerName?: string }) => Promise<boolean>;
+    printSilent: (options?: { printerName?: string; widthMm?: number }) => Promise<boolean>;
     windowControl: (action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => Promise<void>;
     /**
      * Native folder picker. Opens at `defaultPath`, or at this PC's Pictures folder

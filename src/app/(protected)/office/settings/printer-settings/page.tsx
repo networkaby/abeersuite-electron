@@ -213,13 +213,10 @@ export default function PrinterSettingsPage() {
     const handleTest = async () => {
         setTesting(true);
         try {
-            if (typeof window !== "undefined" && window.electronAPI?.printSilent) {
-                const ok = await window.electronAPI.printSilent({ printerName: config.windowsPrinterName });
-                if (ok) {
-                    toast.success("Test printed via Electron native driver");
-                    return;
-                }
-            }
+            // Always test through the bridge. The Electron path used to run first,
+            // but `printSilent` prints the CURRENT PAGE — so it printed this
+            // settings screen and reported success, and the real ESC-POS test
+            // below never ran on the desktop app.
             await bridgeRequest("thermal", "print", {
                 reference: "TEST-001",
                 date: new Date().toISOString(),
