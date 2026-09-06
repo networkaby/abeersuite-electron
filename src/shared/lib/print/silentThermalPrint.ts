@@ -1,7 +1,7 @@
 "use client";
 
 import { bridgeOk, bridgeRequest, thermalPrinterConfigured } from "@/shared/lib/bridge/hardwareBridge";
-import type { VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
+import { voucherPrintPageHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 
 /**
  * Silent thermal print of a Day-Book voucher — the way a POS sale prints:
@@ -24,4 +24,17 @@ export async function printVoucherThermalSilently(source: VoucherSource, rawId: 
     } catch {
         return false;
     }
+}
+
+/**
+ * "Print after save" for the voucher forms, per the form's Thermal tick:
+ *   • Thermal ON  → silent thermal print, like a POS sale (no tab). Only when
+ *     the counter cannot print silently does the format-selection page open,
+ *     on the 80mm view.
+ *   • Thermal OFF → the format-selection page (browser print dialog).
+ */
+export async function printVoucherAfterSave(source: VoucherSource, rawId: number, opts: { thermal: boolean }): Promise<void> {
+    if (opts.thermal && await printVoucherThermalSilently(source, rawId)) return;
+    const url = voucherPrintPageHref(source, rawId) + (opts.thermal ? "&paper=THERMAL_80MM" : "");
+    window.open(url, "_blank", "noopener");
 }

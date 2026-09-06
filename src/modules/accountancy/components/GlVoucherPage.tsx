@@ -31,7 +31,7 @@ import {
     isBankLikeGroupName,
     MONEY_ACCOUNT_PLACEHOLDER,
 } from "@/modules/accountancy/lib/moneyAccount";
-import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
@@ -686,10 +686,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
         return Object.keys(notes).length || cheques.length ? { notes, cheques } : null;
     };
 
-    // Open the saved voucher's print page in a new tab — thermal auto-fire (like
-    // POS) or the browser print page, per the Thermal toggle.
+    // Print after save per the Thermal toggle — silent thermal print (like POS),
+    // else the format-selection page. See printVoucherAfterSave.
     const openReceipt = (id: number) =>
-        window.open(voucherPrintPageHref("gl", id, { thermal }), "_blank", "noopener");
+        void printVoucherAfterSave("gl", id, { thermal });
 
     const submit = async (postAfterSave: boolean, print = false) => {
         if (!chequesComplete) {
