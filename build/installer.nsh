@@ -32,7 +32,15 @@
 ; Electron writes auto-start as "electron.app.<executable name>" under HKCU Run
 ; (app.setLoginItemSettings, see setAutoStart in electron/main.ts). PRODUCT_FILENAME is
 ; electron-builder's own define for that name — "AbeerSuite".
+;
+; Windows keeps a SECOND record next door, under StartupApproved\Run, whenever somebody
+; switches a startup item off in Task Manager. Left behind it would pre-disable the
+; entry if the app were ever installed on this PC again, so it goes too.
+;
+; Neither key is subject to WOW64 registry redirection, so the 32-bit uninstaller reads
+; and writes exactly the values the 64-bit app wrote.
 !define AUTOSTART_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
+!define AUTOSTART_APPROVED_KEY "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
 !define AUTOSTART_REG_VALUE "electron.app.${PRODUCT_FILENAME}"
 
 ; One argument list for counter-teardown.ps1, used by all three ways it can be run
@@ -330,11 +338,18 @@
 ; An UPDATE also runs this uninstaller. installUtil.nsh hands the old uninstaller
 ; `/S /KEEP_APP_DATA --updated _?=<dir>` purely to clear the program folder before the
 ; new version is written into it. Removing any of the three above at that moment would
-; break the version being installed: the replica would be pulled down again over the
-; shop's internet, the staged installer taken from under electron-updater, auto-start
-; lost for good (setAutoStart only re-runs when autostart-initialized.json is missing,
-; and that file survives an update), and the firewall rule the new version wants
-; deleted. So every removal below sits behind $UninstallIsUpdate.
+; break the version being installed: the replica pulled down again over the shop's
+; internet, the staged installer taken from under electron-updater, the firewall rule the
+; new version wants deleted, and the counter's whole settings folder emptied — including
+; `autostart.json`, which is now where the auto-start preference itself lives. So every
+; removal below sits behind $UninstallIsUpdate.
+;
+; Auto-start is the one that would NOT be permanent, and only since 2026-09-06: the app
+; re-asserts the Run entry on every start when the preference says on
+; (ensureAutoStartMatchesPreference in electron/main.ts, which replaced the old one-shot
+; marker). Removing it mid-update would still be wrong — the counter would not come back
+; up if it were rebooted before the next start, and the preference file that drives the
+; repair is in the same folder — but it would no longer be lost for good.
 ;
 ; The flag is read off the command line rather than through electron-builder's own
 ; ${isUpdated}: it is the same `--updated` that installUtil.nsh promises, and reading it
@@ -447,14 +462,67 @@
 
 ; ── The auto-start entry ─────────────────────────────────────────────────────
 ;
-; The app writes this itself on its first packaged start, not the installer, so
-; electron-builder does not know it exists and its uninstaller never touches it.
+; The app writes this itself, not the installer, so electron-builder does not know it
+; exists and its uninstaller never touches it.
+;
+; Two passes, because neither alone is complete:
+;   1. By NAME — catches the entry even if its target has been repointed somewhere else.
+;   2. By TARGET — anything under Run pointing inside $INSTDIR is ours whatever it is
+;      called, so renaming the app later cannot quietly start leaving entries behind.
 ;
 ; Reaches only the user running the uninstaller. On an all-users install another Windows
-; user who also ran the app keeps their own copy of this value — there is no clean way
-; to reach it from here, and a Run entry pointing at a missing exe does nothing.
+; user who also ran the app keeps their own copy — there is no clean way to reach it
+; from here, and a Run entry pointing at a missing exe does nothing.
 !macro removeAutoStart
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+
   DeleteRegValue HKCU "${AUTOSTART_REG_KEY}" "${AUTOSTART_REG_VALUE}"
+  DeleteRegValue HKCU "${AUTOSTART_APPROVED_KEY}" "${AUTOSTART_REG_VALUE}"
+
+  ; Enumeration restarts from 0 after every delete: removing a value shifts each index
+  ; above it down by one, so carrying on would step straight over the next entry. Each
+  ; pass deletes at most one, which is also why this terminates.
+  StrLen $3 "$INSTDIR"
+  StrCpy $4 1
+  ${While} $4 == 1
+    StrCpy $4 0
+    StrCpy $0 0
+    ${Do}
+      ClearErrors
+      EnumRegValue $1 HKCU "${AUTOSTART_REG_KEY}" $0
+      ${If} ${Errors}
+      ${OrIf} $1 == ""
+        ${ExitDo}
+      ${EndIf}
+      ReadRegStr $2 HKCU "${AUTOSTART_REG_KEY}" "$1"
+      ; Electron writes `"<exe>" --hidden`, so the path starts one character in. Offset 0
+      ; is tried as well, in case it is ever written unquoted.
+      StrCpy $5 $2 $3
+      ${If} $5 != "$INSTDIR"
+        StrCpy $5 $2 $3 1
+      ${EndIf}
+      ${If} $5 == "$INSTDIR"
+        DetailPrint "Removing Windows startup entry: $1"
+        DeleteRegValue HKCU "${AUTOSTART_REG_KEY}" "$1"
+        DeleteRegValue HKCU "${AUTOSTART_APPROVED_KEY}" "$1"
+        StrCpy $4 1
+        ${ExitDo}
+      ${EndIf}
+      IntOp $0 $0 + 1
+    ${Loop}
+  ${EndWhile}
+
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
 !macroend
 
 ; ── Firewall rule and Defender exclusions ────────────────────────────────────
