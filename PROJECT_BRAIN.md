@@ -665,7 +665,7 @@ Sketch discussed:
 - **Worker `allowedRoles`** — R1 always bypasses, by design.
 - **Opaque IDs** — S1–S10 statuses, SS1–SS37 workers, R1–R4 roles, P1–P4 priorities, `P-REPAIR` / `P-SALES` pipelines.
 - **`@@unique` with nullable fields** — Postgres treats NULL as distinct; `skipDuplicates` is unreliable. Use `findFirst` + `create`.
-- **Razorpay** — `RAZORPAY_WEBHOOK_SECRET` must be set in `.env`, otherwise webhooks reject silently.
+- **Razorpay reads only `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET`** ([paymentGateways.ts:55-56](src/modules/pos/lib/paymentGateways.ts)). _This line used to say `RAZORPAY_WEBHOOK_SECRET` must be set or "webhooks reject silently" — that key appears nowhere in `src/`, and there is no Razorpay webhook route, so it sent people hunting for a setting that does not exist (corrected 2026-09-06)._
 - **Portal and staff auth never crossover.** Don't reuse staff cookies for portal.
 - **Shop prices in paise.** Use `moneyInr.ts` to format. Never divide by 100 inline.
 - **Schema added via `db push`, no migration**: GST/HSN columns, naming-convention columns. Migrate before any prod deploy.
