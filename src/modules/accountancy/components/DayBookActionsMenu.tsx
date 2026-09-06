@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { CombinedSource } from "@/modules/accountancy/hooks/useDayBook";
 import { apiBase, referenceHref, receiptHref, type ReceiptVariant } from "@/modules/accountancy/lib/voucherUrls";
-import { printVoucherThermalSilently } from "@/shared/lib/print/silentThermalPrint";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
 
@@ -73,9 +73,7 @@ export function DayBookActionsMenu({
     const goPrint = async (variant: ReceiptVariant) => {
         if (variant === "thermal") {
             setBusy(true);
-            const printed = await printVoucherThermalSilently(source, rawId).finally(() => setBusy(false));
-            if (printed) { toast.success("Sent to thermal printer"); return; }
-            window.open(`${receiptHref(source, rawId, kind, "pdf")}&paper=THERMAL_80MM`, "_blank", "noopener");
+            await printVoucherThermal(source, rawId, kind).finally(() => setBusy(false));
             return;
         }
         window.open(receiptHref(source, rawId, kind, variant), "_blank", "noopener");

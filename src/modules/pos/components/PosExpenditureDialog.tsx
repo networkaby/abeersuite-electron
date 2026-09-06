@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { Loader2, Banknote } from "lucide-react";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
@@ -58,8 +59,8 @@ export function PosExpenditureDialog({
                 expenseAccountId,
             });
             toast.success(`Expenditure ${data.voucherRef} · ₹${rupees.toFixed(2)}`);
-            // Open the printable payment voucher (auto-prints on load) in a new tab.
-            window.open(`/receipt/payment/${data.voucherId}?mode=thermal`, "_blank", "noopener");
+            // Silent thermal print of the payment voucher (selection page only as fallback).
+            void printVoucherThermal("gl", data.voucherId, "PAYMENT");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {

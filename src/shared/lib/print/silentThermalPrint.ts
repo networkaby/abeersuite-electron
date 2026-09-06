@@ -1,7 +1,8 @@
 "use client";
 
 import { bridgeOk, bridgeRequest, thermalPrinterConfigured } from "@/shared/lib/bridge/hardwareBridge";
-import { voucherPrintPageHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
+import { toast } from "sonner";
+import { receiptHref, voucherPrintPageHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 
 /**
  * Silent thermal print of a Day-Book voucher — the way a POS sale prints:
@@ -24,6 +25,21 @@ export async function printVoucherThermalSilently(source: VoucherSource, rawId: 
     } catch {
         return false;
     }
+}
+
+/**
+ * "Print (thermal)" for a saved voucher — reprint buttons, 3-dot menus, the
+ * POS Rcv / Exp dialogs: silent bridge print like a POS sale, no tab. Only when
+ * the counter cannot print silently does the format-selection page open (on
+ * the 80mm view). `kind` picks the page: POS / ONLINE_INVOICE → the invoice
+ * page, RECEIPT / PAYMENT → the payment slip, anything else → generic.
+ */
+export async function printVoucherThermal(source: VoucherSource, rawId: number, kind: string): Promise<void> {
+    if (await printVoucherThermalSilently(source, rawId)) {
+        toast.success("Sent to thermal printer");
+        return;
+    }
+    window.open(`${receiptHref(source, rawId, kind, "pdf")}&paper=THERMAL_80MM`, "_blank", "noopener");
 }
 
 /**
