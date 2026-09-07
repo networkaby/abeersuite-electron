@@ -19,6 +19,7 @@ Install this on every counter. It starts a till that has stopped on the red "Thi
 
 - Counter screens no longer lose rows. A row that reached the till's copy just after the screen last asked stayed hidden until somebody pressed Refresh.
 - Moving a card on the Help, Deals or Tasks board no longer makes it jump back to its old place for a few seconds.
+- A task moved on the Work Board now reaches the other machines on its own. Until now only the machine that moved it showed the change, and everyone else saw the old position until they pressed Refresh. The same was true of the task counts beside the menu.
 - The system now finds and repairs rows that had quietly gone out of step with the office. One customer record had been wrong on a till for six weeks with nothing noticing it. Checking and repair now compare what is inside the row, not only its number.
 - A till no longer knocks every five seconds on a database that is not running, and says the real address when it cannot reach one.
 
