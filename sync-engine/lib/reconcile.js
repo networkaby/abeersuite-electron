@@ -68,15 +68,35 @@ function keyExpression(entry) {
  *   `columns` is present for `full` tables: the table's column names on this side.
  */
 async function fingerprint(client, entry, columns) {
-    if (entry.strategy !== "full") {
-        const { rows } = await client.query(
-            `SELECT count(*)::text AS count,
-                    COALESCE(sum(hashtextextended(${keyExpression(entry)}, 0)), 0)::text AS checksum
-             FROM ${q(entry.table)}`,
-        );
-        return rows[0];
-    }
+    if (entry.strategy === "full") return contentFingerprint(client, entry, columns);
 
+    const { rows } = await client.query(
+        `SELECT count(*)::text AS count,
+                COALESCE(sum(hashtextextended(${keyExpression(entry)}, 0)), 0)::text AS checksum
+         FROM ${q(entry.table)}`,
+    );
+    return rows[0];
+}
+
+/**
+ * The same count + hash, but over the WHOLE ROW, for a table of any strategy.
+ *
+ * This is what `fingerprint` runs for a `full` table, lifted out so a watermark table
+ * can be asked the same question on demand. It is deliberately NOT what the hourly
+ * reconcile uses: hashing every row means reading every row on BOTH sides, and paying
+ * that against Supabase on a schedule is exactly the egress this project exists to
+ * avoid. See verify-replica.js --deep, which is the on-demand caller.
+ *
+ * Worth being precise about what only this can catch. A watermark table's changes are
+ * meant to be carried by `updatedAt`, so a key hash is enough — UNLESS a row's content
+ * changed without `updatedAt` moving. That is not hypothetical: a foreign key's
+ * ON DELETE SET NULL fires inside PostgreSQL, so Prisma's application-level @updatedAt
+ * never runs, and the replica (which applies everything under
+ * `session_replication_role = replica`, suspending those same FK actions) never
+ * performs the matching change. The row then differs forever: the watermark will not
+ * re-pull it, and a key hash cannot see it.
+ */
+async function contentFingerprint(client, entry, columns) {
     // Row content. With a column list, keep only those keys so a replica-only column
     // cannot make the sides disagree; the column list of THIS side rides along in the
     // same statement so the caller can pass it to the other side.
@@ -130,4 +150,90 @@ async function keyDiff(source, local, entry) {
     };
 }
 
-module.exports = { fingerprint, same, keyDiff, keyExpression };
+/**
+ * Which keys exist on BOTH sides but hold different content.
+ *
+ * The gap `keyDiff` cannot close. That one answers "which rows are missing or extra",
+ * which is all a key hash can ever support; this answers "which rows are here on both
+ * sides and disagree" — the shape a suspended FK action leaves behind.
+ *
+ * One row per record on the wire from each side (a key and a 64-bit hash), the same
+ * order of cost as `keyDiff`, which is why this belongs to the on-demand tool rather
+ * than the hourly pass.
+ *
+ * `columns` is the SOURCE's column list, exactly as `contentFingerprint` returns it:
+ * the source hashes its whole row, the replica hashes only those columns, so a column
+ * the replica still carries and the source has dropped cannot read as a difference.
+ */
+async function rowHashDiff(source, local, entry, columns) {
+    const keyExpr = keyExpression(entry);
+    const [src, loc] = await Promise.all([
+        source.query(
+            `SELECT ${keyExpr} AS k, hashtextextended(to_jsonb(t)::text, 0)::text AS h
+               FROM ${q(entry.table)} t`,
+        ),
+        local.query(
+            `SELECT ${keyExpr} AS k,
+                    hashtextextended(
+                        COALESCE((SELECT jsonb_object_agg(key, value)
+                                    FROM jsonb_each(to_jsonb(t))
+                                   WHERE key = ANY($1::text[])), '{}'::jsonb)::text, 0)::text AS h
+               FROM ${q(entry.table)} t`,
+            [columns],
+        ),
+    ]);
+
+    const here = new Map(loc.rows.map((r) => [r.k, r.h]));
+    const differing = [];
+    for (const r of src.rows) {
+        const mine = here.get(r.k);
+        // `undefined` means the row is missing here, which is keyDiff's job, not ours.
+        if (mine !== undefined && mine !== r.h) differing.push(r.k);
+    }
+    return differing;
+}
+
+/**
+ * Every table that points AT `table` through a foreign key whose ON DELETE action
+ * rewrites the referencing column — SET NULL ('n') or SET DEFAULT ('d').
+ *
+ * Why this exists. When a parent row is deleted on the source, PostgreSQL performs
+ * that action there and the child row's content changes. On the replica the same
+ * delete is applied under `session_replication_role = replica` (db.js), which
+ * suspends FK actions on purpose so rows can land out of dependency order — so the
+ * child is left holding a key that no longer exists. Neither healer notices: the
+ * child's `updatedAt` never moved (the source's change was made by the database, not
+ * by Prisma), and the reconcile's key hash only ever sees keys, which are unchanged
+ * on both sides. The row stays wrong for the life of the replica.
+ *
+ * So after a delete we ask the source what those children should look like now. The
+ * source is the authority; we copy its answer rather than trying to re-implement FK
+ * semantics here, which would have to stay in step with 95 constraints forever.
+ *
+ * ON DELETE CASCADE is deliberately absent. It deletes the child outright on the
+ * source, so the replica ends up with rows the source lacks — a difference in the KEY
+ * set, which the ordinary fingerprint already catches on that table's next verify.
+ *
+ * Only single-column foreign keys are returned. Every one of this schema's 95 is
+ * single-column; a composite one would need its columns matched to the parent key in
+ * `confkey` order, and silently mis-matching it would be worse than skipping it.
+ */
+async function referencingNullers(client, table) {
+    const { rows } = await client.query(
+        `SELECT c.conrelid::regclass::text AS child_table,
+                a.attname                  AS child_column
+           FROM pg_constraint c
+           JOIN pg_attribute a
+             ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+          WHERE c.contype = 'f'
+            AND c.confdeltype IN ('n', 'd')
+            AND c.confrelid = $1::regclass
+            AND array_length(c.conkey, 1) = 1`,
+        [q(table)],
+    );
+    return rows.map((r) => ({ table: r.child_table.replace(/^"|"$/g, ""), column: r.child_column }));
+}
+
+module.exports = {
+    fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression, referencingNullers,
+};

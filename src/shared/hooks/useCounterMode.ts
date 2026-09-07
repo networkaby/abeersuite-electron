@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { setWritesGoLocal, setReadsGoLocal, setWritesHeldUntilApplied } from "@/shared/lib/realtime/appChannel";
+import { setServedByReplica } from "@/shared/lib/browser/localDb";
 
 /** Mirror of `counterStatus()` in shared/lib/prisma/counterMode.ts. */
 export type CounterStatus = {
@@ -74,6 +75,18 @@ export function useCounterMode(): CounterStatus | null {
                 // Whether a screen may re-read right after its own save, or must wait for
                 // the replica to say the rows have landed. See setWritesHeldUntilApplied.
                 setWritesHeldUntilApplied(data.writePreference === "v_live");
+                // Whether the browser's Dexie cache is worth keeping at all. The
+                // exact mirror of `shouldReadLocal()` in prisma/counterMode.ts —
+                // stricter than setReadsGoLocal above, which deliberately leaves
+                // `replicaReady` out, because a counter still reading Supabase
+                // WANTS the cache. Takes effect on the next page load, never this
+                // one (see setServedByReplica). This endpoint needs a login, so a
+                // counter writes nothing before someone signs in — which just
+                // leaves the cache behaving as it always has until then.
+                setServedByReplica(
+                    data.isCounter
+                    && (data.mode === "LOCAL" || (data.replicaReady && data.preference !== "live")),
+                );
                 if (!cancelled) setStatus(data);
             } catch {
                 // Leave the last known status in place rather than flashing "unknown".

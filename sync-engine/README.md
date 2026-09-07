@@ -236,6 +236,54 @@ Verified by injecting divergence in both directions at once (5 rows deleted loca
 1 bogus row inserted) and watching a cycle report `Device repair -1 +5`, after which
 a full compare was exact again.
 
+### What a key hash cannot see: same key, different row (2026-09-08)
+
+The cheap check hashes **primary keys**. So it answers "is a row missing or extra?"
+and nothing else. A row present on both sides whose *contents* differ reads as
+agreement, forever — the watermark will not re-pull it either, if `updatedAt` did not
+move. Two real causes, both found on a live counter:
+
+**1. A foreign key action on the source.** `ON DELETE SET NULL` fires inside
+PostgreSQL, so Prisma's application-level `@updatedAt` never runs and the row's
+timestamp does not move. Here the same delete is applied under
+`session_replication_role = replica`, which suspends FK actions on purpose so rows can
+land out of dependency order — so we never make the matching change and are left
+holding a key that no longer exists. Seen as `Person 8282` keeping
+`convertedToCompanyId = 17` for six weeks after the office had nulled it, while every
+verify reported the table clean. This schema has **95** `ON DELETE SET NULL`
+constraints, all single-column.
+
+*Fixed* by `repairReferencing` in `sync-once.js`: after `deleteByKeys` removes parent
+keys, every table referencing that parent through a SET NULL / SET DEFAULT foreign key
+has its affected rows re-pulled from the source. The source is the authority — we copy
+its answer rather than re-implement FK semantics against 95 constraints. Every delete
+reaches a replica through that one function, so one hook covers the class. It costs
+nothing on a cycle where nothing was deleted.
+
+`ON DELETE CASCADE` needs no such handling: it removes the child on the source, which
+is a **key** difference the ordinary fingerprint already catches.
+
+**2. A `child` row edited without its parent moving.** The mirror of the 2026-09-03
+insert bug above, and not fixed by the same change. A child table has no watermark of
+its own — it is pulled when its parent's `updatedAt` moves — so an *edit in place*
+that does not touch the parent is invisible to both the pull and the key hash. Seen as
+`UserSurfaceSeen` holding a `seenAt` two days behind the source on 7 rows.
+
+Not fixed in the engine. Found by `verify-replica.js --deep`.
+
+### Verifying row contents: `--deep`
+
+`node verify-replica.js --deep` hashes `to_jsonb(row)` instead of the key, for every
+strategy, and `--repair` re-pulls whatever disagrees. **Deliberately not on the hourly
+schedule**: it reads every row on both sides, and paying that against Supabase is the
+egress this project exists to avoid. Reach for it when a counter's screen disagrees
+with the office, or after a hard delete on the office.
+
+First full run against a live pair (2026-09-08, 116 tables, 20,748 rows, 23 s):
+113 tables exact including contents; `LoyaltyLedger` and `LoyaltyLot` each short two
+rows (a key difference the hourly pass repairs on its own); `UserSurfaceSeen` seven
+rows diverged in content — which nothing but `--deep` can see.
+
 ### Syncing on a signal instead of a timer
 
 The app already broadcasts `{ topics, at }` on every successful write, and the
@@ -269,16 +317,29 @@ client-exposed by design, not secrets). Omit them and the worker uses the timer 
 ## Verifying the replica
 
 ```powershell
-node verify-replica.js          # count + key checksum, every table
-node verify-replica.js --keys   # also list differing ids (transfers keys)
+node verify-replica.js                  # count + key checksum, every table
+node verify-replica.js --keys           # also list differing ids (transfers keys)
+node verify-replica.js --deep           # hash the whole ROW, not just the key
+node verify-replica.js --deep --repair  # ...and re-pull whatever disagrees
+node verify-replica.js --only Person --deep
 ```
 
 The failure this guards against is silent: a replica missing rows does not error, it
 renders a report with fewer lines — which reads as "those records do not exist"
 rather than "this database is behind". Cheap enough to run often (two numbers per
-table per side; nothing transferred unless a table disagrees and `--keys` is passed).
+table per side; nothing transferred unless a table disagrees).
 
-Last full run against Supabase: **113 tables, 20134 rows each side, exact match.**
+**A plain run compares keys, not rows** — so it can report a table clean while a row's
+contents differ on the two sides. It now says so in its own output rather than
+claiming an exact match. `--deep` is what actually proves the contents equal; see
+*What a key hash cannot see* above for the two ways rows drift apart in place.
+
+`--repair` never acts on its own: it only fixes what a comparison in the same run
+already found.
+
+Last full key run against Supabase: **113 tables, 20134 rows each side, exact match.**
+Last `--deep` run (2026-09-08): **116 tables, 20,748 rows, 3 tables disagreeing** — see
+above.
 
 ### Grants it depends on
 
