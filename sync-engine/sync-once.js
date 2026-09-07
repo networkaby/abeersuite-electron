@@ -484,10 +484,19 @@ async function main() {
                     // nothing, the re-fingerprint would still differ, and the table would
                     // never be marked verified: a loop that makes no progress and logs
                     // "still differs after repair" every hour.
-                    const refreshed = reconcile.hashesRowContent(entry)
+                    // ...but not while the replica is missing a column the source has. Then
+                    // every row reads as different for one schema reason, and `upsert`
+                    // names the source's columns, so the repair would fail on every batch.
+                    // schemaGuard should have halted the worker long before this; this is
+                    // the cheap second lock on the same door.
+                    const behind = reconcile.missingColumns(srcFp, locFp);
+                    const refreshed = reconcile.hashesRowContent(entry) && behind.length === 0
                         ? await pullByKeys(source, local, entry,
                             await reconcile.rowHashDiff(source, local, entry, srcFp.columns || []))
                         : 0;
+                    if (behind.length) {
+                        console.log(`  ${model.padEnd(28)} schema behind: missing ${behind.join(", ")}`);
+                    }
                     repaired += refreshed;
                     // A repair changes what this replica serves just as a pull does, so
                     // the screens must hear about it (see __SYNC_APPLIED__ below).

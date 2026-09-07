@@ -260,7 +260,29 @@ function hashesRowContent(entry) {
     return HASHES_ROW_CONTENT.has(entry.strategy);
 }
 
+/**
+ * Columns the SOURCE has and the replica does not, from two content fingerprints.
+ * Empty for a key fingerprint, which carries no column list.
+ *
+ * The asymmetry is deliberate and only goes one way. A column the REPLICA still has and
+ * the source has dropped is tolerated — that is what the column list passed to
+ * `contentFingerprint` exists for. The reverse cannot be: the replica has nowhere to put
+ * the value, so every row reads as different, for one schema reason rather than N data
+ * reasons. Callers must say that plainly instead of reporting thousands of drifted rows,
+ * and must NOT try to repair it — `upsert` builds its column list from the SOURCE row,
+ * so it would name a column the replica lacks and fail on every batch.
+ *
+ * Seen live on 2026-09-08: a counter still running the previous build reported all 405
+ * `UniversalVoucher` and all 35 `Ticket` rows as drifted, because the office had gained
+ * `sourceCounterId` and that replica's schema had not caught up yet.
+ */
+function missingColumns(srcFp, locFp) {
+    if (!srcFp || !locFp || !srcFp.columns || !locFp.columns) return [];
+    const here = new Set(locFp.columns);
+    return srcFp.columns.filter((c) => !here.has(c));
+}
+
 module.exports = {
     fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression,
-    referencingNullers, hashesRowContent,
+    referencingNullers, hashesRowContent, missingColumns,
 };

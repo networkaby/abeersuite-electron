@@ -153,6 +153,28 @@ async function main() {
         await pullByKeys(source, local, tables.UserSurfaceSeen, drift);
         const cAfter = await reconcile.fingerprint(local, tables.UserSurfaceSeen, cSrc.columns || []);
         check("equal after the repair", reconcile.same(cSrc, cAfter), true);
+
+        console.log("\n3. A replica whose schema is behind the source");
+
+        // The office adds a column; this replica has not been updated yet. Every row now
+        // reads as different — for one schema reason, not N data reasons — and a repair
+        // must NOT be attempted, since upsert names the source's columns and would fail
+        // on every batch.
+        await source.query('ALTER TABLE "UserSurfaceSeen" ADD COLUMN "sourceCounterId" int');
+
+        const bSrc = await reconcile.fingerprint(source, tables.UserSurfaceSeen);
+        const bLoc = await reconcile.fingerprint(local, tables.UserSurfaceSeen, bSrc.columns || []);
+        check("every row now reads as different", reconcile.same(bSrc, bLoc), false);
+        check("...and it is named as a missing column, not as drifted rows",
+            reconcile.missingColumns(bSrc, bLoc), ["sourceCounterId"]);
+
+        // The other direction stays tolerated: a column the replica kept and the source
+        // dropped must never read as a difference.
+        await local.query('ALTER TABLE "UserSurfaceSeen" ADD COLUMN "legacyNote" text');
+        const tSrc = await reconcile.fingerprint(source, tables.UserSurfaceSeen);
+        const tLoc = await reconcile.fingerprint(local, tables.UserSurfaceSeen, tSrc.columns || []);
+        check("a replica-only column is still tolerated",
+            reconcile.missingColumns(tSrc, tLoc), ["sourceCounterId"]);
     } finally {
         local.release();
         source.release();

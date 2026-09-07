@@ -305,16 +305,35 @@ totals) are still excluded; those are re-summed locally by `rebuildTotals.js`.
 Found by `test-reconcile.js`, not by review: the first version of the FK repair passed
 every check except the one that read the row back off disk.
 
+### A replica whose schema is behind reads as "every row differs"
+
+The column list exists so a column the **replica** kept and the source dropped cannot
+make the two sides disagree. The opposite direction cannot be tolerated the same way:
+if the SOURCE has a column the replica lacks, the replica has nowhere to put the value,
+so every row's hash differs — for one schema reason, not N data reasons.
+
+`missingColumns` names it, and both callers stop there rather than "repairing": `upsert`
+builds its column list from the source row, so it would name a column the replica lacks
+and fail on every batch. `verify-replica.js` prints the missing columns instead of
+thousands of ids, and pass 3 skips the content repair and logs `schema behind`.
+schemaGuard should have halted the worker long before either — this is the second lock
+on the same door.
+
+Seen live on 2026-09-08: a counter still on the previous build reported all 405
+`UniversalVoucher` and all 35 `Ticket` rows as drifted, because the office had gained
+`sourceCounterId` and that replica's schema had not caught up.
+
 ### Testing this
 
 ```powershell
 node test-reconcile.js   # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empty databases
 ```
 
-Reproduces both faults against a throwaway pair of databases — the FK-rewritten row and
-the child row edited in place — and asserts that a key hash calls each one clean while
-the new machinery finds and repairs it. The header explains how to make a scratch
-cluster from the binaries the app already ships.
+Reproduces all three faults against a throwaway pair of databases — the FK-rewritten
+row, the child row edited in place, and the replica whose schema is behind — and
+asserts that a key hash calls each one clean while the new machinery finds it, repairs
+what is repairable, and refuses to "repair" a schema gap. 15 checks. The header explains
+how to make a scratch cluster from the binaries the app already ships.
 
 ### Verifying row contents: `--deep`
 
