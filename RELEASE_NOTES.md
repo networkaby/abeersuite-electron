@@ -1,23 +1,35 @@
-# v1.2.0
+# v1.3.0
 
-For the trial till only. This version adds a new way of saving: the till sends each save to the office server in one go instead of doing the whole job over the internet itself. Install it on the one machine chosen for the trial. Other counters can wait for the next version.
+Install this on every counter. It starts a till that has stopped on the red "This counter needs an update" screen, and it carries a set of sync repairs that keep each till's copy of the data honest.
 
-**Before installing:** the office website (office.networkservice.in) must already be running this version, and everyone will be asked to sign in once more after the office update.
+**About the stopped counters:** the office server has gained two new fields — the till that raised a voucher, and the till that raised a ticket. A counter whose own copy of the data does not have those fields stops copying and pauses billing on purpose, rather than saving against records it does not fully understand. That is the red screen. This version gives the counter the matching fields, so copying starts again.
 
-## Saving bills
+## Stopped counters
 
-- Saving a bill, receipt or expense is much faster on the trial till. The office does the saving; the till only sends and waits for the answer.
-- If the office cannot be reached at all, the till saves the bill itself as before, and the top bar shows Offline until the line is back.
-- If the line drops in the middle of a save, the till will not save the bill a second time on its own. It shows "The office did not confirm this save. It may already be saved — check before entering it again." Check the Day Book before re-entering.
+- A till showing "This counter needs an update" works again after this install. Its own copy of the data is rebuilt with the fields the office added, and copying carries on by itself.
+- A till in that state fetches this update on its own, and installs it about five minutes later. Nobody has to walk to the machine.
 
-## Bill numbers
+## Bills and the Day Book
 
-- Every bill, receipt and expense saved through the office now takes its number from the common series (counter 1), the same series the office uses. A till that has to save by itself while offline still uses its own counter number.
+- Every bill, receipt, expense and repair ticket now records which till raised it. An entry made at the office shows as an office entry — that is a real answer, not a blank.
+- The POS sales register has a new "Only this counter" tick, on by default, so a cashier sees their own till's sales.
+- The sales register and the Day Book are now ordered by the date on the entry. Before this, bills a till saved while offline jumped to the top when they finally reached the office, above sales made days later.
 
 ## Sync
 
-- After a save, the till's screens show the new entry straight away. Receipts, expenses and cash drops recorded on one counter now reach the other counters on the next sync instead of waiting up to an hour.
+- Counter screens no longer lose rows. A row that reached the till's copy just after the screen last asked stayed hidden until somebody pressed Refresh.
+- Moving a card on the Help, Deals or Tasks board no longer makes it jump back to its old place for a few seconds.
+- The system now finds and repairs rows that had quietly gone out of step with the office. One customer record had been wrong on a till for six weeks with nothing noticing it. Checking and repair now compare what is inside the row, not only its number.
+- A till no longer knocks every five seconds on a database that is not running, and says the real address when it cannot reach one.
 
-## Sign-in
+## Counter saving
 
-- The sign-in cookie now has the same name on the office website and on every counter. After this update everyone signs in once more, on the website as well as on the tills.
+- Under office saving, a till now sends every save to the office, not only the common ones. Removing a customer record the office had already removed no longer fails at the till with an error.
+- The top bar now says **W:Office** while saves go through the office. It used to say "Live", which read as if the till were writing to the internet database itself.
+
+## My Profile — customer website
+
+- Customers can now see and change their own photo, name, address, mobile numbers and email addresses from My Profile.
+- A customer who shops for more than one person or firm can choose which profile they are shopping with, from a "Using: <name>" chip in the header and at checkout.
+- A mobile number or email a customer adds themselves stays unverified until it is confirmed by OTP. Staff can still find the customer by it at the counter, but until it is confirmed it cannot be made the main number, and it cannot be used to sign in or to reset a password. Anything staff entered counts as verified already.
+- Company details stay read-only in the customer website.
