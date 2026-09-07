@@ -20,14 +20,30 @@
  * is deleted and another inserted between two cycles - the total is unchanged while
  * the contents are not. Hashing the keys catches that.
  *
- * ── Full tables hash the ROW, not the key ──────────────────────────────────
+ * ── Tables with no watermark hash the ROW, not the key ─────────────────────
  * A key-only hash cannot see an edit in place: rename a Department, release a
  * PosCounter (boundDeviceId -> null), and count and keys are both unchanged, so the
  * table is skipped forever and the replica keeps the old value. For a watermark table
- * that is fine - updatedAt carries the edit - but a 'full' table has no watermark, so
- * the fingerprint IS its only change detector. Those tables therefore hash
- * `to_jsonb(row)`: jsonb normalises key order and value rendering, so the two servers
- * agree byte for byte.
+ * that is fine - updatedAt carries the edit - but a table with no watermark of its own
+ * has nothing else to carry it, so the fingerprint IS its only change detector. Those
+ * tables therefore hash `to_jsonb(row)`: jsonb normalises key order and value
+ * rendering, so the two servers agree byte for byte.
+ *
+ * Two strategies qualify, for the same reason:
+ *
+ *   'full'  - replaced wholesale, no cursor anywhere.
+ *   'child' - pulled when its PARENT's updatedAt moves, which says nothing about the
+ *             child. A child row edited in place without touching its parent is
+ *             therefore invisible to the pull AND to a key hash. Found on a live
+ *             replica on 2026-09-08: UserSurfaceSeen holding a `seenAt` two days
+ *             behind the source on 7 rows, every cycle reporting the table verified.
+ *             (The mirror of the 2026-09-03 bug, where child rows INSERTED without
+ *             the parent moving never arrived at all.)
+ *
+ * The cost is a sequential scan of the child table on both sides, at most once per
+ * VERIFY_INTERVAL_MS. Cheap on this schema today; the ones to watch as volume grows
+ * are the line-item children - InvStockLedger, VoucherGlLine, VoucherInventoryLine,
+ * TicketOrderLine.
  *
  * The replica may carry a column the source has dropped (schemaGuard tolerates that on
  * purpose), which would make the two sides disagree forever. So the SOURCE fingerprint
@@ -42,6 +58,10 @@
  */
 
 const { q } = require("./db");
+
+/** Strategies with no watermark of their own, so the fingerprint is their only change
+ *  detector and must hash the row rather than the key. See the note above. */
+const HASHES_ROW_CONTENT = new Set(["full", "child"]);
 
 /**
  * SQL that renders a row's primary key as one text value.
@@ -68,7 +88,7 @@ function keyExpression(entry) {
  *   `columns` is present for `full` tables: the table's column names on this side.
  */
 async function fingerprint(client, entry, columns) {
-    if (entry.strategy === "full") return contentFingerprint(client, entry, columns);
+    if (HASHES_ROW_CONTENT.has(entry.strategy)) return contentFingerprint(client, entry, columns);
 
     const { rows } = await client.query(
         `SELECT count(*)::text AS count,
@@ -234,6 +254,13 @@ async function referencingNullers(client, table) {
     return rows.map((r) => ({ table: r.child_table.replace(/^"|"$/g, ""), column: r.child_column }));
 }
 
+/** Whether this table's fingerprint compares row contents rather than keys, and so
+ *  whether a mismatch can be one that only `rowHashDiff` will explain. */
+function hashesRowContent(entry) {
+    return HASHES_ROW_CONTENT.has(entry.strategy);
+}
+
 module.exports = {
-    fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression, referencingNullers,
+    fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression,
+    referencingNullers, hashesRowContent,
 };

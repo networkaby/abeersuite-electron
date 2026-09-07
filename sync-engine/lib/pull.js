@@ -71,7 +71,7 @@ function chunk(arr, size) {
  * row with no `updatedAt` (most append/full reference tables) keeps the previous
  * unconditional behaviour.
  */
-async function upsert(client, table, pk, rows, jsonCols, cacheCols) {
+async function upsert(client, table, pk, rows, jsonCols, cacheCols, force) {
     if (rows.length === 0) return 0;
     const json = jsonCols || new Set();
     const cache = new Set(cacheCols || []);
@@ -92,7 +92,17 @@ async function upsert(client, table, pk, rows, jsonCols, cacheCols) {
     const setSql = updates.length
         ? updates.map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(", ")
         : null;
-    const guardSql = hasUpdatedAt
+    // The monotonic guard: never let an older copy of a row overwrite a newer one, for
+    // pulls that can arrive out of order.
+    //
+    // `force` turns it off, and a reconcile-driven repair MUST turn it off. The whole
+    // class of divergence that repair exists for is a row whose content differs while
+    // `updatedAt` is IDENTICAL on both sides — a foreign key's ON DELETE SET NULL fires
+    // inside PostgreSQL, so Prisma's @updatedAt never runs. Against equal timestamps
+    // `EXCLUDED.updatedAt > table.updatedAt` is false, so the row is silently not
+    // written and the repair reports success having done nothing. Reconciliation has
+    // just proved the source's copy is the truth; it does not need a tiebreak.
+    const guardSql = hasUpdatedAt && !force
         ? ` WHERE ${q(table)}.${q("updatedAt")} IS NULL OR EXCLUDED.${q("updatedAt")} > ${q(table)}.${q("updatedAt")}`
         : "";
 
@@ -250,7 +260,7 @@ async function pullChildren(source, local, entry, parentIds) {
  * timestamps sit BEHIND our cursor. A delta pull will never look at them again, so
  * without this they stay missing for the life of the replica.
  */
-async function pullByKeys(source, local, entry, keys) {
+async function pullByKeys(source, local, entry, keys, force = true) {
     if (!keys || keys.length === 0) return 0;
 
     const keyExpr = keyExpression(entry);
@@ -263,7 +273,11 @@ async function pullByKeys(source, local, entry, keys) {
         );
         if (res.rows.length === 0) continue;
         const jsonCols = jsonColumnsOf(res.fields);
-        await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, res.rows, jsonCols, entry.cacheColumns));
+        // `force` defaults ON here, unlike the ordinary pulls: every caller of this
+        // function is reconciliation, which has just compared the two sides and knows
+        // the source's copy is the truth. Leaving the monotonic guard in place would
+        // make it a no-op against equal timestamps — see upsert.
+        await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, res.rows, jsonCols, entry.cacheColumns, force));
         written += res.rows.length;
     }
     return written;
