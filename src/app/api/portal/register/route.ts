@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { ensurePortalPerson } from "@/shared/lib/auth/findPortalPerson";
+import { ensurePortalPerson, matchPortalPerson } from "@/shared/lib/auth/findPortalPerson";
 import { resolvePortalIdentity } from "@/shared/lib/auth/authorizePortalPasswordless";
 
 /**
@@ -42,6 +42,15 @@ export async function POST(req: Request) {
             return NextResponse.json(
                 { error: "Please verify your mobile or email again." },
                 { status: 401 }
+            );
+        }
+
+        // An unverified self-added contact cannot set or reset a password —
+        // it proves nothing about who owns the profile it sits on.
+        if ((await matchPortalPerson(prisma, identity)).status === "unverified") {
+            return NextResponse.json(
+                { error: "This contact is saved on a profile but not verified yet. Sign in with your password or a verified mobile/email, then verify it from My Profile." },
+                { status: 403 }
             );
         }
 

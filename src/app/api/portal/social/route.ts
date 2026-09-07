@@ -22,14 +22,14 @@ export async function GET() {
     try {
         const profile = await prisma.customerSocialProfile.findUnique({
             where:  { personId: customerId! },
-            select: { handle: true, avatarUrl: true, coverUrl: true, bio: true, joinedAt: true },
+            select: { handle: true, coverUrl: true, bio: true, joinedAt: true },
         });
         if (!profile) return NextResponse.json({ joined: false as const });
 
         const [person, wallRows, feedRows, wallCount, friends] = await Promise.all([
             prisma.person.findUnique({
                 where:  { id: customerId! },
-                select: { name: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail },
+                select: { name: true, avatarUrl: true, phones: selectPrimaryPhone, emails: selectPrimaryEmail },
             }),
             prisma.wallPost.findMany({
                 where:   { ownerKind: "PERSON", ownerId: customerId! },
@@ -72,7 +72,7 @@ export async function GET() {
             joined: true as const,
             me: {
                 handle:      profile.handle,
-                avatarUrl:   profile.avatarUrl,
+                avatarUrl:   person?.avatarUrl ?? null,
                 coverUrl:    profile.coverUrl,
                 bio:         profile.bio,
                 joinedAt:    profile.joinedAt,

@@ -61,7 +61,7 @@ export async function resolveSocialActors(
         personIds.length
             ? db.person.findMany({
                 where: { id: { in: personIds } },
-                select: { id: true, name: true, socialProfile: { select: { handle: true, avatarUrl: true } } },
+                select: { id: true, name: true, avatarUrl: true, socialProfile: { select: { handle: true } } },
             })
             : Promise.resolve([]),
     ]);
@@ -80,7 +80,7 @@ export async function resolveSocialActors(
         // A customer only participates once joined (handle present); still render
         // by name if a ref somehow predates the profile.
         map.set(socialKey("PERSON", p.id), {
-            kind: "PERSON", id: p.id, name: p.name, avatarUrl: p.socialProfile?.avatarUrl ?? null,
+            kind: "PERSON", id: p.id, name: p.name, avatarUrl: p.avatarUrl,
             href: p.socialProfile ? `/portal/social/u/${p.socialProfile.handle}` : "#",
             role: null, roleBadge: null, isCustomer: true,
         });

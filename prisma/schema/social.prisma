@@ -90,7 +90,7 @@ model CustomerSocialProfile {
   person    Person   @relation("PersonSocialProfile", fields: [personId], references: [id], onDelete: Cascade)
   /// Public handle (@nickname), unique across customers.
   handle    String   @unique
-  avatarUrl String?
+  /// Photo lives on Person.avatarUrl (shared with the rest of the portal).
   coverUrl  String?
   bio       String?
   joinedAt  DateTime @default(now())

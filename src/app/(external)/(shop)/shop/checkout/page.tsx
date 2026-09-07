@@ -18,7 +18,7 @@ import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { productPath } from "@/shared/lib/shop/productPublic";
 import { Badge } from "@/components/ui/badge";
 import { Lock, ShieldCheck, Loader2, Truck, CreditCard, HandCoins } from "lucide-react";
-import PortalAccountSwitcher from "@/modules/external/portal/PortalAccountSwitcher";
+import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
 type ShippingOption = {
@@ -415,10 +415,13 @@ export default function ShopCheckoutPage() {
                 <div className="space-y-8">
                     <Card className="border-border/80 shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-lg">Account profile</CardTitle>
+                            <CardTitle className="text-lg">Billing profile</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <PortalAccountSwitcher />
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm text-muted-foreground">This order and its bill go to the profile you are using.</p>
+                                <PortalProfileSwitch />
+                            </div>
                             {accountOptions.length === 0 && !accountLoading ? (
                                 <p className="text-sm text-muted-foreground">
                                     No active portal profile found. Please sign in to the customer portal first.{" "}

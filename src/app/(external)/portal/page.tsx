@@ -8,10 +8,10 @@ import {
     Gift,
     Heart,
     Percent,
-    Settings,
     ShieldCheck,
     ShoppingBag,
     Ticket,
+    UserRound,
     Users,
     Wallet,
 } from "lucide-react";
@@ -78,7 +78,7 @@ export default async function PortalHomePage() {
                     <PortalCard href="/portal/coupons" icon={Percent} title="My Coupons" desc="View available discount offers." />
                     <PortalCard href="/portal/wallet" icon={Wallet} title="My Wallet" desc="Check wallet balance and transactions." />
                     <PortalCard href="/portal/wishlist" icon={Heart} title="Wishlist" desc="Saved items ready to buy." />
-                    <PortalCard href="/portal/settings" icon={Settings} title="Profile Settings" desc="Manage profile and account security." />
+                    <PortalCard href="/portal/profile" icon={UserRound} title="My Profile" desc="Photo, details, contacts and the profile you shop with." />
                     <Card className="border-dashed border-border/70 sm:col-span-2 xl:col-span-2">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">

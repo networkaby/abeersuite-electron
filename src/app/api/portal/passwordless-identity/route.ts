@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
+import { matchPortalPerson } from "@/shared/lib/auth/findPortalPerson";
 import { resolvePortalIdentity } from "@/shared/lib/auth/authorizePortalPasswordless";
 
 /**
@@ -29,8 +29,11 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Verification failed" }, { status: 401 });
         }
 
-        const person = await findPortalPerson(prisma, identity);
-        return NextResponse.json({ exists: person !== null });
+        // `unverified` = on file, but only as a contact the customer typed into
+        // the portal without an OTP. It must not create a second customer, and
+        // it must not sign in — the UI explains how to verify it instead.
+        const match = await matchPortalPerson(prisma, identity);
+        return NextResponse.json({ exists: match.status === "found", unverified: match.status === "unverified" });
     } catch (e) {
         return handleApiError(e, "Could not check your details. Please try again.");
     }

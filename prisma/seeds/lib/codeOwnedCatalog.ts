@@ -219,6 +219,40 @@ export async function ensureXorCheck(pool: Pool, table: "Phone" | "Email", const
 }
 
 /**
+ * Portal profile columns (2026-09-07) — the data-move half of a schema change.
+ *
+ * `prisma db push` adds `Person.avatarUrl` and `Phone/Email.verifiedAt` and
+ * DROPS `CustomerSocialProfile.avatarUrl`, so this must run BEFORE the push on
+ * a DB that still has the old column: it adds the new columns itself, copies
+ * every social photo onto the Person, and backfills `verifiedAt` — every
+ * contact that exists today was typed in by staff who met the customer, so all
+ * of them count as verified. Idempotent: every step is IF NOT EXISTS / WHERE
+ * NULL, and the copy is skipped once the old column is gone.
+ */
+export async function ensurePortalProfileColumns(pool: Pool) {
+    await pool.query(`ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "avatarUrl" TEXT`);
+    await pool.query(`ALTER TABLE "Phone"  ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3)`);
+    await pool.query(`ALTER TABLE "Email"  ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3)`);
+
+    const { rows } = await pool.query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'CustomerSocialProfile' AND column_name = 'avatarUrl'`,
+    );
+    if (rows.length > 0) {
+        await pool.query(
+            `UPDATE "Person" p SET "avatarUrl" = s."avatarUrl"
+               FROM "CustomerSocialProfile" s
+              WHERE s."personId" = p.id AND s."avatarUrl" IS NOT NULL AND p."avatarUrl" IS NULL`,
+        );
+    }
+
+    // Rows created before the column existed pre-date the portal's self-service
+    // add, so they are staff-entered → verified as of when they were created.
+    await pool.query(`UPDATE "Phone" SET "verifiedAt" = "createdAt" WHERE "verifiedAt" IS NULL`);
+    await pool.query(`UPDATE "Email" SET "verifiedAt" = "createdAt" WHERE "verifiedAt" IS NULL`);
+}
+
+/**
  * Apply everything code-owned to the DB: permission catalog (upsert + prune of
  * retired ids, keeping Work/WorkGroup-referenced ones), the Phone/Email XOR
  * constraints, and the voucher numbering series. Idempotent; deletes ONLY
@@ -246,6 +280,7 @@ export async function applyCodeOwnedCatalog(prisma: PrismaClient, pool: Pool): P
 
     await ensureXorCheck(pool, "Phone", "Phone_owner_xor");
     await ensureXorCheck(pool, "Email", "Email_owner_xor");
+    await ensurePortalProfileColumns(pool);
 
     await seedVoucherSeries(prisma);
 

@@ -5,11 +5,11 @@ import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 
 // PATCH /api/portal/social/profile — the customer edits their own social profile
-// (handle / avatar / bio). Empty string clears avatar or bio.
+// (handle / cover / bio). Empty string clears cover or bio. The profile photo is
+// Person.avatarUrl, edited through PATCH /api/portal/me.
 const patchSchema = z.object({
     handle:    z.string().trim().min(3, "At least 3 characters").max(30, "Max 30 characters")
         .regex(/^[a-zA-Z0-9_]+$/, "Letters, numbers and underscore only").optional(),
-    avatarUrl: z.string().trim().url("Enter a valid URL").nullable().optional().or(z.literal("")),
     coverUrl:  z.string().trim().url("Enter a valid URL").nullable().optional().or(z.literal("")),
     bio:       z.string().trim().max(500, "Max 500 characters").nullable().optional(),
 });
@@ -24,7 +24,7 @@ export async function PATCH(req: Request) {
     const { data, error } = await validateRequest(req, patchSchema);
     if (error) return error;
 
-    const update: { handle?: string; avatarUrl?: string | null; coverUrl?: string | null; bio?: string | null } = {};
+    const update: { handle?: string; coverUrl?: string | null; bio?: string | null } = {};
     if (data.handle !== undefined) {
         const handle = data.handle.toLowerCase();
         const taken = await prisma.customerSocialProfile.findFirst({
@@ -34,7 +34,6 @@ export async function PATCH(req: Request) {
         if (taken) return NextResponse.json({ error: "That nickname is taken." }, { status: 409 });
         update.handle = handle;
     }
-    if (data.avatarUrl !== undefined) update.avatarUrl = data.avatarUrl ? data.avatarUrl : null;
     if (data.coverUrl !== undefined) update.coverUrl = data.coverUrl ? data.coverUrl : null;
     if (data.bio !== undefined) update.bio = data.bio ? data.bio : null;
 
@@ -42,7 +41,7 @@ export async function PATCH(req: Request) {
         const saved = await prisma.customerSocialProfile.update({
             where:  { personId: customerId! },
             data:   update,
-            select: { handle: true, avatarUrl: true, coverUrl: true, bio: true, joinedAt: true },
+            select: { handle: true, coverUrl: true, bio: true, joinedAt: true },
         });
         return NextResponse.json(saved);
     } catch (e) {

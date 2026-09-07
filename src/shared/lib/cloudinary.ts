@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 
 // Shared Cloudinary upload-signature builder, used by both the staff
-// (/api/upload-signature) and portal (/api/portal/social/upload-signature)
+// (/api/upload-signature) and portal (/api/portal/upload-signature)
 // endpoints. Signs an upload to a whitelisted folder; returns null when the
 // Cloudinary env vars aren't configured.
 

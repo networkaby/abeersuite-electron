@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
         const profile = await prisma.customerSocialProfile.create({
             data:   { personId: customerId!, handle },
-            select: { handle: true, avatarUrl: true, bio: true, joinedAt: true },
+            select: { handle: true, bio: true, joinedAt: true },
         });
         return NextResponse.json({ joined: true as const, ...profile }, { status: 201 });
     } catch (e) {

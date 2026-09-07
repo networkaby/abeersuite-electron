@@ -13,9 +13,9 @@ import {
     LogOut,
     Menu,
     Percent,
-    Settings,
     ShoppingBag,
     Ticket,
+    UserRound,
     Users,
     Wallet,
     X,
@@ -29,6 +29,9 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
+import UserAvatar from "@/shared/components/UserAvatar";
+import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
+import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
 type PortalAppShellProps = {
     children: React.ReactNode;
@@ -42,7 +45,7 @@ const NAV_ITEMS = [
     { href: "/portal/coupons", label: "My Coupons", icon: Percent },
     { href: "/portal/wallet", label: "My Wallet", icon: Wallet },
     { href: "/portal/wishlist", label: "Wishlist", icon: Heart },
-    { href: "/portal/settings", label: "Profile Settings", icon: Settings },
+    { href: "/portal/profile", label: "My Profile", icon: UserRound },
 ] as const;
 
 /** Sign-up / password pages render bare — no sidebar for someone not signed in. */
@@ -109,6 +112,10 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
     const [open, setOpen] = useState(false);
     const user = session?.user as { kind?: string; name?: string } | undefined;
     const isCustomer = user?.kind === "customer";
+    // The store copy wins once loaded: it follows a rename or a new photo
+    // straight away, while the session name only refreshes on next sign-in.
+    const profile = usePortalAccountStore((s) => s.profile);
+    const displayName = profile?.name ?? user?.name ?? "";
 
     if (isPortalAuthPage(pathname)) {
         return <div className="min-h-screen bg-background">{children}</div>;
@@ -137,20 +144,21 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                     </div>
                     <div className="flex items-center gap-2">
                         {isCustomer ? (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="gap-1.5">
-                                        <span className="max-w-[10rem] truncate">
-                                            {user?.name ? `Welcome, ${user.name}` : "My Account"}
-                                        </span>
-                                        <ChevronDown className="size-3.5 shrink-0" />
-                                    </Button>
-                                </DropdownMenuTrigger>
+                            <>
+                                <PortalProfileSwitch />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="gap-2 pl-1.5" aria-label="Account menu">
+                                            <UserAvatar avatarUrl={profile?.avatarUrl} name={displayName || "Customer"} role={null} sizePx={26} />
+                                            <span className="hidden max-w-[8rem] truncate sm:inline">{displayName || "My Account"}</span>
+                                            <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem asChild>
-                                        <Link href="/portal/settings">
-                                            <Settings className="size-4" />
-                                            Profile Settings
+                                        <Link href="/portal/profile">
+                                            <UserRound className="size-4" />
+                                            My Profile
                                         </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -162,7 +170,8 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                                         Sign out
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
-                            </DropdownMenu>
+                                </DropdownMenu>
+                            </>
                         ) : (
                             <Button variant="outline" size="sm" asChild>
                                 <Link href="/login">Sign in</Link>

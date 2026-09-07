@@ -38,11 +38,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ kind: stri
         } else {
             const p = await prisma.person.findUnique({
                 where:  { id },
-                select: { id: true, name: true, socialProfile: { select: { handle: true, avatarUrl: true, coverUrl: true, bio: true, joinedAt: true } } },
+                select: { id: true, name: true, avatarUrl: true, socialProfile: { select: { handle: true, coverUrl: true, bio: true, joinedAt: true } } },
             });
             if (!p || !p.socialProfile) return NextResponse.json({ error: "Not found" }, { status: 404 });
             actor = {
-                kind: "PERSON", id: p.id, name: p.name, avatarUrl: p.socialProfile.avatarUrl, coverUrl: p.socialProfile.coverUrl, role: null,
+                kind: "PERSON", id: p.id, name: p.name, avatarUrl: p.avatarUrl, coverUrl: p.socialProfile.coverUrl, role: null,
                 roleBadge: null, handle: p.socialProfile.handle, bio: p.socialProfile.bio,
                 joinedAt: p.socialProfile.joinedAt.toISOString(), isCustomer: true,
             };

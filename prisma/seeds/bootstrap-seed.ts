@@ -63,7 +63,7 @@ import {
     buildVoucherTemplateDefaults,
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "../../src/shared/lib/constants/companyDetails";
-import { PERMISSION_CATALOG, ensureXorCheck as ensureXorCheckShared } from "./lib/codeOwnedCatalog";
+import { PERMISSION_CATALOG, ensureXorCheck as ensureXorCheckShared, ensurePortalProfileColumns } from "./lib/codeOwnedCatalog";
 import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 
-// GET /api/portal/social/upload-signature — a signed Cloudinary upload for a
-// signed-in customer's social profile photo (avatars folder only).
+// GET /api/portal/upload-signature — a signed Cloudinary upload for a signed-in
+// customer's own photos (profile picture, social cover). Avatars folder only.
 export async function GET() {
     const { response } = await requirePortalCustomer();
     if (response) return response;

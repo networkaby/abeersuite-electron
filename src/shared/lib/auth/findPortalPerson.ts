@@ -16,6 +16,18 @@ import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/po
 
 type FoundPerson = { id: number; name: string } | null;
 
+/**
+ * A lookup result that also says WHY nobody was found. `unverified` means the
+ * identifier IS on a customer's profile, but as a contact they typed into the
+ * portal themselves without an OTP — so it must not sign them in, register, or
+ * reset a password (see Phone.verifiedAt). The UI tells them to verify it from
+ * My Profile after signing in another way.
+ */
+export type PortalPersonMatch =
+    | { status: "found"; person: { id: number; name: string } }
+    | { status: "unverified" }
+    | { status: "none" };
+
 type Db = PrismaClient | Prisma.TransactionClient;
 
 /** Written variants of a 10-digit Indian number that may sit in the DB. */
@@ -24,52 +36,64 @@ function phoneVariants(digits: string): string[] {
     return [...variants];
 }
 
-/** Find by email (case-insensitive). */
-export async function findPersonByPortalEmail(db: Db, emailNormalized: string): Promise<FoundPerson> {
+/** Find by email (case-insensitive). Only a verified row identifies a person. */
+export async function findPersonByPortalEmail(db: Db, emailNormalized: string): Promise<PortalPersonMatch> {
     const match = await db.email.findFirst({
         where: { email: { equals: emailNormalized, mode: "insensitive" }, personId: { not: null } },
-        select: { person: { select: { id: true, name: true } } },
+        select: { verifiedAt: true, person: { select: { id: true, name: true } } },
     });
-    return match?.person ?? null;
+    if (!match?.person) return { status: "none" };
+    return match.verifiedAt ? { status: "found", person: match.person } : { status: "unverified" };
 }
 
-/** Find by mobile, tolerating the various stored formats. */
-export async function findPersonByPortalPhone(db: Db, phoneNormalized: string): Promise<FoundPerson> {
+/** Find by mobile, tolerating the various stored formats. Only a verified row identifies a person. */
+export async function findPersonByPortalPhone(db: Db, phoneNormalized: string): Promise<PortalPersonMatch> {
     const digits = normalizePortalPhone(phoneNormalized) ?? phoneNormalized;
 
     // Exact hits on the common written forms first — index-friendly.
     const exact = await db.phone.findFirst({
         where: { personId: { not: null }, phone: { in: phoneVariants(digits) } },
-        select: { person: { select: { id: true, name: true } } },
+        select: { verifiedAt: true, person: { select: { id: true, name: true } } },
     });
-    if (exact?.person) return exact.person;
+    if (exact?.person) {
+        return exact.verifiedAt ? { status: "found", person: exact.person } : { status: "unverified" };
+    }
 
     // Fall back to spacing/punctuation variants ("98765 43210", "+91-98765-43210").
     // `endsWith` keeps this a single indexed-ish query instead of a table scan in JS,
     // then we confirm by normalising the few candidates it returns.
     const candidates = await db.phone.findMany({
         where: { personId: { not: null }, phone: { endsWith: digits.slice(-6) } },
-        select: { phone: true, person: { select: { id: true, name: true } } },
+        select: { phone: true, verifiedAt: true, person: { select: { id: true, name: true } } },
         take: 50,
     });
-    return (
-        candidates.find((row) => row.phone && normalizePortalPhone(row.phone) === digits)?.person ?? null
-    );
+    const hit = candidates.find((row) => row.phone && normalizePortalPhone(row.phone) === digits);
+    if (!hit?.person) return { status: "none" };
+    return hit.verifiedAt ? { status: "found", person: hit.person } : { status: "unverified" };
 }
 
 /** Email takes precedence when both are supplied. */
-export async function findPortalPerson(
+export async function matchPortalPerson(
     db: Db,
     identity: { emailNormalized?: string | null; phoneNormalized?: string | null }
-): Promise<FoundPerson> {
+): Promise<PortalPersonMatch> {
     if (identity.emailNormalized) {
         const byEmail = await findPersonByPortalEmail(db, identity.emailNormalized);
-        if (byEmail) return byEmail;
+        if (byEmail.status !== "none") return byEmail;
     }
     if (identity.phoneNormalized) {
         return findPersonByPortalPhone(db, identity.phoneNormalized);
     }
-    return null;
+    return { status: "none" };
+}
+
+/** Convenience: the person, or null when unknown OR only unverified. */
+export async function findPortalPerson(
+    db: Db,
+    identity: { emailNormalized?: string | null; phoneNormalized?: string | null }
+): Promise<FoundPerson> {
+    const match = await matchPortalPerson(db, identity);
+    return match.status === "found" ? match.person : null;
 }
 
 // ── Find or create ───────────────────────────────────────────────────────────
@@ -80,16 +104,20 @@ export type PortalContactIdentity = {
     phoneNormalized?: string | null;
 };
 
-/** Attach a contact row, shrugging off the unique clash when it already exists. */
-async function attachPhone(db: Db, personId: number, phone: string, isPrimary: boolean) {
+/**
+ * Attach a contact row, shrugging off the unique clash when it already exists.
+ * `verified` is true only for the channel the OTP just proved; the optional
+ * "other contact" typed on the onboarding form is taken on trust, i.e. unverified.
+ */
+async function attachPhone(db: Db, personId: number, phone: string, isPrimary: boolean, verified: boolean) {
     await db.phone
-        .create({ data: { phone: `+91${phone}`, personId, isPrimary } })
+        .create({ data: { phone: `+91${phone}`, personId, isPrimary, verifiedAt: verified ? new Date() : null } })
         .catch(() => { /* already on file — nothing to do */ });
 }
 
-async function attachEmail(db: Db, personId: number, email: string, isPrimary: boolean) {
+async function attachEmail(db: Db, personId: number, email: string, isPrimary: boolean, verified: boolean) {
     await db.email
-        .create({ data: { email, personId, isPrimary } })
+        .create({ data: { email, personId, isPrimary, verifiedAt: verified ? new Date() : null } })
         .catch(() => { /* already on file — nothing to do */ });
 }
 
@@ -122,10 +150,13 @@ export async function ensurePortalPerson(
         identity.phoneNormalized ??
         (extra && !extra.includes("@") ? normalizePortalPhone(extra) : null);
 
+    const phoneVerified = Boolean(identity.phoneNormalized);
+    const emailVerified = Boolean(identity.emailNormalized);
+
     const existing = await findPortalPerson(db, identity);
     if (existing) {
-        if (phone) await attachPhone(db, existing.id, phone, false);
-        if (email) await attachEmail(db, existing.id, email, false);
+        if (phone) await attachPhone(db, existing.id, phone, false, phoneVerified);
+        if (email) await attachEmail(db, existing.id, email, false, emailVerified);
         const account = await db.account.findUnique({
             where: { personId: existing.id },
             select: { id: true },
@@ -142,13 +173,17 @@ export async function ensurePortalPerson(
         const person = await tx.person.create({
             data: { name: name.trim() || email?.split("@")[0] || "Customer" },
         });
+        // The proved channel is primary; the trusted extra one is neither
+        // primary nor verified (an unverified row can never be primary).
         if (phone) {
             await tx.phone.create({
-                data: { phone: `+91${phone}`, personId: person.id, isPrimary: true },
+                data: { phone: `+91${phone}`, personId: person.id, isPrimary: phoneVerified, verifiedAt: phoneVerified ? new Date() : null },
             });
         }
         if (email) {
-            await tx.email.create({ data: { email, personId: person.id, isPrimary: true } });
+            await tx.email.create({
+                data: { email, personId: person.id, isPrimary: emailVerified, verifiedAt: emailVerified ? new Date() : null },
+            });
         }
         await tx.account.create({
             data: { personId: person.id, name: person.name, creditLimit: 0 },

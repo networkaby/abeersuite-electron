@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
-import { ensurePortalPerson, findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
+import { ensurePortalPerson, matchPortalPerson } from "@/shared/lib/auth/findPortalPerson";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 import { readTicket } from "@/shared/lib/auth/otpChallenge";
 import { verifyFirebaseIdToken } from "@/shared/lib/auth/firebaseToken";
@@ -36,6 +36,8 @@ export type PortalIdentity = {
 
 export type PasswordlessResult =
     | { status: "invalid" }
+    /** On file only as an unverified portal self-add — never a sign-in identity. */
+    | { status: "unverified" }
     | { status: "needsOnboarding"; identity: PortalIdentity }
     | { status: "ok"; user: PortalAuthUser };
 
@@ -114,9 +116,10 @@ export async function authorizePortalPasswordless(
     const identity = await resolvePortalIdentity(args.token);
     if (!identity) return { status: "invalid" };
 
-    const existing = await findPortalPerson(prisma, identity);
-    if (existing) {
-        const user = await toAuthUser(prisma, existing.id);
+    const match = await matchPortalPerson(prisma, identity);
+    if (match.status === "unverified") return { status: "unverified" };
+    if (match.status === "found") {
+        const user = await toAuthUser(prisma, match.person.id);
         return user ? { status: "ok", user } : { status: "invalid" };
     }
 

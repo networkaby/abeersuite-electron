@@ -30,16 +30,25 @@ export default function PortalOtpLoginForm({
     busy: parentBusy,
     submitError,
     initialStep = "identify",
+    lockedIdentifier,
+    verifyLabel = "Verify & sign in",
 }: {
     /** Called with a verified token from whichever channel was used. */
     onVerified: (token: string, channel: OtpChannel, identity: string) => void;
     busy: boolean;
     submitError: string;
     initialStep?: OtpStep;
+    /**
+     * Verify THIS contact (My Profile → Verify): the field is pre-filled and
+     * read-only, so the code can only go to the contact being verified.
+     */
+    lockedIdentifier?: string;
+    /** Button text on the code step — "sign in" reads wrong on a profile page. */
+    verifyLabel?: string;
 }) {
     const [step, setStep] = useState<OtpStep>(initialStep);
     // One field for mobile OR email — we work out which it is.
-    const [identifier, setIdentifier] = useState("");
+    const [identifier, setIdentifier] = useState(lockedIdentifier ?? "");
     const [code, setCode] = useState("");
     const [error, setError] = useState("");
     const [sending, setSending] = useState(false);
@@ -123,6 +132,7 @@ export default function PortalOtpLoginForm({
                         autoComplete="username"
                         placeholder="98765 43210 or you@example.com"
                         value={identifier}
+                        readOnly={!!lockedIdentifier}
                         onChange={(e) => setIdentifier(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === "Enter") {
@@ -175,12 +185,14 @@ export default function PortalOtpLoginForm({
             </div>
             {(error || submitError) && <p className="text-sm text-destructive">{error || submitError}</p>}
             <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
-                {busy ? "Verifying…" : "Verify & sign in"}
+                {busy ? "Verifying…" : verifyLabel}
             </Button>
             <div className="flex items-center justify-between text-sm">
-                <button type="button" className="text-primary underline" onClick={restart}>
-                    {asEmail ? "Change email" : "Change number"}
-                </button>
+                {lockedIdentifier ? <span /> : (
+                    <button type="button" className="text-primary underline" onClick={restart}>
+                        {asEmail ? "Change email" : "Change number"}
+                    </button>
+                )}
                 <button
                     type="button"
                     className="text-primary underline disabled:text-muted-foreground disabled:no-underline"

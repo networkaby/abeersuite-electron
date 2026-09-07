@@ -18,12 +18,27 @@ export const contactValueSchema = z
         isPrimary: z.boolean().optional(),
     });
 
-export type ContactValueInput = z.infer<typeof contactValueSchema>;
+export type ContactValueInput = z.infer<typeof contactValueSchema> & {
+    /**
+     * Ownership proof. Staff-entered contacts are verified on entry (default);
+     * the portal passes `false` for a contact the customer typed in without an
+     * OTP, and such a row can never be primary — see `makePrimaryTx`.
+     */
+    verified?: boolean;
+};
 
 export class ContactConflictError extends Error {
     status = 409;
     constructor(public field: "phone" | "email", value: string) {
         super(`This ${field} (${value}) is already used by another contact`);
+    }
+}
+
+/** Thrown when an unverified contact is asked to become primary. */
+export class ContactUnverifiedError extends Error {
+    status = 409;
+    constructor(kind: "phone" | "email") {
+        super(`Verify this ${kind === "phone" ? "mobile" : "email"} before making it primary`);
     }
 }
 
@@ -57,6 +72,12 @@ async function makePrimaryTx(
 ) {
     // Branch on `kind` explicitly — a variable holding `tx.phone | tx.email`
     // isn't callable in TS (union of overloaded delegate types collapses).
+    if (newPrimaryId != null) {
+        const row = kind === "phone"
+            ? await tx.phone.findUnique({ where: { id: newPrimaryId }, select: { verifiedAt: true } })
+            : await tx.email.findUnique({ where: { id: newPrimaryId }, select: { verifiedAt: true } });
+        if (!row?.verifiedAt) throw new ContactUnverifiedError(kind);
+    }
     if (kind === "phone") {
         await tx.phone.updateMany({ where: { ...ownerWhere(owner), isPrimary: true }, data: { isPrimary: false } });
         if (newPrimaryId != null) {
@@ -77,15 +98,17 @@ async function maybePromoteNextAfterDelete(
     kind: "phone" | "email",
     owner: ContactOwner,
 ): Promise<boolean> {
+    // Only a verified row may become primary (unverified ones are portal
+    // self-adds nobody has proved yet).
     const remaining = kind === "phone"
         ? await tx.phone.findMany({
-            where: ownerWhere(owner),
+            where: { ...ownerWhere(owner), verifiedAt: { not: null } },
             orderBy: [{ isPrimary: "desc" }, { id: "asc" }],
             take: 1,
             select: { id: true, isPrimary: true },
         })
         : await tx.email.findMany({
-            where: ownerWhere(owner),
+            where: { ...ownerWhere(owner), verifiedAt: { not: null } },
             orderBy: [{ isPrimary: "desc" }, { id: "asc" }],
             take: 1,
             select: { id: true, isPrimary: true },
@@ -109,7 +132,8 @@ export async function createPhone(owner: ContactOwner, input: ContactValueInput)
             // with one primary and rest non-primary after this insert.
             const existing = await tx.phone.count({ where: ownerWhere(owner) });
             const isFirst = existing === 0;
-            const wantPrimary = Boolean(input.isPrimary) || isFirst;
+            // An unverified row is never primary — not even as the only one.
+            const wantPrimary = input.verified !== false && (Boolean(input.isPrimary) || isFirst);
 
             if (wantPrimary) {
                 // Clear existing primaries before marking the new one primary
@@ -128,6 +152,7 @@ export async function createPhone(owner: ContactOwner, input: ContactValueInput)
                     companyId: owner.companyId ?? null,
                     label: input.label ?? null,
                     isPrimary: wantPrimary,
+                    verifiedAt: input.verified === false ? null : new Date(),
                 },
             });
         });
@@ -144,7 +169,7 @@ export async function createEmail(owner: ContactOwner, input: ContactValueInput)
         return await prisma.$transaction(async (tx) => {
             const existing = await tx.email.count({ where: ownerWhere(owner) });
             const isFirst = existing === 0;
-            const wantPrimary = Boolean(input.isPrimary) || isFirst;
+            const wantPrimary = input.verified !== false && (Boolean(input.isPrimary) || isFirst);
 
             if (wantPrimary) {
                 await tx.email.updateMany({
@@ -160,6 +185,7 @@ export async function createEmail(owner: ContactOwner, input: ContactValueInput)
                     companyId: owner.companyId ?? null,
                     label: input.label ?? null,
                     isPrimary: wantPrimary,
+                    verifiedAt: input.verified === false ? null : new Date(),
                 },
             });
         });
@@ -298,4 +324,13 @@ export async function setPrimaryPhone(id: number) {
 /** One-shot PATCH helper: make a specific email the primary for its owner. */
 export async function setPrimaryEmail(id: number) {
     return await updateEmail(id, { isPrimary: true });
+}
+
+/** Stamp ownership proof on a contact (portal OTP, or staff confirming in person). */
+export async function markPhoneVerified(id: number) {
+    return await prisma.phone.update({ where: { id }, data: { verifiedAt: new Date() } });
+}
+
+export async function markEmailVerified(id: number) {
+    return await prisma.email.update({ where: { id }, data: { verifiedAt: new Date() } });
 }

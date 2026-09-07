@@ -46,8 +46,12 @@ export function usePortalPasswordlessSignIn(onSignedIn: () => void) {
                 setError(GENERIC_FAIL);
                 return;
             }
-            const { exists } = (await res.json()) as { exists: boolean };
+            const { exists, unverified } = (await res.json()) as { exists: boolean; unverified?: boolean };
 
+            if (unverified) {
+                setError("This contact is saved on a profile but not verified yet. Sign in with your password or a verified mobile/email, then verify it from My Profile.");
+                return;
+            }
             if (!exists) {
                 setOnboard({ token, channel, identity });
                 return;

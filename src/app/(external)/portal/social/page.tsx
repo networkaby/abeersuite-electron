@@ -123,7 +123,7 @@ function EditTab({ me, onSaved }: { me: Me; onSaved: () => void }) {
         if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return; }
         setBusy(true);
         try {
-            const url = await uploadImageToCloudinary(file, "/api/portal/social/upload-signature");
+            const url = await uploadImageToCloudinary(file, "/api/portal/upload-signature");
             apply(url);
             toast.success("Photo uploaded");
         } catch {
@@ -134,12 +134,18 @@ function EditTab({ me, onSaved }: { me: Me; onSaved: () => void }) {
     async function save() {
         setSaving(true);
         try {
-            await axios.patch("/api/portal/social/profile", {
-                handle: handle.trim(),
-                avatarUrl: avatarUrl.trim() || null,
-                coverUrl: coverUrl.trim() || null,
-                bio: bio.trim() || null,
-            });
+            // The photo is the customer's one profile picture (Person.avatarUrl),
+            // shared with My Profile; the rest is social-only.
+            await Promise.all([
+                axios.patch("/api/portal/social/profile", {
+                    handle: handle.trim(),
+                    coverUrl: coverUrl.trim() || null,
+                    bio: bio.trim() || null,
+                }),
+                (avatarUrl.trim() || null) !== (me.avatarUrl ?? null)
+                    ? axios.patch("/api/portal/me", { avatarUrl: avatarUrl.trim() || null })
+                    : Promise.resolve(),
+            ]);
             toast.success("Profile saved");
             onSaved();
         } catch (e) {

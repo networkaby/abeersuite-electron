@@ -17,6 +17,9 @@ model Person {
   id            Int       @id @default(autoincrement())
   name          String
   address       String?
+  /// Profile photo (Cloudinary URL) the customer uploads from the portal. One
+  /// photo per person — the social profile shows this same picture.
+  avatarUrl     String?
   agreedToTerms Boolean   @default(false)
   isActive      Boolean   @default(true)
   agreedAt      DateTime?
@@ -221,6 +224,11 @@ model Phone {
   label     String?
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
+  /// When ownership was proved. Staff-entered contacts are verified on entry
+  /// (they met the customer); a portal OTP sets it too. Null only for a contact
+  /// the customer typed into the portal without an OTP — POS search still finds
+  /// it, but it cannot be primary, sign in by OTP, or reset the password.
+  verifiedAt DateTime?
 
   person  Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
   company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -237,6 +245,11 @@ model Email {
   label     String?
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
+  /// When ownership was proved. Staff-entered contacts are verified on entry
+  /// (they met the customer); a portal OTP sets it too. Null only for a contact
+  /// the customer typed into the portal without an OTP — POS search still finds
+  /// it, but it cannot be primary, sign in by OTP, or reset the password.
+  verifiedAt DateTime?
 
   person  Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
   company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
