@@ -1050,6 +1050,7 @@ CREATE TABLE IF NOT EXISTS "UniversalVoucher" (
     "status" "VoucherStatus" NOT NULL DEFAULT 'DRAFT',
     "binding" "VoucherBinding" NOT NULL DEFAULT 'REGULAR',
     "branchId" TEXT,
+    "sourceCounterId" INTEGER,
     "partyAccountId" INTEGER,
     "postedAt" TIMESTAMP(3),
     "cancelledAt" TIMESTAMP(3),
@@ -1075,6 +1076,7 @@ ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "denomJson" JSONB;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "status" "VoucherStatus" NOT NULL DEFAULT 'DRAFT';
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "binding" "VoucherBinding" NOT NULL DEFAULT 'REGULAR';
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
+ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "sourceCounterId" INTEGER;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "partyAccountId" INTEGER;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "postedAt" TIMESTAMP(3);
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);
@@ -3064,6 +3066,7 @@ CREATE TABLE IF NOT EXISTS "Ticket" (
     "context" JSONB,
     "recurrenceId" INTEGER,
     "occurrenceNo" INTEGER,
+    "sourceCounterId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "statusEnteredAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
@@ -3092,6 +3095,7 @@ ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "parentWorkerId" TEXT;
 ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "context" JSONB;
 ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "recurrenceId" INTEGER;
 ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "occurrenceNo" INTEGER;
+ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "sourceCounterId" INTEGER;
 ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 ALTER TABLE "Ticket" ADD COLUMN IF NOT EXISTS "statusEnteredAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
@@ -3746,6 +3750,9 @@ CREATE INDEX IF NOT EXISTS "UniversalVoucher_partyAccountId_idx" ON "UniversalVo
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_branchId_idx" ON "UniversalVoucher"("branchId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "UniversalVoucher_sourceCounterId_idx" ON "UniversalVoucher"("sourceCounterId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_updatedAt_idx" ON "UniversalVoucher"("updatedAt");
 
 -- CreateIndex
@@ -4131,6 +4138,9 @@ CREATE INDEX IF NOT EXISTS "Ticket_accountId_idx" ON "Ticket"("accountId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Ticket_createdAt_idx" ON "Ticket"("createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Ticket_sourceCounterId_idx" ON "Ticket"("sourceCounterId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Ticket_wakeAt_idx" ON "Ticket"("wakeAt");

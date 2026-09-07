@@ -221,10 +221,17 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<Provisio
             // Every statement is guarded (IF NOT EXISTS, or a DO block swallowing
             // duplicate_object for CREATE TYPE / ADD CONSTRAINT — see makeIdempotent()
             // in gen-local-schema.ts), so a re-apply is a no-op for anything that
-            // already exists in the same shape. It does NOT pick up a column added to
-            // an already-existing table — that needs a real diff-against-target
-            // migrator, not this from-empty snapshot — so a genuine shape change still
-            // surfaces here, and failures stay reported rather than swallowed.
+            // already exists in the same shape. A column added upstream to a table this
+            // replica ALREADY has does reach it: addColumnBackfills() in
+            // gen-local-schema.ts emits an `ADD COLUMN IF NOT EXISTS` per column right
+            // after each `CREATE TABLE`, precisely because `CREATE TABLE IF NOT EXISTS`
+            // skips the whole statement once the table exists. So shipping a rebuilt
+            // local-schema.sql is what clears a counter halted on schema drift.
+            //
+            // One simple-query call, so Postgres runs the whole file in an implicit
+            // transaction: it either all applies or none of it does. The hash below is
+            // stamped only after it returns, so a failure leaves the replica on its old
+            // hash and the next boot retries rather than declaring itself current.
             await client.query(schemaSql);
             await client.query(
                 `INSERT INTO "_provision" (only_row, schema_hash) VALUES (true, $1)
