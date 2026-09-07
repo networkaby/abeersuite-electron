@@ -452,10 +452,14 @@ async function main() {
             for (const model of due) {
                 const entry = tables[model];
                 try {
-                    const [srcFp, locFp] = await Promise.all([
-                        reconcile.fingerprint(source, entry),
-                        reconcile.fingerprint(local, entry),
-                    ]);
+                    // Source FIRST, not in parallel: a row-content fingerprint (full and
+                    // child tables — see reconcile.js) has the replica hash only the
+                    // columns the source still has, so it needs that list back before it
+                    // can run. Without it, a column the replica carries and the source has
+                    // dropped would read as a permanent difference. One extra round trip
+                    // on at most VERIFY_BUDGET tables a cycle.
+                    const srcFp = await reconcile.fingerprint(source, entry);
+                    const locFp = await reconcile.fingerprint(local, entry, srcFp.columns || []);
                     verified++;
                     if (reconcile.same(srcFp, locFp)) {
                         await state.recordVerified(local, entry, srcFp.count, srcFp.checksum);
@@ -474,13 +478,33 @@ async function main() {
                             source, local, tables, fkCache, entry, diff.onlyLocal, changedModels,
                         );
                     }
+                    // A content fingerprint can disagree while the KEYS match perfectly —
+                    // that is the whole reason full and child tables hash the row. keyDiff
+                    // has nothing to say about those, so without this the repair would move
+                    // nothing, the re-fingerprint would still differ, and the table would
+                    // never be marked verified: a loop that makes no progress and logs
+                    // "still differs after repair" every hour.
+                    // ...but not while the replica is missing a column the source has. Then
+                    // every row reads as different for one schema reason, and `upsert`
+                    // names the source's columns, so the repair would fail on every batch.
+                    // schemaGuard should have halted the worker long before this; this is
+                    // the cheap second lock on the same door.
+                    const behind = reconcile.missingColumns(srcFp, locFp);
+                    const refreshed = reconcile.hashesRowContent(entry) && behind.length === 0
+                        ? await pullByKeys(source, local, entry,
+                            await reconcile.rowHashDiff(source, local, entry, srcFp.columns || []))
+                        : 0;
+                    if (behind.length) {
+                        console.log(`  ${model.padEnd(28)} schema behind: missing ${behind.join(", ")}`);
+                    }
+                    repaired += refreshed;
                     // A repair changes what this replica serves just as a pull does, so
                     // the screens must hear about it (see __SYNC_APPLIED__ below).
-                    if (removed + added > 0) changedModels.add(model);
+                    if (removed + added + refreshed > 0) changedModels.add(model);
                     console.log(
-                        `  ${model.padEnd(28)} repair    -${removed} +${added}`,
+                        `  ${model.padEnd(28)} repair    -${removed} +${added} ~${refreshed}`,
                     );
-                    const after = await reconcile.fingerprint(local, entry);
+                    const after = await reconcile.fingerprint(local, entry, srcFp.columns || []);
                     if (reconcile.same(srcFp, after)) {
                         await state.recordVerified(local, entry, after.count, after.checksum);
                     } else {
@@ -591,7 +615,14 @@ async function main() {
     process.exit(failed === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+// Only when run as a command. Requiring this file (a test, a tool) must not start a
+// sync cycle as a side effect — and `repairReferencing` is worth being able to call
+// against a scratch pair of databases without provisioning all 116 tables.
+if (require.main === module) {
+    main().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+}
+
+module.exports = { repairReferencing };

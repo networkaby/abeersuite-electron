@@ -36,7 +36,12 @@ export async function GET(req: Request) {
                 } : {}),
                 ...(includeEngine ? {} : { type: "JOURNAL" }),
             },
-            orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+            // Posting wall-clock, not row-insert time — see the vouchers route.
+            orderBy: [
+                { date: "desc" },
+                { sourceCreatedAt: { sort: "desc", nulls: "last" } },
+                { createdAt: "desc" },
+            ],
             include: {
                 _count: { select: { lines: true } },
                 lines: { select: { type: true, amount: true } },

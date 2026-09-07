@@ -9,6 +9,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 const ACCOUNT_SELECT = {
     id: true,
@@ -141,6 +142,8 @@ export async function POST(req: Request) {
     try {
         const t = await prisma.ticket.create({
             data: {
+                // Which till raised this — same column and resolver as every voucher.
+                sourceCounterId: await sourceCounterId(),
                 accountId: body.accountId,
                 pipelineId: pipeline.id,
                 status: entryStatus.id,

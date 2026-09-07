@@ -37,6 +37,10 @@ type PosSale = {
     totalAmount: string;
     amountReceived: string;
     branch: string;
+    /** Source counter as `branch-counter`, e.g. "1-24"; "Office" when unattributed. */
+    counter: string;
+    /** Spelled-out form for the cell's tooltip, e.g. "Head Office · Counter 24". */
+    counterLong: string;
     cashier: string;
     lineCount: number;
 };
@@ -108,6 +112,20 @@ export function PosSalesRegister() {
     }, []);
     useEffect(() => { refreshShift(); }, [refreshShift]);
 
+    // "Only this counter" — shared by Sales / Returns / Orders / Estimates /
+    // Cash In-Out, exactly like the date range above. ON by default: a cashier
+    // opening the register wants their own till, and another counter's bills
+    // appearing among theirs is confusing. The Cash Book tab is already locked to
+    // this counter and ignores it.
+    //
+    // Filtered SERVER-side (`?counterId=`). Doing it here would sift only the
+    // 50-row page already fetched and leave the totals and paging wrong.
+    const [onlyThisCounter, setOnlyThisCounter] = useState(true);
+    // Null until the shift loads, and whenever no shift is open — there is no
+    // "this counter" to mean then, so the filter cannot apply.
+    const myCounterId = activeShift?.counter.id ?? null;
+    const counterFilterId = onlyThisCounter ? myCounterId : null;
+
     const [tab, setTab] = useState<"sales" | "returns" | "orders" | "estimates" | "cash" | "ledger">("sales");
     const [moves, setMoves] = useState<CashMove[]>([]);
     const [movesLoading, setMovesLoading] = useState(false);
@@ -115,11 +133,11 @@ export function PosSalesRegister() {
     useEffect(() => {
         if (tab !== "cash") return;
         setMovesLoading(true);
-        axios.get<{ items: CashMove[] }>('/api/pos/cash-movements?limit=100')
+        axios.get<{ items: CashMove[] }>(`/api/pos/cash-movements?limit=100${counterFilterId != null ? `&counterId=${counterFilterId}` : ""}`)
             .then((r) => setMoves(r.data.items))
             .catch(() => toast.error("Failed to load cash movements"))
             .finally(() => setMovesLoading(false));
-    }, [tab, refreshKey]);
+    }, [tab, refreshKey, counterFilterId]);
 
     // ── POS Orders / Estimates (POS_ORDER / POS_ESTIMATE vouchers) ───────────
     const [posDocs, setPosDocs] = useState<PosDoc[]>([]);
@@ -145,11 +163,15 @@ export function PosSalesRegister() {
         if (tab !== "orders" && tab !== "estimates") return;
         const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
         setPosDocsLoading(true);
-        axios.get<PosDoc[]>(`/api/inventory/vouchers?type=${type}`)
-            .then((r) => setPosDocs((Array.isArray(r.data) ? r.data : []).sort((a, b) => b.id - a.id)))
+        axios.get<PosDoc[]>(`/api/inventory/vouchers?type=${type}${counterFilterId != null ? `&counterId=${counterFilterId}` : ""}`)
+            // No client re-sort: the server already returns these newest-raised
+            // first. Re-sorting by `id` here would undo that — `id` is insert-at-
+            // office order, which is the very thing that put a late-synced till's
+            // older documents above newer ones.
+            .then((r) => setPosDocs(Array.isArray(r.data) ? r.data : []))
             .catch(() => toast.error(`Failed to load ${tab}`))
             .finally(() => setPosDocsLoading(false));
-    }, [tab, refreshKey]);
+    }, [tab, refreshKey, counterFilterId]);
 
     // Toggle a non-GL doc between Draft (not finalised) and Issued (given to party).
     async function toggleDocStatus(d: PosDoc) {
@@ -189,7 +211,7 @@ export function PosSalesRegister() {
     const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
     /** Set for a refresh nobody asked for, so the table is not torn down. */
     const silentRef = useRef(false);
-    const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string) => {
+    const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string, counter: number | null) => {
         // A live refresh must not blank a register someone is reading; a person
         // pressing Refresh still gets the spinner. Cleared once the read is done.
         if (!silentRef.current) setLoading(true);
@@ -201,6 +223,7 @@ export function PosSalesRegister() {
                 ...(search ? { q: search } : {}),
                 ...(f ? { from: f } : {}),
                 ...(t ? { to: t } : {}),
+                ...(counter != null ? { counterId: String(counter) } : {}),
             });
             const { data } = await axios.get<ApiResponse>(`/api/pos/sales?${params}`);
             setItems(data.items);
@@ -213,7 +236,11 @@ export function PosSalesRegister() {
         }
     }, []);
 
-    useEffect(() => { void load(listKind, q, page, rangeFrom, rangeTo); }, [load, listKind, q, page, rangeFrom, rangeTo, refreshKey]);
+    useEffect(() => { void load(listKind, q, page, rangeFrom, rangeTo, counterFilterId); }, [load, listKind, q, page, rangeFrom, rangeTo, counterFilterId, refreshKey]);
+
+    // Changing the filter changes how many rows there are, so page 2 of the old
+    // list is meaningless against the new one. Back to the first page.
+    useEffect(() => { setPage(1); }, [counterFilterId]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const refreshCurrentTab = () => {
@@ -345,6 +372,25 @@ export function PosSalesRegister() {
                         Pending only <span className="text-xs">(no sale)</span>
                     </label>
                 )}
+                {/* "Only this counter" — every tab except the Cash Book, which is
+                    already locked to the active shift's counter. Disabled with no
+                    shift open: there is no "this counter" to mean. */}
+                {tab !== "ledger" && (
+                    <label
+                        className={`flex h-9 shrink-0 items-center gap-1.5 text-sm text-muted-foreground ${myCounterId == null ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                        title={myCounterId == null
+                            ? "Open a shift to filter by counter"
+                            : `Show only what was billed at ${activeShift?.counter.name}`}
+                    >
+                        <Checkbox
+                            checked={onlyThisCounter && myCounterId != null}
+                            disabled={myCounterId == null}
+                            onCheckedChange={(v) => setOnlyThisCounter(!!v)}
+                        />
+                        Only this counter
+                        {activeShift && <span className="text-xs">({activeShift.counter.name})</span>}
+                    </label>
+                )}
             </div>
 
             {(tab === "sales" || tab === "returns") && (
@@ -375,6 +421,8 @@ export function PosSalesRegister() {
                                             <th className="px-4 py-2.5 text-left font-medium">Date</th>
                                             {tab === "returns" && <th className="px-4 py-2.5 text-left font-medium">Original</th>}
                                             <th className="px-4 py-2.5 text-left font-medium">Branch</th>
+                                            {/* Source counter as branch-counter, e.g. "1-24". */}
+                                            <th className="px-4 py-2.5 text-left font-medium">Counter</th>
                                             <th className="px-4 py-2.5 text-left font-medium">Cashier</th>
                                             <th className="px-4 py-2.5 text-left font-medium">{tab === "returns" ? "Refund" : "Payment"}</th>
                                             <th className="px-4 py-2.5 text-right font-medium">Items</th>
@@ -407,6 +455,9 @@ export function PosSalesRegister() {
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-2.5 text-muted-foreground">{s.branch}</td>
+                                                {/* Numbers, not names — this bar is already tight. The
+                                                    spelled-out counter is the tooltip. */}
+                                                <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground" title={s.counterLong}>{s.counter}</td>
                                                 <td className="px-4 py-2.5 text-muted-foreground">{s.cashier}</td>
                                                 <td className="px-4 py-2.5">
                                                     {tab === "returns" ? (

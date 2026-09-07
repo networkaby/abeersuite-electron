@@ -148,7 +148,7 @@ export async function GET(req: Request) {
         const select = {
             id: true, type: true, voucherNo: true, date: true,
             description: true, narration: true, status: true,
-            cancelledAt: true, createdAt: true,
+            cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true,
             branchId: true, createdById: true, partyAccountId: true,
             lines: { select: { type: true, amount: true } },
             // The trade detail carries its own id — which is what every inventory
@@ -159,7 +159,24 @@ export async function GET(req: Request) {
             },
         } satisfies Prisma.UniversalVoucherSelect;
 
-        const orderBy: Prisma.UniversalVoucherOrderByWithRelationInput[] = [{ date: "desc" }, { id: "desc" }];
+        // Newest first: day, then the faithful wall-clock within the day, then id.
+        //
+        // `date` is @db.Date — no time — so it can only group days. `id` alone
+        // ordered by insert-at-office, which floats a till's late-synced backlog
+        // above vouchers raised days later. `sourceCreatedAt` is when the voucher
+        // was actually posted, so it does the real work; `id` remains last, which
+        // keeps the order a TOTAL one (id is unique) and so keeps the cursor walk
+        // below gap-free. Rows predating `sourceCreatedAt` sort null-last within
+        // their day and still land on the right day.
+        //
+        // NOTE: the client re-sorts with the same key in useDayBook's `byAge`.
+        // The two must stay in step — a client ordering differently from the
+        // server would mis-place its page boundary and drop rows.
+        const orderBy: Prisma.UniversalVoucherOrderByWithRelationInput[] = [
+            { date: "desc" },
+            { sourceCreatedAt: { sort: "desc", nulls: "last" } },
+            { id: "desc" },
+        ];
 
         let found: Prisma.UniversalVoucherGetPayload<{ select: typeof select }>[];
         let nextCursor: number | null = null;
@@ -254,6 +271,9 @@ export async function GET(req: Request) {
                 status:      v.status,
                 cancelledAt: v.cancelledAt,
                 createdAt:   v.createdAt,
+                // The wall-clock the sort above uses — the client re-sorts by it.
+                sourceCreatedAt: v.sourceCreatedAt,
+                sourceCounterId: v.sourceCounterId,
                 converted:   detail ? convertedIds.has(detail.id) : false,
             };
         });

@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
     const branchParam = searchParams.get("branchId");
     const accountIdParam = searchParams.get("accountId");
     const ticketIdParam = searchParams.get("ticketId");
+    // Only rows RAISED at this counter — the POS register's "Only this counter".
+    const counterIdRaw = Number(searchParams.get("counterId"));
+    const counterId = Number.isInteger(counterIdRaw) && counterIdRaw > 0 ? counterIdRaw : null;
     // 5D-17: shopOrderId filter removed — the order↔voucher FK is disconnected (ecommerce rebuild).
 
     // Normalise the type filter — accept either ?type=SALE or ?types=SALE,POS.
@@ -77,6 +80,8 @@ export async function GET(req: NextRequest) {
         deletedAt: null,
         ...(accountIdParam ? { partyAccountId: Number(accountIdParam) } : {}),
         ...(branchScopeId ? { branchId: branchScopeId } : {}),
+        // "Only this counter" on the POS register (Orders / Estimates tabs).
+        ...(counterId != null ? { sourceCounterId: counterId } : {}),
     };
     const vouchers = await prisma.voucherDetail.findMany({
         where: {
@@ -85,10 +90,19 @@ export async function GET(req: NextRequest) {
                 ...(ticketIdParam ? { links: { some: { kind: "TICKET", targetId: ticketIdParam } } } : {}),
             },
         },
-        orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],   // 5D-10: date on spine
+        // Newest first by WHEN IT WAS RAISED. `date` is @db.Date (day only, no
+        // time) so it groups the days; `sourceCreatedAt` is the faithful counter
+        // wall-clock and orders within one. `id` is only a last tie-break — on its
+        // own it records insert-at-office order, which puts a till's late-synced
+        // backlog above documents raised days afterwards.
+        orderBy: [
+            { universalVoucher: { date: "desc" } },
+            { universalVoucher: { sourceCreatedAt: "desc" } },
+            { id: "desc" },
+        ],   // 5D-10: date on spine
         include: {
             // 5D-2 creator + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-12 branch live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, branch: { select: { id: true, name: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch
+            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true, branch: { select: { id: true, name: true, number: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
@@ -205,6 +219,11 @@ export async function GET(req: NextRequest) {
             deletedAt:   v.universalVoucher?.deletedAt ?? null,
             cancelledAt: v.universalVoucher?.cancelledAt ?? null,
             createdAt:   v.universalVoucher?.createdAt,
+            // Faithful posting wall-clock + the till it was raised at. Surfaced
+            // alongside the lifecycle fields so every register client reads them
+            // the same way.
+            sourceCreatedAt: v.universalVoucher?.sourceCreatedAt ?? null,
+            sourceCounterId: v.universalVoucher?.sourceCounterId ?? null,
         };
         if (v.partyId == null) {
             return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", description: v.universalVoucher?.description ?? null, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };

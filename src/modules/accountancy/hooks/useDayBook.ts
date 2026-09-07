@@ -43,7 +43,7 @@ export type CombinedSource = "inv" | "gl" | "je";
 type RawRow = {
     id:             string;
     rawId:          number;
-    /** Spine id — the second half of the server's `(date desc, id desc)` sort key. */
+    /** Spine id — the LAST part of the server's sort key, and its tie-break. */
     sortId:         number;
     source:         CombinedSource;
     kind:           string;
@@ -59,6 +59,11 @@ type RawRow = {
     status:         "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt:    string | null;
     createdAt:      string;
+    /** Faithful posting wall-clock — the middle of the sort key. Null on rows
+     *  raised before the column existed. */
+    sourceCreatedAt: string | null;
+    /** The till this voucher was raised at. Null = office. */
+    sourceCounterId: number | null;
     converted:      boolean;
 };
 
@@ -99,10 +104,28 @@ export type DayBookQuery = {
 
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
-/** Server order: newest date first, newest spine id first within a date. */
+/**
+ * Server order, mirrored exactly: newest date first, then the faithful posting
+ * wall-clock within the day, then the spine id as the tie-break.
+ *
+ * This MUST match the `orderBy` in the day-book route. The merge below decides
+ * what lies beyond its last loaded row by comparing with this function, so a
+ * comparator that disagreed with the server would put the boundary in the wrong
+ * place and silently drop rows.
+ *
+ * `sourceCreatedAt` is null on rows raised before that column existed; they sort
+ * last within their day, matching the server's `nulls: "last"`.
+ */
 const byAge = (a: RawRow, b: RawRow) => {
     const d = b.date.localeCompare(a.date);
-    return d !== 0 ? d : b.sortId - a.sortId;
+    if (d !== 0) return d;
+    if (a.sourceCreatedAt !== b.sourceCreatedAt) {
+        if (a.sourceCreatedAt === null) return 1;
+        if (b.sourceCreatedAt === null) return -1;
+        const t = b.sourceCreatedAt.localeCompare(a.sourceCreatedAt);
+        if (t !== 0) return t;
+    }
+    return b.sortId - a.sortId;
 };
 
 type Store = {

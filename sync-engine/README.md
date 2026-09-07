@@ -214,7 +214,8 @@ A watermark reports that a row **changed**; it can never report that a row is
 first, budgeted so the cost is spread rather than arriving as a periodic stall.
 
 `watermark`, `append` and `child` tables are reconciled; `full` is exact by construction
-(replaced wholesale). `child` used to be skipped on the argument that it is exact for
+(replaced wholesale). `child` is compared on row **contents**, not keys — see *What a
+key hash cannot see* below. `child` used to be skipped on the argument that it is exact for
 any parent that moved — which is true, and not enough: a child row inserted without
 touching its parent's `updatedAt` never moves the parent, so it is never pulled, and
 nothing else ever looked at that table. Found on a real replica on 2026-09-03: 26
@@ -264,12 +265,75 @@ nothing on a cycle where nothing was deleted.
 is a **key** difference the ordinary fingerprint already catches.
 
 **2. A `child` row edited without its parent moving.** The mirror of the 2026-09-03
-insert bug above, and not fixed by the same change. A child table has no watermark of
-its own — it is pulled when its parent's `updatedAt` moves — so an *edit in place*
-that does not touch the parent is invisible to both the pull and the key hash. Seen as
-`UserSurfaceSeen` holding a `seenAt` two days behind the source on 7 rows.
+insert bug above. A child table has no watermark of its own — it is pulled when its
+parent's `updatedAt` moves — so an *edit in place* that does not touch the parent is
+invisible to both the pull and the key hash. Seen as `UserSurfaceSeen` holding a
+`seenAt` two days behind the source on 7 rows, verified clean every cycle.
 
-Not fixed in the engine. Found by `verify-replica.js --deep`.
+*Fixed* by hashing row contents for `child` tables too, on exactly the argument `full`
+tables already win on: a table with no watermark of its own has nothing but the
+fingerprint to detect a change. Two consequences worth knowing:
+
+- The reconcile's two fingerprints can no longer run in parallel. A content hash has
+  the replica hash only the columns the SOURCE still has, so the source's list must
+  come back first — otherwise a column the replica carries and the source has dropped
+  reads as a permanent difference.
+- A content mismatch can occur with the key sets identical, which `keyDiff` has
+  nothing to say about. Pass 3 therefore also runs `rowHashDiff` and re-pulls what it
+  finds. Without that the repair would move nothing, the re-fingerprint would still
+  differ, and the table would never be marked verified — an hourly loop making no
+  progress.
+
+The cost is a sequential scan of each child table on both sides, at most once per
+`VERIFY_INTERVAL_MS`. Cheap on this schema today (35 child tables, the whole database
+20,748 rows); the ones to watch as volume grows are the line-item children —
+`InvStockLedger`, `VoucherGlLine`, `VoucherInventoryLine`, `TicketOrderLine`.
+
+### The repair has to overrule the monotonic guard
+
+`upsert` normally refuses to overwrite a row with one whose `updatedAt` is not strictly
+newer — the right rule for pulls that can arrive out of order. It is exactly wrong for
+a repair: the entire class of divergence above has **identical `updatedAt` on the two
+sides**, so `EXCLUDED."updatedAt" > "table"."updatedAt"` is false, the write is
+silently skipped, and the repair reports rows fetched while changing nothing.
+
+`pullByKeys` therefore forces the write, and defaults to doing so, because every one of
+its callers is reconciliation — which has just compared the two sides and knows the
+source's copy is the truth. It does not need a tiebreak. `cacheColumns` (running
+totals) are still excluded; those are re-summed locally by `rebuildTotals.js`.
+
+Found by `test-reconcile.js`, not by review: the first version of the FK repair passed
+every check except the one that read the row back off disk.
+
+### A replica whose schema is behind reads as "every row differs"
+
+The column list exists so a column the **replica** kept and the source dropped cannot
+make the two sides disagree. The opposite direction cannot be tolerated the same way:
+if the SOURCE has a column the replica lacks, the replica has nowhere to put the value,
+so every row's hash differs — for one schema reason, not N data reasons.
+
+`missingColumns` names it, and both callers stop there rather than "repairing": `upsert`
+builds its column list from the source row, so it would name a column the replica lacks
+and fail on every batch. `verify-replica.js` prints the missing columns instead of
+thousands of ids, and pass 3 skips the content repair and logs `schema behind`.
+schemaGuard should have halted the worker long before either — this is the second lock
+on the same door.
+
+Seen live on 2026-09-08: a counter still on the previous build reported all 405
+`UniversalVoucher` and all 35 `Ticket` rows as drifted, because the office had gained
+`sourceCounterId` and that replica's schema had not caught up.
+
+### Testing this
+
+```powershell
+node test-reconcile.js   # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empty databases
+```
+
+Reproduces all three faults against a throwaway pair of databases — the FK-rewritten
+row, the child row edited in place, and the replica whose schema is behind — and
+asserts that a key hash calls each one clean while the new machinery finds it, repairs
+what is repairable, and refuses to "repair" a schema gap. 15 checks. The header explains
+how to make a scratch cluster from the binaries the app already ships.
 
 ### Verifying row contents: `--deep`
 
@@ -278,6 +342,12 @@ strategy, and `--repair` re-pulls whatever disagrees. **Deliberately not on the 
 schedule**: it reads every row on both sides, and paying that against Supabase is the
 egress this project exists to avoid. Reach for it when a counter's screen disagrees
 with the office, or after a hard delete on the office.
+
+What it still covers that the hourly pass does not: `watermark` and `append` tables.
+Those keep a key-only fingerprint, on the argument that `updatedAt` carries an edit —
+which is true right up until something changes a row without going through Prisma, as
+cause 1 above did. The engine now repairs the known way that happens; `--deep` is how
+you check for one nobody has thought of yet.
 
 First full run against a live pair (2026-09-08, 116 tables, 20,748 rows, 23 s):
 113 tables exact including contents; `LoyaltyLedger` and `LoyaltyLot` each short two

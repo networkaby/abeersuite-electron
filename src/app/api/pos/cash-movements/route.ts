@@ -16,15 +16,22 @@ export async function GET(req: NextRequest) {
     if (response) return response;
 
     try {
-        const limit = Math.min(200, Math.max(1, Number(new URL(req.url).searchParams.get("limit")) || 100));
+        const params = new URL(req.url).searchParams;
+        const limit = Math.min(200, Math.max(1, Number(params.get("limit")) || 100));
+        // "Only this counter". These rows are already shift-linked, so unlike the
+        // voucher tables the counter is reachable without `sourceCounterId` — the
+        // shift knows it. Filtered on the shift's counter for that reason.
+        const counterIdRaw = Number(params.get("counterId"));
+        const counterId = Number.isInteger(counterIdRaw) && counterIdRaw > 0 ? counterIdRaw : null;
+        const scope = counterId != null ? { shift: { counterId } } : {};
 
         const shiftSelect = {
             select: { counter: { select: { name: true } }, user: { select: { name: true } } },
         } as const;
 
         const [receipts, expenditures] = await Promise.all([
-            prisma.posReceipt.findMany({ orderBy: { createdAt: "desc" }, take: limit, include: { shift: shiftSelect } }),
-            prisma.posExpenditure.findMany({ orderBy: { createdAt: "desc" }, take: limit, include: { shift: shiftSelect } }),
+            prisma.posReceipt.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: limit, include: { shift: shiftSelect } }),
+            prisma.posExpenditure.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: limit, include: { shift: shiftSelect } }),
         ]);
 
         // Batch-resolve voucher refs + account names (plain-int FKs, no relations).

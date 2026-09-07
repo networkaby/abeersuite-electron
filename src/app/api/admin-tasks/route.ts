@@ -8,6 +8,7 @@ import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurrences";
 import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 /** Position the task is assigned to + its current live holders (resolved via
  *  UserPosition), so the board can show who'll actually do the work. */
@@ -160,6 +161,8 @@ export async function POST(req: Request) {
 
         const task = await prisma.ticket.create({
             data: {
+                // Which till raised this — same column and resolver as every voucher.
+                sourceCounterId: await sourceCounterId(),
                 title: data.title,
                 notes: data.description ?? null,
                 category: data.category ?? null,

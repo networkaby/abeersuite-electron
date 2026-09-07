@@ -133,6 +133,18 @@ async function main() {
             for (const b of bad) {
                 if (!b.entry || b.error) continue;
 
+                // A replica whose schema is behind the source has nowhere to put the new
+                // column, so every row reads as different — one schema fact, not N drifted
+                // rows. Say so, and do not offer to repair it: upsert names the source's
+                // columns, so it would fail on every batch.
+                const missing = reconcile.missingColumns(b.src, b.loc);
+                if (missing.length) {
+                    console.log(`\n  ${b.model}: replica is MISSING column(s) ${missing.join(", ")}`);
+                    console.log("    Every row differs for that reason alone. Update the replica schema;");
+                    console.log("    not comparing rows or repairing this table.");
+                    continue;
+                }
+
                 const diff = await reconcile.keyDiff(source, local, b.entry);
                 // Rows present on both sides whose contents disagree. Only a deep run
                 // can see these, and they are the ones no amount of waiting repairs.

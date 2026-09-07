@@ -49,6 +49,8 @@ type ListRow = {
     status:          "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt?:    string | null;
     createdAt:       string;
+    sourceCreatedAt:       string | null;
+    sourceCounterId:       number | null;
     branch?:         { id: string; name: string } | null;
     _count:          { lines: number };
     createdBy:       { name: string };
@@ -127,6 +129,8 @@ export function InvVoucherList({
                     status:         v.status,
                     cancelledAt:    v.cancelledAt ?? null,
                     createdAt:      v.createdAt,
+                    sourceCreatedAt:      v.sourceCreatedAt ?? null,
+                    sourceCounterId:      v.sourceCounterId ?? null,
                     createdById:    null,
                     branchId:       v.branch?.id   ?? null,
                     branchName:     v.branch?.name ?? null,

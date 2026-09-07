@@ -71,6 +71,13 @@ model Ticket {
   recurrenceId Int?
   occurrenceNo Int?
 
+  // Source counter — the till this ticket was RAISED at. Same column, same rule
+  // and same resolver as UniversalVoucher.sourceCounterId (finance.prisma); kept
+  // uniform on purpose so one formatter renders both. Plain int, no FK. Null =
+  // raised at the office. No branch column here: the counter is unique org-wide,
+  // so PosCounter.branchId gives the branch when the label needs it.
+  sourceCounterId Int?
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   // When the ticket entered its CURRENT main status (`status`). Stamped only on a
@@ -106,6 +113,7 @@ model Ticket {
   @@index([assignedPositionId])
   @@index([accountId])
   @@index([createdAt])
+  @@index([sourceCounterId])
   @@index([wakeAt])
   @@index([recurrenceId])
   // Poll-and-skip: the sidebar asks "any ticket touched since <ts>?" on every

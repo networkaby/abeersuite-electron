@@ -36,6 +36,8 @@ type RawRow = {
     status:       "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt?: string | null;
     createdAt:    string;
+    sourceCreatedAt:    string | null;
+    sourceCounterId:    number | null;
     createdById:  number;
     branch:       { id: string; name: string } | null;
     createdBy:    { name: string };
@@ -91,6 +93,8 @@ export function GlVoucherList({
                     status:         v.status,
                     cancelledAt:    v.cancelledAt ?? null,
                     createdAt:      v.createdAt,
+                    sourceCreatedAt:      v.sourceCreatedAt ?? null,
+                    sourceCounterId:      v.sourceCounterId ?? null,
                     createdById:    v.createdById,
                     branchId:       v.branch?.id   ?? null,
                     branchName:     v.branch?.name ?? null,

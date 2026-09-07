@@ -12,6 +12,7 @@ import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -227,6 +228,8 @@ export async function POST(req: Request) {
 
             const t = await tx.ticket.create({
                 data: {
+                    // Which till raised this — same column and resolver as every voucher.
+                    sourceCounterId: await sourceCounterId(tx),
                     priority:   body.priority ?? Priority.MEDIUM,
                     notes:      body.notes || null,
                     pipelineId: body.pipelineId || "P1",

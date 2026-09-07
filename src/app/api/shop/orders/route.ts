@@ -15,6 +15,7 @@ import { quoteShipping } from "@/modules/delivery/lib/shippingQuote";
 import { resolvePayOnDelivery } from "@/shared/lib/payments/payOnDeliveryMethod";
 import { loadDeliveryMethod, type ShiprocketConfig } from "@/modules/delivery/lib/deliveryMethods";
 import { chargeableUnitGrams } from "@/modules/delivery/lib/chargeableWeight";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 const DEFAULT_ITEM_WEIGHT_GRAMS = 500;
 
@@ -263,6 +264,8 @@ export async function POST(req: Request) {
             }
             return tx.ticket.create({
             data: {
+                // Which till raised this — same column and resolver as every voucher.
+                sourceCounterId: await sourceCounterId(tx),
                 accountId: context.active.accountId,
                 pipelineId: ordersPipeline?.id ?? null,
                 status: entryStatus?.id ?? "S1",

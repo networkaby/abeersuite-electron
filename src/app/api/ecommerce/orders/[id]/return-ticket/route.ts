@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 const bodySchema = z.object({
     deviceType: z.string().trim().min(1).default("Shop return"),
@@ -46,6 +47,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // a back-link to the order ticket (sourceOrderTicketId).
         const ticket = await prisma.ticket.create({
             data: {
+                // Which till raised this — same column and resolver as every voucher.
+                sourceCounterId: await sourceCounterId(),
                 priority: Priority.MEDIUM,
                 notes:
                     `Return / RMA — shop order #${oid}. ` +

@@ -51,68 +51,6 @@ const { Client: PgClient } = require("pg") as typeof import("pg");
 export const SYNC_ROLE = "smx_sync";
 export const APP_ROLE = "smx_app";
 
-/**
- * Explicit column migrations for columns added after the initial schema release.
- * These run AFTER the full schema re-apply, so they serve as a belt-and-suspenders
- * guarantee: even if the full DDL batch fails (e.g. a NOT NULL column on a populated
- * table without a default), these targeted ALTER TABLEs still add the critical columns.
- *
- * Each entry is (table, column, type, default-or-null).  The `IF NOT EXISTS` guard
- * makes every statement idempotent — safe to run on a fresh or already-migrated DB.
- */
-const COLUMN_MIGRATIONS: Array<{ table: string; column: string; ddl: string }> = [
-    { table: "Branch", column: "number",
-      ddl: `ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "number" INTEGER NOT NULL DEFAULT 0` },
-    { table: "pos_counters", column: "counterNumber",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "counterNumber" INTEGER NOT NULL DEFAULT 0` },
-    { table: "pos_counters", column: "branchId",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "branchId" TEXT NOT NULL DEFAULT ''` },
-    { table: "pos_counters", column: "idRangeStart",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "idRangeStart" INTEGER` },
-    { table: "pos_counters", column: "boundDeviceId",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceId" TEXT` },
-    { table: "pos_counters", column: "boundDeviceLabel",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundDeviceLabel" TEXT` },
-    { table: "pos_counters", column: "boundAt",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundAt" TIMESTAMP(3)` },
-    { table: "pos_counters", column: "releasedAt",
-      ddl: `ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3)` },
-    { table: "TicketRepair", column: "ticketNo",
-      ddl: `ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketNo" TEXT` },
-];
-
-/**
- * Check whether a column already exists in a table. Used by applyColumnMigrations
- * to skip statements that are already satisfied, keeping the log clean.
- */
-async function columnExists(client: InstanceType<typeof PgClient>, table: string, column: string): Promise<boolean> {
-    const { rows } = await client.query(
-        `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`,
-        [table, column],
-    );
-    return rows.length > 0;
-}
-
-/**
- * Apply explicit column migrations. Runs independently of the full schema re-apply
- * so that even if the DDL batch fails, critical columns are still added.
- */
-async function applyColumnMigrations(client: InstanceType<typeof PgClient>): Promise<void> {
-    let added = 0;
-    for (const m of COLUMN_MIGRATIONS) {
-        if (await columnExists(client, m.table, m.column)) continue;
-        try {
-            await client.query(m.ddl);
-            console.log(`[Provisioner] Added missing column: ${m.table}.${m.column}`);
-            added++;
-        } catch (err) {
-            console.warn(`[Provisioner] Failed to add ${m.table}.${m.column}:`,
-                err instanceof Error ? err.message : err);
-        }
-    }
-    if (added > 0) console.log(`[Provisioner] Applied ${added} column migration(s).`);
-}
-
 /** Mirrors getEmbeddedBinPath()'s dev/packaged split in postgresManager.ts. */
 function resourcePath(fileName: string): string {
     const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
@@ -221,10 +159,26 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<Provisio
             // Every statement is guarded (IF NOT EXISTS, or a DO block swallowing
             // duplicate_object for CREATE TYPE / ADD CONSTRAINT — see makeIdempotent()
             // in gen-local-schema.ts), so a re-apply is a no-op for anything that
-            // already exists in the same shape. It does NOT pick up a column added to
-            // an already-existing table — that needs a real diff-against-target
-            // migrator, not this from-empty snapshot — so a genuine shape change still
-            // surfaces here, and failures stay reported rather than swallowed.
+            // already exists in the same shape. A column added upstream to a table this
+            // replica ALREADY has does reach it: addColumnBackfills() in
+            // gen-local-schema.ts emits an `ADD COLUMN IF NOT EXISTS` per column right
+            // after each `CREATE TABLE`, precisely because `CREATE TABLE IF NOT EXISTS`
+            // skips the whole statement once the table exists. So shipping a rebuilt
+            // local-schema.sql is what clears a counter halted on schema drift.
+            //
+            // One simple-query call, so Postgres runs the whole file in an implicit
+            // transaction: it either all applies or none of it does. The hash below is
+            // stamped only after it returns, so a failure leaves the replica on its old
+            // hash and the next boot retries rather than declaring itself current.
+            //
+            // Between those two facts there is no room for a hand-maintained list of
+            // "columns to add", and this file used to carry one. Do not add it back.
+            // The generated backfills already cover every column of every table, so a
+            // list could only repeat them; and a list could not act as a rescue either,
+            // because a failed batch throws out of this try block before any statement
+            // after this line is reached. A stale local-schema.sql cannot be committed
+            // (`pnpm precommit` runs `gen-local-schema.ts --check`), so regenerating and
+            // shipping this file IS the migration path — there is no second mechanism.
             await client.query(schemaSql);
             await client.query(
                 `INSERT INTO "_provision" (only_row, schema_hash) VALUES (true, $1)
@@ -232,12 +186,6 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<Provisio
                 [schemaHash],
             );
         }
-
-        // Belt-and-suspenders: even when the schema hash matched (no full re-apply),
-        // a previous upgrade may have silently failed to add columns (e.g. NOT NULL
-        // on a populated table without a default).  These ALTER TABLE IF NOT EXISTS
-        // are idempotent and cheap — one information_schema query per migration.
-        await applyColumnMigrations(client);
 
         // Roles. CREATE ROLE has no IF NOT EXISTS, hence the guarded DO block.
         for (const role of [SYNC_ROLE, APP_ROLE]) {

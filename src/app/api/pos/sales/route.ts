@@ -14,6 +14,10 @@
 //   ?limit=50    — page size (max 200, default 50)
 //   ?page=1      — 1-based page
 //   ?q=          — substring search on voucher reference or customer name
+//   ?counterId=  — only rows RAISED at this counter (the register's "Only this
+//                  counter" toggle). Filtered here, never in the browser: the list
+//                  is paged, so a client-side filter would only sift the current
+//                  page and `total` would be wrong.
 //   ?from=YYYY-MM-DD
 //   ?to=YYYY-MM-DD
 //
@@ -25,6 +29,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { handleApiError, parsePagination } from "@/shared/lib/api";
+import { formatSourceCounter, formatSourceCounterLong } from "@/shared/lib/format";
 
 export async function GET(req: NextRequest) {
     const { response } = await requireAuth();
@@ -35,6 +40,8 @@ export async function GET(req: NextRequest) {
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
     const kind = url.searchParams.get("kind")?.trim() === "returns" ? "returns" : "sale";
+    const counterIdRaw = Number(url.searchParams.get("counterId"));
+    const counterId = Number.isInteger(counterIdRaw) && counterIdRaw > 0 ? counterIdRaw : null;
     const { take, skip } = parsePagination(url.searchParams);
 
     try {
@@ -47,6 +54,7 @@ export async function GET(req: NextRequest) {
         const kindSpine: Prisma.UniversalVoucherWhereInput = {
             type: kind === "returns" ? "SALE_RETURN" : "POS",   // 5D-11
             status: "POSTED",
+            ...(counterId != null ? { sourceCounterId: counterId } : {}),
             ...(from || to ? {
                 date: {
                     ...(from ? { gte: new Date(from) } : {}),
@@ -79,13 +87,31 @@ export async function GET(req: NextRequest) {
             prisma.voucherDetail.count({ where }),
             prisma.voucherDetail.findMany({
                 where,
-                orderBy: { id: "desc" },
+                // Newest first, by WHEN THE SALE HAPPENED.
+                //
+                // This used to be `{ id: "desc" }` alone — the VoucherDetail row's
+                // auto-number, which records when a row was INSERTED at the office,
+                // not when it was rung up. A till that spends a while offline pushes
+                // its backlog later, so the office stamps those older sales with
+                // higher numbers and they floated to the top of the register above
+                // sales made days after them.
+                //
+                // `date` is @db.Date — day only, no time — so it can group the days
+                // but can never order within one. `sourceCreatedAt` is the faithful
+                // counter wall-clock (the same column the shift reconciliation
+                // trusts) and does the real work. `id` stays only as a last
+                // tie-break, and for rows older than `sourceCreatedAt` itself.
+                orderBy: [
+                    { universalVoucher: { date: "desc" } },
+                    { universalVoucher: { sourceCreatedAt: "desc" } },
+                    { id: "desc" },
+                ],
                 take,
                 skip,
                 select: {
                     id: true,
                     totalAmount: true,
-                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true, date: true, branch: { select: { id: true, name: true } } } },   // 5D-2/4/5/6 + 5D-10 date + 5D-12 branch
+                    universalVoucher: { select: { createdById: true, partyAccountId: true, description: true, voucherNo: true, date: true, sourceCounterId: true, branch: { select: { id: true, name: true, number: true } } } },   // 5D-2/4/5/6 + 5D-10 date + 5D-12 branch
                     universalVoucherId: true,
                     settlementJson: true,
                     // Original sale a POS return was raised against (SALE_RETURN has
@@ -108,6 +134,16 @@ export async function GET(req: NextRequest) {
             (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
                 .map((u) => [u.id, u.name]),
         );
+        // The counter each row was raised at. Batched like every other ref — the
+        // table is tiny (under 100 rows) and the page holds at most a handful of
+        // distinct counters, so this is one small read, never one per row.
+        const counterIds = [...new Set(vouchers.map((v) => v.universalVoucher?.sourceCounterId).filter((x): x is number => x != null))];
+        const counterById = new Map(
+            (counterIds.length === 0 ? [] : await prisma.posCounter.findMany({
+                where: { id: { in: counterIds } },
+                select: { id: true, name: true, counterNumber: true },
+            })).map((c) => [c.id, c]),
+        );
         const partyAccountIds = [...new Set(vouchers.map((v) => v.universalVoucher?.partyAccountId).filter((x): x is number => x != null))];
         const partyById = new Map(
             (partyAccountIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: partyAccountIds } }, select: { id: true, name: true } }))
@@ -119,6 +155,12 @@ export async function GET(req: NextRequest) {
         const giftCardLiabilityAccountId = (
             await prisma.couponConfig.findUnique({ where: { id: 1 }, select: { giftCardLiabilityAccountId: true } })
         )?.giftCardLiabilityAccountId ?? null;
+
+        /** The counter row a sale was raised at, or null (office / pre-column). */
+        const counterOf = (v: { universalVoucher: { sourceCounterId: number | null } | null }) =>
+            v.universalVoucher?.sourceCounterId != null
+                ? counterById.get(v.universalVoucher.sourceCounterId) ?? null
+                : null;
 
         return NextResponse.json({
             total,
@@ -153,6 +195,19 @@ export async function GET(req: NextRequest) {
                     totalAmount: v.totalAmount.toString(),
                     amountReceived: paid.toFixed(2),
                     branch: v.universalVoucher?.branch?.name ?? "—",
+                    // Source counter, pre-formatted `branch-counter` (e.g. "1-24").
+                    // The branch half comes off the voucher's own branch — never
+                    // stored twice — and the long form is the column's tooltip.
+                    counter: formatSourceCounter({
+                        branchNumber:  v.universalVoucher?.branch?.number,
+                        counterNumber: counterOf(v)?.counterNumber,
+                    }),
+                    counterLong: formatSourceCounterLong({
+                        branchName:    v.universalVoucher?.branch?.name,
+                        branchNumber:  v.universalVoucher?.branch?.number,
+                        counterName:   counterOf(v)?.name,
+                        counterNumber: counterOf(v)?.counterNumber,
+                    }),
                     cashier: (v.universalVoucher?.createdById != null ? cashierById.get(v.universalVoucher.createdById) : null) ?? "—",
                     lineCount: v.universalVoucherId != null ? (lineCountByUv.get(v.universalVoucherId) ?? 0) : 0,
                 };
