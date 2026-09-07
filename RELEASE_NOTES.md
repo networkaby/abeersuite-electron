@@ -1,18 +1,23 @@
-# v1.1.0
+# v1.2.0
 
-Printing across the counter now works more smoothly — receipts and vouchers print straight to the printer without a preview window popping up, and the printed paper matches what you saw on screen.
+For the trial till only. This version adds a new way of saving: the till sends each save to the office server in one go instead of doing the whole job over the internet itself. Install it on the one machine chosen for the trial. Other counters can wait for the next version.
 
-## Printing
-- POS reprints, and Receive / Expense slips, now print silently — no popup, no extra click.
-- Voucher forms (General, Journal, Trading, Branch Transfer, Manufacturing, Physical Stock) print silently right after you save, when "Thermal" is ticked.
-- The "Print (thermal)" option on the 3-dot menu now prints silently, same as a POS sale.
-- Fixed: thermal receipts were printing on a full A4-size page, leaving most of the 80mm roll blank — now sized correctly for the roll.
-- Fixed: thermal receipt preview now matches the actual printed paper — bigger brand name, plain amounts, barcode caption, and long names wrap properly.
-- Fixed: the "Header text" setting no longer accidentally hides the brand name on thermal receipts.
+**Before installing:** the office website (office.networkservice.in) must already be running this version, and everyone will be asked to sign in once more after the office update.
 
-## Templates
-- Coupons and gift cards can now be customized through the print template settings, same as invoices and other receipts.
-- Shipping labels now pull sender name, footer, and which fields to show from the template settings.
+## Saving bills
 
-## Other
-- Fixed a small glitch in the uninstaller.
+- Saving a bill, receipt or expense is much faster on the trial till. The office does the saving; the till only sends and waits for the answer.
+- If the office cannot be reached at all, the till saves the bill itself as before, and the top bar shows Offline until the line is back.
+- If the line drops in the middle of a save, the till will not save the bill a second time on its own. It shows "The office did not confirm this save. It may already be saved — check before entering it again." Check the Day Book before re-entering.
+
+## Bill numbers
+
+- Every bill, receipt and expense saved through the office now takes its number from the common series (counter 1), the same series the office uses. A till that has to save by itself while offline still uses its own counter number.
+
+## Sync
+
+- After a save, the till's screens show the new entry straight away. Receipts, expenses and cash drops recorded on one counter now reach the other counters on the next sync instead of waiting up to an hour.
+
+## Sign-in
+
+- The sign-in cookie now has the same name on the office website and on every counter. After this update everyone signs in once more, on the website as well as on the tills.
