@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextMiddleware, type NextRequest } from "next/server";
 import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
+import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -33,7 +34,14 @@ function wantsStaffSignIn(pathname: string): boolean {
     );
 }
 
-export default auth((req) => {
+/**
+ * Page requests: resolve the session and redirect anyone who should not be here.
+ *
+ * next-auth types this wrapper as a route handler, but it has always been invoked
+ * here as middleware with `(req, event)` — that is what `export default auth(…)` did
+ * before `/api` needed its own branch — so the type is asserted, not the behaviour.
+ */
+const pageProxy = auth((req) => {
     const { pathname } = req.nextUrl;
 
     if (pathname === "/portal/login") {
@@ -79,17 +87,38 @@ export default auth((req) => {
     }
 
     return NextResponse.next();
-});
+}) as unknown as NextMiddleware;
+
+/**
+ * `/api` never goes through the session wrapper above: every route runs its own
+ * `requireAuth()`, and resolving a session here would charge each call a
+ * `tokensValidFrom` read for nothing. The only reason `/api` is in the matcher at all
+ * is the `WRITE_MODE=v_live` write relay (see shared/lib/counter/writeRelay.ts); on
+ * every other build this branch is a straight pass-through.
+ */
+export default function proxy(req: NextRequest, event: NextFetchEvent) {
+    if (req.nextUrl.pathname.startsWith("/api/")) {
+        if (!RELAY_ACTIVE) return NextResponse.next();
+        // Loaded only on a relaying counter, and only once: keeps `pg` and the relay
+        // out of every other build's proxy, and its first load (the first API call
+        // after boot) opens the worker's "rows applied" line ahead of the first save.
+        return import("@/shared/lib/counter/writeRelay")
+            .then(({ relayWrite }) => relayWrite(req))
+            .then((relayed) => relayed ?? NextResponse.next());
+    }
+    return pageProxy(req, event);
+}
 
 export const config = {
     matcher: [
-        // Skip API, Next internals, and any static file in /public
-        // (anything with a file extension). Without the extension escape, /logo.svg
-        // and friends get auth-redirected to /login and serve HTML instead of the asset.
+        // Skip Next internals and any static file in /public (anything with a file
+        // extension). Without the extension escape, /logo.svg and friends get
+        // auth-redirected to /login and serve HTML instead of the asset.
         // The staff print surfaces (`receipt`, `shipping-slip`, `shipping-label`) are
         // deliberately NOT excluded any more — each page under them calls
         // requireStaffPage() itself, but proxy coverage is defense in depth against a
         // page that forgets. They render for a signed-in staff session as before.
-        "/((?!api|_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
+        // `/api` IS matched, for the write relay — see `proxy()` above.
+        "/((?!_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)",
     ],
 };

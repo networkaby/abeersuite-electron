@@ -42,9 +42,11 @@ try {
 // dotenv never overwrites a variable that is already set, so loading (1) first is what
 // makes it win: a single counter can be pointed at a test database without a rebuild.
 //
-// AUTH_SECRET is in neither file — it is generated per machine on first run, see
-// `ensureAuthSecret`. (The `%APPDATA%` folder is named from app.getName(), which reads
-// package.json "name", not the "AbeerSuite" productName.)
+// AUTH_SECRET is baked into (2) only when the build's .env carries one — a
+// WRITE_MODE=v_live till must share the office's secret (see scripts/counterEnv.ts).
+// Otherwise it is generated per machine on first run, see `ensureAuthSecret`. (The
+// `%APPDATA%` folder is named from app.getName(), which reads package.json "name", not
+// the "AbeerSuite" productName.)
 //
 // The forked Next server inherits this process's env (see serverManager.ts), so
 // loading it once here is enough to configure the whole app.
@@ -148,20 +150,22 @@ function loadCounterEnv(): void {
 }
 
 /**
- * Session signing key, generated once per machine.
+ * Session signing key: the baked one when the build ships it, else one per machine.
  *
- * Neither baked into the installer nor asked of an operator. Every counter runs its own
- * Next server and the window loads http://127.0.0.1:3000, so session cookies never cross
- * machines and there is nothing for counters to share. One random secret per PC is
- * therefore strictly better than a shipped constant at no operational cost: a secret read
- * off one counter forges nothing on another.
+ * A build carries `AUTH_SECRET` in counter.env only for `WRITE_MODE=v_live`, where the
+ * till relays its writes to the office and must present a cookie the office can decrypt
+ * (see scripts/counterEnv.ts). Every other build ships none, and this generates one:
+ * that counter's Next server serves only http://127.0.0.1, so its cookies never cross
+ * machines, and a secret read off one such PC forges nothing on another. A placeholder
+ * from .env.example counts as absent — it would sign real cookies with a published string.
  *
  * Stored beside counter-installation-id.json, which survives upgrades, so an update does
  * not sign everybody out. Both names are set because next-auth v5 reads AUTH_SECRET while
  * older call sites still look for NEXTAUTH_SECRET.
  */
 function ensureAuthSecret(): void {
-    if (process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim()) return;
+    const configured = process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim();
+    if (configured && !PLACEHOLDER_ENV_VALUES.has(configured)) return;
 
     const file = path.join(app.getPath("userData"), "auth-secret.json");
     let secret = "";

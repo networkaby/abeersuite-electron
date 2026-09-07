@@ -24,7 +24,7 @@
 | Electron shell, single-instance lock, sandboxed renderer | **Built** | [`electron/main.ts`](../electron/main.ts) |
 | Standalone Next server on loopback | **Built** | [`electron/serverManager.ts`](../electron/serverManager.ts) |
 | Windows installer, symlink hoisting, packaging gate | **Built** | [`scripts/prepare-standalone.ts`](../scripts/prepare-standalone.ts), [`scripts/verify-package.ts`](../scripts/verify-package.ts) |
-| Unattended install, baked env allowlist, per-machine `AUTH_SECRET` | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
+| Unattended install, baked env allowlist, per-machine `AUTH_SECRET` (shared with the office only on a `v_live` build — §4.6) | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
 | Dexie UI hot cache | **Built and in real use** | [`src/shared/lib/browser/localDb.ts`](../src/shared/lib/browser/localDb.ts) |
 | Supabase realtime broadcast channel | **Built** — one channel, `app:changes` | [`src/shared/lib/realtime/appChannel.ts`](../src/shared/lib/realtime/appChannel.ts) |
 | Sync table registry (113 tables) | **Built, generated, precommit-checked** | [`prisma/sync-tables.json`](../prisma/sync-tables.json) |
@@ -322,6 +322,37 @@ pgBouncer *transaction* pooler on a packaged counter, because `DIRECT_URL` is ex
 from `counter.env`.
 
 ---
+
+### 4.6 Relayed writes — `WRITE_MODE=v_live` (2026-09-07)
+
+A third write mode for the trial till. The counter's own Next server forwards every
+non-GET `/api/*` call to the office deployment (`WRITE_API_URL`) as one HTTP round trip —
+[`writeRelay.ts`](../src/shared/lib/counter/writeRelay.ts), called from `src/proxy.ts` —
+while reads stay on the replica. Below the relay the mode is `live`, so an unreachable
+office means the request runs here with `live`'s existing outage fallback. Three rules:
+
+1. **Fall back only when nothing was sent.** DNS, refused, TLS or the 2 s connect timeout
+   → run locally. Any failure after the connection is up → `502 relay_uncertain`, never a
+   local retry, because that would mint the bill twice under two numbers. An office HTTP
+   error passes straight through — except a gateway `502`–`504` with no JSON body, which
+   is answered as uncertain too, and a bare `401` (the cookie did not decode at the
+   office), which pauses the relay for 60 s and runs locally; a `SESSION_REVOKED` `401`
+   passes through and signs the cashier out.
+2. **Hold the response until the replica has the rows.** On an office 2xx the relay asks
+   the worker for a targeted pull over Postgres NOTIFY (`sync-engine/lib/localSignal.js`)
+   and waits, bounded at 3 s, for `sync_relay_done`. Screens then refetch from a replica
+   that already holds the save; a timeout falls back to the Realtime path above. A
+   safety-net cycle in the way is stepped aside and resumed afterwards, and routes that
+   add a shift's children (Rcv, Exp, cash drop, the sale's surplus receipt) bump the
+   shift row so those `child` tables ride the same pull.
+3. **The relay boundary is the build boundary.** Only `COUNTER_API_ALLOWLIST` segments
+   are forwarded, minus this machine's own routes (`auth`, `counter`, `health`, `sync`,
+   `pos/counters`, backup/restore) and bodies over 4 MB.
+
+The office authenticates the relayed request from the till's own session cookie: the
+cookie NAME is pinned in `src/auth.ts` (Auth.js keys the token on secret + name) and
+`counter.env` ships the office's `AUTH_SECRET` for this mode only. Anything saved at the
+office, a relayed POS sale included, numbers in the common series (counter 1).
 
 ## 5. Desktop & hardware capabilities
 

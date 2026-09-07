@@ -1,12 +1,13 @@
 /**
- * Guards the two properties the counter replica's routing rests on.
+ * Guards the properties the counter replica's routing — and the v_live write relay's
+ * boundary — rest on.
  *
  * Runs against NO database — every assertion is about object identity or about a
  * guard that throws before a query is issued — so it is safe in CI and on a laptop.
  *
- * The two modes need different env AT IMPORT TIME and Node caches modules, so each
- * mode runs as its own process (see the package script) rather than trying to reset
- * module state mid-run.
+ * The modes need different env AT IMPORT TIME and Node caches modules, so each mode
+ * runs as its own process (see the package script) rather than trying to reset module
+ * state mid-run.
  *
  *   pnpm check:counter-mode
  */
@@ -177,18 +178,95 @@ async function counterWriteLocalMode(): Promise<Check[]> {
     return out;
 }
 
+/**
+ * A counter relaying its writes to the office: WRITE_MODE=v_live with WRITE_API_URL.
+ *
+ * Two properties. Below the relay this mode IS `live` — writes pick the live client and
+ * a local write is a fallback, so the offline policies still apply — and the relay's
+ * boundary is the build's: only what a counter build serves may be forwarded, never a
+ * read, never this machine's own routes, never a body Vercel would refuse.
+ */
+async function counterWriteRelayMode(): Promise<Check[]> {
+    process.env.DATABASE_URL = "postgresql://u:p@live.invalid:5432/db";
+    process.env.LOCAL_DATABASE_URL = "postgresql://u:p@localhost:5432/smx";
+    process.env.WRITE_MODE = "v_live";
+    process.env.WRITE_API_URL = "https://office.invalid/";
+
+    const mode = await import("@/shared/lib/prisma/counterMode");
+    const relay = await import("@/shared/lib/counter/relayPolicy");
+
+    const decide = (method: string, pathname: string, contentLength: number | null = 100, alreadyRelayed = false) =>
+        relay.decideRelay({ method, pathname, contentLength, alreadyRelayed }).relay;
+
+    return [
+        ["WRITE_MODE=v_live is picked up", mode.WRITE_PREFERENCE === "v_live"],
+        ["WRITE_API_URL is normalised to an origin", mode.WRITE_API_URL === "https://office.invalid"],
+        ["relaysWrites() is true", mode.relaysWrites()],
+        ["writes go live while live is up (v_live IS live below the relay)", mode.shouldWriteLocal() === false],
+        ["a local write is still a FALLBACK, so the offline policies apply", mode.localWriteIsFallback()],
+        // Not a counter PC in this process (COUNTER_PC unset): the relay must stay
+        // inert, which is also what keeps a misconfigured Vercel from relaying to itself.
+        ["relay is inactive off a counter PC", relay.RELAY_ACTIVE === false],
+        ["a POS sale relays", decide("POST", "/api/pos/sale")],
+        ["a voucher post relays", decide("POST", "/api/inventory/vouchers/12/post")],
+        ["a bare DELETE (no body) relays", decide("DELETE", "/api/parties/5", 0)],
+        ["a read never relays", !decide("GET", "/api/pos/sale")],
+        ["the login never relays", !decide("POST", "/api/auth/callback/credentials-staff")],
+        ["this PC's status never relays", !decide("POST", "/api/counter/status")],
+        ["the boot probe never relays", !decide("POST", "/api/health")],
+        ["the outbox push never relays", !decide("POST", "/api/sync/push")],
+        ["the counter-binding routes never relay", !decide("POST", "/api/pos/counters/3/claim-number")],
+        ["backup and restore never relay", !decide("POST", "/api/settings/restore") && !decide("POST", "/api/settings/backup")],
+        ["a path this build does not serve never relays", !decide("POST", "/api/shop/shipway-updates")],
+        // The office decodes what the browser encodes, so the rules must see the decoded path.
+        ["a percent-encoded excluded path never relays", !decide("POST", "/api/settings/%72estore") && !decide("POST", "/api/pos/%63ounters/3/claim-number")],
+        ["a dot-segment path is normalised before the rules", !decide("POST", "/api/pos/../settings/restore")],
+        ["a double-encoded path never relays", !decide("POST", "/api/pos/%2572estore")],
+        ["an already-relayed request never relays again", !decide("POST", "/api/pos/sale", 100, true)],
+        ["a body above Vercel's limit runs here", !decide("POST", "/api/settings/item-import", 5 * 1024 * 1024)],
+        ["a body of unknown size runs here", !decide("POST", "/api/settings/item-import", null)],
+        ["a non-API path never relays", !decide("POST", "/office/pos")],
+    ];
+}
+
+/**
+ * WRITE_MODE=v_live with NO WRITE_API_URL must degrade to `local`, never to `live`:
+ * a half-configured till keeps its saves fast and captured, rather than quietly
+ * writing to Supabase over the WAN — the slow path the relay exists to remove.
+ */
+async function counterWriteRelayUnconfigured(): Promise<Check[]> {
+    process.env.DATABASE_URL = "postgresql://u:p@live.invalid:5432/db";
+    process.env.LOCAL_DATABASE_URL = "postgresql://u:p@localhost:5432/smx";
+    process.env.WRITE_MODE = "v_live";
+    delete process.env.WRITE_API_URL;
+
+    const mode = await import("@/shared/lib/prisma/counterMode");
+    return [
+        ["v_live without WRITE_API_URL degrades to local", mode.WRITE_PREFERENCE === "local"],
+        ["…so writes go local from the first request", mode.shouldWriteLocal()],
+        ["…and a local write is not a fallback there", mode.localWriteIsFallback() === false],
+        ["relaysWrites() is false", mode.relaysWrites() === false],
+    ];
+}
+
+const VARIANTS = {
+    "vercel": vercelMode,
+    "counter": counterMode,
+    "counter-write-local": counterWriteLocalMode,
+    "counter-write-relay": counterWriteRelayMode,
+    "counter-write-relay-unconfigured": counterWriteRelayUnconfigured,
+} as const;
+
 async function main(): Promise<void> {
-    const which = process.argv[2];
-    if (which !== "vercel" && which !== "counter" && which !== "counter-write-local") {
-        console.error("usage: tsx scripts/check-counter-mode.ts <vercel|counter|counter-write-local>");
-        console.error("       (run all three via `pnpm check:counter-mode`)");
+    const which = process.argv[2] as keyof typeof VARIANTS | undefined;
+    if (!which || !(which in VARIANTS)) {
+        console.error(`usage: tsx scripts/check-counter-mode.ts <${Object.keys(VARIANTS).join("|")}>`);
+        console.error("       (run every variant via `pnpm check:counter-mode`)");
         process.exit(2);
     }
 
     console.log(`[counter-mode] ${which}:`);
-    const checks = which === "vercel" ? await vercelMode()
-        : which === "counter-write-local" ? await counterWriteLocalMode()
-            : await counterMode();
+    const checks = await VARIANTS[which]();
 
     let failed = 0;
     for (const [name, ok] of checks) {

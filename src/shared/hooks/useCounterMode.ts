@@ -9,8 +9,8 @@ export type CounterStatus = {
     mode: "LIVE" | "LOCAL";
     /** READ_MODE — where reads are served from. */
     preference: "live" | "shadow" | "local";
-    /** WRITE_MODE — where writes land. */
-    writePreference: "live" | "local";
+    /** WRITE_MODE — where writes land. `v_live` relays them to the office, then is `live`. */
+    writePreference: "live" | "local" | "v_live";
     replicaReady: boolean;
     /**
      * False when the sync worker has HALTED on schema drift. Not-ready then means

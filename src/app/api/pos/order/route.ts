@@ -56,7 +56,6 @@ export async function POST(req: NextRequest) {
         // ── Validate the advance BEFORE creating the order voucher ──────────────
         let shiftId: number | null = null;
         let shiftBranchId = branchId;
-        let shiftCounterNumber: number | null = null;
         const tenders: { accountId: number; amount: number; description?: string }[] = [];
         if (advance > 0.005) {
             if (!body.accountId) {
@@ -68,7 +67,7 @@ export async function POST(req: NextRequest) {
                     id: true, branchId: true,
                     counter: {
                         select: {
-                            name: true, tillAccountId: true, counterNumber: true,
+                            name: true, tillAccountId: true,
                             paymentAccounts: {
                                 where:  { isActive: true },
                                 select: { id: true, accountId: true, label: true },
@@ -94,7 +93,6 @@ export async function POST(req: NextRequest) {
             }
             shiftId = shift.id;
             shiftBranchId = shift.branchId;
-            shiftCounterNumber = shift.counter.counterNumber;
         }
 
         // ── Create the order voucher (always) ───────────────────────────────────
@@ -121,7 +119,6 @@ export async function POST(req: NextRequest) {
                     userId: user!.id,
                     branchId: shiftBranchId,
                     narration: `Advance against ${order.reference}`,
-                    counterNumber: shiftCounterNumber,
                 });
                 await tx.posReceipt.create({
                     data: {

@@ -123,7 +123,7 @@ Everything else in this document is occasional.
 | `pnpm sync:tables:check` | Fails if that registry has drifted | yes |
 | `pnpm db:local-schema` | Regenerates `resources/local-schema.sql` (the replica DDL) | — |
 | `pnpm db:local-schema:check` | Fails if that DDL has drifted from `prisma/schema/` | yes |
-| `pnpm check:counter-mode` | Counter/vercel routing guards, runs with **no database** | yes (both modes) |
+| `pnpm check:counter-mode` | Counter/vercel routing guards and the v_live relay boundary, runs with **no database** | yes (5 variants) |
 | `pnpm check:guard-lint` | Every API route is guarded unless allowlisted | yes |
 | `pnpm precommit` | All seven of the above in one go | — |
 | `pnpm install:git-hooks` | Installs the hook so `precommit` runs by itself | run once per clone |
@@ -271,7 +271,7 @@ Rewrite `RELEASE_NOTES.md` for this version. The first line decides how counters
 
 **Step 7 — pick the variant**
 
-`.env` decides `APP_MODE` and `LANDING_PAGE`. Set them there before building — the file is read at the top of `electron:build` and nowhere later.
+`.env` decides `APP_MODE` and `LANDING_PAGE` — and, for a `WRITE_MODE=v_live` build, `WRITE_API_URL` and the office's `AUTH_SECRET`, which `generate-counter-env.ts` refuses to build without. Set them there before building — the file is read at the top of `electron:build` and nowhere later.
 
 `.env.local` is deliberately **not** loaded, and that is a safety property rather than an oversight: every build step is spawned with a copy of this environment, and `generate-counter-env.ts` falls back to `process.env` for any key `.env` does not supply, so anything loaded here can be baked into the installer. `.env.local` holds web-version dev overrides — a `READ_MODE` or `DATABASE_URL` uncommented for an afternoon's web work would otherwise decide what ships to every counter. See the comment at the top of `scripts/electron-build.ts`.
 

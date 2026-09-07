@@ -88,6 +88,9 @@ export async function startNextServer(port = 3000, compileCacheDir?: string): Pr
             // Login is still required at the app layer.
             HOSTNAME: "0.0.0.0",
             NODE_ENV: "production",
+            // Stamped on relayed writes (shared/lib/counter/writeRelay.ts) so a version
+            // skew between a till and the office is visible in the office's logs.
+            APP_VERSION: app.getVersion(),
             ELECTRON_RUN_AS_NODE: "1",
             // Persists V8's compiled-bytecode cache across launches (Node 22+). Doesn't
             // touch the dominant cost (executing module top-level code, e.g. building the

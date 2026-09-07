@@ -18,10 +18,19 @@
  * else — and the packaging gate enforces it, rather than trusting whoever next edits an
  * `extraResources` filter to remember why it was written that way.
  *
+ * `AUTH_SECRET` IS here, since 2026-09-07, and only because of `WRITE_MODE=v_live`: a
+ * till in that mode relays its writes to the office and authenticates there with its own
+ * session cookie, which the office can only decrypt with the same secret (Auth.js keys
+ * the token on secret + cookie name; `src/auth.ts` pins the name). It used to be
+ * generated per machine (`ensureAuthSecret` in electron/main.ts) on the argument that
+ * cookies never leave 127.0.0.1 — still true, and still what happens when the build's
+ * `.env` carries no secret. What shipping it costs: anyone holding an installer can mint
+ * a staff session at the office. The same installer already carries `DATABASE_URL`, full
+ * read/write on production, which is strictly more; rotating both is an open item.
+ * `generate-counter-env.ts` writes it ONLY when the build's `WRITE_MODE` is `v_live`,
+ * refuses a placeholder or short value, and requires an https `WRITE_API_URL`.
+ *
  * NOT here, on purpose:
- *   - `AUTH_SECRET` — generated per machine on first run (see `ensureAuthSecret` in
- *     electron/main.ts). Cookies never leave 127.0.0.1, so counters share nothing, and a
- *     secret read off one machine forges nothing on another.
  *   - `DIRECT_URL` — only seeds and maintenance scripts read it, so the direct 5432
  *     connection string has no reason to sit on a shop PC.
  *   - `SUPER_ADMIN_PASSWORD` — a full-authority login in plaintext; the escape hatch is
@@ -64,11 +73,15 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     // ── Operating mode ───────────────────────────────────────────────────────
     "APP_MODE",
     // Two independent dials. READ_MODE (live|shadow|local) decides where reads are
-    // served from; WRITE_MODE (live|local) decides where writes land, and picks the
-    // client the other rides on. Both default to `live`, so a counter that sets
+    // served from; WRITE_MODE (live|local|v_live) decides where writes land, and picks
+    // the client the other rides on. Both default to `live`, so a counter that sets
     // neither behaves exactly as it did before either existed.
     "READ_MODE",
     "WRITE_MODE",
+    // v_live only: the office origin the till relays its writes to, and the office's
+    // own session secret so that relay authenticates. See the header for the cost.
+    "WRITE_API_URL",
+    "AUTH_SECRET",
     // Electron window's start URL — see src/shared/lib/appModeCore.ts's
     // resolveLandingPage(). A path only, validated at load time; not a credential.
     "LANDING_PAGE",
@@ -136,6 +149,16 @@ export const COUNTER_ENV_REQUIRED: readonly string[] = [
     "DATABASE_URL",
     "INTERNAL_STAFF_EMAIL_DOMAINS",
 ];
+
+/**
+ * Example secrets from `.env.example`. Present but worthless — baking one would sign
+ * every counter's cookies with a string published in this repository. Mirrors
+ * `PLACEHOLDER_ENV_VALUES` in electron/main.ts, which cannot import from here.
+ */
+export const PLACEHOLDER_SECRET_VALUES: ReadonlySet<string> = new Set([
+    "replace-me-with-a-generated-secret",
+    "your-auth-secret-here",
+]);
 
 /** Every key the packaged file is allowed to contain, for the given variant. Used by
  *  `verify-package.ts`'s packaging gate. */
