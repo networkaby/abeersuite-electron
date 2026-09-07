@@ -40,6 +40,7 @@ import { pushMutations } from "./push";
 import { isThisPcReleased } from "@/shared/lib/counter/releaseGuard";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { ALL_TOPICS } from "@/shared/lib/realtime/topics";
+import { connectionErrorText } from "./connectionError";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { Client: PgClient } = require("pg") as typeof import("pg");
@@ -201,7 +202,7 @@ function startListener(localUrl: string): void {
     client.on("notification", (msg) => {
         if (msg.channel === CHANNEL) void flushOnce(localUrl);
     });
-    client.on("error", (err) => dropAndRetry(`error: ${err.message}`));
+    client.on("error", (err) => dropAndRetry(`error: ${connectionErrorText(err)}`));
     client.on("end", () => dropAndRetry("connection closed"));
 
     client.connect()
@@ -211,7 +212,7 @@ function startListener(localUrl: string): void {
             // Anything that committed while we were not listening.
             void flushOnce(localUrl);
         })
-        .catch((err: unknown) => dropAndRetry(`could not connect: ${err instanceof Error ? err.message : String(err)}`));
+        .catch((err: unknown) => dropAndRetry(`could not connect: ${connectionErrorText(err)}`));
 }
 
 export function startOutboxFlusher(localUrl: string): void {

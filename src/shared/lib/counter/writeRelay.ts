@@ -64,6 +64,7 @@ import { WRITE_API_URL } from "@/shared/lib/prisma/counterMode";
 import { isThisPcReleased, isThisPcWithoutCounter, readCounterSetup } from "@/shared/lib/counter/releaseGuard";
 import { modelsForTopics, topicsForApiPath } from "@/shared/lib/realtime/topics";
 import { DONE_CHANNEL, PULL_CHANNEL, RELAY_ACTIVE, RELAY_HEADER, contentLengthOf, decideRelay } from "./relayPolicy";
+import { connectionErrorText } from "@/shared/lib/sync/connectionError";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { Client: PgClient, Pool: PgPool } = require("pg") as typeof import("pg");
@@ -235,7 +236,7 @@ function startListener(localUrl: string): void {
             if (typeof id === "string") waiters.get(id)?.();
         }
     });
-    client.on("error", (err) => dropAndRetry(`error: ${err.message}`));
+    client.on("error", (err) => dropAndRetry(`error: ${connectionErrorText(err)}`));
     client.on("end", () => dropAndRetry("connection closed"));
     client.connect()
         .then(() => client.query(`LISTEN ${DONE_CHANNEL}`))
@@ -243,7 +244,7 @@ function startListener(localUrl: string): void {
             listenerReady = true;
             console.log(`[writeRelay] listening on ${DONE_CHANNEL}.`);
         })
-        .catch((err: unknown) => dropAndRetry(`could not connect: ${err instanceof Error ? err.message : String(err)}`));
+        .catch((err: unknown) => dropAndRetry(`could not connect: ${connectionErrorText(err)}`));
 }
 
 function getNotifier(localUrl: string): InstanceType<typeof PgPool> {
