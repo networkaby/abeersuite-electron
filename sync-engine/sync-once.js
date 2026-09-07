@@ -20,7 +20,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { pool, canSuspendForeignKeys } = require("./lib/db");
+const { pool, canSuspendForeignKeys, q } = require("./lib/db");
 const registryLib = require("./lib/registry");
 const state = require("./lib/state");
 const { pullWatermark, pullFull, pullChildren, pullByKeys, deleteByKeys } = require("./lib/pull");
@@ -119,6 +119,61 @@ function loadConfig() {
     return cfg;
 }
 
+/**
+ * After parent rows were deleted here, bring every row that REFERENCED them back in
+ * step with the source.
+ *
+ * Deleting the parent on the source fires that FK's ON DELETE SET NULL and rewrites
+ * the child row there. The same delete here does not, because everything is applied
+ * under `session_replication_role = replica` so rows can land out of dependency order
+ * (lib/db.js). The child is then left pointing at a key that no longer exists, and
+ * nothing ever repairs it: its `updatedAt` did not move (the source's change was made
+ * by PostgreSQL, not by Prisma), so no delta pull looks at it again, and the
+ * reconcile's hash compares keys only, which still match on both sides.
+ *
+ * So we re-read those children from the source and let its answer stand. Every delete
+ * reaching this replica comes through `deleteByKeys` in pass 3, which is why this one
+ * call site is enough to cover all 95 of the schema's SET NULL constraints.
+ *
+ * Costs nothing on an ordinary cycle: only reached when a delete actually happened.
+ */
+async function repairReferencing(source, local, tables, fkCache, entry, deletedKeys, changedModels) {
+    // `deletedKeys` are keyExpression text. Matching them against a single-column FK
+    // is only meaningful when the parent key is itself one column; referencingNullers
+    // already returns single-column foreign keys only.
+    if (entry.pk.length !== 1) return 0;
+
+    if (!fkCache.byTable) {
+        fkCache.byTable = new Map(Object.entries(tables).map(([m, e]) => [e.table, m]));
+    }
+    if (!fkCache.nullers.has(entry.table)) {
+        fkCache.nullers.set(entry.table, await reconcile.referencingNullers(local, entry.table));
+    }
+
+    let pulled = 0;
+    for (const ref of fkCache.nullers.get(entry.table)) {
+        const childModel = fkCache.byTable.get(ref.table);
+        if (!childModel) continue; // not replicated here, so nothing to keep in step
+        const childEntry = tables[childModel];
+
+        const { rows } = await local.query(
+            `SELECT ${reconcile.keyExpression(childEntry)} AS k
+               FROM ${q(ref.table)}
+              WHERE ${q(ref.column)}::text = ANY($1)`,
+            [deletedKeys],
+        );
+        if (rows.length === 0) continue;
+
+        const n = await pullByKeys(source, local, childEntry, rows.map((r) => r.k));
+        if (n > 0) {
+            changedModels.add(childModel);
+            pulled += n;
+            console.log(`  ${childModel.padEnd(28)} fk-repair ${n} (after ${entry.table} delete)`);
+        }
+    }
+    return pulled;
+}
+
 async function main() {
     const cfg = loadConfig();
     const registryPath = cfg.registryPath
@@ -151,6 +206,8 @@ async function main() {
      *  below. A model that pulled nothing is deliberately absent: the whole point is to
      *  leave screens alone when a cycle changed nothing they could see. */
     const changedModels = new Set();
+    /** Per-cycle memo for repairReferencing: FK introspection and table->model. */
+    const fkCache = { nullers: new Map(), byTable: null };
     let failed = 0;
     let skipped = 0;
     let verified = 0;
@@ -409,6 +466,14 @@ async function main() {
                     const removed = await deleteByKeys(local, entry, diff.onlyLocal);
                     const added = await pullByKeys(source, local, entry, diff.onlySource);
                     repaired += removed + added;
+                    // The source's ON DELETE SET NULL rewrote the rows that referenced
+                    // what we just deleted; ours did not, because FK actions are
+                    // suspended while applying. Re-read them. See repairReferencing.
+                    if (removed > 0) {
+                        repaired += await repairReferencing(
+                            source, local, tables, fkCache, entry, diff.onlyLocal, changedModels,
+                        );
+                    }
                     // A repair changes what this replica serves just as a pull does, so
                     // the screens must hear about it (see __SYNC_APPLIED__ below).
                     if (removed + added > 0) changedModels.add(model);
