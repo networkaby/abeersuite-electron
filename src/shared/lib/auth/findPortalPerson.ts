@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
-import { normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
+import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 
 /**
  * Resolve a Person from a portal login identifier (already normalized).
@@ -70,4 +70,90 @@ export async function findPortalPerson(
         return findPersonByPortalPhone(db, identity.phoneNormalized);
     }
     return null;
+}
+
+// ── Find or create ───────────────────────────────────────────────────────────
+
+/** What a verified token proves about the customer. */
+export type PortalContactIdentity = {
+    emailNormalized?: string | null;
+    phoneNormalized?: string | null;
+};
+
+/** Attach a contact row, shrugging off the unique clash when it already exists. */
+async function attachPhone(db: Db, personId: number, phone: string, isPrimary: boolean) {
+    await db.phone
+        .create({ data: { phone: `+91${phone}`, personId, isPrimary } })
+        .catch(() => { /* already on file — nothing to do */ });
+}
+
+async function attachEmail(db: Db, personId: number, email: string, isPrimary: boolean) {
+    await db.email
+        .create({ data: { email, personId, isPrimary } })
+        .catch(() => { /* already on file — nothing to do */ });
+}
+
+/**
+ * Resolve the Person a verified identity belongs to, creating them when we have
+ * never seen them before.
+ *
+ * Shared by passwordless onboarding and self-registration so both produce
+ * exactly the same customer — Person + primary contact + cash-only Account
+ * (creditLimit 0 until staff grant a limit) — instead of two near-identical
+ * copies of the same transaction drifting apart.
+ *
+ * An existing customer is never renamed: staff own `Person.name`, and a
+ * self-service form is not the place to overwrite it. We only top up a contact
+ * row or an Account they are missing.
+ */
+export async function ensurePortalPerson(
+    db: PrismaClient,
+    identity: PortalContactIdentity,
+    name: string,
+    extraContact = ""
+): Promise<{ id: number; name: string }> {
+    // The optional second contact the onboarding form offers. Whether it is an
+    // email or a mobile is read off the value itself, so the caller does not
+    // have to tell us which channel was verified.
+    const extra = extraContact.trim();
+    const email =
+        identity.emailNormalized ?? (extra.includes("@") ? normalizePortalEmail(extra) : null);
+    const phone =
+        identity.phoneNormalized ??
+        (extra && !extra.includes("@") ? normalizePortalPhone(extra) : null);
+
+    const existing = await findPortalPerson(db, identity);
+    if (existing) {
+        if (phone) await attachPhone(db, existing.id, phone, false);
+        if (email) await attachEmail(db, existing.id, email, false);
+        const account = await db.account.findUnique({
+            where: { personId: existing.id },
+            select: { id: true },
+        });
+        if (!account) {
+            await db.account.create({
+                data: { personId: existing.id, name: existing.name, creditLimit: 0 },
+            });
+        }
+        return existing;
+    }
+
+    const created = await db.$transaction(async (tx) => {
+        const person = await tx.person.create({
+            data: { name: name.trim() || email?.split("@")[0] || "Customer" },
+        });
+        if (phone) {
+            await tx.phone.create({
+                data: { phone: `+91${phone}`, personId: person.id, isPrimary: true },
+            });
+        }
+        if (email) {
+            await tx.email.create({ data: { email, personId: person.id, isPrimary: true } });
+        }
+        await tx.account.create({
+            data: { personId: person.id, name: person.name, creditLimit: 0 },
+        });
+        return person;
+    });
+    return { id: created.id, name: created.name };
 }

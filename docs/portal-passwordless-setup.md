@@ -10,6 +10,12 @@ and pasting five values into env. Do them in any order; each unlocks one channel
 | Google | Firebase Google | no — shows "not set up yet" |
 | Mobile/email + password | nothing | **yes, works today** |
 
+Password accounts are created and reset at `/portal/register` and
+`/portal/forgot-password`. Both verify the mobile/email by OTP first, so at least
+one OTP channel above must be set up before a customer can pick a password. That
+verification is not optional: the password is linked to an existing customer
+record by number, so without it anyone could claim another customer's orders.
+
 The password login keeps working throughout, so the site is never broken while
 you set these up.
 
@@ -75,16 +81,50 @@ supports both and picks direct whenever `META_WA_ACCESS_TOKEN` is set.
 
 #### Option A — direct to Meta (cheapest, recommended)
 
-1. Create a Meta app at <https://developers.facebook.com> → add the **WhatsApp**
-   product. This is free; no BSP and no monthly fee.
-2. Complete **Business Verification** for your Meta Business account.
-3. Add and verify the sending phone number.
-4. Create an **AUTHENTICATION** template and wait for approval.
-5. Generate a **permanent System User token** (Business Settings → System Users →
-   generate token with `whatsapp_business_messaging`). A temporary dev token
-   expires in 24 hours — do not ship one.
-6. Set `META_WA_ACCESS_TOKEN` and `META_WA_PHONE_NUMBER_ID` (from the app
-   dashboard), plus `WA_OTP_TEMPLATE`.
+1. **Meta app.** Go to <https://developers.facebook.com> → *My Apps* → *Create App*
+   → type **Business** → add the **WhatsApp** product. Free; no BSP, no monthly fee.
+2. **Business verification.** In *Meta Business Suite → Business settings →
+   Security Centre*, complete verification for the business. Until this is done
+   you are stuck on a test number that only messages 5 pre-registered recipients.
+3. **Sending number.** *WhatsApp → API Setup* → *Add phone number*, verify it by
+   OTP. Use a number that is **not** on the WhatsApp Business app — OTP traffic is
+   high-frequency and can drag a number's quality rating down.
+   That screen also shows the **Phone number ID** → `META_WA_PHONE_NUMBER_ID`.
+   (It is a long number, *not* the phone number itself.)
+4. **Template.** *WhatsApp Manager → Message templates → Create template* →
+   category **Authentication**. Meta writes the body for you; the code is the only
+   variable. Two things on this screen decide your env values, so note them:
+   - the **language** you pick — usually `English (US)` = `en_US`, **not** `en`;
+   - whether you leave **"Copy code"** ticked (it is on by default).
+
+   Wait for approval — usually under a day.
+5. **Permanent token.** *Business settings → Users → System users* → add a system
+   user with the Admin role → *Generate new token* → pick your app → tick
+   `whatsapp_business_messaging` **and** `whatsapp_business_management` → set
+   expiry **Never**. → `META_WA_ACCESS_TOKEN`.
+   The token shown on the API Setup page is a **24-hour dev token** — never ship it.
+6. **Env.** Set `META_WA_ACCESS_TOKEN`, `META_WA_PHONE_NUMBER_ID`,
+   `WA_OTP_TEMPLATE` (the template **name**, e.g. `signin_code`, not its id),
+   and then the two that decide whether it actually delivers:
+
+   | Your template | `WA_OTP_LANG` | `WA_OTP_BUTTON` |
+   | --- | --- | --- |
+   | English (US) + "Copy code" ticked *(the default)* | `en_US` | `copy_code` |
+   | English + "Copy code" ticked | `en` | `copy_code` |
+   | Copy code un-ticked, body only | match the language | leave unset |
+   | Made for an Android app (one-tap autofill) | match the language | `one_tap` |
+
+> **These two are the whole game.** Get either wrong and Meta rejects every
+> single send — and because we fall back to SMS on failure, sign-in keeps
+> *working* while quietly costing ~Rs 5 a code instead of ~Rs 0.115. Nothing
+> looks broken. Check `WhatsApp OTP failed, falling back to SMS` in the server
+> logs if the bill looks wrong.
+
+**Test it before trusting it.** With the env set, request a code on `/login` with
+a real mobile and watch the server log. Silence means WhatsApp delivered; a
+`WhatsApp send failed via Meta direct (...)` line carries Meta's own reason —
+`template name does not exist in the translation` is the language mismatch,
+`number of parameters does not match` is the button mismatch.
 
 #### Option B — Fast2SMS passthrough (fastest to set up)
 
@@ -115,8 +155,8 @@ Fast2SMS's markup over Meta's rate. Steps:
 | `META_WA_PHONE_NUMBER_ID` | phone number id from the Meta app dashboard |
 | `FAST2SMS_WA_PHONE_NUMBER_ID` | passthrough only — from `?type=number` |
 | `WA_OTP_TEMPLATE` | the approved template **name** |
-| `WA_OTP_LANG` | template language, default `en` |
-| `WA_OTP_BUTTON` | `1` only if the template has a copy-code / one-tap button |
+| `WA_OTP_LANG` | template language **exactly as approved** — usually `en_US`; default `en` |
+| `WA_OTP_BUTTON` | `copy_code` (Meta's default button), `one_tap`, or unset for body-only |
 
 The older `FAST2SMS_WA_OTP_TEMPLATE` / `_LANG` / `_BUTTON` names still work, so an
 existing setup keeps running; the `WA_*` names are preferred because the template
@@ -189,8 +229,8 @@ FAST2SMS_ROUTE=q
 #
 # Template settings — same either way
 # WA_OTP_TEMPLATE=your_auth_template_name
-# WA_OTP_LANG=en
-# WA_OTP_BUTTON=1
+# WA_OTP_LANG=en_US
+# WA_OTP_BUTTON=copy_code
 
 # Firebase — browser (safe to expose). Google sign-in only.
 NEXT_PUBLIC_FIREBASE_API_KEY=AIza...

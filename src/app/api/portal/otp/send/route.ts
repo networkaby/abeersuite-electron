@@ -3,8 +3,8 @@ import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import {
     isLikelyEmail,
+    normalizeMobile10,
     normalizePortalEmail,
-    normalizePortalPhone,
 } from "@/shared/lib/auth/portalIdentifier";
 import {
     generateOtpCode,
@@ -60,7 +60,8 @@ export async function POST(req: Request) {
 
         const raw = data.identifier;
         const asEmail = isLikelyEmail(raw);
-        const identity = asEmail ? normalizePortalEmail(raw) : normalizePortalPhone(raw);
+        // Mobile is pinned to exactly 10 digits here — see `normalizeMobile10`.
+        const identity = asEmail ? normalizePortalEmail(raw) : normalizeMobile10(raw);
 
         if (!identity) {
             return NextResponse.json(
@@ -118,8 +119,8 @@ export async function POST(req: Request) {
                 ].join("\n"),
             });
         } else {
-            // normalizePortalPhone yields bare digits; Fast2SMS wants exactly 10.
-            await sendMobileOtp(identity.slice(-10), code);
+            // Already exactly 10 bare digits, which is what both pipes want.
+            await sendMobileOtp(identity, code);
         }
 
         const res = NextResponse.json({ ok: true, channel });

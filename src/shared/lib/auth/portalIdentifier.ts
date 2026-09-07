@@ -19,3 +19,18 @@ export function normalizePortalPhone(raw: string): string | null {
 export function isLikelyEmail(identifier: string): boolean {
     return identifier.includes("@");
 }
+
+/**
+ * An Indian mobile in the exact shape the OTP path needs: 10 bare digits.
+ *
+ * `normalizePortalPhone` stays deliberately loose (10–15 digits) because the DB
+ * holds numbers staff typed in every shape, international ones included, and
+ * tightening it there would stop resolving those customers. The OTP path cannot
+ * be that loose: Fast2SMS and Meta both refuse anything but 10 digits, and the
+ * identity baked into the ticket has to be the same 10 digits we later look up
+ * — otherwise a customer verifies fine and is then treated as a stranger.
+ */
+export function normalizeMobile10(raw: string): string | null {
+    const digits = normalizePortalPhone(raw);
+    return digits && digits.length === 10 ? digits : null;
+}

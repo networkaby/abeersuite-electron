@@ -45,8 +45,11 @@ const NAV_ITEMS = [
     { href: "/portal/settings", label: "Profile Settings", icon: Settings },
 ] as const;
 
+/** Sign-up / password pages render bare — no sidebar for someone not signed in. */
+const PORTAL_AUTH_PAGES = ["/portal/register", "/portal/forgot-password"];
+
 function isPortalAuthPage(pathname: string) {
-    return pathname === "/portal/register";
+    return PORTAL_AUTH_PAGES.includes(pathname);
 }
 
 function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {

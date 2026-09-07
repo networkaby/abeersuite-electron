@@ -1,147 +1,95 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { validateRequest } from "@/shared/lib/api";
-import { handleApiError } from "@/shared/lib/api";
-import {
-    isLikelyEmail,
-    normalizePortalEmail,
-    normalizePortalPhone,
-} from "@/shared/lib/auth/portalIdentifier";
-import { findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { handleApiError, validateRequest } from "@/shared/lib/api";
+import { ensurePortalPerson } from "@/shared/lib/auth/findPortalPerson";
+import { resolvePortalIdentity } from "@/shared/lib/auth/authorizePortalPasswordless";
+
+/**
+ * Set the portal password for a **verified** mobile or email.
+ *
+ * One route for both "create my account" and "I forgot my password", because
+ * once a token proves the identity they are the same operation: find or create
+ * the Person, then write the password. Splitting them would only duplicate the
+ * verification and the person lookup.
+ *
+ * ── Why a token is mandatory ────────────────────────────────────────────────
+ * This route used to take a bare mobile/email and a password with nothing to
+ * prove ownership. Because it links to an existing customer record by number,
+ * anyone could type a customer's mobile, pick a password, and walk into that
+ * customer's orders, invoices, wallet and repairs. So the identity now comes
+ * only out of the OTP ticket (or a Google ID token) — never from the body.
+ */
 
 const bodySchema = z.object({
-    mode: z.enum(["mobile", "email"]),
-    identifier: z.string().trim().min(3),
-    password: z.string().min(6),
-    name: z.string().trim().min(1).optional(),
+    /** OTP ticket from /api/portal/otp/verify, or a Firebase ID token. */
+    token: z.string().min(1),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    /** Used only when we are creating the customer; never renames an existing one. */
+    name: z.string().trim().optional(),
+    /** Optional second contact offered on the create form. */
+    extraContact: z.string().trim().optional(),
 });
 
 export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, bodySchema);
         if (error) return error;
-        const { mode, identifier, password, name } = data;
 
-        let phoneRaw: string | null = null;
-        let phoneNorm: string | null = null;
-        let emailNorm: string | null = null;
-
-        if (mode === "email" || isLikelyEmail(identifier)) {
-            emailNorm = normalizePortalEmail(identifier);
-        } else {
-            phoneNorm = normalizePortalPhone(identifier);
-            if (!phoneNorm) {
-                return NextResponse.json({ error: "Invalid mobile number" }, { status: 400 });
-            }
-            phoneRaw = identifier.trim();
-        }
-
-        const existingCred =
-            phoneNorm != null
-                ? await prisma.personPortalCredential.findFirst({ where: { phoneNormalized: phoneNorm } })
-                : emailNorm != null
-                  ? await prisma.personPortalCredential.findFirst({ where: { emailNormalized: emailNorm } })
-                  : null;
-        if (existingCred) {
-            return NextResponse.json({ error: "An account already exists for this mobile or email" }, { status: 409 });
-        }
-
-        // Look up an existing person by stored phone/email rows. Shared with
-        // passwordless sign-in so both agree who an identifier belongs to.
-        let person = await findPortalPerson(prisma, {
-            emailNormalized: emailNorm,
-            phoneNormalized: phoneNorm,
-        });
-
-        if (!person) {
-            const created = await prisma.$transaction(async (tx) => {
-                const p = await tx.person.create({
-                    data: {
-                        name: name || (emailNorm ? emailNorm.split("@")[0] : "Customer") || "Customer",
-                    },
-                });
-                if (phoneNorm || phoneRaw) {
-                    await tx.phone.create({
-                        data: {
-                            phone: phoneNorm ? `+91${phoneNorm}` : phoneRaw!,
-                            personId: p.id,
-                            isPrimary: true,
-                        },
-                    });
-                }
-                if (emailNorm) {
-                    await tx.email.create({
-                        data: { email: emailNorm, personId: p.id, isPrimary: true },
-                    });
-                }
-                await tx.account.create({
-                    // Self-registered portal customer — cash-only (creditLimit 0)
-                    // until staff explicitly grant a positive limit.
-                    data: { personId: p.id, name: p.name, creditLimit: 0 },
-                });
-                return p;
-            });
-            person = { id: created.id, name: created.name };
-        } else {
-            if (name) {
-                await prisma.person.update({ where: { id: person.id }, data: { name } });
-                person.name = name;
-            }
-            // If a phone or email was provided that the person doesn't yet have,
-            // attach it (best-effort; ignore unique violations).
-            if (phoneRaw || phoneNorm) {
-                const phoneVal = phoneNorm ? `+91${phoneNorm}` : phoneRaw!;
-                try {
-                    await prisma.phone.create({
-                        data: { phone: phoneVal, personId: person.id },
-                    });
-                } catch {
-                    /* already exists — ignore */
-                }
-            }
-            if (emailNorm) {
-                try {
-                    await prisma.email.create({
-                        data: { email: emailNorm, personId: person.id },
-                    });
-                } catch {
-                    /* already exists — ignore */
-                }
-            }
-            const existingAccount = await prisma.account.findUnique({
-                where: { personId: person.id },
-                select: { id: true },
-            });
-            if (!existingAccount) {
-                await prisma.account.create({
-                    // Self-registered portal customer — cash-only (creditLimit 0)
-                    // until staff explicitly grant a positive limit.
-                    data: { personId: person.id, name: person.name, creditLimit: 0 },
-                });
-            }
-        }
-
-        if (!phoneNorm && !emailNorm) {
+        const identity = await resolvePortalIdentity(data.token);
+        if (!identity) {
             return NextResponse.json(
-                { error: "Provide a valid mobile or email so you can sign in later" },
-                { status: 400 }
+                { error: "Please verify your mobile or email again." },
+                { status: 401 }
             );
         }
 
-        const hash = await bcrypt.hash(password, 10);
-        await prisma.personPortalCredential.create({
-            data: {
-                personId: person.id,
-                phoneNormalized: phoneNorm,
-                emailNormalized: emailNorm,
-                passwordHash: hash,
-            },
+        const person = await ensurePortalPerson(
+            prisma,
+            identity,
+            data.name ?? "",
+            data.extraContact ?? ""
+        );
+        const passwordHash = await bcrypt.hash(data.password, 10);
+
+        // Fill in the channel column only when it is still empty, so signing in
+        // by mobile keeps working after a reset done over email (and the other
+        // way round) without ever stealing a column another person owns — both
+        // are unique, hence the guarded write rather than a blind overwrite.
+        const existing = await prisma.personPortalCredential.findUnique({
+            where: { personId: person.id },
+            select: { phoneNormalized: true, emailNormalized: true },
         });
+
+        const channelColumns = {
+            ...(identity.phoneNormalized && !existing?.phoneNormalized
+                ? { phoneNormalized: identity.phoneNormalized }
+                : {}),
+            ...(identity.emailNormalized && !existing?.emailNormalized
+                ? { emailNormalized: identity.emailNormalized }
+                : {}),
+        };
+
+        try {
+            await prisma.personPortalCredential.upsert({
+                where: { personId: person.id },
+                create: { personId: person.id, passwordHash, ...channelColumns },
+                update: { passwordHash, ...channelColumns },
+            });
+        } catch {
+            // The only way that fails is another credential already claiming this
+            // mobile/email. The password itself must still land, so retry without
+            // the channel columns.
+            await prisma.personPortalCredential.upsert({
+                where: { personId: person.id },
+                create: { personId: person.id, passwordHash },
+                update: { passwordHash },
+            });
+        }
 
         return NextResponse.json({ ok: true });
     } catch (e) {
-        return handleApiError(e, "Registration failed");
+        return handleApiError(e, "Could not set your password. Please try again.");
     }
 }

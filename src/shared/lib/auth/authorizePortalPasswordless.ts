@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
-import { findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
+import { ensurePortalPerson, findPortalPerson } from "@/shared/lib/auth/findPortalPerson";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 import { readTicket } from "@/shared/lib/auth/otpChallenge";
 import { verifyFirebaseIdToken } from "@/shared/lib/auth/firebaseToken";
@@ -20,7 +20,9 @@ import type { PortalAuthUser } from "@/shared/lib/auth/authorizePortal";
  * ticket do we fall back to Firebase — which is now Google-only.
  *
  * Unknown-but-verified identities are NOT rejected: with `name` supplied we
- * create the Person + contact row + Account, mirroring /api/portal/register
+ * create the Person + contact row + Account through the shared
+ * `ensurePortalPerson`, which /api/portal/register also uses — so a customer
+ * created by OTP sign-in and one created by self-registration are identical
  * (cash-only until staff grant a limit). Without a name we report
  * `needsOnboarding` so the UI can ask for one.
  */
@@ -101,49 +103,6 @@ async function toAuthUser(prisma: PrismaClient, personId: number): Promise<Porta
 }
 
 /**
- * Create a customer from a verified identity. Same shape as self-registration:
- * Person + primary contact + cash-only Account, all in one transaction.
- */
-async function onboardPerson(
-    prisma: PrismaClient,
-    identity: PortalIdentity,
-    name: string,
-    extraContact: string
-): Promise<number> {
-    // The optional second contact the onboarding form offers.
-    const extraEmail =
-        identity.channel === "mobile" && extraContact.includes("@")
-            ? normalizePortalEmail(extraContact)
-            : null;
-    const extraPhone =
-        identity.channel === "email" && extraContact ? normalizePortalPhone(extraContact) : null;
-
-    const created = await prisma.$transaction(async (tx) => {
-        const person = await tx.person.create({ data: { name } });
-
-        const phone = identity.phoneNormalized ?? extraPhone;
-        if (phone) {
-            await tx.phone.create({
-                data: { phone: `+91${phone}`, personId: person.id, isPrimary: true },
-            });
-        }
-        const email = identity.emailNormalized ?? extraEmail;
-        if (email) {
-            await tx.email.create({ data: { email, personId: person.id, isPrimary: true } });
-        }
-
-        await tx.account.create({
-            // Self-onboarded portal customer — cash-only (creditLimit 0) until
-            // staff explicitly grant a positive limit.
-            data: { personId: person.id, name: person.name, creditLimit: 0 },
-        });
-        return person;
-    });
-
-    return created.id;
-}
-
-/**
  * Full sign-in. `name` non-empty means "create if missing" (the onboarding
  * form was filled in); empty means "only sign in if you already know me".
  */
@@ -164,7 +123,7 @@ export async function authorizePortalPasswordless(
     const name = (args.name ?? "").trim();
     if (!name) return { status: "needsOnboarding", identity };
 
-    const personId = await onboardPerson(prisma, identity, name, (args.extraContact ?? "").trim());
-    const user = await toAuthUser(prisma, personId);
+    const person = await ensurePortalPerson(prisma, identity, name, args.extraContact ?? "");
+    const user = await toAuthUser(prisma, person.id);
     return user ? { status: "ok", user } : { status: "invalid" };
 }

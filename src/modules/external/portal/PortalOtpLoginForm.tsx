@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isLikelyEmail, normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
+import { isLikelyEmail, normalizeMobile10, normalizePortalEmail } from "@/shared/lib/auth/portalIdentifier";
 import { sendOtp, type OtpChannel, type OtpConfirmation } from "@/shared/lib/auth/portalPasswordless";
 
 const RESEND_SECONDS = 30;
@@ -48,7 +48,9 @@ export default function PortalOtpLoginForm({
 
     const busy = sending || parentBusy;
     const asEmail = isLikelyEmail(identifier);
-    const digits = normalizePortalPhone(identifier);
+    // Same 10-digit rule the send route applies, so the error shows before
+    // we spend a WhatsApp/SMS message on a number that cannot receive one.
+    const digits = normalizeMobile10(identifier);
     const channel: OtpChannel = asEmail ? "email" : "mobile";
     // Shown back to the customer. The value the server actually verifies comes
     // out of the OTP ticket, so this is for display only.
