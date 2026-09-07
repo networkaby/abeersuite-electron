@@ -26,6 +26,7 @@ import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNatu
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
 import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
 import { retreatReconciliation } from "./reconciliation";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 type Drcr = "DEBIT" | "CREDIT";
 
@@ -208,6 +209,9 @@ export async function engineGlArm(
 
     // CREATE-POSTED-directly: no pre-created draft spine — mint a fresh POSTED one.
     // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
+    // Which till raised this. Resolved here, in the one place every voucher kind
+    // passes through, so no caller has to remember to pass it.
+    const counterId = await sourceCounterId(tx);
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -222,6 +226,7 @@ export async function engineGlArm(
             sourceCreatedAt:      postedAt,   // faithful txn wall-clock for windowed readers
             partyAccountId:       args.partyAccountId ?? null,
             branchId:             branchId ?? null,   // 5D-12: branch primary on the spine
+            sourceCounterId:      counterId,
             createdById:          userId,
             lines: { create: glLineBase },
         },
@@ -259,6 +264,7 @@ export async function engineCreateSpine(
     },
 ): Promise<number> {
     // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
+    const counterId = await sourceCounterId(tx);
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -271,6 +277,7 @@ export async function engineCreateSpine(
             status:         "DRAFT",
             partyAccountId: args.partyAccountId ?? null,
             branchId:       args.branchId ?? null,   // 5D-12: branch primary on the spine
+            sourceCounterId: counterId,
             createdById:    args.userId,
         },
     });

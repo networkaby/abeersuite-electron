@@ -7,6 +7,7 @@ import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 // Convert a help ticket into a real downstream ticket — the "Converted" rung of the
 // help ladder. `deal` drops it into the CRM pipeline as a lead (nurture / push the
@@ -72,6 +73,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             const lead = await prisma.ticket.create({
                 data: {
+                    // Which till raised this — same column and resolver as every voucher.
+                    sourceCounterId: await sourceCounterId(),
                     pipelineId: deals.id,
                     status: entry.id,
                     title: data.title?.trim() || h.subject || "Enquiry lead",
@@ -120,6 +123,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const repair = await prisma.ticket.create({
             data: {
+                // Which till raised this — same column and resolver as every voucher.
+                sourceCounterId: await sourceCounterId(),
                 priority: help.priority,
                 pipelineId: repairPipelineId,
                 accountId,

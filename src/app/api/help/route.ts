@@ -8,6 +8,7 @@ import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 /** Position the ticket is assigned to + its current live holders. */
 const ASSIGNED_POSITION_SELECT = {
@@ -202,6 +203,8 @@ export async function POST(req: Request) {
         const author = await buildActorSnapshot(user.id);
         const ticket = await prisma.ticket.create({
             data: {
+                // Which till raised this — same column and resolver as every voucher.
+                sourceCounterId: await sourceCounterId(),
                 pipelineId: pipeline.id,
                 status: entry.id,
                 title: data.subject ?? null,  // subject mirrored onto the core row (optional)

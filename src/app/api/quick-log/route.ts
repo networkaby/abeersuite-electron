@@ -19,6 +19,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest } from "@/shared/lib/api";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 // Allowed pipeline ids for quick-log
 const ALLOWED_PIPELINE_IDS = ["P2", "P4", "P6"] as const;
@@ -70,6 +71,8 @@ export async function POST(req: Request) {
     // A deal = a Ticket (flavour "deal") + a TicketDeal detail.
     const lead = await prisma.ticket.create({
         data: {
+            // Which till raised this — same column and resolver as every voucher.
+            sourceCounterId: await sourceCounterId(),
             pipelineId,
             status: entryStatus.id,
             title,

@@ -66,7 +66,14 @@ export async function GET(req: Request) {
                     },
                 } : {}),
             },
-            orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+            // `sourceCreatedAt` (when it was posted), not `createdAt` (when the
+            // row was inserted) — on a relayed or late-synced write those differ,
+            // and only the former is the order a person recognises.
+            orderBy: [
+                { date: "desc" },
+                { sourceCreatedAt: { sort: "desc", nulls: "last" } },
+                { createdAt: "desc" },
+            ],
             include: {
                 lines:  { select: { type: true, amount: true } },
                 // 5D-12: branch is primary on the spine — read it straight off the

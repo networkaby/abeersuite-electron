@@ -11,5 +11,6 @@ export * from "./parseNumericInput";
 export * from "./phone";
 export * from "./dateInput";
 export * from "./slugify";
+export * from "./sourceCounter";
 export * from "./utils";
 export * from "./voucherTypeLabel";

@@ -31,6 +31,8 @@ interface RawEntry {
     totalDebit?:  number | string;
     cancelledAt?: string | null;
     createdAt:    string;
+    sourceCreatedAt:    string | null;
+    sourceCounterId:    number | null;
     createdById:  number;
     branchId:     string | null;
     createdBy:    { name: string };
@@ -78,6 +80,8 @@ export function JournalEntriesRegister() {
                     status:         e.status,
                     cancelledAt:    e.cancelledAt ?? null,
                     createdAt:      e.createdAt,
+                    sourceCreatedAt:      e.sourceCreatedAt ?? null,
+                    sourceCounterId:      e.sourceCounterId ?? null,
                     createdById:    e.createdById,
                     branchId:       e.branchId ?? null,
                     branchName:     null,
