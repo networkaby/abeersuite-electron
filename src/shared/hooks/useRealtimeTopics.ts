@@ -41,6 +41,65 @@ import type { Topic } from "@/shared/lib/realtime/topics";
 /** Long enough to swallow a multi-request save, short enough to feel instant. */
 const SETTLE_MS = 600;
 
+/**
+ * The subscription underneath `useRealtimeTopics`, for callers that are not a
+ * component (a module-level store such as `useNavCounts`). Same three rules: nothing
+ * runs hidden, one read per burst, and on a replica-reading counter the Supabase signal
+ * is ignored in favour of the worker's own `sync:applied`. Returns an unsubscribe.
+ */
+export function subscribeRealtimeTopics(topics: readonly Topic[], fn: () => void): () => void {
+    const wanted = new Set(topics);
+    if (wanted.size === 0) return () => {};
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const run = () => {
+        timer = null;
+        fn();
+    };
+
+    const schedule = () => {
+        if (document.hidden || timer) return;
+        timer = setTimeout(run, SETTLE_MS);
+    };
+
+    // On a counter the worker says when pulled rows are really queryable — see
+    // syncApplied.ts. Not filtered by topic: the worker reports models, and mapping
+    // models back to topics would mean hand-maintaining a second map that silently
+    // narrows what refreshes as the schema grows, which is exactly how the worker's
+    // own topic map rotted. A cycle that pulled nothing stays silent, so this only
+    // fires when something really did change on this machine.
+    const bridged = ensureSyncAppliedBridge();
+
+    const offApp = onChangeSignal((sig) => {
+        if (!sig.topics.some((t) => wanted.has(t))) return;
+        // Screens served from the replica would read the OLD rows here: the signal
+        // arrives while the worker is still pulling. Wait for `sync:applied` instead
+        // (one fresh read rather than a stale one followed by a fresh one). Only when
+        // that bridge exists and the status endpoint has said reads are local —
+        // a browser, Vercel, or READ_MODE=live keeps refetching on this signal.
+        if (bridged && getReadsGoLocal()) return;
+        schedule();
+    });
+
+    const onApplied = () => schedule();
+    window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
+
+    // A gap this tab sat hidden through is exactly what a remembered
+    // "owed" flag would try to cover — and get wrong the moment the gap
+    // held no signal at all. Reading unconditionally on return is both
+    // simpler and actually safe.
+    const onVisibility = () => { if (!document.hidden) run(); };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+        offApp();
+        window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
+        if (timer) clearTimeout(timer);
+        document.removeEventListener("visibilitychange", onVisibility);
+    };
+}
+
 export function useRealtimeTopics(
     topics: readonly Topic[],
     fn: () => void,
@@ -55,54 +114,6 @@ export function useRealtimeTopics(
 
     useEffect(() => {
         if (!enabled || key === "") return;
-        const wanted = new Set(key.split(","));
-
-        let timer: ReturnType<typeof setTimeout> | null = null;
-
-        const run = () => {
-            timer = null;
-            fnRef.current();
-        };
-
-        const schedule = () => {
-            if (document.hidden || timer) return;
-            timer = setTimeout(run, SETTLE_MS);
-        };
-
-        // On a counter the worker says when pulled rows are really queryable — see
-        // syncApplied.ts. Not filtered by topic: the worker reports models, and mapping
-        // models back to topics would mean hand-maintaining a second map that silently
-        // narrows what refreshes as the schema grows, which is exactly how the worker's
-        // own topic map rotted. A cycle that pulled nothing stays silent, so this only
-        // fires when something really did change on this machine.
-        const bridged = ensureSyncAppliedBridge();
-
-        const offApp = onChangeSignal((sig) => {
-            if (!sig.topics.some((t) => wanted.has(t))) return;
-            // Screens served from the replica would read the OLD rows here: the signal
-            // arrives while the worker is still pulling. Wait for `sync:applied` instead
-            // (one fresh read rather than a stale one followed by a fresh one). Only when
-            // that bridge exists and the status endpoint has said reads are local —
-            // a browser, Vercel, or READ_MODE=live keeps refetching on this signal.
-            if (bridged && getReadsGoLocal()) return;
-            schedule();
-        });
-
-        const onApplied = () => schedule();
-        window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
-
-        // A gap this tab sat hidden through is exactly what a remembered
-        // "owed" flag would try to cover — and get wrong the moment the gap
-        // held no signal at all. Reading unconditionally on return is both
-        // simpler and actually safe.
-        const onVisibility = () => { if (!document.hidden) run(); };
-        document.addEventListener("visibilitychange", onVisibility);
-
-        return () => {
-            offApp();
-            window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
-            if (timer) clearTimeout(timer);
-            document.removeEventListener("visibilitychange", onVisibility);
-        };
+        return subscribeRealtimeTopics(key.split(",") as Topic[], () => fnRef.current());
     }, [key, enabled]);
 }

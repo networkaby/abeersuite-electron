@@ -8,6 +8,7 @@ import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveC
 import { buildRulesIndex, resolveRedeemCapPct } from "@/modules/loyalty/lib";
 import { barcodeTagPaise, normalizeBarcodeBands } from "@/shared/lib/pricing/barcodePrice";
 import { primaryBarcode } from "@/shared/lib/inventory";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /// Per-product loyalty redeem-cap OVERRIDE (% of the item's value redeemable with
 /// points). Returns a Map<productId, number> holding only products an enabled
@@ -221,12 +222,10 @@ export async function GET(req: NextRequest) {
         // `updatedAt` past it and is picked up by the next delta rather than lost.
         const now = new Date();
         const stamp = await catalogueStamp();
-        const sinceParam = params.get("since");
-        const since = sinceParam ? new Date(sinceParam) : null;
+        const since = parseSince(params.get("since"));
 
         const canDelta =
             since != null
-            && !Number.isNaN(since.getTime())
             && params.get("stamp") === stamp
             && now.getTime() - since.getTime() < MAX_DELTA_WINDOW_MS;
 

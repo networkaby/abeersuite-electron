@@ -174,6 +174,12 @@ function joinRows(rows: RawRow[], refs: Refs): CombinedRow[] {
  * contiguous run from `to` back to its cursor, and letting an older row in would
  * strand it in the middle of a list it does not belong to.
  */
+/** A full page answer replaces whatever was held. Also what the server sends back to
+ *  a `since` request on a replica-reading counter (see parseSince). */
+function storeFromPage(res: DayBookResponse): Store {
+    return { rows: res.rows, refs: res.refs, nextCursor: res.nextCursor, checkedAt: res.computedAt };
+}
+
 function applyDelta(store: Store, res: DayBookResponse): Store {
     const byId = new Map(store.rows.map((r) => [r.id, r]));
     for (const id of res.deleted) byId.delete(id);
@@ -314,11 +320,9 @@ export function useDayBook(query: DayBookQuery) {
                     const res = await fetchDayBook(query, search, { since: cached.checkedAt });
                     if (cancelled) return;
                     // Too much moved for a delta to be the cheap option — start over.
-                    const next = res.overflow
-                        ? await (async () => {
-                            const fresh = await fetchDayBook(query, search);
-                            return { rows: fresh.rows, refs: fresh.refs, nextCursor: fresh.nextCursor, checkedAt: fresh.computedAt };
-                        })()
+                    // A page answer means the server declined the delta outright.
+                    const next = res.mode === "page" ? storeFromPage(res)
+                        : res.overflow ? storeFromPage(await fetchDayBook(query, search))
                         : applyDelta(cached, res);
                     if (cancelled) return;
                     setStore(next);
@@ -326,9 +330,7 @@ export function useDayBook(query: DayBookQuery) {
                 } else {
                     const res = await fetchDayBook(query, search);
                     if (cancelled) return;
-                    const next: Store = {
-                        rows: res.rows, refs: res.refs, nextCursor: res.nextCursor, checkedAt: res.computedAt,
-                    };
+                    const next = storeFromPage(res);
                     setStore(next);
                     if (cacheable) await writeCachedView(key, next);
                 }
@@ -406,7 +408,7 @@ export function useDayBook(query: DayBookQuery) {
                 const res = await fetchDayBook(query, search, { since: current.checkedAt });
                 if (res.overflow) { reload(); return; }
                 // Re-read: a loadMore may have landed while this was in flight.
-                const next = applyDelta(storeRef.current, res);
+                const next = res.mode === "page" ? storeFromPage(res) : applyDelta(storeRef.current, res);
                 setStore(next);
                 setStale(false);
                 if (cacheable) await writeCachedView(key, next);

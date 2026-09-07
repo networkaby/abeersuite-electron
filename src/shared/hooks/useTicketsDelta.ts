@@ -27,6 +27,15 @@
  *    copy on disk for fast reopening. The login gate ensures only authorised
  *    machines reach this code.
  *
+ *  • LOCAL-READ COUNTER. On a till serving screens from its replica the replica IS
+ *    the local copy, and the rules above bend two ways. The server ignores `since`
+ *    there (`parseSince`) and answers with a full page — rows land in the replica
+ *    seconds after Supabase stamped them, so a "changed since my last read" stamp
+ *    taken from the replica's clock can sit PAST a row that has not arrived yet and
+ *    hide it for good. And after the board's OWN save the row is still in flight, so
+ *    `afterOwnWrite` reads nothing until the worker says the rows have landed
+ *    (`sync:applied`); reading at once would snap the optimistic change back.
+ *
  *  • NO DELETE TOMBSTONE, same accepted gap as before: a hard-deleted ticket
  *    inside the loaded window isn't chased down by a delta, bounded by
  *    `MAX_AGE_MS` instead. Hard-deletes are rare and gated.
@@ -37,6 +46,8 @@ import axios from "axios";
 import { localDb, type LocalTicketRow } from "@/shared/lib/browser/localDb";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useRealtimeTopics } from "./useRealtimeTopics";
+import { getReadsGoLocal, getWritesHeldUntilApplied } from "@/shared/lib/realtime/appChannel";
+import { SYNC_APPLIED_EVENT } from "@/shared/lib/realtime/syncApplied";
 
 const DEFAULT_API = "/api/tickets";
 /** One entry per distinct filter combo per board. Bounded so a session of
@@ -47,6 +58,9 @@ const MAX_CACHED_VIEWS = 8;
  *  delete tombstone (mirrors the POS product cache's own MAX_AGE_MS). */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SEARCH_DEBOUNCE_MS = 350;
+/** After the board's own save on a replica-reading till, how long to wait for the
+ *  worker's `sync:applied` before reading anyway (its realtime link may be down). */
+const OWN_WRITE_FALLBACK_MS = 6_000;
 
 export type TicketsQuery = {
     pipelineId?: string;
@@ -193,6 +207,32 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         setTick((t) => t + 1);
     }, []);
 
+    /** The board's OWN write just succeeded. Off a counter, or on a till whose writes
+     *  are held until its replica has the rows (v_live), that is a plain `reload`. On a
+     *  till reading its replica while writing live the row is still in flight: reading
+     *  now would show the old state — snapping an optimistic move back — and stamp the
+     *  cache past the row. So nothing is read until the worker's `sync:applied`, which
+     *  the topic subscription below already answers; the timer only covers a worker
+     *  whose realtime link is down. See the module doc, LOCAL-READ COUNTER. */
+    const ownWriteWait = useRef<(() => void) | null>(null);
+    const clearOwnWriteWait = useCallback(() => {
+        ownWriteWait.current?.();
+        ownWriteWait.current = null;
+    }, []);
+    useEffect(() => clearOwnWriteWait, [clearOwnWriteWait]);
+
+    const afterOwnWrite = useCallback(() => {
+        if (!getReadsGoLocal() || getWritesHeldUntilApplied()) { reload(); return; }
+        clearOwnWriteWait();
+        const onApplied = () => clearOwnWriteWait();
+        const timer = setTimeout(() => { clearOwnWriteWait(); reload(); }, OWN_WRITE_FALLBACK_MS);
+        window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
+        ownWriteWait.current = () => {
+            clearTimeout(timer);
+            window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
+        };
+    }, [reload, clearOwnWriteWait]);
+
     useEffect(() => {
         let cancelled = false;
         const force = forceNext.current;
@@ -220,9 +260,15 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     const res = await fetchTickets<T>(apiPath, query, search, { since: cached.checkedAt });
                     if (cancelled) return;
 
-                    if (res.mode === "delta" && res.overflow) {
-                        const fresh = await fetchTickets<T>(apiPath, query, search);
-                        if (cancelled || fresh.mode !== "page") return;
+                    // A page answer to a `since` request means the server declined the
+                    // delta (a replica-served read — see parseSince); an overflow means
+                    // too much moved for one. Either way a full page replaces the view.
+                    const fresh = res.mode === "page" ? res
+                        : res.overflow ? await fetchTickets<T>(apiPath, query, search)
+                        : null;
+                    if (cancelled) return;
+                    if (fresh) {
+                        if (fresh.mode !== "page") return;
                         const sorted = [...fresh.rows].sort(sort);
                         setRows(sorted);
                         setNextCursor(fresh.nextCursor);
@@ -296,6 +342,6 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         setRows: setRows as Dispatch<SetStateAction<T[]>>,
         loading, loadingMore,
         hasMore: nextCursor != null,
-        error, stale, loadMore, reload,
+        error, stale, loadMore, reload, afterOwnWrite,
     };
 }

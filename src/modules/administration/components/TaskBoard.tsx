@@ -49,7 +49,7 @@ export default function TaskBoard({
 
     // Dexie-cached + delta-synced against the same Ticket replica the other
     // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
-    const { rows: tasks, setRows: setTasks, loading, error, reload: load } = useTicketsDelta<TaskDto>({}, {
+    const { rows: tasks, setRows: setTasks, loading, error, reload: load, afterOwnWrite } = useTicketsDelta<TaskDto>({}, {
         apiPath: "/api/admin-tasks",
         sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
     });
@@ -100,7 +100,7 @@ export default function TaskBoard({
         );
         try {
             await axios.patch(`/api/admin-tasks/${id}`, { status: stageId });
-            load(); // resync (completedAt, comment count, etc.)
+            afterOwnWrite(); // resync (completedAt, comment count, etc.)
         } catch {
             setTasks(prev); // revert
             toast.error("Failed to move task");
@@ -210,7 +210,7 @@ export default function TaskBoard({
                 onOpenChange={setFormOpen}
                 positions={positions}
                 task={editingTask}
-                onSaved={load}
+                onSaved={afterOwnWrite}
             />
             <TaskDetailDialog
                 taskId={detailId}
@@ -220,7 +220,7 @@ export default function TaskBoard({
                 canEdit={canEdit}
                 canDelete={canDelete}
                 onEdit={openEdit}
-                onChanged={load}
+                onChanged={afterOwnWrite}
             />
         </div>
     );

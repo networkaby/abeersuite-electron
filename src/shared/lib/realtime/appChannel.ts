@@ -266,6 +266,23 @@ export function getReadsGoLocal(): boolean {
     return readsGoLocal;
 }
 
+/**
+ * Whether this machine's writes are HELD until its replica has the rows, as reported
+ * by `/api/counter/status` (`WRITE_MODE=v_live`, see writeRelay.ts). On such a till a
+ * screen may re-read straight after its own save. On a till that reads its replica but
+ * writes live, it may not: the row is still in flight, and the read would show the old
+ * state AND stamp the cache past the row (see `useTicketsDelta.afterOwnWrite`).
+ */
+let writesHeldUntilApplied = false;
+
+export function setWritesHeldUntilApplied(held: boolean) {
+    writesHeldUntilApplied = held;
+}
+
+export function getWritesHeldUntilApplied(): boolean {
+    return writesHeldUntilApplied;
+}
+
 /** Announce that these topics changed. Coalesced; safe to call as often as you like.
  *  Supabase broadcast does not echo to the sender, so the acting tab is untouched —
  *  it already knows, and updates through its own save path. */

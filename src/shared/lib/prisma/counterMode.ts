@@ -263,6 +263,26 @@ export function shouldReadLocal(): boolean {
 }
 
 /**
+ * A client's "changed since" stamp, or null when it must not be trusted.
+ *
+ * Every delta cache in the browser remembers the server's `computedAt` and next asks
+ * only for rows with `updatedAt > since`. That is exact against the database that
+ * stamped the rows. Against the REPLICA it is not: rows arrive there seconds after
+ * Supabase stamped them, so a read that runs before the sync lands moves the stamp
+ * past a row that then never qualifies again — the screen stays wrong until someone
+ * presses Refresh. On a replica-served read the stamp is therefore ignored and the
+ * route answers in full; the replica is local, so a full read costs nothing, and the
+ * screen only re-reads on the worker's own "rows applied" signal anyway.
+ *
+ * Off a counter (Vercel, READ_MODE=live) this is the plain parse it always was.
+ */
+export function parseSince(raw: string | null): Date | null {
+    if (!raw || shouldReadLocal()) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Should this WRITE be served by the replica?
  *
  * Under `WRITE_MODE=local` that is simply where writes go. Under `live` it happens

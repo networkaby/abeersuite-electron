@@ -6,6 +6,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 import { balanceDelta, toNumber } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 export type LedgerMode = "posted" | "provisional";
 
@@ -143,9 +144,8 @@ export async function loadMasterOpeningBalances(
  *     of a figure that silently never refreshes.
  */
 export async function isUnchangedSince(sinceParam: string | null, now: Date): Promise<boolean> {
-    if (!sinceParam) return false;
-    const since = new Date(sinceParam);
-    if (Number.isNaN(since.getTime())) return false;
+    const since = parseSince(sinceParam);
+    if (!since) return false;
     if (now.getTime() - since.getTime() >= FINANCE_BAR_POLL_MS) return false;
 
     const row = await prisma.universalVoucher.findFirst({

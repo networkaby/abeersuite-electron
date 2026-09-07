@@ -7,6 +7,7 @@ import { createHelpSchema } from "@/shared/lib/schemas/helpSchema";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { phoneMatchKey } from "@/shared/lib/format";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /** Position the ticket is assigned to + its current live holders. */
 const ASSIGNED_POSITION_SELECT = {
@@ -94,11 +95,10 @@ export async function GET(req: Request) {
         // ── Sync mode (Help board's Dexie-cached delta — see useTicketsDelta) ──
         if (sp.get("sync")) {
             const computedAt = new Date();
-            const sinceParam = sp.get("since");
-            const since = sinceParam ? new Date(sinceParam) : null;
+            const since = parseSince(sp.get("since"));
             const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
 
-            if (since && !Number.isNaN(since.getTime())) {
+            if (since) {
                 const MAX_DELTA_ROWS = 500;
                 const changed = await prisma.ticket.findMany({
                     where: { pipelineId: pipeline.id, updatedAt: { gt: since } },

@@ -7,6 +7,7 @@ import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurrences";
 import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /** Position the task is assigned to + its current live holders (resolved via
  *  UserPosition), so the board can show who'll actually do the work. */
@@ -91,11 +92,10 @@ export async function GET(req: Request) {
         // ── Sync mode (Task board's Dexie-cached delta — see useTicketsDelta) ──
         if (searchParams.get("sync")) {
             const computedAt = new Date();
-            const sinceParam = searchParams.get("since");
-            const since = sinceParam ? new Date(sinceParam) : null;
+            const since = parseSince(searchParams.get("since"));
             const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
 
-            if (since && !Number.isNaN(since.getTime())) {
+            if (since) {
                 const MAX_DELTA_ROWS = 500;
                 const changed = await prisma.ticket.findMany({
                     where: { pipelineId, updatedAt: { gt: since } },

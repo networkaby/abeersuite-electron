@@ -3,6 +3,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getNavCountsPayload, hasNavCountsChangedSince } from "@/shared/lib/nav/navCounts";
 import { handleApiError } from "@/shared/lib/api";
 import { NAV_COUNTS_SINCE_TRUST_MS } from "@/shared/lib/constants/polling";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /**
  * Every sidebar badge in one response — the per-surface { all, new } counts plus
@@ -29,9 +30,8 @@ export async function GET(req: Request) {
 
     try {
         const now = new Date();
-        const sinceParam = new URL(req.url).searchParams.get("since");
-        const since = sinceParam ? new Date(sinceParam) : null;
-        if (since && !Number.isNaN(since.getTime()) && now.getTime() - since.getTime() < NAV_COUNTS_SINCE_TRUST_MS) {
+        const since = parseSince(new URL(req.url).searchParams.get("since"));
+        if (since && now.getTime() - since.getTime() < NAV_COUNTS_SINCE_TRUST_MS) {
             if (!(await hasNavCountsChangedSince(user.id, since))) {
                 return NextResponse.json({ unchanged: true, computedAt: now.toISOString() });
             }

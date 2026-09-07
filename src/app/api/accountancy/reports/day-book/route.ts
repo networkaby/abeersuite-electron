@@ -7,6 +7,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { kindsForFilter, kindsForCategory } from "@/modules/accountancy/lib/voucherKinds";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /**
  * GET /api/accountancy/reports/day-book
@@ -79,9 +80,8 @@ export async function GET(req: Request) {
     const to = searchParams.get("to");
     const search = searchParams.get("search")?.trim() ?? "";
     const branchId = searchParams.get("branchId");
-    const refsSince = searchParams.get("refsSince");
-    const sinceRaw = searchParams.get("since");
-    const since = sinceRaw ? new Date(sinceRaw) : null;
+    const refsSince = parseSince(searchParams.get("refsSince"));
+    const since = parseSince(searchParams.get("since"));
     const statuses = (searchParams.get("statuses") ?? "")
         .split(",")
         .map((s) => s.trim())
@@ -267,7 +267,7 @@ export async function GET(req: Request) {
         const pageAccountIds = [...new Set(rows.map((r) => r.partyAccountId).filter((id): id is number => id != null))];
         const accountOr: Prisma.AccountWhereInput[] = [
             ...(pageAccountIds.length > 0 ? [{ id: { in: pageAccountIds } }] : []),
-            ...(refsSince ? [{ updatedAt: { gt: new Date(refsSince) } }] : []),
+            ...(refsSince ? [{ updatedAt: { gt: refsSince } }] : []),
         ];
         const [branches, users, accounts] = await Promise.all([
             prisma.branch.findMany({ select: { id: true, name: true } }),

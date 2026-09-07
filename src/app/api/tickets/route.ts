@@ -11,6 +11,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -160,11 +161,10 @@ export async function GET(req: Request) {
 
         // ── Sync mode (Repair Tickets board cache) ───────────────────────────────
         const computedAt = new Date();
-        const sinceParam = searchParams.get("since");
-        const since = sinceParam ? new Date(sinceParam) : null;
+        const since = parseSince(searchParams.get("since"));
         const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "desc" }];
 
-        if (since && !Number.isNaN(since.getTime())) {
+        if (since) {
             const MAX_DELTA_ROWS = 500;
             const changed = await prisma.ticket.findMany({
                 where: { ...where, updatedAt: { gt: since } },

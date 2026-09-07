@@ -51,7 +51,7 @@ export default function HelpWorkspace({
 
     // Dexie-cached + delta-synced against the same Ticket replica the other
     // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
-    const { rows: tickets, setRows: setTickets, loading, error, reload: load } = useTicketsDelta<HelpDto>({}, {
+    const { rows: tickets, setRows: setTickets, loading, error, reload: load, afterOwnWrite } = useTicketsDelta<HelpDto>({}, {
         apiPath: "/api/help",
         sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
     });
@@ -91,7 +91,7 @@ export default function HelpWorkspace({
         setTickets((ts) => ts.map((t) => (t.id === ticketId ? { ...t, status: stageId, ticketStatus: target } : t)));
         try {
             await axios.patch(`/api/help/${ticketId}`, { status: stageId });
-            load();
+            afterOwnWrite();
         } catch {
             setTickets(prev);
             toast.error("Failed to move ticket");
@@ -180,14 +180,14 @@ export default function HelpWorkspace({
                 open={quickOpen}
                 onOpenChange={setQuickOpen}
                 positions={positions}
-                onSaved={load}
+                onSaved={afterOwnWrite}
             />
             <HelpFormDialog
                 open={formOpen}
                 onOpenChange={setFormOpen}
                 positions={positions}
                 ticket={editing}
-                onSaved={load}
+                onSaved={afterOwnWrite}
             />
             <HelpDetailDialog
                 ticketId={detailId}
@@ -197,7 +197,7 @@ export default function HelpWorkspace({
                 canEdit={canEdit}
                 canDelete={canDelete}
                 onEdit={openEdit}
-                onChanged={load}
+                onChanged={afterOwnWrite}
             />
         </div>
     );

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /**
  * GET /api/inventory/masters/sync[?since=<iso>]
@@ -39,12 +40,10 @@ export async function GET(req: NextRequest) {
         // Captured BEFORE reading, so a row written mid-request still has an
         // `updatedAt` past it and is picked up by the next delta rather than lost.
         const now = new Date();
-        const sinceParam = req.nextUrl.searchParams.get("since");
-        const since = sinceParam ? new Date(sinceParam) : null;
+        const since = parseSince(req.nextUrl.searchParams.get("since"));
 
         const canDelta =
             since != null
-            && !Number.isNaN(since.getTime())
             && now.getTime() - since.getTime() < MAX_DELTA_WINDOW_MS;
 
         const where = canDelta ? { updatedAt: { gt: since! } } : undefined;

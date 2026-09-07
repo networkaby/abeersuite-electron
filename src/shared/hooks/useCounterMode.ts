@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { setWritesGoLocal, setReadsGoLocal } from "@/shared/lib/realtime/appChannel";
+import { setWritesGoLocal, setReadsGoLocal, setWritesHeldUntilApplied } from "@/shared/lib/realtime/appChannel";
 
 /** Mirror of `counterStatus()` in shared/lib/prisma/counterMode.ts. */
 export type CounterStatus = {
@@ -71,6 +71,9 @@ export function useCounterMode(): CounterStatus | null {
                 // Where reads come from decides which signal a screen waits for: the
                 // replica's "rows applied" line rather than the early Supabase nudge.
                 setReadsGoLocal(data.isCounter && data.preference !== "live");
+                // Whether a screen may re-read right after its own save, or must wait for
+                // the replica to say the rows have landed. See setWritesHeldUntilApplied.
+                setWritesHeldUntilApplied(data.writePreference === "v_live");
                 if (!cancelled) setStatus(data);
             } catch {
                 // Leave the last known status in place rather than flashing "unknown".

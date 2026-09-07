@@ -46,7 +46,7 @@ import {
     writeCache,
     type CachedEntry,
 } from "@/shared/lib/browser/pollCache";
-import { onChangeSignal } from "@/shared/lib/realtime/appChannel";
+import { subscribeRealtimeTopics } from "./useRealtimeTopics";
 
 /** Fired whenever something may have changed a count. */
 export const NAV_COUNTS_CHANGED = "nav-counts:changed";
@@ -137,16 +137,16 @@ function onVisibility() {
     if (document.hidden) {
         stopTimer();
     } else {
-        void refresh();   // catch up on what changed while we were away
-        startTimer();
+        startTimer();     // the topic subscription already re-reads on becoming visible
     }
 }
 
 /** Someone finished a ticket work / a new one arrived — badges recount instantly
  *  instead of waiting for the poll (now a distant fallback, see NAV_COUNTS_POLL_MS).
- *  Only the tab that becomes Realtime leader ever fires this — followers still
- *  get it, since a badge recount is a local read, not a live push, and every
- *  tab already recounts on its own focus/visibility. */
+ *  Goes through the shared topic subscription so that on a counter reading its
+ *  replica the recount waits for the worker's `sync:applied`, not the early Supabase
+ *  nudge — counted on the replica before the rows landed, a badge stays wrong until
+ *  the next focus. That subscription also re-reads on becoming visible. */
 let unsubscribeChangeSignal: (() => void) | null = null;
 
 /** First mounted badge wires everything up; the last one to leave tears it down. */
@@ -158,9 +158,7 @@ function subscribe(listener: () => void) {
         window.addEventListener("inbox:read", onEvent);
         window.addEventListener("focus", onEvent);
         document.addEventListener("visibilitychange", onVisibility);
-        unsubscribeChangeSignal = onChangeSignal((sig) => {
-            if (sig.topics.includes("tickets")) onEvent();
-        });
+        unsubscribeChangeSignal = subscribeRealtimeTopics(["tickets"], onEvent);
         void refresh();
         startTimer();
     }

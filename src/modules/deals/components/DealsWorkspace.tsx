@@ -48,7 +48,7 @@ export default function DealsWorkspace({
 
     // Dexie-cached + delta-synced against the same Ticket replica the other
     // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
-    const { rows: deals, setRows: setDeals, loading, error, reload: load } = useTicketsDelta<DealDto>({}, {
+    const { rows: deals, setRows: setDeals, loading, error, reload: load, afterOwnWrite } = useTicketsDelta<DealDto>({}, {
         apiPath: "/api/deals",
         sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
     });
@@ -85,7 +85,7 @@ export default function DealsWorkspace({
         setDeals((ls) => ls.map((l) => (l.id === dealId ? { ...l, status: stageId, ticketStatus: target } : l)));
         try {
             await axios.patch(`/api/deals/${dealId}`, { status: stageId });
-            load();
+            afterOwnWrite();
         } catch {
             setDeals(prev);
             toast.error("Failed to move deal");
@@ -145,7 +145,7 @@ export default function DealsWorkspace({
                 onOpenChange={setFormOpen}
                 positions={positions}
                 deal={editingDeal}
-                onSaved={load}
+                onSaved={afterOwnWrite}
             />
             <DealDetailDialog
                 dealId={detailId}
@@ -155,7 +155,7 @@ export default function DealsWorkspace({
                 canEdit={canEdit}
                 canDelete={canDelete}
                 onEdit={openEdit}
-                onChanged={load}
+                onChanged={afterOwnWrite}
             />
         </div>
     );
