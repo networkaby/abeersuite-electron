@@ -11,7 +11,9 @@ import {
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
 import type { OrganisationView } from "@/shared/lib/org/organisationView";
-import { buildSampleForKind, VOUCHER_KIND_LABEL } from "@/modules/settings/lib/voucherTemplateSamples";
+import { buildSampleForKind, VOUCHER_KIND_LABEL, SAMPLE_COUPON_CARD, SAMPLE_GIFT_CARD } from "@/modules/settings/lib/voucherTemplateSamples";
+import CouponCard from "@/shared/components/print/CouponCard";
+import GiftCardCard from "@/shared/components/print/GiftCardCard";
 
 interface Props {
     templates:    VoucherTemplateDefaults[];
@@ -65,6 +67,11 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                             <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
                         ))}
                     </optgroup>
+                    <optgroup label="Marketing">
+                        {VOUCHER_TEMPLATE_KIND_GROUPS.marketing.map((k) => (
+                            <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
+                        ))}
+                    </optgroup>
                 </select>
 
                 <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
@@ -88,7 +95,17 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                 </div>
             </div>
 
-            {/* Side-by-side previews */}
+            {/* Cards have one fixed face — no A4 / thermal pair. */}
+            {(selectedKind === "COUPON" || selectedKind === "GIFT_CARD") ? (
+                <PreviewPane title={VOUCHER_KIND_LABEL[selectedKind]} isDefault={false} description="Fixed 360px card face, printed from the browser.">
+                    <div className="flex justify-center">
+                        {selectedKind === "COUPON"
+                            ? <CouponCard template={template} data={SAMPLE_COUPON_CARD} />
+                            : <GiftCardCard template={template} data={SAMPLE_GIFT_CARD} />}
+                    </div>
+                </PreviewPane>
+            ) : (
+            /* Side-by-side previews */
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <PreviewPane
                     title="A4 — Tax invoice"
@@ -115,6 +132,7 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                     </div>
                 </PreviewPane>
             </div>
+            )}
         </div>
     );
 }

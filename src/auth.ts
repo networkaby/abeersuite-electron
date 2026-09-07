@@ -5,10 +5,33 @@ import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 
+/**
+ * One session-cookie NAME on every deployment, office and counters alike.
+ *
+ * Auth.js would otherwise call it `__Secure-authjs.session-token` on https and
+ * `authjs.session-token` on http — and it derives the token's encryption key from the
+ * secret AND that name (`salt = cookieName` in @auth/core/jwt). A `WRITE_MODE=v_live`
+ * till relays its writes to the office with its own cookie, so the office must be able
+ * to decrypt a token minted on http://127.0.0.1: same secret (shipped in counter.env),
+ * same name (this). Only the `secure` flag still follows the protocol.
+ *
+ * Pinning the name changed it on the web deployment, so every office user signed in
+ * once more after that deploy; old `__Secure-` cookies linger harmlessly until expiry.
+ */
+const SESSION_COOKIE_NAME = "authjs.session-token";
+const SECURE_COOKIES =
+    !!process.env.VERCEL || /^https:/i.test(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "");
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     trustHost: true,
     session: { strategy: "jwt" },
+    cookies: {
+        sessionToken: {
+            name: SESSION_COOKIE_NAME,
+            options: { httpOnly: true, sameSite: "lax", path: "/", secure: SECURE_COOKIES },
+        },
+    },
     pages: {
         signIn: "/login",
     },

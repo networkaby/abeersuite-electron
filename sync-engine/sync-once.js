@@ -10,9 +10,10 @@
  *
  *   node sync-once.js --dry-run     report what would move, write nothing
  *   node sync-once.js               sync
- *   node sync-once.js --only Ticket sync one model (and its children)
+ *   node sync-once.js --only Ticket,Account   sync those models (and their children)
  *   node sync-once.js --reason signal   what woke this cycle (index.js passes it);
- *                                       signal|queued may trust a recent schema check
+ *                                       signal|queued|relay may trust a recent schema
+ *                                       check; relay also skips the reconcile pass
  *
  * Config: config.json beside this file (see config.example.json).
  */
@@ -32,9 +33,14 @@ const { configPath } = require("./lib/configPath");
 const args = process.argv.slice(2);
 const DRY = args.includes("--dry-run");
 const onlyIdx = args.indexOf("--only");
-const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1] : null;
+/** Model names to sync, or null for every table. A listed model's children come along. */
+const ONLY = onlyIdx >= 0 && args[onlyIdx + 1]
+    ? args[onlyIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+    : null;
 const reasonIdx = args.indexOf("--reason");
-/** Why this cycle runs: startup | interval | signal | queued | manual (default). */
+/** Why this cycle runs: startup | interval | signal | queued | relay | manual (default).
+ *  `relay` is the app's own targeted pull after a write it relayed to the office
+ *  (lib/localSignal.js) — it holds a user's response, so it is kept as short as possible. */
 const REASON = reasonIdx >= 0 ? args[reasonIdx + 1] : "manual";
 
 /**
@@ -127,6 +133,10 @@ async function main() {
 
     const { tables, ignore } = registryLib.load(registryPath);
     const order = registryLib.syncOrder(tables);
+    if (ONLY) {
+        const unknown = ONLY.filter((m) => !tables[m]);
+        if (unknown.length) console.log(`--only: ignoring unknown model(s) ${unknown.join(", ")}`);
+    }
 
     // One long-lived client per side for the bookkeeping (guard, state, reconcile,
     // status), plus one per lane for the table passes below.
@@ -182,7 +192,7 @@ async function main() {
         // startup, interval and retry cycles always compare, so drift is still caught
         // within the interval, and a missing or failed status row always compares.
         let schema = null;
-        if (REASON === "signal" || REASON === "queued") {
+        if (REASON === "signal" || REASON === "queued" || REASON === "relay") {
             const last = await status.read(local).catch(() => null);
             const age = last && last.last_cycle_at ? Date.now() - new Date(last.last_cycle_at).getTime() : Infinity;
             if (last && last.schema_ok && age < SCHEMA_TRUST_MS) {
@@ -215,7 +225,16 @@ async function main() {
         /** model -> ids written this cycle, for children to filter on. */
         const moved = new Map();
 
-        const want = (model) => !ONLY || model === ONLY || tables[model].parent === ONLY;
+        // A listed model brings its whole subtree: TicketOrderLine rides TicketOrder
+        // rides Ticket, and a targeted cycle that stopped one level down would answer
+        // "applied" with the lines still missing.
+        const want = (model) => {
+            if (!ONLY) return true;
+            for (let m = model; m; m = tables[m] && tables[m].parent) {
+                if (ONLY.includes(m)) return true;
+            }
+            return false;
+        };
 
         /**
          * Run one table on its own pair of connections. Lanes overlap; the bookkeeping
@@ -350,7 +369,10 @@ async function main() {
         // GONE. Without this pass a deleted invoice would sit on the counter forever,
         // and a row whose timestamp is behind our cursor could never be recovered.
         // Both directions are repaired.
-        if (!DRY) {
+        //
+        // Not in a relay cycle: that one holds a cashier's response, and the interval
+        // and signal cycles verify the same tables on the same schedule regardless.
+        if (!DRY && REASON !== "relay") {
             const nowMs = Date.now();
             const due = [...order.independent, ...order.children]
                 .filter((m) => want(m))

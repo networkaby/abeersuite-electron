@@ -36,7 +36,7 @@ import { scaleBomLines } from "@/modules/inventory/lib/bom";
 import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
-import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -421,7 +421,7 @@ export function ManufacturingJournalPage() {
             } else {
                 toast.success("Manufacturing Journal saved as draft");
             }
-            if (print) window.open(voucherPrintPageHref("inv", voucherId, { thermal }), "_blank", "noopener");
+            if (print) void printVoucherAfterSave("inv", voucherId, { thermal });
             if (editing) {
                 closeForm();
             } else {

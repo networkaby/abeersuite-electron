@@ -70,9 +70,10 @@ export async function GET(req: NextRequest) {
             balance += delta(l.type, amt);
             const je  = l.universalVoucher;
             const inv = invByUv.get(je.id);
-            const printUrl =
-                inv                                                   ? `/receipt/invoice/${inv.id}?kind=POS`
-              : je.type === "RECEIPT" || je.type === "PAYMENT"        ? `/receipt/payment/${je.id}`
+            // Silent thermal reprint target (printVoucherThermal on the client).
+            const print =
+                inv                                                   ? { source: "inv" as const, id: inv.id, kind: "POS" }
+              : je.type === "RECEIPT" || je.type === "PAYMENT"        ? { source: "gl" as const, id: je.id, kind: je.type }
               :                                                         null;
             return {
                 id:          l.id,
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
                 debit,
                 credit,
                 balance,
-                printUrl,
+                print,
             };
         });
 

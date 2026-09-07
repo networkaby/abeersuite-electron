@@ -79,6 +79,10 @@ const NON_SECRET_KEYS = new Set([
     "NODE_ENV",
     "APP_MODE",
     "READ_MODE",
+    "WRITE_MODE",
+    // The office's public address (https://office.…) — already compiled into the
+    // bundle as COMPANY_DETAILS.sites.office, so the scanner would otherwise flag it.
+    "WRITE_API_URL",
     "COUNTER_PC",
     "AUTH_TRUST_HOST",
     "AUTH_URL",

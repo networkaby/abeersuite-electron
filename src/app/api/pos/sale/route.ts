@@ -16,7 +16,8 @@ import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
-import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
+import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
+import { buildPaymentSlipPrint } from "@/modules/accountancy/lib/paymentSlip";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -51,6 +52,7 @@ import {
 } from "@/modules/coupons/lib";
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
+import { touchPosShift } from "@/modules/pos/lib/touchShift";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -207,7 +209,6 @@ export async function POST(req: Request) {
                     select: {
                         id: true,
                         name: true,
-                        counterNumber: true,
                         tillAccountId: true,
                         paymentAccounts: {
                             where: { isActive: true },
@@ -866,7 +867,11 @@ export async function POST(req: Request) {
             // tender for any unsettled balance). postInvVoucherToGl posts
             // a single balanced JE per voucher; no separate Receipt
             // voucher / VoucherAllocation needed.
-            const voucherRef = await invNextRef(tx, "POS", { counterNumber: shift.counter.counterNumber });
+            // No explicit counter: resolveCounterNumber() numbers a counter PC's own
+            // write under its counter and anything saved at the office — including a
+            // sale a v_live till relayed there — in the common series. Owner decision
+            // (2026-09-07): one series for every voucher that reaches the office.
+            const voucherRef = await invNextRef(tx, "POS");
             // POS today enforces paymentTotal == totalAmount, so onCredit
             // is always 0 and no AR tender is needed. Kept as a future-
             // facing branch in case partial POS sales get enabled.
@@ -1159,7 +1164,6 @@ export async function POST(req: Request) {
                     branchId: activeBranchId,
                     narration,
                     allocations,
-                    counterNumber: shift.counter.counterNumber,
                 });
                 receiptVoucherId = receipt.voucherId;
                 receiptVoucherRef = receipt.voucherRef;
@@ -1175,6 +1179,7 @@ export async function POST(req: Request) {
                         createdById: user!.id,
                     },
                 });
+                await touchPosShift(tx, shift.id);
             }
 
             return {
@@ -1274,13 +1279,19 @@ export async function POST(req: Request) {
             });
         });
 
-        // Resolved POS print template — the cashier lacks `settings:manage`, so
-        // PosScreen can't fetch it directly. It rides the sale response and is
-        // forwarded to the thermal relay so the printed slip respects the admin's
-        // template and matches /receipt/invoice/[id]?kind=POS. Display-only.
-        const posTemplate = await getVoucherTemplate("POS");
+        // Thermal-resolved POS print template — the cashier lacks `settings:manage`,
+        // so PosScreen can't fetch it directly. It rides the sale response and is
+        // forwarded to the thermal relay so the printed slip obeys the template's
+        // *Thermal* toggles and matches /receipt/invoice/[id]?kind=POS. The
+        // overpayment Receipt voucher (RV-…) rides along the same way, built by
+        // the same helper as /receipt/payment/[id]. Display-only.
+        const [posTemplate, receiptSlip] = await Promise.all([
+            getThermalTemplate("POS"),
+            result.receiptVoucherId ? buildPaymentSlipPrint(result.receiptVoucherId) : null,
+        ]);
+        const receiptPrint = receiptSlip?.relayPayload ?? null;
         console.log(`[pos-timing] ${result.invoiceNumber}: preTx=${Math.round(_tPreTx - _t0)}ms tx=${Math.round(_tTx - _tPreTx)}ms post=${Math.round(performance.now() - _tTx)}ms total=${Math.round(performance.now() - _t0)}ms (lines=${body.lines.length})`);
-        return NextResponse.json({ ...result, posTemplate }, { status: 201 });
+        return NextResponse.json({ ...result, posTemplate, receiptPrint }, { status: 201 });
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });

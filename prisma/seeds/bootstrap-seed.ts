@@ -1521,7 +1521,15 @@ async function main() {
             update: { defaultPaper: data.defaultPaper },
         });
     }
-    console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded\n`);
+    // Baseline flip (2026-09-06): money slips (RECEIPT / PAYMENT) now default to
+    // showing the party's balance before/after. Rows still carrying the OLD
+    // default (both flags off) are moved to the new one; a row where an admin
+    // deliberately kept one side on/off is left alone. Idempotent.
+    const partyBalanceFlip = await prisma.voucherPrintTemplate.updateMany({
+        where: { kind: { in: ["RECEIPT", "PAYMENT"] }, showPartyBalance: false, showPartyBalanceThermal: false },
+        data:  { showPartyBalance: true, showPartyBalanceThermal: true },
+    });
+    console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded (party-balance baseline applied to ${partyBalanceFlip.count})\n`);
 
     // ── Section 14: GSTIN ↔ gstStateCode integrity fixup ─────────────────
     console.log("[14/16] GSTIN ↔ state-code integrity fixup");

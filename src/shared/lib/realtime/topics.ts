@@ -110,3 +110,56 @@ export function topicsForApiPath(pathname: string): Topic[] {
     }
     return [...hit];
 }
+
+/**
+ * Topic → the Prisma models a screen re-reads right after a write to that topic.
+ *
+ * Consumed by ONE caller: the `WRITE_MODE=v_live` write relay
+ * (shared/lib/counter/writeRelay.ts), which asks the sync worker to pull exactly these
+ * before it releases the response, so the screen that refetches after a save finds the
+ * new rows in the replica. Names are `prisma/sync-tables.json` model names; a `child`
+ * table comes along with its parent, so only parents are listed.
+ *
+ * This is NOT the worker's old topic map, which silently NARROWED what a signal synced
+ * and rotted to 60-of-113 coverage. A model missing here degrades softly: the browser's
+ * own change signal makes the worker pull everything a moment later, exactly as it does
+ * today. So the list only has to name what a screen shows immediately after its own
+ * save — and adding one line here is the whole fix when a screen turns out to lag.
+ */
+export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
+    ledger: [
+        "UniversalVoucher", "VoucherDetail", "VoucherAllocation", "VoucherSeries", "VoucherSeriesCounter",
+        "Account", "PosShift", "PosHandover", "GiftCard", "LoyaltyAccount", "CouponRedemption",
+        "RedemptionHold", "AdditionalCostAllocation", "AuditLog",
+    ],
+    stock: ["InvProduct", "InvProductBranch", "UniversalVoucher"],
+    tickets: [
+        "Ticket", "TicketLog", "TicketWorker", "TicketStatus", "StatusTransition", "Work", "WorkGroup",
+        "WorkGroupWork", "Pipeline", "Call", "DeliveryMethod", "ServiceCenter",
+    ],
+    parties: [
+        "Person", "Company", "PersonCompany", "Phone", "Email", "SocialConnection", "CustomerGroup",
+        "CustomerTier", "CustomerTierPeriod", "CreditLimitConfig", "Account",
+    ],
+    catalogue: [
+        "InvProduct", "InvBrand", "InvCategory", "InvProductGroup", "InvAttributeMaster", "InvUnit",
+        "InvBom", "InvWarrantyTerm", "InvNamingConfig", "GstRate", "Coupon", "CouponConfig",
+        "StrategyPoint", "PosService", "LoyaltyConfig", "LoyaltyEarnRule", "LoyaltyMilestone",
+    ],
+    tasks: ["TaskRecurrence", "WallPost", "User"],
+    settings: [
+        "OrgDefaults", "BooksConfig", "Branch", "Department", "DepartmentPermission", "Role",
+        "RolePermission", "Permission", "Position", "User", "UserPermission", "UserPosition",
+        "PosCounter", "PaymentGateway", "AccountGroup", "OfflinePolicy", "BackupConfig",
+        "VoucherPrintTemplate", "VoucherSeries", "ServiceCenter", "Device", "CustomerGroup",
+        "CreditLimitConfig",
+    ],
+    chat: ["ChatRoom", "ChatRoomMember"],
+};
+
+/** The union of `TOPIC_MODELS` for `topics`, de-duplicated. */
+export function modelsForTopics(topics: readonly Topic[]): string[] {
+    const out = new Set<string>();
+    for (const t of topics) for (const m of TOPIC_MODELS[t]) out.add(m);
+    return [...out];
+}

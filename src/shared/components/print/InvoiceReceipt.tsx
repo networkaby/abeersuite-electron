@@ -26,12 +26,15 @@ export default async function InvoiceReceipt({
     kindParam = "SALE",
     placeOfSupplyParam = "",
     paper,
+    mode,
     autoprint,
 }: {
     id: string;
     kindParam?: string;
     placeOfSupplyParam?: string;
     paper?: string;
+    /** "thermal" when the document arrived by the thermal way (fires the bridge). */
+    mode?: string;
     autoprint?: string;
 }) {
     // ?kind=POS for counter sales, everything else defaults to SALE.
@@ -79,6 +82,17 @@ export default async function InvoiceReceipt({
     );
     const charges = settlement.charges.map((c) => ({ ...c, account: chargeAcctById.get(c.accountId) ?? null }));
 
+    // Tenders that settled the bill (cash / UPI / card ledgers) — the counter
+    // slip's payment rows. The party's own ledger is not a tender (credit sale /
+    // overpayment settled to the account; the money then lives on the RV-… slip).
+    const partyAcctId = voucher.universalVoucher?.partyAccountId ?? null;
+    const tenderRows  = settlement.tenders.filter((t) => Math.abs(t.amount) > 0.005 && t.accountId !== partyAcctId);
+    const tenderAcctById = new Map(
+        (tenderRows.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: [...new Set(tenderRows.map((t) => t.accountId))] } }, select: { id: true, name: true } }))
+            .map((a) => [a.id, a.name]),
+    );
+    const receipts = tenderRows.map((t) => ({ label: tenderAcctById.get(t.accountId) ?? "Received", amount: t.amount }));
+
     const owner = voucher.account?.person ?? voucher.account?.company ?? null;
     const partyName  = owner?.name ?? voucher.account?.name ?? readPartyName(voucher.partyJson) ?? "Walk-in";
     const partyPhone = owner?.phones[0]?.phone ?? null;
@@ -106,8 +120,8 @@ export default async function InvoiceReceipt({
         // the "Level Discount (Name)" row.
         prisma.customerTier.findMany({ where: { enabled: true }, select: { name: true, discountPct: true } }),
     ]);
-    // ?paper= override wins; otherwise the kind's stored default.
-    const format = resolvePaperFormat(template, paper);
+    // ?paper= override wins; then ?mode=thermal; otherwise A4.
+    const format = resolvePaperFormat(template, paper, mode);
 
     // Compute CGST/SGST/IGST split for the totals box. Only when a valid
     // place-of-supply was passed; otherwise we render the legacy single
@@ -270,6 +284,11 @@ export default async function InvoiceReceipt({
         total:     Number(voucher.totalAmount),
         notes:     null,
         taxBreakdown,
+        receipts:   receipts.length ? receipts : null,
+        balanceDue: (() => {
+            const due = round2(Number(voucher.totalAmount) - receipts.reduce((s, r) => s + r.amount, 0));
+            return due > 0.005 ? due : null;
+        })(),
         branchAddress: voucher.universalVoucher?.branch
             ? formatStructuredAddressBlock(voucher.universalVoucher.branch) || null
             : null,
@@ -307,6 +326,9 @@ export default async function InvoiceReceipt({
         // Thermal-resolved template rides along so the bridge has the shop's
         // current config (logo/header/GSTIN toggles) on every job.
         template:       resolveTemplateForFormat(template, "THERMAL_80MM"),
+        branchAddress:  sample.branchAddress ?? null,
+        receipts:       sample.receipts ?? null,
+        balanceDue:     sample.balanceDue ?? null,
         lines: voucher.lines.map((l, i) => {
             const lad = ladder?.lines[i];
             const qty = Number(l.quantity);
@@ -334,11 +356,11 @@ export default async function InvoiceReceipt({
         hsnSummary:     ladder?.hsn ?? null,
     } : null;
 
-    // Print rule: POS counter slips fire the combined bridge first (browser
-    // fallback), everything else prints in the browser; both offer the A4 /
-    // thermal picker so each format renders its own template. `?autoprint=0`
-    // (set by a format switch) suppresses the auto-fire.
-    const isThermal = format === "THERMAL_80MM";
+    // Print rule (two ways): the thermal way (`?mode=thermal`, POS reprint /
+    // 3-dot "Print (thermal)") fires the bridge once; no printer / bridge down
+    // leaves this page open as the format-selection page. Any other way in is
+    // the selection page from the start. `?autoprint=0` suppresses auto-fire.
+    const isThermal = format === "THERMAL_80MM" && mode === "thermal";
     const autoPrint = autoprint !== "0";
 
     return (

@@ -366,10 +366,23 @@ on next launch rather than overnight.
 
 ## Two dials, and the trigger that depends on this worker (2026-08-28)
 
-`READ_MODE` decides where READS are served from. `WRITE_MODE` (`live` | `local`) decides
+`READ_MODE` decides where READS are served from. `WRITE_MODE` (`live` | `local` | `v_live`) decides
 where WRITES land, and picks the client the read dial rides on — a `$transaction` is a
 write, so it opens on the WRITE_MODE client and every read inside it stays on the same
 database. Both default to `live`.
+
+`WRITE_MODE=v_live` (2026-09-07) is `live` with a relay in front: the app forwards each
+write to the office deployment, then asks THIS worker — over the replica itself, with
+Postgres NOTIFY — to pull the models that write touched before it answers the browser.
+`lib/localSignal.js` holds `LISTEN sync_pull_now`; `index.js` runs
+`sync-once.js --only A,B,C --reason relay` at once (no settle window, schema check
+trusted, reconcile pass skipped) and reports on `sync_relay_done`. A targeted cycle never
+overlaps another cycle, but it does not wait behind one either: a safety-net cycle in
+its way is killed (per-table transactions, nothing half-written), the targeted pull
+runs, and the interrupted cycle resumes afterwards protected from a second pre-emption,
+so a busy till cannot starve it. While the worker is halted on schema drift, targeted
+pulls are answered `ok: false` at once, so the app releases the responses it is holding. Channel names
+and payloads are fixed on both sides by `src/shared/lib/counter/relayPolicy.ts`.
 
 Under `WRITE_MODE=local` this worker is only half the picture. The app writes its
 replica directly; those writes are captured by an `_outbox_capture` trigger on every

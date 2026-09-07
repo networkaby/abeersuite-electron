@@ -12,6 +12,10 @@ import { toast } from "sonner";
 import { resolveMachineIdentity, matchesThisMachine, type MachineIdentity } from "@/shared/lib/counter/identity";
 
 import { bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
+import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { resolveTemplateForFormat, rowToVoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { buildSampleForKind } from "@/modules/settings/lib/voucherTemplateSamples";
 import { isElectronEnvironment } from "@/shared/lib/bridge";
 import { HardwareStatusCard, useHardwareProbe, type HardwareProbe } from "@/modules/settings/components/HardwareStatusCard";
 
@@ -29,10 +33,9 @@ interface RelayConfig {
     comPort: string;
     windowsPrinterName: string;
     /**
-     * No longer editable here. The printed header comes from the print template
-     * (VoucherPrintTemplate.headerLine1) so every counter prints the same name;
-     * this stays in the saved config only as the bridge's fallback for a template
-     * with a blank header line.
+     * Not editable here and never printed: the slip header comes from the print
+     * template (headerLine1, filled from the Organisation). Kept in the saved
+     * config for the QR welcome screen and the counter's device label.
      */
     companyName: string;
     relayPort: number;
@@ -213,24 +216,21 @@ export default function PrinterSettingsPage() {
     const handleTest = async () => {
         setTesting(true);
         try {
-            // Always test through the bridge. The Electron path used to run first,
-            // but `printSilent` prints the CURRENT PAGE — so it printed this
-            // settings screen and reported success, and the real ESC-POS test
-            // below never ran on the desktop app.
-            await bridgeRequest("thermal", "print", {
-                reference: "TEST-001",
-                date: new Date().toISOString(),
-                type: "TEST",
-                party: null,
-                narration: "Printer test — if you can read this, it works!",
-                lines: [
-                    { accountName: "Test Account", type: "DEBIT", amount: 1000, description: null },
-                    { accountName: "Test Account", type: "CREDIT", amount: 1000, description: null },
-                ],
-                totalDebit: 1000,
-                totalCredit: 1000,
-                status: "POSTED",
-                createdBy: "System",
+            // The test print is the JOURNAL sample rendered through the real
+            // print/voucher path with the shop's own JOURNAL template (thermal
+            // toggles), so what comes out is exactly what a real slip looks like.
+            const res = await fetch("/api/settings/voucher-templates/JOURNAL");
+            if (!res.ok) throw new Error("Could not load the Journal print template");
+            const row = await res.json();
+            const template = resolveTemplateForFormat(
+                mergeTemplateWithOrg(rowToVoucherTemplateDefaults(row), getOrganisation()),
+                "THERMAL_80MM",
+            );
+            await bridgeRequest("thermal", "print/voucher", {
+                kind:     "JOURNAL",
+                title:    template.headerLine2,
+                sample:   { ...buildSampleForKind("JOURNAL"), reference: "TEST-001", notes: "Printer test — if you can read this, it works!" },
+                template,
             });
             toast.success("Test sent — check the printer");
         } catch (err) {

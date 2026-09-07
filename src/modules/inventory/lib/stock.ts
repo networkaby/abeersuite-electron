@@ -84,6 +84,12 @@ export async function invNextRef(
     // claimed to, and the office still numbers as 1.
     const counterNumber = resolveCounterNumber(ctx);
     const startsWith = `${String(counterNumber).padStart(2, "0")}-${prefix}-${year}-`;
+    // count(+1) is not atomic under READ COMMITTED: two transactions counting the same
+    // prefix at once both mint the same number. The prefix used to be per till, so only
+    // one machine ever counted it; a v_live till relays this to the office, where every
+    // till shares counter 1's prefix. One transaction-scoped advisory lock per prefix
+    // serialises the count and the insert that follows it, and costs nothing otherwise.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${startsWith}))`;
     const count = await tx.voucherDetail.count({ where: { universalVoucher: { voucherNo: { startsWith } } } });   // 5D-6: ref on spine
     return `${startsWith}${String(count + 1).padStart(4, "0")}`;
 }

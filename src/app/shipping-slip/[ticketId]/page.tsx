@@ -41,7 +41,7 @@ export default async function ShippingSlipPage({
     searchParams,
 }: {
     params:        Promise<{ ticketId: string }>;
-    searchParams?: Promise<{ paper?: string; autoprint?: string; n?: string }>;
+    searchParams?: Promise<{ paper?: string; autoprint?: string; n?: string; mode?: string }>;
 }) {
     const { ticketId } = await params;
     const sp = (await searchParams) ?? {};
@@ -71,9 +71,10 @@ export default async function ShippingSlipPage({
     // Print template — shop header / address / GSTIN / footer, configured on the
     // Print Templates settings page (SHIPPING_SLIP kind).
     const template = await getVoucherTemplate("SHIPPING_SLIP");
-    const format = resolvePaperFormat(template, sp.paper);
+    const format = resolvePaperFormat(template, sp.paper, sp.mode);
     // Sign-off flags apply per format (A4 vs 80mm) — resolve once for the body.
     const resolved = resolveTemplateForFormat(template, format);
+    // Repair family: the template's default paper decides (no ticks on the form).
     const isThermal = format === "THERMAL_80MM";
     const autoPrint = sp.autoprint !== "0";
 

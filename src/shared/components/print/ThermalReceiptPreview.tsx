@@ -20,7 +20,6 @@
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { QrSvg } from "@/shared/components/print/QrSvg";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 
@@ -177,8 +176,10 @@ export interface ThermalReceiptSample {
     branchAddress?: string | null;
 }
 
+// Plain figures, no "Rs." — the ESC/POS slip prints amounts bare (the column
+// header says Amount), and the paper is the reference for this preview.
 const fmtINR = (n: number) =>
-    `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Class used to scope the inline <style> block when rendered inline in the
 // host page (previewMode=true). MUST stay in sync with the wrapper div below.
@@ -258,7 +259,9 @@ interface BodyProps {
 
 /** Template-driven header chrome (logo · brand · address · GSTIN · phone). */
 function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
-    const brand     = template.headerLine1 || COMPANY_DETAILS.brandName;
+    // headerLine1 is always filled by mergeTemplateWithOrg (Organisation brand
+    // fallback) — one brand source, no second fallback here.
+    const brand     = template.headerLine1;
     const addrLines = template.addressBlock.split("\n").map((l) => l.trim()).filter(Boolean);
     return (
         <>
@@ -271,8 +274,9 @@ function ThermalHeader({ template, sample }: { template: VoucherTemplateDefaults
                 </div>
             )}
 
-            {template.showHeaderText && (
-                <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx + 2 }}>
+            {/* Brand at double size, like the ESC/POS brand line (setTextSize 1,1 = 2× width and height). */}
+            {template.showHeaderText && brand && (
+                <div className="center" style={{ fontWeight: "bold", fontSize: template.fontSizePx * 2, lineHeight: 1.15 }}>
                     {brand}
                 </div>
             )}
@@ -360,7 +364,7 @@ function MoneyThermalMiddle({ template, sample }: { template: VoucherTemplateDef
                 <span>{fmtINR(total)}</span>
             </div>
             <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(total)}</div>
-            {(sample.balanceBefore || sample.balanceAfter) && (
+            {template.showPartyBalance && (sample.balanceBefore || sample.balanceAfter) && (
                 <>
                     <div className="hr" />
                     {sample.balanceBefore && (
@@ -376,6 +380,23 @@ function MoneyThermalMiddle({ template, sample }: { template: VoucherTemplateDef
                         </div>
                     )}
                 </>
+            )}
+        </>
+    );
+}
+
+function ThermalReceiptsBlock({ sample }: { sample: ThermalReceiptSample }) {
+    const receipts = (sample.receipts ?? []).filter((r) => Math.abs(r.amount) > 0.005);
+    const due      = sample.balanceDue ?? 0;
+    if (receipts.length === 0 && due <= 0.005) return null;
+    return (
+        <>
+            <div className="hr" />
+            {receipts.map((r, i) => (
+                <div key={i} className="row"><span>{r.label}</span><span>{fmtINR(r.amount)}</span></div>
+            ))}
+            {due > 0.005 && (
+                <div className="row total"><span>Balance due</span><span>{fmtINR(due)}</span></div>
             )}
         </>
     );
@@ -497,6 +518,10 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     )}
                 </>
             )}
+
+            {/* Tenders received (one row per ledger) + balance due — the counter
+                slip's Cash / UPI / Card rows. A reprint shows payments as of now. */}
+            <ThermalReceiptsBlock sample={sample} />
 
             {/* No narration on the counter slip either — it is internal
                 bookkeeping text, not customer-facing. Per-line item notes still

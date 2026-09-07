@@ -10,6 +10,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { touchPosShift } from "@/modules/pos/lib/touchShift";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -53,6 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             },
             include: { droppedBy: { select: { id: true, name: true } } },
         });
+        await touchPosShift(prisma, shiftId);
 
         return NextResponse.json({ ...drop, amountPaise: drop.amountPaise.toString() }, { status: 201 });
     } catch (e) {

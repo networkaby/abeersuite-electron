@@ -76,7 +76,7 @@ import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActi
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
-import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
@@ -1288,7 +1288,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // Thermal auto-fire (like POS) or the browser print page, per the
                 // Thermal toggle. The generic /receipt/voucher route resolves the
                 // correct per-kind template from the saved voucher itself.
-                window.open(voucherPrintPageHref("inv", savedId, { thermal }), "_blank", "noopener");
+                void printVoucherAfterSave("inv", savedId, { thermal });
             }
 
             if (isEditing) {

@@ -41,11 +41,18 @@ export const READ_PREFERENCE: ReadPreference =
 /**
  * Where WRITES go, from `WRITE_MODE`. Independent of `READ_MODE`.
  *
- *   live  — write Supabase, falling back to the replica + outbox during an outage.
- *           Today's behaviour, and the escape hatch: one env var reverts a
- *           misbehaving till to it without a rebuild.
- *   local — write the replica always; the outbox carries it up afterwards. The
- *           counter treats its own PostgreSQL the way the web app treats Supabase.
+ *   live   — write Supabase, falling back to the replica + outbox during an outage.
+ *            Today's behaviour, and the escape hatch: one env var reverts a
+ *            misbehaving till to it without a rebuild.
+ *   local  — write the replica always; the outbox carries it up afterwards. The
+ *            counter treats its own PostgreSQL the way the web app treats Supabase.
+ *   v_live — `live`, with every non-GET `/api/*` call RELAYED to the office deployment
+ *            (`WRITE_API_URL`) as one HTTP round trip instead of thirty-odd Prisma
+ *            round trips across the WAN — see shared/lib/counter/writeRelay.ts.
+ *            Below the relay it IS `live`: when the office cannot be reached the
+ *            request runs here exactly as `live` would, with the same outage fallback.
+ *            Needs `WRITE_API_URL`; without it the till degrades to `local`, never to
+ *            the slow direct-to-Supabase path this mode exists to remove.
  *
  * ── How the two dials compose ───────────────────────────────────────────────
  * WRITE_MODE picks the base client; READ_MODE decides whether reads are redirected
@@ -58,14 +65,46 @@ export const READ_PREFERENCE: ReadPreference =
  * for. Under `local` it is simply where writes go, so enforcing it would permanently
  * refuse those voucher types rather than protect anything.
  */
-export type WritePreference = "live" | "local";
+export type WritePreference = "live" | "local" | "v_live";
 
-export const WRITE_PREFERENCE: WritePreference =
-    process.env.WRITE_MODE === "local" ? "local" : "live";
+/** The office deployment a `v_live` till relays its writes to. Origin only, no path. */
+export const WRITE_API_URL: string | null = (() => {
+    const raw = process.env.WRITE_API_URL?.trim();
+    if (!raw) return null;
+    try {
+        const url = new URL(raw);
+        if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+        return url.origin;
+    } catch {
+        return null;
+    }
+})();
 
-/** True when a local write means "Supabase is unreachable", not "this is where we write". */
+function parseWritePreference(): WritePreference {
+    const raw = process.env.WRITE_MODE;
+    if (raw === "local") return "local";
+    if (raw === "v_live") {
+        if (WRITE_API_URL) return "v_live";
+        // A half-configured till must fail SAFE: `local` keeps every save on this
+        // machine, where it is fast and captured by the outbox. Degrading to `live`
+        // would quietly reintroduce the WAN round trips the relay exists to remove.
+        console.warn("[counter] WRITE_MODE=v_live but WRITE_API_URL is missing or not a URL — writing local instead.");
+        return "local";
+    }
+    return "live";
+}
+
+export const WRITE_PREFERENCE: WritePreference = parseWritePreference();
+
+/** True when a local write means "Supabase is unreachable", not "this is where we write".
+ *  `v_live` counts: below the relay it is `live`, so a local write there is an outage too. */
 export function localWriteIsFallback(): boolean {
-    return WRITE_PREFERENCE === "live";
+    return WRITE_PREFERENCE !== "local";
+}
+
+/** True on a till that forwards its writes to the office (`WRITE_MODE=v_live`). */
+export function relaysWrites(): boolean {
+    return WRITE_PREFERENCE === "v_live";
 }
 
 /** True only on a counter PC. Set by `electron/main.ts` from the actual outcome of

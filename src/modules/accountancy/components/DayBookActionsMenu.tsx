@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { CombinedSource } from "@/modules/accountancy/hooks/useDayBook";
 import { apiBase, referenceHref, receiptHref, type ReceiptVariant } from "@/modules/accountancy/lib/voucherUrls";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
 
@@ -64,8 +65,17 @@ export function DayBookActionsMenu({
 
     const base = apiBase(source, rawId);
 
-    // ── Print / PDF (opens a print tab; user picks printer or "Save as PDF") ──
-    const goPrint = (variant: ReceiptVariant) => {
+    // ── The two print ways ───────────────────────────────────────────────────
+    // "Print (thermal)" sends straight to the counter printer, like a POS sale —
+    // no tab. Only when the counter cannot print silently (no printer set up,
+    // bridge down, send failed) does the format-selection page open, on the
+    // 80mm view. "Print / PDF" is always the selection page.
+    const goPrint = async (variant: ReceiptVariant) => {
+        if (variant === "thermal") {
+            setBusy(true);
+            await printVoucherThermal(source, rawId, kind).finally(() => setBusy(false));
+            return;
+        }
         window.open(receiptHref(source, rawId, kind, variant), "_blank", "noopener");
     };
 
@@ -213,10 +223,10 @@ export function DayBookActionsMenu({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                     {/* Print / PDF — available for every voucher kind & state */}
-                    <DropdownMenuItem onSelect={() => goPrint("thermal")} disabled={busy}>
+                    <DropdownMenuItem onSelect={() => void goPrint("thermal")} disabled={busy}>
                         <Printer className="size-4" /> Print (thermal)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => goPrint("pdf")} disabled={busy}>
+                    <DropdownMenuItem onSelect={() => void goPrint("pdf")} disabled={busy}>
                         <FileText className="size-4" /> Print / PDF
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

@@ -22,6 +22,7 @@ import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import type { PaymentRelayPayload } from "@/modules/accountancy/lib/paymentSlip";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, todayIso, toDateOnly } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
@@ -269,7 +270,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             }
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: PaymentRelayPayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: toDateOnly(due),   // local day, same reason as `today`
@@ -371,6 +372,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         invoiceNumber: data.voucherRef,
                         date: today,
                         customerName: snapshot?.party.name ?? "Walk-in",
+                        customerPhone: snapshot?.party.phone ?? null,
                         customerGstin: snapshot?.party.gstin ?? null,
                         // Resolved POS print template → the relay renders the
                         // header/address/toggles/terms/footer + ladder so the
@@ -398,12 +400,14 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         // Overpayment: the tenders live on the separate Receipt
                         // voucher (RV-…), so the sale slip shows NO payment lines
                         // (the sale is settled to the customer account). Exact-pay
-                        // sales keep the traditional cash/UPI breakdown.
-                        cashPaid: b.overpaid > 0 ? 0 : b.cashNet,
-                        upiPaid: b.overpaid > 0 ? 0 : b.upiEntered,
-                        extrasPaid: b.overpaid > 0 ? [] : splits
-                            .filter((s) => s.amount > 0 && payAccountById.get(s.paymentAccountId ?? -1)?.channel !== "UPI")
-                            .map((s) => ({ method: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Other", amount: s.amount, reference: s.reference })),
+                        // sales print one row per tender ledger, same as the
+                        // preview / reprint (`sample.receipts`).
+                        receipts: b.overpaid > 0 ? [] : [
+                            ...(b.cashNet > 0 ? [{ label: "Cash", amount: b.cashNet }] : []),
+                            ...splits
+                                .filter((s) => s.amount > 0)
+                                .map((s) => ({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount })),
+                        ],
                         // "Today's discount" ladder (additive).
                         grossAtTag: printLadder.barcodeTotal,
                         discounts: printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),
@@ -417,30 +421,16 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     // Overpayment booked a separate Receipt voucher (RV-…). On a
                     // relay setup it prints on the SAME thermal printer — the tender
                     // breakdown lives here, not on the sale slip above.
-                    if (data.receiptVoucherId) {
-                        const rcvTenders: { label: string; amount: number }[] = [];
-                        if (b.cashNet > 0) rcvTenders.push({ label: "Cash", amount: b.cashNet });
-                        for (const s of splits) {
-                            if (s.amount <= 0) continue;
-                            rcvTenders.push({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount });
-                        }
-                        void bridgeRequest("thermal", "print/payment", {
-                            reference: data.receiptVoucherRef,
-                            date: today,
-                            party: snapshot?.party.name ?? null,
-                            tenders: rcvTenders,
-                            total: b.collected,
-                            arrear: data.arrearCleared,
-                            advance: data.advanceCredited,
-                        note: `Against ${data.voucherRef}`,
-                        }).catch(() => toast.error("Receipt voucher print failed"));
+                    if (data.receiptPrint) {
+                        void bridgeRequest("thermal", "print/voucher", data.receiptPrint)
+                            .catch(() => toast.error("Receipt voucher print failed"));
                     }
                 } else {
-                    window.open(`/receipt/invoice/${data.voucherId}?kind=POS&autoprint=1`, "_blank", "noopener");
-                    // No relay → print the Receipt voucher in the browser too
-                    // (/receipt/payment/[id] auto-prints on mount).
+                    // No thermal printer → the format-selection page (opens on the
+                    // 80mm view; the cashier picks the format + printer and prints).
+                    window.open(`/receipt/invoice/${data.voucherId}?kind=POS&paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
                     if (data.receiptVoucherId) {
-                        window.open(`/receipt/payment/${data.receiptVoucherId}`, "_blank", "noopener");
+                        window.open(`/receipt/payment/${data.receiptVoucherId}?paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
                     }
                 }
             }

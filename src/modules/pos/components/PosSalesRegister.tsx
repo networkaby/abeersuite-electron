@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import {
     Search, Loader2, Monitor, RotateCcw, ExternalLink, Printer, Plus,
 } from "lucide-react";
@@ -54,7 +55,7 @@ type CashMove = {
 // Counter till cash book (ledger with running balance).
 type LedgerRow = {
     id: number; date: string; reference: string; particulars: string;
-    debit: number | null; credit: number | null; balance: number; printUrl: string | null;
+    debit: number | null; credit: number | null; balance: number; print: { source: "inv" | "gl"; id: number; kind: string } | null;
 };
 type LedgerData = {
     counter: { id: number; name: string; tillAccountName: string };
@@ -435,8 +436,8 @@ export function PosSalesRegister() {
                                                 <td className="px-4 py-2.5 text-right">
                                                     <button
                                                         type="button"
-                                                        title={tab === "returns" ? "Print return voucher" : "Print receipt (thermal → browser fallback)"}
-                                                        onClick={() => window.open(tab === "returns" ? `/receipt/voucher/inv/${s.id}` : `/receipt/invoice/${s.id}?kind=POS`, "_blank", "noopener")}
+                                                        title={tab === "returns" ? "Print return voucher (thermal)" : "Print receipt (thermal)"}
+                                                        onClick={() => void printVoucherThermal("inv", s.id, tab === "returns" ? "SALE_RETURN" : "POS")}
                                                         className="inline-flex text-muted-foreground hover:text-foreground"
                                                     >
                                                         <Printer size={14} />
@@ -603,8 +604,8 @@ export function PosSalesRegister() {
                                             {m.voucherId != null && (
                                                 <button
                                                     type="button"
-                                                    title="Print voucher (thermal → browser fallback)"
-                                                    onClick={() => window.open(`/receipt/payment/${m.voucherId}`, "_blank", "noopener")}
+                                                    title="Print voucher (thermal)"
+                                                    onClick={() => void printVoucherThermal("gl", m.voucherId!, "RECEIPT")}
                                                     className="inline-flex text-muted-foreground hover:text-foreground"
                                                 >
                                                     <Printer size={14} />
@@ -665,10 +666,10 @@ export function PosSalesRegister() {
                                             <td className="px-4 py-2.5 text-right font-mono text-red-700">{r.credit != null ? fmt(r.credit) : ""}</td>
                                             <td className="px-4 py-2.5 text-right font-mono">{fmt(r.balance)}</td>
                                             <td className="px-4 py-2.5 text-right">
-                                                {r.printUrl && (
-                                                    <a href={r.printUrl} target="_blank" rel="noopener noreferrer" title="Print (thermal → browser fallback)" className="inline-flex text-muted-foreground hover:text-foreground">
+                                                {r.print && (
+                                                    <button type="button" onClick={() => void printVoucherThermal(r.print!.source, r.print!.id, r.print!.kind)} title="Print (thermal)" className="inline-flex text-muted-foreground hover:text-foreground">
                                                         <Printer size={14} />
-                                                    </a>
+                                                    </button>
                                                 )}
                                             </td>
                                         </tr>

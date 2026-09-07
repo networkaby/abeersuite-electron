@@ -13,6 +13,26 @@ import type { RepairTicketBodyData } from "@/shared/components/print/RepairTicke
 import type { ShippingSlipBodyData } from "@/shared/components/print/ShippingSlipBody";
 import type { ShippingLabelData } from "@/shared/components/print/ShippingLabel";
 import type { ParcelLabelData } from "@/shared/components/print/OrderParcelLabel";
+import type { CouponCardData } from "@/shared/components/print/CouponCard";
+import type { GiftCardData } from "@/shared/components/print/GiftCardCard";
+
+// 1×1 transparent PNG stands in for the QR in the editor preview.
+const SAMPLE_QR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+export const SAMPLE_COUPON_CARD: CouponCardData = {
+    headline:  "10% OFF",
+    name:      "Festive Offer",
+    code:      "FEST10",
+    qrDataUrl: SAMPLE_QR,
+    subLines:  ["10% off the bill.", "Min bill ₹1,000.", "Valid until 2026-12-31."],
+};
+
+export const SAMPLE_GIFT_CARD: GiftCardData = {
+    valueText: "₹1,000.00",
+    code:      "GC-7F3K-92QA",
+    qrDataUrl: SAMPLE_QR,
+    subLines:  ["Valid until 2027-06-30."],
+};
 
 // Sample issuing-branch address for previewing the "Branch address" toggle.
 const SAMPLE_BRANCH_ADDRESS = "Zone Road, Ward 5\nBongaigaon, Assam, 783380";
@@ -478,6 +498,17 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 subtotal: null, taxAmount: null, total: 980.86,
                 notes: null,
             };
+        case "COUPON":
+        case "GIFT_CARD":
+            // Cards render their own face (SAMPLE_COUPON_CARD / SAMPLE_GIFT_CARD);
+            // the receipt sample is only here to satisfy the registry.
+            return {
+                reference: kind === "COUPON" ? "FEST10" : "GC-7F3K-92QA", date: today,
+                partyName: null, partyPhone: null,
+                lines: [],
+                subtotal: null, taxAmount: null, total: null,
+                notes: null,
+            };
     }
 }
 
@@ -512,4 +543,6 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     SHIPPING_SLIP: "Service Slip",
     SERVICE_SHIPPING_LABEL: "Service Shipping Label",
     DELIVERY_SHIPPING_LABEL: "Parcel Shipping Label",
+    COUPON: "Coupon Card",
+    GIFT_CARD: "Gift Card",
 };

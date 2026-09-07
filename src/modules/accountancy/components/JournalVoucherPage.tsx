@@ -35,7 +35,7 @@ import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
-import { voucherPrintPageHref } from "@/modules/accountancy/lib/voucherUrls";
+import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
@@ -360,7 +360,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     };
 
     const openReceipt = (id: number) =>
-        window.open(voucherPrintPageHref("je", id, { thermal }), "_blank", "noopener");
+        void printVoucherAfterSave("je", id, { thermal });
 
     const submit = async (postAfterSave: boolean, print = false) => {
         if (lines.some((l) => !l.accountId)) { toast.error("Each line needs an account"); return; }

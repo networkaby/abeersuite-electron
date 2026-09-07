@@ -8,7 +8,7 @@ import {
 
 // GET /api/settings/voucher-templates
 // Returns every template row. Defensively upserts any missing rows so the UI
-// can always render all 21 tabs even if the seed wasn't re-run after a kind
+// can always render every kind tab even if the seed wasn't re-run after a kind
 // was added to the enum.
 export async function GET() {
     const { response } = await requireAuth();

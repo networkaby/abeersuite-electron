@@ -50,18 +50,17 @@ export function referenceHref(
 export type ReceiptVariant = "thermal" | "pdf";
 
 /**
- * URL to open a voucher's printable receipt.
+ * URL to open a voucher's printable receipt — the two print ways:
  *
- * `thermal` routes POS sales and GL receipts/payments to their dedicated relay
- * pages (real thermal-bridge print, untouched); every other kind goes through
- * the generic template-driven `/receipt/voucher` route with `mode=thermal` so the
- * page can still resolve the voucher's configured template but force the thermal
- * relay when the user intentionally chose that action.
+ *   • `thermal` → `?mode=thermal`: the page fires the bridge once on mount.
+ *     The 3-dot menu no longer opens this (it prints silently through
+ *     `printVoucherThermalSilently` and falls back to the `pdf` page on the
+ *     80mm view); kept for links that want the page-based thermal way.
+ *   • `pdf` → `?autoprint=0`: the format-selection page from the start. The
+ *     user picks A4 / thermal and the printer in the browser dialog.
  *
- * The PDF/browser route intentionally leaves the format unset so the server can
- * follow each voucher kind's configured print template/default paper. The page
- * still exposes the format picker for a user override, defaulting to the
- * template's choice.
+ * POS sales and GL receipts/payments keep their dedicated pages; every other
+ * kind goes through the generic template-driven `/receipt/voucher` route.
  */
 export function receiptHref(
     source: VoucherSource,
@@ -73,11 +72,11 @@ export function receiptHref(
     const paymentLikeReceipt = source === "gl" && (kind === "RECEIPT" || kind === "PAYMENT");
 
     if (posLikeInvoice) {
-        const qs = variant === "thermal" ? `?kind=${kind}` : `?kind=${kind}&autoprint=0`;
+        const qs = variant === "thermal" ? `?kind=${kind}&mode=thermal` : `?kind=${kind}&autoprint=0`;
         return `/receipt/invoice/${rawId}${qs}`;
     }
     if (paymentLikeReceipt) {
-        return variant === "thermal" ? `/receipt/payment/${rawId}` : `/receipt/payment/${rawId}?autoprint=0`;
+        return variant === "thermal" ? `/receipt/payment/${rawId}?mode=thermal` : `/receipt/payment/${rawId}?autoprint=0`;
     }
     if (variant === "thermal") return `/receipt/voucher/${source}/${rawId}?mode=thermal`;
     return `/receipt/voucher/${source}/${rawId}?autoprint=0`;
@@ -86,12 +85,10 @@ export function receiptHref(
 /**
  * Print page for any voucher, opened by the forms' "Print after save" toggle.
  * Driven by the per-kind "Thermal" toggle:
- *   • thermal → `?mode=thermal` — the page auto-fires to the thermal printer like
- *     POS (tries the local relay, falls back to an auto browser print of the 80mm
- *     slip).
- *   • browser (default) → `?autoprint=0` — the traditional, format-selectable
- *     browser print page; the customer's paper size (set per kind on the
- *     voucher-templates page) applies and nothing fires until the user prints.
+ *   • thermal → `?mode=thermal` — silent thermal print through the bridge; no
+ *     printer / bridge down → the format-selection page stays open instead.
+ *   • browser (default) → `?autoprint=0` — the format-selection page; nothing
+ *     fires until the user picks a format and prints.
  */
 export function voucherPrintPageHref(
     source: VoucherSource,

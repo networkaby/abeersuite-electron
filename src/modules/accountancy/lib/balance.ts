@@ -144,9 +144,10 @@ export function computeBalance(
 /**
  * Which counter this save numbers under.
  *
- * An explicit context wins (the POS sale passes its shift's counter). Otherwise a
- * counter PC numbers under the counter it is set up as, and the office — no counter
- * at all — numbers as counter 1. Same fallback `assembleReference` renders, so the
+ * An explicit context wins (nothing on the POS path passes one any more — since
+ * 2026-09-07 every voucher saved at the office, a relayed one included, numbers in
+ * the common series). Otherwise a counter PC numbers under the counter it is set up
+ * as, and the office — no counter at all — numbers as counter 1. Same fallback `assembleReference` renders, so the
  * printed reference and the series row it came from always agree.
  */
 export function resolveCounterNumber(ctx?: import("./voucherRef").ReferenceContext): number {

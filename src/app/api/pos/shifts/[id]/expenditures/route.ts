@@ -21,6 +21,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
+import { touchPosShift } from "@/modules/pos/lib/touchShift";
 
 const expenditureSchema = z.object({
     amountPaise:      z.number().int().positive(),
@@ -42,7 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const shift = await prisma.posShift.findUnique({
             where:  { id: shiftId },
-            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true, counterNumber: true, allowedExpenseAccountIds: true } } },
+            select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true, allowedExpenseAccountIds: true } } },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "OPEN") {
@@ -92,7 +93,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 ],
                 post:      true,
                 branchId:  shift.branchId,
-                counterNumber: shift.counter.counterNumber,
             });
 
             const exp = await tx.posExpenditure.create({
@@ -106,6 +106,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
                 select: { id: true },
             });
+            await touchPosShift(tx, shiftId);
             return { expId: exp.id, voucherId: voucher.id, voucherRef: voucher.reference };
         });
 

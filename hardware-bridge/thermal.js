@@ -170,9 +170,19 @@ async function qrToTempPng(text) {
 }
 
 // ── Shared template chrome ───────────────────────────────────────────────────────
-// Small helpers mirroring the browser ThermalHeader / ThermalFooter so all three
-// builders (payment · POS · voucher) stay in sync with the print template. The
-// email + website lines are gated by showPhone (matching ThermalReceiptPreview).
+// Helpers mirroring the browser ThermalHeader / ThermalFooter / MoneyThermalMiddle
+// (src/shared/components/print/ThermalReceiptPreview.tsx) line for line, so the
+// paper slip and the thermal preview are the same document. Both builders (POS ·
+// voucher) are the same printer type and page size (80mm ESC/POS), which is the
+// only reason they may share these. The email + website lines are gated by
+// showPhone (matching the preview).
+//
+// The template arrives already merged with the Organisation and resolved for
+// THERMAL_80MM by the app (getThermalTemplate / resolveTemplateForFormat), so
+// there is no brand / footer fallback here: a blank line prints nothing.
+//
+// fontFamily / fontSizePx are browser-only — ESC/POS prints the head's built-in
+// font, so they are deliberately not read here.
 function printEmailWeb(printer, t) {
     if (t.showPhone && t.emailLine)   printer.println(t.emailLine);
     if (t.showPhone && t.websiteLine) printer.println(t.websiteLine);
@@ -212,241 +222,184 @@ function printDisclaimer(printer, t) {
     }
 }
 
-// ── ESC/POS receipt builder ───────────────────────────────────────────────────
-
-function buildReceiptBuffer(data, companyName) {
-    const printer = new ThermalPrinter({
-        type:         PrinterTypes.EPSON,
-        interface:    "tcp://127.0.0.1:9999",
-        characterSet: CharacterSet.PC437_USA,
-    });
-
-    const { reference, date, type, party, narration, lines, totalDebit, totalCredit, status, createdBy } = data;
-
-    const fmtAmt = (n) =>
-        Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    const formattedDate = date
-        ? new Date(date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-        : "";
-
-    printer.alignCenter();
-    printer.bold(true);
-    printer.setTextSize(1, 1);
-    printer.println(companyName || "My Company");
-    printer.setTextNormal();
-    printer.bold(false);
-    printer.println("VOUCHER");
-    printer.drawLine();
-
-    printer.alignLeft();
-    printer.tableCustom([
-        { text: `Ref: ${reference}`, align: "LEFT",  width: 0.6 },
-        { text: formattedDate,        align: "RIGHT", width: 0.4 },
-    ]);
-    printer.println(`Type: ${(type || "").replace(/_/g, " ")}`);
-    if (party) printer.println(`Party: ${party}`);
-    printer.drawLine();
-
-    printer.tableCustom([
-        { text: "Account", align: "LEFT",  width: 0.5 },
-        { text: "Dr",      align: "RIGHT", width: 0.25 },
-        { text: "Cr",      align: "RIGHT", width: 0.25 },
-    ]);
-    printer.drawLine();
-
-    for (const line of lines || []) {
-        const amt = fmtAmt(line.amount);
-        const dr  = line.type === "DEBIT"  ? amt : "";
-        const cr  = line.type === "CREDIT" ? amt : "";
-        printer.tableCustom([
-            { text: line.accountName || "", align: "LEFT",  width: 0.5 },
-            { text: dr,                     align: "RIGHT", width: 0.25 },
-            { text: cr,                     align: "RIGHT", width: 0.25 },
-        ]);
-        if (line.description) printer.println("  " + line.description);
-    }
-
-    printer.drawLine();
-    printer.bold(true);
-    printer.tableCustom([
-        { text: "Total",             align: "LEFT",  width: 0.5 },
-        { text: fmtAmt(totalDebit),  align: "RIGHT", width: 0.25 },
-        { text: fmtAmt(totalCredit), align: "RIGHT", width: 0.25 },
-    ]);
-    printer.bold(false);
-    printer.drawLine();
-
-    if (narration) {
-        printer.println(`Note: ${narration}`);
-        printer.drawLine();
-    }
-
-    printer.println(`Status: ${status || ""}   By: ${createdBy || ""}`);
-    printer.println(`Printed: ${new Date().toLocaleString("en-GB")}`);
-    printer.cut();
-
-    return printer.getBuffer();
+// The preview prints `sample.date` exactly as the page supplied it (an ISO day
+// "2026-09-06" or a preformatted "06 Sept 2026, 05:30"), so the slip does too.
+function displayDate(d) {
+    return d == null ? "" : String(d);
 }
 
-// ── Payment / Receipt voucher builder (POS "Rcv" + collect-on-the-go surplus) ──
-// Prints the money side of a counter receipt: who paid, the tender breakdown
-// (cash / UPI / card — one row each), the total received, and how it was applied
-// (old dues cleared / advance). For a POS overpayment the sale slip carries NO
-// tenders — they live here.
-async function buildPaymentBuffer(data, companyName) {
-    const { reference, date, party, tenders, total, arrear, advance, note,
-            title, partyLabel, totalLabel, template: tpl } = data;
+// Kinds whose party is the supplier (mirrors isSupplierPartyKind in the preview).
+const SUPPLIER_PARTY_KINDS = new Set(["PURCHASE", "PURCHASE_RETURN", "PURCHASE_ORDER", "GRN", "REJECTION_OUT", "DEBIT_NOTE"]);
 
-    // Resolved template (header/address/toggles/footer) — sent with every job so
-    // the slip honours the shop's current config, matching the browser payment
-    // page. Older clients omit it → safe fallbacks.
-    const t = {
-        headerLine1:    "",
-        headerLine2:    "",
-        addressBlock:   "",
-        gstinLine:      "",
-        phoneLine:      "",
-        logoUrl:        "",
-        showLogo:       false,
-        showHeaderText: true,
-        showAddress:    true,
-        showGstin:      true,
-        showPhone:      true,
-        signatureLabel: "Authorised Signatory",
-        footerLine:     "Thank you · Visit again",
-        paperWidthMm:   80,
-        ...(tpl || {}),
-    };
+// Multi-line template text → one println per trimmed, non-empty line.
+function printLines(printer, text) {
+    for (const ln of String(text || "").split("\n").map((x) => x.trim()).filter(Boolean))
+        printer.println(ln);
+}
 
-    const mm        = Number(t.paperWidthMm) || 80;
-    const cols      = mm >= 70 ? 48 : 32;
-    const charWidth = cols - 2;
-
-    const printer = new ThermalPrinter({
-        type:         PrinterTypes.EPSON,
-        interface:    "tcp://127.0.0.1:9999",
-        characterSet: CharacterSet.PC437_USA,
-        width:        charWidth,
-    });
-
-    const fmtAmt = (n) =>
-        Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const formattedDate = date
-        ? new Date(date).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-        : "";
-
-    // ── Header (template-driven) ──────────────────────────────────────────
+// Header chrome — mirrors ThermalHeader + the doc-title line of ReceiptBody:
+// logo → brand → HO address → branch address → phone → email/web → GSTIN →
+// divider → headerLine2 (bold, centred, BELOW the divider).
+async function printHeader(printer, t, branchAddress, tag) {
     printer.alignCenter();
     if (t.showLogo && t.logoUrl) {
         try {
-            const logoFile = await logoToTempPng(t.logoUrl, cols >= 48 ? 360 : 240);
+            const logoFile = await logoToTempPng(t.logoUrl, t._cols >= 48 ? 360 : 240);
             await printer.printImage(logoFile);
         } catch (err) {
-            console.warn("[thermal:payment] logo skipped:", err.message);
+            console.warn(`[thermal:${tag}] logo skipped:`, err.message);
         }
     }
-    if (t.showHeaderText) {
+    if (t.showHeaderText && t.headerLine1) {
         printer.bold(true);
         printer.setTextSize(1, 1);
-        printer.println(t.headerLine1 || companyName || "My Company");
+        printer.println(t.headerLine1);
         printer.setTextNormal();
         printer.bold(false);
     }
-    printer.println(t.headerLine2 || title || "PAYMENT RECEIPT");
-    if (t.showAddress && t.addressBlock) {
-        for (const ln of String(t.addressBlock).split("\n").map((s) => s.trim()).filter(Boolean))
-            printer.println(ln);
-    }
+    if (t.showAddress && t.addressBlock) printLines(printer, t.addressBlock);
+    if (t.showBranchAddress && branchAddress) printLines(printer, branchAddress);
     if (t.showPhone && t.phoneLine) printer.println(t.phoneLine);
     printEmailWeb(printer, t);
     if (t.showGstin && t.gstinLine) printer.println(t.gstinLine);
     printer.drawLine();
-
+    if (t.headerLine2) {
+        printer.bold(true);
+        printer.println(t.headerLine2);
+        printer.bold(false);
+    }
     printer.alignLeft();
-    printer.tableCustom([
-        { text: `No: ${reference || ""}`, align: "LEFT",  width: 0.55 },
-        { text: formattedDate,            align: "RIGHT", width: 0.45 },
-    ]);
-    if (party) printer.println(`${partyLabel || "Received from"}: ${party}`);
-    printer.drawLine();
+}
 
-    // Tender breakdown — the money side lives here now (not on the sale slip).
-    for (const tnd of tenders || []) {
-        printer.tableCustom([
-            { text: tnd.label || "",   align: "LEFT",  width: 0.6 },
-            { text: fmtAmt(tnd.amount), align: "RIGHT", width: 0.4 },
-        ]);
+// Footer chrome — mirrors ThermalFooter: [divider + terms] → [bank block] →
+// [signature] → divider → footer line → disclaimer → barcode → cut.
+async function printFooter(printer, t, reference, tag) {
+    if (t.termsText) {
+        printer.drawLine();
+        printer.alignLeft();
+        for (const ln of String(t.termsText).split("\n")) printer.println(ln);
+    }
+    await printBankBlock(printer, t, tag);
+    if (t.showSignature) {
+        printer.println("");
+        printer.println("");
+        printer.alignRight();
+        printer.println(t.signatureLabel || "Authorised Signatory");
+        printer.alignLeft();
     }
     printer.drawLine();
+    printer.alignCenter();
+    if (t.footerLine && String(t.footerLine).trim()) printer.println(String(t.footerLine).trim());
+    printDisclaimer(printer, t);
+    // Scannable CODE128 of the voucher number (matches the browser slip's
+    // BarcodeSvg) — gated by the template. Best-effort: never block the slip.
+    if (t.showBarcode && reference) {
+        // HRI text (`text: 2`) is ignored by some heads (RETSOL TP806), so the
+        // number is printed as a plain centred line under the bars, like the
+        // preview's BarcodeSvg caption.
+        try { printer.code128(String(reference), { height: 60, text: 0 }); printer.println(String(reference)); }
+        catch (err) { console.warn(`[thermal:${tag}] barcode skipped:`, err.message); }
+    }
+    printer.cut();
+}
 
+// Tenders received against the bill (one row per tender ledger) + balance due.
+// Mirrors the receipts block of DefaultThermalMiddle.
+function printReceiptsBlock(printer, sample, fmt) {
+    const receipts = Array.isArray(sample.receipts) ? sample.receipts.filter((r) => Math.abs(Number(r.amount)) > 0.005) : [];
+    const due      = Number(sample.balanceDue || 0);
+    if (receipts.length === 0 && due <= 0.005) return;
+    printer.drawLine();
+    printer.alignLeft();
+    for (const r of receipts)
+        printer.tableCustom([
+            { text: String(r.label || "Received").slice(0, 22), align: "LEFT",  width: 0.55 },
+            { text: fmt(r.amount),                             align: "RIGHT", width: 0.45 },
+        ]);
+    if (due > 0.005) {
+        printer.bold(true);
+        printer.tableCustom([
+            { text: "Balance due", align: "LEFT",  width: 0.55 },
+            { text: fmt(due),      align: "RIGHT", width: 0.45 },
+        ]);
+        printer.bold(false);
+    }
+}
+
+// Money voucher (RECEIPT / PAYMENT) cash slip — mirrors MoneyThermalMiddle:
+// ref | date → divider → Received from / Paid to → phone → By: mode(s) →
+// Towards: notes → divider → RECEIVED / PAID + amount → words → [party balance].
+function printMoneyMiddle(printer, sample, t, fmt, formattedDate) {
+    const isPayment = t.kind === "PAYMENT";
+    const total     = Number(sample.total || 0);
+    const modes     = (sample.lines || []).filter((l) => String(l.description || "").trim());
+    printer.alignLeft();
+    // Money slips carry a date + time ("06 Sept 2026, 05:30") — give it room.
+    printer.tableCustom([
+        { text: String(sample.reference || ""), align: "LEFT",  width: 0.45 },
+        { text: formattedDate,                  align: "RIGHT", width: 0.55 },
+    ]);
+    printer.drawLine();
+    printer.tableCustom([
+        { text: isPayment ? "Paid to:" : "Received from:", align: "LEFT",  width: 0.4, bold: true },
+        { text: String(sample.partyName || "Walk-in"),     align: "RIGHT", width: 0.6, bold: true },
+    ]);
+    if (sample.partyPhone) {
+        printer.alignRight();
+        printer.println(String(sample.partyPhone));
+        printer.alignLeft();
+    }
+    if (modes.length === 1) {
+        printer.tableCustom([
+            { text: "By:",                 align: "LEFT",  width: 0.3 },
+            { text: modes[0].description,  align: "RIGHT", width: 0.7 },
+        ]);
+    } else if (modes.length > 1) {
+        modes.forEach((l, i) => {
+            printer.tableCustom([
+                { text: `${i === 0 ? "By: " : ""}${l.description}`, align: "LEFT",  width: 0.6 },
+                { text: fmt(l.amount),                              align: "RIGHT", width: 0.4 },
+            ]);
+        });
+    }
+    if (sample.notes) printer.println(`Towards: ${sample.notes}`);
+    printer.drawLine();
     printer.bold(true);
     printer.tableCustom([
-        { text: totalLabel || "Received", align: "LEFT",  width: 0.5 },
-        { text: "Rs. " + fmtAmt(total),   align: "RIGHT", width: 0.5 },
+        { text: isPayment ? "PAID" : "RECEIVED", align: "LEFT",  width: 0.5 },
+        { text: fmt(total),                      align: "RIGHT", width: 0.5 },
     ]);
     printer.bold(false);
-    printer.drawLine();
-
-    if (Number(arrear) > 0)
-        printer.tableCustom([{ text: "Cleared old dues", align: "LEFT", width: 0.6 }, { text: fmtAmt(arrear), align: "RIGHT", width: 0.4 }]);
-    if (Number(advance) > 0)
-        printer.tableCustom([{ text: "Advance / credit", align: "LEFT", width: 0.6 }, { text: fmtAmt(advance), align: "RIGHT", width: 0.4 }]);
-    if (Number(arrear) > 0 || Number(advance) > 0) printer.drawLine();
-
-    if (note) { printer.println(note); printer.drawLine(); }
-
     printer.alignCenter();
-    if ((totalLabel || "Received") === "Received") printer.println("Received with thanks");
-
-    // Bank details + scan-to-pay UPI QR (template-driven), matching the browser footer.
-    await printBankBlock(printer, t, "payment");
-
-    // Signature line — the payment slip always shows it (a money receipt),
-    // matching the browser body.
-    printer.println("");
-    printer.println("");
-    printer.alignRight();
-    printer.println(t.signatureLabel || "Authorised Signatory");
-
-    printer.alignCenter();
-    printer.println(t.footerLine || "Thank you · Visit again");
-    printDisclaimer(printer, t);
-    printer.cut();
-
-    return printer.getBuffer();
+    printer.println(rupeesInWords(total));
+    printer.alignLeft();
+    if (t.showPartyBalance && (sample.balanceBefore || sample.balanceAfter)) {
+        printer.drawLine();
+        if (sample.balanceBefore)
+            printer.tableCustom([
+                { text: "Balance before",             align: "LEFT",  width: 0.5 },
+                { text: String(sample.balanceBefore), align: "RIGHT", width: 0.5 },
+            ]);
+        if (sample.balanceAfter) {
+            printer.bold(true);
+            printer.tableCustom([
+                { text: "Balance after",             align: "LEFT",  width: 0.5 },
+                { text: String(sample.balanceAfter), align: "RIGHT", width: 0.5 },
+            ]);
+            printer.bold(false);
+        }
+    }
 }
 
 // ── POS receipt builder ───────────────────────────────────────────────────────
 
-async function buildPosBuffer(data, companyName) {
-    const { invoiceNumber, date, customerName, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, cashPaid, upiPaid, extrasPaid, grossAtTag, discounts, charges, savings, hsnSummary, template: tpl } = data;
+async function buildPosBuffer(data) {
+    const { invoiceNumber, date, customerName, customerPhone, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
 
-    // Resolved POS voucher print template (header/address/toggles/terms/footer).
-    // Sent by PosScreen (via /api/pos/sale → posTemplate) so this slip matches
-    // /receipt/invoice/[id]?kind=POS. Older clients omit it → safe fallbacks.
-    const t = {
-        headerLine1:    "",
-        headerLine2:    "POS sale receipt",
-        addressBlock:   "",
-        gstinLine:      "",
-        phoneLine:      "",
-        logoUrl:        "",
-        showLogo:       false,
-        showHeaderText: true,
-        showAddress:    true,
-        showGstin:      true,
-        showPhone:      true,
-        showTaxSummary: true,
-        showMrp:        true,
-        showSignature:  false,
-        showBarcode:    false,
-        signatureLabel: "Authorised Signatory",
-        termsText:      "",
-        footerLine:     "Thank you · Visit again",
-        paperWidthMm:   80,
-        ...(tpl || {}),
-    };
+    // Thermal-resolved POS print template (header/address/toggles/terms/footer).
+    // Sent by PosScreen (via /api/pos/sale → posTemplate) and by the invoice
+    // reprint page, so this slip matches /receipt/invoice/[id]?kind=POS.
+    const t = { paperWidthMm: 80, ...(tpl || {}) };
 
     // Usable columns from the paper size. An "80mm" head prints ~72mm wide = 48
     // columns (Font A); a "58mm" head prints ~48mm = 32. paperWidthMm may carry
@@ -457,7 +410,7 @@ async function buildPosBuffer(data, companyName) {
     const mm        = Number(t.paperWidthMm) || 80;
     const cols      = mm >= 70 ? 48 : 32;
     const charWidth = cols - 2;
-    const nameWidth = Math.floor(charWidth * 0.5) - 1;
+    t._cols = cols;
 
     const printer = new ThermalPrinter({
         type:         PrinterTypes.EPSON,
@@ -474,50 +427,25 @@ async function buildPosBuffer(data, companyName) {
     const fmtAmt = (n) =>
         Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const formattedDate = date
-        ? new Date(date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-        : "";
-    const formattedTime = date
-        ? new Date(date).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-        : "";
+    await printHeader(printer, t, branchAddress, "pos");
 
-    // ── Header (template-driven) ──────────────────────────────────────────
-    printer.alignCenter();
-    // Logo (same template as the browser receipt). Best-effort — a fetch/raster
-    // failure or a printer without image support must never block the slip.
-    if (t.showLogo && t.logoUrl) {
-        try {
-            const logoFile = await logoToTempPng(t.logoUrl, cols >= 48 ? 360 : 240);
-            await printer.printImage(logoFile);
-        } catch (err) {
-            console.warn("[thermal:pos] logo skipped:", err.message);
-        }
-    }
-    if (t.showHeaderText) {
-        printer.bold(true);
-        printer.setTextSize(1, 1);
-        printer.println(t.headerLine1 || companyName || "My Company");
-        printer.setTextNormal();
-        printer.bold(false);
-    }
-    if (t.headerLine2) printer.println(t.headerLine2);
-    if (t.showAddress && t.addressBlock) {
-        for (const ln of String(t.addressBlock).split("\n").map((s) => s.trim()).filter(Boolean))
-            printer.println(ln);
-    }
-    if (t.showPhone && t.phoneLine) printer.println(t.phoneLine);
-    printEmailWeb(printer, t);
-    if (t.showGstin && t.gstinLine) printer.println(t.gstinLine);
-    printer.drawLine();
-
+    // ── Reference + party — mirrors DefaultThermalMiddle ──────────────────
     printer.alignLeft();
-    printer.println(`Invoice: ${invoiceNumber}`);
     printer.tableCustom([
-        { text: `Date: ${formattedDate}`, align: "LEFT",  width: 0.6 },
-        { text: formattedTime,             align: "RIGHT", width: 0.4 },
+        { text: String(invoiceNumber || ""), align: "LEFT",  width: 0.6 },
+        { text: displayDate(date),           align: "RIGHT", width: 0.4 },
     ]);
-    printer.println(`Customer: ${customerName || "Walk-in"}`);
-    if (customerGstin) printer.println(`GSTIN: ${customerGstin}`);
+    printer.tableCustom([
+        { text: "Customer:",                       align: "LEFT",  width: 0.4 },
+        { text: String(customerName || "Walk-in"), align: "RIGHT", width: 0.6 },
+    ]);
+    if (customerPhone) { printer.alignRight(); printer.println(String(customerPhone)); printer.alignLeft(); }
+    if (customerGstin) {
+        printer.tableCustom([
+            { text: "GSTIN:",               align: "LEFT",  width: 0.4 },
+            { text: String(customerGstin),  align: "RIGHT", width: 0.6 },
+        ]);
+    }
     printer.drawLine();
 
     printer.tableCustom([
@@ -528,7 +456,8 @@ async function buildPosBuffer(data, companyName) {
     printer.drawLine();
 
     for (const line of lines || []) {
-        const name = String(line.name || "").slice(0, nameWidth);
+        // Full name — tableCustom wraps it inside the column, like the preview.
+        const name = String(line.name || "");
         const qty  = Number(line.qty) || 0;
         // Ladder mode shows the public tag (barcode) total as the line amount; the
         // real per-item price stays pooled in "Counter discount" below.
@@ -578,7 +507,7 @@ async function buildPosBuffer(data, companyName) {
                 ]);
             }
         }
-    } else if (t.showTaxSummary) {
+    } else {
         printer.tableCustom([
             { text: "Subtotal", align: "LEFT",  width: 0.55 },
             { text: fmtAmt(subtotal), align: "RIGHT", width: 0.45 },
@@ -599,14 +528,15 @@ async function buildPosBuffer(data, companyName) {
     printer.drawLine();
     printer.bold(true);
     printer.tableCustom([
-        { text: "TOTAL",       align: "LEFT",  width: 0.55 },
+        { text: "Total",       align: "LEFT",  width: 0.55 },
         { text: fmtAmt(total), align: "RIGHT", width: 0.45 },
     ]);
     printer.bold(false);
     // GST is INCLUDED in the inclusive amounts above — shown as a note on the
-    // total (not a column row, so the running math reads correctly).
-    if (ladderMode && t.showTaxSummary && Array.isArray(hsnSummary) && hsnSummary.length > 0) {
-        const gst = hsnSummary.reduce((s, h) => s + (h.cgst || 0) + (h.sgst || 0), 0);
+    // total (not a column row, so the running math reads correctly). Part of
+    // the total block, so it always prints (matches the preview).
+    if (ladderMode && Array.isArray(hsnSummary) && hsnSummary.length > 0) {
+        const gst = taxTotal != null ? Number(taxTotal) : hsnSummary.reduce((s, h) => s + (h.cgst || 0) + (h.sgst || 0), 0);
         if (gst > 0.005) {
             printer.tableCustom([
                 { text: "incl. GST (CGST+SGST)", align: "LEFT",  width: 0.6 },
@@ -622,64 +552,11 @@ async function buildPosBuffer(data, companyName) {
         ]);
     }
     printer.bold(false);
-    printer.drawLine();
 
-    if (cashPaid > 0) {
-        printer.tableCustom([
-            { text: "Cash",           align: "LEFT",  width: 0.55 },
-            { text: fmtAmt(cashPaid), align: "RIGHT", width: 0.45 },
-        ]);
-    }
-    if (upiPaid > 0) {
-        printer.tableCustom([
-            { text: "UPI",           align: "LEFT",  width: 0.55 },
-            { text: fmtAmt(upiPaid), align: "RIGHT", width: 0.45 },
-        ]);
-    }
-    for (const e of extrasPaid || []) {
-        if (e.amount > 0) {
-            const label = e.method.replace(/_/g, " ");
-            printer.tableCustom([
-                { text: label,           align: "LEFT",  width: 0.55 },
-                { text: fmtAmt(e.amount), align: "RIGHT", width: 0.45 },
-            ]);
-        }
-    }
-    const change = Math.max(0, (cashPaid || 0) - total);
-    if (change > 0) {
-        printer.tableCustom([
-            { text: "Change",       align: "LEFT",  width: 0.55 },
-            { text: fmtAmt(change), align: "RIGHT", width: 0.45 },
-        ]);
-    }
+    // Tenders (one row per ledger) + balance due — same block as the preview.
+    printReceiptsBlock(printer, { receipts, balanceDue }, fmtAmt);
 
-    printer.drawLine();
-
-    // ── Terms / bank / signature / footer (template-driven) ───────────────
-    if (t.termsText) {
-        printer.alignLeft();
-        for (const ln of String(t.termsText).split("\n")) printer.println(ln);
-        printer.drawLine();
-    }
-    await printBankBlock(printer, t, "pos");
-    if (t.showSignature) {
-        printer.println("");
-        printer.println("");
-        printer.alignRight();
-        printer.println(t.signatureLabel || "Authorised Signatory");
-        printer.alignLeft();
-    }
-    printer.alignCenter();
-    printer.println(t.footerLine || "Thank you · Visit again");
-    printDisclaimer(printer, t);
-    // Scannable CODE128 of the invoice number (matches the browser slip's
-    // BarcodeSvg) — gated by the template. Best-effort: never block the slip.
-    if (t.showBarcode && invoiceNumber) {
-        try { printer.code128(String(invoiceNumber), { height: 60, text: 2 }); }
-        catch (err) { console.warn("[thermal:pos] barcode skipped:", err.message); }
-    }
-    printer.cut();
-
+    await printFooter(printer, t, invoiceNumber, "pos");
     return printer.getBuffer();
 }
 
@@ -949,39 +826,17 @@ function printShippingSlipMiddle(printer, body) {
 // thermal output honours each kind's configured template. Mirrors the web
 // <ThermalReceiptPreview> ReceiptBody. Sent by the app's /receipt/voucher,
 // /receipt/[id] (repair ticket) and /shipping-slip pages → POST /print/voucher.
-async function buildVoucherBuffer(data, companyName) {
+async function buildVoucherBuffer(data) {
     const { sample = {}, template: tpl } = data || {};
 
-    // Resolved per-kind print template (header/address/toggles/terms/footer).
-    // Older clients omit it → safe fallbacks.
-    const t = {
-        headerLine1:    "",
-        headerLine2:    "",
-        addressBlock:   "",
-        gstinLine:      "",
-        phoneLine:      "",
-        logoUrl:        "",
-        showLogo:          false,
-        showHeaderText:    true,
-        showAddress:       true,
-        showBranchAddress: false,
-        showGstin:         true,
-        showPhone:         true,
-        showTaxSummary:    true,
-        showMrp:           true,
-        showSignature:     false,
-        showBarcode:       false,
-        signatureLabel: "Authorised Signatory",
-        termsText:      "",
-        footerLine:     "Thank you · Visit again",
-        paperWidthMm:   80,
-        ...(tpl || {}),
-    };
+    // Thermal-resolved per-kind print template (header/address/toggles/terms/footer).
+    const kind = String(data.kind || (tpl && tpl.kind) || "");
+    const t = { paperWidthMm: 80, ...(tpl || {}), kind };
 
     const mm        = Number(t.paperWidthMm) || 80;
     const cols      = mm >= 70 ? 48 : 32;
     const charWidth = cols - 2;
-    const nameWidth = Math.floor(charWidth * 0.5) - 1;
+    t._cols = cols;
 
     const printer = new ThermalPrinter({
         type:         PrinterTypes.EPSON,
@@ -992,47 +847,14 @@ async function buildVoucherBuffer(data, companyName) {
 
     const fmtAmt = (n) =>
         Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const formattedDate = sample.date
-        ? new Date(sample.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-        : "";
+    const formattedDate = displayDate(sample.date);
 
-    // ── Header (template-driven) ──────────────────────────────────────────
-    printer.alignCenter();
-    if (t.showLogo && t.logoUrl) {
-        try {
-            const logoFile = await logoToTempPng(t.logoUrl, cols >= 48 ? 360 : 240);
-            await printer.printImage(logoFile);
-        } catch (err) {
-            console.warn("[thermal:voucher] logo skipped:", err.message);
-        }
-    }
-    if (t.showHeaderText) {
-        printer.bold(true);
-        printer.setTextSize(1, 1);
-        printer.println(t.headerLine1 || companyName || "My Company");
-        printer.setTextNormal();
-        printer.bold(false);
-    }
-    if (t.headerLine2) printer.println(t.headerLine2);
-    if (t.showAddress && t.addressBlock) {
-        for (const ln of String(t.addressBlock).split("\n").map((s) => s.trim()).filter(Boolean))
-            printer.println(ln);
-    }
-    // Issuing-branch address (voucher-backed prints) — matches the browser slip.
-    if (t.showBranchAddress && sample.branchAddress) {
-        for (const ln of String(sample.branchAddress).split("\n").map((s) => s.trim()).filter(Boolean))
-            printer.println(ln);
-    }
-    if (t.showPhone && t.phoneLine) printer.println(t.phoneLine);
-    printEmailWeb(printer, t);
-    if (t.showGstin && t.gstinLine) printer.println(t.gstinLine);
-    printer.drawLine();
+    await printHeader(printer, t, sample.branchAddress, "voucher");
 
     // ── Kind-aware middle — bespoke bodies mirror the browser ReceiptBody ───
     // Non-invoice kinds (repair ticket, shipping slip, deposit/handover
     // worksheet, journal) each render their own middle; everything else falls
     // through to the generic Item/Qty invoice below.
-    const kind = String(data.kind || "");
     if (kind === "REPAIR_TICKET") {
         printRepairTicketMiddle(printer, data.body);
     } else if (kind === "SHIPPING_SLIP") {
@@ -1041,6 +863,8 @@ async function buildVoucherBuffer(data, companyName) {
         printDepositMiddle(printer, sample, fmtAmt, formattedDate);
     } else if (kind === "CONTRA" || kind === "JOURNAL") {
         printJournalMiddle(printer, sample, fmtAmt, formattedDate);
+    } else if (kind === "RECEIPT" || kind === "PAYMENT") {
+        printMoneyMiddle(printer, sample, t, fmtAmt, formattedDate);
     } else {
     // ── Reference + party ─────────────────────────────────────────────────
     printer.alignLeft();
@@ -1048,9 +872,17 @@ async function buildVoucherBuffer(data, companyName) {
         { text: String(sample.reference || ""), align: "LEFT",  width: 0.6 },
         { text: formattedDate,                  align: "RIGHT", width: 0.4 },
     ]);
-    printer.println(`Customer: ${sample.partyName || "Walk-in"}`);
-    if (sample.partyPhone) printer.println(String(sample.partyPhone));
-    if (sample.partyGstin) printer.println(`GSTIN: ${sample.partyGstin}`);
+    printer.tableCustom([
+        { text: SUPPLIER_PARTY_KINDS.has(kind) ? "Supplier:" : "Customer:", align: "LEFT",  width: 0.4 },
+        { text: String(sample.partyName || "Walk-in"),                       align: "RIGHT", width: 0.6 },
+    ]);
+    if (sample.partyPhone) { printer.alignRight(); printer.println(String(sample.partyPhone)); printer.alignLeft(); }
+    if (sample.partyGstin) {
+        printer.tableCustom([
+            { text: "GSTIN:",                  align: "LEFT",  width: 0.4 },
+            { text: String(sample.partyGstin), align: "RIGHT", width: 0.6 },
+        ]);
+    }
     printer.drawLine();
 
     // ── Line items ────────────────────────────────────────────────────────
@@ -1061,7 +893,7 @@ async function buildVoucherBuffer(data, companyName) {
     ]);
     printer.drawLine();
     for (const line of sample.lines || []) {
-        const name = String(line.description || "").slice(0, nameWidth);
+        const name = String(line.description || "");
         printer.tableCustom([
             { text: name,                        align: "LEFT",  width: 0.5 },
             { text: String(line.quantity ?? ""), align: "RIGHT", width: 0.15 },
@@ -1106,9 +938,9 @@ async function buildVoucherBuffer(data, companyName) {
             { text: fmtAmt(sample.total != null ? sample.total : d.grossAtTag - d.total), align: "RIGHT", width: 0.45 },
         ]);
         printer.bold(false);
-        if (t.showTaxSummary && Array.isArray(sample.hsnSummary) && sample.hsnSummary.length > 0) {
+        if (Array.isArray(sample.hsnSummary) && sample.hsnSummary.length > 0) {
             const inter = sample.taxBreakdown && sample.taxBreakdown.kind === "INTER";
-            const gst   = sample.hsnSummary.reduce((s, h) => s + (h.cgst || 0) + (h.sgst || 0), 0);
+            const gst   = d.taxTotal != null ? Number(d.taxTotal) : sample.hsnSummary.reduce((s, h) => s + (h.cgst || 0) + (h.sgst || 0), 0);
             if (gst > 0.005)
                 printer.tableCustom([
                     { text: `incl. ${inter ? "GST (IGST)" : "GST (CGST+SGST)"}`, align: "LEFT",  width: 0.6 },
@@ -1124,7 +956,7 @@ async function buildVoucherBuffer(data, companyName) {
             printer.bold(false);
         }
     } else {
-        if (t.showTaxSummary && sample.subtotal != null) {
+        if (sample.subtotal != null) {
             printer.tableCustom([
                 { text: "Subtotal",       align: "LEFT",  width: 0.55 },
                 { text: fmtAmt(sample.subtotal), align: "RIGHT", width: 0.45 },
@@ -1148,40 +980,13 @@ async function buildVoucherBuffer(data, companyName) {
             printer.bold(false);
         }
     }
-    printer.drawLine();
+    // Tenders received + balance due (reprint shows payments as of now).
+    printReceiptsBlock(printer, sample, fmtAmt);
     } // end generic Item/Qty invoice middle
 
-    // ── Notes / terms / bank / signature / footer (template-driven) ───────
-    // Journal/Contra print their own narration in the middle → skip here.
-    if (sample.notes && kind !== "CONTRA" && kind !== "JOURNAL") {
-        printer.alignLeft();
-        for (const ln of String(sample.notes).split("\n")) printer.println(ln);
-        printer.drawLine();
-    }
-    if (t.termsText) {
-        printer.alignLeft();
-        for (const ln of String(t.termsText).split("\n")) printer.println(ln);
-        printer.drawLine();
-    }
-    await printBankBlock(printer, t, "voucher");
-    if (t.showSignature) {
-        printer.println("");
-        printer.println("");
-        printer.alignRight();
-        printer.println(t.signatureLabel || "Authorised Signatory");
-        printer.alignLeft();
-    }
-    printer.alignCenter();
-    printer.println(t.footerLine || "Thank you · Visit again");
-    printDisclaimer(printer, t);
-    // Scannable CODE128 of the voucher number (matches the browser slip's
-    // BarcodeSvg) — gated by the template. Best-effort: never block the slip.
-    if (t.showBarcode && sample.reference) {
-        try { printer.code128(String(sample.reference), { height: 60, text: 2 }); }
-        catch (err) { console.warn("[thermal:voucher] barcode skipped:", err.message); }
-    }
-    printer.cut();
-
+    // No narration on the counter slip — internal bookkeeping text (the
+    // preview skips it too). Journal / money middles print their own.
+    await printFooter(printer, t, sample.reference, "voucher");
     return printer.getBuffer();
 }
 
@@ -1391,40 +1196,23 @@ function start({ getConfig, setConfig }) {
         // and Windows. Never throws: an unreachable printer is an answer, not a fault.
         "printer:probe": async () => probePrinter(getConfig()),
 
-        "print": async (payload) => {
-            const { reference, lines } = payload || {};
-            if (!reference || !lines) throw new Error("Missing required fields: reference, lines");
-            const cfg = getConfig();
-            await sendBuffer(cfg, buildReceiptBuffer(payload, cfg.companyName || "My Company"));
-            console.log(`[thermal] Printed: ${reference}`);
-            return { ok: true };
-        },
-
         "print/pos": async (payload) => {
             const { invoiceNumber, lines } = payload || {};
             if (!invoiceNumber || !lines) throw new Error("Missing required fields: invoiceNumber, lines");
             const cfg = getConfig();
-            await sendBuffer(cfg, await buildPosBuffer(payload, cfg.companyName || "My Company"));
+            await sendBuffer(cfg, await buildPosBuffer(payload));
             console.log(`[thermal] POS printed: ${invoiceNumber}`);
             return { ok: true };
         },
 
-        "print/payment": async (payload) => {
-            const { reference } = payload || {};
-            if (!reference) throw new Error("Missing required field: reference");
-            const cfg = getConfig();
-            await sendBuffer(cfg, await buildPaymentBuffer(payload, cfg.companyName || "My Company"));
-            console.log(`[thermal] Payment printed: ${reference}`);
-            return { ok: true };
-        },
-
-        // Generic office voucher (GL · inventory · journal) — renders the app's
-        // ThermalReceiptSample + per-kind template. Payload: { kind, title, sample, template }.
+        // Every document except the POS ladder slip (GL · inventory · journal ·
+        // money slips · repair · shipping) — renders the app's ThermalReceiptSample
+        // + thermal-resolved per-kind template. Payload: { kind, title, sample, template }.
         "print/voucher": async (payload) => {
             const { sample } = payload || {};
             if (!sample || !Array.isArray(sample.lines)) throw new Error("Missing required field: sample.lines");
             const cfg = getConfig();
-            await sendBuffer(cfg, await buildVoucherBuffer(payload, cfg.companyName || "My Company"));
+            await sendBuffer(cfg, await buildVoucherBuffer(payload));
             console.log(`[thermal] Voucher printed: ${sample.reference || ""}`);
             return { ok: true };
         },
@@ -1468,4 +1256,4 @@ function start({ getConfig, setConfig }) {
     if (cfg.connectionType === "windows") console.log(`[thermal] windows printer: ${cfg.windowsPrinterName}`);
 }
 
-module.exports = { start, buildPosBuffer, buildReceiptBuffer, buildPaymentBuffer, buildVoucherBuffer };
+module.exports = { start, buildPosBuffer, buildVoucherBuffer };

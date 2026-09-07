@@ -12,17 +12,18 @@ import { requireStaffPage } from "@/shared/lib/auth/permissions";
 // ── Generic voucher print page ──────────────────────────────────────────────
 //
 // Prints ANY Day-Book voucher (inventory · GL · journal-entry) through the
-// template-driven renderer, following the house print rule: thermal always
-// tries the combined bridge first and falls back to the browser, where a format
-// picker lets the user switch A4 / thermal — each format rendering its own
-// template. Reached from the 3-dot menu's Print / PDF actions and the voucher
-// forms' "Print after save" toggle:
+// template-driven renderer, following the house print rule (two ways only):
+// silent thermal = the bridge; otherwise this format-selection page, where the
+// user picks A4 / thermal and the printer in the browser dialog — each format
+// rendering its own template. Reached from the 3-dot menu's Print (thermal) /
+// Print / PDF actions and the voucher forms' "Print after save" toggle:
 //
 //   /receipt/voucher/<source>/<id>?paper=A4           → A4 print
 //   /receipt/voucher/<source>/<id>?paper=THERMAL_80MM → 80mm thermal
 //   /receipt/voucher/<source>/<id>?width=72           → 72mm thermal width
-//   /receipt/voucher/<source>/<id>?mode=thermal       → force thermal + auto-fire
-//        the combined bridge (browser fallback if the relay is offline)
+//   /receipt/voucher/<source>/<id>?mode=thermal       → the thermal way: fire the
+//        bridge once on mount; no printer / bridge down → this same page stays
+//        open as the format-selection page (nothing auto-prints)
 //
 // The POS counter flow keeps its dedicated relay pages (/receipt/invoice?kind=POS
 // and /receipt/payment) — this route is the catch-all for every other kind.
@@ -48,9 +49,9 @@ export default async function VoucherReceiptPage({
 
     const template = await getVoucherTemplate(data.kind);
 
-    // Format resolution: `?mode=thermal` (the form's Thermal toggle) forces the
-    // 80mm slip; otherwise `?paper=` wins, then the kind's stored default.
-    const format = sp.mode === "thermal" ? "THERMAL_80MM" : resolvePaperFormat(template, sp.paper);
+    // Format resolution: `?paper=` wins, then `?mode=thermal` (the thermal way
+    // in), otherwise A4 — see resolvePaperFormat.
+    const format = resolvePaperFormat(template, sp.paper, sp.mode);
     const isThermal = format === "THERMAL_80MM";
 
     // `?width=` overrides the thermal width (e.g. 72mm) without a new PaperFormat.

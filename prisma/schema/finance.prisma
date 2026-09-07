@@ -328,7 +328,7 @@ model VoucherSeriesCounter {
 //   • Repair documents (REPAIR_TICKET | SHIPPING_SLIP) — no enum, plain ids.
 // Drives the thermal 80mm receipt rendered by /receipt/invoice/[id], the shared
 // <ThermalReceiptPreview>, and the repair prints (/receipt/[id], /shipping-slip).
-// Bootstrap seed inserts all 25 rows; reset endpoint re-applies the defaults
+// Bootstrap seed inserts one row per VoucherTemplateKind; reset endpoint re-applies the defaults
 // from src/shared/lib/print/voucherTemplateDefaults.ts (same source). The model
 // name stays VoucherPrintTemplate to avoid a table rename on the production DB.
 model VoucherPrintTemplate {

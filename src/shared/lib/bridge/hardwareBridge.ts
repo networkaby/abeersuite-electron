@@ -120,3 +120,19 @@ export async function bridgeOk(mod: BridgeModule, timeoutMs = 2000): Promise<boo
         return false;
     }
 }
+
+/** True when Printer Settings names a thermal printer of any type (LAN ip /
+ *  COM port / Windows printer) for the chosen connection. Blank → the counter
+ *  has no thermal printer, so nothing may print silently (print rule, point 4). */
+export async function thermalPrinterConfigured(): Promise<boolean> {
+    try {
+        const cfg = await bridgeRequest<{ connectionType?: string; printerIp?: string; comPort?: string; windowsPrinterName?: string }>("thermal", "config:get", undefined, 1500);
+        switch (cfg?.connectionType) {
+            case "com":     return !!cfg.comPort?.trim();
+            case "windows": return !!cfg.windowsPrinterName?.trim();
+            default:        return !!cfg?.printerIp?.trim();
+        }
+    } catch {
+        return false;
+    }
+}

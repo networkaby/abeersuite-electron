@@ -5,7 +5,7 @@
  * documents (repair ticket, shipping slip) all live here.
  *
  * Used by:
- *   • prisma/seeds/bootstrap-seed.ts        — initial upsert of all 25 rows
+ *   • prisma/seeds/bootstrap-seed.ts        — initial upsert of every kind in VOUCHER_TEMPLATE_KINDS
  *   • /api/settings/voucher-templates/...   — list-auto-upsert, reset-to-default
  *   • /office/settings/voucher-templates    — UI grouping (Accounting / Inventory / Repair)
  *   • src/shared/lib/print/voucherTemplate.ts — runtime fallback if a row is missing
@@ -78,10 +78,19 @@ export const REPAIR_DOCUMENT_KINDS = [
     "DELIVERY_SHIPPING_LABEL",
 ] as const;
 
+// Marketing cards — the printable coupon and gift card. Not vouchers: a QR +
+// code card with its own face (CouponCard / GiftCardCard), but the brand line,
+// small label, terms and foot come from the same per-kind template registry.
+export const MARKETING_DOCUMENT_KINDS = [
+    "COUPON",
+    "GIFT_CARD",
+] as const;
+
 export const VOUCHER_TEMPLATE_KINDS = [
     ...ACCOUNTING_VOUCHER_KINDS,
     ...INVENTORY_VOUCHER_KINDS,
     ...REPAIR_DOCUMENT_KINDS,
+    ...MARKETING_DOCUMENT_KINDS,
 ] as const;
 
 export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
@@ -90,6 +99,7 @@ export const VOUCHER_TEMPLATE_KIND_GROUPS = {
     accounting: ACCOUNTING_VOUCHER_KINDS,
     inventory: INVENTORY_VOUCHER_KINDS,
     repair: REPAIR_DOCUMENT_KINDS,
+    marketing: MARKETING_DOCUMENT_KINDS,
 } as const;
 
 // Human-readable per-kind sub-titles that go into headerLine2 by default.
@@ -127,6 +137,8 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     SHIPPING_SLIP: "Service Slip / Delivery Challan",
     SERVICE_SHIPPING_LABEL: "Service Shipping Label",
     DELIVERY_SHIPPING_LABEL: "Parcel Shipping Label",
+    COUPON: "Coupon",
+    GIFT_CARD: "Gift Card",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -146,6 +158,8 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     "SHIPPING_SLIP",
     "SERVICE_SHIPPING_LABEL",
     "DELIVERY_SHIPPING_LABEL",
+    "COUPON",
+    "GIFT_CARD",
 ]);
 
 // Repair-shop documents that show customer + staff signature lines by default.
@@ -164,6 +178,15 @@ const BARCODE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateK
     "POS",
     "ONLINE_INVOICE",
     "SALE_RETURN",
+]);
+
+// Money slips (RECEIPT / PAYMENT) show the party's running balance
+// (before / after) by default — it is the customer's own account on a slip
+// handed to them. Every other kind keeps it off: a goods invoice may be seen
+// by anyone. Both A4 + thermal seeds; tunable per format afterwards.
+const PARTY_BALANCE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
+    "RECEIPT",
+    "PAYMENT",
 ]);
 
 // Per-kind default footer / terms overrides (blank kinds fall back to the
@@ -248,6 +271,9 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     // The parcel label's real sizes (4×6 roll / A4 2-up / 80mm strip) live on its
     // own print page; this default only satisfies the shared registry.
     DELIVERY_SHIPPING_LABEL: "A4",
+    // Cards print as a fixed 360px face in the browser; A4 only satisfies the registry.
+    COUPON: "A4",
+    GIFT_CARD: "A4",
 };
 
 // Per-kind default for the voucher form's "Print after save" toggle
@@ -290,6 +316,8 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     SHIPPING_SLIP: false,
     SERVICE_SHIPPING_LABEL: false,
     DELIVERY_SHIPPING_LABEL: false,
+    COUPON:                false,
+    GIFT_CARD:             false,
 };
 
 /** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
@@ -336,6 +364,8 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     SHIPPING_SLIP:         false,
     SERVICE_SHIPPING_LABEL: false,
     DELIVERY_SHIPPING_LABEL: false,
+    COUPON:                false,
+    GIFT_CARD:             false,
 };
 
 /** Initial "Thermal" toggle state for a voucher kind (false → browser print). */
@@ -405,9 +435,9 @@ export interface VoucherTemplateDefaults {
  * Returns the canonical default row for a kind. Reused by both seed and the
  * reset-to-default endpoint so the two stay in sync by construction.
  *
- * `headerLine1` is intentionally left blank — the renderer falls back to
- * COMPANY_DETAILS.brandName so the seeded output matches the current
- * hardcoded receipts without baking the brand into the DB.
+ * `headerLine1` is intentionally left blank — mergeTemplateWithOrg() fills it
+ * from the Organisation brand at print time, so the brand is never baked into
+ * the DB and a rename in Organisation settings reaches every document.
  */
 export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): VoucherTemplateDefaults {
     return {
@@ -430,7 +460,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showBank: false,                                 showBankThermal: false,
-        showPartyBalance: false,                         showPartyBalanceThermal: false,
+        showPartyBalance: PARTY_BALANCE_KINDS.has(kind), showPartyBalanceThermal: PARTY_BALANCE_KINDS.has(kind),
         showQrCode: false,
         // Label meta — device hidden by default (theft), the rest shown.
         showTicket: true,                                showTicketThermal: true,          showTicketTl: true,

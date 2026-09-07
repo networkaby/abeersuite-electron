@@ -25,6 +25,20 @@ import {
     type OrganisationView,
 } from "@/shared/lib/org/organisationView";
 
+/** Shop identity for the shipping labels' FROM block, from a merged template. */
+export function labelSender(t: VoucherTemplateDefaults): { name: string; address: string | null; phone: string | null } {
+    return {
+        name:    t.headerLine1,
+        address: t.addressBlock?.trim() || null,
+        phone:   t.phoneLine?.replace(/^Ph:\s*/i, "").trim() || null,
+    };
+}
+
+/** Bottom-strip footer for the shipping labels; blank → nothing printed. */
+export function labelFooter(t: VoucherTemplateDefaults): string | null {
+    return t.footerLine?.trim() || null;
+}
+
 export function mergeTemplateWithOrg(
     template: VoucherTemplateDefaults,
     org: OrganisationView,
