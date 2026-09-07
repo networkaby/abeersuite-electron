@@ -84,6 +84,14 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
 
     // ── Desk clutter ─────────────────────────────────────────────────────────
     [/^\/api\/(admin-tasks|admin-task-recurrences|quick-notes|quick-log|notifications|wall-posts)/, ["tasks"]],
+    // An admin task IS a Ticket row — same model, admin pipeline — so a write here
+    // moves the tickets bucket as much as `/api/tickets` does. Saying only "tasks"
+    // left the two surfaces that watch Ticket rows deaf to it: the Work Board (every
+    // board on `useTicketsDelta` listens on "tickets") and the sidebar badges (they
+    // count `prisma.ticket`). Both then showed a task moved on another machine only
+    // after a manual Refresh — or, on a counter, whenever its sync worker happened to
+    // pull anything at all, which is why the till looked live and the web looked stuck.
+    [/^\/api\/admin-tasks/,                         ["tickets"]],
 
     // ── Configuration ────────────────────────────────────────────────────────
     [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart|service-centers)/, ["settings"]],
