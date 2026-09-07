@@ -345,9 +345,11 @@ office means the request runs here with `live`'s existing outage fallback. Three
    safety-net cycle in the way is stepped aside and resumed afterwards, and routes that
    add a shift's children (Rcv, Exp, cash drop, the sale's surplus receipt) bump the
    shift row so those `child` tables ride the same pull.
-3. **The relay boundary is the build boundary.** Only `COUNTER_API_ALLOWLIST` segments
-   are forwarded, minus this machine's own routes (`auth`, `counter`, `health`, `sync`,
-   `pos/counters`, backup/restore) and bodies over 4 MB.
+3. **Every write is forwarded.** There is no segment allowlist: any non-GET `/api/*`
+   call goes to the office, minus this machine's own routes (`auth`, `counter`, `health`,
+   `sync`, `pos/counters`, backup/restore) and bodies over 4 MB. A full build running in
+   counter mode serves routes the counter build strips, and their writes must reach the
+   office too — the till never writes Supabase directly while the office is reachable.
 
 The office authenticates the relayed request from the till's own session cookie: the
 cookie NAME is pinned in `src/auth.ts` (Auth.js keys the token on secret + name) and

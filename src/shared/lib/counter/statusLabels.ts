@@ -18,6 +18,9 @@
  *
  *   Local    — this machine's replica, BY CHOICE (READ_MODE/WRITE_MODE=local).
  *   Live     — Supabase.
+ *   Office   — writes only: WRITE_MODE=v_live, each save forwarded to the office
+ *              deployment in one round trip and landing on Supabase there. Still
+ *              live below the relay, so the word must say where the request goes.
  *   Offline  — the dial says `live`, but Supabase cannot be reached, so we are
  *              falling back to the replica. A failure, not a mode.
  *
@@ -34,7 +37,7 @@
  */
 
 /** What the shell prints for a read or a write. See the header for the meanings. */
-export type StatusWord = "Local" | "Live" | "Offline";
+export type StatusWord = "Local" | "Live" | "Office" | "Offline";
 
 /** Whether Supabase is reachable. Not "is anything wrong" — see `Offline`. */
 export type StatusTone = "ok" | "down";
@@ -82,7 +85,13 @@ export function shellStatus(s: StatusInput): ShellStatus {
 
     return {
         read: { word: readsLocal ? "Local" : offline ? "Offline" : "Live", tone },
-        write: { word: s.writePreference === "local" ? "Local" : offline ? "Offline" : "Live", tone },
+        write: {
+            word: s.writePreference === "local" ? "Local"
+                : offline ? "Offline"
+                : s.writePreference === "v_live" ? "Office"
+                : "Live",
+            tone,
+        },
         offline,
     };
 }

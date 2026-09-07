@@ -11,7 +11,6 @@
  * See writeRelay.ts for the why of every rule.
  */
 
-import { COUNTER_API_ALLOWLIST, PUBLIC_ONLY_API_SEGMENTS } from "@/shared/lib/appModeCore";
 import { IS_COUNTER_PC, WRITE_API_URL, relaysWrites } from "@/shared/lib/prisma/counterMode";
 
 /** Stamped on every relayed request. The office ignores it today; it is what stops a
@@ -46,7 +45,7 @@ const NEVER_RELAY: readonly RegExp[] = [
 ];
 
 export type RelaySkipReason =
-    | "read" | "not-api" | "already-relayed" | "excluded" | "not-served-here"
+    | "read" | "not-api" | "already-relayed" | "excluded"
     | "body-too-large" | "body-size-unknown";
 
 export type RelayDecision = { relay: true } | { relay: false; reason: RelaySkipReason };
@@ -75,13 +74,14 @@ export function decideRelay(input: {
     if (pathname === null) return skip("excluded");
     if (!pathname.startsWith("/api/")) return skip("not-api");
     if (NEVER_RELAY.some((re) => re.test(pathname))) return skip("excluded");
-    // The relay boundary is the build boundary: `counter-build.ts` strips every API
-    // segment outside this allowlist, so a path outside it 404s here today and must
-    // not be resurrected at the office by forwarding it.
-    const segment = pathname.split("/")[2] ?? "";
-    if (!COUNTER_API_ALLOWLIST.has(segment) || PUBLIC_ONLY_API_SEGMENTS.has(segment)) {
-        return skip("not-served-here");
-    }
+    // No segment allowlist beyond this point: every other write is the office's to
+    // make. The old "relay boundary is the build boundary" rule let any segment the
+    // counter build strips (customer-tools, accountancy, companies, …) run HERE on a
+    // full build in counter mode — reading the replica but writing Supabase directly
+    // from the till, the split that tried to hard-delete a tombstone the office no
+    // longer had. The office authenticates every relayed call from the till's own
+    // cookie and applies its own permissions, so forwarding a segment the counter
+    // build does not serve opens nothing the office does not already gate.
     if (input.contentLength === null) return skip("body-size-unknown");
     if (input.contentLength > MAX_RELAY_BODY_BYTES) return skip("body-too-large");
     return { relay: true };

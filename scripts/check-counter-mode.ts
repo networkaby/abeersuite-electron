@@ -217,7 +217,9 @@ async function counterWriteRelayMode(): Promise<Check[]> {
         ["the outbox push never relays", !decide("POST", "/api/sync/push")],
         ["the counter-binding routes never relay", !decide("POST", "/api/pos/counters/3/claim-number")],
         ["backup and restore never relay", !decide("POST", "/api/settings/restore") && !decide("POST", "/api/settings/backup")],
-        ["a path this build does not serve never relays", !decide("POST", "/api/shop/shipway-updates")],
+        // No segment allowlist: a full build in counter mode serves routes the counter build
+        // strips, and their writes must reach the office rather than run here against Supabase.
+        ["a write outside the counter allowlist still relays", decide("DELETE", "/api/customer-tools/trash/person/8504", 0) && decide("POST", "/api/accountancy/journal-entries")],
         // The office decodes what the browser encodes, so the rules must see the decoded path.
         ["a percent-encoded excluded path never relays", !decide("POST", "/api/settings/%72estore") && !decide("POST", "/api/pos/%63ounters/3/claim-number")],
         ["a dot-segment path is normalised before the rules", !decide("POST", "/api/pos/../settings/restore")],

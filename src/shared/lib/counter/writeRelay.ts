@@ -43,9 +43,9 @@
  * the browser's own change signal makes the worker pull moments later anyway.
  *
  * ── What is deliberately NOT relayed ─────────────────────────────────────────
- * Reads (they are the egress win). Anything this build does not itself serve — the
- * relay boundary IS the build boundary, otherwise every till on the shop LAN would be
- * an open door into the office's shop/portal routes. The login (it mints THIS
+ * Reads (they are the egress win). Every other write IS relayed, whatever segment it
+ * sits under: a full build running in counter mode serves routes the counter build
+ * strips, and those must reach the office too. The login (it mints THIS
  * machine's cookie), this machine's own status, boot probe and outbox push, the
  * counter-binding routes (they bind THIS device and already write authoritatively),
  * backup/restore (their credentials are withheld from tills on purpose), and bodies

@@ -37,7 +37,7 @@ export default function CounterStatusBadge() {
             ? "Saving works as normal — it goes to this computer and uploads when the connection returns."
             : "Only the actions enabled in Offline Policies can be saved until the connection returns."}`
         : `Connected. Reads come from ${read.word === "Local" ? "this computer's own copy, which keeps itself up to date" : "the server"}. `
-        + `Saves go to ${write.word === "Local" ? "this computer and upload straight away" : "the server"}.${sourceNote}`;
+        + `Saves go to ${write.word === "Local" ? "this computer and upload straight away" : write.word === "Office" ? "the head office, which saves them to the server" : "the server"}.${sourceNote}`;
 
     return (
         <span
