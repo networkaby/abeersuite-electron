@@ -90,8 +90,8 @@ export default function HelpWorkspace({
         const prev = tickets;
         setTickets((ts) => ts.map((t) => (t.id === ticketId ? { ...t, status: stageId, ticketStatus: target } : t)));
         try {
-            await axios.patch(`/api/help/${ticketId}`, { status: stageId });
-            afterOwnWrite();
+            const { data } = await axios.patch<HelpDto>(`/api/help/${ticketId}`, { status: stageId });
+            afterOwnWrite(data);
         } catch {
             setTickets(prev);
             toast.error("Failed to move ticket");

@@ -84,8 +84,8 @@ export default function DealsWorkspace({
         const prev = deals;
         setDeals((ls) => ls.map((l) => (l.id === dealId ? { ...l, status: stageId, ticketStatus: target } : l)));
         try {
-            await axios.patch(`/api/deals/${dealId}`, { status: stageId });
-            afterOwnWrite();
+            const { data } = await axios.patch<DealDto>(`/api/deals/${dealId}`, { status: stageId });
+            afterOwnWrite(data);
         } catch {
             setDeals(prev);
             toast.error("Failed to move deal");

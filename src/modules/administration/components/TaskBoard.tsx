@@ -99,8 +99,8 @@ export default function TaskBoard({
             ),
         );
         try {
-            await axios.patch(`/api/admin-tasks/${id}`, { status: stageId });
-            afterOwnWrite(); // resync (completedAt, comment count, etc.)
+            const { data } = await axios.patch<TaskDto>(`/api/admin-tasks/${id}`, { status: stageId });
+            afterOwnWrite(data); // resync (completedAt, comment count, etc.)
         } catch {
             setTasks(prev); // revert
             toast.error("Failed to move task");

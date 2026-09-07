@@ -34,7 +34,12 @@
  *    taken from the replica's clock can sit PAST a row that has not arrived yet and
  *    hide it for good. And after the board's OWN save the row is still in flight, so
  *    `afterOwnWrite` reads nothing until the worker says the rows have landed
- *    (`sync:applied`); reading at once would snap the optimistic change back.
+ *    (`sync:applied`); reading at once would snap the optimistic change back. That
+ *    still leaves one read it does not own: a cycle ALREADY RUNNING when the save
+ *    landed reports `sync:applied` for other tables, and the re-read that triggers
+ *    answers from a replica without this row — the card jumps back and returns on the
+ *    next cycle. So `afterOwnWrite` also PINS the row the server answered with: any
+ *    copy read back with an older `updatedAt` is not believed.
  *
  *  • NO DELETE TOMBSTONE, same accepted gap as before: a hard-deleted ticket
  *    inside the loaded window isn't chased down by a delta, bounded by
@@ -61,6 +66,10 @@ const SEARCH_DEBOUNCE_MS = 350;
 /** After the board's own save on a replica-reading till, how long to wait for the
  *  worker's `sync:applied` before reading anyway (its realtime link may be down). */
 const OWN_WRITE_FALLBACK_MS = 6_000;
+/** How long a just-written row outranks an older copy read back from a replica that
+ *  has not caught up. Comfortably longer than a sync cycle, and short enough that it
+ *  can never mask somebody else's later edit. */
+const OWN_WRITE_PIN_MS = 60_000;
 
 export type TicketsQuery = {
     pipelineId?: string;
@@ -192,7 +201,35 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     const checkedAtRef = useRef<string | null>(null);
     const rowsRef       = useRef<T[]>([]);
     rowsRef.current = rows;
+    // The caller rebuilds `sort` every render; afterOwnWrite reads the latest through
+    // this rather than carrying it in a dependency list.
+    const sortRef = useRef(sort);
+    sortRef.current = sort;
     const forceNext  = useRef(false);
+
+    /** Rows this board has just written itself, each held against any copy that comes
+     *  back older than the one the server answered with. See the module doc's
+     *  LOCAL-READ COUNTER note for the read this exists to survive. Self-clearing: a
+     *  pin goes the moment a read answers with that stamp or newer, and by time, so a
+     *  row that is deleted or filtered away elsewhere can never stick to the board. */
+    const pinned = useRef(new Map<number, { row: T; at: number }>());
+
+    const applyPins = useCallback((rows: T[]): T[] => {
+        const pins = pinned.current;
+        if (pins.size === 0) return rows;
+        const now = Date.now();
+        for (const [id, pin] of pins) if (now - pin.at > OWN_WRITE_PIN_MS) pins.delete(id);
+        if (pins.size === 0) return rows;
+        return rows.map((r) => {
+            const pin = pins.get(r.id);
+            if (!pin) return r;
+            if (Date.parse(r.updatedAt) >= Date.parse(pin.row.updatedAt)) {
+                pins.delete(r.id);   // the read caught up — this row governs itself again
+                return r;
+            }
+            return pin.row;
+        });
+    }, []);
 
     /** Manual/forced refresh — bypasses the local cache entirely (the Reload
      *  button, and right after this tab's own save). */
@@ -221,7 +258,21 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     }, []);
     useEffect(() => clearOwnWriteWait, [clearOwnWriteWait]);
 
-    const afterOwnWrite = useCallback(() => {
+    const afterOwnWrite = useCallback((saved?: unknown) => {
+        // The row as the SERVER has it, when the caller has one to give — every board's
+        // own PATCH answers with it. A dialog that only reports "saved" (or hands back
+        // an id) still gets the wait below, just without the guard.
+        if (saved && typeof saved === "object") {
+            const row = saved as T;
+            if (typeof row.id === "number" && typeof row.updatedAt === "string") {
+                pinned.current.set(row.id, { row, at: Date.now() });
+                // Show the server's own copy at once: it carries what the optimistic
+                // patch could only guess at (stage order, completedAt, counts). Placed
+                // straight in, NOT through `applyPins` — that clears a pin whose stamp
+                // a row has reached, and this row is the pin itself.
+                setRows((rs) => rs.map((r) => (r.id === row.id ? row : r)).sort(sortRef.current));
+            }
+        }
         if (!getReadsGoLocal() || getWritesHeldUntilApplied()) { reload(); return; }
         clearOwnWriteWait();
         const onApplied = () => clearOwnWriteWait();
@@ -248,7 +299,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 cached = await readCachedView<T>(key);
                 if (cancelled) return;
                 if (cached) {
-                    setRows([...cached.rows].sort(sort));
+                    setRows(applyPins([...cached.rows]).sort(sort));
                     setNextCursor(cached.nextCursor);
                     checkedAtRef.current = cached.checkedAt;
                     setLoading(false);
@@ -269,7 +320,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     if (cancelled) return;
                     if (fresh) {
                         if (fresh.mode !== "page") return;
-                        const sorted = [...fresh.rows].sort(sort);
+                        const sorted = applyPins([...fresh.rows]).sort(sort);
                         setRows(sorted);
                         setNextCursor(fresh.nextCursor);
                         checkedAtRef.current = fresh.computedAt;
@@ -277,7 +328,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     } else if (res.mode === "delta") {
                         const byId = new Map(rowsRef.current.map((r) => [r.id, r]));
                         for (const r of res.rows) byId.set(r.id, r);
-                        const merged = [...byId.values()].sort(sort);
+                        const merged = applyPins([...byId.values()]).sort(sort);
                         setRows(merged);
                         checkedAtRef.current = res.computedAt;
                         if (cacheable) await writeCachedView(key, merged, cached.nextCursor, res.computedAt);
@@ -285,7 +336,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 } else {
                     const res = await fetchTickets<T>(apiPath, query, search);
                     if (cancelled || res.mode !== "page") return;
-                    const sorted = [...res.rows].sort(sort);
+                    const sorted = applyPins([...res.rows]).sort(sort);
                     setRows(sorted);
                     setNextCursor(res.nextCursor);
                     checkedAtRef.current = res.computedAt;
@@ -306,7 +357,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         // only ever read inside the closure above, never used to decide whether
         // to refetch.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [key, search, cacheable, tick]);
+    }, [key, search, cacheable, tick, applyPins]);
 
     // A change anywhere that touches this board's topic re-checks it live — see
     // the module doc's REALTIME section. Coalesced and hidden-tab-safe already
@@ -320,7 +371,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
             try {
                 const res = await fetchTickets<T>(apiPath, query, search, { cursor: nextCursor });
                 if (res.mode !== "page") return;
-                const merged = [...rowsRef.current, ...res.rows].sort(sort);
+                const merged = applyPins([...rowsRef.current, ...res.rows]).sort(sort);
                 setRows(merged);
                 setNextCursor(res.nextCursor);
                 if (cacheable) {
@@ -333,7 +384,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [key, search, cacheable, nextCursor, loadingMore]);
+    }, [key, search, cacheable, nextCursor, loadingMore, applyPins]);
 
     return {
         rows,
