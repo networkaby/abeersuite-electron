@@ -25,7 +25,7 @@
 | Standalone Next server on loopback | **Built** | [`electron/serverManager.ts`](../electron/serverManager.ts) |
 | Windows installer, symlink hoisting, packaging gate | **Built** | [`scripts/prepare-standalone.ts`](../scripts/prepare-standalone.ts), [`scripts/verify-package.ts`](../scripts/verify-package.ts) |
 | Unattended install, baked env allowlist, per-machine `AUTH_SECRET` (shared with the office only on a `v_live` build — §4.6) | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
-| Dexie UI hot cache | **Built and in real use** | [`src/shared/lib/browser/localDb.ts`](../src/shared/lib/browser/localDb.ts) |
+| Dexie UI hot cache | **Built and in real use — web/office only; off on a replica-served counter** | [`src/shared/lib/browser/localDb.ts`](../src/shared/lib/browser/localDb.ts) |
 | Supabase realtime broadcast channel | **Built** — one channel, `app:changes` | [`src/shared/lib/realtime/appChannel.ts`](../src/shared/lib/realtime/appChannel.ts) |
 | Sync table registry (113 tables) | **Built, generated, precommit-checked** | [`prisma/sync-tables.json`](../prisma/sync-tables.json) |
 | Live/local routing + outage demotion | **Built** | [`src/shared/lib/prisma/prismaClient.ts`](../src/shared/lib/prisma/prismaClient.ts) |
@@ -149,8 +149,10 @@ remembers which counter it is (id + extension) so staff see "Ext 04" rather than
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          AbeerSuite Desktop                             │
 │                                                                         │
-│  Tier 1: UI Hot Cache (Dexie / IndexedDB)              [BUILT]          │
+│  Tier 1: UI Hot Cache (Dexie / IndexedDB)     [BUILT — web/office only] │
 │  • Instant reads for POS barcode scanner & search                       │
+│  • RETIRED on a counter served by its own replica: Tier 2 is already    │
+│    local, so this tier saves nothing and only risks a stale stamp       │
 │                                    ▲                                    │
 │  Tier 2: Primary Local Store (Local PostgreSQL)        [NOT BUILT]      │
 │  • Schema parity with cloud Supabase (enums, arrays, JSONB)             │
