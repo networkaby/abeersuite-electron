@@ -79,3 +79,23 @@ export const POS_LIVE_POLL_MS = 5_400_000;   // 90 minutes
  * ever missed (socket hiccup, bridge retry racing the signal, etc).
  */
 export const CALL_POPUP_POLL_MS = 20_000;   // 20 seconds
+
+/**
+ * How long an unlogged call keeps waiting in the counter's follow-up icon
+ * (CallFollowUpPopup) before it drops off.
+ *
+ * **Edit this one line to widen or narrow that window.** It is a display rule
+ * only — the call row itself is never deleted or hidden from the CRM Call Log
+ * page; this decides only how long the counter keeps being reminded about it.
+ * Two days covers a late call logged the next morning, or a day off, without
+ * letting a week of forgotten calls pile up behind the icon.
+ */
+export const CALL_POPUP_MAX_AGE_MS = 48 * 60 * 60 * 1000;   // 2 days
+
+/**
+ * The follow-up icon sits quietly with its count until the last call is
+ * logged; the panel opens by itself on a NEWLY arrived call, and otherwise on
+ * this cadence — a scheduled "these are still waiting" nudge rather than a
+ * five-minute nag. **Edit this one line to change how often it asks.**
+ */
+export const CALL_POPUP_REMIND_MS = 30 * 60 * 1000;   // 30 minutes

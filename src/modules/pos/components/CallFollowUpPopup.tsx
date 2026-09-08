@@ -33,15 +33,21 @@
  * the other two and jumps focus straight to the textarea for a fast type-and-
  * save. Save is disabled until that note is non-empty.
  *
- * MINIMIZE, NOT DISMISS. Escape / outside-click / the header's hide control
- * all do the same thing: collapse to a small floating button instead of
- * closing. While minimized the popup automatically re-expands after
- * `REMIND_MS` if anything is still pending — an honest "ask me later" rather
- * than a close that quietly drops the reminder. `minimized`/`remindAt` persist
- * to localStorage (not component state) because this component is mounted
- * separately in two different layouts (office vs POS) — crossing between
- * them unmounts one copy and mounts the other, and a plain in-memory flag
- * would forget it was minimized the moment that happens.
+ * THE ICON WAITS UNTIL ZERO. Escape / outside-click / the header's hide
+ * control all do the same thing: collapse to a small floating button instead
+ * of closing. That button is on screen for as long as ANY call is still
+ * unlogged — it is the resting state of this feature, not a temporary
+ * snooze, and it only disappears when the count reaches zero. The panel
+ * itself opens by itself in two cases: a call that was not in the queue on
+ * the previous tick has just arrived, and every `CALL_POPUP_REMIND_MS` as a
+ * scheduled "these are still waiting" nudge. A call older than
+ * `CALL_POPUP_MAX_AGE_MS` drops off the icon — the row is untouched and
+ * still on the CRM Call Log, it just stops being a counter reminder.
+ * `minimized`/`remindAt` persist to localStorage (not component state)
+ * because this component is mounted separately in two different layouts
+ * (office vs POS) — crossing between them unmounts one copy and mounts the
+ * other, and a plain in-memory flag would forget it was minimized the moment
+ * that happens.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -56,18 +62,9 @@ import {
 import { usePolling } from "@/shared/hooks/usePolling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useMyCounterExtension } from "@/modules/pos/hooks/useMyCounterExtension";
-import { CALL_POPUP_POLL_MS } from "@/shared/lib/constants/polling";
+import { CALL_POPUP_POLL_MS, CALL_POPUP_MAX_AGE_MS, CALL_POPUP_REMIND_MS } from "@/shared/lib/constants/polling";
 import { formatCallerNumber, formatDateTime } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
-
-// A call this far back is stale by the time staff would see it (they were
-// away, or the popup only just mounted on a fresh page load) — surfacing it
-// would look like a phantom reminder for a conversation nobody remembers.
-const LOOKBACK_MS = 20 * 60 * 1000;
-
-// How long minimized holds before automatically re-expanding — "still
-// pending, are you free now?" on a cadence, not a one-time snooze.
-const REMIND_MS = 5 * 60 * 1000;
 
 const STORAGE_KEY = "call-followup-popup:v1";
 
@@ -131,6 +128,9 @@ export default function CallFollowUpPopup() {
     // dependency of it (that would tear the timer down on every toggle).
     const minimizedRef = useRef(minimized);
     const remindAtRef = useRef(loadPersisted().remindAt);
+    // Call ids the previous refresh saw — null until the first one lands, so
+    // the opening backlog is seeded rather than treated as newly arrived.
+    const seenIdsRef = useRef<Set<number> | null>(null);
     const posRef = useRef(pos);
     useEffect(() => { minimizedRef.current = minimized; }, [minimized]);
     useEffect(() => { posRef.current = pos; }, [pos]);
@@ -149,15 +149,28 @@ export default function CallFollowUpPopup() {
         try {
             // `extension === null` → no ext param → GET /api/calls falls back to
             // every counter's unhandled calls (see the module doc's WHICH CALLS).
-            const params: Record<string, string> = { unhandled: "1", limit: "10" };
+            // The window is days now, not minutes, so ask for more than a
+            // screenful — the icon's count has to be the honest total.
+            const params: Record<string, string> = { unhandled: "1", limit: "50" };
             if (extension) params.ext = extension;
             const { data } = await axios.get<{ items: PendingCall[] }>("/api/calls", { params });
-            const cutoff = Date.now() - LOOKBACK_MS;
-            setQueue(data.items.filter((c) => new Date(c.occurredAt).getTime() >= cutoff));
+            const cutoff = Date.now() - CALL_POPUP_MAX_AGE_MS;
+            const fresh = data.items.filter((c) => new Date(c.occurredAt).getTime() >= cutoff);
+            setQueue(fresh);
 
-            // Piggyback the "is it time to nag again" check on the same tick
-            // instead of a second timer.
-            if (minimizedRef.current && Date.now() >= remindAtRef.current) {
+            // A call the previous tick had not seen is a call that just
+            // happened — open the panel for it. The very first tick only
+            // seeds the set: the backlog already waiting when this PC
+            // opened the app is not "new", and the scheduled nudge below
+            // will raise it soon enough.
+            const seen = seenIdsRef.current;
+            const isNew = seen !== null && fresh.some((c) => !seen.has(c.id));
+            seenIdsRef.current = new Set(fresh.map((c) => c.id));
+
+            // Piggyback the "is it time to nudge again" check on the same
+            // tick instead of a second timer.
+            const due = Date.now() >= remindAtRef.current;
+            if (minimizedRef.current && fresh.length > 0 && (isNew || due)) {
                 minimizedRef.current = false;
                 setMinimized(false);
                 savePersisted({ minimized: false, remindAt: 0, pos: posRef.current });
@@ -228,7 +241,7 @@ export default function CallFollowUpPopup() {
     };
 
     const hide = () => {
-        const remindAt = Date.now() + REMIND_MS;
+        const remindAt = Date.now() + CALL_POPUP_REMIND_MS;
         remindAtRef.current = remindAt;
         setMinimized(true);
         savePersisted({ minimized: true, remindAt, pos });
@@ -330,9 +343,13 @@ export default function CallFollowUpPopup() {
                 ? "Create deal"
                 : "Save note";
 
+    // The panel is up only when it has a call to show AND staff has not
+    // parked it; the icon fills every other moment the queue is not empty.
+    const panelOpen = Boolean(current) && !minimized;
+
     return (
         <>
-            {queue.length > 0 && minimized && (
+            {queue.length > 0 && !panelOpen && (
                 <button
                     type="button"
                     onPointerDown={onDragStart}
@@ -347,7 +364,7 @@ export default function CallFollowUpPopup() {
             )}
 
             {/* Escape / outside-click minimize instead of closing — see the module doc. */}
-            <Dialog open={Boolean(current) && !minimized} onOpenChange={(open) => { if (!open) hide(); }}>
+            <Dialog open={panelOpen} onOpenChange={(open) => { if (!open) hide(); }}>
                 <DialogContent className="sm:max-w-sm" showCloseButton={false}>
                     {current && (
                         <>
