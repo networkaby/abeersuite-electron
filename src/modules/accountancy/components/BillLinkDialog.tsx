@@ -41,7 +41,9 @@ import { planLinks, reconcilePicks, sumPicks, EPS, type LinkableDoc } from "@/mo
  *  affordance so the user is never offered something that would be rejected. */
 const ALREADY_MONEY = ["RECEIPT", "PAYMENT", "CONTRA"];
 
-export type LinkPlan = { universalVoucherId: number; amount: number }[];
+/** One line of the POST body: `voucherId` is the name the API asks for — the
+ *  spine id of the bill on the other end. */
+export type LinkPlan = { voucherId: number; amount: number }[];
 
 /** What the settling voucher needs to know: which way the money goes, whose
  *  bill it is, how much is open on it, and which bill it is. */
@@ -214,8 +216,8 @@ export function BillLinkDialog({
         docs
             .filter((d) => (picked[d.universalVoucherId] ?? 0) > EPS)
             .map((d) => ({
-                universalVoucherId: d.universalVoucherId,
-                amount: round2((d.linkedHere ?? 0) + picked[d.universalVoucherId]),
+                voucherId: d.universalVoucherId,
+                amount:    round2((d.linkedHere ?? 0) + picked[d.universalVoucherId]),
             }));
 
     const save = async () => {
