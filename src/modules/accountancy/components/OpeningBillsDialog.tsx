@@ -25,10 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/utils/constants";
@@ -170,25 +167,15 @@ export function OpeningBillsDialog({
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        <div className="flex items-end gap-3">
-                            <div className="space-y-1">
-                                <Label className="text-xs">Side</Label>
-                                <Select value={type} onValueChange={(v) => setType(v as "DEBIT" | "CREDIT")}>
-                                    <SelectTrigger className="h-8 w-44 text-sm">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="DEBIT">Debit — they owe us</SelectItem>
-                                        <SelectItem value="CREDIT">Credit — we owe them</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        {/* The side is NOT a choice. The opening balance already
+                            says which way it goes, so asking again could only
+                            introduce a wrong answer — it is shown, not picked. */}
+                        <p className="text-sm text-muted-foreground">
+                            {type === "DEBIT" ? "Debit — they owe us" : "Credit — we owe them"}
                             {target !== null && (
-                                <p className="pb-1 text-xs text-muted-foreground">
-                                    Opening balance on the master: <span className="font-mono">₹ {fmt(target)}</span>
-                                </p>
+                                <> · opening balance on the master <span className="font-mono">₹ {fmt(target)}</span></>
                             )}
-                        </div>
+                        </p>
 
                         <div className="max-h-[46vh] overflow-y-auto rounded border border-border">
                             <table className="w-full text-sm">
@@ -212,10 +199,9 @@ export function OpeningBillsDialog({
                                                 />
                                             </td>
                                             <td className="px-3 py-2">
-                                                <Input
-                                                    type="date"
+                                                <TallyDateInput
                                                     value={r.date}
-                                                    onChange={(e) => setRow(i, { date: e.target.value })}
+                                                    onValueChange={(iso) => setRow(i, { date: iso })}
                                                     className="h-8 text-sm"
                                                 />
                                             </td>
