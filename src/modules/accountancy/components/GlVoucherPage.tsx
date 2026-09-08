@@ -42,7 +42,9 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { formatBalanceWithSide } from "@/modules/accountancy/lib/balanceFormat";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
-import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
+import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { settleFromPicks } from "@/modules/accountancy/lib/settleFromPicks";
+import { EPS } from "@/modules/accountancy/lib/billLinkPlan";
 import { OpenBillsPanel, clearOpenBillsCache, type BillPicks } from "@/modules/accountancy/components/OpenBillsPanel";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
@@ -928,10 +930,34 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                 await axios.post(`/api/accountancy/vouchers/${created.data.id}/post`);
                 clearOpenBillsCache();   // the party's dues just moved
                 toast.success(`${copy.title} ${created.data.reference} saved & posted`);
-                // Now it is posted, so it can legally settle a bill. Offer that at
-                // once — the id returned here IS the spine id (Phase 5E).
-                if (partyLedgerId != null) {
-                    setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId, plan: billPicks });
+                // Now it is posted, so it can legally settle a bill. The panel
+                // has already said which — including any credit the party had
+                // lying with us, and an opening balance that still needs making
+                // into a bill — so carry it out rather than asking again. A
+                // failure here leaves the voucher posted and unlinked, which is a
+                // state the "Link to bills" button can finish by hand.
+                if (partyLedgerId != null && Object.keys(billPicks).length > 0) {
+                    try {
+                        const done = await settleFromPicks({
+                            accountId: partyLedgerId,
+                            voucherId: created.data.id,
+                            side:      openBillsSide,
+                            picks:     billPicks,
+                        });
+                        if (done) {
+                            clearOpenBillsCache();
+                            clearBillLinkCache();
+                            toast.success(
+                                done.credits > EPS
+                                    ? `Settled ${done.bills} bill(s) — ₹${fmt(done.placed)}, of which ₹${fmt(done.credits)} from credits already with this party.`
+                                    : `Settled ${done.bills} bill(s) — ₹${fmt(done.placed)}.`,
+                            );
+                        }
+                    } catch (e) {
+                        toast.error(extractApiError(e, "Saved and posted, but the bills could not be settled — use Link to bills."));
+                    }
+                } else if (partyLedgerId != null) {
+                    setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId });
                 }
             } else {
                 toast.success(`${copy.title} ${created.data.reference} saved as draft`);
@@ -1318,14 +1344,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                                 amount={partyRow ? Math.max(0, parseRowAmount(partyRow.amount)) : 0}
                                 picks={billPicks}
                                 ledgerLabel={formatBalanceWithSide(accountById.get(partyLedgerId))}
-                                // Signed on the panel's side: Dr balance = they owe us (Receipt side),
-                                // flipped for a Payment where a Cr balance is what we owe.
-                                ledgerOwed={(() => {
-                                    const a = accountById.get(partyLedgerId);
-                                    const bal = a?.balance ?? 0;
-                                    const dr = a?.normalBalance === "CREDIT" ? -bal : bal;
-                                    return openBillsSide === 1 ? dr : -dr;
-                                })()}
                                 onChange={(picks, amt) => {
                                     setBillPickState({ partyId: partyLedgerId, picks });
                                     if (amt !== null && partyRow) updateRow(partyRow.id, { amount: amt > 0 ? String(round2(amt)) : "" });

@@ -41,7 +41,7 @@ async function main(): Promise<void> {
         removeLinksForVoucher, planLinks, autoLinkOrder, dueDateOf, BillLinkError,
         assertLinkPlan, assertLinksSurviveEdit,
     } = await import("@/modules/accountancy/lib/billLink");
-    const { reconcilePicks } = await import("@/modules/accountancy/lib/billLinkPlan");
+    const { reconcilePicks, assignSources } = await import("@/modules/accountancy/lib/billLinkPlan");
     const { ACCOUNT_GROUPS } = await import("@/shared/lib/constants/accounting");
 
     // ── Pick real ledgers to act on ────────────────────────────────────────
@@ -475,6 +475,32 @@ async function main(): Promise<void> {
     // clearing every one of them proposes nothing and leaves saved links alone.
     check("Reset (no ticks) proposes nothing, so saved links cannot be touched",
         Object.keys(planLinks(synthetic, 1000, { existing: {}, pickedIds: [] }).picks).length === 0);
+
+    // ── 9. Who pays which bill, when the money comes from two places ───────
+    //
+    // The owner's case: ₹50 received closes ₹1,050 of bills, because the party
+    // already had ₹1,000 lying with us. The receipt pays first, the credit
+    // finishes the job, and every link is still one ordinary pair.
+    const paid = assignSources(
+        [{ id: 200, amount: 630 }, { id: 19, amount: 420 }],   // two bills, ₹1,050
+        50,                                                     // the receipt
+        [{ id: 17, amount: 1000 }],                             // credit already with us
+    );
+    const own = paid.find((p) => p.sourceId === null);
+    const cred = paid.find((p) => p.sourceId === 17);
+    check("the voucher pays first, the credit finishes the bills",
+        own?.links.length === 1 && near(own.links[0].amount, 50) && own.links[0].universalVoucherId === 200
+        && cred?.links.length === 2
+        && near(cred.links[0].amount, 580) && near(cred.links[1].amount, 420),
+        paid.map((p) => `${p.sourceId ?? "self"}:[${p.links.map((l) => `${l.universalVoucherId}=${l.amount}`).join(",")}]`).join(" "));
+
+    const everyLink = paid.flatMap((p) => p.links).reduce((s, l) => s + l.amount, 0);
+    check("and the links add up to exactly the bills being closed",
+        near(everyLink, 1050), `${everyLink}`);
+
+    // Nothing to spend, nothing assigned — a credit on its own settles no bill.
+    check("a credit with no bill ticked produces no links",
+        assignSources([], 0, [{ id: 17, amount: 1000 }]).length === 0);
 
     // Due dates are whole days on top of the bill date, computed in UTC so the
     // answer does not move with the machine's timezone.

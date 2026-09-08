@@ -43,9 +43,21 @@ export async function GET(req: Request) {
 
     const docs = await loadLinkableDocs(prisma, accountId, { excludeId, side });
 
+    // The party's opening balance while it is still a bare figure on the master.
+    // Reported as the fact it is, rather than left for a caller to infer by
+    // subtracting the documents from the ledger balance — that subtraction is
+    // only as fresh as the balance the caller happens to hold, and a stale one
+    // invents an opening balance that does not exist.
+    const account = await prisma.account.findUnique({
+        where:  { id: accountId },
+        select: { openingBalance: true, openingBalanceType: true },
+    });
+
     return NextResponse.json({
         docs,
         self,
+        scalarOpening:     account?.openingBalance != null ? Number(account.openingBalance) : null,
+        scalarOpeningType: account?.openingBalanceType ?? null,
         receivableTotal: docs.filter((d) => d.side === 1).reduce((s, d) => s + d.open, 0),
         payableTotal:    docs.filter((d) => d.side === -1).reduce((s, d) => s + d.open, 0),
     });

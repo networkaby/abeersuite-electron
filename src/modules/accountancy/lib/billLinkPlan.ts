@@ -88,6 +88,63 @@ export function autoLinkOrder<T extends { dueDate: string; open: number; univers
     });
 }
 
+/** The id a party's opening balance carries while it is still a bare figure on
+ *  the master with no voucher behind it. Negative, so it can never collide with
+ *  a real spine id; the caller turns it into a real opening bill before saving
+ *  anything against it. */
+export const OPENING_SCALAR_ID = -1;
+
+/** One voucher's worth of links: what it settles, and by how much. */
+export type LinkPlanFor = {
+    /** The settling voucher. `null` = the one the user has open, which does not
+     *  exist yet at planning time. */
+    sourceId: number | null;
+    links:    { universalVoucherId: number; amount: number }[];
+};
+
+/**
+ * Who pays which bill, when the money comes from more than one place.
+ *
+ * A party's own credits — an advance they left, a sale return, an unlinked
+ * receipt — are money already sitting with us, and they can close bills just as
+ * the voucher in hand can. Letting them into the same settlement is what lets
+ * ₹10,000 received close ₹11,000 of bills when ₹1,000 was already lying there:
+ * the receipt's amount does not grow, the number of bills it can clear does.
+ *
+ * `targets` are the references being settled (each with the amount to place on
+ * it) and `credits` the same-side references being spent. The voucher in hand
+ * pays first and the credits follow, each in `autoLinkOrder`, so the same ticks
+ * always produce the same links — and every link is still one ordinary pair of
+ * opposite-side vouchers, which is the only kind the books allow.
+ */
+export function assignSources(
+    targets: { id: number; amount: number }[],
+    ownBudget: number,
+    credits: { id: number; amount: number }[],
+): LinkPlanFor[] {
+    const out = new Map<number | null, { universalVoucherId: number; amount: number }[]>();
+    const sources: { id: number | null; left: number }[] = [
+        { id: null, left: round2(ownBudget) },
+        ...credits.map((c) => ({ id: c.id, left: round2(c.amount) })),
+    ];
+
+    let s = 0;
+    for (const t of targets) {
+        let need = round2(t.amount);
+        while (need > EPS && s < sources.length) {
+            const src = sources[s];
+            if (src.left <= EPS) { s += 1; continue; }
+            const take = round2(Math.min(need, src.left));
+            const list = out.get(src.id) ?? [];
+            list.push({ universalVoucherId: t.id, amount: take });
+            out.set(src.id, list);
+            src.left = round2(src.left - take);
+            need = round2(need - take);
+        }
+    }
+    return [...out.entries()].map(([sourceId, links]) => ({ sourceId, links }));
+}
+
 /**
  * Cut a set of ticks down to what the bills can still take.
  *
