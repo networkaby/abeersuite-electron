@@ -131,6 +131,10 @@ function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
 
 export type MoneyFlowKind = "PAYMENT" | "RECEIPT" | "CONTRA" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
+/** A bill the form opens on top of: whose it is, what is open on it, and which
+ *  voucher it is — exactly what `?partyAccountId=..&amount=..&billId=..` says. */
+export type SettleBill = { partyAccountId: number; amount: number; billId: number };
+
 // Cash / Bank / OD — see moneyAccount.ts for why OD belongs with the deposit
 // accounts. Payment, Receipt and Contra all draw from this one set.
 const isMoneyAccount    = (a: GlAccount) => isMoneyGroupName(a.group?.name);
@@ -325,13 +329,17 @@ function DenomPanel({ title, denomList, value, onChange }: {
  * click) and every close path (Back, Cancel, Esc, after save) calls it
  * instead of navigating the tab.
  */
-export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }: {
+export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, settleBill = null }: {
     kind: MoneyFlowKind;
     voucherId?: number;
     onClose?: () => void;
     /** Create mode only: a party to start with (the open customer profile).
      *  Payment / Receipt → first particulars row; CN / DN → the top party. */
     initialParty?: PickedParty | null;
+    /** Create mode only: the bill this voucher is being made to settle — the
+     *  same three values the /new URL carries, for the dialog host which has no
+     *  route of its own to put them in. */
+    settleBill?: SettleBill | null;
 }) {
     const router = useRouter();
     const { data: session, status: sessionStatus } = useSession();
@@ -650,16 +658,16 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
     // date, a part payment — stays the user's to change, because this is the
     // real voucher screen and not a shortcut around it.
     //
-    // Read straight off the URL rather than through useSearchParams: it is a
-    // one-shot starting value, and this form also renders inside a dialog where
-    // there is no route of its own to read.
+    // Hosted in a dialog there is no route to read, so the same three values
+    // arrive as `settleBill`; on the /new page they are read straight off the
+    // URL rather than through useSearchParams, being a one-shot start value.
     useEffect(() => {
         if (isEditing || !isPayRec) return;
         const qs = new URLSearchParams(window.location.search);
-        const partyAccountId = Number(qs.get("partyAccountId"));
+        const partyAccountId = settleBill ? settleBill.partyAccountId : Number(qs.get("partyAccountId"));
         if (!Number.isFinite(partyAccountId) || partyAccountId <= 0) return;
-        const amount = Number(qs.get("amount"));
-        const billId = Number(qs.get("billId"));
+        const amount = settleBill ? settleBill.amount : Number(qs.get("amount"));
+        const billId = settleBill ? settleBill.billId : Number(qs.get("billId"));
         const typed  = Number.isFinite(amount) && amount > 0 ? String(round2(amount)) : "";
         setRows([{ ...newRow(), accountId: partyAccountId, amount: typed }, newRow()]);
         if (Number.isFinite(billId) && billId > 0 && typed) {

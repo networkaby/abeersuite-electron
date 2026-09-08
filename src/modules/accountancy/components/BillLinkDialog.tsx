@@ -43,6 +43,15 @@ const ALREADY_MONEY = ["RECEIPT", "PAYMENT", "CONTRA"];
 
 export type LinkPlan = { universalVoucherId: number; amount: number }[];
 
+/** What the settling voucher needs to know: which way the money goes, whose
+ *  bill it is, how much is open on it, and which bill it is. */
+export type SettleRequest = {
+    kind: "RECEIPT" | "PAYMENT";
+    partyAccountId: number;
+    amount: number;
+    billId: number;
+};
+
 // Show the last answer while the fresh one is on its way — the party's open bills
 // barely move between two clicks, and a spinner where a table just was reads as a
 // bug. Cleared after any successful link so the next open cannot show stale rows.
@@ -60,7 +69,7 @@ function labelFor(d: LinkableDoc): string {
 
 export function BillLinkDialog({
     open, onOpenChange, accountId, partyName, voucherId, onSaved, initialPlan,
-    settleDirectly = false,
+    settleDirectly = false, onSettle,
 }: {
     open:         boolean;
     onOpenChange: (v: boolean) => void;
@@ -79,6 +88,10 @@ export function BillLinkDialog({
      *  reports); a voucher form must not throw the user off the voucher they
      *  have just posted. */
     settleDirectly?: boolean;
+    /** Where the settling voucher opens. Given, the caller hosts the receipt /
+     *  payment form itself (a dialog over the report) and the user never leaves
+     *  the page; left out, this navigates to the voucher's own screen. */
+    onSettle?: (req: SettleRequest) => void;
 }) {
     const [docs, setDocs] = useState<LinkableDoc[]>([]);
     const [self, setSelf] = useState<LinkableDoc | null>(null);
@@ -236,13 +249,18 @@ export function BillLinkDialog({
     // of the way — the receipt / payment form then owns the date, the cash or
     // bank account, and everything else a voucher needs.
     const openSettlingVoucher = () => {
-        const path = self?.side === 1 ? "/vouchers/receipts/new" : "/vouchers/payments/new";
+        const kind = self?.side === 1 ? "RECEIPT" : "PAYMENT";
+        onOpenChange(false);
+        if (onSettle) {
+            onSettle({ kind, partyAccountId: accountId, amount: round2(available), billId: voucherId });
+            return;
+        }
+        const path = kind === "RECEIPT" ? "/vouchers/receipts/new" : "/vouchers/payments/new";
         const qs = new URLSearchParams({
             partyAccountId: String(accountId),
             amount:         String(round2(available)),
             billId:         String(voucherId),
         });
-        onOpenChange(false);
         router.push(`${path}?${qs.toString()}`);
     };
 

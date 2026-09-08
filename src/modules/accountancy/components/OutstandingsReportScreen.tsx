@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
-import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
+import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
@@ -68,6 +69,9 @@ export function OutstandingsReportScreen({
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
     // Which bill the link popup is settling, with the party it stands against.
     const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number; accountName: string } | null>(null);
+    // The receipt / payment being made against a bill, hosted right here so the
+    // report stays on screen behind it.
+    const [settle, setSettle] = useState<SettleRequest | null>(null);
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<ViewMode>("party");
@@ -403,7 +407,8 @@ export function OutstandingsReportScreen({
         </div>
         {/* `settleDirectly` — here the bill is the starting point, so a party with
             nothing open on the other side needs no popup: it goes straight to the
-            receipt / payment for this bill. */}
+            receipt / payment for this bill. `onSettle` keeps that voucher on this
+            page, as a dialog over the report. */}
         {linkTarget && (
             <BillLinkDialog
                 open
@@ -413,8 +418,16 @@ export function OutstandingsReportScreen({
                 voucherId={linkTarget.voucherId}
                 onSaved={() => load(true)}
                 settleDirectly
+                onSettle={setSettle}
             />
         )}
+        {/* Saved or abandoned, the report is read again: a settled bill must not
+            still be sitting there, and its open-bill list is now stale. */}
+        <GlVoucherDialog
+            kind={settle?.kind ?? null}
+            settleBill={settle}
+            onClose={() => { setSettle(null); clearBillLinkCache(); load(true); }}
+        />
         </ScrollArea>
     );
 }
