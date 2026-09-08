@@ -41,10 +41,15 @@ export function clearOpenBillsCache(): void {
     cache.clear();
 }
 
-function fetchOpenBills(key: string, accountId: number, side: 1 | -1): Promise<LinkableDoc[]> {
+// BOTH sides of the party, deliberately. Asking for one side made everything on
+// the other side a nameless remainder the panel had to call "on account" — when
+// in truth every rupee on a party's ledger belongs to a document that has a
+// reference: an opening bill, a sale, a return, a receipt. The lump was our
+// missing question, not the party's unattributed money.
+function fetchOpenBills(key: string, accountId: number): Promise<LinkableDoc[]> {
     const running = inflight.get(key);
     if (running) return running;
-    const p = axios.get<{ docs: LinkableDoc[] }>(`/api/accountancy/allocations/open?accountId=${accountId}&side=${side}`)
+    const p = axios.get<{ docs: LinkableDoc[] }>(`/api/accountancy/allocations/open?accountId=${accountId}`)
         .then((r) => {
             cache.set(key, { at: Date.now(), docs: r.data.docs });
             return r.data.docs;
@@ -87,22 +92,35 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
         const hit = cache.get(key);
         if (hit && Date.now() - hit.at < TTL_MS) return;
         let cancelled = false;
-        fetchOpenBills(key, accountId, side)
+        fetchOpenBills(key, accountId)
             .then((docs) => { if (!cancelled) setResult({ key, docs }); })
             .catch((e) => { if (!cancelled) setResult({ key, error: extractApiError(e, "Could not load open bills") }); });
         return () => { cancelled = true; };
-    }, [accountId, side, key]);
+    }, [accountId, key]);
 
     // Fresh answer for this key wins; otherwise a cached one (even if stale, while
     // the refresh is on its way); otherwise loading.
     const current = result?.key === key ? result : null;
-    const docs: LinkableDoc[] | null = current?.docs ?? cache.get(key)?.docs ?? null;
+    const all: LinkableDoc[] | null = current?.docs ?? cache.get(key)?.docs ?? null;
     const error = current?.error ?? null;
 
+    // What THIS voucher can settle, and what it cannot. The second list is not a
+    // leftover: those are the party's open references on the other side — an
+    // opening bill, an advance already received, a sale return — each of which a
+    // document of the opposite kind will settle one day. Shown by name, because
+    // there is no such thing as money on a party's ledger with no reference.
+    const docs = all === null ? null : all.filter((d) => d.side === side);
+    const others = all === null ? [] : all.filter((d) => d.side !== side);
+
     const totalOpen = (docs ?? []).reduce((s, d) => s + d.open, 0);
-    // Ledger minus bills = the on-account part. Signed on this side: positive
-    // = still owed beyond the bills, negative = advance already lying with us.
-    const onAccount = ledgerOwed != null ? round2(ledgerOwed - totalOpen) : null;
+    const totalOther = others.reduce((s, d) => s + d.open, 0);
+    // Both lists come off the party's GL legs, so they must account for the whole
+    // ledger between them. Anything left over is not "on account" — it is an
+    // opening balance still sitting as a bare figure on the master, with no
+    // voucher behind it, and it is named as exactly that.
+    const unexplained = ledgerOwed != null && all !== null
+        ? round2(ledgerOwed - round2(totalOpen - totalOther))
+        : null;
     const placed = sumOf(picks);
     const amountTyped = amount > EPS && Math.abs(amount - (setByTicks ?? -1)) > EPS;
 
@@ -205,9 +223,10 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                 <div className="flex justify-center py-4">
                     <Loader2 className="animate-spin text-muted-foreground" size={16} />
                 </div>
-            ) : docs.length === 0 && !(onAccount != null && Math.abs(onAccount) > EPS) ? (
+            ) : docs.length === 0 && others.length === 0 && !(unexplained != null && Math.abs(unexplained) > EPS) ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                    Nothing open. This {side === 1 ? "receipt" : "payment"} stays as an advance.
+                    Nothing open. This {side === 1 ? "receipt" : "payment"} stands as its own open reference —
+                    a later bill can be settled against it.
                 </p>
             ) : (
                 <>
@@ -275,20 +294,55 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                     </tr>
                                 );
                             })}
-                            {/* On account — the ledger money that is not linked to any bill
-                                (opening balance, unlinked receipts or payments, advances). A
-                                row like the bills so the ledger figure adds up in one place;
-                                not tickable — an untouched remainder already lands here. */}
-                            {onAccount != null && Math.abs(onAccount) > EPS && (
-                                <tr className="border-t border-border/50 bg-muted/30" title="Money on the ledger that is not linked to any bill — opening balance, unlinked receipts or payments, advances.">
+                            {/* The other side of the party's book, by name. A
+                                {side === 1 ? "receipt" : "payment"} cannot settle these — both
+                                are the same side — but they are open references all the same,
+                                and leaving them out was what forced the old nameless "on
+                                account" line. */}
+                            {others.length > 0 && (
+                                <>
+                                    <tr className="border-t border-border">
+                                        <td />
+                                        <td colSpan={3} className="pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                                            {side === 1 ? "Already with us" : "They owe us"}
+                                            <span className="ml-1 normal-case tracking-normal opacity-70">
+                                                — a {side === 1 ? "bill" : "receipt"} settles these, not this voucher
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {others.map((d) => (
+                                        <tr key={d.universalVoucherId} className="border-t border-border/50 text-muted-foreground">
+                                            <td className="w-6 py-1" />
+                                            <td className="py-1 pr-1">
+                                                <span className="font-mono whitespace-nowrap">{d.ref}</span>
+                                                <span className="block text-[10px] opacity-80">
+                                                    {new Date(d.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                </span>
+                                            </td>
+                                            <td className="py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap">{fmt(d.face)}</td>
+                                            <td className="py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap text-green-700">
+                                                {fmt(d.open)} {side === 1 ? "Cr" : "Dr"}
+                                            </td>
+                                            <td className="py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap">—</td>
+                                        </tr>
+                                    ))}
+                                </>
+                            )}
+
+                            {/* Only when the two lists do NOT account for the whole ledger:
+                                an opening balance still sitting as a bare number on the master,
+                                with no voucher behind it. Named for what it is, with what to do
+                                about it — not filed away as "on account". */}
+                            {unexplained != null && Math.abs(unexplained) > EPS && (
+                                <tr className="border-t border-border/50 bg-amber-50/60" title="This much of the ledger has no voucher behind it — convert the party's opening balance to a bill (Masters → Opening Balance → Convert all to bills) and it gets a reference like everything else.">
                                     <td className="w-6 py-1" />
                                     <td className="py-1 pr-1">
-                                        <span>On account</span>
-                                        <span className="block text-[10px] text-muted-foreground">not bill-wise</span>
+                                        <span className="text-amber-800">Opening balance, not yet a bill</span>
+                                        <span className="block text-[10px] text-amber-700/80">no reference yet — convert it in Masters</span>
                                     </td>
                                     <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
-                                    <td className={`py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap ${onAccount > 0 ? "text-orange-600" : "text-green-700"}`}>
-                                        {fmt(Math.abs(onAccount))} {onAccount > 0 ? "Dr" : "Cr"}
+                                    <td className={`py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap ${unexplained > 0 ? "text-orange-600" : "text-green-700"}`}>
+                                        {fmt(Math.abs(unexplained))} {unexplained > 0 ? "Dr" : "Cr"}
                                     </td>
                                     <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
                                 </tr>
@@ -319,16 +373,21 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                         )}
                         {amountTyped && amount - placed > EPS && (
                             <div className="flex justify-between text-muted-foreground">
-                                <span>Stays as advance</span>
+                                <span>Stays as its own reference</span>
                                 <span className="font-mono tabular-nums">₹ {fmt(round2(amount - placed))}</span>
                             </div>
                         )}
-                        {/* The ledger's own figure beside the bill-wise one. They differ
-                            whenever money moved without being linked to a bill — an
-                            opening balance, an unlinked receipt, an advance — and that
-                            difference is named here rather than left as a puzzle. */}
+                        {totalOther > EPS && (
+                            <div className="flex justify-between text-muted-foreground">
+                                <span>{side === 1 ? "Already with us" : "They owe us"}</span>
+                                <span className="font-mono tabular-nums">₹ {fmt(totalOther)}</span>
+                            </div>
+                        )}
+                        {/* The ledger's own figure, which the two lists above now add up to
+                            on their own — every rupee sitting against a reference. When it
+                            does not add up, the row inside the table says why. */}
                         {ledgerLabel != null && (
-                            <div className="flex justify-between border-t border-border/60 pt-1 font-medium" title="Bills open + on account = the ledger's own balance">
+                            <div className="flex justify-between border-t border-border/60 pt-1 font-medium" title="What is open on each side accounts for the whole ledger — every amount has a reference behind it.">
                                 <span>Ledger balance</span>
                                 <span className="font-mono tabular-nums">{ledgerLabel}</span>
                             </div>
