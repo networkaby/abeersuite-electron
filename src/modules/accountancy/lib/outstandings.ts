@@ -51,6 +51,11 @@ export type OutstandingBill = {
 export type PartyOutstanding = {
     accountId:        number;
     accountName:      string;
+    /** Everything the report's search box may match on, lower-cased and joined:
+     *  party name, account code, GSTIN and every phone number of the party. The
+     *  bill rows add their own voucher no on top. Built once here so the screen
+     *  filters with a single `includes` and never goes back to the DB to search. */
+    searchKey:        string;
     personId:       number | null;
     companyId:        number | null;
     totalOutstanding: number;
@@ -61,6 +66,7 @@ export type PartyOutstanding = {
 export type OutstandingBillFlat = OutstandingBill & {
     accountId:   number;
     accountName: string;
+    searchKey:   string;
 };
 
 export type OutstandingsReport = {
@@ -436,6 +442,57 @@ function toOutstandingBill(raw: RawBill, asOf: Date): OutstandingBill | null {
     };
 }
 
+/**
+ * The searchable identifiers of each party account — name, code, GSTIN and
+ * phone numbers — as one lower-cased blob per account id. Three small reads,
+ * only the columns needed; the screen then searches without touching the DB.
+ */
+async function loadSearchKeys(
+    accounts: { id: number; name: string; code: string | null; personId: number | null; companyId: number | null }[],
+): Promise<Map<number, string>> {
+    const personIds  = accounts.map((a) => a.personId).filter((v): v is number => v !== null);
+    const companyIds = accounts.map((a) => a.companyId).filter((v): v is number => v !== null);
+
+    const [persons, companies, phones] = await Promise.all([
+        personIds.length === 0 ? [] : prisma.person.findMany({
+            where:  { id: { in: personIds } },
+            select: { id: true, gstin: true },
+        }),
+        companyIds.length === 0 ? [] : prisma.company.findMany({
+            where:  { id: { in: companyIds } },
+            select: { id: true, gstin: true, companyReg: true, taxId: true },
+        }),
+        personIds.length === 0 && companyIds.length === 0 ? [] : prisma.phone.findMany({
+            where:  { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
+            select: { phone: true, personId: true, companyId: true },
+        }),
+    ]);
+
+    const personBits  = new Map<number, string[]>();
+    const companyBits = new Map<number, string[]>();
+    const push = (m: Map<number, string[]>, id: number, v: string | null) => {
+        if (!v) return;
+        const arr = m.get(id) ?? [];
+        arr.push(v);
+        m.set(id, arr);
+    };
+    for (const p of persons)   push(personBits, p.id, p.gstin);
+    for (const c of companies) { push(companyBits, c.id, c.gstin); push(companyBits, c.id, c.companyReg); push(companyBits, c.id, c.taxId); }
+    for (const ph of phones) {
+        if (ph.personId  !== null) push(personBits,  ph.personId,  ph.phone);
+        if (ph.companyId !== null) push(companyBits, ph.companyId, ph.phone);
+    }
+
+    const out = new Map<number, string>();
+    for (const a of accounts) {
+        const bits = [a.name, a.code ?? ""];
+        if (a.personId  !== null) bits.push(...(personBits.get(a.personId)   ?? []));
+        if (a.companyId !== null) bits.push(...(companyBits.get(a.companyId) ?? []));
+        out.set(a.id, bits.filter(Boolean).join(" ").toLowerCase());
+    }
+    return out;
+}
+
 export async function getOutstandings(
     groupName: "Sundry Debtors" | "Sundry Creditors",
     asOf: Date = new Date(),
@@ -456,11 +513,16 @@ export async function getOutstandings(
     const [accounts, bills] = await Promise.all([
         prisma.account.findMany({
             where: { id: { in: accountIds } },
-            select: { id: true, name: true, personId: true, companyId: true },
+            select: { id: true, name: true, code: true, personId: true, companyId: true },
             orderBy: [{ name: "asc" }],
         }),
         loadOpenBills(accountIds, asOf, invType),
     ]);
+
+    // Only the parties that actually have an open bill need search identifiers —
+    // a group can hold thousands of ledgers and most of them are settled.
+    const withBills = new Set(bills.map((b) => b.accountId));
+    const searchKeys = await loadSearchKeys(accounts.filter((a) => withBills.has(a.id)));
 
     const partyMap = new Map<number, PartyOutstanding>();
     const accountNameMap = new Map<number, string>();
@@ -468,6 +530,7 @@ export async function getOutstandings(
         partyMap.set(a.id, {
             accountId:        a.id,
             accountName:      a.name,
+            searchKey:        searchKeys.get(a.id) ?? a.name.toLowerCase(),
             personId:       a.personId,
             companyId:        a.companyId,
             totalOutstanding: 0,
@@ -491,6 +554,8 @@ export async function getOutstandings(
             ...bill,
             accountId:   raw.accountId,
             accountName: accountNameMap.get(raw.accountId) ?? "",
+            // The party's identifiers plus this bill's own reference number.
+            searchKey:   `${searchKeys.get(raw.accountId) ?? ""} ${bill.ref}`.toLowerCase(),
         });
     }
 

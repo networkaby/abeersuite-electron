@@ -32,6 +32,8 @@ const BUCKET_COLORS = {
 
 type ViewMode = "party" | "bill";
 
+const EMPTY_BUCKETS = { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 };
+
 function fmtIsoDate(s: string): string {
     // Mon DD format; year omitted for compact rows
     const d = new Date(s);
@@ -64,42 +66,52 @@ export default function ReceivablesPage() {
     // voucher posted at another counter as well as one posted here.
     useRealtimeTopics(["ledger"], () => load(true));
 
-    // Search only narrows what is already on screen — no refetch, no extra DB read.
+    // `searchKey` carries the party's name, code, GSTIN and phone numbers, and on
+    // a bill row its reference number too. Searching only narrows what is already
+    // on screen — no refetch, no extra DB read.
     // The bucket cards and the Total row stay on the full report figures.
     const q = query.trim().toLowerCase();
     const parties = useMemo(
-        () => !data ? [] : !q ? data.parties : data.parties.filter((p) => p.accountName.toLowerCase().includes(q)),
+        () => !data ? [] : !q ? data.parties : data.parties.filter((p) => p.searchKey.includes(q)),
         [data, q],
     );
     const bills = useMemo(
-        () => !data ? [] : !q ? data.bills
-            : data.bills.filter((b) => b.accountName.toLowerCase().includes(q) || b.ref.toLowerCase().includes(q)),
+        () => !data ? [] : !q ? data.bills : data.bills.filter((b) => b.searchKey.includes(q)),
         [data, q],
+    );
+
+    // The cards on top always report the whole book; the row under a table adds up
+    // only the rows that table is showing, so a search reads as its own little total.
+    const shownParty = useMemo(() => {
+        if (!q) return { buckets: data?.buckets ?? EMPTY_BUCKETS, total: data?.totalOutstanding ?? 0 };
+        const buckets = { ...EMPTY_BUCKETS };
+        let total = 0;
+        for (const p of parties) {
+            buckets.b0_30 += p.buckets.b0_30;
+            buckets.b30_60 += p.buckets.b30_60;
+            buckets.b60_90 += p.buckets.b60_90;
+            buckets.b90_plus += p.buckets.b90_plus;
+            total += p.totalOutstanding;
+        }
+        return { buckets, total };
+    }, [data, q, parties]);
+
+    const shownBillTotal = useMemo(
+        () => !q ? (data?.totalOutstanding ?? 0) : bills.reduce((sum, b) => sum + b.outstanding, 0),
+        [data, q, bills],
     );
 
     return (
         <ScrollArea className="h-full" type="always">
-        <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
+        <div className="max-w-7xl mx-auto space-y-3 px-6 pt-2 pb-4">
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">Receivables</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <h1 className="text-xl font-bold text-foreground">Receivables</h1>
+                    <p className="text-xs text-muted-foreground">
                         Open bills from Sundry Debtors with ageing buckets — click a party to drill into bills.
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
-                    <div className="space-y-1">
-                        <Label>Search</Label>
-                        <div className="relative">
-                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                placeholder="Party name or bill ref…"
-                                className="w-56 pl-8"
-                            />
-                        </div>
-                    </div>
                     <div className="space-y-1">
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
@@ -108,26 +120,36 @@ export default function ReceivablesPage() {
                 </div>
             </div>
 
+            <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search party name, number, GSTIN, code or bill no…"
+                    className="h-8 pl-8"
+                />
+            </div>
+
             {loading && (
-                <div className="flex justify-center py-20">
+                <div className="flex justify-center py-16">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
             )}
 
             {!loading && data && (
                 <>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                         {(Object.keys(BUCKET_LABELS) as (keyof typeof BUCKET_LABELS)[]).map((k) => (
-                            <div key={k} className="rounded-lg border border-border bg-card p-3 shadow-sm">
+                            <div key={k} className="rounded-lg border border-border bg-card px-3 py-1.5 shadow-sm">
                                 <div className="text-xs text-muted-foreground">{BUCKET_LABELS[k]}</div>
-                                <div className={`mt-1 text-lg font-mono font-semibold ${BUCKET_COLORS[k]}`}>
+                                <div className={`text-base font-mono font-semibold ${BUCKET_COLORS[k]}`}>
                                     {fmt(data.buckets[k])}
                                 </div>
                             </div>
                         ))}
-                        <div className="rounded-lg border border-border bg-primary/10 p-3 shadow-sm">
+                        <div className="rounded-lg border border-border bg-primary/10 px-3 py-1.5 shadow-sm">
                             <div className="text-xs text-muted-foreground">Total Outstanding</div>
-                            <div className="mt-1 text-lg font-mono font-bold text-primary">
+                            <div className="text-base font-mono font-bold text-primary">
                                 {fmt(data.totalOutstanding)}
                             </div>
                         </div>
@@ -137,7 +159,7 @@ export default function ReceivablesPage() {
                     <div className="flex items-center gap-1 border-b border-border">
                         <button
                             onClick={() => setView("party")}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            className={`px-4 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                                 view === "party"
                                     ? "border-primary text-primary"
                                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -147,7 +169,7 @@ export default function ReceivablesPage() {
                         </button>
                         <button
                             onClick={() => setView("bill")}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            className={`px-4 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                                 view === "bill"
                                     ? "border-primary text-primary"
                                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -175,7 +197,7 @@ export default function ReceivablesPage() {
                             <tbody>
                                 {parties.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
+                                        <td colSpan={8} className="py-10 text-center text-muted-foreground text-sm">
                                             {q ? `No party matches “${query.trim()}”.` : "No outstanding receivables."}
                                         </td>
                                     </tr>
@@ -185,27 +207,27 @@ export default function ReceivablesPage() {
                                         className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                         onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${p.accountId}?asOf=${asOf}`)}
                                     >
-                                        <td className="px-3 py-2.5 font-medium text-foreground">{p.accountName}</td>
-                                        <td className="px-3 py-2.5 text-right text-muted-foreground">{p.billCount}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{p.buckets.b0_30 > 0 ? fmt(p.buckets.b0_30) : <span className="text-muted-foreground/65">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-amber-600">{p.buckets.b30_60 > 0 ? fmt(p.buckets.b30_60) : <span className="text-muted-foreground/65">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-orange-600">{p.buckets.b60_90 > 0 ? fmt(p.buckets.b60_90) : <span className="text-muted-foreground/65">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-red-600">{p.buckets.b90_plus > 0 ? fmt(p.buckets.b90_plus) : <span className="text-muted-foreground/65">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(p.totalOutstanding)}</td>
-                                        <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>
+                                        <td className="px-3 py-1.5 font-medium text-foreground">{p.accountName}</td>
+                                        <td className="px-3 py-1.5 text-right text-muted-foreground">{p.billCount}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{p.buckets.b0_30 > 0 ? fmt(p.buckets.b0_30) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-amber-600">{p.buckets.b30_60 > 0 ? fmt(p.buckets.b30_60) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-orange-600">{p.buckets.b60_90 > 0 ? fmt(p.buckets.b60_90) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-red-600">{p.buckets.b90_plus > 0 ? fmt(p.buckets.b90_plus) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(p.totalOutstanding)}</td>
+                                        <td className="px-3 py-1.5 text-muted-foreground"><ChevronRight size={14} /></td>
                                     </tr>
                                 ))}
                             </tbody>
                             {parties.length > 0 && (
                                 <tfoot className="border-t bg-muted/30 font-semibold">
                                     <tr>
-                                        <td className="px-3 py-2.5">Total</td>
+                                        <td className="px-3 py-1.5">Total</td>
                                         <td />
-                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(data.buckets.b0_30)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-amber-600">{fmt(data.buckets.b30_60)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-orange-600">{fmt(data.buckets.b60_90)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-red-600">{fmt(data.buckets.b90_plus)}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totalOutstanding)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{fmt(shownParty.buckets.b0_30)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-amber-600">{fmt(shownParty.buckets.b30_60)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-orange-600">{fmt(shownParty.buckets.b60_90)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-red-600">{fmt(shownParty.buckets.b90_plus)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{fmt(shownParty.total)}</td>
                                         <td />
                                     </tr>
                                 </tfoot>
@@ -234,7 +256,7 @@ export default function ReceivablesPage() {
                             <tbody>
                                 {bills.length === 0 ? (
                                     <tr>
-                                        <td colSpan={10} className="py-12 text-center text-muted-foreground text-sm">
+                                        <td colSpan={10} className="py-10 text-center text-muted-foreground text-sm">
                                             {q ? `No bill matches “${query.trim()}”.` : "No outstanding bills."}
                                         </td>
                                     </tr>
@@ -253,15 +275,15 @@ export default function ReceivablesPage() {
                                             className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                             onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${b.accountId}?asOf=${asOf}`)}
                                         >
-                                            <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.billDate)}</td>
-                                            <td className="px-3 py-2.5 font-mono text-xs">{b.ref}</td>
-                                            <td className="px-3 py-2.5 font-medium text-foreground">{b.accountName}</td>
-                                            <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
-                                            <td className="px-3 py-2.5 text-right font-mono">{fmt(b.totalAmount)}</td>
-                                            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
-                                            <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
-                                            <td className={`px-3 py-2.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
-                                            <td className="px-3 py-2.5 text-right">
+                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.billDate)}</td>
+                                            <td className="px-3 py-1.5 font-mono text-xs">{b.ref}</td>
+                                            <td className="px-3 py-1.5 font-medium text-foreground">{b.accountName}</td>
+                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
+                                            <td className={`px-3 py-1.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
+                                            <td className="px-3 py-1.5 text-right">
                                                 {b.universalVoucherId != null && (
                                                     <button
                                                         type="button"
@@ -277,7 +299,7 @@ export default function ReceivablesPage() {
                                                     </button>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>
+                                            <td className="px-3 py-1.5 text-muted-foreground"><ChevronRight size={14} /></td>
                                         </tr>
                                     );
                                 })}
@@ -285,8 +307,8 @@ export default function ReceivablesPage() {
                             {bills.length > 0 && (
                                 <tfoot className="border-t bg-muted/30 font-semibold">
                                     <tr>
-                                        <td colSpan={6} className="px-3 py-2.5 text-right">Total</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totalOutstanding)}</td>
+                                        <td colSpan={6} className="px-3 py-1.5 text-right">Total</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{fmt(shownBillTotal)}</td>
                                         <td colSpan={3} />
                                     </tr>
                                 </tfoot>
