@@ -39,12 +39,12 @@ import { round2 } from "@/shared/lib/format/moneyInr";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { partyLedgerIds } from "./accountGroups";
-import { EPS, DEFAULT_DUE_DAYS, sideOf, type LinkableDoc } from "./billLinkPlan";
+import { EPS, dueDateOf, sideOf, type LinkableDoc } from "./billLinkPlan";
 
 // The pure planning half lives in `billLinkPlan.ts` (no Prisma, so the popup can
 // import it). Re-exported here so server callers have one place to import from.
-export { planLinks, sideOf, EPS } from "./billLinkPlan";
-export type { LinkSide, LinkableDoc } from "./billLinkPlan";
+export { planLinks, autoLinkOrder, dueDateOf, sumPicks, sideOf, EPS, DEFAULT_DUE_DAYS } from "./billLinkPlan";
+export type { LinkSide, LinkableDoc, BillPicks } from "./billLinkPlan";
 
 /**
  * Only these two shapes are real spine links. The other enum members
@@ -174,7 +174,7 @@ export async function loadLinkableDocs(
         .map(([id]) => id);
     if (ids.length === 0) return [];
 
-    const [spines, details, linked] = await Promise.all([
+    const [spines, details, linked, here] = await Promise.all([
         db.universalVoucher.findMany({
             where:  { id: { in: ids } },
             select: { id: true, type: true, voucherNo: true, date: true },
@@ -184,6 +184,9 @@ export async function loadLinkableDocs(
             select: { universalVoucherId: true, totalAmount: true, creditPeriodDays: true },
         }),
         sumLinked(db, ids),
+        opts.excludeId === undefined
+            ? Promise.resolve({} as Record<number, number>)
+            : pairAmounts(db, opts.excludeId, ids),
     ]);
 
     const detailBySpine = new Map(details.map((d) => [d.universalVoucherId, d]));
@@ -199,26 +202,59 @@ export async function loadLinkableDocs(
         if (open <= EPS) continue;
 
         const detail = detailBySpine.get(s.id);
-        const due = new Date(s.date);
-        due.setDate(due.getDate() + (detail?.creditPeriodDays ?? DEFAULT_DUE_DAYS));
 
         docs.push({
             universalVoucherId: s.id,
             voucherType:        s.type,
             ref:                s.voucherNo ?? formatUvNo(s.id),
             date:               s.date.toISOString(),
-            dueDate:            due.toISOString(),
+            dueDate:            dueDateOf(s.date, detail?.creditPeriodDays).toISOString(),
             side,
             face:               detail?.totalAmount != null ? Number(detail.totalAmount) : Math.abs(signed),
             linked:             linked[s.id] ?? 0,
             open,
+            ...(opts.excludeId === undefined ? {} : { linkedHere: here[s.id] ?? 0 }),
         });
     }
 
-    // Oldest first — the order the Auto button walks, and the order a human
-    // expects to clear dues in.
+    // Oldest first — a plain, stable reading order for the list. Auto does NOT
+    // use it: it walks `autoLinkOrder` (due date, then the smaller bill), which
+    // is a different question from how the bills are shown.
     docs.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.universalVoucherId - b.universalVoucherId));
     return docs;
+}
+
+/**
+ * How much of each `otherIds` bill is already settled by `voucherId` — the
+ * amount on the one allocation row the pair shares, in either orientation.
+ *
+ * The link save states what the pair's total SHOULD be rather than what to add
+ * to it, so the client has to know what it currently is. Without this, a user
+ * reopening the popup would be offered the same money to place a second time.
+ */
+export async function pairAmounts(
+    db: Prisma.TransactionClient,
+    voucherId: number,
+    otherIds: number[],
+): Promise<Record<number, number>> {
+    const ids = otherIds.filter((id) => id !== voucherId);
+    if (ids.length === 0) return {};
+    const rows = await db.voucherAllocation.findMany({
+        where: {
+            ...LINK_SHAPE,
+            OR: [
+                { targetId: voucherId, sourceId: { in: ids } },
+                { sourceId: voucherId, targetId: { in: ids } },
+            ],
+        },
+        select: { targetId: true, sourceId: true, amount: true },
+    });
+    const out: Record<number, number> = {};
+    for (const r of rows) {
+        const other = r.targetId === voucherId ? r.sourceId : r.targetId;
+        out[other] = round2((out[other] ?? 0) + Number(r.amount));
+    }
+    return out;
 }
 
 /**
@@ -256,8 +292,7 @@ export async function loadDocOpen(
     ]);
 
     const open = round2(Math.abs(signed) - (linked[spineId] ?? 0));
-    const due = new Date(spine.date);
-    due.setDate(due.getDate() + (detail?.creditPeriodDays ?? DEFAULT_DUE_DAYS));
+    const due = dueDateOf(spine.date, detail?.creditPeriodDays);
 
     return {
         universalVoucherId: spine.id,
@@ -291,7 +326,13 @@ export type LinkOrientation = {
  */
 export async function assertLinkable(
     tx: Prisma.TransactionClient,
-    args: { accountId: number; aId: number; bId: number; amount: number },
+    args: {
+        accountId: number; aId: number; bId: number; amount: number;
+        /** What this pair is already linked for, when the write REPLACES that
+         *  figure rather than adding to it. Both ends already count it as spent,
+         *  so it has to be given back before measuring the room. */
+        replacing?: number;
+    },
 ): Promise<LinkOrientation> {
     const amount = round2(args.amount);
     if (amount <= EPS) throw new BillLinkError("Link amount must be more than zero.");
@@ -332,8 +373,9 @@ export async function assertLinkable(
     }
 
     const linked = await sumLinked(tx, [args.aId, args.bId]);
-    const aOpen = round2(Math.abs(aSigned) - (linked[args.aId] ?? 0));
-    const bOpen = round2(Math.abs(bSigned) - (linked[args.bId] ?? 0));
+    const replacing = round2(args.replacing ?? 0);
+    const aOpen = round2(Math.abs(aSigned) - (linked[args.aId] ?? 0) + replacing);
+    const bOpen = round2(Math.abs(bSigned) - (linked[args.bId] ?? 0) + replacing);
     // Both sides are checked: a link overdrawing either end would mis-state the
     // books just as badly, whichever end it is.
     if (amount > aOpen + 0.01) {
@@ -349,14 +391,197 @@ export async function assertLinkable(
 }
 
 /**
- * Write (or top up) one link. Idempotent: linking the same pair again adds to the
- * existing row rather than leaving two rows saying half the story each. The
- * caller must have run `assertLinkable` first — its open-amount check already
- * excludes whatever this pair had linked before, so adding is the correct move.
+ * Refuse an edit that would strand a settlement. Call INSIDE the edit's own
+ * transaction, once the new lines are written — it reads the voucher as it now
+ * stands, so a refusal rolls the whole edit back.
+ *
+ * Two ways an in-place edit used to break the books silently, both because the
+ * line rewrite knew nothing about links:
+ *
+ *   • Reduce a fully-linked ₹10,000 receipt to ₹3,000 and its open goes to
+ *     −₹7,000. `loadLinkableDocs` drops anything not positive, so the receipt
+ *     vanishes from the list — while the bill it settled still counts the whole
+ *     ₹10,000 as paid and drops out of Receivables too. Money simply disappears
+ *     from the reports.
+ *   • Move a linked voucher onto a different party and the link survives,
+ *     netting against a party who never had it.
+ *
+ * The rule is the one `saveOpeningBills` already applies to an opening bill: an
+ * amount may not fall below what has been settled against it. Unlink first.
+ */
+export async function assertLinksSurviveEdit(
+    tx: Prisma.TransactionClient,
+    args: { spineId: number; partyBefore: number | null; partyAfter: number | null },
+): Promise<void> {
+    const linked = (await sumLinked(tx, [args.spineId]))[args.spineId] ?? 0;
+    if (linked <= EPS) return;
+
+    const spine = await tx.universalVoucher.findUnique({
+        where:  { id: args.spineId },
+        select: { voucherNo: true },
+    });
+    const ref = spine?.voucherNo ?? formatUvNo(args.spineId);
+
+    if (args.partyAfter == null || args.partyBefore !== args.partyAfter) {
+        throw new BillLinkError(
+            `${ref} has ₹${linked.toFixed(2)} settled against bills, so its party cannot be changed — unlink it first, then edit.`,
+        );
+    }
+
+    const legs = await loadPartyLegs(tx, args.partyAfter, [args.spineId]);
+    const worth = round2(Math.abs(legs.get(args.spineId) ?? 0));
+    if (worth + 0.01 < linked) {
+        throw new BillLinkError(
+            `${ref} already has ₹${linked.toFixed(2)} settled against bills, so it cannot be reduced to ₹${worth.toFixed(2)} — unlink it first.`,
+        );
+    }
+}
+
+/** One validated line of a link plan, ready to write. */
+export type PlannedLink = LinkOrientation & {
+    /** The counterpart bill, as the caller named it. */
+    voucherId: number;
+    amount:    number;
+    /** What the pair is linked for today — 0 unless the write replaces it. */
+    replacing: number;
+};
+
+/**
+ * The same rules as `assertLinkable`, for a whole plan at once.
+ *
+ * Checking link-by-link meant `partyLedgerIds()` (two uncached group-tree walks),
+ * a `loadPartyLegs` and a `sumLinked` per line — around 1,400 queries for a
+ * 200-line plan, all inside one transaction, which is a long time to hold a lock
+ * a till may be waiting on. Everything is read once here and the room is tracked
+ * in memory, so the money still cannot be spent twice: each line is measured
+ * against what the earlier lines already took.
+ */
+export async function assertLinkPlan(
+    tx: Prisma.TransactionClient,
+    args: {
+        accountId: number;
+        voucherId: number;
+        links: { voucherId: number; amount: number }[];
+        /** `set` = each amount is what that pair should TOTAL, not what to add. */
+        mode:  "increment" | "set";
+    },
+): Promise<PlannedLink[]> {
+    const parties = await partyLedgerIds();
+    if (!parties.has(args.accountId)) {
+        throw new BillLinkError(
+            "Bills can only be linked on a party ledger (under Sundry Debtors or Sundry Creditors).",
+        );
+    }
+    if (args.links.some((l) => l.voucherId === args.voucherId)) {
+        throw new BillLinkError("A voucher cannot settle itself.");
+    }
+    const otherIds = args.links.map((l) => l.voucherId);
+    if (new Set(otherIds).size !== otherIds.length) {
+        throw new BillLinkError("The same bill is listed twice — each bill takes one line.");
+    }
+
+    const allIds = [args.voucherId, ...otherIds];
+    const alive = await tx.universalVoucher.findMany({
+        where:  { id: { in: allIds }, ...ledgerStatusFilterUv() },
+        select: { id: true, voucherNo: true },
+    });
+    if (alive.length !== allIds.length) {
+        throw new BillLinkError("Every voucher must be posted, and neither cancelled nor deleted.");
+    }
+    const refById = new Map(alive.map((v) => [v.id, v.voucherNo ?? formatUvNo(v.id)]));
+
+    const [legs, linked, pairs] = await Promise.all([
+        loadPartyLegs(tx, args.accountId, allIds),
+        sumLinked(tx, allIds),
+        args.mode === "set"
+            ? pairAmounts(tx, args.voucherId, otherIds)
+            : Promise.resolve({} as Record<number, number>),
+    ]);
+
+    const selfSigned = legs.get(args.voucherId) ?? 0;
+    const selfSide = sideOf(selfSigned);
+    if (selfSide === 0) {
+        throw new BillLinkError(
+            `${refById.get(args.voucherId)} has nothing against this party, so there is nothing to link.`,
+        );
+    }
+
+    const out: PlannedLink[] = [];
+    let selfReplacing = 0;
+    let selfPlaced = 0;
+
+    for (const l of args.links) {
+        const amount = round2(l.amount);
+        if (amount <= EPS) throw new BillLinkError("Link amount must be more than zero.");
+
+        const signed = legs.get(l.voucherId) ?? 0;
+        const side = sideOf(signed);
+        if (side === 0) {
+            throw new BillLinkError(`${refById.get(l.voucherId)} has nothing against this party, so there is nothing to link.`);
+        }
+        if (side === selfSide) {
+            throw new BillLinkError(
+                selfSide === 1
+                    ? "Both vouchers are amounts the party owes us. One of them has to be a payment side (receipt, credit note, purchase or journal)."
+                    : "Both vouchers are amounts we owe the party. One of them has to be a receivable side (sale, debit note or journal).",
+            );
+        }
+
+        const replacing = round2(pairs[l.voucherId] ?? 0);
+        const room = round2(Math.abs(signed) - (linked[l.voucherId] ?? 0) + replacing);
+        if (amount > room + 0.01) {
+            throw new BillLinkError(
+                `${refById.get(l.voucherId)} has only ₹${room.toFixed(2)} open — cannot link ₹${amount.toFixed(2)}.`,
+            );
+        }
+
+        selfReplacing = round2(selfReplacing + replacing);
+        selfPlaced = round2(selfPlaced + amount);
+        out.push({
+            voucherId: l.voucherId,
+            amount,
+            replacing,
+            ...(selfSide === 1
+                ? { targetId: args.voucherId, sourceId: l.voucherId }
+                : { targetId: l.voucherId, sourceId: args.voucherId }),
+        });
+    }
+
+    // The linking voucher is checked once, against everything the plan places on
+    // it — the per-line loop it replaced only ever saw one line at a time.
+    const selfRoom = round2(Math.abs(selfSigned) - (linked[args.voucherId] ?? 0) + selfReplacing);
+    if (selfPlaced > selfRoom + 0.01) {
+        throw new BillLinkError(
+            `${refById.get(args.voucherId)} has only ₹${selfRoom.toFixed(2)} open — cannot place ₹${selfPlaced.toFixed(2)}.`,
+        );
+    }
+    return out;
+}
+
+/**
+ * Write one link, in one of two ways:
+ *
+ *   • `increment` (the default) — adds to whatever the pair already has. Right
+ *     for every caller that links a voucher it created moments ago in the same
+ *     transaction, where the pair cannot already exist.
+ *   • `set` — the pair ends up at exactly this amount. Right for a screen that
+ *     knows the whole answer, because then SAVING TWICE CHANGES NOTHING: a lost
+ *     response, a double click or a replayed request all land on the same
+ *     figure. `assertLinkable` must be given `replacing` so it measures the room
+ *     with the old figure handed back.
+ *
+ * Deliberately a `findFirst` + update rather than an upsert on the unique key:
+ * that key includes `sourceType`, so a legacy `PAYMENT`-sourced row for the same
+ * pair would be invisible to the upsert and a SECOND row would appear. Both
+ * would then be counted, the bill would net to zero and drop out of the reports.
  */
 export async function createLink(
     tx: Prisma.TransactionClient,
-    args: { targetId: number; sourceId: number; amount: number; reference?: string | null; userId: number },
+    args: {
+        targetId: number; sourceId: number; amount: number;
+        reference?: string | null; userId: number;
+        mode?: "increment" | "set";
+    },
 ): Promise<number> {
     const amount = round2(args.amount);
     const existing = await tx.voucherAllocation.findFirst({
@@ -366,7 +591,10 @@ export async function createLink(
     if (existing) {
         await tx.voucherAllocation.update({
             where: { id: existing.id },
-            data:  { amount: { increment: amount }, ...(args.reference ? { reference: args.reference } : {}) },
+            data:  {
+                amount: args.mode === "set" ? amount : { increment: amount },
+                ...(args.reference ? { reference: args.reference } : {}),
+            },
         });
         return existing.id;
     }

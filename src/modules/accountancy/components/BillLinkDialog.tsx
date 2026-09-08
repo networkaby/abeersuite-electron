@@ -38,7 +38,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/utils/constants";
 import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
-import { planLinks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
+import { planLinks, reconcilePicks, sumPicks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
 
 /** Just enough of a ledger to offer it as the till the money moves through. */
 type MoneyAccount = { id: number; name: string; code: string | null; group: { name: string } | null };
@@ -129,6 +129,23 @@ export function BillLinkDialog({
         void load();
     }, [open, accountId, load, initialPlan]);
 
+    // Ticks carried in from the Receipt/Payment form were made against the list
+    // as it looked BEFORE the voucher was posted. Measure them against the list
+    // that just arrived: a bill that is gone, or that someone else has settled in
+    // the meantime, is dropped or trimmed here and said out loud — rather than
+    // being counted in the total on screen and quietly left out of the save.
+    useEffect(() => {
+        if (!open || docs.length === 0) return;
+        setPicked((prev) => {
+            const { picks, clamped } = reconcilePicks(docs, prev);
+            if (clamped.length === 0) return prev;
+            toast.info(clamped.length === 1
+                ? "One bill you ticked has changed — its amount was adjusted."
+                : `${clamped.length} bills you ticked have changed — their amounts were adjusted.`);
+            return picks;
+        });
+    }, [open, docs]);
+
     // Only fetched when the user actually opens the create panel — most visits to
     // this popup are a plain link and never need the ledger list.
     useEffect(() => {
@@ -171,20 +188,39 @@ export function BillLinkDialog({
         });
     };
 
-    // Auto — oldest first, exactly the order the POS surplus already clears dues in.
+    // Auto — overdue first, then nearest due date, and the smaller bill on a tie.
+    // It builds AROUND what the user already ticked: those ticks are kept as they
+    // are and their money is taken out of the budget first, so pressing Auto can
+    // only ever fill the remainder. A hand-made choice is never overwritten.
     const auto = () => {
-        const plan = planLinks(docs, available);
-        if (plan.length === 0) {
-            toast.info("Nothing to link — this party has no open bills on the other side.");
+        const before = sumPicks(picked);
+        const { picks, clamped } = planLinks(docs, available, { existing: picked });
+        if (sumPicks(picks) - before <= EPS) {
+            toast.info(before > EPS
+                ? "Nothing more to place — the amount is already spread over the bills you ticked."
+                : "Nothing to link — this party has no open bills on the other side.");
             return;
         }
-        setPicked(Object.fromEntries(plan.map((p) => [p.universalVoucherId, p.amount])));
+        setPicked(picks);
+        if (clamped.length > 0) toast.info(`${clamped.length} tick(s) no longer fit and were adjusted.`);
     };
 
+    /** Reset — every tick goes, auto-made and hand-made alike. Links already
+     *  SAVED against this voucher are untouched: a tick is only a proposal, and
+     *  a bill with nothing proposed on it is simply left off the save. */
+    const reset = () => setPicked({});
+
+    // Each line says what the pair should TOTAL, not what to add — so saving the
+    // same screen twice lands on the same figure instead of settling twice. A
+    // tick is money being ADDED to whatever this voucher already put on that
+    // bill, which is why the two are summed here.
     const buildPlan = (): LinkPlan =>
         docs
             .filter((d) => (picked[d.universalVoucherId] ?? 0) > EPS)
-            .map((d) => ({ universalVoucherId: d.universalVoucherId, amount: picked[d.universalVoucherId] }));
+            .map((d) => ({
+                universalVoucherId: d.universalVoucherId,
+                amount: round2((d.linkedHere ?? 0) + picked[d.universalVoucherId]),
+            }));
 
     const save = async () => {
         const plan = buildPlan();
@@ -257,7 +293,7 @@ export function BillLinkDialog({
                     <DialogDescription>
                         {partyName ? `${partyName} — ` : ""}
                         ₹ {fmt(available)} to place{self ? ` from ${self.ref}` : ""}. Tick the bills this settles, or
-                        press Auto to clear the oldest first.
+                        press Auto to clear the overdue ones first.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -404,11 +440,11 @@ export function BillLinkDialog({
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                     <div className="flex gap-2">
                         <Button type="button" size="sm" variant="outline" onClick={auto} disabled={docs.length === 0}>
-                            <Wand2 size={14} className="mr-1" /> Auto (oldest first)
+                            <Wand2 size={14} className="mr-1" /> Auto (overdue first)
                         </Button>
                         {allocated > EPS && (
-                            <Button type="button" size="sm" variant="ghost" onClick={() => setPicked({})}>
-                                <X size={14} className="mr-1" /> Clear
+                            <Button type="button" size="sm" variant="ghost" onClick={reset}>
+                                <X size={14} className="mr-1" /> Reset
                             </Button>
                         )}
                     </div>

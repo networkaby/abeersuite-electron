@@ -4,7 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
-    saveOpeningBills, defaultOpeningDateIso, DEFAULT_OPENING_REF, OpeningBillError,
+    saveOpeningBills, defaultOpeningDateIso, DEFAULT_OPENING_REF, OPENING_TYPE, OpeningBillError,
 } from "@/modules/accountancy/lib/openingBills";
 import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -56,13 +56,27 @@ export async function POST(req: Request) {
             select: { id: true, name: true, openingBalance: true, openingBalanceType: true },
             orderBy: { name: "asc" },
         });
-        const work = candidates.filter((a) => Number(a.openingBalance) !== 0);
+        // An account that already has bill-wise openings is left alone. It should
+        // not be possible to have both — converting nulls the scalar — but
+        // flattening someone's hand-made breakup back into a single bill is not a
+        // risk worth taking across a whole book at once. `pnpm opening:to-bills`
+        // skips on the same rule.
+        const alreadyBillWise = new Set(
+            (await prisma.universalVoucher.findMany({
+                where:    { type: OPENING_TYPE, partyAccountId: { in: partyIds }, deletedAt: null, status: { not: "CANCELLED" } },
+                select:   { partyAccountId: true },
+                distinct: ["partyAccountId"],
+            })).map((v) => v.partyAccountId).filter((x): x is number => x !== null),
+        );
+        const work = candidates.filter((a) => Number(a.openingBalance) !== 0 && !alreadyBillWise.has(a.id));
+        const skipped = candidates.filter((a) => alreadyBillWise.has(a.id)).length;
 
         if (data.dryRun) {
             return NextResponse.json({
                 dryRun:  true,
                 date, ref,
                 accounts: work.length,
+                skipped,
                 total:    work.reduce((s, a) => s + Number(a.openingBalance), 0),
                 preview:  work.slice(0, 20).map((a) => ({
                     accountId: a.id, name: a.name,
@@ -101,6 +115,7 @@ export async function POST(req: Request) {
         return NextResponse.json({
             dryRun: false, date, ref,
             converted: converted.length,
+            skipped,
             failed,
         });
     } catch (e) {

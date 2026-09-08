@@ -308,13 +308,32 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         uvId != null
             ? loadTenderLines(prisma, [uvId])
             : Promise.resolve(new Map<number, { accountId: number; amount: number }[]>()),
+        // BOTH sides of the link, not just the target side. A bill is the target
+        // only when it is the receivable one; a PURCHASE settled against a sale —
+        // the dual-role party the whole feature exists for — sits on the SOURCE
+        // side, and reading one side alone printed it as still fully unpaid. That
+        // is a wrong number handed to a supplier.
         uvId != null
             ? prisma.voucherAllocation.findMany({
-                where:  { targetType: "UNIVERSAL_VOUCHER", targetId: uvId },
-                select: { amount: true, method: true, reference: true },
+                where: {
+                    targetType: "UNIVERSAL_VOUCHER",
+                    sourceType: { in: ["VOUCHER", "PAYMENT"] },
+                    OR: [{ targetId: uvId }, { sourceId: uvId }],
+                },
+                select: { targetId: true, sourceId: true, amount: true, reference: true },
             })
-            : Promise.resolve([] as { amount: Prisma.Decimal; method: string; reference: string | null }[]),
+            : Promise.resolve([] as { targetId: number; sourceId: number; amount: Prisma.Decimal; reference: string | null }[]),
     ]);
+
+    // Only a link whose other end is still alive settles anything — the same rule
+    // `sumLinked` applies, so the printed figure and the ledger cannot disagree.
+    const otherEnds = [...new Set(allocations.map((a) => (a.targetId === uvId ? a.sourceId : a.targetId)))];
+    const liveEnds = otherEnds.length === 0 ? new Set<number>() : new Set(
+        (await prisma.universalVoucher.findMany({
+            where:  { id: { in: otherEnds }, status: "POSTED", deletedAt: null },
+            select: { id: true },
+        })).map((r) => r.id),
+    );
 
     const tenders = (uvId != null ? tenderLines.get(uvId) ?? [] : [])
         .filter((t) => Math.abs(t.amount) > 0.005 && t.accountId !== partyAccountId);
@@ -332,11 +351,16 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     for (const a of allocations) {
         const amt = toNumber(a.amount);
         if (Math.abs(amt) < 0.005) continue;
-        // An advance is money the customer had already parked with us; a plain
-        // allocation is a receipt entered against this bill later. Naming them
-        // apart matters — the customer wants to see their advance was used.
-        const base = a.method === "ADVANCE" ? "Advance adjusted" : "Payment adjusted";
-        receipts.push({ label: a.reference ? `${base} (${a.reference})` : base, amount: amt });
+        if (a.targetId === a.sourceId) continue;
+        const other = a.targetId === uvId ? a.sourceId : a.targetId;
+        if (!liveEnds.has(other)) continue;
+        // Every link written today is an AGAINST_REF one; the old ADVANCE branch
+        // that used to label these was reading a method nothing writes any more,
+        // so it never once chose the other wording.
+        receipts.push({
+            label:  a.reference ? `Payment adjusted (${a.reference})` : "Payment adjusted",
+            amount: amt,
+        });
     }
     const balanceDue = round2(total - receipts.reduce((s, r) => s + r.amount, 0));
 

@@ -15,6 +15,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { sumLinked } from "./billLink";
+import { autoLinkOrder, dueDateOf } from "./billLinkPlan";
+import { OPENING_TYPE } from "./openingBills";
 import { accountIdsUnderGroup } from "./accountGroups";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
@@ -79,7 +81,6 @@ export type LedgerOutstanding = {
     buckets:          Buckets;
 };
 
-const DEFAULT_DUE_DAYS = 30;
 const EMPTY_BUCKETS: Buckets = { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 };
 
 function emptyBuckets(): Buckets {
@@ -161,14 +162,21 @@ async function loadOpenBills(
         prisma.universalVoucher.findMany({
             where: {
                 partyAccountId: { in: accountIds },
-                type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
+                // OPENING joins them. `openingBills.ts` turns a party's carried-
+                // over balance into a real posted voucher precisely so it can be
+                // aged and settled like any other bill — but it has no
+                // VoucherDetail, so the inventory sweep further down can never
+                // see it. Left out of here it linked fine in the popup and was
+                // simply missing from Receivables and Payables: two views
+                // disagreeing about the same money.
+                type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE", OPENING_TYPE] },
                 deletedAt:      null,
                 status:         { not: "CANCELLED" },
                 date:           { lte: asOf },
             },
             select: {
                 id: true, partyAccountId: true, voucherNo: true, date: true, type: true,
-                lines: { select: { type: true, amount: true } },
+                lines: { select: { accountId: true, type: true, amount: true } },
             },
         }),
         prisma.account.findMany({
@@ -247,8 +255,24 @@ async function loadOpenBills(
 
     for (const v of vouchers) {
         if (v.partyAccountId === null) continue;
-        const due = new Date(v.date);
-        due.setDate(due.getDate() + DEFAULT_DUE_DAYS);
+
+        let totalAmount = v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0);
+
+        if (v.type === OPENING_TYPE) {
+            // An opening is worth what the PARTY leg says, not what the debit
+            // legs add up to: its other side is Suspense, so on a payable
+            // opening the debit leg is the suspense one. The leg's direction is
+            // also the only thing that says which report the row belongs in —
+            // debit = they owe us, credit = we owe them.
+            const leg = v.lines
+                .filter((l) => l.accountId === v.partyAccountId)
+                .reduce((s, l) => s + (l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount)), 0);
+            if (Math.abs(leg) <= 0.005) continue;
+            const legSide = leg > 0 ? "SALE" : "PURCHASE";
+            if (invType !== "BOTH" && invType !== legSide) continue;
+            totalAmount = Math.abs(leg);
+        }
+
         bills.push({
             kind:        "voucher",
             id:          v.id,
@@ -257,8 +281,8 @@ async function loadOpenBills(
             accountId:   v.partyAccountId,
             ref:         v.voucherNo ?? formatUvNo(v.id),
             billDate:    v.date,
-            dueDate:     due,
-            totalAmount: v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
+            dueDate:     dueDateOf(v.date),
+            totalAmount,
             paid:        paidByVch[v.id] ?? 0,
         });
     }
@@ -275,8 +299,7 @@ async function loadOpenBills(
                         ? companyToAcc[v.partyId] ?? null
                         : null);
         if (accountId === null) continue;
-        const due = new Date(v.universalVoucher!.date);   // 5D-10: date on spine
-        due.setDate(due.getDate() + (v.creditPeriodDays ?? DEFAULT_DUE_DAYS));
+        const due = dueDateOf(v.universalVoucher!.date, v.creditPeriodDays);   // 5D-10: date on spine
         const total = Number(v.totalAmount);
         // Paid at sale time = sum of non-AR tenders on this voucher
         // (cash / bank / card / wallet). The AR tender row IS the
@@ -344,6 +367,7 @@ export async function getOpenSaleBillsForFifo(
             id: true,
             totalAmount: true, universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 + 5D-6 + 5D-10 date
             partyType: true, partyId: true, universalVoucherId: true,
+            creditPeriodDays: true,
         },
     });
 
@@ -358,7 +382,7 @@ export async function getOpenSaleBillsForFifo(
         sumLinked(tx, uvIds),
     ]);
 
-    const out: { universalVoucherId: number; outstanding: number; billDate: Date; ref: string }[] = [];
+    const out: { universalVoucherId: number; outstanding: number; billDate: Date; ref: string; dueDate: Date }[] = [];
     for (const v of invVouchers) {
         if (v.universalVoucherId === null) continue;
         const resolved = v.universalVoucher?.partyAccountId ?? accountId; // single-ledger scope — partyOr already matched
@@ -370,12 +394,26 @@ export async function getOpenSaleBillsForFifo(
         const paid = paidAtSale + (paidBySpine[v.universalVoucherId] ?? 0);
         const outstanding = total - paid;
         if (outstanding > 0.005) {
-            out.push({ universalVoucherId: v.universalVoucherId, outstanding, billDate: v.universalVoucher!.date, ref: v.universalVoucher?.voucherNo ?? "" });
+            out.push({
+                universalVoucherId: v.universalVoucherId,
+                outstanding,
+                billDate: v.universalVoucher!.date,
+                dueDate:  dueDateOf(v.universalVoucher!.date, v.creditPeriodDays),
+                ref:      v.universalVoucher?.voucherNo ?? "",
+            });
         }
     }
-    // Oldest-first → FIFO.
-    out.sort((a, b) => +a.billDate - +b.billDate);
-    return out;
+    // The SAME order the office's Auto button uses — overdue first, then nearest
+    // due, smaller bill on a tie. It used to be oldest bill date here and
+    // something else there, which meant a surplus at the counter cleared one bill
+    // and the same surplus in the office cleared another. That is the kind of
+    // difference a customer notices and nobody can explain.
+    const byId = new Map(out.map((b) => [b.universalVoucherId, b]));
+    return autoLinkOrder(out.map((b) => ({
+        universalVoucherId: b.universalVoucherId,
+        dueDate:            b.dueDate.toISOString(),
+        open:               b.outstanding,
+    }))).map((o) => byId.get(o.universalVoucherId)!);
 }
 
 function toOutstandingBill(raw: RawBill, asOf: Date): OutstandingBill | null {

@@ -10,9 +10,13 @@
 //   2. "on any linked voucher delete will make it unsettled we may link with
 //      another voucher" — cancel the settling voucher, and the bill is open
 //      again; hard-delete it, same; then it can be linked to a different one.
-//   3. "auto will link older" — Auto fills oldest bill first.
+//   3. "kill overdue, then nearest due date, for same due date lowest amount" —
+//      the order Auto settles in, and its promise never to touch a tick the user
+//      made by hand.
 //   4. The guards refuse what should be refused: same-side, self-link,
 //      over-allocation, and a non-party ledger.
+//   5. Saving the same plan twice settles the bill once, not twice.
+//   6. A voucher cannot be edited below what is already settled against it.
 //
 // Run: pnpm verify:bill-links
 
@@ -34,8 +38,10 @@ async function main(): Promise<void> {
     const { accountIdsUnderGroup } = await import("@/modules/accountancy/lib/accountGroups");
     const {
         sumLinked, assertLinkable, createLink, loadLinkableDocs, loadDocOpen,
-        removeLinksForVoucher, planLinks, BillLinkError,
+        removeLinksForVoucher, planLinks, autoLinkOrder, dueDateOf, BillLinkError,
+        assertLinkPlan, assertLinksSurviveEdit,
     } = await import("@/modules/accountancy/lib/billLink");
+    const { reconcilePicks } = await import("@/modules/accountancy/lib/billLinkPlan");
     const { ACCOUNT_GROUPS } = await import("@/shared/lib/constants/accounting");
 
     // ── Pick real ledgers to act on ────────────────────────────────────────
@@ -199,6 +205,72 @@ async function main(): Promise<void> {
             check("and the already-settled sale is untouched",
                 settledStill === null || near(settledStill.open, 0), `open ${settledStill?.open}`);
 
+            // ── 6b. Saving the same plan twice settles the bill ONCE ───────
+            //
+            // The hazard this closes is not really the double click — that was
+            // already refused for having no room left. It is the PARTIAL retry:
+            // a plan of several links commits, the response is lost, and the
+            // retry used to add the whole lot again on any bill that still had
+            // room. Stating the pair's TOTAL rather than what to add makes the
+            // second attempt land on the same figure.
+            const idemBill    = await mk("SALE",    "DEBIT",  1000, 15);
+            const idemReceipt = await mk("RECEIPT", "CREDIT",  400, 2);
+
+            const firstPass = await assertLinkPlan(tx, {
+                accountId: party, voucherId: idemReceipt, mode: "set",
+                links: [{ voucherId: idemBill, amount: 400 }],
+            });
+            for (const l of firstPass) {
+                await createLink(tx, { targetId: l.targetId, sourceId: l.sourceId, amount: l.amount, userId: user.id, mode: "set" });
+            }
+            const afterFirst = (await sumLinked(tx, [idemBill]))[idemBill] ?? 0;
+
+            // The very same request again — the client re-sends the pair total it
+            // was shown, which is what it already is.
+            const secondPass = await assertLinkPlan(tx, {
+                accountId: party, voucherId: idemReceipt, mode: "set",
+                links: [{ voucherId: idemBill, amount: 400 }],
+            });
+            for (const l of secondPass) {
+                await createLink(tx, { targetId: l.targetId, sourceId: l.sourceId, amount: l.amount, userId: user.id, mode: "set" });
+            }
+            const afterSecond = (await sumLinked(tx, [idemBill]))[idemBill] ?? 0;
+
+            check("saving the same plan twice settles the bill once, not twice",
+                near(afterFirst, 400) && near(afterSecond, 400),
+                `first ${afterFirst}, second ${afterSecond}`);
+
+            const rows = await tx.voucherAllocation.count({
+                where: { targetType: "UNIVERSAL_VOUCHER", targetId: idemBill, sourceId: idemReceipt },
+            });
+            check("and it leaves ONE allocation row for the pair, not two", rows === 1, `${rows} rows`);
+
+            // ── 6c. A settled voucher cannot be edited out from under its link ──
+            check("a voucher may still be edited while it covers what it settles",
+                await (async () => {
+                    try {
+                        await assertLinksSurviveEdit(tx, { spineId: idemReceipt, partyBefore: party, partyAfter: party });
+                        return true;
+                    } catch { return false; }
+                })());
+
+            // Shrink the receipt below the ₹400 it has settled — the very edit
+            // that used to leave the bill paid by money that no longer exists.
+            await tx.voucherGlLine.updateMany({ where: { universalVoucherId: idemReceipt }, data: { amount: 100 } });
+            let refusedEdit = false;
+            try {
+                await assertLinksSurviveEdit(tx, { spineId: idemReceipt, partyBefore: party, partyAfter: party });
+            } catch (e) { refusedEdit = e instanceof BillLinkError; }
+            check("refuses to shrink a voucher below what is settled against it", refusedEdit);
+
+            let refusedParty = false;
+            try {
+                await assertLinksSurviveEdit(tx, { spineId: idemReceipt, partyBefore: party, partyAfter: bank.id });
+            } catch (e) { refusedParty = e instanceof BillLinkError; }
+            check("refuses to move a settled voucher onto another party", refusedParty);
+
+            await tx.voucherGlLine.updateMany({ where: { universalVoucherId: idemReceipt }, data: { amount: 400 } });
+
             // ── 7. Housekeeping removes both directions ────────────────────
             const removed = await removeLinksForVoucher(tx, sale);
             check("unlinking a voucher clears links on both of its sides", removed.length >= 2, `${removed.length} removed`);
@@ -319,23 +391,98 @@ async function main(): Promise<void> {
         }
     }
 
-    // ── 8. Auto is oldest-first (pure, no database) ────────────────────────
-    const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
-    const synthetic = [
-        { universalVoucherId: 1, voucherType: "SALE", ref: "A", date: day(30), dueDate: day(0), side: 1 as const, face: 400, linked: 0, open: 400 },
-        { universalVoucherId: 2, voucherType: "SALE", ref: "B", date: day(20), dueDate: day(0), side: 1 as const, face: 400, linked: 0, open: 400 },
-        { universalVoucherId: 3, voucherType: "SALE", ref: "C", date: day(10), dueDate: day(0), side: 1 as const, face: 500, linked: 0, open: 500 },
-    ];
-    const auto = planLinks(synthetic, 1000);
-    check("Auto clears the oldest bills first (400 + 400 + 200)",
-        auto.length === 3 && near(auto[0].amount, 400) && near(auto[1].amount, 400) && near(auto[2].amount, 200)
-        && auto[0].universalVoucherId === 1 && auto[2].universalVoucherId === 3,
-        auto.map((a) => `${a.universalVoucherId}:${a.amount}`).join(" "));
+    // ── 7b. An opening bill reaches the REPORTS, not just the link popup ───
+    //
+    // Checked against committed data rather than inside the rolled-back
+    // transaction above, because `getLedgerOutstanding` reads through its own
+    // client and cannot see uncommitted rows. This is the check whose absence
+    // let the gap live: the harness proved opening bills were linkable, and
+    // nobody asked whether Receivables could see them.
+    const { getLedgerOutstanding } = await import("@/modules/accountancy/lib/outstandings");
+    const anyOpening = await prisma.universalVoucher.findFirst({
+        where:  { type: "OPENING", partyAccountId: { not: null }, status: "POSTED", deletedAt: null },
+        select: { id: true, partyAccountId: true, voucherNo: true },
+        orderBy: { id: "desc" },
+    });
+    if (!anyOpening) {
+        console.log("  · no bill-wise opening balances in this database — report check skipped");
+    } else {
+        const report = await getLedgerOutstanding(anyOpening.partyAccountId!, new Date());
+        const row = report?.bills.find((b) => b.universalVoucherId === anyOpening.id);
+        check("an opening bill shows up in the ledger's outstanding report",
+            row !== undefined && row.voucherType === "OPENING",
+            row ? `₹${row.outstanding}` : `${anyOpening.voucherNo ?? anyOpening.id} missing from ${report?.bills.length ?? 0} bills`);
+    }
 
-    const ticked = planLinks(synthetic, 1000, [3]);
+    // ── 8. Auto's priority and its promise not to override (pure, no database) ──
+    //
+    // The owner's rule, in their words: "kill overdue, then nearest due date, for
+    // same due date lowest amount". Note bill DATE is deliberately not part of it
+    // — B below is raised before D but falls due at the same time, and the
+    // smaller of the two is settled first.
+    const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+    const bill = (id: number, ref: string, days: number, due: number, open: number) => ({
+        universalVoucherId: id, voucherType: "SALE", ref, date: day(days), dueDate: day(due),
+        side: 1 as const, face: open, linked: 0, open,
+    });
+    const synthetic = [
+        bill(1, "A", 30, 10, 400),    // overdue 10 days
+        bill(2, "B", 20, 20, 400),    // overdue 20 days — but the bigger of the pair
+        bill(3, "C", 10, -5, 500),    // not due for another 5 days
+        bill(4, "D",  5, 20, 100),    // overdue 20 days, and the smaller — goes first
+    ];
+
+    // The order itself, asked of the comparator. (It cannot be read back off the
+    // plan: a plan is keyed by voucher id, and JavaScript walks integer-like keys
+    // in numeric order no matter which order they were put in.)
+    const order = autoLinkOrder(synthetic).map((d) => d.universalVoucherId).join(",");
+    check("Auto kills the most overdue first, smaller bill on a tie (D, B, A, then C)",
+        order === "4,2,1,3", order);
+
+    const { picks: auto } = planLinks(synthetic, 1000);
+    check("Auto spends the money in that order — only the last bill is left part-paid",
+        near(auto[4] ?? 0, 100) && near(auto[2] ?? 0, 400) && near(auto[1] ?? 0, 400) && near(auto[3] ?? 0, 100),
+        Object.entries(auto).map(([id, a]) => `${id}:${a}`).join(" "));
+
+    // The whole point of the rule: a hand-made choice survives Auto untouched,
+    // and Auto is only allowed to spend what is still unplaced.
+    const { picks: kept } = planLinks(synthetic, 1000, { existing: { 3: 500 } });
+    check("Auto never overrides a manual tick — it fills only the remainder",
+        near(kept[3] ?? 0, 500) && near(kept[4] ?? 0, 100) && near(kept[2] ?? 0, 400)
+        && kept[1] === undefined
+        && near(Object.values(kept).reduce((s, n) => s + n, 0), 1000),
+        Object.entries(kept).map(([id, a]) => `${id}:${a}`).join(" "));
+
+    const { picks: full } = planLinks(synthetic, 100, { existing: { 3: 500 } });
+    check("a manual tick larger than the money is left alone, not trimmed to fit",
+        near(full[3] ?? 0, 500) && Object.keys(full).length === 1,
+        Object.entries(full).map(([id, a]) => `${id}:${a}`).join(" "));
+
+    const { picks: ticked } = planLinks(synthetic, 1000, { pickedIds: [3] });
     check("ticking one bill fills only that bill",
-        ticked.length === 1 && ticked[0].universalVoucherId === 3 && near(ticked[0].amount, 500),
-        ticked.map((a) => `${a.universalVoucherId}:${a.amount}`).join(" "));
+        Object.keys(ticked).length === 1 && near(ticked[3] ?? 0, 500),
+        Object.entries(ticked).map(([id, a]) => `${id}:${a}`).join(" "));
+
+    // Ticks made on the form travel to the popup, which reloads the list. One
+    // that no longer fits must be said out loud, not silently dropped at save.
+    const gone = reconcilePicks(synthetic, { 99: 200, 4: 999 });
+    check("a tick whose bill has gone is dropped, and an oversized one is trimmed",
+        gone.picks[99] === undefined && near(gone.picks[4] ?? 0, 100)
+        && gone.clamped.includes(99) && gone.clamped.includes(4),
+        `clamped ${gone.clamped.join(",")}`);
+
+    // Reset is a client-side act by design: a tick is only a proposal, so
+    // clearing every one of them proposes nothing and leaves saved links alone.
+    check("Reset (no ticks) proposes nothing, so saved links cannot be touched",
+        Object.keys(planLinks(synthetic, 1000, { existing: {}, pickedIds: [] }).picks).length === 0);
+
+    // Due dates are whole days on top of the bill date, computed in UTC so the
+    // answer does not move with the machine's timezone.
+    const dd = dueDateOf(new Date("2026-04-01T00:00:00.000Z"), 45);
+    check("due date = bill date + credit period, in UTC",
+        dd.toISOString().slice(0, 10) === "2026-05-16", dd.toISOString());
+    check("a bill with no credit period falls due on the house default",
+        dueDateOf(new Date("2026-04-01T00:00:00.000Z"), null).toISOString().slice(0, 10) === "2026-05-01");
 
     // ── Report ────────────────────────────────────────────────────────────
     console.log("");

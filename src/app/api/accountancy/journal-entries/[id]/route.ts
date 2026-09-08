@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -149,6 +150,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 },
                 include: { lines: true },
             });
+
+            // A journal with a party leg can be settling a bill like anything
+            // else, and the line swap above knows nothing about that. Checked on
+            // the entry as it now stands, so a refusal rolls the edit back.
+            await assertLinksSurviveEdit(tx, {
+                spineId:     entryId,
+                partyBefore: existing.partyAccountId,
+                partyAfter:  existing.partyAccountId,
+            });
             return updatedJe;
         // Posted edit = reverse + per-new-line findUnique + re-apply; over the
         // Supabase pooler this can exceed the default 5s interactive-tx
@@ -156,6 +166,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }, { timeout: 30_000, maxWait: 10_000 });
         return NextResponse.json(updated);
     } catch (e) {
+        // A refusal the user can act on ("unlink it first"), not a server fault.
+        if (e instanceof BillLinkError) return NextResponse.json({ error: e.message }, { status: 422 });
         return handleApiError(e, "Failed to update journal entry");
     }
 }
