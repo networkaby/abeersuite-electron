@@ -162,11 +162,20 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     const credits = (rows ?? []).filter((d) => d.side !== side);
 
     const totalOpen = targets.reduce((s, d) => s + d.open, 0);
+    const totalOther = credits.reduce((s, d) => s + d.open, 0);
     const isCredit = (d: LinkableDoc) => d.side !== side;
 
     const onBills = round2(targets.reduce((s, d) => s + (picks[d.universalVoucherId] ?? 0), 0));
     const fromCredits = round2(credits.reduce((s, d) => s + (picks[d.universalVoucherId] ?? 0), 0));
     const amountTyped = amount > EPS && Math.abs(amount - (setByTicks ?? -1)) > EPS;
+
+    // The two directions netted off. Both of these are worth showing because both
+    // are a cross-check the reader can make at a glance: the open column nets to
+    // the party's ledger balance, and the link column nets to what this voucher
+    // itself must be worth once the credits have done their share.
+    const netOpen = round2(totalOpen - totalOther);
+    const netPlaced = round2(onBills - fromCredits);
+    const drCr = (n: number) => (n >= 0 ? (side === 1 ? "Dr" : "Cr") : (side === 1 ? "Cr" : "Dr"));
 
     /** How much of a credit can be spent: never more than it holds, and never
      *  more than the bills on screen are actually absorbing — a credit that pays
@@ -387,6 +396,35 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                             })}
 
                         </tbody>
+                        {/* Sticky, so it stays under the eye while a long list
+                            scrolls. Both figures are nets across the two
+                            directions, which is what makes them worth reading:
+                            the open column comes to the party's ledger balance,
+                            and the link column to what this voucher has to be
+                            worth once the credits have done their share. */}
+                        <tfoot className="sticky bottom-0 bg-card">
+                            <tr className="border-t border-border font-medium">
+                                <td className="w-6 py-1.5" />
+                                <td className="py-1.5 pr-1">Total</td>
+                                <td className="py-1.5 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
+                                <td className="py-1.5 pl-2 text-right font-mono tabular-nums whitespace-nowrap">
+                                    <span className={netPlaced > EPS ? "text-muted-foreground line-through decoration-muted-foreground/50" : ""}>
+                                        {fmt(Math.abs(netOpen))} {drCr(netOpen)}
+                                    </span>
+                                    {/* Where this party lands once the voucher is
+                                        saved — the same before-and-after the rows
+                                        above show, for the ledger as a whole. */}
+                                    {netPlaced > EPS && (
+                                        <span className="block text-[10px] text-green-700">
+                                            → {fmt(Math.abs(round2(netOpen - netPlaced)))} {drCr(round2(netOpen - netPlaced))}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="py-1.5 pl-2 pr-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                                    {netPlaced > EPS ? fmt(netPlaced) : "—"}
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                     </div>
                     <div className="mt-2 flex gap-2">
