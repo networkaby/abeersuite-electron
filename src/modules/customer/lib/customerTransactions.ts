@@ -1,7 +1,8 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
-import { sumReceiptAllocations, loadTenderLines } from "@/modules/accountancy/lib/outstandings";
+import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
+import { sumLinked } from "@/modules/accountancy/lib/billLink";
 import type { TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
 
 const VOUCHER_SELECT = {
@@ -99,7 +100,9 @@ async function enrichVouchers(
         .map((v) => v.universalVoucherId)
         .filter((x): x is number => x !== null);
     const [paidBySpine, tendersBySpine] = await Promise.all([
-        sumReceiptAllocations(prisma, uvIds),
+        // Links counted from either side, and only while the settling voucher is
+        // still alive — so a cancelled receipt stops showing as paid here too.
+        sumLinked(prisma, uvIds),
         loadTenderLines(prisma, uvIds),
     ]);
     const creatorIds = [...new Set(rawVouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];

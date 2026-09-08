@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +15,8 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import type { LedgerOutstanding, AgeingBucket } from "@/modules/accountancy/lib/outstandings";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
+import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
 
 const BUCKET_LABELS: Record<AgeingBucket, string> = {
     b0_30:    "0–30",
@@ -61,13 +63,18 @@ export default function LedgerOutstandingsPage({
     // voucher posted at another counter as well as one posted here.
     useRealtimeTopics(["ledger"], () => load(true));
 
-    const billUrl = (kind: "voucher" | "sale" | "purchase", id: number): string => {
-        switch (kind) {
-            case "voucher":  return `/office/accountancy/journal-entries/${id}`;
-            case "sale":     return `/vouchers/sales/new?voucherId=${id}`;
-            case "purchase": return `/vouchers/purchases/new?voucherId=${id}`;
-        }
-    };
+    // `referenceHref` is the one place that knows each kind's edit page. It also
+    // knows the two id spaces: a sale/purchase row is keyed on its VoucherDetail
+    // id, a credit/debit note on its spine id — which is exactly what `b.id`
+    // already carries for each. (This replaced a hand-written map that sent every
+    // credit/debit-note row to /office/accountancy/journal-entries/<id>, a route
+    // that does not exist — so those rows all 404'd.)
+    const billUrl = (b: { voucherType: string; id: number }): string | null =>
+        referenceHref(voucherSourceForType(b.voucherType), b.id, b.voucherType);
+
+    // Which bill the link popup is settling. Every row here is against this one
+    // ledger, so the party is the ledger itself.
+    const [linkSpineId, setLinkSpineId] = useState<number | null>(null);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -129,24 +136,26 @@ export default function LedgerOutstandingsPage({
                                     <th className="px-3 py-2 text-right font-medium">Total</th>
                                     <th className="px-3 py-2 text-right font-medium">Paid</th>
                                     <th className="px-3 py-2 text-right font-medium">Outstanding</th>
+                                    <th className="w-10 px-3 py-2" />
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.bills.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                                        <td colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
                                             No open bills for this ledger.
                                         </td>
                                     </tr>
                                 ) : data.bills.map((b) => (
                                     <tr key={`${b.kind}-${b.id}`} className="border-b last:border-0 hover:bg-muted/40">
                                         <td className="px-3 py-2.5 font-mono">
-                                            <Link
-                                                href={billUrl(b.kind, b.id)}
-                                                className="text-primary hover:underline"
-                                            >
-                                                {b.ref}
-                                            </Link>
+                                            {billUrl(b) ? (
+                                                <Link href={billUrl(b)!} className="text-primary hover:underline">
+                                                    {b.ref}
+                                                </Link>
+                                            ) : (
+                                                <span>{b.ref}</span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
                                             {new Date(b.billDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
@@ -158,6 +167,19 @@ export default function LedgerOutstandingsPage({
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(b.totalAmount)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono font-semibold ${BUCKET_COLORS[b.bucket]}`}>{fmt(b.outstanding)}</td>
+                                        <td className="px-3 py-2.5 text-right">
+                                            {b.universalVoucherId != null && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setLinkSpineId(b.universalVoucherId)}
+                                                    title="Settle this bill against another voucher of this party"
+                                                >
+                                                    <Link2 size={14} />
+                                                </Button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -166,6 +188,7 @@ export default function LedgerOutstandingsPage({
                                     <tr>
                                         <td colSpan={6} className="px-3 py-2.5">Total</td>
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totalOutstanding)}</td>
+                                        <td />
                                     </tr>
                                 </tfoot>
                             )}
@@ -174,6 +197,16 @@ export default function LedgerOutstandingsPage({
                 </>
             )}
         </div>
+        {linkSpineId != null && (
+            <BillLinkDialog
+                open
+                onOpenChange={(v) => { if (!v) setLinkSpineId(null); }}
+                accountId={Number(ledgerId)}
+                partyName={data?.accountName}
+                voucherId={linkSpineId}
+                onSaved={() => load(true)}
+            />
+        )}
         </ScrollArea>
     );
 }

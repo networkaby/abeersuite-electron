@@ -6,6 +6,7 @@ import { z } from "zod";
 import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
+import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -50,6 +51,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 await retreatReconciliation(tx, voucher.lines.map((l) => l.accountId), voucher.date);
             }
 
+            // Bill-wise links pointing at a voucher that is about to physically
+            // vanish are debris — take them with it, and keep a copy in the snapshot
+            // so the audit trail says what was unlinked. Correctness does not depend
+            // on this: `sumLinked` ignores a link whose other end has gone, so the
+            // counterpart reopens either way. A restore brings the voucher back with
+            // a FRESH id, so links are deliberately not re-made — relink by hand.
+            const removedLinks = await removeLinksForVoucher(tx, voucher.id);
+
             // ONE AuditLog row carrying the whole graph (spine + its GL lines) so
             // restore can rebuild everything from a single snapshot.
             const created = await tx.auditLog.create({
@@ -59,7 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     originalId:  voucher.id,
                     originalRef: voucher.voucherNo ?? formatUvNo(voucher.id),
                     reason:      data.reason,
-                    snapshot:    { ...voucher, journalEntry: voucher },
+                    snapshot:    { ...voucher, journalEntry: voucher, billLinks: removedLinks },
                     actorId:     user!.id,
                 }),
             });

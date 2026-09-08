@@ -4,11 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, ChevronRight } from "lucide-react";
+import { Loader2, ChevronRight, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
+import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
@@ -39,6 +40,8 @@ function fmtIsoDate(s: string): string {
 export default function ReceivablesPage() {
     const router = useRouter();
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
+    // Which bill the link popup is settling, with the party it stands against.
+    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number; accountName: string } | null>(null);
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<ViewMode>("party");
@@ -198,12 +201,13 @@ export default function ReceivablesPage() {
                                     <th className="px-3 py-2 text-right font-medium">Outstanding</th>
                                     <th className="px-3 py-2 text-right font-medium">Status</th>
                                     <th className="px-3 py-2 w-8" />
+                                    <th className="px-3 py-2 w-8" />
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.bills.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} className="py-12 text-center text-muted-foreground text-sm">
+                                        <td colSpan={10} className="py-12 text-center text-muted-foreground text-sm">
                                             No outstanding bills.
                                         </td>
                                     </tr>
@@ -230,6 +234,22 @@ export default function ReceivablesPage() {
                                             <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
                                             <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
                                             <td className={`px-3 py-2.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
+                                            <td className="px-3 py-2.5 text-right">
+                                                {b.universalVoucherId != null && (
+                                                    <button
+                                                        type="button"
+                                                        title="Settle this bill against a receipt, credit note, purchase or journal of this party"
+                                                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                        onClick={(e) => {
+                                                            // The row itself drills to the party — keep that off this button.
+                                                            e.stopPropagation();
+                                                            setLinkTarget({ voucherId: b.universalVoucherId!, accountId: b.accountId, accountName: b.accountName });
+                                                        }}
+                                                    >
+                                                        <Link2 size={14} />
+                                                    </button>
+                                                )}
+                                            </td>
                                             <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>
                                         </tr>
                                     );
@@ -240,7 +260,7 @@ export default function ReceivablesPage() {
                                     <tr>
                                         <td colSpan={6} className="px-3 py-2.5 text-right">Total</td>
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totalOutstanding)}</td>
-                                        <td colSpan={2} />
+                                        <td colSpan={3} />
                                     </tr>
                                 </tfoot>
                             )}
@@ -250,6 +270,16 @@ export default function ReceivablesPage() {
                 </>
             )}
         </div>
+        {linkTarget && (
+            <BillLinkDialog
+                open
+                onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
+                accountId={linkTarget.accountId}
+                partyName={linkTarget.accountName}
+                voucherId={linkTarget.voucherId}
+                onSaved={() => load(true)}
+            />
+        )}
         </ScrollArea>
     );
 }

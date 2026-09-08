@@ -3789,6 +3789,9 @@ CREATE INDEX IF NOT EXISTS "VoucherAllocation_sourceType_sourceId_idx" ON "Vouch
 CREATE INDEX IF NOT EXISTS "VoucherAllocation_method_idx" ON "VoucherAllocation"("method");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "VoucherAllocation_targetType_targetId_sourceType_sourceId_key" ON "VoucherAllocation"("targetType", "targetId", "sourceType", "sourceId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
 
 -- CreateIndex

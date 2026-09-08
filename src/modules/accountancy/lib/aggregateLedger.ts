@@ -7,22 +7,13 @@ import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 import { balanceDelta, toNumber } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
+import { ledgerStatusFilterUv, type LedgerMode } from "./ledgerStatus";
 
-export type LedgerMode = "posted" | "provisional";
-
-/**
- * The single ledger-inclusion gate for universal-voucher reads. `posted`
- * (default) = POSTED only (the books); `provisional` also includes DRAFT
- * (Tally-Scenario what-if). CANCELLED / soft-deleted are never counted. Every GL
- * reader — Balance Sheet, P&L, Trial Balance, Day Book, ledger, cash-flow,
- * recompute-balances, till-ledger — spreads this into its `universalVoucher`
- * filter so they agree by construction.
- */
-export function ledgerStatusFilterUv(mode: LedgerMode = "posted"): Prisma.UniversalVoucherWhereInput {
-    return mode === "provisional"
-        ? { status: { in: ["POSTED", "DRAFT"] as VoucherStatus[] }, deletedAt: null }
-        : { status: "POSTED" as VoucherStatus, deletedAt: null };
-}
+// Both live in `./ledgerStatus` now, so a caller needing only the gate does not
+// have to pull this module's `server-only` dependency chain in. Re-exported here
+// so every existing importer is untouched.
+export { ledgerStatusFilterUv } from "./ledgerStatus";
+export type { LedgerMode } from "./ledgerStatus";
 
 export type AccountAggregate = {
     accountId: number;

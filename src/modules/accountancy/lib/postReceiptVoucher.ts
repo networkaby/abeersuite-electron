@@ -19,6 +19,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { engineCreateVoucher } from "./transactionEngine";
+import { createLink } from "./billLink";
 
 export type ReceiptTender = {
     accountId:    number;           // till / bank / UPI / card ledger to debit
@@ -123,24 +124,25 @@ export async function postReceiptVoucher(
     }
 
     // Allocate directly against the bill's universal-voucher spine (G5 — the JE
-    // hop is gone; the caller passes the spine id). All receivables readers net
-    // these UNIVERSAL_VOUCHER allocations out.
+    // hop is gone; the caller passes the spine id), through the one link writer in
+    // `billLink.ts` so this path and the manual popup cannot drift apart.
+    //
+    // The full `assertLinkable` check is deliberately NOT run here: this is inside
+    // the POS sale transaction, and re-deriving party legs per bill would put a
+    // handful of extra round trips between the customer and their receipt. It is
+    // safe because the callers plan against `getOpenSaleBillsForFifo`, which
+    // already clamps every entry to that bill's own outstanding, and the total
+    // guard above covers the receipt side. The manual path, where a human picks
+    // arbitrary vouchers, does run the full check.
     const allocationIds: number[] = [];
     for (const a of allocationPlan) {
-        const alloc = await tx.voucherAllocation.create({
-            data: {
-                targetType:  "UNIVERSAL_VOUCHER",
-                targetId:    a.universalVoucherId,
-                sourceType:  "VOUCHER",
-                sourceId:    voucher.id,
-                amount:      a.amount,
-                method:      "AGAINST_REF",
-                reference:   voucherRef,
-                createdById: args.userId,
-            },
-            select: { id: true },
-        });
-        allocationIds.push(alloc.id);
+        allocationIds.push(await createLink(tx, {
+            targetId:  a.universalVoucherId,   // the bill — the receivable side
+            sourceId:  voucher.id,             // this receipt — the paying side
+            amount:    a.amount,
+            reference: voucherRef,
+            userId:    args.userId,
+        }));
     }
 
     return {

@@ -1,12 +1,21 @@
 // Outstandings computation — shared between Receivables, Payables, and Ledger
 // outstanding reports. Walks the AccountGroup hierarchy under "Sundry Debtors"
-// or "Sundry Creditors", collects open Invoice and Voucher rows, subtracts
-// allocations, and buckets the outstanding by age.
+// or "Sundry Creditors", collects open Invoice and Voucher rows, subtracts what
+// has been linked against them, and buckets the outstanding by age.
+//
+// The netting itself lives in `billLink.ts` (`sumLinked`) — one symmetric,
+// alive-filtered rule shared with the bill-wise link popup. Symmetric matters
+// here: when a purchase is settled against a sale for a party who is both our
+// customer and our supplier, the purchase sits on the SOURCE side of that link,
+// and a target-only sum would leave it showing as fully open. Alive-filtered
+// matters because a cancelled or deleted receipt must stop clearing its bill.
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { sumLinked } from "./billLink";
+import { accountIdsUnderGroup } from "./accountGroups";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
 
@@ -19,6 +28,14 @@ export type OutstandingBill = {
     // consolidation (2026-05-24).
     kind:        "voucher" | "sale" | "purchase";
     id:          number;
+    /** The spine id — what a bill-wise link points at. `id` above is the id the
+     *  row's drill-down link needs (detail id for sale/purchase), which is a
+     *  different id space, so both are carried. Null only for pre-Phase-5 rows. */
+    universalVoucherId: number | null;
+    /** The spine's voucher type (SALE / POS / PURCHASE / CREDIT_NOTE / …) — what
+     *  `referenceHref` needs to build the row's drill-down link, and what tells a
+     *  reader which side of a dual-role party's book the row belongs to. */
+    voucherType: string;
     ref:         string;
     billDate:    string;
     dueDate:     string;
@@ -82,29 +99,6 @@ function bucketFor(days: number): AgeingBucket {
 }
 
 /**
- * Phase 4 G1: total RECEIPT allocations against each given journal entry, read
- * from the universal-voucher spine (UNIVERSAL_VOUCHER allocations), returned
- * keyed by the LEGACY JE id — so callers that key by `journalEntryId` are a
- * drop-in. Dual-target (postReceiptVoucher + the backfill) keeps these identical
- * to the old JOURNAL_ENTRY sums; reading the spine lets us drop the JE
- * allocations in G1d/G5. Accepts the global client or a tx.
- */
-export async function sumReceiptAllocations(
-    db: Prisma.TransactionClient,
-    universalVoucherIds: number[],
-): Promise<Record<number, number>> {
-    const ids = [...new Set(universalVoucherIds)];
-    if (ids.length === 0) return {};
-    const allocs = await db.voucherAllocation.findMany({
-        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: ids } },
-        select: { targetId: true, amount: true },
-    });
-    const out: Record<number, number> = {};
-    for (const a of allocs) out[a.targetId] = (out[a.targetId] ?? 0) + Number(a.amount);
-    return out;
-}
-
-/**
  * Phase 4 G4b: the role=TENDER GL lines for each given journal entry, read from
  * the universal-voucher spine, keyed by the LEGACY JE id — a drop-in for the old
  * `InvVoucherTender.findMany` grouped by InvVoucher. Callers apply the non-AR
@@ -131,60 +125,11 @@ export async function loadTenderLines(
     return out;
 }
 
-/**
- * Phase 4 G5: total allocations settling each finance Voucher (CREDIT_NOTE /
- * DEBIT_NOTE bill), read from the universal-voucher spine (UNIVERSAL_VOUCHER
- * allocations keyed by the bill's `universalVoucherId`), returned keyed by the
- * LEGACY Voucher id — a drop-in for the old `targetType=VOUCHER` sum so callers
- * that key by `voucher.id` are unchanged. Re-homes off `targetType=VOUCHER`.
- */
-export async function sumVoucherAllocations(
-    db: Prisma.TransactionClient,
-    voucherIds: number[],
-): Promise<Record<number, number>> {
-    // Phase 5 5E: the spine IS the finance voucher — `voucherIds` ARE spine ids,
-    // so this is now a direct allocation lookup (the old Voucher→spine hop is gone).
-    const ids = [...new Set(voucherIds)];
-    if (ids.length === 0) return {};
-    const allocs = await db.voucherAllocation.findMany({
-        where:  { targetType: "UNIVERSAL_VOUCHER", targetId: { in: ids } },
-        select: { targetId: true, amount: true },
-    });
-    const out: Record<number, number> = {};
-    for (const a of allocs) out[a.targetId] = (out[a.targetId] ?? 0) + Number(a.amount);
-    return out;
-}
-
-async function accountIdsUnderGroup(groupName: string): Promise<number[]> {
-    const groups = await prisma.accountGroup.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, parentId: true },
-    });
-    const root = groups.find((g) => g.name === groupName);
-    if (!root) return [];
-
-    const included = new Set<number>([root.id]);
-    let grew = true;
-    while (grew) {
-        grew = false;
-        for (const g of groups) {
-            if (g.parentId !== null && included.has(g.parentId) && !included.has(g.id)) {
-                included.add(g.id);
-                grew = true;
-            }
-        }
-    }
-
-    const accounts = await prisma.account.findMany({
-        where: { isActive: true, groupId: { in: Array.from(included) } },
-        select: { id: true },
-    });
-    return accounts.map((a) => a.id);
-}
-
 type RawBill = {
     kind:        OutstandingBill["kind"];
     id:          number;
+    universalVoucherId: number | null;
+    voucherType: string;
     accountId:   number;
     ref:         string;
     billDate:    Date;
@@ -222,7 +167,7 @@ async function loadOpenBills(
                 date:           { lte: asOf },
             },
             select: {
-                id: true, partyAccountId: true, voucherNo: true, date: true,
+                id: true, partyAccountId: true, voucherNo: true, date: true, type: true,
                 lines: { select: { type: true, amount: true } },
             },
         }),
@@ -290,12 +235,12 @@ async function loadOpenBills(
         .filter((x): x is number => x !== null);
 
     const [paidByVch, tendersBySpine, paidBySpine] = await Promise.all([
-        // CREDIT_NOTE/DEBIT_NOTE bill settlements via the spine (keyed by Voucher id).
-        sumVoucherAllocations(prisma, vchIds),
+        // CREDIT_NOTE/DEBIT_NOTE bill settlements — spine ids, link counted from either side.
+        sumLinked(prisma, vchIds),
         // Up-front tenders via the spine (role=TENDER), keyed by universalVoucherId.
         loadTenderLines(prisma, uvIds),
-        // RECEIPT settlements via the spine, keyed by universalVoucherId.
-        sumReceiptAllocations(prisma, uvIds),
+        // Later settlements against the bill's spine row, from either side of the link.
+        sumLinked(prisma, uvIds),
     ]);
 
     const bills: RawBill[] = [];
@@ -307,6 +252,8 @@ async function loadOpenBills(
         bills.push({
             kind:        "voucher",
             id:          v.id,
+            universalVoucherId: v.id,
+            voucherType: v.type,
             accountId:   v.partyAccountId,
             ref:         v.voucherNo ?? formatUvNo(v.id),
             billDate:    v.date,
@@ -346,6 +293,8 @@ async function loadOpenBills(
         bills.push({
             kind:        v.universalVoucher!.type === "SALE" || v.universalVoucher!.type === "POS" ? "sale" : "purchase",
             id:          v.id,
+            universalVoucherId: v.universalVoucherId,
+            voucherType: v.universalVoucher!.type,
             accountId,
             ref:         v.universalVoucher?.voucherNo ?? "",
             billDate:    v.universalVoucher!.date,   // 5D-10
@@ -405,8 +354,8 @@ export async function getOpenSaleBillsForFifo(
     const [tendersBySpine, paidBySpine] = await Promise.all([
         // Up-front tenders via the spine (role=TENDER), keyed by universalVoucherId.
         loadTenderLines(tx, uvIds),
-        // RECEIPT settlements via the spine, keyed by universalVoucherId.
-        sumReceiptAllocations(tx, uvIds),
+        // Later settlements against the bill's spine row, from either side of the link.
+        sumLinked(tx, uvIds),
     ]);
 
     const out: { universalVoucherId: number; outstanding: number; billDate: Date; ref: string }[] = [];
@@ -436,6 +385,8 @@ function toOutstandingBill(raw: RawBill, asOf: Date): OutstandingBill | null {
     return {
         kind:        raw.kind,
         id:          raw.id,
+        universalVoucherId: raw.universalVoucherId,
+        voucherType: raw.voucherType,
         ref:         raw.ref,
         billDate:    raw.billDate.toISOString(),
         dueDate:     raw.dueDate.toISOString(),

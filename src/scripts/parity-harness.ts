@@ -30,7 +30,8 @@ import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputeAccountBalances, ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
-import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
+import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
+import { sumLinked, assertLinkable, createLink } from "@/modules/accountancy/lib/billLink";
 import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
@@ -665,7 +666,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
             const uvAlloc   = allocs.find((a) => a.targetType === "UNIVERSAL_VOUCHER" && a.targetId === saleSpine);
             const noJeAlloc = !allocs.some((a) => a.targetType === "JOURNAL_ENTRY");
             // The spine-based reader helper returns the settled amount keyed by spine id.
-            const paidViaSpine = await sumReceiptAllocations(tx, [saleSpine!]);
+            const paidViaSpine = await sumLinked(tx, [saleSpine!]);
             const helperOk = Math.abs((paidViaSpine[saleSpine!] ?? 0) - 118) < 0.01;
             ok = !!uvAlloc && noJeAlloc && allocs.length === 1 && helperOk;
             throw new Error(ROLLBACK);
@@ -733,35 +734,55 @@ async function runShiftCashMath(): Promise<boolean> {
     return ok;
 }
 
-/** G5: a CREDIT_NOTE bill settled by a UNIVERSAL_VOUCHER allocation (re-homed off
- *  targetType=VOUCHER) is read back via sumVoucherAllocations keyed by Voucher id.
- *  Rolled back. */
+/** Bill-wise link: a credit note settles a receivable for the SAME party — the
+ *  purchase-against-sale case in miniature — read back by `sumLinked` from BOTH
+ *  ends, plus proof that a self-link nets nothing. Rolled back. */
 async function runVoucherAllocation(): Promise<boolean> {
     const acc = await loadAccounts();
     if (!acc || acc.income == null || acc.debtor == null) { console.log("\nvoucher-alloc skipped — no accounts"); return true; }
-    let ok = false;
+    let pairOk = false;
+    let selfOk = false;
     try {
         await prisma.$transaction(async (tx) => {
-            // A posted CREDIT_NOTE bill (Dr Income / Cr Debtor) → has a spine + universalVoucherId.
-            const v = await engineCreateVoucher(tx, {
+            // Receivable side — Dr Debtor / Cr Income: the party owes us 300.
+            const bill = await engineCreateVoucher(tx, {
+                type: "DEBIT_NOTE", date: new Date(), userId: acc.userId,
+                lines: [{ accountId: acc.debtor!, type: "DEBIT", amount: 300 }, { accountId: acc.income!, type: "CREDIT", amount: 300 }],
+                partyAccountId: acc.debtor, post: true,
+            });
+            // Payable side — Dr Income / Cr Debtor: a credit note back to them.
+            const note = await engineCreateVoucher(tx, {
                 type: "CREDIT_NOTE", date: new Date(), userId: acc.userId,
                 lines: [{ accountId: acc.income!, type: "DEBIT", amount: 300 }, { accountId: acc.debtor!, type: "CREDIT", amount: 300 }],
                 partyAccountId: acc.debtor, post: true,
             });
-            // Phase 5 5E: the spine IS the CREDIT_NOTE — v.id is the spine id.
-            if (v.id == null) throw new Error("CREDIT_NOTE has no spine");
-            // Settle 120 against the bill on the spine.
-            await tx.voucherAllocation.create({ data: { targetType: "UNIVERSAL_VOUCHER", targetId: v.id, sourceType: "VOUCHER", sourceId: v.id, amount: 120, method: "AGAINST_REF", createdById: acc.userId } });
-            const paid = await sumVoucherAllocations(tx, [v.id]);
-            ok = Math.abs((paid[v.id] ?? 0) - 120) < 0.005;
+            if (bill.id == null || note.id == null) throw new Error("voucher has no spine");
+
+            const { targetId, sourceId } = await assertLinkable(tx, { accountId: acc.debtor!, aId: note.id, bId: bill.id, amount: 120 });
+            await createLink(tx, { targetId, sourceId, amount: 120, userId: acc.userId });
+
+            // Both ends must come down — that is what lets a purchase settle a sale.
+            // The receivable side is always stored as the target, whichever order
+            // the caller passed the two vouchers in.
+            const paid = await sumLinked(tx, [bill.id, note.id]);
+            pairOk = Math.abs((paid[bill.id] ?? 0) - 120) < 0.005
+                  && Math.abs((paid[note.id] ?? 0) - 120) < 0.005
+                  && targetId === bill.id;
+
+            // A self-link must stay invisible, or a symmetric sum counts it twice.
+            await tx.voucherAllocation.create({ data: { targetType: "UNIVERSAL_VOUCHER", targetId: note.id, sourceType: "VOUCHER", sourceId: note.id, amount: 50, method: "AGAINST_REF", createdById: acc.userId } });
+            const afterSelf = await sumLinked(tx, [note.id]);
+            selfOk = Math.abs((afterSelf[note.id] ?? 0) - 120) < 0.005;
+
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
         if ((e as Error)?.message !== ROLLBACK) throw e;
     }
-    console.log("\n=== G5 voucher-alloc (CREDIT_NOTE settled on spine, rolled back) ===");
-    console.log("sumVoucherAllocations returns settled 120 by Voucher id:", ok ? "✓" : "✗");
-    return ok;
+    console.log("\n=== bill-wise link (credit note settles a receivable, rolled back) ===");
+    console.log("sumLinked nets both ends of the link:", pairOk ? "✓" : "✗");
+    console.log("a self-link nets nothing:", selfOk ? "✓" : "✗");
+    return pairOk && selfOk;
 }
 
 async function main() {

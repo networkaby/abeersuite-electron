@@ -243,6 +243,11 @@ model VoucherAllocation {
   createdBy   User                 @relation("VoucherAllocationCreatedBy", fields: [createdById], references: [id])
   createdAt   DateTime             @default(now())
 
+  // One row per pair, so linking the same two vouchers again tops the existing
+  // row up instead of leaving two rows each telling half the story. Orientation
+  // is normalised by the writer (the receivable side is always the target), which
+  // is what turns an unordered pair into a plain ordered key.
+  @@unique([targetType, targetId, sourceType, sourceId])
   @@index([targetType, targetId])
   @@index([sourceType, sourceId])
   @@index([method])

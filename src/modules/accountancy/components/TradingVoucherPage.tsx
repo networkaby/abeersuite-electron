@@ -73,6 +73,7 @@ import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/
 import { useActiveRow } from "@/shared/hooks/useActiveRow";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
+import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
@@ -244,6 +245,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Loaded voucher's lifecycle fields — handed to the inline LifecycleActions
     // bar in the footer when editing a posted voucher.
     const [loadedLifecycle, setLoadedLifecycle] = useState<{ status: string; deletedAt: string | null; cancelledAt: string | null } | null>(null);
+    // Spine id of the voucher being edited — what a bill-wise link points at.
+    const [spineId, setSpineId] = useState<number | null>(null);
+    const [linkOpen, setLinkOpen] = useState(false);
 
     // Inline lifecycle bar permissions — same rules as the row 3-dot menu.
     const { data: session, status: sessionStatus } = useSession();
@@ -506,6 +510,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             /// .partyAccountId). Needed to tell the auto-appended AR tender row
             /// apart from real cash/bank tenders on edit-load.
             accountId: number | null;
+            /// The spine id. `id` above is the VoucherDetail id — a different id
+            /// space — and a bill-wise link points at the spine.
+            universalVoucherId: number | null;
             paymentMode?: string | null;
             paymentAccountId?: number | null;
             creditPeriodDays: number | null;
@@ -672,6 +679,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // ledger isn't in the cash/bank list) and re-post it as a
                 // receipt that never happened.
                 const partyAccountId = v.accountId ?? null;
+                setSpineId(v.universalVoucherId ?? null);
                 if (v.tenders && v.tenders.length > 0) {
                     setTenders(v.tenders
                         .filter((t) => partyAccountId == null || t.accountId !== partyAccountId)
@@ -2293,18 +2301,20 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 saving={saving}
                 leftContent={
                     <div className="mr-auto flex items-center gap-2">
-                        {/* Bill-wise details / link-payment — placeholder for the Tally-style
-                            "settle this bill against open receipts" flow. Real allocation
-                            UI lands in a follow-up; the button confirms the location. */}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toast.info("Bill-wise details — coming soon. Will let you allocate this sale against the customer's open advance receipts.")}
-                            className="gap-1.5 text-muted-foreground hover:text-foreground"
-                            title="Link this sale to existing bills / advance receipts"
-                        >
-                            <Link2 size={14} /> Link Payment
-                        </Button>
+                        {/* Bill-wise link. Only once the voucher exists and has a party:
+                            an unsaved bill has no spine row for a link to point at, and a
+                            link is always measured on a party ledger. */}
+                        {spineId != null && party?.accountId != null && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLinkOpen(true)}
+                                className="gap-1.5 text-muted-foreground hover:text-foreground"
+                                title="Link this bill to the party's receipts, credit notes, purchases or journals"
+                            >
+                                <Link2 size={14} /> Link Payment
+                            </Button>
+                        )}
                         {isEditing && editVoucherId != null && loadedLifecycle && (
                             <div className="ml-2 flex items-center gap-3">
                                 <LifecycleActions
@@ -2378,6 +2388,20 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Bill-wise link. The voucher is already posted here, so the popup
+                writes the links itself; it asks the server how much of this bill is
+                still open and offers only the party's opposite-side vouchers. */}
+            {spineId != null && party?.accountId != null && (
+                <BillLinkDialog
+                    open={linkOpen}
+                    onOpenChange={setLinkOpen}
+                    accountId={party.accountId}
+                    partyName={party.name}
+                    voucherId={spineId}
+                    onSaved={() => toast.success("Bill-wise link saved.")}
+                />
+            )}
         </div>
     );
 }

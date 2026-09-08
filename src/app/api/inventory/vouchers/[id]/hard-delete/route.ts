@@ -5,6 +5,7 @@ import { z } from "zod";
 import { toNumber, balanceDelta, loadNormalBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
+import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -106,6 +107,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }
             }
 
+            // Bill-wise links pointing at a voucher that is about to physically
+            // vanish are debris — take them with it, and keep a copy in the snapshot
+            // so the audit trail says what was unlinked. Correctness does not depend
+            // on this: `sumLinked` ignores a link whose other end has gone, so the
+            // counterpart reopens either way. A restore brings the voucher back with
+            // a FRESH id, so links are deliberately not re-made — relink by hand.
+            const removedLinks = voucher.universalVoucherId != null
+                ? await removeLinksForVoucher(tx, voucher.universalVoucherId)
+                : [];
+
             // ONE AuditLog row carrying the whole graph (voucher + children + its JE).
             // Restore reads this single row and rebuilds everything — no cross-row stitching.
             const created = await tx.auditLog.create({
@@ -115,7 +126,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     originalId: voucher.id,
                     originalRef: voucher.universalVoucher?.voucherNo ?? "",
                     reason: data.reason,
-                    snapshot: { ...voucher, journalEntry: origJe },
+                    snapshot: { ...voucher, journalEntry: origJe, billLinks: removedLinks },
                     actorId: user!.id,
                 }),
             });

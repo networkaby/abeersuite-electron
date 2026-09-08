@@ -11,7 +11,7 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Trash2, CheckCircle2, X } from "lucide-react";
+import { Plus, Trash2, CheckCircle2, X, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog, DialogContent, DialogDescription,
@@ -36,6 +36,7 @@ import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/vouche
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
+import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import {
@@ -419,6 +420,11 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const [incomeExpOnly, setIncomeExpOnly] = useState(false);
     const rowNatureType = kind === "PAYMENT" ? "EXPENSE" : "INCOME";
 
+    // Which voucher the bill-wise popup is linking, and on which party ledger.
+    // Both are captured together because the form resets itself after a save, and
+    // the popup opened right after posting must keep the party it was posted for.
+    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number } | null>(null);
+
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const topAccounts = accounts.filter(copy.topFilter);
     // Sales/Purchase Accounts groups carry inventory-linked trading ledgers
@@ -431,6 +437,23 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 a.group?.name !== ACCOUNT_GROUPS.SALES_ACCOUNTS &&
                 a.group?.name !== ACCOUNT_GROUPS.PURCHASE_ACCOUNTS));
     const topAccount  = effectiveTopAccountId ? accountById.get(effectiveTopAccountId) : undefined;
+
+    // The party ledger this voucher stands against — stamped on the spine so
+    // reports and the bill-wise popup can find the voucher by party.
+    //
+    // A Credit/Debit Note carries the party on top. A Receipt or Payment carries
+    // it in the particulars ("Received from" / "Paid to"), where there may be
+    // none, one, or several: a scalar column can only hold the single-party case,
+    // so several parties leaves it null. Nothing is lost by that — bill-wise
+    // linking reads the GL legs, which name every party on the voucher.
+    const isPartyAccount = (a?: GlAccount) => !!a && (isSundryDebtor(a) || isSundryCreditor(a));
+    const partyRowIds = [...new Set(
+        rows.map((r) => r.accountId)
+            .filter((id): id is number => id !== null && isPartyAccount(accountById.get(id))),
+    )];
+    const partyLedgerId: number | null = copy.topPickerKind === "party"
+        ? effectiveTopAccountId
+        : partyRowIds.length === 1 ? partyRowIds[0] : null;
 
     // "Bank-like" = Bank Accounts or Bank OD A/c — both are a real cash/cheque
     // movement at the counter, so depositing into either behaves the same way.
@@ -739,6 +762,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 await axios.patch(`/api/accountancy/vouchers/${voucherId}`, {
                     date,
                     narration: narration.trim() || undefined,
+                    ...(partyLedgerId != null ? { partyAccountId: partyLedgerId } : {}),
                     lines:     allLines,
                     // Contra: null clears a stale capture when the box is unticked.
                     ...(isContra ? { denomJson: buildDenomPayload() } : {}),
@@ -763,6 +787,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                     type:      kind,
                     date,
                     narration: narration.trim() || undefined,
+                    ...(partyLedgerId != null ? { partyAccountId: partyLedgerId } : {}),
                     lines:     allLines,
                     ...(isContra ? { denomJson: buildDenomPayload() } : {}),
                 },
@@ -770,6 +795,11 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             if (postAfterSave) {
                 await axios.post(`/api/accountancy/vouchers/${created.data.id}/post`);
                 toast.success(`${copy.title} ${created.data.reference} saved & posted`);
+                // Now it is posted, so it can legally settle a bill. Offer that at
+                // once — the id returned here IS the spine id (Phase 5E).
+                if (partyLedgerId != null) {
+                    setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId });
+                }
             } else {
                 toast.success(`${copy.title} ${created.data.reference} saved as draft`);
             }
@@ -1102,6 +1132,17 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                             canHardDelete={canHardDelete}
                             onChanged={() => setReloadCounter((c) => c + 1)}
                         />
+                        {loadedVoucher.status === "POSTED" && !loadedVoucher.deletedAt && !loadedVoucher.cancelledAt && partyLedgerId != null && voucherId != null && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLinkTarget({ voucherId, accountId: partyLedgerId })}
+                                className="gap-1.5 text-muted-foreground hover:text-foreground"
+                                title="Link this voucher to the party's open bills"
+                            >
+                                <Link2 size={14} /> Link to bills
+                            </Button>
+                        )}
                         {loadedVoucher.status === "POSTED" && !loadedVoucher.deletedAt && !loadedVoucher.cancelledAt && (
                             <span className="text-[11px] text-amber-600 italic">
                                 Will reverse + re-post on save (reference preserved)
@@ -1110,6 +1151,15 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                     </div>
                 ) : undefined}
             />
+            {linkTarget && (
+                <BillLinkDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
+                    accountId={linkTarget.accountId}
+                    voucherId={linkTarget.voucherId}
+                    onSaved={() => setReloadCounter((c) => c + 1)}
+                />
+            )}
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 <DialogContent showCloseButton={false}>
                     <DialogHeader>

@@ -1,116 +1,52 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { sumReceiptAllocations, loadTenderLines, sumVoucherAllocations } from "@/modules/accountancy/lib/outstandings";
+import { loadLinkableDocs, loadDocOpen } from "@/modules/accountancy/lib/billLink";
 
-// GET /api/accountancy/allocations/open?accountId=N
-// Returns InvVoucher (SALE/POS/PURCHASE) and finance Voucher (CREDIT_NOTE /
-// DEBIT_NOTE) rows tied to the given party account that still have an
-// outstanding amount (totalAmount − Σ allocations targeting this row).
+// GET /api/accountancy/allocations/open?accountId=N[&excludeId=M][&side=1|-1]
 //
-// Used by the bill-wise drawer when entering a Receipt or Payment voucher
-// to show which open bills can be settled.
+// Everything of this party that still has something open — sale, POS, purchase,
+// receipt, payment, credit/debit note, journal alike — oldest first, so the
+// bill-wise popup can offer a tick-list and its Auto button can walk the same
+// order (oldest first) with no re-sorting.
 //
-// Migrated from prisma.invoice to prisma.invVoucher on 2026-05-24 as part
-// of the Invoice → InvVoucher consolidation (Layer 3e). Allocations target
-// the InvVoucher's `journalEntryId` (the canonical receipts-engine link),
-// not the InvVoucher id directly.
+// `side` is +1 when the party owes us (receivable) and −1 when we owe them
+// (payable). A link is only legal between opposite sides.
+//
+// Pass `excludeId` — the voucher the user has open — and the answer comes back
+// already correct for it: that voucher is left out of the list, `self` says how
+// much of it is free to place, and the list is narrowed to the side it can
+// actually settle. The caller then needs to know nothing about signs.
+//
+// One list, keyed by SPINE id. The old shape split invoices from vouchers and
+// returned `VoucherDetail.id` for the invoice half, which is a different id space
+// from the one links live in — posting it back would have linked the wrong
+// document.
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
-    const accountId = searchParams.get("accountId") ? Number(searchParams.get("accountId")) : null;
-    if (!accountId) return NextResponse.json({ error: "accountId required" }, { status: 400 });
+    const accountId = Number(searchParams.get("accountId"));
+    if (!Number.isFinite(accountId) || accountId <= 0) {
+        return NextResponse.json({ error: "accountId required" }, { status: 400 });
+    }
+    const excludeRaw = Number(searchParams.get("excludeId"));
+    const excludeId = Number.isFinite(excludeRaw) && excludeRaw > 0 ? excludeRaw : undefined;
+    const sideRaw = searchParams.get("side");
+    const askedSide = sideRaw === "1" ? 1 : sideRaw === "-1" ? -1 : undefined;
 
-    // ── InvVoucher bills (SALE / POS / PURCHASE) for the party ────────────
-    const invVouchers = await prisma.voucherDetail.findMany({
-        where: {
-            // 5D-4 party + 5D-8 status/deletedAt + 5D-11 type all live on the spine.
-            universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: ["SALE", "POS", "PURCHASE"] } },
-        },
-        select: {
-            id: true,
-            totalAmount: true,
-            universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 + 5D-6 + 5D-10 date
-            universalVoucherId: true, creditPeriodDays: true,
-        },
-        orderBy: [{ universalVoucher: { date: "asc" } }],   // 5D-10
-    });
-    const uvIds = invVouchers
-        .map((v) => v.universalVoucherId)
-        .filter((x): x is number => x !== null);
-    // RECEIPT settlements + up-front tenders, both via the spine (universalVoucherId).
-    const [jeAllocSum, tendersBySpine] = await Promise.all([
-        sumReceiptAllocations(prisma, uvIds),
-        loadTenderLines(prisma, uvIds),
-    ]);
+    const self = excludeId !== undefined ? await loadDocOpen(prisma, accountId, excludeId) : null;
+    // An explicit `side` wins; otherwise the open voucher's own side decides, and
+    // we offer only the opposite one — the only side a link is legal against.
+    const side = askedSide ?? (self ? (self.side === 1 ? -1 : 1) : undefined);
 
-    const openInvoices = invVouchers
-        .map((v) => {
-            const total = Number(v.totalAmount);
-            // Paid at sale time = non-AR tender rows (cash/bank/card).
-            // Later receipts add via the spine-allocation chain.
-            const upfront = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
-                .filter((t) => t.accountId !== v.universalVoucher?.partyAccountId)
-                .reduce((s, t) => s + t.amount, 0);
-            const allocated = upfront + (v.universalVoucherId !== null ? (jeAllocSum[v.universalVoucherId] ?? 0) : 0);
-            const due = new Date(v.universalVoucher!.date);   // 5D-10: date on spine
-            due.setDate(due.getDate() + (v.creditPeriodDays ?? 30));
-            return {
-                kind:        "invoice" as const, // keep the wire key the dialog already consumes
-                id:          v.id,
-                reference:   v.universalVoucher?.voucherNo ?? "",
-                date:        v.universalVoucher!.date,   // 5D-10
-                dueDate:     due,
-                totalAmount: total,
-                allocated,
-                outstanding: total - allocated,
-            };
-        })
-        .filter((row) => row.outstanding > 0.005);
-
-    // ── Finance Voucher bills (CREDIT_NOTE / DEBIT_NOTE) for the party ────
-    // RECEIPT/PAYMENT are settlements, not bills — they appear as the
-    // source side of an allocation, not the target side. Same logic as
-    // outstandings.ts post-2026-05-24.
-    // Phase 5 5E: the spine IS the finance voucher; total is computed from the
-    // debit legs (no stored totalAmount).
-    const vouchers = await prisma.universalVoucher.findMany({
-        where: {
-            partyAccountId: accountId,
-            type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
-            deletedAt:      null,
-            status:         { not: "CANCELLED" },
-        },
-        select: { id: true, type: true, voucherNo: true, date: true, lines: { select: { type: true, amount: true } } },
-        orderBy: [{ date: "asc" }],
-    });
-    const vchIds = vouchers.map((v) => v.id);
-    // 5E: CREDIT_NOTE/DEBIT_NOTE settlements via the spine (keyed by spine id).
-    const vchAllocSum = await sumVoucherAllocations(prisma, vchIds);
-
-    const openVouchers = vouchers
-        .map((v) => {
-            const total = v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0);
-            return {
-                kind:        "voucher" as const,
-                id:          v.id,
-                voucherType: v.type,
-                reference:   v.voucherNo ?? formatUvNo(v.id),
-                date:        v.date,
-                totalAmount: total,
-                allocated:   vchAllocSum[v.id] ?? 0,
-                outstanding: total - (vchAllocSum[v.id] ?? 0),
-            };
-        })
-        .filter((row) => row.outstanding > 0.005);
+    const docs = await loadLinkableDocs(prisma, accountId, { excludeId, side });
 
     return NextResponse.json({
-        openInvoices,
-        openVouchers,
-        openTotal: openInvoices.reduce((s, r) => s + r.outstanding, 0)
-                 + openVouchers.reduce((s, r) => s + r.outstanding, 0),
+        docs,
+        self,
+        receivableTotal: docs.filter((d) => d.side === 1).reduce((s, d) => s + d.open, 0),
+        payableTotal:    docs.filter((d) => d.side === -1).reduce((s, d) => s + d.open, 0),
     });
 }
