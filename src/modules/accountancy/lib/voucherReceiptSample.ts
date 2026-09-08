@@ -14,6 +14,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { parseBankJson } from "@/shared/lib/org/organisationView";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
+import { paymentInstrumentText } from "@/shared/lib/constants/accounting";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
@@ -413,6 +414,16 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
 
     // GL vouchers have no qty×rate goods — render each ledger line as
     // "<Account> (Dr|Cr)" with its amount so the slip reads as a journal.
+    // Payment / Receipt print a receipt-book "By:" line instead, so only the
+    // money side (Cash/Bank) is sent, tagged with its instrument when captured
+    // ("HDFC Bank · UPI (4532…)"). The party is already the addressee.
+    const moneySide = v.type === "RECEIPT" ? "DEBIT" : v.type === "PAYMENT" ? "CREDIT" : null;
+    const printLines = v.lines
+        .filter((l) => moneySide == null || l.type === moneySide)
+        .map((l) => {
+            const instrument = moneySide ? paymentInstrumentText(l.method, l.reference) : "";
+            return { ...l, description: instrument ? `${l.account.name} · ${instrument}` : l.account.name };
+        });
     const sample: ThermalReceiptSample = {
         reference:  (v.voucherNo ?? formatUvNo(v.id)),
         date:       isoDate(v.date),
@@ -422,8 +433,8 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
         // Journal-style lines carry the GL side; the renderer shows a
         // Particulars · Debit · Credit table (Contra / Journal) rather than
         // "Account (Dr)" text in a qty/rate row.
-        lines: v.lines.map((l) => ({
-            description: l.account.name,
+        lines: printLines.map((l) => ({
+            description: l.description,
             quantity:    1,
             amount:      toNumber(l.amount),
             entryType:   l.type,

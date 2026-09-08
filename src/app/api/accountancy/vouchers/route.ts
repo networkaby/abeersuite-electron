@@ -8,6 +8,7 @@ import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { validateRequest } from "@/shared/lib/api";
+import { PAYMENT_INSTRUMENT_VALUES } from "@/shared/lib/constants/accounting";
 import { handleApiError } from "@/shared/lib/api";
 
 const lineSchema = z.object({
@@ -15,6 +16,9 @@ const lineSchema = z.object({
     type:        z.enum(["DEBIT", "CREDIT"]),
     amount:      z.number().positive(),
     description: z.string().trim().optional(),
+    // Payment instrument (Payment / Receipt: on the Cash/Bank line) — optional.
+    method:      z.enum(PAYMENT_INSTRUMENT_VALUES).optional(),
+    reference:   z.string().trim().max(60).optional(),
 });
 
 // Contra deposit-slip capture — the FINAL combined breakdown (notes counts +

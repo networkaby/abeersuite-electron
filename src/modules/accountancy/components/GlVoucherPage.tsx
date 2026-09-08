@@ -3,8 +3,11 @@
 // Tally-finish full-page voucher form for the five pure-GL voucher kinds
 // (Payment, Receipt, Contra, Credit Note, Debit Note). Per-kind COPY config
 // drives labels / Dr-Cr sides / account filters. Layout: compact top strip,
-// two-column Particulars / Amount body, balance indicator + amount-in-words,
-// sticky footer. Create-only.
+// two-column Particulars / Amount body, sticky footer. Payment / Receipt are
+// the counter-friendly pair: no Dr/Cr chrome, an always-present blank entry
+// row (Tally-style, Enter walks down), an optional payment instrument on the
+// Cash/Bank line, and the last-used Cash/Bank ledger remembered per kind.
+// Create + edit (PATCH).
 
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
@@ -21,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
-import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { ACCOUNT_GROUPS, PAYMENT_INSTRUMENTS, type PaymentInstrument } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
@@ -58,6 +61,9 @@ type LoadedLine = {
     type:        "DEBIT" | "CREDIT";
     amount:      number | string;
     description: string | null;
+    /** Payment instrument — only on the Cash/Bank line of a Payment / Receipt. */
+    method?:     string | null;
+    reference?:  string | null;
 };
 
 type LoadedVoucher = {
@@ -77,7 +83,10 @@ type LoadedVoucher = {
 
 // Normalized line for dirty-check comparison.
 type SnapLine = { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description: string };
-type Snapshot = { date: string; narration: string; lines: SnapLine[] };
+// `instrument` = "<method>|<reference>" of the money line ("" when none).
+type Snapshot = { date: string; narration: string; instrument: string; lines: SnapLine[] };
+const instrumentKey = (method?: string | null, reference?: string | null) =>
+    method || (reference ?? "").trim() ? `${method ?? ""}|${(reference ?? "").trim()}` : "";
 
 function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description?: string | null }[]): SnapLine[] {
     return lines
@@ -97,6 +106,7 @@ function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; am
 function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
     if (a.date !== b.date) return false;
     if (a.narration !== b.narration) return false;
+    if (a.instrument !== b.instrument) return false;
     if (a.lines.length !== b.lines.length) return false;
     for (let i = 0; i < a.lines.length; i++) {
         const x = a.lines[i], y = b.lines[i];
@@ -402,6 +412,20 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
     const [rows, setRows] = useState<Row[]>([newRow()]);
 
+    // Payment / Receipt: HOW the money moved (optional) — stored as method +
+    // reference on the Cash/Bank GL line and printed on the receipt's "By:" line.
+    const [instrument, setInstrument]       = useState<PaymentInstrument | "">("");
+    const [instrumentRef, setInstrumentRef] = useState("");
+    const narrationRef = useRef<HTMLInputElement>(null);
+    // Focus a particulars row's ledger / amount box by row POSITION (the combobox
+    // owns its own input, so we reach it through the row's data attribute; the
+    // position, not the client-only row id, keeps server and client HTML equal).
+    // A short delay lets the combobox finish its own select-and-refocus first.
+    const focusIn = (selector: string) =>
+        setTimeout(() => document.querySelector<HTMLInputElement>(selector)?.focus(), 60);
+    const focusRowLedger = (idx: number) => focusIn(`[data-row-idx="${idx}"] input`);
+    const focusRowAmount = (idx: number) => focusIn(`[data-row-idx="${idx}"] input[data-amount]`);
+
     // ── Contra deposit-slip capture ─────────────────────────────────────────
     const isContra = kind === "CONTRA";
     const [denomOn, setDenomOn]     = useState(false);
@@ -419,6 +443,35 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     const isPayRec = kind === "PAYMENT" || kind === "RECEIPT";
     const [incomeExpOnly, setIncomeExpOnly] = useState(false);
     const rowNatureType = kind === "PAYMENT" ? "EXPENSE" : "INCOME";
+
+    // Payment / Receipt keep one blank entry row at the bottom (Tally-style: no
+    // "Add Row" click — a fresh line appears as soon as the last one is used).
+    // Blank rows are ignored for totals, validation and save.
+    const isBlankRow = (r: Row) => r.accountId == null && !r.amount.trim() && !r.note.trim();
+    const activeRows = isPayRec ? rows.filter((r) => !isBlankRow(r)) : rows;
+    useEffect(() => {
+        if (!isPayRec) return;
+        if (rows.length === 0 || !isBlankRow(rows[rows.length - 1])) {
+            setRows((rs) => [...rs, newRow()]);
+        }
+    }, [isPayRec, rows]);
+
+    // Remember the last Cash/Bank ledger used per kind so the daily receipt is
+    // just party + amount. Read once the accounts are in (create mode only).
+    const lastTopKey = `glvoucher:lastTop:${kind}`;
+    useEffect(() => {
+        if (!isPayRec || isEditing || topLedgerId != null || accounts.length === 0) return;
+        try {
+            const saved = Number(window.localStorage.getItem(lastTopKey));
+            if (saved && accounts.some((a) => a.id === saved && copy.topFilter(a))) setTopLedgerId(saved);
+        } catch { /* storage unavailable — start blank */ }
+        // Only on first accounts load; a cleared picker must stay cleared.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [accounts.length]);
+    const rememberTop = (id: number | null) => {
+        if (!isPayRec || id == null) return;
+        try { window.localStorage.setItem(lastTopKey, String(id)); } catch { /* ignore */ }
+    };
 
     // Which voucher the bill-wise popup is linking, and on which party ledger.
     // Both are captured together because the form resets itself after a save, and
@@ -448,7 +501,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     // linking reads the GL legs, which name every party on the voucher.
     const isPartyAccount = (a?: GlAccount) => !!a && (isSundryDebtor(a) || isSundryCreditor(a));
     const partyRowIds = [...new Set(
-        rows.map((r) => r.accountId)
+        activeRows.map((r) => r.accountId)
             .filter((id): id is number => id !== null && isPartyAccount(accountById.get(id))),
     )];
     const partyLedgerId: number | null = copy.topPickerKind === "party"
@@ -482,13 +535,13 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     // Every cheque row must carry a cheque number before the voucher can save.
     const chequesComplete = rows.every((r) => !isChequeRow(r) || (r.chequeNo ?? "").trim().length > 0);
 
-    const rowsTotal = rows.reduce((s, r) => s + parseRowAmount(r.amount), 0);
+    const rowsTotal = activeRows.reduce((s, r) => s + parseRowAmount(r.amount), 0);
     const topTotal  = rowsTotal;  // top side auto-derives from particulars sum
     const balanced  = rowsTotal > 0
-        && rows.every((r) => r.accountId !== null && (allowNegativeRows ? parseRowAmount(r.amount) !== 0 : parseRowAmount(r.amount) > 0))
+        && activeRows.every((r) => r.accountId !== null && (allowNegativeRows ? parseRowAmount(r.amount) !== 0 : parseRowAmount(r.amount) > 0))
         && !!effectiveTopAccountId
         // top account can't equal any particulars account (would self-balance)
-        && rows.every((r) => r.accountId !== effectiveTopAccountId)
+        && activeRows.every((r) => r.accountId !== effectiveTopAccountId)
         && chequesComplete;
 
     // Org's note/coin list for the denomination panels (same as shift close).
@@ -579,7 +632,11 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                 const extraTopLines = topSideLines.slice(1);
                 const rowLines = v.lines.filter((l) => l.type === copy.rowSide);
 
-                if (topLine) setTopLedgerId(topLine.accountId);
+                if (topLine) {
+                    setTopLedgerId(topLine.accountId);
+                    setInstrument((topLine.method as PaymentInstrument | null | undefined) ?? "");
+                    setInstrumentRef(topLine.reference ?? "");
+                }
                 const combinedRows = [
                     ...rowLines.map((l) => ({ accountId: l.accountId, amount: Number(l.amount), note: l.description ?? "" })),
                     ...extraTopLines.map((l) => ({ accountId: l.accountId, amount: -Number(l.amount), note: l.description ?? "" })),
@@ -614,9 +671,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
                 // Snapshot original for dirty-check
                 originalSnapshotRef.current = {
-                    date:      v.date.slice(0, 10),
-                    narration: (v.narration ?? "").trim(),
-                    lines:     normalizeLines(v.lines.map((l) => ({
+                    date:       v.date.slice(0, 10),
+                    narration:  (v.narration ?? "").trim(),
+                    instrument: isPayRec ? instrumentKey(topLine?.method, topLine?.reference) : "",
+                    lines:      normalizeLines(v.lines.map((l) => ({
                         accountId:   l.accountId,
                         type:        l.type,
                         amount:      Number(l.amount),
@@ -627,7 +685,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             .catch(() => toast.error("Failed to load voucher"))
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [isEditing, voucherId, kind, copy.topSide, copy.rowSide, reloadCounter]);
+    }, [isEditing, voucherId, kind, isPayRec, copy.topSide, copy.rowSide, reloadCounter]);
 
     // Re-mark cheque rows once BOTH the saved cheques and the accounts list are
     // available (they load independently). Match each cheque to a row by drawer
@@ -728,8 +786,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             accountId: effectiveTopAccountId!,
             type:      copy.topSide,
             amount:    rowsTotal,
+            ...(isPayRec && instrument ? { method: instrument } : {}),
+            ...(isPayRec && instrumentRef.trim() ? { reference: instrumentRef.trim() } : {}),
         };
-        const rowLines = rows.map((r) => {
+        const rowLines = activeRows.map((r) => {
             const amt = parseRowAmount(r.amount);
             const negative = allowNegativeRows && amt < 0;
             return {
@@ -747,8 +807,9 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
         if (isEditing && voucherId != null) {
             const current: Snapshot = {
                 date,
-                narration: narration.trim(),
-                lines:     normalizeLines(allLines),
+                narration:  narration.trim(),
+                instrument: isPayRec ? instrumentKey(instrument, instrumentRef) : "",
+                lines:      normalizeLines(allLines),
             };
             const original = originalSnapshotRef.current;
             if (original && snapshotsEqual(original, current)) {
@@ -807,11 +868,16 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             // Reset for the next voucher instead of navigating away — same as the
             // Sale form: the user can punch in the next entry without leaving.
             // Cancel / Close X are the explicit exits to the register.
+            rememberTop(effectiveTopAccountId);
             setNarration("");
-            setTopLedgerId(null);
+            setInstrument("");
+            setInstrumentRef("");
+            // Payment / Receipt keep the Cash/Bank ledger for the next entry.
+            if (!isPayRec) setTopLedgerId(null);
             setTopParty(null);
             partyPickerRef.current?.clear();
             setRows([newRow()]);
+            if (isPayRec) focusRowLedger(0);
             setRowDenoms({});
             setDate(toIsoDate(new Date()));
             isDirtyRef.current = false;
@@ -868,10 +934,12 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
                     {/* Top side — single first line. Dr/Cr prefix in grey, then picker, then amount. */}
                     <div className="space-y-2">
-                        <div className="grid grid-cols-[40px_minmax(0,1fr)_160px] items-start gap-3 pb-2 border-b border-border/60">
-                            <span className="pt-2 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-                                {copy.topSide === "DEBIT" ? "Dr" : "Cr"}
-                            </span>
+                        <div className={`grid items-start gap-3 pb-2 border-b border-border/60 ${isPayRec ? "grid-cols-1" : "grid-cols-[40px_minmax(0,1fr)_160px]"}`}>
+                            {!isPayRec && (
+                                <span className="pt-2 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                                    {copy.topSide === "DEBIT" ? "Dr" : "Cr"}
+                                </span>
+                            )}
                             <div>
                                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">{copy.topLabel}</p>
                                 {copy.topPickerKind === "party" && !isEditing ? (
@@ -903,12 +971,40 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                 ) : (
                                     <GlAccountCombobox
                                         value={topLedgerId}
-                                        onChange={(a) => setTopLedgerId(a?.id ?? null)}
+                                        onChange={(a) => {
+                                            setTopLedgerId(a?.id ?? null);
+                                            if (isPayRec && a) focusRowLedger(0);
+                                        }}
                                         accounts={topAccounts}
                                         placeholder={copy.topPlaceholder}
                                     />
                                 )}
                                 <BalanceHint account={topAccount} />
+                                {/* Payment instrument — optional. Cash / UPI / Card / Cheque /
+                                    Bank transfer plus its number, printed on the receipt's
+                                    "By:" line. Left blank for a plain entry. */}
+                                {isPayRec && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <label className="text-[11px] text-muted-foreground whitespace-nowrap">Instrument</label>
+                                        <select
+                                            value={instrument}
+                                            onChange={(e) => setInstrument(e.target.value as PaymentInstrument | "")}
+                                            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                        >
+                                            <option value="">— optional —</option>
+                                            {PAYMENT_INSTRUMENTS.map((i) => (
+                                                <option key={i.value} value={i.value}>{i.label}</option>
+                                            ))}
+                                        </select>
+                                        <Input
+                                            value={instrumentRef}
+                                            onChange={(e) => setInstrumentRef(e.target.value)}
+                                            placeholder="Cheque no. / UPI ref / txn id"
+                                            maxLength={60}
+                                            className="h-8 text-xs max-w-[260px]"
+                                        />
+                                    </div>
+                                )}
                                 {/* Denomination capture — offered whenever the contra
                                     moves physical cash (deposit to bank, or a cash-to-
                                     cash handover). Ticked → cash amounts come from the
@@ -926,9 +1022,11 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                     </label>
                                 )}
                             </div>
-                            <div className="pt-6 text-right font-mono tabular-nums text-sm">
-                                {topTotal > 0 ? `₹ ${fmt(topTotal)}` : <span className="text-muted-foreground/65">—</span>}
-                            </div>
+                            {!isPayRec && (
+                                <div className="pt-6 text-right font-mono tabular-nums text-sm">
+                                    {topTotal > 0 ? `₹ ${fmt(topTotal)}` : <span className="text-muted-foreground/65">—</span>}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -950,7 +1048,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                             <thead>
                                 <tr className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
                                     <th className="w-8 px-1 py-1 text-left font-medium">#</th>
-                                    <th className="px-2 py-1 text-left font-medium">{copy.rowSide === "DEBIT" ? "Dr" : "Cr"} · Particulars</th>
+                                    <th className="px-2 py-1 text-left font-medium">{isPayRec ? "Particulars" : `${copy.rowSide === "DEBIT" ? "Dr" : "Cr"} · Particulars`}</th>
                                     <th className="w-40 px-2 py-1 text-right font-medium">Amount</th>
                                     <th className="w-8 px-1 py-1" />
                                 </tr>
@@ -962,7 +1060,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                     // the side panel, plain typing is off.
                                     const denomLocked = isContra && denomOn && isCashAcct(acct);
                                     return (
-                                        <tr key={row.id} className="border-t border-border/40 align-top">
+                                        <tr key={row.id} data-row-idx={i} className="border-t border-border/40 align-top">
                                             <td className="px-1 py-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
                                             <td className="px-2 py-2">
                                                 <GlAccountCombobox
@@ -976,6 +1074,8 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                             accountId: a?.id ?? null,
                                                             ...(lockNow ? { amount: total && total > 0 ? String(round2(total)) : "" } : {}),
                                                         });
+                                                        // Ledger picked → straight to its amount (Tally flow).
+                                                        if (isPayRec && a) focusRowAmount(i);
                                                     }}
                                                     accounts={rowAccounts}
                                                     placeholder={copy.rowPlaceholder}
@@ -985,6 +1085,10 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     value={row.note}
                                                     onChange={(e) => updateRow(row.id, { note: e.target.value })}
                                                     placeholder="Note (optional)"
+                                                    // Payment / Receipt: Tab walks ledger → amount; the note is
+                                                    // reached by mouse (or Enter here goes on to the amount).
+                                                    tabIndex={isPayRec ? -1 : undefined}
+                                                    onKeyDown={isPayRec ? (e) => { if (e.key === "Enter") { e.preventDefault(); focusRowAmount(i); } } : undefined}
                                                     className="h-7 text-xs mt-1"
                                                 />
                                                 {/* Bank Transfer-from in a deposit = a cheque. No toggle:
@@ -1015,11 +1119,20 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                             updateRow(row.id, { amount: e.target.value });
                                                         }
                                                     }}
+                                                    data-amount=""
+                                                    // Enter on the amount → next row's ledger (a blank one
+                                                    // is always waiting); on an empty last row → Narration.
+                                                    onKeyDown={isPayRec ? (e) => {
+                                                        if (e.key !== "Enter") return;
+                                                        e.preventDefault();
+                                                        if (i + 1 < rows.length) focusRowLedger(i + 1);
+                                                        else narrationRef.current?.focus();
+                                                    } : undefined}
                                                     className="h-8 text-right tabular-nums font-mono"
                                                 />
                                             </td>
                                             <td className="px-1 py-2 text-center">
-                                                {rows.length > 1 && (
+                                                {rows.length > 1 && !(isPayRec && isBlankRow(row)) && (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon-xs"
@@ -1036,14 +1149,29 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                 })}
                             </tbody>
                         </table>
-                        <div className="px-1 pt-2">
-                            <Button variant="ghost" size="sm" onClick={addRow} className="h-auto py-1 text-xs text-primary">
-                                <Plus size={12} className="mr-1" /> Add Row
-                            </Button>
-                        </div>
+                        {!isPayRec && (
+                            <div className="px-1 pt-2">
+                                <Button variant="ghost" size="sm" onClick={addRow} className="h-auto py-1 text-xs text-primary">
+                                    <Plus size={12} className="mr-1" /> Add Row
+                                </Button>
+                            </div>
+                        )}
+                        {/* Payment / Receipt: one plain total instead of the Dr/Cr balance card —
+                            the money side always equals the particulars, so there is nothing to match. */}
+                        {isPayRec && (
+                            <div className="flex items-baseline justify-end gap-3 border-t border-border px-2 pt-2">
+                                <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                                    Total {kind === "RECEIPT" ? "received" : "paid"}
+                                </span>
+                                <span className="font-mono tabular-nums text-base font-semibold">
+                                    ₹ {fmt(rowsTotal)}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Totals strip */}
+                    {/* Totals strip — Contra / Credit Note / Debit Note keep the Dr·Cr check */}
+                    {!isPayRec && (
                     <div className="rounded-md border border-border bg-muted/30 px-4 py-3">
                         <div className="flex items-center justify-end gap-6 text-sm">
                             <span className="text-muted-foreground">Dr</span>
@@ -1067,11 +1195,13 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                             )}
                         </div>
                     </div>
+                    )}
 
                     {/* Narration + amount-in-words — Tally convention */}
                     <div className="space-y-1">
                         <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Narration</label>
                         <Input
+                            ref={narrationRef}
                             value={narration}
                             onChange={(e) => setNarration(e.target.value)}
                             placeholder={copy.narrationPlaceholder}

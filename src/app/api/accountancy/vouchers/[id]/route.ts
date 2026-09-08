@@ -1,3 +1,4 @@
+import { PAYMENT_INSTRUMENT_VALUES } from "@/shared/lib/constants/accounting";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
@@ -58,6 +59,9 @@ const lineSchema = z.object({
     type:        z.enum(["DEBIT", "CREDIT"]),
     amount:      z.number().positive(),
     description: z.string().trim().optional(),
+    // Payment instrument (Payment / Receipt: on the Cash/Bank line) — optional.
+    method:      z.enum(PAYMENT_INSTRUMENT_VALUES).optional(),
+    reference:   z.string().trim().max(60).optional(),
 });
 
 // Contra deposit-slip capture — same shape as the create route; the FINAL
@@ -148,6 +152,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     type:        l.type,
                     amount:      l.amount,
                     description: l.description ?? null,
+                    method:      l.method ?? null,
+                    reference:   l.reference ?? null,
                     seq:         idx,
                 })),
             });

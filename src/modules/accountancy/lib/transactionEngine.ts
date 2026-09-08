@@ -374,7 +374,7 @@ export interface CreateGlVoucherSpec {
     type:            VoucherType;
     date:            Date;
     userId:          number;
-    lines:           { accountId: number; type: Drcr; amount: number; description?: string | null }[];
+    lines:           { accountId: number; type: Drcr; amount: number; description?: string | null; method?: PaymentMethod | null; reference?: string | null }[];
     narration?:      string | null;
     partyAccountId?: number | null;
     /** When true, create then immediately post (DRAFT → POSTED) in the same tx. */
@@ -505,6 +505,8 @@ export async function engineCreateVoucher(
             type:        l.type,
             amount:      round2(l.amount),
             description: l.description ?? null,
+            method:      l.method ?? null,
+            reference:   l.reference ?? null,
             seq:         idx,
         })),
     });

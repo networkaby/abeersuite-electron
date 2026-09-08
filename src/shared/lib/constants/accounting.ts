@@ -41,3 +41,30 @@ export type AccountGroupName = (typeof ACCOUNT_GROUPS)[keyof typeof ACCOUNT_GROU
 export const ACCOUNT_LEDGERS = {
     PETTY_CASH: "Petty Cash",
 } as const;
+
+/**
+ * Payment instrument — HOW money moved on a Payment / Receipt voucher (the
+ * `method` + `reference` columns on the Cash/Bank GL line). Mirrors the
+ * Prisma `PaymentMethod` enum; the labels are what the form and the printed
+ * receipt show. Optional on the form — a plain cash receipt leaves it blank.
+ */
+export const PAYMENT_INSTRUMENTS = [
+    { value: "CASH",           label: "Cash" },
+    { value: "MOBILE_PAYMENT", label: "UPI" },
+    { value: "CARD",           label: "Card" },
+    { value: "CHEQUE",         label: "Cheque" },
+    { value: "BANK_TRANSFER",  label: "Bank transfer" },
+    { value: "OTHER",          label: "Other" },
+] as const;
+
+export type PaymentInstrument = (typeof PAYMENT_INSTRUMENTS)[number]["value"];
+
+export const PAYMENT_INSTRUMENT_VALUES = PAYMENT_INSTRUMENTS.map((i) => i.value) as [PaymentInstrument, ...PaymentInstrument[]];
+
+/** "UPI (4532…)" / "Cheque (483920)" / "Cash" — for print and lists; "" when nothing captured. */
+export function paymentInstrumentText(method?: string | null, reference?: string | null): string {
+    const label = PAYMENT_INSTRUMENTS.find((i) => i.value === method)?.label ?? "";
+    const ref = (reference ?? "").trim();
+    if (label && ref) return `${label} (${ref})`;
+    return label || ref;
+}
