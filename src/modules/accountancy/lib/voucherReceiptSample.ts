@@ -415,15 +415,17 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     // GL vouchers have no qty×rate goods — render each ledger line as
     // "<Account> (Dr|Cr)" with its amount so the slip reads as a journal.
     // Payment / Receipt print a receipt-book "By:" line instead, so only the
-    // money side (Cash/Bank) is sent, tagged with its instrument when captured
-    // ("HDFC Bank · UPI (4532…)"). The party is already the addressee.
+    // money side (Cash/Bank) is sent. The instruments live on the particulars
+    // rows (one party by UPI, the next by cheque) and are gathered onto that
+    // line: "HDFC Bank · UPI (4532…), Cheque (IN955468)". The party is already
+    // the addressee.
     const moneySide = v.type === "RECEIPT" ? "DEBIT" : v.type === "PAYMENT" ? "CREDIT" : null;
+    const instruments = moneySide
+        ? v.lines.filter((l) => l.type !== moneySide).map((l) => paymentInstrumentText(l.method, l.reference)).filter(Boolean).join(", ")
+        : "";
     const printLines = v.lines
         .filter((l) => moneySide == null || l.type === moneySide)
-        .map((l) => {
-            const instrument = moneySide ? paymentInstrumentText(l.method, l.reference) : "";
-            return { ...l, description: instrument ? `${l.account.name} · ${instrument}` : l.account.name };
-        });
+        .map((l) => ({ ...l, description: instruments ? `${l.account.name} · ${instruments}` : l.account.name }));
     const sample: ThermalReceiptSample = {
         reference:  (v.voucherNo ?? formatUvNo(v.id)),
         date:       isoDate(v.date),
