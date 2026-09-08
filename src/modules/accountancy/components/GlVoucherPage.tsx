@@ -42,6 +42,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
+import { OpenBillsPanel, clearOpenBillsCache } from "@/modules/accountancy/components/OpenBillsPanel";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import {
@@ -549,6 +550,12 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
         ? rows.filter((r) => isCashAcct(r.accountId ? accountById.get(r.accountId) : undefined))
         : [];
     const showDenomPanels = cashRows.length > 0;
+    // Payment / Receipt with ONE party row → its open bills sit beside the form
+    // from the moment the party is picked (read-only; the link itself happens in
+    // the popup after posting). A Receipt settles receivables, a Payment payables.
+    const showOpenBills = isPayRec && !isEditing && partyLedgerId != null;
+    const openBillsSide: 1 | -1 = kind === "RECEIPT" ? 1 : -1;
+    const showSidePanel = showDenomPanels || showOpenBills;
     // At least one Transfer-from is cash → this contra moves physical cash, so
     // the denomination option is meaningful (deposit to bank, or cash handover).
     // A bank → cash withdrawal has no cash source and doesn't offer it.
@@ -896,6 +903,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
             );
             if (postAfterSave) {
                 await axios.post(`/api/accountancy/vouchers/${created.data.id}/post`);
+                clearOpenBillsCache();   // the party's dues just moved
                 toast.success(`${copy.title} ${created.data.reference} saved & posted`);
                 // Now it is posted, so it can legally settle a bill. Offer that at
                 // once — the id returned here IS the spine id (Phase 5E).
@@ -970,7 +978,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
             {/* Entry boxes sit on the raised (white) surface so they stand off the
                 grey page, and hint text is faded so it never reads as typed data. */}
             <div className="flex-1 overflow-y-auto px-8 py-6 [&_input]:bg-card [&_select]:bg-card [&_input::placeholder]:text-muted-foreground/55 [&_input:disabled]:bg-muted">
-                <div className={`mx-auto flex items-start gap-8 ${showDenomPanels ? "max-w-6xl" : "max-w-3xl"}`}>
+                <div className={`mx-auto flex items-start gap-8 ${showSidePanel ? "max-w-6xl" : "max-w-3xl"}`}>
                 <div className="min-w-0 flex-1 space-y-6">
 
                     {/* Top side — single first line. Dr/Cr prefix in grey, then picker, then amount. */}
@@ -1275,8 +1283,20 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
 
                 {/* Denomination panels — one per cash Transfer-from row; the
                     combined result is what the deposit slip prints. */}
-                {showDenomPanels && (
+                {showSidePanel && (
                     <aside className="w-[300px] shrink-0 space-y-4 sticky top-0">
+                        {showOpenBills && partyLedgerId != null && (
+                            <OpenBillsPanel
+                                accountId={partyLedgerId}
+                                partyName={accountById.get(partyLedgerId)?.name}
+                                side={openBillsSide}
+                                // Click a bill → its open amount goes into the party's row.
+                                onPickAmount={(amt) => {
+                                    const target = rows.find((r) => r.accountId === partyLedgerId);
+                                    if (target) updateRow(target.id, { amount: String(round2(amt)) });
+                                }}
+                            />
+                        )}
                         {cashRows.map((r) => (
                             <DenomPanel
                                 key={r.id}
@@ -1345,7 +1365,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                     onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
                     accountId={linkTarget.accountId}
                     voucherId={linkTarget.voucherId}
-                    onSaved={() => setReloadCounter((c) => c + 1)}
+                    onSaved={() => { clearOpenBillsCache(); setReloadCounter((c) => c + 1); }}
                 />
             )}
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
