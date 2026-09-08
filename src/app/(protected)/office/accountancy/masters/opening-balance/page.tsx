@@ -32,6 +32,9 @@ import { fmt } from "@/utils/constants";
 type AccountRow = {
     id: number; code: string; name: string;
     openingBalance: number; openingBalanceType: "DEBIT" | "CREDIT" | null;
+    /** Under Sundry Debtors or Sundry Creditors — the only ledgers that keep
+     *  bill-wise details. A bank or capital opening has no bills behind it. */
+    isParty: boolean;
 };
 type ProductRow = {
     id: number; sku: string; name: string;
@@ -380,16 +383,19 @@ function AccountOpeningSection({
                                     {a.openingBalanceType === "CREDIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/65">—</span>}
                                 </td>
                                 <td className="px-5 py-2 text-right">
-                                    {/* Break this one number into the bills it really was, so each
-                                        ages and can be settled on its own. */}
-                                    <button
-                                        type="button"
-                                        title="Bill-wise details for this opening balance"
-                                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                        onClick={(e) => { e.stopPropagation(); setBillsForAccount(a.id); }}
-                                    >
-                                        <ListTree size={14} />
-                                    </button>
+                                    {/* Party ledgers only. Breaking a bank or capital opening into
+                                        "bills" would be meaningless — there is nothing to age and
+                                        nothing to settle it against. */}
+                                    {a.isParty && (
+                                        <button
+                                            type="button"
+                                            title="Bill-wise details for this opening balance"
+                                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            onClick={(e) => { e.stopPropagation(); setBillsForAccount(a.id); }}
+                                        >
+                                            <ListTree size={14} />
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

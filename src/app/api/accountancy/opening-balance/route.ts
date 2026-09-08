@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { partyLedgerIds } from "@/modules/accountancy/lib/accountGroups";
 
 // GET /api/accountancy/opening-balance
 // Returns: per-account opening balance rows, per-product opening stock rows,
@@ -11,7 +12,7 @@ export async function GET() {
     if (response) return response;
 
     try {
-        const [accounts, products] = await Promise.all([
+        const [accounts, products, partyIds] = await Promise.all([
             prisma.account.findMany({
                 where: { openingBalance: { not: null } },
                 orderBy: [{ code: "asc" }],
@@ -31,6 +32,12 @@ export async function GET() {
                     unit: { select: { code: true, label: true } },
                 },
             }),
+            // Which of these are parties. Bill-wise details only mean something
+            // for a Sundry Debtor or Creditor — a bank or capital account has an
+            // opening balance but no bills behind it — so the summary says which
+            // rows may be broken up rather than leaving the UI to guess from a
+            // group name that could be a sub-group.
+            partyLedgerIds(),
         ]);
 
         const openingDrTotal = accounts
@@ -47,7 +54,7 @@ export async function GET() {
         const difference = openingDrTotal - openingCrTotal;
 
         return NextResponse.json({
-            accounts,
+            accounts: accounts.map((a) => ({ ...a, isParty: partyIds.has(a.id) })),
             products,
             openingDrTotal,
             openingCrTotal,

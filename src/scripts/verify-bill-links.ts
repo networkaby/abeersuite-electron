@@ -297,6 +297,20 @@ async function main(): Promise<void> {
                             e instanceof Error ? e.message : String(e));
                     }
 
+                    // Bill-wise is a party idea — a bank or capital opening has
+                    // no bills behind it. The UI hides the button; this is the
+                    // rule underneath it.
+                    try {
+                        await saveOpeningBills(tx, {
+                            accountId: others[0].id, type: "DEBIT", userId: user.id,
+                            bills: [{ ref: "X", date: "2026-04-01", amount: 10 }],
+                        });
+                        check("refuses a bill-wise opening on a non-party ledger", false, "was allowed");
+                    } catch (e) {
+                        check("refuses a bill-wise opening on a non-party ledger", e instanceof OpeningBillError,
+                            e instanceof Error ? e.message : String(e));
+                    }
+
                     throw new Error(ROLLBACK);
                 }, { timeout: 60_000, maxWait: 15_000 });
             } catch (e) {

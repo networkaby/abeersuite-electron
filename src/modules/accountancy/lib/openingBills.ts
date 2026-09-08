@@ -203,6 +203,18 @@ export async function saveOpeningBills(
     });
     if (!account) throw new OpeningBillError("Ledger not found.");
 
+    // Bill-wise is a PARTY idea. A bank, a cash box or a capital account has an
+    // opening balance but no bills behind it — nothing to age, nothing to settle
+    // against. Tally gates it the same way ("maintain balances bill-by-bill" is a
+    // party-ledger setting). Checked here and not only in the UI, because a
+    // hidden button is not a rule.
+    const { partyLedgerIds } = await import("./accountGroups");
+    if (!(await partyLedgerIds()).has(args.accountId)) {
+        throw new OpeningBillError(
+            `${account.name} is not a party ledger — bill-wise details are only kept for Sundry Debtors and Sundry Creditors.`,
+        );
+    }
+
     const suspense = await resolveSuspenseLedger(tx);
     if (suspense === args.accountId) {
         throw new OpeningBillError("The suspense ledger cannot carry a bill-wise opening of its own.");
