@@ -931,7 +931,9 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             {/* Body — Tally-finish: two columns (Particulars wide / Amount right).
                 Contra denomination capture docks its counting panels in the free
                 space beside the form (one panel per cash Transfer-from row). */}
-            <div className="flex-1 overflow-y-auto px-8 py-6">
+            {/* Entry boxes sit on the raised (white) surface so they stand off the
+                grey page, and hint text is faded so it never reads as typed data. */}
+            <div className="flex-1 overflow-y-auto px-8 py-6 [&_input]:bg-card [&_select]:bg-card [&_input::placeholder]:text-muted-foreground/55 [&_input:disabled]:bg-muted">
                 <div className={`mx-auto flex items-start gap-8 ${showDenomPanels ? "max-w-6xl" : "max-w-3xl"}`}>
                 <div className="min-w-0 flex-1 space-y-6">
 
