@@ -20,6 +20,7 @@ import { Loader2, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { fmt } from "@/utils/constants";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
@@ -132,6 +133,38 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
         onChange(next, nextAmount);
     };
 
+    /**
+     * Type an amount straight onto one bill — how the money gets DIVIDED between
+     * bills rather than filled bill-by-bill from the top.
+     *
+     * Two ceilings, and the lower one wins: a bill can never take more than it
+     * has open, and when an amount has been typed on the row, the bills together
+     * can never take more than that amount. With no amount typed yet the ticks
+     * are what build it, so only the bill's own open applies and the row total
+     * follows what is placed.
+     */
+    const setPick = (d: LinkableDoc, raw: string) => {
+        const id = d.universalVoucherId;
+        const next = { ...picks };
+        const val = parseFloat(raw);
+
+        if (!Number.isFinite(val) || val <= 0) {
+            delete next[id];
+        } else {
+            const others = round2(sumOf(next) - (next[id] ?? 0));
+            const cap = amountTyped
+                ? Math.min(d.open, Math.max(0, round2(amount - others)))
+                : d.open;
+            const take = round2(Math.min(val, cap));
+            if (take <= EPS) delete next[id];
+            else next[id] = take;
+        }
+
+        const nextAmount = amountTyped ? null : sumOf(next);
+        if (nextAmount !== null) setSetByTicks(nextAmount);
+        onChange(next, nextAmount);
+    };
+
     // Auto — overdue first, then nearest due date, the smaller bill on a tie.
     // Ticks already made by hand are kept exactly as they are and paid for first,
     // so Auto can only fill what is still unplaced. With no amount typed yet it
@@ -187,15 +220,16 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                 <th className="w-6" />
                                 <th className="py-1 text-left font-medium">Bill</th>
                                 <th className="py-1 text-right font-medium">Total</th>
-                                <th className="py-1 text-right font-medium">Linked</th>
                                 <th className="py-1 text-right font-medium">Open</th>
+                                <th className="py-1 text-right font-medium">Link now</th>
                             </tr>
                         </thead>
                         <tbody>
                             {docs.map((d) => {
                                 const value = picks[d.universalVoucherId];
                                 const ticked = value !== undefined;
-                                const partial = ticked && value < d.open - EPS;
+                                const placing = value ?? 0;
+                                const willClose = placing >= d.open - EPS;
                                 return (
                                     <tr
                                         key={d.universalVoucherId}
@@ -212,21 +246,31 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                             </span>
                                         </td>
                                         <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{fmt(d.face)}</td>
-                                        {/* What money has already been LINKED to this bill —
-                                            not `face − open`, which also swallows whatever was
-                                            tendered at the counter and so read as a different
-                                            number from the same column in the link popup. */}
-                                        <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">
-                                            {d.linked > EPS ? fmt(d.linked) : "—"}
-                                        </td>
+                                        {/* Open, and straight under it what this bill will be
+                                            left at once the amount beside it is linked. The
+                                            answer to "how much of this is still mine to chase"
+                                            shown before and after, rather than a `*` the reader
+                                            has to look up in a footnote. */}
                                         <td className="py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap">
-                                            {ticked ? (
-                                                <span className={partial ? "text-amber-600" : "text-green-600"} title={partial ? `of ${fmt(d.open)} open` : undefined}>
-                                                    {fmt(value)}{partial ? "*" : ""}
+                                            <span className={placing > EPS ? "text-muted-foreground line-through decoration-muted-foreground/50" : "text-orange-600"}>
+                                                {fmt(d.open)}
+                                            </span>
+                                            {placing > EPS && (
+                                                <span className={`block text-[10px] ${willClose ? "text-green-600" : "text-amber-600"}`}>
+                                                    → {fmt(round2(d.open - placing))}
                                                 </span>
-                                            ) : (
-                                                <span className="text-orange-600">{fmt(d.open)}</span>
                                             )}
+                                        </td>
+                                        <td className="py-1 pl-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                            <Input
+                                                type="text"
+                                                inputMode="decimal"
+                                                aria-label={`Link now against ${d.ref}`}
+                                                placeholder="0.00"
+                                                value={value ?? ""}
+                                                onChange={(e) => setPick(d, e.target.value)}
+                                                className="h-6 w-[86px] px-1.5 text-right font-mono text-xs tabular-nums"
+                                            />
                                         </td>
                                     </tr>
                                 );
@@ -243,10 +287,10 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                         <span className="block text-[10px] text-muted-foreground">not bill-wise</span>
                                     </td>
                                     <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
-                                    <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
                                     <td className={`py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap ${onAccount > 0 ? "text-orange-600" : "text-green-700"}`}>
                                         {fmt(Math.abs(onAccount))} {onAccount > 0 ? "Dr" : "Cr"}
                                     </td>
+                                    <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
                                 </tr>
                             )}
                         </tbody>
@@ -292,7 +336,7 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
                         {amountTyped
-                            ? "Ticks fill bills within the amount typed. Auto fills the rest, overdue first, without touching your ticks. * = part of the bill."
+                            ? "Ticks fill bills within the amount typed — or type into Link now to divide it yourself. Auto fills the rest, overdue first, without touching your ticks."
                             : "Each tick adds the bill to the amount; Auto offers everything open. Type an amount first to fill bills within it."}
                         {" "}After Save, the link popup opens with the same ticks.
                     </p>
