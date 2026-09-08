@@ -56,6 +56,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
+import { useActivePartyStore } from "@/store/activePartyStore";
 
 interface CompanyListItem extends BrowseListRow {
     phone: string | null;
@@ -133,6 +134,19 @@ export default function CompaniesPage() {
     const [detail, setDetail] = useState<CompanyDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [tab, setTab] = useState<Tab>("transactions");
+    // Quick Actions read the open profile so a party-facing voucher opens with
+    // this party in place. Cleared when the profile closes or the page unmounts.
+    const setActiveParty = useActivePartyStore((s) => s.setParty);
+    useEffect(() => {
+        setActiveParty(detail ? {
+            kind: "company",
+            id: detail.id,
+            name: detail.name,
+            phone: detail.phone,
+            accountId: detail.accountId,
+        } : null);
+        return () => setActiveParty(null);
+    }, [detail, setActiveParty]);
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));

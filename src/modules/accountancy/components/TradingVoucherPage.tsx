@@ -64,6 +64,7 @@ import {
 } from "@/shared/components/PartySearchAndCreate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
+import { consumePreloadParty } from "@/store/activePartyStore";
 import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
@@ -391,6 +392,19 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .catch(() => setNextRef(""));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
+
+    // ── Party preload ──────────────────────────────────────────────────────
+    // Quick Actions clicked while a customer profile was open stashes that
+    // party for exactly one mount (see activePartyStore). Credit mode, party
+    // locked in — the same state a hand-pick leaves behind.
+    useEffect(() => {
+        if (isEditing) return;
+        const p = consumePreloadParty();
+        if (!p) return;
+        setPayMode("CREDIT");
+        setParty(p);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Duplicate hydration ────────────────────────────────────────────────
     // ⋮ → Duplicate on a sibling voucher stashes the source's data in

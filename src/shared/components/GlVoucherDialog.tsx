@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { GlVoucherPage, type MoneyFlowKind } from "@/modules/accountancy/components/GlVoucherPage";
 import { JournalVoucherPage } from "@/modules/accountancy/components/JournalVoucherPage";
+import type { ActiveParty } from "@/store/activePartyStore";
 
 /** Voucher kinds the Quick Actions menus open in place. */
 export type GlDialogKind = MoneyFlowKind | "JOURNAL";
@@ -26,7 +27,12 @@ export const GL_DIALOG_KIND_BY_ACTION: Record<string, GlDialogKind> = {
  * Esc and outside clicks are left to the form: it owns the "discard unsaved
  * changes?" prompt, and Radix closing underneath it would lose that.
  */
-export default function GlVoucherDialog({ kind, onClose }: { kind: GlDialogKind | null; onClose: () => void }) {
+export default function GlVoucherDialog({ kind, onClose, initialParty = null }: {
+    kind: GlDialogKind | null;
+    onClose: () => void;
+    /** The open customer profile, if any — lands in the form's party slot. */
+    initialParty?: ActiveParty | null;
+}) {
     return (
         <Dialog open={kind != null} onOpenChange={(o) => { if (!o) onClose(); }}>
             <DialogContent
@@ -39,7 +45,7 @@ export default function GlVoucherDialog({ kind, onClose }: { kind: GlDialogKind 
                 <DialogDescription className="sr-only">Fill in the voucher and save, or close to discard.</DialogDescription>
                 {kind === "JOURNAL"
                     ? <JournalVoucherPage key="JOURNAL" onClose={onClose} />
-                    : kind && <GlVoucherPage key={kind} kind={kind} onClose={onClose} />}
+                    : kind && <GlVoucherPage key={kind} kind={kind} onClose={onClose} initialParty={initialParty} />}
             </DialogContent>
         </Dialog>
     );

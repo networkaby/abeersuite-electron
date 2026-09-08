@@ -20,6 +20,13 @@ import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
 import GlVoucherDialog, { GL_DIALOG_KIND_BY_ACTION, type GlDialogKind } from "@/shared/components/GlVoucherDialog";
+import { useActivePartyStore, stashPreloadParty, type ActiveParty } from "@/store/activePartyStore";
+
+/** Full-page vouchers that take a party: the open profile rides along. */
+const PARTY_FACING_TRADING = new Set([
+    "new-sale", "new-purchase", "new-sale-return", "new-purchase-return",
+    "new-estimate", "new-sales-order", "new-purchase-order",
+]);
 import { HelpQuickForm } from "@/modules/help/components";
 import { DealFormDialog } from "@/modules/deals/components";
 import { TaskFormDialog } from "@/modules/administration/components";
@@ -117,6 +124,10 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const [moreOpen, setMoreOpen] = useState(false);
     // GL voucher opened in place over the office (left-click); right-click → new window.
     const [glDialogKind, setGlDialogKind] = useState<GlDialogKind | null>(null);
+    // Party captured at click time, so closing the profile mid-entry doesn't blank the form.
+    const [glDialogParty, setGlDialogParty] = useState<ActiveParty | null>(null);
+    const activeParty = useActivePartyStore((s) => s.party);
+    const openGlDialog = (kind: GlDialogKind) => { setGlDialogParty(activeParty); setGlDialogKind(kind); };
 
     const {
         width: barWidth, isDragging: barDragging,
@@ -360,7 +371,10 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                             onClick={dialogKind ? (e) => {
                                                 if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
                                                 e.preventDefault();
-                                                setGlDialogKind(dialogKind);
+                                                openGlDialog(dialogKind);
+                                            } : action.action && PARTY_FACING_TRADING.has(action.action) ? () => {
+                                                // Same-tab navigation: hand the open profile to the form.
+                                                stashPreloadParty(activeParty);
                                             } : undefined}
                                             onContextMenu={(e) => {
                                                 e.preventDefault();
@@ -401,7 +415,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                 permissions={permissions}
                 isAdmin={isAdmin}
                 defaultPipeline={defaultPipeline}
-                onOpenGlVoucher={setGlDialogKind}
+                onOpenGlVoucher={openGlDialog}
             />
             <CreatePersonDialog open={personOpen} onOpenChange={setPersonOpen} />
             <CreateCompanyDialog open={companyOpen} onOpenChange={setCompanyOpen} />
@@ -409,7 +423,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             <DealFormDialog open={dealOpen} onOpenChange={setDealOpen} positions={positions} deal={null} onSaved={() => { /* no list on-screen to refresh */ }} />
             <TaskFormDialog open={taskOpen} onOpenChange={setTaskOpen} positions={positions} task={null} onSaved={() => { /* no list on-screen to refresh */ }} />
             <ActionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
-            <GlVoucherDialog kind={glDialogKind} onClose={() => setGlDialogKind(null)} />
+            <GlVoucherDialog kind={glDialogKind} initialParty={glDialogParty} onClose={() => setGlDialogKind(null)} />
         </>
     );
 }

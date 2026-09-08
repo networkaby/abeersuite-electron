@@ -322,7 +322,14 @@ function DenomPanel({ title, denomList, value, onChange }: {
  * click) and every close path (Back, Cancel, Esc, after save) calls it
  * instead of navigating the tab.
  */
-export function GlVoucherPage({ kind, voucherId, onClose }: { kind: MoneyFlowKind; voucherId?: number; onClose?: () => void }) {
+export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }: {
+    kind: MoneyFlowKind;
+    voucherId?: number;
+    onClose?: () => void;
+    /** Create mode only: a party to start with (the open customer profile).
+     *  Payment / Receipt → first particulars row; CN / DN → the top party. */
+    initialParty?: PickedParty | null;
+}) {
     const router = useRouter();
     const { data: session, status: sessionStatus } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
@@ -590,6 +597,19 @@ export function GlVoucherPage({ kind, voucherId, onClose }: { kind: MoneyFlowKin
                 .catch(() => setNextRef(""));
         }
     }, [kind, isEditing]);
+
+    // ── Party preload (Quick Actions from an open customer profile) ─────────
+    useEffect(() => {
+        if (isEditing || !initialParty) return;
+        if (copy.topPickerKind === "party") {
+            setTopParty(initialParty);
+        } else if (isPayRec && initialParty.accountId != null) {
+            setRows([{ ...newRow(), accountId: initialParty.accountId }, newRow()]);
+            focusRowAmount(0);
+        }
+        // Once, on mount — the party is a starting value, not a binding.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Duplicate hydration ────────────────────────────────────────────────
     // When the ⋮ → Duplicate flow lands on this /new page, it stashes a
