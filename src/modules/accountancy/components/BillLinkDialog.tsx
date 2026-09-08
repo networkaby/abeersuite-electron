@@ -23,17 +23,30 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, Wand2, X } from "lucide-react";
+import { Loader2, Wand2, X, HandCoins } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/utils/constants";
+import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { planLinks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
+
+/** Just enough of a ledger to offer it as the till the money moves through. */
+type MoneyAccount = { id: number; name: string; code: string | null; group: { name: string } | null };
+
+/** Money that already moved cannot be settled by creating more money — it needs
+ *  linking to a bill instead. The API refuses these too; this only hides the
+ *  affordance so the user is never offered something that would be rejected. */
+const ALREADY_MONEY = ["RECEIPT", "PAYMENT", "CONTRA"];
 
 export type LinkPlan = { universalVoucherId: number; amount: number }[];
 
@@ -71,6 +84,15 @@ export function BillLinkDialog({
     const [saving, setSaving] = useState(false);
     const [picked, setPicked] = useState<Record<number, number>>({});
 
+    // "Receive now / Pay now" — when there is nothing to link against, make the
+    // settling voucher here instead of sending the user off to a blank form.
+    const [moneyAccounts, setMoneyAccounts] = useState<MoneyAccount[]>([]);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [createAmount, setCreateAmount] = useState("");
+    const [createDate, setCreateDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [createMoneyId, setCreateMoneyId] = useState<string>("");
+    const [creating, setCreating] = useState(false);
+
     // The server works out which side is eligible from the voucher itself, so the
     // caller never has to reason about debit and credit.
     const key = `${accountId}|${voucherId}`;
@@ -101,8 +123,18 @@ export function BillLinkDialog({
     useEffect(() => {
         if (!open || !accountId) return;
         setPicked({});
+        setCreateOpen(false);
         void load();
     }, [open, accountId, load]);
+
+    // Only fetched when the user actually opens the create panel — most visits to
+    // this popup are a plain link and never need the ledger list.
+    useEffect(() => {
+        if (!createOpen || moneyAccounts.length > 0) return;
+        axios.get<MoneyAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
+            .then((r) => setMoneyAccounts(r.data.filter((a) => isMoneyGroupName(a.group?.name))))
+            .catch((e) => toast.error(extractApiError(e, "Could not load cash and bank accounts")));
+    }, [createOpen, moneyAccounts.length]);
 
     // The server reports the true open amount — it already knows what earlier links
     // took, and what the bill's own up-front tenders covered.
@@ -172,6 +204,49 @@ export function BillLinkDialog({
         }
     };
 
+    // A bill can be settled by creating money; money already moved cannot.
+    const canCreate = self !== null && !ALREADY_MONEY.includes(self.voucherType);
+    // Which way the money goes is decided by the bill, not asked: a receivable is
+    // received, a payable is paid.
+    const createVerb = self?.side === 1 ? "Receive" : "Pay";
+
+    const createAndSettle = async () => {
+        const amount = round2(parseFloat(createAmount));
+        if (!Number.isFinite(amount) || amount <= EPS) {
+            toast.error("Enter how much is being settled.");
+            return;
+        }
+        if (amount > available + 0.01) {
+            toast.error(`Only ₹ ${fmt(available)} is open on this bill.`);
+            return;
+        }
+        if (!createMoneyId) {
+            toast.error(`Pick the account the money ${self?.side === 1 ? "comes into" : "goes out of"}.`);
+            return;
+        }
+        setCreating(true);
+        try {
+            const { data } = await axios.post<{ kind: string; voucherRef: string }>(
+                "/api/accountancy/allocations/settle",
+                {
+                    accountId,
+                    billVoucherId:  voucherId,
+                    amount,
+                    moneyAccountId: Number(createMoneyId),
+                    date:           createDate,
+                },
+            );
+            clearBillLinkCache();
+            toast.success(`${data.kind === "RECEIPT" ? "Receipt" : "Payment"} ${data.voucherRef} created and linked.`);
+            onSaved?.();
+            onOpenChange(false);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not create the settlement voucher"));
+        } finally {
+            setCreating(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-3xl">
@@ -195,9 +270,11 @@ export function BillLinkDialog({
                             : "This voucher has nothing against this party to place."}
                     </p>
                 ) : docs.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                        Nothing open on the other side for this party. Leave it unlinked and it stays as an advance —
-                        you can link it to a bill later.
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                        Nothing open on the other side for this party.
+                        {canCreate
+                            ? ` Use ${createVerb.toLowerCase()} now below to settle it straight away.`
+                            : " Leave it unlinked and it stays as an advance — you can link it to a bill later."}
                     </p>
                 ) : (
                     <div className="max-h-[52vh] overflow-y-auto rounded border border-border">
@@ -252,6 +329,73 @@ export function BillLinkDialog({
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {/* Nothing to link against? Make the settling voucher here. Which
+                    kind it is follows from the bill's own side, so there is no
+                    "receipt or payment?" question to get wrong. */}
+                {canCreate && available > EPS && (
+                    <div className="rounded border border-border bg-muted/30 p-3">
+                        {!createOpen ? (
+                            <Button type="button" size="sm" variant="outline" onClick={() => {
+                                setCreateAmount(String(available));
+                                setCreateOpen(true);
+                            }}>
+                                <HandCoins size={14} className="mr-1" /> {createVerb} now — create a{" "}
+                                {self?.side === 1 ? "receipt" : "payment"} for this bill
+                            </Button>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm font-medium">
+                                        {createVerb} against {self?.ref}
+                                    </p>
+                                    <Button type="button" size="sm" variant="ghost" onClick={() => setCreateOpen(false)}>
+                                        <X size={14} />
+                                    </Button>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Amount</Label>
+                                        <Input
+                                            type="text" inputMode="decimal"
+                                            value={createAmount}
+                                            onChange={(e) => setCreateAmount(e.target.value)}
+                                            className="h-8 text-right text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Date</Label>
+                                        <Input
+                                            type="date"
+                                            value={createDate}
+                                            onChange={(e) => setCreateDate(e.target.value)}
+                                            className="h-8 text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">
+                                            {self?.side === 1 ? "Received in" : "Paid from"}
+                                        </Label>
+                                        <Select value={createMoneyId} onValueChange={setCreateMoneyId}>
+                                            <SelectTrigger className="h-8 text-sm">
+                                                <SelectValue placeholder="Cash / bank…" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {moneyAccounts.map((a) => (
+                                                    <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <Button type="button" size="sm" onClick={createAndSettle} disabled={creating}>
+                                    {creating && <Loader2 className="mr-1 animate-spin" size={14} />}
+                                    Create &amp; settle
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 )}
 

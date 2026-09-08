@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { removeLink } from "@/modules/accountancy/lib/billLink";
 
@@ -27,7 +27,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
             select: { type: true },
         });
         // A link whose vouchers are already gone is debris — let it be removed.
-        if (!vouchers.every((v) => userCanVoucher(user, v.type, "cancel"))) {
+        // Kind-less variant, or a POS bill's link could never be undone.
+        if (!vouchers.every((v) => userCanVoucherKind(user, v.type, "cancel"))) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

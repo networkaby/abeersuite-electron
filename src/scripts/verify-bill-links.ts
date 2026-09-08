@@ -165,6 +165,40 @@ async function main(): Promise<void> {
             await refuses("refuses a ledger that is not a party ledger",
                 () => assertLinkable(tx, { accountId: bank.id, aId: sale2, bId: receipt, amount: 10 }));
 
+            // ── 6b. A sale return after a SETTLED sale opens room for the next ──
+            //
+            // The owner's case: a sale is settled in full, then goods come back.
+            // The return credits the party, so it is a payable-side document with
+            // nothing linked to it — money the customer is owed. It must then be
+            // available to settle the NEXT sale, and it needs no special code:
+            // a return has a party leg like anything else.
+            const soldOut  = await mk("SALE",    "DEBIT",  5000, 60);
+            const paidUp   = await mk("RECEIPT", "CREDIT", 5000, 59);
+            const o1 = await assertLinkable(tx, { accountId: party, aId: soldOut, bId: paidUp, amount: 5000 });
+            await createLink(tx, { ...o1, amount: 5000, userId: user.id });
+            const settled = await loadDocOpen(tx, party, soldOut);
+            check("a sale settled in full has nothing open", near(settled?.open ?? -1, 0), `open ${settled?.open}`);
+
+            const ret = await mk("SALE_RETURN", "CREDIT", 1200, 30);
+            const retDoc = await loadDocOpen(tx, party, ret);
+            check("the sale return stands as ₹1200 the customer is owed",
+                retDoc?.side === -1 && near(retDoc.open, 1200), `side ${retDoc?.side}, open ${retDoc?.open}`);
+
+            const nextSale = await mk("SALE", "DEBIT", 3000, 2);
+            const offered = await loadLinkableDocs(tx, party, { excludeId: nextSale, side: -1 });
+            check("the return is offered against the next sale",
+                offered.some((d) => d.universalVoucherId === ret),
+                offered.map((d) => d.voucherType).join(", "));
+
+            const o2 = await assertLinkable(tx, { accountId: party, aId: nextSale, bId: ret, amount: 1200 });
+            await createLink(tx, { ...o2, amount: 1200, userId: user.id });
+            const nextOpen = await loadDocOpen(tx, party, nextSale);
+            check("settling the next sale with it leaves ₹1800 to collect",
+                near(nextOpen?.open ?? -1, 1800), `open ${nextOpen?.open}`);
+            const settledStill = await loadDocOpen(tx, party, soldOut);
+            check("and the already-settled sale is untouched",
+                settledStill === null || near(settledStill.open, 0), `open ${settledStill?.open}`);
+
             // ── 7. Housekeeping removes both directions ────────────────────
             const removed = await removeLinksForVoucher(tx, sale);
             check("unlinking a voucher clears links on both of its sides", removed.length >= 2, `${removed.length} removed`);

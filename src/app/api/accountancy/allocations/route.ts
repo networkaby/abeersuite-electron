@@ -1,15 +1,20 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { assertLinkable, createLink, BillLinkError } from "@/modules/accountancy/lib/billLink";
 
 // A link is a statement about two POSTED vouchers, so it is gated at the same
-// rung as editing one: `cancel` on BOTH kinds. Kinds with no matrix row (POS,
-// online channel variants) pass through, exactly as everywhere else.
-function canLink(user: Parameters<typeof userCanVoucher>[0], types: string[]): boolean {
-    return types.every((t) => userCanVoucher(user, t, "cancel"));
+// rung as editing one: `cancel` on BOTH kinds.
+//
+// `userCanVoucherKind`, NOT `userCanVoucher`: the latter returns false for kinds
+// with no matrix row, which would make every POS bill unlinkable by anyone — and
+// POS bills are precisely the ones carrying counter dues. The kind-less variant
+// passes those through, gated by their own flow, exactly as the create/post
+// routes do.
+function canLink(user: Parameters<typeof userCanVoucherKind>[0], types: string[]): boolean {
+    return types.every((t) => userCanVoucherKind(user, t, "cancel"));
 }
 
 const createSchema = z.object({

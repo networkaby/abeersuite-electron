@@ -1,17 +1,26 @@
-// ── postReceiptVoucher — atomic Receipt voucher + JE + bill allocation ──────
+// ── postSettlementVoucher — atomic settlement voucher + GL + bill link ──────
 //
-// Replaces the legacy `postPosReceiptJe` + `Payment` model. Each customer
-// receipt becomes a single `Voucher type=RECEIPT` with one debit line per
-// tender (cash till / bank / UPI / card) and one credit line that closes the
-// customer's AR. A mirror JournalEntry is posted and Account.balance is
-// updated for every line. When `allocateToJournalEntryId` is provided, a
-// `VoucherAllocation` (AGAINST_REF) ties the receipt to the originating
-// InvVoucher's JE so `outstandings.ts` can net it out of receivables.
+// One writer for both directions of settling a party:
+//
+//   RECEIPT — money IN.  Debit each tender (till / bank / UPI / card), credit
+//             the customer, closing what they owed us.
+//   PAYMENT — money OUT. The exact mirror: credit each tender, debit the
+//             supplier, closing what we owed them.
+//
+// The two differ only in which side the legs sit on, so they share every other
+// rule — the amount guard, the posting, the balance deltas and the bill link.
+// `postReceiptVoucher` stays as the RECEIPT-only wrapper its four POS callers
+// already use, so nothing at the counter changed.
+//
+// A link (AGAINST_REF) ties the voucher to the bill(s) it settles, so
+// `outstandings.ts` nets it out. Orientation follows the same rule as every
+// other link: the RECEIVABLE side is stored as the target — the bill for a
+// receipt, the voucher itself for a payment.
 //
 // Used by:
 //   • POS sale (single-tap settlement at the counter)
-//   • Office "record receipt against invoice" flow
-//   • Any future credit-collection screen
+//   • the bill-wise popup's Receive now / Pay now
+//   • online / ecommerce receipts
 //
 // Caller passes resolved account ids — this helper does no account lookup
 // (no "Cash-in-Hand" name search) to keep the contract simple and the
@@ -25,6 +34,15 @@ export type ReceiptTender = {
     accountId:    number;           // till / bank / UPI / card ledger to debit
     amount:       number;           // rupees, > 0
     description?: string;           // free-text per line (e.g. "UPI ref ABC123")
+};
+
+/** Which way the money moves. RECEIPT = in, PAYMENT = out. */
+export type SettlementKind = "RECEIPT" | "PAYMENT";
+
+export type PostSettlementVoucherArgs = Omit<PostReceiptVoucherArgs, "customerAccountId"> & {
+    kind:           SettlementKind;
+    /** The party ledger being settled — credited on a receipt, debited on a payment. */
+    partyAccountId: number;
 };
 
 export type PostReceiptVoucherArgs = {
@@ -64,9 +82,18 @@ export type PostReceiptVoucherResult = {
     allocationIds:  number[];
 };
 
+/** RECEIPT-only wrapper — the shape the POS and online callers already pass. */
 export async function postReceiptVoucher(
     tx: Prisma.TransactionClient,
     args: PostReceiptVoucherArgs,
+): Promise<PostReceiptVoucherResult> {
+    const { customerAccountId, ...rest } = args;
+    return postSettlementVoucher(tx, { ...rest, kind: "RECEIPT", partyAccountId: customerAccountId });
+}
+
+export async function postSettlementVoucher(
+    tx: Prisma.TransactionClient,
+    args: PostSettlementVoucherArgs,
 ): Promise<PostReceiptVoucherResult> {
     const total = args.tenders.reduce((s, t) => s + t.amount, 0);
     if (total <= 0) throw new Error("Receipt voucher has zero amount.");
@@ -77,22 +104,26 @@ export async function postReceiptVoucher(
     // the mirror JournalEntry and the per-line Account.balance deltas (with the
     // null-normalBalance group-nature fallback the AR/AP party ledgers need).
     // `postedAt = args.date` preserves the auto-settled receipt's posting stamp.
+    // Money in debits the till and credits the party; money out is the mirror.
+    const tenderSide = args.kind === "RECEIPT" ? "DEBIT" as const : "CREDIT" as const;
+    const partySide  = args.kind === "RECEIPT" ? "CREDIT" as const : "DEBIT" as const;
+
     const voucher = await engineCreateVoucher(tx, {
-        type:           "RECEIPT",
+        type:           args.kind,
         date:           args.date,
         userId:         args.userId,
-        partyAccountId: args.customerAccountId,
+        partyAccountId: args.partyAccountId,
         narration:      args.narration ?? null,
         lines: [
             ...args.tenders.map((t) => ({
                 accountId:   t.accountId,
-                type:        "DEBIT" as const,
+                type:        tenderSide,
                 amount:      t.amount,
                 description: t.description ?? null,
             })),
             {
-                accountId:   args.customerAccountId,
-                type:        "CREDIT" as const,
+                accountId:   args.partyAccountId,
+                type:        partySide,
                 amount:      total,
                 description: args.narration ?? null,
             },
@@ -114,12 +145,12 @@ export async function postReceiptVoucher(
                 ? [{ universalVoucherId: args.allocateToUniversalVoucherId, amount: total }]
                 : [];
 
-    // Never allocate more than the receipt actually received — an over-allocation
-    // would mis-state receivables; throwing here rolls back the whole transaction.
+    // Never allocate more than the voucher actually moved — an over-allocation
+    // would mis-state the books; throwing here rolls back the whole transaction.
     const allocSum = allocationPlan.reduce((s, a) => s + a.amount, 0);
     if (allocSum > total + 0.01) {
         throw new Error(
-            `Receipt allocation (₹${allocSum.toFixed(2)}) exceeds receipt total (₹${total.toFixed(2)}).`,
+            `Allocation (₹${allocSum.toFixed(2)}) exceeds the voucher total (₹${total.toFixed(2)}).`,
         );
     }
 
@@ -136,9 +167,14 @@ export async function postReceiptVoucher(
     // arbitrary vouchers, does run the full check.
     const allocationIds: number[] = [];
     for (const a of allocationPlan) {
+        // The receivable side is always the target. On a receipt that is the bill
+        // (the customer owed us); on a payment it is this voucher (paying a
+        // supplier debits them). Same rule `assertLinkable` normalises to, so the
+        // pair-unique index sees one orientation whichever path wrote the row.
+        const bill = a.universalVoucherId;
         allocationIds.push(await createLink(tx, {
-            targetId:  a.universalVoucherId,   // the bill — the receivable side
-            sourceId:  voucher.id,             // this receipt — the paying side
+            targetId:  args.kind === "RECEIPT" ? bill : voucher.id,
+            sourceId:  args.kind === "RECEIPT" ? voucher.id : bill,
             amount:    a.amount,
             reference: voucherRef,
             userId:    args.userId,
