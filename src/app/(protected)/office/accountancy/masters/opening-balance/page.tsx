@@ -5,10 +5,11 @@
 // every figure here is always effective from the start of the books,
 // whether imported or created fresh.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, AlertTriangle, CheckCircle, Plus } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,12 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { InvProductCombobox } from "@/modules/inventory/components/InvProductCombobox";
+import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
+import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
+import { productMatchesQuery } from "@/shared/lib/inventory";
 import { fmt } from "@/utils/constants";
 
 type AccountRow = {
@@ -41,18 +48,24 @@ type Summary = {
     suspenseAmount: number;
 };
 
-interface AllAccount { id: number; code: string; name: string }
-interface AllProduct { id: number; sku: string; name: string; unit: { code: string } }
+/** One row of the shared product catalogue — only the bit the stock-table
+ *  filter needs, so a barcode the summary row doesn't carry still matches. */
+type CatalogRow = { id: number; name: string; sku: string; codes?: { value: string }[] };
 
 interface AccountGroupOpt { id: number; name: string; type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE"; parentId: number | null }
 interface UnitOpt { id: number; code: string; label: string }
 
 export default function OpeningBalancePage() {
+    // Which ledger is on screen. Kept in the URL so a refresh — or a link
+    // handed to someone else — lands back on the same tab.
+    const router = useRouter();
+    const search = useSearchParams();
+    const tab = search.get("tab") === "stock" ? "stock" : "accounts";
+
     const [data, setData] = useState<Summary | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const [allAccounts, setAllAccounts] = useState<AllAccount[]>([]);
-    const [allProducts, setAllProducts] = useState<AllProduct[]>([]);
+    const [allAccounts, setAllAccounts] = useState<GlAccount[]>([]);
 
     // Refetch without flipping `loading` — the full-page spinner is for the
     // first load only. `onChanged={load}` fires after every edit, and
@@ -64,25 +77,23 @@ export default function OpeningBalancePage() {
             .finally(() => setLoading(false));
     }, []);
 
+    // includeParties — a migrating shop's opening balances are mostly Sundry
+    // Debtors / Creditors, and the default (pure GL) list hides every one of
+    // them. It also carries aliases and party phones, which is what lets the
+    // picker find a ledger by any identifier, not just its name.
     const loadAccounts = useCallback(() => {
-        return axios.get<AllAccount[]>("/api/accountancy/gl-accounts")
+        return axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
             .then((r) => setAllAccounts(r.data))
             .catch(() => { /* page still useful without picker */ });
     }, []);
 
-    const loadProducts = useCallback(() => {
-        return axios.get<AllProduct[]>("/api/inventory/products")
-            .then((r) => setAllProducts(r.data))
-            .catch(() => { /* same */ });
-    }, []);
-
+    // Products come from the shared catalogue (IndexedDB + delta sync) that
+    // every product picker already reads — this page keeps no second copy.
+    const refreshProducts = useCallback(async () => { await loadProductCatalog(); }, []);
 
     useEffect(load, [load]);
 
-    useEffect(() => {
-        loadAccounts();
-        loadProducts();
-    }, [loadAccounts, loadProducts]);
+    useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
     if (loading) {
         return (
@@ -132,25 +143,37 @@ export default function OpeningBalancePage() {
                     <SummaryCard label="Opening Stock" value={data.openingStockTotal} color="text-foreground" />
                 </div>
 
-                <AccountOpeningSection
-                    accounts={data.accounts}
-                    allAccounts={allAccounts}
-                    onChanged={load}
-                    onAccountListChanged={loadAccounts}
-                    openingDrTotal={data.openingDrTotal}
-                    openingCrTotal={data.openingCrTotal}
-                    balanced={balanced}
-                    suspenseSide={data.suspenseSide}
-                    suspenseAmount={data.suspenseAmount}
-                />
+                <Tabs value={tab} onValueChange={(v) => router.replace(`?tab=${v}`, { scroll: false })}>
+                    <TabsList>
+                        <TabsTrigger value="accounts">
+                            Account Ledger <span className="ml-1.5 text-xs opacity-70">{data.accounts.length}</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="stock">
+                            Stock Ledger <span className="ml-1.5 text-xs opacity-70">{data.products.length}</span>
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
 
-                <ProductOpeningSection
-                    products={data.products}
-                    allProducts={allProducts}
-                    onChanged={load}
-                    onProductListChanged={loadProducts}
-                    openingStockTotal={data.openingStockTotal}
-                />
+                {tab === "accounts" ? (
+                    <AccountOpeningSection
+                        accounts={data.accounts}
+                        allAccounts={allAccounts}
+                        onChanged={load}
+                        onAccountListChanged={loadAccounts}
+                        openingDrTotal={data.openingDrTotal}
+                        openingCrTotal={data.openingCrTotal}
+                        balanced={balanced}
+                        suspenseSide={data.suspenseSide}
+                        suspenseAmount={data.suspenseAmount}
+                    />
+                ) : (
+                    <ProductOpeningSection
+                        products={data.products}
+                        onChanged={load}
+                        onProductListChanged={refreshProducts}
+                        openingStockTotal={data.openingStockTotal}
+                    />
+                )}
             </div>
         </ScrollArea>
     );
@@ -169,7 +192,7 @@ function AccountOpeningSection({
     accounts, allAccounts, onChanged, onAccountListChanged, openingDrTotal, openingCrTotal, balanced, suspenseSide, suspenseAmount,
 }: {
     accounts: AccountRow[];
-    allAccounts: AllAccount[];
+    allAccounts: GlAccount[];
     onChanged: () => void;
     onAccountListChanged: () => Promise<void> | void;
     openingDrTotal: number;
@@ -186,6 +209,22 @@ function AccountOpeningSection({
         type: "DEBIT" as "DEBIT" | "CREDIT",
     });
     const [saving, setSaving] = useState(false);
+    const [filter, setFilter] = useState("");
+
+    // The table filter matches the same identifiers the picker searches — code,
+    // name, alias, party mobile — so whatever finds a ledger in the dropdown
+    // also finds its row below. Aliases and phones live on the full list only.
+    const meta = useMemo(() => new Map(allAccounts.map((a) => [a.id, a])), [allAccounts]);
+    const q = filter.trim().toLowerCase();
+    const visible = q
+        ? accounts.filter((a) => {
+            const m = meta.get(a.id);
+            return a.name.toLowerCase().includes(q)
+                || (a.code ?? "").toLowerCase().includes(q)
+                || aliasMatches(m?.aliases, q)
+                || (m?.phones ?? []).some((p) => p.toLowerCase().includes(q));
+        })
+        : accounts;
 
     const handleAccountCreated = async (newId: number) => {
         await onAccountListChanged();
@@ -198,13 +237,13 @@ function AccountOpeningSection({
     useEffect(() => {
         if (!form.accountId) return;
         const existing = accounts.find((a) => a.id === form.accountId);
-        if (existing && existing.openingBalanceType) {
-            setForm((f) => ({
-                ...f,
-                amount: String(existing.openingBalance ?? ""),
-                type: existing.openingBalanceType ?? "DEBIT",
-            }));
-        }
+        setForm((f) => ({
+            ...f,
+            // A ledger with no opening yet starts empty — the previous ledger's
+            // figure must never be left sitting in the box waiting to be saved.
+            amount: existing?.openingBalanceType ? String(existing.openingBalance ?? "") : "",
+            type: existing?.openingBalanceType ?? f.type,
+        }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [form.accountId]);
 
@@ -235,7 +274,11 @@ function AccountOpeningSection({
             <div className="border-b border-border bg-muted px-5 py-3 flex items-center justify-between">
                 <div>
                     <h3 className="text-sm font-semibold">Account Opening Balances</h3>
-                    <p className="text-xs text-muted-foreground">{accounts.length} {accounts.length === 1 ? "account" : "accounts"} with opening balance</p>
+                    <p className="text-xs text-muted-foreground">
+                        {q
+                            ? `${visible.length} of ${accounts.length} shown`
+                            : `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"} with opening balance`}
+                    </p>
                 </div>
                 <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => setShowCreate(true)}>
@@ -257,18 +300,12 @@ function AccountOpeningSection({
                 <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-2">
                         <Label>Account</Label>
-                        <Select
-                            value={String(form.accountId)}
-                            onValueChange={(v) => setForm((f) => ({ ...f, accountId: Number(v) }))}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="0">Select account</SelectItem>
-                                {allAccounts.map((a) => (
-                                    <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <GlAccountCombobox
+                            value={form.accountId || null}
+                            onChange={(a) => setForm((f) => ({ ...f, accountId: a?.id ?? 0 }))}
+                            accounts={allAccounts}
+                            placeholder="Search name, code, alias or mobile…"
+                        />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Amount</Label>
@@ -295,6 +332,16 @@ function AccountOpeningSection({
                 </div>
             )}
 
+            {accounts.length > 0 && (
+                <div className="border-b border-border px-5 py-2">
+                    <div className="relative max-w-xs">
+                        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input value={filter} onChange={(e) => setFilter(e.target.value)}
+                            className="h-8 pl-8" placeholder="Filter by name, code, alias or mobile…" />
+                    </div>
+                </div>
+            )}
+
             {accounts.length === 0 ? (
                 <div className="px-5 py-8 text-center text-muted-foreground text-sm">
                     No opening balances yet. Click <strong>Add / Edit</strong> above to set one.
@@ -309,7 +356,14 @@ function AccountOpeningSection({
                         </tr>
                     </thead>
                     <tbody>
-                        {accounts.map((a) => (
+                        {visible.length === 0 && (
+                            <tr>
+                                <td colSpan={3} className="px-5 py-6 text-center text-muted-foreground">
+                                    No account matches “{filter}”.
+                                </td>
+                            </tr>
+                        )}
+                        {visible.map((a) => (
                             <tr key={a.id} className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                 onClick={() => { setShowAdd(true); setForm((f) => ({ ...f, accountId: a.id })); }}>
                                 <td className="px-5 py-2">
@@ -345,10 +399,9 @@ function AccountOpeningSection({
 }
 
 function ProductOpeningSection({
-    products, allProducts, onChanged, onProductListChanged, openingStockTotal,
+    products, onChanged, onProductListChanged, openingStockTotal,
 }: {
     products: ProductRow[];
-    allProducts: AllProduct[];
     onChanged: () => void;
     onProductListChanged: () => Promise<void> | void;
     openingStockTotal: number;
@@ -361,6 +414,16 @@ function ProductOpeningSection({
         rate: "",
     });
     const [saving, setSaving] = useState(false);
+    const [filter, setFilter] = useState("");
+
+    // Barcodes / EANs are not on the summary row, so the filter borrows them
+    // from the shared catalogue — the same rule the picker above matches on.
+    const { products: catalog } = useProductCatalog<CatalogRow>();
+    const codes = useMemo(() => new Map(catalog.map((p) => [p.id, p.codes ?? []])), [catalog]);
+    const q = filter.trim().toLowerCase();
+    const visible = q
+        ? products.filter((p) => productMatchesQuery({ name: p.name, sku: p.sku, codes: codes.get(p.id) }, q))
+        : products;
 
     const handleProductCreated = async (newId: number) => {
         await onProductListChanged();
@@ -372,13 +435,13 @@ function ProductOpeningSection({
     useEffect(() => {
         if (!form.productId) return;
         const existing = products.find((p) => p.id === form.productId);
-        if (existing) {
-            setForm((f) => ({
-                ...f,
-                qty: String(existing.openingStock ?? ""),
-                rate: String(existing.openingRate ?? ""),
-            }));
-        }
+        setForm((f) => ({
+            ...f,
+            // Product with no opening stock yet → empty boxes, never the last
+            // product's qty and rate.
+            qty: existing ? String(existing.openingStock ?? "") : "",
+            rate: existing ? String(existing.openingRate ?? "") : "",
+        }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [form.productId]);
 
@@ -410,7 +473,11 @@ function ProductOpeningSection({
             <div className="border-b border-border bg-muted px-5 py-3 flex items-center justify-between">
                 <div>
                     <h3 className="text-sm font-semibold">Product Opening Stock</h3>
-                    <p className="text-xs text-muted-foreground">{products.length} {products.length === 1 ? "product" : "products"} with opening stock</p>
+                    <p className="text-xs text-muted-foreground">
+                        {q
+                            ? `${visible.length} of ${products.length} shown`
+                            : `${products.length} ${products.length === 1 ? "product" : "products"} with opening stock`}
+                    </p>
                 </div>
                 <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => setShowCreate(true)}>
@@ -432,18 +499,12 @@ function ProductOpeningSection({
                 <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-2">
                         <Label>Product</Label>
-                        <Select
-                            value={String(form.productId)}
-                            onValueChange={(v) => setForm((f) => ({ ...f, productId: Number(v) }))}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="0">Select product</SelectItem>
-                                {allProducts.map((p) => (
-                                    <SelectItem key={p.id} value={String(p.id)}>{p.sku} — {p.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <InvProductCombobox
+                            value={form.productId || null}
+                            onChange={(p) => setForm((f) => ({ ...f, productId: p?.id ?? 0 }))}
+                            placeholder="Search name, SKU or barcode…"
+                            allowCreate={false}
+                        />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Qty</Label>
@@ -466,6 +527,16 @@ function ProductOpeningSection({
                 </div>
             )}
 
+            {products.length > 0 && (
+                <div className="border-b border-border px-5 py-2">
+                    <div className="relative max-w-xs">
+                        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input value={filter} onChange={(e) => setFilter(e.target.value)}
+                            className="h-8 pl-8" placeholder="Filter by name, SKU or barcode…" />
+                    </div>
+                </div>
+            )}
+
             {products.length === 0 ? (
                 <div className="px-5 py-8 text-center text-muted-foreground text-sm">
                     No opening stock yet. Click <strong>Add / Edit</strong> above to set qty + rate for a product.
@@ -481,7 +552,14 @@ function ProductOpeningSection({
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((p) => (
+                        {visible.length === 0 && (
+                            <tr>
+                                <td colSpan={4} className="px-5 py-6 text-center text-muted-foreground">
+                                    No product matches “{filter}”.
+                                </td>
+                            </tr>
+                        )}
+                        {visible.map((p) => (
                             <tr key={p.id} className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                 onClick={() => { setShowAdd(true); setForm((f) => ({ ...f, productId: p.id })); }}>
                                 <td className="px-5 py-2">
