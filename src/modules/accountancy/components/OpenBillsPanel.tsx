@@ -99,6 +99,9 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     const error = current?.error ?? null;
 
     const totalOpen = (docs ?? []).reduce((s, d) => s + d.open, 0);
+    // Ledger minus bills = the on-account part. Signed on this side: positive
+    // = still owed beyond the bills, negative = advance already lying with us.
+    const onAccount = ledgerOwed != null ? round2(ledgerOwed - totalOpen) : null;
     const placed = sumOf(picks);
     const amountTyped = amount > EPS && Math.abs(amount - (setByTicks ?? -1)) > EPS;
 
@@ -140,13 +143,22 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                 <div className="flex justify-center py-4">
                     <Loader2 className="animate-spin text-muted-foreground" size={16} />
                 </div>
-            ) : docs.length === 0 ? (
+            ) : docs.length === 0 && !(onAccount != null && Math.abs(onAccount) > EPS) ? (
                 <p className="mt-2 text-xs text-muted-foreground">
                     Nothing open. This {side === 1 ? "receipt" : "payment"} stays as an advance.
                 </p>
             ) : (
                 <>
                     <table className="mt-2 w-full text-xs">
+                        <thead>
+                            <tr className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                                <th className="w-6" />
+                                <th className="py-1 text-left font-medium">Bill</th>
+                                <th className="py-1 text-right font-medium">Total</th>
+                                <th className="py-1 text-right font-medium">Settled</th>
+                                <th className="py-1 text-right font-medium">Open</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {docs.map((d) => {
                                 const value = picks[d.universalVoucherId];
@@ -161,18 +173,15 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                         <td className="w-6 py-1">
                                             <Checkbox checked={ticked} onCheckedChange={() => toggle(d)} onClick={(e) => e.stopPropagation()} />
                                         </td>
-                                        <td className="py-1 pr-2">
-                                            <span className="font-mono">{d.ref}</span>
-                                            <span className="ml-1 text-muted-foreground">
+                                        <td className="py-1 pr-1">
+                                            <span className="font-mono whitespace-nowrap">{d.ref}</span>
+                                            <span className="block text-[10px] text-muted-foreground">
                                                 {new Date(d.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
                                             </span>
-                                            {/* Bill total and what is already settled — so the open
-                                                figure on the right is never a mystery. */}
-                                            <span className="block text-[10px] text-muted-foreground font-mono tabular-nums">
-                                                Total {fmt(d.face)} · Settled {fmt(round2(d.face - d.open))}
-                                            </span>
                                         </td>
-                                        <td className="py-1 text-right font-mono tabular-nums">
+                                        <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{fmt(d.face)}</td>
+                                        <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{fmt(round2(d.face - d.open))}</td>
+                                        <td className="py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap">
                                             {ticked ? (
                                                 <span className={partial ? "text-amber-600" : "text-green-600"} title={partial ? `of ${fmt(d.open)} open` : undefined}>
                                                     {fmt(value)}{partial ? "*" : ""}
@@ -184,6 +193,24 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                     </tr>
                                 );
                             })}
+                            {/* On account — the ledger money that is not linked to any bill
+                                (opening balance, unlinked receipts or payments, advances). A
+                                row like the bills so the ledger figure adds up in one place;
+                                not tickable — an untouched remainder already lands here. */}
+                            {onAccount != null && Math.abs(onAccount) > EPS && (
+                                <tr className="border-t border-border/50 bg-muted/30" title="Money on the ledger that is not linked to any bill — opening balance, unlinked receipts or payments, advances.">
+                                    <td className="w-6 py-1" />
+                                    <td className="py-1 pr-1">
+                                        <span>On account</span>
+                                        <span className="block text-[10px] text-muted-foreground">not bill-wise</span>
+                                    </td>
+                                    <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
+                                    <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
+                                    <td className={`py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap ${onAccount > 0 ? "text-orange-600" : "text-green-700"}`}>
+                                        {fmt(Math.abs(onAccount))} {onAccount > 0 ? "Dr" : "Cr"}
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                     <div className="mt-1.5 space-y-0.5 border-t border-border pt-1.5 text-xs">
@@ -207,21 +234,11 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                             whenever money moved without being linked to a bill — an
                             opening balance, an unlinked receipt, an advance — and that
                             difference is named here rather than left as a puzzle. */}
-                        {ledgerLabel != null && ledgerOwed != null && (
-                            <>
-                                <div className="flex justify-between border-t border-border/60 pt-1 text-muted-foreground">
-                                    <span>Ledger balance</span>
-                                    <span className="font-mono tabular-nums">{ledgerLabel}</span>
-                                </div>
-                                {Math.abs(ledgerOwed - totalOpen) > EPS && (
-                                    <div className="flex justify-between text-muted-foreground" title="Money on the ledger that is not linked to any bill — opening balance, unlinked receipts or payments, advances.">
-                                        <span>Not bill-wise (unlinked)</span>
-                                        <span className="font-mono tabular-nums">
-                                            {fmt(Math.abs(round2(ledgerOwed - totalOpen)))} {ledgerOwed - totalOpen > 0 ? "owed" : "advance"}
-                                        </span>
-                                    </div>
-                                )}
-                            </>
+                        {ledgerLabel != null && (
+                            <div className="flex justify-between border-t border-border/60 pt-1 font-medium" title="Bills open + on account = the ledger's own balance">
+                                <span>Ledger balance</span>
+                                <span className="font-mono tabular-nums">{ledgerLabel}</span>
+                            </div>
                         )}
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">

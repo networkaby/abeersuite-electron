@@ -1309,7 +1309,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                 {/* Denomination panels — one per cash Transfer-from row; the
                     combined result is what the deposit slip prints. */}
                 {showSidePanel && (
-                    <aside className="w-[300px] shrink-0 space-y-4 sticky top-0">
+                    <aside className={`${showOpenBills ? "w-[440px]" : "w-[300px]"} shrink-0 space-y-4 sticky top-0`}>
                         {showOpenBills && partyLedgerId != null && (
                             <OpenBillsPanel
                                 accountId={partyLedgerId}
