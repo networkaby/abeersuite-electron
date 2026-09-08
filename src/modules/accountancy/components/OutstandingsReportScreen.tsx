@@ -1,0 +1,377 @@
+"use client";
+
+// The Receivables and Payables screens are the same report read from opposite
+// sides of the book — same ageing periods, same party/bill tabs, same search,
+// same drill-down. So there is one screen here and each page just says which
+// side it is. Anything added below shows up on both, which is the point.
+
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { toast } from "sonner";
+import { Loader2, ChevronRight, Link2, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { fmt } from "@/utils/constants";
+import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+
+// TODO(config): the four periods are fixed at 30 / 60 / 90 days today — the
+// boundaries live in `bucketFor()` in modules/accountancy/lib/outstandings.ts.
+// They are to become configurable under /office/settings, after which both the
+// bucketing and these labels must read from that config instead.
+const BUCKET_LABELS = {
+    b0_30:    "0–30 days",
+    b30_60:   "30–60 days",
+    b60_90:   "60–90 days",
+    b90_plus: "90+ days",
+} as const;
+
+const BUCKET_COLORS = {
+    b0_30:    "text-foreground",
+    b30_60:   "text-amber-600",
+    b60_90:   "text-orange-600",
+    b90_plus: "text-red-600",
+} as const;
+
+type Bucket = keyof typeof BUCKET_LABELS;
+type ViewMode = "party" | "bill";
+
+const EMPTY_BUCKETS = { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 };
+
+function fmtIsoDate(s: string): string {
+    // Mon DD format; year omitted for compact rows
+    const d = new Date(s);
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
+export function OutstandingsReportScreen({
+    title, subtitle, apiPath, loadError, emptyText, settleHint,
+}: {
+    title:      string;
+    subtitle:   string;
+    /** `/api/accountancy/reports/receivables` or `…/payables`. */
+    apiPath:    string;
+    loadError:  string;
+    /** Shown when the book itself is clear, before any search or period. */
+    emptyText:  { party: string; bill: string };
+    /** Tooltip on the bill row's link button — it settles the other way round
+     *  for a payable, so each side words it in its own money's terms. */
+    settleHint: string;
+}) {
+    const router = useRouter();
+    const [asOf, setAsOf] = useState(toIsoDate(new Date()));
+    // Which bill the link popup is settling, with the party it stands against.
+    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number; accountName: string } | null>(null);
+    const [data, setData] = useState<OutstandingsReport | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [view, setView] = useState<ViewMode>("party");
+    const [query, setQuery] = useState("");
+    // Clicking a period card shows that period alone; clicking it again clears.
+    const [period, setPeriod] = useState<Bucket | null>(null);
+
+    const load = useCallback((silent = false) => {
+        // A realtime refresh must not blank a report the user is reading.
+        if (!silent) setLoading(true);
+        axios.get<OutstandingsReport>(`${apiPath}?asOf=${asOf}`)
+            .then((r) => setData(r.data))
+            .catch(() => toast.error(loadError))
+            .finally(() => setLoading(false));
+    }, [asOf, apiPath, loadError]);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(load, [load]);
+
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    useRealtimeTopics(["ledger"], () => load(true));
+
+    // `searchKey` carries the party's name, code, GSTIN and phone numbers, and on
+    // a bill row its reference number too. Searching and the period toggle only
+    // narrow what is already on screen — no refetch, no extra DB read.
+    const q = query.trim().toLowerCase();
+
+    const parties = useMemo(() => {
+        if (!data) return [];
+        let rows = q ? data.parties.filter((p) => p.searchKey.includes(q)) : data.parties;
+        // A party belongs to a period only if it has money sitting in it.
+        if (period) rows = rows.filter((p) => p.buckets[period] > 0.005);
+        return rows;
+    }, [data, q, period]);
+
+    const bills = useMemo(() => {
+        if (!data) return [];
+        let rows = q ? data.bills.filter((b) => b.searchKey.includes(q)) : data.bills;
+        if (period) rows = rows.filter((b) => b.bucket === period);
+        return rows;
+    }, [data, q, period]);
+
+    // The cards on top always report the whole book — they are the buttons, so
+    // their figures must not move. The row under a table adds up only the rows
+    // that table is showing.
+    const shownParty = useMemo(() => {
+        if (!q && !period) return { buckets: data?.buckets ?? EMPTY_BUCKETS, total: data?.totalOutstanding ?? 0 };
+        const buckets = { ...EMPTY_BUCKETS };
+        let total = 0;
+        for (const p of parties) {
+            buckets.b0_30    += p.buckets.b0_30;
+            buckets.b30_60   += p.buckets.b30_60;
+            buckets.b60_90   += p.buckets.b60_90;
+            buckets.b90_plus += p.buckets.b90_plus;
+            // With a period on, the row's Total column shows that period alone, so
+            // the footer must add up the same thing the eye is adding up.
+            total += period ? p.buckets[period] : p.totalOutstanding;
+        }
+        return { buckets, total };
+    }, [data, q, period, parties]);
+
+    const shownBillTotal = useMemo(
+        () => !q && !period ? (data?.totalOutstanding ?? 0) : bills.reduce((sum, b) => sum + b.outstanding, 0),
+        [data, q, period, bills],
+    );
+
+    const narrowed = (what: string) =>
+        `No ${what} ${q ? `matches “${query.trim()}”` : "sits"}${period ? ` in ${BUCKET_LABELS[period]}` : ""}.`;
+
+    const cardClass = (on: boolean) =>
+        `rounded-lg border px-3 py-1.5 text-left shadow-sm transition-colors ${
+            on ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border bg-card hover:bg-muted/50"
+        }`;
+
+    const tabClass = (on: boolean) =>
+        `px-4 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            on ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+        }`;
+
+    return (
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-7xl mx-auto space-y-3 px-6 pt-2 pb-4">
+            <div className="flex items-end justify-between gap-3 flex-wrap">
+                <div>
+                    <h1 className="text-xl font-bold text-foreground">{title}</h1>
+                    <p className="text-xs text-muted-foreground">{subtitle}</p>
+                </div>
+                <div className="flex items-end gap-2">
+                    <div className="space-y-1">
+                        <Label>As on</Label>
+                        <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
+                    </div>
+                    <Button onClick={() => load()}>Refresh</Button>
+                </div>
+            </div>
+
+            <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search party name, number, GSTIN, code or bill no…"
+                    className="h-8 pl-8"
+                />
+            </div>
+
+            {loading && (
+                <div className="flex justify-center py-16">
+                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                </div>
+            )}
+
+            {!loading && data && (
+                <>
+                    {/* Each card is the switch for its own period. */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {(Object.keys(BUCKET_LABELS) as Bucket[]).map((k) => (
+                            <button
+                                key={k}
+                                type="button"
+                                title={period === k ? "Showing this period only — click to show all" : `Show only ${BUCKET_LABELS[k]}`}
+                                onClick={() => setPeriod((cur) => (cur === k ? null : k))}
+                                className={cardClass(period === k)}
+                            >
+                                <div className="text-xs text-muted-foreground">{BUCKET_LABELS[k]}</div>
+                                <div className={`text-base font-mono font-semibold ${BUCKET_COLORS[k]}`}>
+                                    {fmt(data.buckets[k])}
+                                </div>
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            title="Show every period"
+                            onClick={() => setPeriod(null)}
+                            className={cardClass(period === null)}
+                        >
+                            <div className="text-xs text-muted-foreground">Total Outstanding</div>
+                            <div className="text-base font-mono font-bold text-primary">
+                                {fmt(data.totalOutstanding)}
+                            </div>
+                        </button>
+                    </div>
+
+                    {/* View tabs */}
+                    <div className="flex items-center gap-1 border-b border-border">
+                        <button onClick={() => setView("party")} className={tabClass(view === "party")}>
+                            Party-wise <span className="ml-1 text-xs text-muted-foreground">({parties.length})</span>
+                        </button>
+                        <button onClick={() => setView("bill")} className={tabClass(view === "bill")}>
+                            Bill-wise <span className="ml-1 text-xs text-muted-foreground">({bills.length})</span>
+                        </button>
+                    </div>
+
+                    {view === "party" && (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                        <table className="w-full text-sm">
+                            <thead className="border-b bg-muted text-xs text-muted-foreground">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Party</th>
+                                    <th className="px-3 py-2 text-right font-medium">Bills</th>
+                                    <th className="px-3 py-2 text-right font-medium">0–30</th>
+                                    <th className="px-3 py-2 text-right font-medium">30–60</th>
+                                    <th className="px-3 py-2 text-right font-medium">60–90</th>
+                                    <th className="px-3 py-2 text-right font-medium">90+</th>
+                                    <th className="px-3 py-2 text-right font-medium">Total</th>
+                                    <th className="px-3 py-2 w-8" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {parties.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="py-10 text-center text-muted-foreground text-sm">
+                                            {q || period ? narrowed("party") : emptyText.party}
+                                        </td>
+                                    </tr>
+                                ) : parties.map((p) => (
+                                    <tr
+                                        key={p.accountId}
+                                        className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
+                                        onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${p.accountId}?asOf=${asOf}`)}
+                                    >
+                                        <td className="px-3 py-1.5 font-medium text-foreground">{p.accountName}</td>
+                                        <td className="px-3 py-1.5 text-right text-muted-foreground">{p.billCount}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{p.buckets.b0_30 > 0 ? fmt(p.buckets.b0_30) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-amber-600">{p.buckets.b30_60 > 0 ? fmt(p.buckets.b30_60) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-orange-600">{p.buckets.b60_90 > 0 ? fmt(p.buckets.b60_90) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-red-600">{p.buckets.b90_plus > 0 ? fmt(p.buckets.b90_plus) : <span className="text-muted-foreground/65">—</span>}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(period ? p.buckets[period] : p.totalOutstanding)}</td>
+                                        <td className="px-3 py-1.5 text-muted-foreground"><ChevronRight size={14} /></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            {parties.length > 0 && (
+                                <tfoot className="border-t bg-muted/30 font-semibold">
+                                    <tr>
+                                        <td className="px-3 py-1.5">Total</td>
+                                        <td />
+                                        <td className="px-3 py-1.5 text-right font-mono">{fmt(shownParty.buckets.b0_30)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-amber-600">{fmt(shownParty.buckets.b30_60)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-orange-600">{fmt(shownParty.buckets.b60_90)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-red-600">{fmt(shownParty.buckets.b90_plus)}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{fmt(shownParty.total)}</td>
+                                        <td />
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                    )}
+
+                    {view === "bill" && (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                        <table className="w-full text-sm">
+                            <thead className="border-b bg-muted text-xs text-muted-foreground">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Bill date</th>
+                                    <th className="px-3 py-2 text-left font-medium">Ref</th>
+                                    <th className="px-3 py-2 text-left font-medium">Party</th>
+                                    <th className="px-3 py-2 text-left font-medium">Due date</th>
+                                    <th className="px-3 py-2 text-right font-medium">Total</th>
+                                    <th className="px-3 py-2 text-right font-medium">Paid</th>
+                                    <th className="px-3 py-2 text-right font-medium">Outstanding</th>
+                                    <th className="px-3 py-2 text-right font-medium">Status</th>
+                                    <th className="px-3 py-2 w-8" />
+                                    <th className="px-3 py-2 w-8" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {bills.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={10} className="py-10 text-center text-muted-foreground text-sm">
+                                            {q || period ? narrowed("bill") : emptyText.bill}
+                                        </td>
+                                    </tr>
+                                ) : bills.map((b) => {
+                                    const statusClass =
+                                        b.bucket === "b0_30"    ? "text-muted-foreground" :
+                                        b.bucket === "b30_60"   ? "text-amber-600" :
+                                        b.bucket === "b60_90"   ? "text-orange-600" :
+                                                                  "text-red-600";
+                                    const statusLabel = b.daysOverdue <= 30
+                                        ? `Within ${30 - b.daysOverdue}d`
+                                        : `Overdue ${b.daysOverdue - 30}d`;
+                                    return (
+                                        <tr
+                                            key={`${b.kind}-${b.id}`}
+                                            className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
+                                            onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${b.accountId}?asOf=${asOf}`)}
+                                        >
+                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.billDate)}</td>
+                                            <td className="px-3 py-1.5 font-mono text-xs">{b.ref}</td>
+                                            <td className="px-3 py-1.5 font-medium text-foreground">{b.accountName}</td>
+                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
+                                            <td className={`px-3 py-1.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
+                                            <td className="px-3 py-1.5 text-right">
+                                                {b.universalVoucherId != null && (
+                                                    <button
+                                                        type="button"
+                                                        title={settleHint}
+                                                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                        onClick={(e) => {
+                                                            // The row itself drills to the party — keep that off this button.
+                                                            e.stopPropagation();
+                                                            setLinkTarget({ voucherId: b.universalVoucherId!, accountId: b.accountId, accountName: b.accountName });
+                                                        }}
+                                                    >
+                                                        <Link2 size={14} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-1.5 text-muted-foreground"><ChevronRight size={14} /></td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                            {bills.length > 0 && (
+                                <tfoot className="border-t bg-muted/30 font-semibold">
+                                    <tr>
+                                        <td colSpan={6} className="px-3 py-1.5 text-right">Total</td>
+                                        <td className="px-3 py-1.5 text-right font-mono">{fmt(shownBillTotal)}</td>
+                                        <td colSpan={3} />
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                    )}
+                </>
+            )}
+        </div>
+        {linkTarget && (
+            <BillLinkDialog
+                open
+                onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
+                accountId={linkTarget.accountId}
+                partyName={linkTarget.accountName}
+                voucherId={linkTarget.voucherId}
+                onSaved={() => load(true)}
+            />
+        )}
+        </ScrollArea>
+    );
+}
