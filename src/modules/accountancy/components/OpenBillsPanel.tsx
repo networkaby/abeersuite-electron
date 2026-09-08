@@ -177,6 +177,14 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     const netPlaced = round2(onBills - fromCredits);
     const drCr = (n: number) => (n >= 0 ? (side === 1 ? "Dr" : "Cr") : (side === 1 ? "Cr" : "Dr"));
 
+    // What the money can find no bill for. It does not vanish and it is not
+    // "unallocated" — it becomes this voucher's OWN open reference, which a bill
+    // raised later can be settled against. Tally calls it a New Ref. Shown as a
+    // row of its own so the Link now column adds up to the amount received, and
+    // so the ledger's landing figure below counts it: the party is credited with
+    // it either way, linked or not.
+    const newRef = Math.max(0, round2(amount - netPlaced));
+
     /** How much of a credit can be spent: never more than it holds, and never
      *  more than the bills on screen are actually absorbing — a credit that pays
      *  no bill would be money going nowhere. */
@@ -395,6 +403,28 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                 );
                             })}
 
+                            {/* The money no bill claimed, standing as this voucher's
+                                own reference. Not a warning and not a leftover — it
+                                is how an advance comes into being, and a bill raised
+                                next week settles against it by name. */}
+                            {newRef > EPS && (
+                                <tr className="border-t border-border/50 bg-sky-50/60" title="No bill takes this part, so it stays open on this voucher as a reference of its own. A later bill can be settled against it.">
+                                    <td className="w-6 py-1" />
+                                    <td className="py-1 pr-1">
+                                        <span className="text-sky-800">New reference</span>
+                                        <span className="block text-[10px] text-sky-700/80">
+                                            stays open on this {side === 1 ? "receipt" : "payment"}
+                                        </span>
+                                    </td>
+                                    <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
+                                    <td className="py-1 pl-2 text-right font-mono tabular-nums text-sky-700 whitespace-nowrap">
+                                        {fmt(newRef)} {side === 1 ? "Cr" : "Dr"}
+                                    </td>
+                                    <td className="py-1 pl-2 pr-1.5 text-right font-mono tabular-nums text-sky-800 whitespace-nowrap">
+                                        {fmt(newRef)}
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                         {/* Sticky, so it stays under the eye while a long list
                             scrolls. Both figures are nets across the two
@@ -408,20 +438,23 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                 <td className="py-1.5 pr-1">Total</td>
                                 <td className="py-1.5 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">—</td>
                                 <td className="py-1.5 pl-2 text-right font-mono tabular-nums whitespace-nowrap">
-                                    <span className={netPlaced > EPS ? "text-muted-foreground line-through decoration-muted-foreground/50" : ""}>
+                                    <span className={netPlaced + newRef > EPS ? "text-muted-foreground line-through decoration-muted-foreground/50" : ""}>
                                         {fmt(Math.abs(netOpen))} {drCr(netOpen)}
                                     </span>
                                     {/* Where this party lands once the voucher is
                                         saved — the same before-and-after the rows
-                                        above show, for the ledger as a whole. */}
-                                    {netPlaced > EPS && (
+                                        above show, for the ledger as a whole. The
+                                        new reference counts here too: the party is
+                                        credited with that money whether a bill
+                                        claimed it or not. */}
+                                    {netPlaced + newRef > EPS && (
                                         <span className="block text-[10px] text-green-700">
-                                            → {fmt(Math.abs(round2(netOpen - netPlaced)))} {drCr(round2(netOpen - netPlaced))}
+                                            → {fmt(Math.abs(round2(netOpen - netPlaced - newRef)))} {drCr(round2(netOpen - netPlaced - newRef))}
                                         </span>
                                     )}
                                 </td>
                                 <td className="py-1.5 pl-2 pr-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-                                    {netPlaced > EPS ? fmt(netPlaced) : "—"}
+                                    {netPlaced + newRef > EPS ? fmt(round2(netPlaced + newRef)) : "—"}
                                 </td>
                             </tr>
                         </tfoot>
