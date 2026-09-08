@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, ChevronRight, Link2 } from "lucide-react";
+import { Loader2, ChevronRight, Link2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
@@ -45,6 +46,7 @@ export default function ReceivablesPage() {
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<ViewMode>("party");
+    const [query, setQuery] = useState("");
 
     const load = useCallback((silent = false) => {
         // A realtime refresh must not blank a report the user is reading.
@@ -62,6 +64,19 @@ export default function ReceivablesPage() {
     // voucher posted at another counter as well as one posted here.
     useRealtimeTopics(["ledger"], () => load(true));
 
+    // Search only narrows what is already on screen — no refetch, no extra DB read.
+    // The bucket cards and the Total row stay on the full report figures.
+    const q = query.trim().toLowerCase();
+    const parties = useMemo(
+        () => !data ? [] : !q ? data.parties : data.parties.filter((p) => p.accountName.toLowerCase().includes(q)),
+        [data, q],
+    );
+    const bills = useMemo(
+        () => !data ? [] : !q ? data.bills
+            : data.bills.filter((b) => b.accountName.toLowerCase().includes(q) || b.ref.toLowerCase().includes(q)),
+        [data, q],
+    );
+
     return (
         <ScrollArea className="h-full" type="always">
         <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
@@ -73,6 +88,18 @@ export default function ReceivablesPage() {
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
+                    <div className="space-y-1">
+                        <Label>Search</Label>
+                        <div className="relative">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Party name or bill ref…"
+                                className="w-56 pl-8"
+                            />
+                        </div>
+                    </div>
                     <div className="space-y-1">
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
@@ -126,7 +153,7 @@ export default function ReceivablesPage() {
                                     : "border-transparent text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                            Bill-wise <span className="ml-1 text-xs text-muted-foreground">({data.bills.length})</span>
+                            Bill-wise <span className="ml-1 text-xs text-muted-foreground">({bills.length})</span>
                         </button>
                     </div>
 
@@ -146,13 +173,13 @@ export default function ReceivablesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.parties.length === 0 ? (
+                                {parties.length === 0 ? (
                                     <tr>
                                         <td colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
-                                            No outstanding receivables.
+                                            {q ? `No party matches “${query.trim()}”.` : "No outstanding receivables."}
                                         </td>
                                     </tr>
-                                ) : data.parties.map((p) => (
+                                ) : parties.map((p) => (
                                     <tr
                                         key={p.accountId}
                                         className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
@@ -169,7 +196,7 @@ export default function ReceivablesPage() {
                                     </tr>
                                 ))}
                             </tbody>
-                            {data.parties.length > 0 && (
+                            {parties.length > 0 && (
                                 <tfoot className="border-t bg-muted/30 font-semibold">
                                     <tr>
                                         <td className="px-3 py-2.5">Total</td>
@@ -205,13 +232,13 @@ export default function ReceivablesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.bills.length === 0 ? (
+                                {bills.length === 0 ? (
                                     <tr>
                                         <td colSpan={10} className="py-12 text-center text-muted-foreground text-sm">
-                                            No outstanding bills.
+                                            {q ? `No bill matches “${query.trim()}”.` : "No outstanding bills."}
                                         </td>
                                     </tr>
-                                ) : data.bills.map((b) => {
+                                ) : bills.map((b) => {
                                     const statusClass =
                                         b.bucket === "b0_30"    ? "text-muted-foreground" :
                                         b.bucket === "b30_60"   ? "text-amber-600" :
@@ -255,7 +282,7 @@ export default function ReceivablesPage() {
                                     );
                                 })}
                             </tbody>
-                            {data.bills.length > 0 && (
+                            {bills.length > 0 && (
                                 <tfoot className="border-t bg-muted/30 font-semibold">
                                     <tr>
                                         <td colSpan={6} className="px-3 py-2.5 text-right">Total</td>
