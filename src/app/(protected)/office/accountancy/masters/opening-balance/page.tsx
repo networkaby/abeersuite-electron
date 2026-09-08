@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, AlertTriangle, CheckCircle, Plus, Search, ListTree } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, Plus, Search, ListTree, FileStack } from "lucide-react";
 import { OpeningBillsDialog } from "@/modules/accountancy/components/OpeningBillsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +71,44 @@ export default function OpeningBalancePage() {
 
     const [allAccounts, setAllAccounts] = useState<GlAccount[]>([]);
 
+    // "Convert all to bills" — a party's opening figure is invisible to
+    // Receivables, Payables and bill-wise linking until it becomes a real
+    // voucher. Always asked TWICE: the first press only reports what would
+    // happen, because converting moves Account.balance and that is what the POS
+    // credit check reads at the counter.
+    const [convert, setConvert] = useState<{ accounts: number; total: number; skipped: number } | null>(null);
+    const [converting, setConverting] = useState(false);
+
+    const previewConvert = async () => {
+        setConverting(true);
+        try {
+            const { data: r } = await axios.post("/api/accountancy/opening-balance/to-bills", { dryRun: true });
+            if (r.accounts === 0) {
+                toast.info(r.skipped > 0
+                    ? "Every party opening is already bill-wise."
+                    : "No party opening balances to convert.");
+                return;
+            }
+            setConvert({ accounts: r.accounts, total: r.total, skipped: r.skipped ?? 0 });
+        } catch (err) {
+            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Failed" : "Failed");
+        } finally { setConverting(false); }
+    };
+
+    const applyConvert = async () => {
+        setConverting(true);
+        try {
+            const { data: r } = await axios.post("/api/accountancy/opening-balance/to-bills", { dryRun: false });
+            const failed: { name: string; reason: string }[] = r.failed ?? [];
+            toast.success(`${r.converted} opening balance(s) are now bills.`);
+            if (failed.length > 0) toast.error(`${failed.length} could not be converted: ${failed[0].reason}`);
+            setConvert(null);
+            load();
+        } catch (err) {
+            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Failed" : "Failed");
+        } finally { setConverting(false); }
+    };
+
     // Refetch without flipping `loading` — the full-page spinner is for the
     // first load only. `onChanged={load}` fires after every edit, and
     // re-showing it unmounted the whole summary (page blink).
@@ -113,12 +151,50 @@ export default function OpeningBalancePage() {
     return (
         <ScrollArea className="h-full" type="always">
             <div className="max-w-5xl mx-auto space-y-6 px-0 pt-3 pb-6">
-                <div>
-                    <h1 className="text-2xl font-bold">Opening Balance</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        Per-account opening figures for migration from another system — always effective from the start of the books.
-                    </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold">Opening Balance</h1>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                            Per-account opening figures for migration from another system — always effective from the start of the books.
+                        </p>
+                    </div>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={previewConvert} disabled={converting}>
+                        {converting ? <Loader2 size={14} className="animate-spin" /> : <FileStack size={14} />} Convert all to bills
+                    </Button>
                 </div>
+
+                {/* Asked twice on purpose. The first press writes nothing — it
+                    only reports how many parties and how much, because
+                    converting moves Account.balance, and that is the figure the
+                    POS credit check reads at the counter. A customer who looks
+                    clear today can start hitting their credit limit tomorrow:
+                    correct, but it should not arrive as a surprise. */}
+                {convert && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2 text-sm">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle size={18} className="text-amber-700 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-medium text-amber-800">
+                                    Turn {convert.accounts} party opening balance{convert.accounts === 1 ? "" : "s"} into bills — ₹ {fmt(convert.total)} in all?
+                                </p>
+                                <p className="text-amber-800/80 text-xs mt-1">
+                                    Each becomes one real opening bill, so it appears in Receivables and Payables and money can be
+                                    settled against it. It also moves the ledger balance the counter&apos;s credit check reads, so a
+                                    customer may start hitting their credit limit.
+                                    {convert.skipped > 0 && ` ${convert.skipped} party already broken up bill-wise will be left alone.`}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pl-8">
+                            <Button size="sm" onClick={applyConvert} disabled={converting}>
+                                {converting ? <Loader2 size={14} className="animate-spin mr-1" /> : null} Yes, convert
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setConvert(null)} disabled={converting}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {balanced ? (
                     <div className="rounded-lg border border-green-200 bg-green-50 p-4 flex items-center gap-3 text-sm">

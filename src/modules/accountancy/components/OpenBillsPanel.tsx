@@ -16,16 +16,16 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Loader2 } from "lucide-react";
+import { Loader2, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fmt } from "@/utils/constants";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
-import { EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
+import { planLinks, sumPicks, EPS, type LinkableDoc, type BillPicks } from "@/modules/accountancy/lib/billLinkPlan";
 
-/** Ticked bills → amount placed on each (spine id → ₹). */
-export type BillPicks = Record<number, number>;
+export type { BillPicks };
 
 // Same idea as the popup's cache: the party's open bills barely move between
 // two keystrokes, and a spinner where a table just was reads as a bug.
@@ -53,7 +53,7 @@ function fetchOpenBills(key: string, accountId: number, side: 1 | -1): Promise<L
     return p;
 }
 
-const sumOf = (picks: BillPicks) => round2(Object.values(picks).reduce((s, n) => s + n, 0));
+const sumOf = sumPicks;
 
 export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onChange, ledgerLabel, ledgerOwed }: {
     /** The party ledger whose open bills are shown. */
@@ -132,6 +132,35 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
         onChange(next, nextAmount);
     };
 
+    // Auto — overdue first, then nearest due date, the smaller bill on a tie.
+    // Ticks already made by hand are kept exactly as they are and paid for first,
+    // so Auto can only fill what is still unplaced. With no amount typed yet it
+    // offers to settle everything open, the same way ticking every row would.
+    const auto = () => {
+        const list = docs ?? [];
+        const budget = amountTyped ? amount : round2(totalOpen);
+        const before = sumOf(picks);
+        const { picks: next, clamped } = planLinks(list, budget, { existing: picks });
+        if (sumOf(next) - before <= EPS) {
+            toast.info(before > EPS
+                ? "Nothing more to place — the amount is already spread over the bills you ticked."
+                : "Nothing open to settle for this party.");
+            return;
+        }
+        const nextAmount = amountTyped ? null : sumOf(next);
+        if (nextAmount !== null) setSetByTicks(nextAmount);
+        onChange(next, nextAmount);
+        if (clamped.length > 0) toast.info(`${clamped.length} tick(s) no longer fit and were adjusted.`);
+    };
+
+    /** Reset — every tick goes, hand-made and auto-made alike. An amount the
+     *  user typed stays; one that the ticks themselves put there goes with them. */
+    const reset = () => {
+        const nextAmount = amountTyped ? null : 0;
+        if (nextAmount !== null) setSetByTicks(null);
+        onChange({}, nextAmount);
+    };
+
     return (
         <div className="rounded-md border border-border bg-card p-3 shadow-sm">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
@@ -149,13 +178,16 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                 </p>
             ) : (
                 <>
-                    <table className="mt-2 w-full text-xs">
-                        <thead>
+                    {/* Capped so a party with forty open bills cannot push Save
+                        off the bottom of the screen. */}
+                    <div className="mt-2 max-h-[46vh] overflow-y-auto">
+                    <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-card">
                             <tr className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
                                 <th className="w-6" />
                                 <th className="py-1 text-left font-medium">Bill</th>
                                 <th className="py-1 text-right font-medium">Total</th>
-                                <th className="py-1 text-right font-medium">Settled</th>
+                                <th className="py-1 text-right font-medium">Linked</th>
                                 <th className="py-1 text-right font-medium">Open</th>
                             </tr>
                         </thead>
@@ -180,7 +212,13 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                             </span>
                                         </td>
                                         <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{fmt(d.face)}</td>
-                                        <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{fmt(round2(d.face - d.open))}</td>
+                                        {/* What money has already been LINKED to this bill —
+                                            not `face − open`, which also swallows whatever was
+                                            tendered at the counter and so read as a different
+                                            number from the same column in the link popup. */}
+                                        <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                                            {d.linked > EPS ? fmt(d.linked) : "—"}
+                                        </td>
                                         <td className="py-1 pl-2 text-right font-mono tabular-nums whitespace-nowrap">
                                             {ticked ? (
                                                 <span className={partial ? "text-amber-600" : "text-green-600"} title={partial ? `of ${fmt(d.open)} open` : undefined}>
@@ -213,6 +251,17 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                             )}
                         </tbody>
                     </table>
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                        <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={auto}>
+                            <Wand2 size={13} className="mr-1" /> Auto
+                        </Button>
+                        {placed > EPS && (
+                            <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={reset}>
+                                <X size={13} className="mr-1" /> Reset
+                            </Button>
+                        )}
+                    </div>
                     <div className="mt-1.5 space-y-0.5 border-t border-border pt-1.5 text-xs">
                         <div className="flex justify-between text-muted-foreground">
                             <span>Total open</span>
@@ -243,8 +292,8 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
                         {amountTyped
-                            ? "Ticks fill bills within the amount typed. * = part of the bill."
-                            : "Each tick adds the bill to the amount; type an amount first to fill bills within it."}
+                            ? "Ticks fill bills within the amount typed. Auto fills the rest, overdue first, without touching your ticks. * = part of the bill."
+                            : "Each tick adds the bill to the amount; Auto offers everything open. Type an amount first to fill bills within it."}
                         {" "}After Save, the link popup opens with the same ticks.
                     </p>
                 </>

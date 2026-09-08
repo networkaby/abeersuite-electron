@@ -10,6 +10,7 @@ import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/ba
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
 
 // Phase 5 5E: the UniversalVoucher spine IS the financial voucher (Voucher table
 // dropped). `id` is the spine id; lines are VoucherGlLine. The spine is scalar/
@@ -179,11 +180,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ...(denom !== undefined ? { denomJson: denom ?? Prisma.DbNull } : {}),
                 },
             });
+
+            // The lines have just been rewritten with no regard for what this
+            // voucher has already settled. Check it last, on the voucher as it
+            // now stands, so a refusal takes the whole edit back with it.
+            await assertLinksSurviveEdit(tx, {
+                spineId:     voucherId,
+                partyBefore: existing.partyAccountId,
+                partyAfter:  body.partyAccountId ?? null,
+            });
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const updated = await prisma.universalVoucher.findUnique({ where: { id: voucherId }, include: { lines: true } });
         return NextResponse.json(updated ? await enrichVoucher(updated) : null);
     } catch (e) {
+        // A refusal the user can act on ("unlink it first"), not a server fault.
+        if (e instanceof BillLinkError) return NextResponse.json({ error: e.message }, { status: 422 });
         return handleApiError(e, "Failed to update voucher");
     }
 }

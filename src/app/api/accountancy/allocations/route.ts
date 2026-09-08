@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { assertLinkable, createLink, BillLinkError } from "@/modules/accountancy/lib/billLink";
+import { assertLinkPlan, createLink, BillLinkError } from "@/modules/accountancy/lib/billLink";
 
 // A link is a statement about two POSTED vouchers, so it is gated at the same
 // rung as editing one: `cancel` on BOTH kinds.
@@ -28,6 +28,18 @@ const createSchema = z.object({
         amount:    z.number().positive(),
     })).min(1).max(200),
     reference: z.string().trim().max(120).optional(),
+    /**
+     * What `amount` means on each line:
+     *
+     *   • `set` (the default) — what the pair should TOTAL once this is saved.
+     *     Saving the same plan twice therefore changes nothing, which is what
+     *     makes a double click, a retry after a lost response, or a replayed
+     *     request harmless.
+     *   • `increment` — add this much to whatever the pair already has. Only for
+     *     a caller that genuinely means "some more", and cannot be replayed
+     *     safely.
+     */
+    mode: z.enum(["set", "increment"]).default("set"),
 });
 
 // GET /api/accountancy/allocations?voucherId=42
@@ -102,21 +114,33 @@ export async function POST(req: Request) {
         }
 
         const created = await prisma.$transaction(async (tx) => {
+            // Everything about a link is measured on ONE party ledger, so one
+            // lock per party is enough to stop two tills reading the same room
+            // and both spending it. The unique key alone would not: it stops a
+            // second ROW for a pair, not a doubled amount on the one row.
+            // Two-argument form, not hashtext() — the single-argument namespace
+            // is global and already used elsewhere for voucher numbering.
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(4711, ${data.accountId})`;
+
+            // Validated as a whole: every rule the per-link loop applied, plus
+            // the linking voucher checked once against everything the plan puts
+            // on it, and read in a handful of queries instead of ~7 per line.
+            const plan = await assertLinkPlan(tx, {
+                accountId: data.accountId,
+                voucherId: data.voucherId,
+                links:     data.links,
+                mode:      data.mode,
+            });
+
             const out: number[] = [];
-            for (const link of data.links) {
-                // Checked one at a time and inside the transaction, so each link
-                // sees the room the previous ones already took.
-                const { targetId, sourceId } = await assertLinkable(tx, {
-                    accountId: data.accountId,
-                    aId:       data.voucherId,
-                    bId:       link.voucherId,
-                    amount:    link.amount,
-                });
+            for (const link of plan) {
                 out.push(await createLink(tx, {
-                    targetId, sourceId,
+                    targetId:  link.targetId,
+                    sourceId:  link.sourceId,
                     amount:    link.amount,
                     reference: data.reference ?? null,
                     userId:    user!.id,
+                    mode:      data.mode,
                 }));
             }
             return out;
