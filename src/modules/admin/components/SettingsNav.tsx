@@ -19,7 +19,7 @@ const GROUP_SLUGS: string[][] = [
     ["pos-services"],                          // POS (service catalogue)
     ["workflow"], // workflow (Statuses / Workers / Pipelines / Works as sub-tabs)
     ["naming-convention"],                     // inventory
-    ["printer-settings", "qr-display-settings"], // hardware
+    ["printer-settings", "qr-display-settings", "screen-size"], // hardware / this PC
 ];
 
 function isActive(pathname: string, href: string): boolean {

@@ -148,8 +148,9 @@ export const COUNTER_VOUCHERS_MODULE_STRIP = [
 
 /** office/settings keeps only what a till actually touches: POS service config, the
  *  printer, and the customer-facing QR display — the two things the counter bridge
- *  exists to drive, per `src/shared/lib/bridge/hardwareBridge.ts`. */
-export const COUNTER_SETTINGS_KEEP = new Set(["pos-services", "printer-settings", "qr-display-settings"]);
+ *  exists to drive, per `src/shared/lib/bridge/hardwareBridge.ts` — plus the screen
+ *  size, which is per-PC and is exactly the setting a small counter screen needs. */
+export const COUNTER_SETTINGS_KEEP = new Set(["pos-services", "printer-settings", "qr-display-settings", "screen-size"]);
 
 export const COUNTER_API_ALLOWLIST = new Set([
     "auth", "pos", "counter", "parties", "inventory", "pricing-strategy", "accounts",

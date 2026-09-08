@@ -5,6 +5,14 @@ import type { RestoreReadiness, RunResult } from "./backupManager";
 export type { UpdateState, UpdateTier, UpdatePhase } from "./updateManager";
 export type { BackupAvailability, RestoreReadiness, RunResult } from "./backupManager";
 
+export interface DisplaySetting {
+    mode: "auto" | "fixed";
+    /** The zoom factor actually in force, e.g. 0.8 for 80%. */
+    applied: number;
+    /** Only present on `get` — the choices the Settings page should offer. */
+    steps?: number[];
+}
+
 export interface ElectronAPI {
     isElectron: true;
     getCounterId: () => Promise<string>;
@@ -40,6 +48,18 @@ export interface ElectronAPI {
         restoreFromDisk: (confirm: string) => Promise<RunResult>;
         /** Every pg_dump/pg_restore progress line. Returns an unsubscribe function. */
         onProgress: (callback: (line: string) => void) => () => void;
+    };
+    /**
+     * How big the app draws itself on THIS counter, see electron/displayPreference.ts.
+     *
+     * `applied` is the factor in force right now — under "auto" it is whatever this
+     * counter's screen width resolved to, which is the number the Settings page shows
+     * beside the Automatic option. `steps` is the list of factors Settings offers, kept
+     * in main so the two can never drift apart.
+     */
+    display: {
+        get: () => Promise<DisplaySetting>;
+        set: (mode: "auto" | "fixed", factor?: number) => Promise<DisplaySetting>;
     };
     /** Splash-screen progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
@@ -104,6 +124,10 @@ const electronAPI: ElectronAPI = {
             ipcRenderer.on("backup:progress", handler);
             return () => ipcRenderer.removeListener("backup:progress", handler);
         },
+    },
+    display: {
+        get: () => ipcRenderer.invoke("display:get"),
+        set: (mode, factor) => ipcRenderer.invoke("display:set", mode, factor),
     },
     onBootProgress: (callback) => {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));

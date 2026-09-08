@@ -820,6 +820,34 @@ ipcMain.handle("window:control", (event, action: "minimize" | "maximize" | "clos
     }
 });
 
+// ── Screen size ──────────────────────────────────────────────────────────────
+// Reads as "what is applied right now" rather than just the saved value, because the
+// Settings page has to show what Automatic actually resolved to on THIS counter — the
+// answer differs per machine and the staff need to see the number they are comparing
+// their manual choices against.
+ipcMain.handle("display:get", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const pref = readDisplayPreference();
+    return {
+        mode: pref.mode,
+        applied: resolveZoomFactor(win ?? undefined),
+        steps: [...ZOOM_STEPS],
+    };
+});
+
+ipcMain.handle("display:set", (event, mode: "auto" | "fixed", factor?: number) => {
+    if (mode === "fixed" && typeof factor === "number") {
+        writeDisplayPreference({ mode: "fixed", factor });
+    } else {
+        writeDisplayPreference({ mode: "auto" });
+    }
+    // Every window, not only the sender: a report window left open beside the Settings
+    // page would otherwise keep the old size until it was closed and opened again.
+    applyPreferenceToAllWindows();
+    const win = BrowserWindow.fromWebContents(event.sender);
+    return { mode: readDisplayPreference().mode, applied: resolveZoomFactor(win ?? undefined) };
+});
+
 // ── Auto Updater ─────────────────────────────────────────────────────────────
 // Policy and mechanics live in updateManager.ts. What stays here is the wiring: the
 // renderer's view of the update, its "Restart now", and the POS cart's busy flag.
@@ -845,6 +873,7 @@ import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isB
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 import { setupAutoUpdater, stopAutoUpdater, getUpdateState, install, checkNow, setCartBusy, clearUpdateSplash } from "./updateManager";
+import { attachZoom, fitToScreen, stepZoom, readDisplayPreference, writeDisplayPreference, applyPreferenceToAllWindows, resolveZoomFactor, ZOOM_STEPS } from "./displayPreference";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
 // See serverManager.ts's warmRoutes() for why this exists: preloadEntriesOnStart
@@ -1069,15 +1098,19 @@ function attachWindowOpenPolicy(win: BrowserWindow): void {
         if (!target) return { action: "deny" };
 
         if (target.internal) {
+            // Same reason as the main window: a report window opened at a size the
+            // counter's screen does not have is a window with its footer off the
+            // bottom of the screen.
+            const fitted = fitToScreen({ width: 1280, height: 820, minWidth: 900, minHeight: 600 });
             return {
                 action: "allow",
                 // Inherit the parent's hardening explicitly rather than trusting the
                 // defaults a child window would otherwise be created with.
                 overrideBrowserWindowOptions: {
-                    width: 1280,
-                    height: 820,
-                    minWidth: 900,
-                    minHeight: 600,
+                    width: fitted.width,
+                    height: fitted.height,
+                    minWidth: fitted.minWidth,
+                    minHeight: fitted.minHeight,
                     title: APP_TITLE,
                     autoHideMenuBar: true,
                     backgroundColor: SPLASH_BG,
@@ -1105,6 +1138,7 @@ function attachWindowOpenPolicy(win: BrowserWindow): void {
         // main window gets the hide-on-close treatment, so a closed report window is not
         // left invisible in memory with nothing able to bring it back.
         attachWindowOpenPolicy(child);
+        attachZoom(child);
     });
 }
 
@@ -1114,11 +1148,14 @@ function attachWindowOpenPolicy(win: BrowserWindow): void {
  * Postgres and the server are still starting.
  */
 function createShellWindow(initiallyHidden = false): BrowserWindow {
+    // 1366 x 860 is the size the office screens were designed against. On a counter
+    // with a smaller screen it is simply not available, so ask the screen first.
+    const fitted = fitToScreen({ width: 1366, height: 860, minWidth: 1024, minHeight: 700 });
     const win = new BrowserWindow({
-        width: 1366,
-        height: 860,
-        minWidth: 1024,
-        minHeight: 700,
+        width: fitted.width,
+        height: fitted.height,
+        minWidth: fitted.minWidth,
+        minHeight: fitted.minHeight,
         title: currentAppTitle(),
         autoHideMenuBar: true,
         show: false,
@@ -1135,6 +1172,11 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
     });
 
     attachWindowOpenPolicy(win);
+    attachZoom(win);
+    // On a screen too small for the design size, the fitted window already fills the
+    // work area — maximising makes that the window's real state, so Windows snaps and
+    // restores it correctly instead of treating a full-screen-sized window as floating.
+    if (fitted.oversized) win.once("ready-to-show", () => win.maximize());
     // did-navigate covers full loads; did-navigate-in-page covers Next's client-side
     // router (pushState) — staff move between office/pos/vouchers screens without a
     // full reload, so only the latter fires for most in-app navigation.
@@ -1188,7 +1230,73 @@ function showBootError(triedUrl: string): void {
 }
 
 // ── App Lifecycle ────────────────────────────────────────────────────────────
+/**
+ * Replaces Electron's built-in menu, for one reason: the built-in Zoom In / Zoom Out
+ * change the zoom without telling the app, so a size a cashier set with the keyboard
+ * was forgotten the moment the counter restarted. These items go through stepZoom,
+ * which saves the choice.
+ *
+ * The menu stays hidden (`autoHideMenuBar`); it exists for its shortcuts. Edit is here
+ * because Ctrl+C / Ctrl+V on Windows come from the menu — drop it and copy-paste dies
+ * in every input box in the app.
+ */
+function buildApplicationMenu(): void {
+    const focused = () => BrowserWindow.getFocusedWindow() ?? mainWindow;
+    Menu.setApplicationMenu(
+        Menu.buildFromTemplate([
+            {
+                label: "Edit",
+                submenu: [
+                    { role: "undo" },
+                    { role: "redo" },
+                    { type: "separator" },
+                    { role: "cut" },
+                    { role: "copy" },
+                    { role: "paste" },
+                    { role: "selectAll" },
+                ],
+            },
+            {
+                label: "View",
+                submenu: [
+                    { role: "reload" },
+                    { role: "forceReload" },
+                    { role: "toggleDevTools" },
+                    { type: "separator" },
+                    {
+                        label: "Zoom In",
+                        accelerator: "CommandOrControl+Plus",
+                        click: () => stepZoom(focused(), 0.05),
+                    },
+                    {
+                        // Ctrl and "=" is the same physical key as "+" without Shift, and
+                        // it is the one people actually press.
+                        label: "Zoom In",
+                        accelerator: "CommandOrControl+=",
+                        visible: false,
+                        click: () => stepZoom(focused(), 0.05),
+                    },
+                    {
+                        label: "Zoom Out",
+                        accelerator: "CommandOrControl+-",
+                        click: () => stepZoom(focused(), -0.05),
+                    },
+                    {
+                        label: "Automatic Size",
+                        accelerator: "CommandOrControl+0",
+                        click: () => stepZoom(focused(), 0),
+                    },
+                    { type: "separator" },
+                    { role: "togglefullscreen" },
+                ],
+            },
+            { label: "Window", submenu: [{ role: "minimize" }, { role: "close" }] },
+        ]),
+    );
+}
+
 app.whenReady().then(async () => {
+    buildApplicationMenu();
     createSystemTray();
 
     if (app.isPackaged) {
