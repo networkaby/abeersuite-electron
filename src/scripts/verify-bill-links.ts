@@ -211,6 +211,100 @@ async function main(): Promise<void> {
         if ((e as Error)?.message !== ROLLBACK) throw e;
     }
 
+    // ── 7b. A party's opening balance, broken into bills ───────────────────
+    //
+    // The point of the breakup is that each piece behaves like a real bill: it
+    // shows as outstanding, it ages, and money can be settled against it. None
+    // of that works while the opening is a lone number on the master with no GL
+    // lines behind it.
+    {
+        const { prisma } = await import("@/shared/lib/prisma/prismaClient");
+        const { accountIdsUnderGroup } = await import("@/modules/accountancy/lib/accountGroups");
+        const { loadOpeningBills, saveOpeningBills, OpeningBillError } =
+            await import("@/modules/accountancy/lib/openingBills");
+        const { loadLinkableDocs, assertLinkable, createLink } =
+            await import("@/modules/accountancy/lib/billLink");
+        const { ACCOUNT_GROUPS } = await import("@/shared/lib/constants/accounting");
+
+        const debtorIds = await accountIdsUnderGroup(ACCOUNT_GROUPS.SUNDRY_DEBTORS);
+        const party = debtorIds[0];
+        const user = await prisma.user.findFirst({ select: { id: true } });
+        const others = await prisma.account.findMany({
+            where: { id: { notIn: debtorIds }, isActive: true }, select: { id: true }, take: 1,
+        });
+
+        if (party && user && others[0]) {
+            try {
+                await prisma.$transaction(async (tx) => {
+                    const saved = await saveOpeningBills(tx, {
+                        accountId: party, type: "DEBIT", userId: user.id,
+                        bills: [
+                            { ref: "OB-1", date: "2026-04-01", amount: 600 },
+                            { ref: "OB-2", date: "2026-05-15", amount: 400 },
+                        ],
+                    });
+                    check("an opening balance splits into two real bills",
+                        saved.created.length === 2 && near(saved.total, 1000), `total ${saved.total}`);
+
+                    const bills = await loadOpeningBills(tx, party);
+                    check("both read back with their own number and date",
+                        bills.length === 2 && bills[0].ref === "OB-1" && bills[1].date === "2026-05-15",
+                        bills.map((b) => `${b.ref}@${b.date}`).join(" "));
+
+                    // The scalar must be gone, or the same money counts twice.
+                    const acct = await tx.account.findUnique({
+                        where: { id: party }, select: { openingBalance: true },
+                    });
+                    check("the master figure is cleared so nothing double-counts",
+                        acct?.openingBalance === null, `scalar ${acct?.openingBalance}`);
+
+                    const open = await loadLinkableDocs(tx, party, { side: 1 });
+                    const ob1 = open.find((d) => d.universalVoucherId === saved.created[0]);
+                    check("an opening bill is outstanding like any other bill",
+                        ob1?.side === 1 && near(ob1.open, 600), `open ${ob1?.open}`);
+
+                    // Settle one of them, exactly as a receipt would.
+                    const rc = await tx.universalVoucher.create({
+                        data: {
+                            type: "RECEIPT", date: new Date(), description: "verify opening receipt",
+                            status: "POSTED", partyAccountId: party, createdById: user.id,
+                        },
+                        select: { id: true },
+                    });
+                    await tx.voucherGlLine.createMany({
+                        data: [
+                            { universalVoucherId: rc.id, accountId: party, type: "CREDIT", amount: 600 },
+                            { universalVoucherId: rc.id, accountId: others[0].id, type: "DEBIT", amount: 600 },
+                        ],
+                    });
+                    const o = await assertLinkable(tx, { accountId: party, aId: saved.created[0], bId: rc.id, amount: 600 });
+                    await createLink(tx, { ...o, amount: 600, userId: user.id });
+
+                    const afterSettle = await loadOpeningBills(tx, party);
+                    check("money settles against one opening bill only",
+                        near(afterSettle[0].linked, 600) && near(afterSettle[1].linked, 0),
+                        afterSettle.map((b) => `${b.ref}:${b.linked}`).join(" "));
+
+                    // Dropping a settled bill would un-settle a banked receipt.
+                    try {
+                        await saveOpeningBills(tx, {
+                            accountId: party, type: "DEBIT", userId: user.id,
+                            bills: [{ universalVoucherId: saved.created[1], ref: "OB-2", date: "2026-05-15", amount: 400 }],
+                        });
+                        check("refuses to drop a settled opening bill", false, "was allowed");
+                    } catch (e) {
+                        check("refuses to drop a settled opening bill", e instanceof OpeningBillError,
+                            e instanceof Error ? e.message : String(e));
+                    }
+
+                    throw new Error(ROLLBACK);
+                }, { timeout: 60_000, maxWait: 15_000 });
+            } catch (e) {
+                if ((e as Error)?.message !== ROLLBACK) throw e;
+            }
+        }
+    }
+
     // ── 8. Auto is oldest-first (pure, no database) ────────────────────────
     const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
     const synthetic = [

@@ -9,7 +9,8 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, AlertTriangle, CheckCircle, Plus, Search } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, Plus, Search, ListTree } from "lucide-react";
+import { OpeningBillsDialog } from "@/modules/accountancy/components/OpeningBillsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,6 +204,8 @@ function AccountOpeningSection({
 }) {
     const [showAdd, setShowAdd] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
+    // Which ledger's opening is being broken into bills.
+    const [billsForAccount, setBillsForAccount] = useState<number | null>(null);
     const [form, setForm] = useState({
         accountId: 0,
         amount: "",
@@ -353,12 +356,13 @@ function AccountOpeningSection({
                             <th className="px-5 py-2 text-left font-medium">Account</th>
                             <th className="px-5 py-2 text-right font-medium">Debit</th>
                             <th className="px-5 py-2 text-right font-medium">Credit</th>
+                            <th className="px-5 py-2 text-right font-medium">Bill-wise</th>
                         </tr>
                     </thead>
                     <tbody>
                         {visible.length === 0 && (
                             <tr>
-                                <td colSpan={3} className="px-5 py-6 text-center text-muted-foreground">
+                                <td colSpan={4} className="px-5 py-6 text-center text-muted-foreground">
                                     No account matches “{filter}”.
                                 </td>
                             </tr>
@@ -374,6 +378,18 @@ function AccountOpeningSection({
                                 </td>
                                 <td className="px-5 py-2 text-right font-mono">
                                     {a.openingBalanceType === "CREDIT" ? fmt(Number(a.openingBalance)) : <span className="text-muted-foreground/65">—</span>}
+                                </td>
+                                <td className="px-5 py-2 text-right">
+                                    {/* Break this one number into the bills it really was, so each
+                                        ages and can be settled on its own. */}
+                                    <button
+                                        type="button"
+                                        title="Bill-wise details for this opening balance"
+                                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        onClick={(e) => { e.stopPropagation(); setBillsForAccount(a.id); }}
+                                    >
+                                        <ListTree size={14} />
+                                    </button>
                                 </td>
                             </tr>
                         ))}
@@ -393,6 +409,15 @@ function AccountOpeningSection({
                         )}
                     </tfoot>
                 </table>
+            )}
+
+            {billsForAccount !== null && (
+                <OpeningBillsDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setBillsForAccount(null); }}
+                    accountId={billsForAccount}
+                    onSaved={onChanged}
+                />
             )}
         </div>
     );
