@@ -9,6 +9,7 @@ prisma/seeds/
 ├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
+├─ sync-permissions.ts          APPLY — bring Permission rows in line with the catalog + grant one to roles, without a full seed
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
 ├─ purge-demo-contacts.ts       OPS — wipes contacts (+ transactions), keeps products + settings
@@ -243,6 +244,7 @@ These do just the one job.
 | Script | Purpose |
 |---|---|
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
+| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and optionally grants one to named roles. **Dry by default — `--apply` writes.** Adds and updates only; a DB row absent from the catalog is reported, never deleted. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Use it when a new `ui:sidebar:*` id appears and you do NOT want the R1 top-up a full seed brings. |
 
 ### Shipping a permission
 
@@ -266,6 +268,28 @@ The flow is now:
 > if a permission was deliberately removed from R1 in the Role Matrix, it comes back.
 > Decide which you want before reseeding. (`admin:bypass` is `systemOnly` and stays
 > excluded.)
+
+**Some permissions are never typed by hand.** Adding a nav entry to `SETTINGS_NAV` /
+`MODULE_SECTIONS` makes `sidebarModules.ts` derive a new `ui:sidebar:<module>:<link>` id,
+which `codeOwnedCatalog.ts` folds into the catalog automatically. The row is then real in
+code and absent from every database — and the Role page will show its chip but **silently
+drop the grant on save** (`api/roles/[id]/permissions/route.ts` returns it as
+`dropped.unseeded`). So a new nav link IS a permission change, even though nothing was
+added to the catalog by hand.
+
+When you want that row without the R1 top-up above, use the targeted applier:
+
+```bash
+pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1,R2,R3          # preview
+pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1,R2,R3 --apply  # write
+```
+
+It creates only the rows the catalog has and the DB lacks, grants them, and bumps
+`tokensValidFrom` for the affected staff (permissions ride the JWT, so a grant is invisible
+until the holder signs in again). Pass `--no-revoke` during trading hours — the grant still
+lands, it just waits for each person's next login. `--overlay-only` on the full seed is **not**
+an alternative: the R1 top-up sits outside that branch and runs anyway, and skipping step 1
+means the new row is never created.
 
 ### `apply-taxonomy` and the group tree
 

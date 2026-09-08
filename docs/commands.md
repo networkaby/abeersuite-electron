@@ -139,6 +139,7 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
+| `pnpm seed:sync-permissions` | Creates catalog `Permission` rows the DB lacks, and grants one to named roles. Dry by default; `--apply` writes, `--no-revoke` spares sessions | yes (adds only, never deletes) |
 | `pnpm seed:helper-brands` | The brand master (~60 brands) | demo |
 | `pnpm seed:helper-all` | `helper-brands`, then `seed:check-docs` | demo |
 | `pnpm seed:purge-demo` | `purge-demo-contacts` + `purge-demo-products` | demo only |
@@ -405,13 +406,19 @@ The rule going forward: **a script earns a place in `prisma/seeds/` only if it w
 more than once.** A one-time fix that ships with a schema change goes into
 `bootstrap-seed.ts` plus a line in the commit message — not into a new file.
 
-`seed:apply-taxonomy` is the **only** applier left, and the only one with work still
-in front of it. The others were deleted once it was clear the code already did their
-job: `seed:apply-permissions` (the permission catalog is the source of truth and both
-seeds apply it in full) and `seed:apply-voucher-series-counters` (`seedVoucherSeries`
-creates the counter-1 rows, and `GET /api/accountancy/voucher-series` runs it on
-every request, so the rows self-heal just by opening the page). Shipping a permission
-is now a plain `pnpm prisma db seed`.
+There are two appliers: `seed:apply-taxonomy` and `seed:sync-permissions`. The rest were
+deleted once it was clear the code already did their job: `seed:apply-permissions` (the
+permission catalog is the source of truth and both seeds apply it in full) and
+`seed:apply-voucher-series-counters` (`seedVoucherSeries` creates the counter-1 rows, and
+`GET /api/accountancy/voucher-series` runs it on every request, so the rows self-heal just
+by opening the page).
+
+Shipping a permission is normally a plain `pnpm prisma db seed`. `seed:sync-permissions`
+exists for the case where that hammer is too big — chiefly a **new nav link**, which
+auto-derives a `ui:sidebar:*` permission that no database has yet. It re-earns its place on
+every future nav addition, and unlike the old `apply-permissions` it embeds no permission
+list: it imports `PERMISSION_CATALOG` and takes the policy from its flags, so there is
+nothing in it that can go stale.
 
 **Loose end still worth cleaning (not done here):** `scripts/` holds obvious throwaways —
 `tmp-check-apportioned-vouchers.ts`, `tmp-check-unit-cols.ts`, `inspect-call-raw.ts`,

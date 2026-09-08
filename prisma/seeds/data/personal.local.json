@@ -9273,6 +9273,10 @@
     },
     {
       "roleId": "R3",
+      "permissionId": "ui:sidebar:settings:screen-size"
+    },
+    {
+      "roleId": "R3",
       "permissionId": "help:create"
     },
     {
@@ -9378,6 +9382,10 @@
     {
       "roleId": "R1",
       "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:settings:screen-size"
     },
     {
       "roleId": "R1",
@@ -9534,6 +9542,10 @@
     {
       "roleId": "R2",
       "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:screen-size"
     },
     {
       "roleId": "R2",
