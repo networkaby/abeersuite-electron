@@ -83,7 +83,7 @@ function fetchOpenBills(key: string, accountId: number): Promise<OpenBills> {
     return p;
 }
 
-export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onChange, ledgerLabel }: {
+export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onChange }: {
     /** The party ledger whose open bills are shown. */
     accountId:  number;
     partyName?: string;
@@ -95,9 +95,6 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     picks:      BillPicks;
     /** New ticks, and the row amount they imply (null = leave the amount alone). */
     onChange:   (picks: BillPicks, amount: number | null) => void;
-    /** The ledger's own balance — "41,496.95 Cr" — shown as the figure the two
-     *  sides of the list add up to between them. */
-    ledgerLabel?: string;
 }) {
     const key = `${accountId}|${side}`;
     // The answer is keyed by the party, so switching party never shows the old
@@ -165,14 +162,10 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     const credits = (rows ?? []).filter((d) => d.side !== side);
 
     const totalOpen = targets.reduce((s, d) => s + d.open, 0);
-    const totalOther = credits.reduce((s, d) => s + d.open, 0);
     const isCredit = (d: LinkableDoc) => d.side !== side;
 
     const onBills = round2(targets.reduce((s, d) => s + (picks[d.universalVoucherId] ?? 0), 0));
     const fromCredits = round2(credits.reduce((s, d) => s + (picks[d.universalVoucherId] ?? 0), 0));
-    // What this voucher itself has to be worth: the bills it closes, less the
-    // credits doing part of the closing.
-    const placed = round2(onBills - fromCredits);
     const amountTyped = amount > EPS && Math.abs(amount - (setByTicks ?? -1)) > EPS;
 
     /** How much of a credit can be spent: never more than it holds, and never
@@ -406,52 +399,6 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                             </Button>
                         )}
                     </div>
-                    <div className="mt-1.5 space-y-0.5 border-t border-border pt-1.5 text-xs">
-                        <div className="flex justify-between text-muted-foreground">
-                            <span>Bills open</span>
-                            <span className="font-mono tabular-nums">₹ {fmt(totalOpen)}</span>
-                        </div>
-                        {totalOther > EPS && (
-                            <div className="flex justify-between text-muted-foreground">
-                                <span>{side === 1 ? "Credits with us" : "Credits they hold"}</span>
-                                <span className="font-mono tabular-nums">₹ {fmt(totalOther)}</span>
-                            </div>
-                        )}
-                        {onBills > EPS && (
-                            <div className="flex justify-between font-medium">
-                                <span>Bills being closed</span>
-                                <span className="font-mono tabular-nums">₹ {fmt(onBills)}</span>
-                            </div>
-                        )}
-                        {fromCredits > EPS && (
-                            <div className="flex justify-between text-green-700">
-                                <span>…of which from credits</span>
-                                <span className="font-mono tabular-nums">₹ {fmt(fromCredits)}</span>
-                            </div>
-                        )}
-                        {amountTyped && amount - placed > EPS && (
-                            <div className="flex justify-between text-muted-foreground">
-                                <span>Stays as its own reference</span>
-                                <span className="font-mono tabular-nums">₹ {fmt(round2(amount - placed))}</span>
-                            </div>
-                        )}
-                        {/* The ledger's own figure, which the two lists above now add up to
-                            on their own — every rupee sitting against a reference. When it
-                            does not add up, the row inside the table says why. */}
-                        {ledgerLabel != null && (
-                            <div className="flex justify-between border-t border-border/60 pt-1 font-medium" title="What is open on each side accounts for the whole ledger — every amount has a reference behind it.">
-                                <span>Ledger balance</span>
-                                <span className="font-mono tabular-nums">{ledgerLabel}</span>
-                            </div>
-                        )}
-                    </div>
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                        {amountTyped
-                            ? "Ticks fill bills within the amount typed — or type into Link now to divide it yourself. Auto fills the rest, overdue first, without touching your ticks."
-                            : "Each tick adds the bill to the amount; Auto offers everything open. Type an amount first to fill bills within it."}
-                        {" "}A green row is credit already with this party — tick it and it closes bills too.
-                        {" "}Save carries the whole settlement out.
-                    </p>
                 </>
             )}
         </div>

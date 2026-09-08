@@ -40,7 +40,6 @@ import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
-import { formatBalanceWithSide } from "@/modules/accountancy/lib/balanceFormat";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
 import { settleFromPicks } from "@/modules/accountancy/lib/settleFromPicks";
@@ -1343,7 +1342,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                                 side={openBillsSide}
                                 amount={partyRow ? Math.max(0, parseRowAmount(partyRow.amount)) : 0}
                                 picks={billPicks}
-                                ledgerLabel={formatBalanceWithSide(accountById.get(partyLedgerId))}
                                 onChange={(picks, amt) => {
                                     setBillPickState({ partyId: partyLedgerId, picks });
                                     if (amt !== null && partyRow) updateRow(partyRow.id, { amount: amt > 0 ? String(round2(amt)) : "" });
