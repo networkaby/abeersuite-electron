@@ -40,9 +40,10 @@ import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { printAfterSaveDefault, thermalDefault } from "@/shared/lib/print/voucherTemplateDefaults";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
+import { formatBalanceWithSide } from "@/modules/accountancy/lib/balanceFormat";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
-import { OpenBillsPanel, clearOpenBillsCache } from "@/modules/accountancy/components/OpenBillsPanel";
+import { OpenBillsPanel, clearOpenBillsCache, type BillPicks } from "@/modules/accountancy/components/OpenBillsPanel";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import {
@@ -508,7 +509,12 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
     // Which voucher the bill-wise popup is linking, and on which party ledger.
     // Both are captured together because the form resets itself after a save, and
     // the popup opened right after posting must keep the party it was posted for.
-    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number } | null>(null);
+    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number; plan?: BillPicks } | null>(null);
+
+    // Bill-wise ticks made in the side panel before save. Kept with the party
+    // they belong to, so a change of party simply starts from no ticks; handed
+    // to the link popup after posting so it opens ticked the same way.
+    const [billPickState, setBillPickState] = useState<{ partyId: number; picks: BillPicks }>({ partyId: 0, picks: {} });
 
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const topAccounts = accounts.filter(copy.topFilter);
@@ -556,6 +562,23 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
     const showOpenBills = isPayRec && !isEditing && partyLedgerId != null;
     const openBillsSide: 1 | -1 = kind === "RECEIPT" ? 1 : -1;
     const showSidePanel = showDenomPanels || showOpenBills;
+    const partyRow = partyLedgerId != null ? rows.find((r) => r.accountId === partyLedgerId) : undefined;
+    const billPicks: BillPicks = billPickState.partyId === partyLedgerId ? billPickState.picks : {};
+    // The amount was typed below what the ticks place → drop ticks, last first,
+    // until they fit (a tick can never claim money the row does not have).
+    const trimPicksTo = (amt: number) => {
+        const entries = Object.entries(billPicks);
+        let total = entries.reduce((s, [, v]) => s + v, 0);
+        if (total <= amt + 0.005) return;
+        const next: BillPicks = { ...billPicks };
+        for (let i = entries.length - 1; i >= 0 && total > amt + 0.005; i--) {
+            const [id, v] = entries[i];
+            const keep = Math.max(0, round2(v - (total - amt)));
+            total = round2(total - v + keep);
+            if (keep > 0.005) next[Number(id)] = keep; else delete next[Number(id)];
+        }
+        setBillPickState({ partyId: partyLedgerId ?? 0, picks: next });
+    };
     // At least one Transfer-from is cash → this contra moves physical cash, so
     // the denomination option is meaningful (deposit to bank, or cash handover).
     // A bank → cash withdrawal has no cash source and doesn't offer it.
@@ -908,7 +931,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                 // Now it is posted, so it can legally settle a bill. Offer that at
                 // once — the id returned here IS the spine id (Phase 5E).
                 if (partyLedgerId != null) {
-                    setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId });
+                    setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId, plan: billPicks });
                 }
             } else {
                 toast.success(`${copy.title} ${created.data.reference} saved as draft`);
@@ -924,6 +947,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
             setTopParty(null);
             partyPickerRef.current?.clear();
             setRows([newRow()]);
+            setBillPickState({ partyId: 0, picks: {} });
             if (isPayRec) focusRowLedger(0);
             setRowDenoms({});
             setDate(toIsoDate(new Date()));
@@ -1183,6 +1207,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                                                     onChange={(e) => {
                                                         if (isRowAmountChars(e.target.value)) {
                                                             updateRow(row.id, { amount: e.target.value });
+                                                            if (partyRow?.id === row.id) trimPicksTo(Math.max(0, parseRowAmount(e.target.value)));
                                                         }
                                                     }}
                                                     data-amount=""
@@ -1290,10 +1315,20 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                                 accountId={partyLedgerId}
                                 partyName={accountById.get(partyLedgerId)?.name}
                                 side={openBillsSide}
-                                // Click a bill → its open amount goes into the party's row.
-                                onPickAmount={(amt) => {
-                                    const target = rows.find((r) => r.accountId === partyLedgerId);
-                                    if (target) updateRow(target.id, { amount: String(round2(amt)) });
+                                amount={partyRow ? Math.max(0, parseRowAmount(partyRow.amount)) : 0}
+                                picks={billPicks}
+                                ledgerLabel={formatBalanceWithSide(accountById.get(partyLedgerId))}
+                                // Signed on the panel's side: Dr balance = they owe us (Receipt side),
+                                // flipped for a Payment where a Cr balance is what we owe.
+                                ledgerOwed={(() => {
+                                    const a = accountById.get(partyLedgerId);
+                                    const bal = a?.balance ?? 0;
+                                    const dr = a?.normalBalance === "CREDIT" ? -bal : bal;
+                                    return openBillsSide === 1 ? dr : -dr;
+                                })()}
+                                onChange={(picks, amt) => {
+                                    setBillPickState({ partyId: partyLedgerId, picks });
+                                    if (amt !== null && partyRow) updateRow(partyRow.id, { amount: amt > 0 ? String(round2(amt)) : "" });
                                 }}
                             />
                         )}
@@ -1365,6 +1400,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
                     onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
                     accountId={linkTarget.accountId}
                     voucherId={linkTarget.voucherId}
+                    initialPlan={linkTarget.plan}
                     onSaved={() => { clearOpenBillsCache(); setReloadCounter((c) => c + 1); }}
                 />
             )}

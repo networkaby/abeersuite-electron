@@ -66,7 +66,7 @@ function labelFor(d: LinkableDoc): string {
 }
 
 export function BillLinkDialog({
-    open, onOpenChange, accountId, partyName, voucherId, onSaved,
+    open, onOpenChange, accountId, partyName, voucherId, onSaved, initialPlan,
 }: {
     open:         boolean;
     onOpenChange: (v: boolean) => void;
@@ -77,6 +77,8 @@ export function BillLinkDialog({
     voucherId:    number;
     /** Called once the links are saved. */
     onSaved?:     () => void;
+    /** Ticks made before save (the form's side panel) — the popup opens with them. */
+    initialPlan?: Record<number, number>;
 }) {
     const [docs, setDocs] = useState<LinkableDoc[]>([]);
     const [self, setSelf] = useState<LinkableDoc | null>(null);
@@ -122,10 +124,10 @@ export function BillLinkDialog({
 
     useEffect(() => {
         if (!open || !accountId) return;
-        setPicked({});
+        setPicked(initialPlan ?? {});
         setCreateOpen(false);
         void load();
-    }, [open, accountId, load]);
+    }, [open, accountId, load, initialPlan]);
 
     // Only fetched when the user actually opens the create panel — most visits to
     // this popup are a plain link and never need the ledger list.

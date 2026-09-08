@@ -1,19 +1,31 @@
 "use client";
 
-// Bill-wise preview beside a Receipt / Payment form — "what does this party
-// have open right now?" — shown the moment a party is picked, BEFORE save.
+// Bill-wise tick-list beside a Receipt / Payment form — "what does this party
+// have open, and which of it is this money for?" — shown the moment a party is
+// picked, BEFORE save.
 //
-// Read-only on purpose: a link is only legal between two posted vouchers, so
-// the actual placing still happens in BillLinkDialog straight after posting.
-// This panel exists so the counter can SEE the dues while typing the amount,
-// and click a bill to take its open amount into the row.
+// Two ways round, and the panel works out which from the row amount:
+//   • amount already typed (say 5,000) → ticking fills bills WITHIN it: a 4,000
+//     bill in full, then 1,000 of the next; once the money runs out a further
+//     tick is refused.
+//   • amount empty → each tick ADDS the bill's open amount to the row (4,000,
+//     then 7,000), and unticking takes it back out.
+// The ticks are handed up as a plan, so the link popup after posting opens
+// already ticked the same way. The link itself still happens there: a link is
+// only legal between two posted vouchers.
 
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import { fmt } from "@/utils/constants";
 import { extractApiError } from "@/shared/lib/api";
-import type { LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
+import { round2 } from "@/shared/lib/format/moneyInr";
+import { EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
+
+/** Ticked bills → amount placed on each (spine id → ₹). */
+export type BillPicks = Record<number, number>;
 
 // Same idea as the popup's cache: the party's open bills barely move between
 // two keystrokes, and a spinner where a table just was reads as a bug.
@@ -41,19 +53,34 @@ function fetchOpenBills(key: string, accountId: number, side: 1 | -1): Promise<L
     return p;
 }
 
-export function OpenBillsPanel({ accountId, partyName, side, onPickAmount }: {
+const sumOf = (picks: BillPicks) => round2(Object.values(picks).reduce((s, n) => s + n, 0));
+
+export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onChange, ledgerLabel, ledgerOwed }: {
     /** The party ledger whose open bills are shown. */
-    accountId:    number;
-    partyName?:   string;
+    accountId:  number;
+    partyName?: string;
     /** +1 = bills they owe us (a Receipt settles these) · −1 = bills we owe (a Payment). */
-    side:         1 | -1;
-    /** Click a bill → the caller takes its open amount into the row. */
-    onPickAmount?: (amount: number) => void;
+    side:       1 | -1;
+    /** The party row's amount as it stands. */
+    amount:     number;
+    /** Current ticks (owned by the form so they survive to the popup). */
+    picks:      BillPicks;
+    /** New ticks, and the row amount they imply (null = leave the amount alone). */
+    onChange:   (picks: BillPicks, amount: number | null) => void;
+    /** The ledger's own balance — "41,496.95 Cr" — and how much of it is owed on
+     *  THIS side (positive = they owe us for a Receipt / we owe them for a Payment).
+     *  Shown against the bill-wise open so a mismatch is explained, not hidden. */
+    ledgerLabel?: string;
+    ledgerOwed?:  number;
 }) {
     const key = `${accountId}|${side}`;
     // The answer is keyed by the party, so switching party never shows the old
     // party's bills: an answer for another key is simply not this one.
     const [result, setResult] = useState<{ key: string; docs?: LinkableDoc[]; error?: string } | null>(null);
+    // The last amount THIS panel set. While the row still shows it, the ticks
+    // drive the amount; the moment it differs, the user typed and the amount
+    // drives the ticks.
+    const [setByTicks, setSetByTicks] = useState<number | null>(null);
 
     useEffect(() => {
         const hit = cache.get(key);
@@ -72,6 +99,35 @@ export function OpenBillsPanel({ accountId, partyName, side, onPickAmount }: {
     const error = current?.error ?? null;
 
     const totalOpen = (docs ?? []).reduce((s, d) => s + d.open, 0);
+    const placed = sumOf(picks);
+    const amountTyped = amount > EPS && Math.abs(amount - (setByTicks ?? -1)) > EPS;
+
+    const toggle = (d: LinkableDoc) => {
+        const id = d.universalVoucherId;
+        if (picks[id] !== undefined) {
+            const next = { ...picks };
+            delete next[id];
+            const nextAmount = amountTyped ? null : sumOf(next);
+            if (nextAmount !== null) setSetByTicks(nextAmount);
+            onChange(next, nextAmount);
+            return;
+        }
+        if (amountTyped) {
+            // Fill within the typed amount — full where it fits, the rest partially.
+            const room = round2(amount - placed);
+            if (room <= EPS) {
+                toast.info(`₹ ${fmt(amount)} is already placed — raise the amount to tick more.`);
+                return;
+            }
+            onChange({ ...picks, [id]: round2(Math.min(room, d.open)) }, null);
+            return;
+        }
+        // Amount empty (or set by earlier ticks) — each tick adds its bill.
+        const next = { ...picks, [id]: d.open };
+        const nextAmount = sumOf(next);
+        setSetByTicks(nextAmount);
+        onChange(next, nextAmount);
+    };
 
     return (
         <div className="rounded-md border border-border bg-card p-3 shadow-sm">
@@ -92,30 +148,87 @@ export function OpenBillsPanel({ accountId, partyName, side, onPickAmount }: {
                 <>
                     <table className="mt-2 w-full text-xs">
                         <tbody>
-                            {docs.map((d) => (
-                                <tr
-                                    key={d.universalVoucherId}
-                                    className={`border-t border-border/50 ${onPickAmount ? "cursor-pointer hover:bg-muted/50" : ""}`}
-                                    title={onPickAmount ? "Click to take this bill's open amount into the row" : undefined}
-                                    onClick={() => onPickAmount?.(d.open)}
-                                >
-                                    <td className="py-1 pr-2">
-                                        <span className="font-mono">{d.ref}</span>
-                                        <span className="ml-1 text-muted-foreground">
-                                            {new Date(d.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
-                                        </span>
-                                    </td>
-                                    <td className="py-1 text-right font-mono tabular-nums text-orange-600">{fmt(d.open)}</td>
-                                </tr>
-                            ))}
+                            {docs.map((d) => {
+                                const value = picks[d.universalVoucherId];
+                                const ticked = value !== undefined;
+                                const partial = ticked && value < d.open - EPS;
+                                return (
+                                    <tr
+                                        key={d.universalVoucherId}
+                                        className={`cursor-pointer border-t border-border/50 ${ticked ? "bg-primary/5" : "hover:bg-muted/50"}`}
+                                        onClick={() => toggle(d)}
+                                    >
+                                        <td className="w-6 py-1">
+                                            <Checkbox checked={ticked} onCheckedChange={() => toggle(d)} onClick={(e) => e.stopPropagation()} />
+                                        </td>
+                                        <td className="py-1 pr-2">
+                                            <span className="font-mono">{d.ref}</span>
+                                            <span className="ml-1 text-muted-foreground">
+                                                {new Date(d.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                            </span>
+                                            {/* Bill total and what is already settled — so the open
+                                                figure on the right is never a mystery. */}
+                                            <span className="block text-[10px] text-muted-foreground font-mono tabular-nums">
+                                                Total {fmt(d.face)} · Settled {fmt(round2(d.face - d.open))}
+                                            </span>
+                                        </td>
+                                        <td className="py-1 text-right font-mono tabular-nums">
+                                            {ticked ? (
+                                                <span className={partial ? "text-amber-600" : "text-green-600"} title={partial ? `of ${fmt(d.open)} open` : undefined}>
+                                                    {fmt(value)}{partial ? "*" : ""}
+                                                </span>
+                                            ) : (
+                                                <span className="text-orange-600">{fmt(d.open)}</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
-                    <div className="mt-1.5 flex justify-between border-t border-border pt-1.5 text-xs font-medium">
-                        <span>Total open</span>
-                        <span className="font-mono tabular-nums">₹ {fmt(totalOpen)}</span>
+                    <div className="mt-1.5 space-y-0.5 border-t border-border pt-1.5 text-xs">
+                        <div className="flex justify-between text-muted-foreground">
+                            <span>Total open</span>
+                            <span className="font-mono tabular-nums">₹ {fmt(totalOpen)}</span>
+                        </div>
+                        {placed > EPS && (
+                            <div className="flex justify-between font-medium">
+                                <span>Placed by ticks</span>
+                                <span className="font-mono tabular-nums">₹ {fmt(placed)}</span>
+                            </div>
+                        )}
+                        {amountTyped && amount - placed > EPS && (
+                            <div className="flex justify-between text-muted-foreground">
+                                <span>Stays as advance</span>
+                                <span className="font-mono tabular-nums">₹ {fmt(round2(amount - placed))}</span>
+                            </div>
+                        )}
+                        {/* The ledger's own figure beside the bill-wise one. They differ
+                            whenever money moved without being linked to a bill — an
+                            opening balance, an unlinked receipt, an advance — and that
+                            difference is named here rather than left as a puzzle. */}
+                        {ledgerLabel != null && ledgerOwed != null && (
+                            <>
+                                <div className="flex justify-between border-t border-border/60 pt-1 text-muted-foreground">
+                                    <span>Ledger balance</span>
+                                    <span className="font-mono tabular-nums">{ledgerLabel}</span>
+                                </div>
+                                {Math.abs(ledgerOwed - totalOpen) > EPS && (
+                                    <div className="flex justify-between text-muted-foreground" title="Money on the ledger that is not linked to any bill — opening balance, unlinked receipts or payments, advances.">
+                                        <span>Not bill-wise (unlinked)</span>
+                                        <span className="font-mono tabular-nums">
+                                            {fmt(Math.abs(round2(ledgerOwed - totalOpen)))} {ledgerOwed - totalOpen > 0 ? "owed" : "advance"}
+                                        </span>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                        After Save, the link popup opens to place this {side === 1 ? "receipt" : "payment"} against these bills.
+                        {amountTyped
+                            ? "Ticks fill bills within the amount typed. * = part of the bill."
+                            : "Each tick adds the bill to the amount; type an amount first to fill bills within it."}
+                        {" "}After Save, the link popup opens with the same ticks.
                     </p>
                 </>
             )}
