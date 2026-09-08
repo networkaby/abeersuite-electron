@@ -3,7 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Scale } from "lucide-react";
+import { Scale, ListTree } from "lucide-react";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { OpeningBillsDialog } from "@/modules/accountancy/components/OpeningBillsDialog";
 
 interface Props {
     accountId: number;
@@ -47,6 +48,7 @@ export default function AccountOpeningBalanceCard({
     const [amount, setAmount] = useState(() => toInput(initialAmount));
     const [type, setType] = useState<"DEBIT" | "CREDIT">(initialType ?? "DEBIT");
     const [saving, setSaving] = useState(false);
+    const [billsOpen, setBillsOpen] = useState(false);
 
     const savedAmount = toInput(initialAmount);
     const savedType = initialType ?? "DEBIT";
@@ -85,7 +87,7 @@ export default function AccountOpeningBalanceCard({
                 <p className="text-sm text-muted-foreground">
                     {hasOpening
                         ? <>Carried-forward opening balance of <span className="font-medium text-foreground">{formatRupees(parsed)}</span> ({type === "DEBIT" ? "Dr" : "Cr"}), from before this ledger started in the app.</>
-                        : "No opening balance — set one when migrating a customer's existing outstanding from another system."}
+                        : "No opening balance on the master — set one when migrating a customer's existing outstanding from another system, or check Bill-wise details, where it lives once it has been broken into bills."}
                 </p>
 
                 {canEdit ? (
@@ -112,11 +114,26 @@ export default function AccountOpeningBalanceCard({
                                 </Select>
                             </div>
                         </div>
-                        {dirty && (
-                            <Button size="sm" onClick={() => void save()} disabled={saving}>
-                                {saving ? "Saving…" : "Save opening balance"}
-                            </Button>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {dirty && (
+                                <Button size="sm" onClick={() => void save()} disabled={saving}>
+                                    {saving ? "Saving…" : "Save opening balance"}
+                                </Button>
+                            )}
+                            {/* One number rarely tells the whole story. Break it into the
+                                bills it really was and each one ages, shows in Receivables
+                                and can have a receipt settled against it.
+                                Shown whether or not the amount above is set: once a breakup
+                                exists the master figure is cleared (or the same money would
+                                count twice), and this is the only way back in to edit it.
+                                Hidden only while there are unsaved edits, which are not in
+                                the breakup yet. */}
+                            {!dirty && (
+                                <Button size="sm" variant="outline" onClick={() => setBillsOpen(true)}>
+                                    <ListTree size={14} className="mr-1" /> Bill-wise details
+                                </Button>
+                            )}
+                        </div>
                     </>
                 ) : (
                     <p className="text-xs text-muted-foreground/70">
@@ -124,6 +141,14 @@ export default function AccountOpeningBalanceCard({
                     </p>
                 )}
             </CardContent>
+            {billsOpen && (
+                <OpeningBillsDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setBillsOpen(false); }}
+                    accountId={accountId}
+                    onSaved={onSaved}
+                />
+            )}
         </Card>
     );
 }

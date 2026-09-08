@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, ListTree } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -22,6 +22,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
+import { OpeningBillsDialog } from "@/modules/accountancy/components/OpeningBillsDialog";
 import { LedgerParticularsFields } from "@/modules/accountancy/components/LedgerParticularsFields";
 import {
     emptyParticulars, parseParticulars, particularsPayload,
@@ -71,6 +72,7 @@ export function EditLedgerDialog({
     const [aliases, setAliases] = useState("");
     const [groupId, setGroupId] = useState<number | null>(null);
     const [particulars, setParticulars] = useState<ParticularsState>(emptyParticulars);
+    const [billsOpen, setBillsOpen] = useState(false);
     const [openingBalance, setOpeningBalance] = useState("");
     const [openingBalanceType, setOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
 
@@ -175,6 +177,18 @@ export function EditLedgerDialog({
                         <p className="text-sm font-medium text-foreground">
                             Opening Balance <span className="font-normal text-muted-foreground">— leave blank to clear</span>
                         </p>
+                        {/* For a party, one figure is rarely one bill. Breaking it up
+                            lets each piece age and be settled on its own; the dialog
+                            itself says so when this ledger is not a party. */}
+                        {ledger && (
+                            <Button
+                                type="button" size="sm" variant="outline"
+                                className="mb-3"
+                                onClick={() => setBillsOpen(true)}
+                            >
+                                <ListTree size={14} className="mr-1" /> Bill-wise details
+                            </Button>
+                        )}
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div className="space-y-1.5">
                                 <Label>Amount (₹)</Label>
@@ -216,6 +230,15 @@ export function EditLedgerDialog({
                     </Button>
                 </DialogFooter>
             </DialogContent>
+
+            {billsOpen && ledger && (
+                <OpeningBillsDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setBillsOpen(false); }}
+                    accountId={ledger.id}
+                    onSaved={onSaved}
+                />
+            )}
         </Dialog>
     );
 }

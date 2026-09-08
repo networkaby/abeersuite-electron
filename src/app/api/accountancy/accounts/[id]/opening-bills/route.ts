@@ -6,6 +6,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
     loadOpeningBills, saveOpeningBills, defaultOpeningDateIso, DEFAULT_OPENING_REF, OpeningBillError,
 } from "@/modules/accountancy/lib/openingBills";
+import { partyLedgerIds } from "@/modules/accountancy/lib/accountGroups";
 
 // GET  /api/accountancy/accounts/[id]/opening-bills — the party's opening bills
 // PUT  /api/accountancy/accounts/[id]/opening-bills — replace them
@@ -49,10 +50,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         });
         if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        const bills = await loadOpeningBills(prisma, accountId);
+        const [bills, partyIds] = await Promise.all([
+            loadOpeningBills(prisma, accountId),
+            partyLedgerIds(),
+        ]);
         return NextResponse.json({
             accountId,
             accountName: account.name,
+            // Bill-wise is a party idea; every caller can mount the editor and
+            // let this decide, instead of each one re-deriving the group walk.
+            isParty: partyIds.has(accountId),
             // The master figure, present only while this party is still on the
             // scalar form. Once bills exist it is null and the bills are the truth.
             scalarOpening:     account.openingBalance != null ? Number(account.openingBalance) : null,

@@ -41,6 +41,9 @@ type Row = {
 
 type Loaded = {
     accountName:       string;
+    /** Bill-wise is only kept for Sundry Debtors and Creditors. The server
+     *  decides, so every surface can mount this without redoing the group walk. */
+    isParty:           boolean;
     scalarOpening:     number | null;
     scalarOpeningType: "DEBIT" | "CREDIT" | null;
     bills:             { universalVoucherId: number; ref: string; date: string; amount: number; type: "DEBIT" | "CREDIT"; linked: number }[];
@@ -165,6 +168,11 @@ export function OpeningBillsDialog({
                     <div className="flex justify-center py-10">
                         <Loader2 className="animate-spin text-muted-foreground" size={20} />
                     </div>
+                ) : data && !data.isParty ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                        {data.accountName} is not a party ledger. Bill-wise details are kept only for Sundry Debtors
+                        and Sundry Creditors — a bank, cash or capital opening has no bills behind it to age or settle.
+                    </p>
                 ) : (
                     <div className="space-y-3">
                         {/* The side is NOT a choice. The opening balance already
@@ -250,7 +258,7 @@ export function OpeningBillsDialog({
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                         Cancel
                     </Button>
-                    <Button type="button" onClick={save} disabled={saving || loading || mismatch}>
+                    <Button type="button" onClick={save} disabled={saving || loading || mismatch || data?.isParty === false}>
                         {saving && <Loader2 className="mr-1 animate-spin" size={14} />}
                         Save breakup
                     </Button>
