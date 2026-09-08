@@ -139,7 +139,7 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
-| `pnpm seed:sync-permissions` | Creates catalog `Permission` rows the DB lacks, and grants one to named roles. Dry by default; `--apply` writes, `--no-revoke` spares sessions | yes (adds only, never deletes) |
+| `pnpm seed:sync-permissions` | Creates catalog `Permission` rows the DB lacks, then grants one to roles (`--roles`) or takes it back (`--revoke-from`). Dry by default; `--apply` writes, `--no-revoke` spares sessions | yes (never deletes a `Permission`) |
 | `pnpm seed:helper-brands` | The brand master (~60 brands) | demo |
 | `pnpm seed:helper-all` | `helper-brands`, then `seed:check-docs` | demo |
 | `pnpm seed:purge-demo` | `purge-demo-contacts` + `purge-demo-products` | demo only |

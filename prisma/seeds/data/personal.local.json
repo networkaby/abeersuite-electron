@@ -9273,10 +9273,6 @@
     },
     {
       "roleId": "R3",
-      "permissionId": "ui:sidebar:settings:screen-size"
-    },
-    {
-      "roleId": "R3",
       "permissionId": "help:create"
     },
     {
@@ -9542,10 +9538,6 @@
     {
       "roleId": "R2",
       "permissionId": "ui:sidebar:settings:qr-display"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:screen-size"
     },
     {
       "roleId": "R2",

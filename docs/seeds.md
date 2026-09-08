@@ -244,7 +244,7 @@ These do just the one job.
 | Script | Purpose |
 |---|---|
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
-| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and optionally grants one to named roles. **Dry by default — `--apply` writes.** Adds and updates only; a DB row absent from the catalog is reported, never deleted. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Use it when a new `ui:sidebar:*` id appears and you do NOT want the R1 top-up a full seed brings. |
+| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and grants one to named roles (`--roles`) or takes it back (`--revoke-from`). **Dry by default — `--apply` writes.** Never deletes a `Permission`; a DB row absent from the catalog is reported and left alone. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Use it when a new `ui:sidebar:*` id appears and you do NOT want the R1 top-up a full seed brings. |
 
 ### Shipping a permission
 
@@ -280,8 +280,15 @@ added to the catalog by hand.
 When you want that row without the R1 top-up above, use the targeted applier:
 
 ```bash
-pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1,R2,R3          # preview
-pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1,R2,R3 --apply  # write
+pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1          # preview
+pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1 --apply  # write
+```
+
+Changed your mind about who holds it? `--revoke-from` is the symmetric twin, and takes
+back only that one permission from only those roles:
+
+```bash
+pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --revoke-from R2,R3 --apply
 ```
 
 It creates only the rows the catalog has and the DB lacks, grants them, and bumps
