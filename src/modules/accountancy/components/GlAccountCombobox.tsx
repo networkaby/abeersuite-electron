@@ -9,7 +9,7 @@
  * clear button, dropdown widens to fit row).
  */
 
-import { useEffect, useState, useCallback, useLayoutEffect } from "react";
+import { useEffect, useState, useCallback, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useComboboxNav } from "@/shared/hooks";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
@@ -42,15 +42,33 @@ type Props = {
     placeholder?: string;
     className?: string;
     autoFocus?: boolean;
+    /** Characters the user must type before the list appears. 0 (default)
+     *  opens on focus — right for a short Cash/Bank picker; a particulars
+     *  row with thousands of party ledgers passes 1. */
+    minChars?: number;
 };
+
+/** Typing pause before the list is filtered and drawn. */
+const DEBOUNCE_MS = 150;
+/** Rows drawn at most. Nobody scrolls 3,000 ledgers; rendering them all
+ *  froze the input for ~2s on focus (measured 2026-09-08). */
+const MAX_ROWS = 50;
 
 export function GlAccountCombobox({
     value, onChange, accounts,
     placeholder = "Select account",
     className = "",
     autoFocus = false,
+    minChars = 0,
 }: Props) {
     const [query, setQuery] = useState("");
+    // The list filters on this, which trails `query` by DEBOUNCE_MS while the
+    // user is still typing; the input itself always shows `query` at once.
+    const [debounced, setDebounced] = useState("");
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(query), DEBOUNCE_MS);
+        return () => clearTimeout(t);
+    }, [query]);
 
     // Sync display text when external value changes. The GL code stays in the
     // model (search filter still matches it) but is hidden from the UI.
@@ -63,32 +81,41 @@ export function GlAccountCombobox({
     }, [selectedAccount, selectedLabel, value]);
     useEffect(syncQuery, [syncQuery]);
 
-    const q = query.trim().toLowerCase();
+    const q = debounced.trim().toLowerCase();
+    // Below the minimum the list is empty — and stays closed (see `open`).
+    const belowMin = q.length < minChars;
     // Digits-only form of the query, so "9954999", "99549 99" and "+91 99549…"
     // all match the stored number however it was typed in.
     const qDigits = q.replace(/\D/g, "");
-    const filtered = q && q !== selectedLabel.toLowerCase()
-        ? accounts.filter((a) =>
-            a.name.toLowerCase().includes(q) ||
-            aliasMatches(a.aliases, q) ||
-            (a.code ?? "").toLowerCase().includes(q) ||
-            (qDigits.length >= 3 && (a.phones ?? []).some(
-                (p) => p.replace(/\D/g, "").includes(qDigits),
-            )),
-        )
-        : accounts;
+    const filtered = useMemo(() => {
+        if (belowMin) return [];
+        const all = q && q !== selectedLabel.toLowerCase()
+            ? accounts.filter((a) =>
+                a.name.toLowerCase().includes(q) ||
+                aliasMatches(a.aliases, q) ||
+                (a.code ?? "").toLowerCase().includes(q) ||
+                (qDigits.length >= 3 && (a.phones ?? []).some(
+                    (p) => p.replace(/\D/g, "").includes(qDigits),
+                )))
+            : accounts;
+        return all.length > MAX_ROWS ? all.slice(0, MAX_ROWS) : all;
+    }, [accounts, q, qDigits, selectedLabel, belowMin]);
+    const truncated = !belowMin && filtered.length === MAX_ROWS;
 
-    const cb = useComboboxNav({
+    const [focused, setFocused] = useState(false);
+    const nav = useComboboxNav({
         count: filtered.length,
         onSelect: (i) => {
             const a = filtered[i];
             if (!a) return;
             setQuery(a.name);
-            cb.setOpen(false);
+            nav.setOpen(false);
             onChange(a);
         },
         onClear: () => { setQuery(""); onChange(null); },
     });
+    // No dropdown without focus, and none before the minimum characters.
+    const cb = { ...nav, open: nav.open && focused && !belowMin };
 
     // Prefer an ancestor dialog content (if any) over document.body so the
     // dropdown lives inside Radix Dialog's react-remove-scroll allow-list;
@@ -191,10 +218,11 @@ export function GlAccountCombobox({
                     if (!e.target.value) onChange(null);
                 }}
                 onFocus={(e) => {
+                    setFocused(true);
                     cb.setOpen(true);
                     e.target.select();    // immediate typing replaces the label
                 }}
-                onBlur={cb.handleBlur}
+                onBlur={() => { setFocused(false); cb.handleBlur(); }}
                 onKeyDown={onKeyDown}
             />
 
@@ -263,6 +291,11 @@ export function GlAccountCombobox({
                                     </li>
                                 ))}
                             </ul>
+                            {truncated && (
+                                <div className="px-3 py-1.5 text-[11px] text-muted-foreground text-center border-t border-border">
+                                    First {MAX_ROWS} shown — type more to narrow down
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>,

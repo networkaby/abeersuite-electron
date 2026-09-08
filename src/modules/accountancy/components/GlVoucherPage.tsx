@@ -52,6 +52,7 @@ import {
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { useGlAccounts } from "@/shared/hooks/useGlAccounts";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { parseDenomJson, type DenomJson } from "@/shared/lib/accountancy/denomJson";
@@ -395,7 +396,8 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
 
     // Accounts loaded once on mount; particulars combobox picks from rowFilter,
     // top picker from topFilter.
-    const [accounts, setAccounts] = useState<GlAccount[]>([]);
+    // Shared in-memory list (see useGlAccounts) — instant when already loaded.
+    const { accounts } = useGlAccounts({ onError: () => toast.error("Failed to load accounts") });
     const [nextRef, setNextRef] = useState<string>("");
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(isEditing);
@@ -569,9 +571,6 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     }, [isContra, topIsBank]);
 
     useEffect(() => {
-        axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
-            .then((r) => setAccounts(r.data))
-            .catch(() => toast.error("Failed to load accounts"));
         // Skip the next-ref fetch in edit mode — we'll show the loaded reference.
         if (!isEditing) {
             axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=${kind}`)
@@ -1074,6 +1073,8 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     }}
                                                     accounts={rowAccounts}
                                                     placeholder={copy.rowPlaceholder}
+                                                    // Thousands of party ledgers: the list waits for a character.
+                                                    minChars={isPayRec ? 1 : 0}
                                                 />
                                                 <BalanceHint account={acct} />
                                                 {/* Payment / Receipt: the note box is shown only for the row in

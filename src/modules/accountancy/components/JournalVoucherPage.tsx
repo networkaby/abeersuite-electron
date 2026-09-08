@@ -31,6 +31,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { extractApiError } from "@/shared/lib/api";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox } from "@/modules/accountancy/components/GlAccountCombobox";
+import { useGlAccounts } from "@/shared/hooks/useGlAccounts";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -193,7 +194,8 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     };
 
     const isEditing = voucherId != null && Number.isFinite(voucherId);
-    const [accounts, setAccounts] = useState<GlAccount[]>([]);
+    const { accounts: sharedAccounts } = useGlAccounts({ onError: () => toast.error("Failed to load accounts") });
+    const accounts = sharedAccounts as GlAccount[];
     const [nextRef, setNextRef]   = useState<string>("");
     const [saving, setSaving]     = useState(false);
     const [loading, setLoading]   = useState(isEditing);
@@ -208,9 +210,6 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     const [lines, setLines]         = useState<Line[]>([newLine("DEBIT"), newLine("CREDIT")]);
 
     useEffect(() => {
-        axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
-            .then((r) => setAccounts(r.data))
-            .catch(() => toast.error("Failed to load accounts"));
         if (!isEditing) {
             axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=JOURNAL`)
                 .then((r) => setNextRef(r.data.reference))

@@ -197,7 +197,8 @@ let servedFrozen: boolean | undefined;
 /** Whether this document has already thrown away what the cache held. Once. */
 let discarded = false;
 
-function servedByReplica(): boolean {
+/** Whether this machine serves its screens from its own replica (frozen per document). */
+export function servedByReplica(): boolean {
     if (servedFrozen === undefined) {
         try {
             servedFrozen = localStorage.getItem(SERVED_KEY) === "1";
