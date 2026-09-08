@@ -317,7 +317,12 @@ function DenomPanel({ title, denomList, value, onChange }: {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; voucherId?: number }) {
+/**
+ * `onClose` — when set, the form is hosted inside a dialog (Quick Actions
+ * click) and every close path (Back, Cancel, Esc, after save) calls it
+ * instead of navigating the tab.
+ */
+export function GlVoucherPage({ kind, voucherId, onClose }: { kind: MoneyFlowKind; voucherId?: number; onClose?: () => void }) {
     const router = useRouter();
     const { data: session, status: sessionStatus } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
@@ -366,6 +371,8 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     //   We deliberately do NOT fall back to router.push(listPath) so we
     //   never hijack the user's attention by opening the register.
     const closeForm = () => {
+        // Hosted in a dialog (Quick Actions click) → the host closes itself.
+        if (onClose) { onClose(); return; }
         if (typeof window === "undefined") return;
         if (window.history.length > 1) {
             router.back();
@@ -379,15 +386,20 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
             if (e.key !== "Escape") return;
             const t = e.target as HTMLElement | null;
             if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            // Another dialog (discard prompt, bill link…) owns Esc — but not the
+            // dialog this form itself lives in when opened from Quick Actions.
+            const root = rootRef.current;
+            const dialogs = Array.from(document.querySelectorAll('[data-state="open"][role="dialog"]'));
+            if (dialogs.some((d) => !root || !d.contains(root))) return;
             if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
-            if (typeof window !== "undefined") {
-                if (window.history.length > 1) router.back(); else window.close();
-            }
+            closeForm();
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [router]);
+        // closeForm is stable in effect (router + onClose only).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [router, onClose]);
+    const rootRef = useRef<HTMLDivElement>(null);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = () => {
@@ -902,7 +914,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div ref={rootRef} className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title={copy.title}

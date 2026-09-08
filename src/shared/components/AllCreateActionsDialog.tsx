@@ -15,6 +15,7 @@ import { moduleColor, moduleIconStyle, moduleTint } from "@/shared/lib/format/mo
 import { canViewModule, canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
+import { GL_DIALOG_KIND_BY_ACTION, type GlDialogKind } from "@/shared/components/GlVoucherDialog";
 // GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
 // Sale / Purchase also use full-page routes.
 
@@ -24,9 +25,11 @@ type Props = {
     permissions: string[];
     isAdmin: boolean;
     defaultPipeline: { id: string } | null;
+    /** Opens a GL voucher over the office (same dialog the bar uses). */
+    onOpenGlVoucher: (kind: GlDialogKind) => void;
 };
 
-export default function AllCreateActionsDialog({ open, onOpenChange, permissions, isAdmin, defaultPipeline }: Props) {
+export default function AllCreateActionsDialog({ open, onOpenChange, permissions, isAdmin, defaultPipeline, onOpenGlVoucher }: Props) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { setPersonOpen, setCompanyOpen, setHelpOpen, setDealOpen, setTaskOpen } = useCreateDialogStore();
     // GL voucher stores removed — those kinds now navigate to full-page routes.
@@ -36,6 +39,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const handleAction = (action: ModuleCreateAction) => {
         if (action.disabled) return;
         onOpenChange(false);
+        const glKind = action.action ? GL_DIALOG_KIND_BY_ACTION[action.action] : undefined;
+        if (glKind) { onOpenGlVoucher(glKind); return; }
         if (action.action === "new-ticket" && action.pipelineRef === "default" && defaultPipeline) {
             setInitialPipelineId(defaultPipeline.id);
             openQuickTicket(true);
@@ -49,18 +54,6 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             setDealOpen(true);
         } else if (action.action === "new-task") {
             setTaskOpen(true);
-        } else if (action.action === "new-journal-voucher") {
-            window.open("/vouchers/journal-entries/new", "_blank", "noopener");
-        } else if (action.action === "new-debit-note") {
-            window.open("/vouchers/debit-notes/new", "_blank", "noopener");
-        } else if (action.action === "new-contra") {
-            window.open("/vouchers/contras/new", "_blank", "noopener");
-        } else if (action.action === "new-payment") {
-            window.open("/vouchers/payments/new", "_blank", "noopener");
-        } else if (action.action === "new-receipt") {
-            window.open("/vouchers/receipts/new", "_blank", "noopener");
-        } else if (action.action === "new-credit-note") {
-            window.open("/vouchers/credit-notes/new", "_blank", "noopener");
         } else if (action.action === "new-sale") {
             window.open("/vouchers/sales/new", "_blank", "noopener");
         } else if (action.action === "new-purchase") {

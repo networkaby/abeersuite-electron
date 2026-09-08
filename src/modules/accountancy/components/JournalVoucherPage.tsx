@@ -145,7 +145,8 @@ const lineAmount = (l: Line) =>
 
 const listPath = "/office/accountancy/vouchers-registers/journal-entries";
 
-export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
+/** `onClose` — hosted in a dialog (Quick Actions click): every close path calls it instead of navigating. */
+export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number; onClose?: () => void } = {}) {
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
@@ -165,6 +166,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     //     window.close() closes the script-opened tab in Chrome/Firefox.
     //   • Manually-typed URL: window.close() silently fails — acceptable.
     const closeForm = () => {
+        if (onClose) { onClose(); return; }
         if (typeof window === "undefined") return;
         if (window.history.length > 1) {
             router.back();
@@ -178,15 +180,18 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             if (e.key !== "Escape") return;
             const t = e.target as HTMLElement | null;
             if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            // Another dialog owns Esc — but not the one this form itself lives in.
+            const root = rootRef.current;
+            const dialogs = Array.from(document.querySelectorAll('[data-state="open"][role="dialog"]'));
+            if (dialogs.some((d) => !root || !d.contains(root))) return;
             if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
-            if (typeof window !== "undefined") {
-                if (window.history.length > 1) router.back(); else window.close();
-            }
+            closeForm();
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [router]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [router, onClose]);
+    const rootRef = useRef<HTMLDivElement>(null);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = () => {
@@ -458,7 +463,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div ref={rootRef} className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Journal Voucher"
@@ -530,6 +535,8 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                                                 onChange={(a) => updateLine(line.id, { accountId: a?.id ?? 0 })}
                                                 accounts={accounts}
                                                 placeholder="Select account"
+                                                // Every ledger incl. parties: the list waits for a character.
+                                                minChars={1}
                                             />
                                             <BalanceHint account={acct} />
                                         </div>

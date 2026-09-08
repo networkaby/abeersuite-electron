@@ -19,6 +19,7 @@ import { useCreateDialogStore } from "@/store/createDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
+import GlVoucherDialog, { GL_DIALOG_KIND_BY_ACTION, type GlDialogKind } from "@/shared/components/GlVoucherDialog";
 import { HelpQuickForm } from "@/modules/help/components";
 import { DealFormDialog } from "@/modules/deals/components";
 import { TaskFormDialog } from "@/modules/administration/components";
@@ -114,6 +115,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const collapsed = barMode === "collapsed";
     const isHidden = barMode === "hidden";
     const [moreOpen, setMoreOpen] = useState(false);
+    // GL voucher opened in place over the office (left-click); right-click → new window.
+    const [glDialogKind, setGlDialogKind] = useState<GlDialogKind | null>(null);
 
     const {
         width: barWidth, isDragging: barDragging,
@@ -344,6 +347,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                 const titleAttr = collapsed ? action.label : `${action.label} — ${action.subtitle}`;
 
                                 if (resolvedHref && !action.disabled) {
+                                    const dialogKind = action.action ? GL_DIALOG_KIND_BY_ACTION[action.action] : undefined;
                                     return (
                                         <Link
                                             key={`${action.label}|${action.action ?? action.href ?? ""}`}
@@ -351,6 +355,13 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                             className={rowClass}
                                             style={rowStyle}
                                             title={titleAttr}
+                                            // Plain left-click on a GL voucher opens it over the office;
+                                            // modifier clicks keep the browser's own new-tab behaviour.
+                                            onClick={dialogKind ? (e) => {
+                                                if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+                                                e.preventDefault();
+                                                setGlDialogKind(dialogKind);
+                                            } : undefined}
                                             onContextMenu={(e) => {
                                                 e.preventDefault();
                                                 setCtxMenu({ x: e.clientX, y: e.clientY, href: resolvedHref });
@@ -390,6 +401,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                 permissions={permissions}
                 isAdmin={isAdmin}
                 defaultPipeline={defaultPipeline}
+                onOpenGlVoucher={setGlDialogKind}
             />
             <CreatePersonDialog open={personOpen} onOpenChange={setPersonOpen} />
             <CreateCompanyDialog open={companyOpen} onOpenChange={setCompanyOpen} />
@@ -397,6 +409,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             <DealFormDialog open={dealOpen} onOpenChange={setDealOpen} positions={positions} deal={null} onSaved={() => { /* no list on-screen to refresh */ }} />
             <TaskFormDialog open={taskOpen} onOpenChange={setTaskOpen} positions={positions} task={null} onSaved={() => { /* no list on-screen to refresh */ }} />
             <ActionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
+            <GlVoucherDialog kind={glDialogKind} onClose={() => setGlDialogKind(null)} />
         </>
     );
 }
