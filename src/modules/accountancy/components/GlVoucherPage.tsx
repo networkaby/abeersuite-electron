@@ -246,6 +246,11 @@ type Row = {
     chequeNo?: string;
 };
 
+// Owner (2026-09-08): the per-row By / Ref no. columns are hidden for now — the
+// row NOTE carries the instrument details until the columns are wanted back.
+// Everything behind them (row state, API, print) stays wired; flip to show.
+const SHOW_INSTRUMENT_COLUMNS = false;
+
 let rowSeq = 0;
 const newRow = (): Row => ({ id: ++rowSeq, accountId: null, amount: "", note: "" });
 
@@ -1029,8 +1034,8 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                 <tr className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
                                     <th className="w-8 px-1 py-1 text-left font-medium">#</th>
                                     <th className="px-2 py-1 text-left font-medium">{isPayRec ? "Particulars" : `${copy.rowSide === "DEBIT" ? "Dr" : "Cr"} · Particulars`}</th>
-                                    {isPayRec && <th className="w-24 px-1 py-1 text-left font-medium">By</th>}
-                                    {isPayRec && <th className="w-36 px-1 py-1 text-left font-medium">Ref no.</th>}
+                                    {isPayRec && SHOW_INSTRUMENT_COLUMNS && <th className="w-24 px-1 py-1 text-left font-medium">By</th>}
+                                    {isPayRec && SHOW_INSTRUMENT_COLUMNS && <th className="w-36 px-1 py-1 text-left font-medium">Ref no.</th>}
                                     <th className="w-40 px-2 py-1 text-right font-medium">Amount</th>
                                     <th className="w-8 px-1 py-1" />
                                 </tr>
@@ -1079,7 +1084,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     <Input
                                                         value={row.note}
                                                         onChange={(e) => updateRow(row.id, { note: e.target.value })}
-                                                        placeholder="Note (optional)"
+                                                        placeholder={SHOW_INSTRUMENT_COLUMNS ? "Note (optional)" : "Note — e.g. UPI ref / cheque no. (optional)"}
                                                         tabIndex={isPayRec ? -1 : undefined}
                                                         onKeyDown={isPayRec ? (e) => { if (e.key === "Enter") { e.preventDefault(); focusRowAmount(i); } } : undefined}
                                                         className="h-7 text-xs mt-1"
@@ -1100,7 +1105,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     </div>
                                                 )}
                                             </td>
-                                            {isPayRec && (
+                                            {isPayRec && SHOW_INSTRUMENT_COLUMNS && (
                                                 <td className="px-1 py-2">
                                                     <select
                                                         value={row.method ?? ""}
@@ -1115,7 +1120,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                                                     </select>
                                                 </td>
                                             )}
-                                            {isPayRec && (
+                                            {isPayRec && SHOW_INSTRUMENT_COLUMNS && (
                                                 <td className="px-1 py-2">
                                                     <Input
                                                         value={row.reference ?? ""}
