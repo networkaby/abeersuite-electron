@@ -642,6 +642,34 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null }:
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // ── Settle-a-bill preload (the link popup sends the user here) ─────────
+    // Opened as /vouchers/receipts/new?partyAccountId=..&amount=..&billId=..
+    // the form starts as the bill left it: the party in the first particulars
+    // row, the open amount typed, and that bill already ticked in the open-bills
+    // panel beside the form. Everything else — which cash or bank account, the
+    // date, a part payment — stays the user's to change, because this is the
+    // real voucher screen and not a shortcut around it.
+    //
+    // Read straight off the URL rather than through useSearchParams: it is a
+    // one-shot starting value, and this form also renders inside a dialog where
+    // there is no route of its own to read.
+    useEffect(() => {
+        if (isEditing || !isPayRec) return;
+        const qs = new URLSearchParams(window.location.search);
+        const partyAccountId = Number(qs.get("partyAccountId"));
+        if (!Number.isFinite(partyAccountId) || partyAccountId <= 0) return;
+        const amount = Number(qs.get("amount"));
+        const billId = Number(qs.get("billId"));
+        const typed  = Number.isFinite(amount) && amount > 0 ? String(round2(amount)) : "";
+        setRows([{ ...newRow(), accountId: partyAccountId, amount: typed }, newRow()]);
+        if (Number.isFinite(billId) && billId > 0 && typed) {
+            setBillPickState({ partyId: partyAccountId, picks: { [billId]: round2(amount) } });
+        }
+        focusRowAmount(0);
+        // Once, on mount — the bill is a starting value, not a binding.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // ── Duplicate hydration ────────────────────────────────────────────────
     // When the ⋮ → Duplicate flow lands on this /new page, it stashes a
     // payload in sessionStorage.  We consume + clear it on mount so a manual

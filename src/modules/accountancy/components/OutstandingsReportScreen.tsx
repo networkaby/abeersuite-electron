@@ -6,10 +6,10 @@
 // side it is. Anything added below shows up on both, which is the point.
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, ChevronRight, Link2, Search } from "lucide-react";
+import { Loader2, ChevronRight, Link2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 
 // TODO(config): the four periods are fixed at 30 / 60 / 90 days today — the
 // boundaries live in `bucketFor()` in modules/accountancy/lib/outstandings.ts.
@@ -64,7 +65,6 @@ export function OutstandingsReportScreen({
      *  for a payable, so each side words it in its own money's terms. */
     settleHint: string;
 }) {
-    const router = useRouter();
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
     // Which bill the link popup is settling, with the party it stands against.
     const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number; accountName: string } | null>(null);
@@ -74,6 +74,9 @@ export function OutstandingsReportScreen({
     const [query, setQuery] = useState("");
     // Clicking a period card shows that period alone; clicking it again clears.
     const [period, setPeriod] = useState<Bucket | null>(null);
+    // Clicking a party row narrows this same page to that party's bills — held by
+    // account id, not by name, so two look-alike names can never be confused.
+    const [focus, setFocus] = useState<{ accountId: number; name: string } | null>(null);
 
     const load = useCallback((silent = false) => {
         // A realtime refresh must not blank a report the user is reading.
@@ -90,6 +93,13 @@ export function OutstandingsReportScreen({
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
     useRealtimeTopics(["ledger"], () => load(true));
+
+    useEffect(() => {
+        if (!focus) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFocus(null); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [focus]);
 
     // `searchKey` carries the party's name, code, GSTIN and phone numbers, and on
     // a bill row its reference number too. Searching and the period toggle only
@@ -108,8 +118,9 @@ export function OutstandingsReportScreen({
         if (!data) return [];
         let rows = q ? data.bills.filter((b) => b.searchKey.includes(q)) : data.bills;
         if (period) rows = rows.filter((b) => b.bucket === period);
+        if (focus) rows = rows.filter((b) => b.accountId === focus.accountId);
         return rows;
-    }, [data, q, period]);
+    }, [data, q, period, focus]);
 
     // The cards on top always report the whole book — they are the buttons, so
     // their figures must not move. The row under a table adds up only the rows
@@ -131,12 +142,16 @@ export function OutstandingsReportScreen({
     }, [data, q, period, parties]);
 
     const shownBillTotal = useMemo(
-        () => !q && !period ? (data?.totalOutstanding ?? 0) : bills.reduce((sum, b) => sum + b.outstanding, 0),
-        [data, q, period, bills],
+        () => !q && !period && !focus ? (data?.totalOutstanding ?? 0) : bills.reduce((sum, b) => sum + b.outstanding, 0),
+        [data, q, period, focus, bills],
     );
 
+    // `referenceHref` is the one place that knows each kind's own edit page.
+    const billHref = (b: { voucherType: string; id: number }) =>
+        referenceHref(voucherSourceForType(b.voucherType), b.id, b.voucherType);
+
     const narrowed = (what: string) =>
-        `No ${what} ${q ? `matches “${query.trim()}”` : "sits"}${period ? ` in ${BUCKET_LABELS[period]}` : ""}.`;
+        `No ${what} ${q ? `matches “${query.trim()}”` : "sits"}${period ? ` in ${BUCKET_LABELS[period]}` : ""}${focus ? ` for ${focus.name}` : ""}.`;
 
     const cardClass = (on: boolean) =>
         `rounded-lg border px-3 py-1.5 text-left shadow-sm transition-colors ${
@@ -174,6 +189,20 @@ export function OutstandingsReportScreen({
                     className="h-8 pl-8"
                 />
             </div>
+
+            {focus && (
+                <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Showing</span>
+                    <button
+                        type="button"
+                        onClick={() => setFocus(null)}
+                        title="Show every party again (Esc)"
+                        className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-0.5 font-medium text-primary hover:bg-primary/20"
+                    >
+                        {focus.name} <X size={13} />
+                    </button>
+                </div>
+            )}
 
             {loading && (
                 <div className="flex justify-center py-16">
@@ -248,7 +277,8 @@ export function OutstandingsReportScreen({
                                     <tr
                                         key={p.accountId}
                                         className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                        onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${p.accountId}?asOf=${asOf}`)}
+                                        title="Show this party's bills"
+                                        onClick={() => { setFocus({ accountId: p.accountId, name: p.accountName }); setView("bill"); }}
                                     >
                                         <td className="px-3 py-1.5 font-medium text-foreground">{p.accountName}</td>
                                         <td className="px-3 py-1.5 text-right text-muted-foreground">{p.billCount}</td>
@@ -300,7 +330,7 @@ export function OutstandingsReportScreen({
                                 {bills.length === 0 ? (
                                     <tr>
                                         <td colSpan={10} className="py-10 text-center text-muted-foreground text-sm">
-                                            {q || period ? narrowed("bill") : emptyText.bill}
+                                            {q || period || focus ? narrowed("bill") : emptyText.bill}
                                         </td>
                                     </tr>
                                 ) : bills.map((b) => {
@@ -315,12 +345,21 @@ export function OutstandingsReportScreen({
                                     return (
                                         <tr
                                             key={`${b.kind}-${b.id}`}
-                                            className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                            onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${b.accountId}?asOf=${asOf}`)}
+                                            className="border-b last:border-0 hover:bg-muted/40"
                                         >
                                             <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.billDate)}</td>
-                                            <td className="px-3 py-1.5 font-mono text-xs">{b.ref}</td>
-                                            <td className="px-3 py-1.5 font-medium text-foreground">{b.accountName}</td>
+                                            <td className="px-3 py-1.5 font-mono text-xs">
+                                                {billHref(b) ? (
+                                                    <Link href={billHref(b)!} className="text-primary hover:underline">{b.ref}</Link>
+                                                ) : b.ref}
+                                            </td>
+                                            <td
+                                                className="px-3 py-1.5 font-medium text-foreground cursor-pointer hover:underline"
+                                                title="Show only this party"
+                                                onClick={() => setFocus({ accountId: b.accountId, name: b.accountName })}
+                                            >
+                                                {b.accountName}
+                                            </td>
                                             <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
                                             <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>
                                             <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
@@ -362,6 +401,9 @@ export function OutstandingsReportScreen({
                 </>
             )}
         </div>
+        {/* `settleDirectly` — here the bill is the starting point, so a party with
+            nothing open on the other side needs no popup: it goes straight to the
+            receipt / payment for this bill. */}
         {linkTarget && (
             <BillLinkDialog
                 open
@@ -370,6 +412,7 @@ export function OutstandingsReportScreen({
                 partyName={linkTarget.accountName}
                 voucherId={linkTarget.voucherId}
                 onSaved={() => load(true)}
+                settleDirectly
             />
         )}
         </ScrollArea>

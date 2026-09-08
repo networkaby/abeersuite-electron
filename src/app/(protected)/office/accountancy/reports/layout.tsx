@@ -40,7 +40,6 @@ export default function AccountancyReportsLayout({ children }: { children: React
                     "fund-flow": "Fund Flow",
                     "ratio-analysis": "Ratio Analysis",
                     "bank-reconciliation": "Bank Reconciliation",
-                    "ledger-outstandings": "Ledger Outstandings",
                     "optional-vouchers": "Optional Vouchers",
                     "pending-vouchers": "Pending Inventory",
                 }}

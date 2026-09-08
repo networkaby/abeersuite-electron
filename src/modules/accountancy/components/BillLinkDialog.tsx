@@ -20,28 +20,21 @@
 // post in two steps, so anything held in the form would be a promise the books
 // cannot keep. The forms open this popup straight after posting instead.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, Wand2, X, HandCoins } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/utils/constants";
-import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { planLinks, reconcilePicks, sumPicks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
-
-/** Just enough of a ledger to offer it as the till the money moves through. */
-type MoneyAccount = { id: number; name: string; code: string | null; group: { name: string } | null };
 
 /** Money that already moved cannot be settled by creating more money — it needs
  *  linking to a bill instead. The API refuses these too; this only hides the
@@ -67,6 +60,7 @@ function labelFor(d: LinkableDoc): string {
 
 export function BillLinkDialog({
     open, onOpenChange, accountId, partyName, voucherId, onSaved, initialPlan,
+    settleDirectly = false,
 }: {
     open:         boolean;
     onOpenChange: (v: boolean) => void;
@@ -79,6 +73,12 @@ export function BillLinkDialog({
     onSaved?:     () => void;
     /** Ticks made before save (the form's side panel) — the popup opens with them. */
     initialPlan?: Record<number, number>;
+    /** When the party has nothing open on the other side, do not sit there with a
+     *  popup whose only live button is "pay now" — go to that voucher at once.
+     *  Only for screens where the bill is the starting point (the outstandings
+     *  reports); a voucher form must not throw the user off the voucher they
+     *  have just posted. */
+    settleDirectly?: boolean;
 }) {
     const [docs, setDocs] = useState<LinkableDoc[]>([]);
     const [self, setSelf] = useState<LinkableDoc | null>(null);
@@ -86,14 +86,7 @@ export function BillLinkDialog({
     const [saving, setSaving] = useState(false);
     const [picked, setPicked] = useState<Record<number, number>>({});
 
-    // "Receive now / Pay now" — when there is nothing to link against, make the
-    // settling voucher here instead of sending the user off to a blank form.
-    const [moneyAccounts, setMoneyAccounts] = useState<MoneyAccount[]>([]);
-    const [createOpen, setCreateOpen] = useState(false);
-    const [createAmount, setCreateAmount] = useState("");
-    const [createDate, setCreateDate] = useState(() => new Date().toISOString().slice(0, 10));
-    const [createMoneyId, setCreateMoneyId] = useState<string>("");
-    const [creating, setCreating] = useState(false);
+    const router = useRouter();
 
     // The server works out which side is eligible from the voucher itself, so the
     // caller never has to reason about debit and credit.
@@ -125,7 +118,6 @@ export function BillLinkDialog({
     useEffect(() => {
         if (!open || !accountId) return;
         setPicked(initialPlan ?? {});
-        setCreateOpen(false);
         void load();
     }, [open, accountId, load, initialPlan]);
 
@@ -145,15 +137,6 @@ export function BillLinkDialog({
             return picks;
         });
     }, [open, docs]);
-
-    // Only fetched when the user actually opens the create panel — most visits to
-    // this popup are a plain link and never need the ledger list.
-    useEffect(() => {
-        if (!createOpen || moneyAccounts.length > 0) return;
-        axios.get<MoneyAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
-            .then((r) => setMoneyAccounts(r.data.filter((a) => isMoneyGroupName(a.group?.name))))
-            .catch((e) => toast.error(extractApiError(e, "Could not load cash and bank accounts")));
-    }, [createOpen, moneyAccounts.length]);
 
     // The server reports the true open amount — it already knows what earlier links
     // took, and what the bill's own up-front tenders covered.
@@ -248,42 +231,33 @@ export function BillLinkDialog({
     // received, a payable is paid.
     const createVerb = self?.side === 1 ? "Receive" : "Pay";
 
-    const createAndSettle = async () => {
-        const amount = round2(parseFloat(createAmount));
-        if (!Number.isFinite(amount) || amount <= EPS) {
-            toast.error("Enter how much is being settled.");
-            return;
-        }
-        if (amount > available + 0.01) {
-            toast.error(`Only ₹ ${fmt(available)} is open on this bill.`);
-            return;
-        }
-        if (!createMoneyId) {
-            toast.error(`Pick the account the money ${self?.side === 1 ? "comes into" : "goes out of"}.`);
-            return;
-        }
-        setCreating(true);
-        try {
-            const { data } = await axios.post<{ kind: string; voucherRef: string }>(
-                "/api/accountancy/allocations/settle",
-                {
-                    accountId,
-                    billVoucherId:  voucherId,
-                    amount,
-                    moneyAccountId: Number(createMoneyId),
-                    date:           createDate,
-                },
-            );
-            clearBillLinkCache();
-            toast.success(`${data.kind === "RECEIPT" ? "Receipt" : "Payment"} ${data.voucherRef} created and linked.`);
-            onSaved?.();
-            onOpenChange(false);
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not create the settlement voucher"));
-        } finally {
-            setCreating(false);
-        }
+    // The settling voucher is made on its own screen, not in here. This popup
+    // only knows which bill and how much, so it hands those over and steps out
+    // of the way — the receipt / payment form then owns the date, the cash or
+    // bank account, and everything else a voucher needs.
+    const openSettlingVoucher = () => {
+        const path = self?.side === 1 ? "/vouchers/receipts/new" : "/vouchers/payments/new";
+        const qs = new URLSearchParams({
+            partyAccountId: String(accountId),
+            amount:         String(round2(available)),
+            billId:         String(voucherId),
+        });
+        onOpenChange(false);
+        router.push(`${path}?${qs.toString()}`);
     };
+
+    // Nothing to link against, and money still open — the popup has nothing to
+    // ask, so it steps aside and opens the settling voucher itself. Fires once
+    // per open: the push unmounts this in practice, and the guard covers the
+    // case where it does not.
+    const jumped = useRef(false);
+    useEffect(() => { if (!open) jumped.current = false; }, [open]);
+    useEffect(() => {
+        if (!settleDirectly || !open || loading || jumped.current) return;
+        if (!self || docs.length > 0 || available <= EPS || !canCreate) return;
+        jumped.current = true;
+        openSettlingVoucher();
+    });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -370,70 +344,15 @@ export function BillLinkDialog({
                     </div>
                 )}
 
-                {/* Nothing to link against? Make the settling voucher here. Which
-                    kind it is follows from the bill's own side, so there is no
-                    "receipt or payment?" question to get wrong. */}
+                {/* Nothing to link against? Go and make the settling voucher —
+                    which kind it is follows from the bill's own side, so there
+                    is no "receipt or payment?" question to get wrong. */}
                 {canCreate && available > EPS && (
                     <div className="rounded border border-border bg-muted/30 p-3">
-                        {!createOpen ? (
-                            <Button type="button" size="sm" variant="outline" onClick={() => {
-                                setCreateAmount(String(available));
-                                setCreateOpen(true);
-                            }}>
-                                <HandCoins size={14} className="mr-1" /> {createVerb} now — create a{" "}
-                                {self?.side === 1 ? "receipt" : "payment"} for this bill
-                            </Button>
-                        ) : (
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm font-medium">
-                                        {createVerb} against {self?.ref}
-                                    </p>
-                                    <Button type="button" size="sm" variant="ghost" onClick={() => setCreateOpen(false)}>
-                                        <X size={14} />
-                                    </Button>
-                                </div>
-                                <div className="grid gap-3 sm:grid-cols-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-xs">Amount</Label>
-                                        <Input
-                                            type="text" inputMode="decimal"
-                                            value={createAmount}
-                                            onChange={(e) => setCreateAmount(e.target.value)}
-                                            className="h-8 text-right text-sm"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-xs">Date</Label>
-                                        <Input
-                                            type="date"
-                                            value={createDate}
-                                            onChange={(e) => setCreateDate(e.target.value)}
-                                            className="h-8 text-sm"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-xs">
-                                            {self?.side === 1 ? "Received in" : "Paid from"}
-                                        </Label>
-                                        <Select value={createMoneyId} onValueChange={setCreateMoneyId}>
-                                            <SelectTrigger className="h-8 text-sm">
-                                                <SelectValue placeholder="Cash / bank…" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {moneyAccounts.map((a) => (
-                                                    <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                                <Button type="button" size="sm" onClick={createAndSettle} disabled={creating}>
-                                    {creating && <Loader2 className="mr-1 animate-spin" size={14} />}
-                                    Create &amp; settle
-                                </Button>
-                            </div>
-                        )}
+                        <Button type="button" size="sm" variant="outline" onClick={openSettlingVoucher}>
+                            <HandCoins size={14} className="mr-1" /> {createVerb} now — open a{" "}
+                            {self?.side === 1 ? "receipt" : "payment"} for this bill
+                        </Button>
                     </div>
                 )}
 
