@@ -11,6 +11,7 @@ import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
+import { GlBuildError } from "@/modules/accountancy/lib/postInvVoucher";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
@@ -670,6 +671,9 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json(voucher, { status: 201 });
     } catch (e) {
+        // A voucher whose ledger entry cannot be built is the user's to fix (the
+        // payment rows do not add up), not a server fault — show it as it is.
+        if (e instanceof GlBuildError) return NextResponse.json({ error: e.message }, { status: 422 });
         return handleApiError(e, "Failed to save voucher");
     }
 }

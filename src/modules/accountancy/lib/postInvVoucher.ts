@@ -178,8 +178,23 @@ export type PostVoucherInput = {
     userId: number;
 };
 
+/** A refusal the caller should show to the user as-is — not a server fault.
+ *  Raised when a voucher that must carry a ledger entry cannot be given one. */
+export class GlBuildError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "GlBuildError";
+    }
+}
+
+/** Why a build produced no GL lines. "none" — this voucher has no ledger entry
+ *  to make and never had one (a type that does not post, a zero-value voucher);
+ *  carrying on is correct. "refused" — it SHOULD have posted and could not, so
+ *  carrying on would leave a voucher whose invoice and ledger disagree. */
+export type GlSkipReason = "none" | "refused";
+
 type BuiltGl =
-    | { skip: true;  notes: string[] }
+    | { skip: true;  reason: GlSkipReason; notes: string[] }
     | { skip: false; lines: JeLine[]; notes: string[]; ledgers: LedgerLite[] };
 
 /**
@@ -215,7 +230,7 @@ export async function buildInvVoucherGlLines(
     const isSaleReturn       = voucher.type === "SALE_RETURN";
     const isPurchaseReturn   = voucher.type === "PURCHASE_RETURN";
     if (!isPositiveSale && !isPositivePurchase && !isSaleReturn && !isPurchaseReturn) {
-        return { skip: true, notes: ["voucher type does not post to GL"] };
+        return { skip: true, reason: "none", notes: ["voucher type does not post to GL"] };
     }
     // `isSale` (legacy name) reused below as a shorthand for the "sale shape"
     // direction — counter Dr, body Cr. SALE and PURCHASE_RETURN both share it.
@@ -245,7 +260,7 @@ export async function buildInvVoucherGlLines(
     const goodsAmount  = subtotal - taxAmount;
 
     if (totalAmount <= 0) {
-        return { skip: true, notes: ["voucher total is zero — skipping GL post"] };
+        return { skip: true, reason: "none", notes: ["voucher total is zero — skipping GL post"] };
     }
 
     // ── Resolve ledgers ────────────────────────────────────────────────
@@ -266,7 +281,7 @@ export async function buildInvVoucherGlLines(
         if (bodyLedger) notes.push(`no dedicated ${bodyKindLabel} ledger — folded into ${bodyLedger.name}`);
     }
     if (!bodyLedger) {
-        return { skip: true, notes: [
+        return { skip: true, reason: "refused", notes: [
             `no ledger found for ${bodyKindLabel} — skipping GL post`,
         ] };
     }
@@ -279,7 +294,7 @@ export async function buildInvVoucherGlLines(
     // partyType+partyId resolution fallback.
     const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
     if (tenderRows.length === 0) {
-        return { skip: true, notes: [
+        return { skip: true, reason: "refused", notes: [
             ...notes,
             `no tender rows on voucher ${voucher.reference} — caller must supply at least one`,
         ] };
@@ -523,9 +538,9 @@ export async function buildInvVoucherGlLines(
     const debSum = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
     const credSum = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
     if (Math.abs(debSum - credSum) > 0.01) {
-        return { skip: true, notes: [
+        return { skip: true, reason: "refused", notes: [
             ...notes,
-            `JE not balanced (Dr ${debSum.toFixed(2)} vs Cr ${credSum.toFixed(2)}) — skipped`,
+            `the payment rows come to ₹${debSum.toFixed(2)} but the voucher comes to ₹${credSum.toFixed(2)}`,
         ] };
     }
 

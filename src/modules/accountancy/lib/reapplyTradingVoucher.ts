@@ -14,7 +14,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { saleToSpec, type TradingStockLine } from "./voucherMappers";
-import type { PostVoucherInput } from "./postInvVoucher";
+import { GlBuildError, type PostVoucherInput } from "./postInvVoucher";
 import { recomputeAccountBalances } from "./aggregateLedger";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
@@ -36,6 +36,23 @@ export async function reapplyTradingVoucherInPlace(
 
     // Recompute the spec (GL lines + stock moves) from the edited voucher.
     const spec = await saleToSpec(tx, voucher, { branchId, lines });
+
+    // A voucher that HAD a ledger entry must come out of an edit with one. If the
+    // builder refused — the commonest reason being that the tenders no longer add
+    // up to the edited total — this edit cannot be saved, because the alternative
+    // is what used to happen: the lines and the header change, the GL silently
+    // keeps the pre-edit figures, and the invoice and the books disagree for good.
+    // Thrown inside the route's transaction, so nothing is written at all.
+    if (spec.glSkipReason === "refused"
+        || (journalEntryId != null && spec.glLines.length === 0
+            && await tx.voucherGlLine.count({ where: { universalVoucherId: journalEntryId } }) > 0)) {
+        const why = (spec.glNotes ?? []).join("; ");
+        throw new GlBuildError(
+            `This edit cannot be saved: the ledger entry could not be rebuilt${why ? ` — ${why}` : ""}. ` +
+            "Check that the payment rows (cash, bank, or the party's own account for the unpaid part) " +
+            "add up to the voucher total.",
+        );
+    }
 
     // ── GL: rewrite the spine lines on the SAME UniversalVoucher id ───────────
     // `journalEntryId` carries the spine id (self-ref since G5); receipts

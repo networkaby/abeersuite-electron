@@ -9,6 +9,7 @@ import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
+import { GlBuildError } from "@/modules/accountancy/lib/postInvVoucher";
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
@@ -511,6 +512,9 @@ export async function PATCH(req: Request, { params }: Params) {
 
         return NextResponse.json(updated);
     } catch (e) {
+        // A voucher whose ledger entry cannot be built is the user's to fix (the
+        // payment rows do not add up), not a server fault — show it as it is.
+        if (e instanceof GlBuildError) return NextResponse.json({ error: e.message }, { status: 422 });
         return handleApiError(e, "Failed to update voucher");
     }
 }

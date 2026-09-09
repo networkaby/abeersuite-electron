@@ -96,6 +96,12 @@ export async function saleToSpec(
         date:       voucher.date,
         reference:  voucher.reference,
         narration:  readPartyName(voucher.partyJson) ?? voucher.description,
+        // Why there are no GL lines, in the builder's own words. An empty
+        // `glLines` on its own cannot tell "this type never posts to GL" from
+        // "this voucher does not balance", and a caller that cannot tell has no
+        // choice but to carry on — which is how an edit once kept a stale ledger.
+        glSkipReason: built.skip ? built.reason : undefined,
+        glNotes:      built.notes,
         glLines:    built.skip ? [] : built.lines,
         stockMoves: stock
             ? buildTradingStockMoves({
