@@ -8,6 +8,8 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { Prisma } from "@/generated/prisma/client";
+import { partyBankSchema, resolvePartyBank } from "@/shared/lib/schemas/partyBankSchema";
 import { deleteOrDeactivatePerson } from "@/modules/customer/lib/deleteParty";
 
 const updateSchema = z.object({
@@ -26,6 +28,8 @@ const updateSchema = z.object({
     // Reactivate (or re-deactivate) — gated separately below on customers:delete,
     // the same tier that owns DELETE.
     isActive:          z.boolean().optional(),
+    // The party's OWN bank account (how we pay them) — `null` clears it.
+    bankJson:          partyBankSchema.nullable().optional(),
 });
 
 export async function GET(
@@ -174,6 +178,15 @@ export async function PUT(
         );
     }
 
+    // Bank particulars: validate IFSC / UPI before touching the row, so a typo
+    // comes back as a sentence instead of a silently-stored bad account.
+    let bankPatch: { bankJson: Prisma.InputJsonValue | typeof Prisma.DbNull } | null = null;
+    if (body.bankJson !== undefined) {
+        const bank = resolvePartyBank(body.bankJson);
+        if ("error" in bank) return NextResponse.json({ error: bank.error }, { status: 400 });
+        bankPatch = { bankJson: bank.value ?? Prisma.DbNull };
+    }
+
     try {
         const person = await prisma.person.update({
             where: { id: Number(id) },
@@ -191,6 +204,7 @@ export async function PUT(
                 ...(body.noDiscount !== undefined && { noDiscount: body.noDiscount }),
                 ...(body.customerGroupId !== undefined && { customerGroupId: body.customerGroupId }),
                 ...(body.isActive !== undefined && { isActive: body.isActive }),
+                ...(bankPatch ?? {}),
             },
         });
         return NextResponse.json(person);
