@@ -9,7 +9,7 @@ import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
-import { GlBuildError } from "@/modules/accountancy/lib/postInvVoucher";
+import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib/postInvVoucher";
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
@@ -298,6 +298,18 @@ export async function PATCH(req: Request, { params }: Params) {
             chargesNet,
         );
     }
+
+    // The payment rows must still add up AFTER the edit. This PATCH may change
+    // the lines (and so the total) while saying nothing about tenders, in which
+    // case the existing ones stand — and a voucher whose goods moved but whose
+    // money did not is exactly the state that used to be saved in silence. Same
+    // rule as POST, same function, checked before anything is written.
+    const effectiveTotal = totals?.totalAmount ?? Number(existing.totalAmount);
+    const effectiveTenders = tenders !== undefined
+        ? tenders
+        : readSettlement(existing.settlementJson).tenders;
+    const tenderComplaint = tenderCoverageComplaint(effectiveTenders, effectiveTotal);
+    if (tenderComplaint) return NextResponse.json({ error: tenderComplaint }, { status: 400 });
 
     const wasPosted = existing.universalVoucher?.status === "POSTED";   // 5D-8
     const userId = user!.id;

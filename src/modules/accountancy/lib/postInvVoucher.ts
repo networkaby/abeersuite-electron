@@ -178,6 +178,35 @@ export type PostVoucherInput = {
     userId: number;
 };
 
+/**
+ * The invariant that keeps a trading voucher's money side equal to its goods
+ * side: the payment rows must add up to the voucher total. The party's own
+ * unpaid part is a payment row too (the AR / AP tender), so a credit sale is
+ * covered by this as much as a cash one.
+ *
+ * Returns the complaint to show the user, or null when the voucher is sound.
+ *
+ * This lived inline in POST /api/inventory/vouchers and NOWHERE ELSE, which is
+ * how POS-26-27-0039 came to exist: an edit changed the lines and the total,
+ * kept the old payment rows, and no one checked. The GL builder noticed and its
+ * objection was thrown away (see `GlSkipReason`). One copy, called by every
+ * route that writes a voucher, is the reason that cannot happen twice.
+ *
+ * A voucher with no payment rows at all is left to the GL builder to judge —
+ * some types legitimately have none, and it knows which.
+ */
+export function tenderCoverageComplaint(
+    tenders: { amount: number | string }[],
+    totalAmount: number,
+): string | null {
+    if (tenders.length === 0) return null;
+    const sum = tenders.reduce((s, t) => s + Number(t.amount), 0);
+    // A rupee's worth of rounding is the operator's, not an error.
+    if (Math.abs(sum - totalAmount) <= 0.01) return null;
+    return `The payment rows come to ₹${sum.toFixed(2)} but the voucher total is ₹${totalAmount.toFixed(2)}. `
+        + "Adjust them so they add up — the unpaid part goes on the party's own account.";
+}
+
 /** A refusal the caller should show to the user as-is — not a server fault.
  *  Raised when a voucher that must carry a ledger entry cannot be given one. */
 export class GlBuildError extends Error {

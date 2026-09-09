@@ -43,6 +43,7 @@
     "verify:bill-links": "tsx src/scripts/verify-bill-links.ts",
     "opening:preview": "tsx src/scripts/opening-bills-preview.ts",
     "opening:to-bills": "tsx src/scripts/opening-bills-backfill.ts",
+    "check:voucher-ledger": "tsx src/scripts/check-voucher-ledger.ts",
     "check:voucher-duplicates": "tsx src/scripts/check-voucher-duplicates.ts",
     "seed:apply-taxonomy": "tsx prisma/seeds/apply-taxonomy.ts",
     "seed:sync-permissions": "tsx prisma/seeds/sync-permissions.ts",
