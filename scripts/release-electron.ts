@@ -28,7 +28,17 @@ interface PublishTarget {
     private?: boolean;
     releaseType?: string;
     tokenEnv: string;
+    /** Which GITHUB_UPDATE_REPO_N this came from. Slot 2 is the test channel. */
+    slot: number;
 }
+
+/**
+ * A version carrying a prerelease part — `1.3.1-pre.1` — is a test build.
+ *
+ * Semver's own rule: anything after the first `-`. Nothing here inspects the word
+ * itself, so `-pre.1`, `-rc.2` and `-beta` all behave the same way.
+ */
+const isPrerelease = /-/.test(version);
 
 // Each release repo can sit under a DIFFERENT GitHub account, so a single
 // GH_TOKEN can't authenticate against both — electron-publish's GitHubPublisher
@@ -44,12 +54,44 @@ for (let n = 1; process.env[`GITHUB_UPDATE_REPO_${n}`]; n++) {
         console.error(`[release-electron] FATAL: GITHUB_UPDATE_REPO_${n} must be "owner/repo", got "${process.env[`GITHUB_UPDATE_REPO_${n}`]}".`);
         process.exit(1);
     }
-    publishTargets.push({ provider: "github", owner, repo, private: true, releaseType: "release", tokenEnv: `GH_TOKEN_${n}` });
+    publishTargets.push({ provider: "github", owner, repo, private: true, releaseType: "release", tokenEnv: `GH_TOKEN_${n}`, slot: n });
 }
 
 if (publishTargets.length === 0) {
     console.error("[release-electron] FATAL: no GITHUB_UPDATE_REPO_N vars set in .env (need at least GITHUB_UPDATE_REPO_1 + GH_TOKEN_1).");
     process.exit(1);
+}
+
+// ── Test builds go to the test repo, and only there ──────────────────────────
+// Slot 1 is what the counters actually update from — GITHUB_DOWNLOAD_UPDATE_REPO
+// points at it (electron/updateManager.ts), so anything published there is a real
+// release to real tills. Slot 2 is the test channel. A `-pre` version belongs in
+// slot 2 alone, marked as a GitHub prerelease so it never shows as "Latest".
+//
+// This is a gate, not a convenience: RELEASE_ONLY_REPO exists for retrying a repo
+// that failed, and the runbook calls it "retry path only, never the normal path".
+// Shipping a test build must not depend on someone remembering to set it.
+if (isPrerelease) {
+    const testChannel = publishTargets.filter(t => t.slot === 2);
+    if (testChannel.length === 0) {
+        console.error(
+            `[release-electron] FATAL: version ${version} is a prerelease, which publishes to the test repo only,\n` +
+            "  but no GITHUB_UPDATE_REPO_2 / GH_TOKEN_2 pair is set in .env.\n" +
+            "  Either add that pair, or release a version with no \"-\" in it to publish to every repo."
+        );
+        process.exit(1);
+    }
+    for (const t of testChannel) t.releaseType = "prerelease";
+    publishTargets = testChannel;
+    console.log(
+        `[release-electron] ${version} is a PRERELEASE — publishing to ${testChannel[0].owner}/${testChannel[0].repo} only, ` +
+        "marked as a GitHub prerelease. Counters update from repo 1 and will not see it."
+    );
+} else {
+    console.log(
+        `[release-electron] ${version} is a full release — publishing to all ${publishTargets.length} repo(s): ` +
+        publishTargets.map(t => `${t.owner}/${t.repo}`).join(", ")
+    );
 }
 
 // Retry a single target that failed (e.g. a bad token) without re-publishing a
@@ -178,7 +220,9 @@ const builderArgs = ["--publish", "always", "--prepackaged", prepackaged];
 let exitCode = 0;
 for (const target of publishTargets) {
     console.log(`[release-electron] → Publishing to ${target.owner}/${target.repo}...`);
-    const { tokenEnv, ...builderTarget } = target;
+    // `tokenEnv` and `slot` are ours, not electron-builder's — they must not reach
+    // package.json's build.publish, which is validated against its own schema.
+    const { tokenEnv, slot: _slot, ...builderTarget } = target;
     pkg.build.publish = [builderTarget];
     // releaseNotes goes through package.json rather than a `-c.releaseInfo.releaseNotes=...`
     // CLI arg — with 80+ commits since the last tag, the escaped JSON routinely blows

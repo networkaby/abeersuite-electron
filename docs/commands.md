@@ -41,7 +41,7 @@ git push origin main && git push production main
 6. Release notes assembled = your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order
 7. Annotated git tag `v<version>` created if it does not already exist
 8. `git push origin HEAD --tags` — `main` **and** the tag to `origin` (`devloperakramul/abeersuite-electron`)
-9. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
+9. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env` — or, when the version carries a `-` (`1.3.1-pre.1`), in `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease — each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
 
 **You finish (2 things, still manual today):**
 
@@ -62,7 +62,7 @@ git checkout dev && git merge --ff-only main && git push origin dev
 - release from any branch other than `main`
 - tag by hand, or push a tag on its own
 - draft a release or upload a binary in the GitHub web UI
-- publish to one release repo and leave the other behind — the only exception is the documented retry `RELEASE_ONLY_REPO=<repo> pnpm electron:release`, used *after* a partial failure, never as the normal path
+- publish to one release repo and leave the other behind — two exceptions, both deliberate: a **prerelease version** (any `-` in it) is *meant* to go to repo 2 alone and the script does that on its own, and the documented retry `RELEASE_ONLY_REPO=<repo> pnpm electron:release` is used *after* a partial failure, never as the normal path and never to force the prerelease split
 - release without rewriting `RELEASE_NOTES.md`
 - run `scripts/release-electron.ts` directly, bypassing the `verify:package` gate
 

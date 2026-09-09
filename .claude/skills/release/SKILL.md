@@ -14,7 +14,11 @@ Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) an
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
 - **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". Everything else in this repo still stops at the commit.
-- **Never** tag by hand, push a tag on its own, draft a release or upload a binary in the GitHub web UI, run `scripts/release-electron.ts` directly (it bypasses the `verify:package` gate), publish to one release repo and leave another behind, or reuse last version's notes.
+- **A `-` in the version makes it a test build.** `1.3.1-pre.1` publishes to `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease. A version with no `-` publishes to **every** repo. The gate is in `scripts/release-electron.ts` and needs nothing set by hand — do not reach for `RELEASE_ONLY_REPO` to get this, that is the retry path.
+  - Repo 1 is what the tills update from (`GITHUB_DOWNLOAD_UPDATE_REPO` → `electron/updateManager.ts`). Publishing there reaches real counters.
+  - Repo 2 is the test channel. Counters never poll it, and `allowPrerelease` is off, so a test build cannot reach a till by accident.
+  - A test build still comes off `main` like any other — the `main`-only rule above is not relaxed for it.
+- **Never** tag by hand, push a tag on its own, draft a release or upload a binary in the GitHub web UI, run `scripts/release-electron.ts` directly (it bypasses the `verify:package` gate), publish to one release repo and leave another behind **when the version has no `-`**, or reuse last version's notes.
 
 ## Preflight
 
@@ -103,7 +107,7 @@ One command owns all of this — never do any part of it by hand:
 - Assembles the release notes: your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order.
 - Creates the annotated git tag **`v<version>`** if it does not already exist.
 - `git push origin HEAD --tags` — `main` **and** the tag to `origin`.
-- **Publishes a GitHub release to every `GITHUB_UPDATE_REPO_N`**, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes.
+- **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
 
 **Between pack and publish, ask the owner to join hand for the smoke test.** You cannot do this one:
 
@@ -135,7 +139,7 @@ Done means, and say each one plainly:
 
 - `main` and `v<version>` are on **both** remotes.
 - `dev` is level with `main`.
-- **Every** release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes.
+- **Every** release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes — or, for a `-pre` version, **repo 2 shows them and repo 1 was deliberately left alone**. Say which, and say that counters will not see a test build.
 - Which urgency tier went out, and therefore how counters will take it.
 
 ## Join hand — where to stop and ask
