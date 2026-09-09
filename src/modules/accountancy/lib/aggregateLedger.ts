@@ -1,13 +1,13 @@
 // Single-pass aggregation of POSTED VoucherGlLines (universal-voucher spine) per account.
 // Returns opening / debits / credits / closing — given a date range (or just an asOf for closing-only).
 
-import type { Prisma, VoucherStatus } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 import { balanceDelta, toNumber } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
-import { ledgerStatusFilterUv, type LedgerMode } from "./ledgerStatus";
+import { ledgerStatusFilterUv } from "./ledgerStatus";
 
 // Both live in `./ledgerStatus` now, so a caller needing only the gate does not
 // have to pull this module's `server-only` dependency chain in. Re-exported here

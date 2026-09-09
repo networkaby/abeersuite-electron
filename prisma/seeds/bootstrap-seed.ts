@@ -1209,7 +1209,15 @@ async function main() {
     console.log("[6/7] DB constraints");
     await ensureXorCheck("Phone", "Phone_owner_xor");
     await ensureXorCheck("Email", "Email_owner_xor");
-    console.log(`      ✓ Phone/Email XOR ownership CHECK ensured\n`);
+    console.log(`      ✓ Phone/Email XOR ownership CHECK ensured`);
+    // The portal-profile columns and their backfill, the same call the personal
+    // seed makes through applyCodeOwnedCatalog(). It was imported here and never
+    // called, so a DB brought up by THIS seed skipped it — harmless on a fresh
+    // database, where Prisma creates the columns anyway, but it left the older-DB
+    // path (copy the social photo onto the Person, mark staff-entered contacts
+    // verified) depending on which seed happened to run. Idempotent either way.
+    await ensurePortalProfileColumns(pool);
+    console.log(`      ✓ Portal profile columns ensured\n`);
 
     // ── Section 7: Inventory naming convention (singleton) ─────────────
     // Drives auto-fill of InvProduct.name / shopSubheading / slug from the

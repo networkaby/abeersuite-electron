@@ -1,6 +1,5 @@
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
 import { nextRefFromSeries, resolveCounterNumber } from "@/modules/accountancy/lib/balance";
-import { round2 } from "@/shared/lib/format";
 
 // ── Reference number generation ───────────────────────────────────────────────
 

@@ -11,6 +11,25 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    // A leading underscore is how this codebase says "named on purpose, used on
+    // purpose nowhere" — a destructure that exists only to keep a key OUT of the
+    // rest object, a signature that must match an interface, a caught error we do
+    // not read. Without this the rule flags exactly the cases the convention was
+    // invented for, and the only way to quieten it is a disable comment.
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          varsIgnorePattern: "^_",
+          argsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
+  {
     files: externalFiles,
     rules: {
       "no-restricted-imports": [

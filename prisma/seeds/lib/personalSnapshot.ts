@@ -39,8 +39,9 @@
 
 // This seed transformer reshapes arbitrary Prisma rows by string key (see the
 // `Row`/`Ref` note below) and destructures fields purely to drop them. Loose
-// `any` and rest-to-omit unused bindings are intentional here, not oversights.
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+// `any` is intentional here, not an oversight; the rest-to-omit bindings are
+// named with a leading underscore, which the lint config already allows.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PrismaClient } from "../../../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { aliasRows } from "../../../src/modules/accountancy/lib/accountAlias";
