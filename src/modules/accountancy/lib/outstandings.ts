@@ -15,9 +15,11 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { sumLinked } from "./billLink";
+import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { autoLinkOrder, dueDateOf } from "./billLinkPlan";
 import { OPENING_TYPE } from "./openingBills";
 import { accountIdsUnderGroup } from "./accountGroups";
+import { round2 } from "@/shared/lib/format/moneyInr";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
 
@@ -128,6 +130,33 @@ export async function loadTenderLines(
         const arr = out.get(l.universalVoucherId) ?? [];
         arr.push({ accountId: l.accountId, amount: Number(l.amount) });
         out.set(l.universalVoucherId, arr);
+    }
+    return out;
+}
+
+/**
+ * Every one of these parties' own legs on these bills, keyed `accountId:spineId`
+ * and signed debit-positive. One query for the whole report — the per-bill
+ * alternative is a query per row, which this report cannot afford.
+ */
+async function loadPartyLegsFor(
+    accountIds: number[],
+    spineIds: number[],
+): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (accountIds.length === 0 || spineIds.length === 0) return out;
+    const lines = await prisma.voucherGlLine.findMany({
+        where: {
+            accountId:          { in: accountIds },
+            universalVoucherId: { in: [...new Set(spineIds)] },
+            universalVoucher:   ledgerStatusFilterUv(),
+        },
+        select: { accountId: true, universalVoucherId: true, type: true, amount: true },
+    });
+    for (const l of lines) {
+        const key = `${l.accountId}:${l.universalVoucherId}`;
+        const delta = l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+        out.set(key, round2((out.get(key) ?? 0) + delta));
     }
     return out;
 }
@@ -248,14 +277,21 @@ async function loadOpenBills(
         .map((v) => v.universalVoucherId)
         .filter((x): x is number => x !== null);
 
-    const [paidByVch, tendersBySpine, paidBySpine] = await Promise.all([
+    const [paidByVch, tendersBySpine, paidBySpine, partyLegs] = await Promise.all([
         // CREDIT_NOTE/DEBIT_NOTE bill settlements — spine ids, link counted from either side.
         sumLinked(prisma, vchIds),
         // Up-front tenders via the spine (role=TENDER), keyed by universalVoucherId.
         loadTenderLines(prisma, uvIds),
         // Later settlements against the bill's spine row, from either side of the link.
         sumLinked(prisma, uvIds),
+        // What each party's OWN leg on the bill says — the same reading the
+        // bill-wise popup trusts. See the note over `legOf` below.
+        loadPartyLegsFor(accountIds, uvIds),
     ]);
+
+    /** `${accountId}:${spineId}` → signed party leg (debit positive). */
+    const legOf = (accountId: number, spineId: number | null): number | null =>
+        spineId === null ? null : partyLegs.get(`${accountId}:${spineId}`) ?? 0;
 
     const bills: RawBill[] = [];
 
@@ -311,14 +347,39 @@ async function loadOpenBills(
         // (cash / bank / card / wallet). The AR tender row IS the
         // unsettled remainder; later Receipt vouchers chip away at it
         // via the VoucherAllocation → journalEntryId chain (paidByJe).
-        const vTenders = v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [];
-        const paidAtSale = vTenders
-            .filter((t) => t.accountId !== accountId)
-            .reduce((s, t) => s + t.amount, 0);
-        // Plus any later receipts allocated against the voucher's spine row.
-        const paid =
-            paidAtSale +
-            (v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0);
+        //
+        // What is still open is what the PARTY'S OWN LEG on this bill says, less
+        // what has since been linked against it — the same rule `billLink.ts`
+        // uses, so this report and the bill-wise popup can never disagree.
+        //
+        // The older reading (invoice total − legs tagged `role=TENDER`) trusted a
+        // tag: a cash sale posted before tender-tagging has its cash leg untagged
+        // and NO party leg at all, so the whole invoice was reported as money owed
+        // by a customer who never owed it. A leg cannot be forgotten the way a tag
+        // can — if the party owes nothing, there is nothing on their ledger to read.
+        //
+        // Bills with no spine (pre-Phase-5 rows) have no legs to read, so they keep
+        // the tender reading; there is nothing better available for them.
+        const signed = legOf(accountId, v.universalVoucherId);
+        const linkedOnSpine = v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0;
+        let paid: number;
+        if (signed !== null) {
+            // Direction is the leg's own: a debit is money owed to us (sale side),
+            // a credit is money we owe (purchase side). A leg pointing the other
+            // way belongs in the other report, not this one.
+            const wantSide = v.universalVoucher!.type === "PURCHASE" ? -1 : 1;
+            const legSide = signed > 0.005 ? 1 : signed < -0.005 ? -1 : 0;
+            if (legSide !== wantSide) continue;
+            const open = round2(Math.abs(signed) - linkedOnSpine);
+            if (open <= 0.005) continue;
+            paid = round2(total - open);
+        } else {
+            const vTenders = v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [];
+            const paidAtSale = vTenders
+                .filter((t) => t.accountId !== accountId)
+                .reduce((s, t) => s + t.amount, 0);
+            paid = paidAtSale + linkedOnSpine;
+        }
         bills.push({
             kind:        v.universalVoucher!.type === "SALE" || v.universalVoucher!.type === "POS" ? "sale" : "purchase",
             id:          v.id,
