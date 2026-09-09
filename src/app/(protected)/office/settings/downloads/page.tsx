@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, MonitorDown, Printer, QrCode } from "lucide-react";
+import { Download, FlaskConical, MonitorDown, Printer, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -34,6 +34,67 @@ const APP_DOWNLOADS: DownloadItem[] = [
     },
 ];
 
+// ── Test builds ─────────────────────────────────────────────────────────────
+// Published to the second release repo only, which the counters never poll (see
+// scripts/release-electron.ts). So a test build can only be taken deliberately —
+// this section is that deliberate act, instead of a trip to GitHub.
+type PrereleaseAsset = { id: number; name: string; size: number };
+type PrereleaseInfo = {
+    tag: string;
+    name: string;
+    publishedAt: string | null;
+    notes: string;
+    prerelease: boolean;
+    assets: PrereleaseAsset[];
+};
+
+function megabytes(bytes: number): string {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function TestBuildCard({ release }: { release: PrereleaseInfo }) {
+    // The first line of RELEASE_NOTES.md, which is what the release body opens with.
+    const headline = release.notes.split("\n").find((l) => l.trim().length > 0)?.trim() ?? "";
+    return (
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+            <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm">{release.name}</p>
+                        {release.prerelease && (
+                            <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                Test
+                            </span>
+                        )}
+                    </div>
+                    {release.publishedAt && (
+                        <p className="text-xs text-muted-foreground">
+                            {new Date(release.publishedAt).toLocaleString(undefined, {
+                                day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+                            })}
+                        </p>
+                    )}
+                    {headline && <p className="text-xs text-muted-foreground line-clamp-2">{headline}</p>}
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {release.assets.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No installer on this release.</p>
+                )}
+                {release.assets.map((a) => (
+                    <Button key={a.id} asChild size="sm" variant="outline">
+                        {/* Server-side redirect to a signed GitHub URL — the repo is private,
+                            so a direct link would 404. See the API route. */}
+                        <a href={`/api/settings/downloads/prereleases/${a.id}`}>
+                            <Download size={14} /> {a.name} <span className="text-muted-foreground">· {megabytes(a.size)}</span>
+                        </a>
+                    </Button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function DownloadCard({ item }: { item: DownloadItem }) {
     return (
         <div className="rounded-lg border border-border bg-card p-4 flex items-start justify-between gap-4">
@@ -53,11 +114,29 @@ function DownloadCard({ item }: { item: DownloadItem }) {
 export default function DownloadsPage() {
     const [version, setVersion] = useState<string | null>(null);
 
+    const [testBuilds, setTestBuilds] = useState<PrereleaseInfo[] | null>(null);
+    const [testError, setTestError] = useState<string | null>(null);
+
     useEffect(() => {
         fetch("/combined-bridge.version.json", { cache: "no-store" })
             .then((r) => (r.ok ? r.json() : null))
             .then((j: { version?: string } | null) => { if (j?.version) setVersion(j.version); })
             .catch(() => { /* manifest optional */ });
+    }, []);
+
+    useEffect(() => {
+        fetch("/api/settings/downloads/prereleases")
+            .then((r) => r.json())
+            .then((j: { configured?: boolean; error?: string; releases?: PrereleaseInfo[] }) => {
+                if (j.configured === false) {
+                    setTestError("not-configured");
+                    setTestBuilds([]);
+                    return;
+                }
+                if (j.error) setTestError(j.error);
+                setTestBuilds(j.releases ?? []);
+            })
+            .catch(() => { setTestError("Could not reach the test release list."); setTestBuilds([]); });
     }, []);
 
     return (
@@ -98,6 +177,38 @@ export default function DownloadsPage() {
 
                     <div className="space-y-2">
                         {BRIDGE_DOWNLOADS.map((d) => <DownloadCard key={d.href} item={d} />)}
+                    </div>
+                </section>
+
+                <section className="space-y-3">
+                    <div>
+                        <h2 className="font-semibold flex items-center gap-2">
+                            <FlaskConical size={16} /> Test builds
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                            Not for the counters. These are published for trying on one spare PC before a
+                            version goes out — a till will never offer one of these as an update.
+                        </p>
+                    </div>
+
+                    {testBuilds === null && (
+                        <p className="text-xs text-muted-foreground">Looking for test builds…</p>
+                    )}
+                    {testError === "not-configured" && (
+                        <p className="text-xs text-muted-foreground">
+                            Not set up on this server. Add <code>GITHUB_TEST_DOWNLOAD_REPO</code> and{" "}
+                            <code>GITHUB_TEST_DOWNLOAD_PAT_TOKEN</code> to <code>.env</code> to list them here.
+                        </p>
+                    )}
+                    {testError && testError !== "not-configured" && (
+                        <p className="text-xs text-destructive">{testError}</p>
+                    )}
+                    {testBuilds?.length === 0 && !testError && (
+                        <p className="text-xs text-muted-foreground">No test builds published yet.</p>
+                    )}
+
+                    <div className="space-y-2">
+                        {testBuilds?.map((r) => <TestBuildCard key={r.tag} release={r} />)}
                     </div>
                 </section>
 
