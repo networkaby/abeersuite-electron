@@ -13,17 +13,17 @@
   Hard rules for this file, all of them consequences of WHEN it runs:
     - No server. It is on screen before Next has forked, so nothing may be
       fetched from 127.0.0.1 and no framework may be involved. Plain HTML.
-    - No internet. A counter boots offline routinely (that is what the local
-      replica is for), so every pixel here ships with the app. The background is
-      drawn in CSS, not downloaded — a remote image would leave a blank screen
-      on exactly the machines this screen is for.
+    - Never blank. The counter has internet, so the background is a real photo —
+      but it is loaded through a fallback chain (cache → saved copy → internet →
+      drawn) so a slow morning or a dropped line still gives a finished screen
+      rather than an empty one.
     - Degrades to a demo. With no `window.electronAPI` (opened straight in a
       browser) it cycles the boot messages by itself, so the design can be
       reviewed without packaging the app.
 
-  Customising it: drop an image at %APPDATA%/abeersuite-electron/login-background.jpg
-  and main passes it in as `?bg=` — it then replaces the drawn background. The card,
-  the greeting and the tips below are all this one file; edit them here.
+  EVERYTHING YOU WOULD WANT TO CHANGE IS IN THE `CONFIG` BLOCK at the top of the
+  script below — the photos, the shop message, the tips, the greeting names, and
+  which pieces show at all. Edit it there; nothing below it needs touching.
 -->
 <style>
   :root{
@@ -115,6 +115,8 @@
 
   .tip{margin:14px 0 0;font-size:12px;color:var(--ink-dim);line-height:1.55;min-height:34px;opacity:0;transition:opacity .5s}
   .tip.in{opacity:1}
+  .shopmsg{margin:10px 0 0;font-size:11.5px;color:rgba(148,163,184,.7);letter-spacing:.01em}
+  .shopmsg:empty{display:none}
 
   .meta{
     position:fixed;bottom:14px;left:0;right:0;z-index:3;text-align:center;
@@ -152,6 +154,7 @@
     <div class="bar"><span id="barfill"></span></div>
     <div class="srow"><i class="dot" id="dot"></i><span class="smsg" id="smsg">Starting&hellip;</span></div>
     <p class="tip" id="tip"></p>
+    <p class="shopmsg" id="shopmsg"></p>
   </div>
 </form>
 
@@ -160,6 +163,55 @@
 <script>
 (function () {
   "use strict";
+
+  // ══ CONFIG — this block is yours. Edit it; leave everything below alone. ═══
+  var CONFIG = {
+
+    // Background photos, tried in order until one loads. Use any direct image
+    // URL. `images.unsplash.com` and `images.pexels.com` are already the hosts
+    // next.config.ts trusts for the rest of the app, so they are safe choices.
+    // Put your own shop photo first when you have one.
+    // A picture at %APPDATA%/abeersuite-electron/login-background.jpg still wins
+    // over every entry here — that is the per-counter override.
+    BACKGROUNDS: [
+      "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1920&q=80",
+      "https://images.unsplash.com/photo-1556740738-b6a63e27c4df?auto=format&fit=crop&w=1920&q=80"
+    ],
+
+    // How dark to make the photo so the card stays readable. 0 = untouched
+    // photo, 1 = solid navy. 0.55 suits most bright shop photos.
+    SCRIM: 0.55,
+
+    // One line under the tips. Leave "" to hide it entirely.
+    SHOP_MESSAGE: "Network Service — service with a smile.",
+
+    // Shown one at a time while the app is starting, then they stop. Write as
+    // many as you like; they are picked in a rotating order, not at random, so
+    // every one of them gets seen.
+    TIPS: [
+      "Press F2 at the till to jump straight to the customer box.",
+      "A sale saves to this counter first, so billing keeps working if the internet drops.",
+      "Search a customer by mobile number, not just by name.",
+      "Open your shift before billing — the till account comes from the shift.",
+      "Ctrl and − or + resizes the whole app if the text feels small."
+    ],
+
+    // Seconds each tip stays on screen.
+    TIP_SECONDS: 7,
+
+    // Switch pieces of the screen off without deleting them.
+    SHOW_CLOCK: true,
+    SHOW_TIPS: true,
+    SHOW_PROGRESS: true,
+
+    // The greeting. Hours are 24-hour; each entry is "from this hour onwards".
+    GREETINGS: [
+      { from: 0,  text: "Good morning" },
+      { from: 12, text: "Good afternoon" },
+      { from: 17, text: "Good evening" }
+    ]
+  };
+  // ══ END CONFIG ════════════════════════════════════════════════════════════
 
   var qs      = new URLSearchParams(location.search);
   var api     = window.electronAPI;
@@ -176,44 +228,71 @@
   var elEmail = document.getElementById("email");
   var elPass  = document.getElementById("pass");
 
-  // ── Owner's own background, when one has been dropped in ──────────────────
-  // A file URL passed by main. Anything else is ignored: this page is opened
-  // with loadFile(), so a remote URL here would be the only thing on the screen
-  // capable of reaching the network.
+  // ── Background: cache → saved copy → internet → drawn ─────────────────────
+  // Tried in order, first one that loads wins, and the drawn CSS background is
+  // simply what is already on screen if none of them do. That ordering is the
+  // whole trick: the photo is never fetched while the cashier waits — the
+  // browser cache answers on every boot after the first, and main keeps a saved
+  // copy beside it, so a slow morning costs nothing and a dropped line costs a
+  // photo rather than a blank screen.
+  //
+  // `?bg=` is the per-counter override main passes when the owner has dropped a
+  // picture into the app folder. It is tried first and it is a local file, so a
+  // counter with its own photo never touches the network at all.
   (function applyBackground() {
-    var bg = qs.get("bg");
-    if (!bg || bg.slice(0, 5) !== "file:") return;
-    var img = new Image();
-    img.onload = function () {
-      document.getElementById("bg").style.backgroundImage = "url('" + bg.replace(/'/g, "%27") + "')";
-      var i, blobs = document.getElementsByClassName("blob");
-      for (i = 0; i < blobs.length; i++) blobs[i].style.display = "none";
-    };
-    img.src = bg;  // A broken path simply never loads, and the drawn background stays.
+    var chain = [];
+    var override = qs.get("bg");
+    if (override && (override.slice(0, 5) === "file:" || override.charAt(0) === ".")) chain.push(override);
+    chain = chain.concat(CONFIG.BACKGROUNDS || []);
+
+    document.querySelector(".scrim").style.background = "rgba(2,6,23," + CONFIG.SCRIM + ")";
+
+    var at = 0;
+    (function tryNext() {
+      if (at >= chain.length) return;          // Nothing loaded — drawn background stays.
+      var url = chain[at++];
+      var img = new Image();
+      img.onload = function () {
+        document.getElementById("bg").style.backgroundImage = "url('" + url.replace(/'/g, "%27") + "')";
+        var i, blobs = document.getElementsByClassName("blob");
+        for (i = 0; i < blobs.length; i++) blobs[i].style.display = "none";
+        // Hand it to main to keep, so this counter has it even if the line is
+        // down tomorrow. Best-effort; an older Electron build simply lacks it.
+        if (api && api.cacheLoginBackground && url.slice(0, 4) === "http") {
+          try { api.cacheLoginBackground(url); } catch (e) { /* decoration, never fatal */ }
+        }
+      };
+      img.onerror = tryNext;
+      img.src = url;
+    })();
   })();
 
   // ── Greeting + clock ──────────────────────────────────────────────────────
   function tick() {
     var now = new Date();
-    var h = now.getHours();
-    elGreet.textContent = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+    var h = now.getHours(), i, pick = "";
+    // Last entry whose `from` we have passed — so the order in CONFIG is what
+    // decides, and adding a fourth slot needs no code change here.
+    for (i = 0; i < CONFIG.GREETINGS.length; i++) {
+      if (h >= CONFIG.GREETINGS[i].from) pick = CONFIG.GREETINGS[i].text;
+    }
+    elGreet.textContent = pick;
     elClock.textContent = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
       + "  ·  " + now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   }
-  tick();
-  setInterval(tick, 20000);
+  if (CONFIG.SHOW_CLOCK) { tick(); setInterval(tick, 20000); }
+  else { elClock.style.display = "none"; tick(); }
+
+  if (!CONFIG.SHOW_PROGRESS) document.querySelector(".bar").style.display = "none";
+
+  // The shop's own line, under the tips.
+  if (CONFIG.SHOP_MESSAGE) document.getElementById("shopmsg").textContent = CONFIG.SHOP_MESSAGE;
 
   // ── Something to read while it starts ─────────────────────────────────────
   // Rotated slowly, and only while the app is still booting — once it is ready
   // the cashier should be signing in, not reading.
-  var TIPS = [
-    "Press F2 at the till to jump straight to the customer box.",
-    "A sale saves to this counter first, so billing keeps working if the internet drops.",
-    "Search a customer by mobile number, not just by name.",
-    "Open your shift before billing — the till account comes from the shift.",
-    "Ctrl and − or + resizes the whole app if the text feels small."
-  ];
-  var tipAt = Math.floor(Math.random() * TIPS.length);
+  var TIPS = CONFIG.SHOW_TIPS ? (CONFIG.TIPS || []) : [];
+  var tipAt = Math.floor(Math.random() * (TIPS.length || 1));
   var tipTimer = null;
   function showTip() {
     elTip.classList.remove("in");
@@ -223,8 +302,10 @@
       elTip.classList.add("in");
     }, 500);
   }
-  showTip();
-  tipTimer = setInterval(showTip, 7000);
+  if (TIPS.length) {
+    showTip();
+    tipTimer = setInterval(showTip, Math.max(2, CONFIG.TIP_SECONDS || 7) * 1000);
+  }
 
   // ── Boot progress ─────────────────────────────────────────────────────────
   // The bar is deliberately not a real percentage — main reports steps, not a
