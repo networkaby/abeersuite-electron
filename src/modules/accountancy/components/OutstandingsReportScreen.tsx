@@ -9,13 +9,13 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, ChevronRight, Link2, Search, X } from "lucide-react";
+import { Loader2, ChevronRight, HandCoins, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
-import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import { clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -53,7 +53,7 @@ function fmtIsoDate(s: string): string {
 }
 
 export function OutstandingsReportScreen({
-    title, subtitle, apiPath, loadError, emptyText, settleHint,
+    title, subtitle, apiPath, loadError, emptyText, settleKind, settleHint,
 }: {
     title:      string;
     subtitle:   string;
@@ -62,13 +62,16 @@ export function OutstandingsReportScreen({
     loadError:  string;
     /** Shown when the book itself is clear, before any search or period. */
     emptyText:  { party: string; bill: string };
-    /** Tooltip on the bill row's link button — it settles the other way round
-     *  for a payable, so each side words it in its own money's terms. */
+    /** Which voucher settles a bill on this report: a receivable is received,
+     *  a payable is paid. The bill is the starting point here, so the button
+     *  opens that voucher itself — the form's own open-bills panel does the
+     *  ticking, the party's existing credits included, which is everything the
+     *  link popup used to do and more. */
+    settleKind: SettleRequest["kind"];
+    /** Tooltip on that button, worded in each side's own money's terms. */
     settleHint: string;
 }) {
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
-    // Which bill the link popup is settling, with the party it stands against.
-    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; accountId: number; accountName: string } | null>(null);
     // The receipt / payment being made against a bill, hosted right here so the
     // report stays on screen behind it.
     const [settle, setSettle] = useState<SettleRequest | null>(null);
@@ -378,10 +381,15 @@ export function OutstandingsReportScreen({
                                                         onClick={(e) => {
                                                             // The row itself drills to the party — keep that off this button.
                                                             e.stopPropagation();
-                                                            setLinkTarget({ voucherId: b.universalVoucherId!, accountId: b.accountId, accountName: b.accountName });
+                                                            setSettle({
+                                                                kind:           settleKind,
+                                                                partyAccountId: b.accountId,
+                                                                amount:         b.outstanding,
+                                                                billId:         b.universalVoucherId!,
+                                                            });
                                                         }}
                                                     >
-                                                        <Link2 size={14} />
+                                                        <HandCoins size={14} />
                                                     </button>
                                                 )}
                                             </td>
@@ -405,23 +413,10 @@ export function OutstandingsReportScreen({
                 </>
             )}
         </div>
-        {/* `settleDirectly` — here the bill is the starting point, so a party with
-            nothing open on the other side needs no popup: it goes straight to the
-            receipt / payment for this bill. `onSettle` keeps that voucher on this
-            page, as a dialog over the report. */}
-        {linkTarget && (
-            <BillLinkDialog
-                open
-                onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
-                accountId={linkTarget.accountId}
-                partyName={linkTarget.accountName}
-                voucherId={linkTarget.voucherId}
-                onSaved={() => load(true)}
-                settleDirectly
-                onSettle={setSettle}
-            />
-        )}
-        {/* Saved or abandoned, the report is read again: a settled bill must not
+        {/* The voucher opens as a dialog over the report — the bill is the
+            starting point here, and the form carries the open-bills panel that
+            ticks this bill and any credit the party is already sitting on.
+            Saved or abandoned, the report is read again: a settled bill must not
             still be sitting there, and its open-bill list is now stale. */}
         <GlVoucherDialog
             kind={settle?.kind ?? null}

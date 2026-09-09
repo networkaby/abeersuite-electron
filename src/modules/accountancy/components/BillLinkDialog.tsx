@@ -20,7 +20,7 @@
 // post in two steps, so anything held in the form would be a promise the books
 // cannot keep. The forms open this popup straight after posting instead.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -71,7 +71,6 @@ function labelFor(d: LinkableDoc): string {
 
 export function BillLinkDialog({
     open, onOpenChange, accountId, partyName, voucherId, onSaved, initialPlan,
-    settleDirectly = false, onSettle,
 }: {
     open:         boolean;
     onOpenChange: (v: boolean) => void;
@@ -84,16 +83,6 @@ export function BillLinkDialog({
     onSaved?:     () => void;
     /** Ticks made before save (the form's side panel) — the popup opens with them. */
     initialPlan?: Record<number, number>;
-    /** When the party has nothing open on the other side, do not sit there with a
-     *  popup whose only live button is "pay now" — go to that voucher at once.
-     *  Only for screens where the bill is the starting point (the outstandings
-     *  reports); a voucher form must not throw the user off the voucher they
-     *  have just posted. */
-    settleDirectly?: boolean;
-    /** Where the settling voucher opens. Given, the caller hosts the receipt /
-     *  payment form itself (a dialog over the report) and the user never leaves
-     *  the page; left out, this navigates to the voucher's own screen. */
-    onSettle?: (req: SettleRequest) => void;
 }) {
     const [docs, setDocs] = useState<LinkableDoc[]>([]);
     const [self, setSelf] = useState<LinkableDoc | null>(null);
@@ -253,10 +242,6 @@ export function BillLinkDialog({
     const openSettlingVoucher = () => {
         const kind = self?.side === 1 ? "RECEIPT" : "PAYMENT";
         onOpenChange(false);
-        if (onSettle) {
-            onSettle({ kind, partyAccountId: accountId, amount: round2(available), billId: voucherId });
-            return;
-        }
         const path = kind === "RECEIPT" ? "/vouchers/receipts/new" : "/vouchers/payments/new";
         const qs = new URLSearchParams({
             partyAccountId: String(accountId),
@@ -265,19 +250,6 @@ export function BillLinkDialog({
         });
         router.push(`${path}?${qs.toString()}`);
     };
-
-    // Nothing to link against, and money still open — the popup has nothing to
-    // ask, so it steps aside and opens the settling voucher itself. Fires once
-    // per open: the push unmounts this in practice, and the guard covers the
-    // case where it does not.
-    const jumped = useRef(false);
-    useEffect(() => { if (!open) jumped.current = false; }, [open]);
-    useEffect(() => {
-        if (!settleDirectly || !open || loading || jumped.current) return;
-        if (!self || docs.length > 0 || available <= EPS || !canCreate) return;
-        jumped.current = true;
-        openSettlingVoucher();
-    });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

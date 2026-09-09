@@ -10,7 +10,8 @@ export default function ReceivablesPage() {
             apiPath="/api/accountancy/reports/receivables"
             loadError="Failed to load receivables"
             emptyText={{ party: "No outstanding receivables.", bill: "No outstanding bills." }}
-            settleHint="Settle this bill against a receipt, credit note, purchase or journal of this party"
+            settleKind="RECEIPT"
+            settleHint="Receive against this bill — opens a receipt with this bill ticked"
         />
     );
 }
