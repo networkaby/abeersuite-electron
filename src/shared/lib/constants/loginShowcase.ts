@@ -13,6 +13,27 @@
  * different text.
  */
 
+/**
+ * Backdrop photos, tried in order until one loads. Any direct image URL will do.
+ * `images.unsplash.com` and `images.pexels.com` are the hosts the rest of the app
+ * already trusts, so they are safe choices. Put the shop's own photo first when
+ * there is one.
+ *
+ * On a counter, a picture dropped at %APPDATA%/abeersuite-electron/login-background.jpg
+ * beats every entry here — that override is the shell's, and the web page has no
+ * such file to read.
+ */
+export const LOGIN_BACKGROUNDS: readonly string[] = [
+    "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1920&q=80",
+    "https://images.unsplash.com/photo-1556740738-b6a63e27c4df?auto=format&fit=crop&w=1920&q=80",
+];
+
+/**
+ * How dark to make the photo so the card stays readable. 0 = untouched photo,
+ * 1 = solid navy. 0.55 suits most bright shop photos.
+ */
+export const LOGIN_SCRIM = 0.55;
+
 /** The line above the spotlight, in small caps. */
 export const LOGIN_TAGLINE = "One shop, one system.";
 

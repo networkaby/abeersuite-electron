@@ -6,8 +6,10 @@ import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
+    LOGIN_BACKGROUNDS,
     LOGIN_MODULES,
     LOGIN_ROTATE_SECONDS,
+    LOGIN_SCRIM,
     LOGIN_SHOP_MESSAGE,
     LOGIN_SPOTLIGHTS,
     LOGIN_TAGLINE,
@@ -45,6 +47,36 @@ function useRotation(length: number, seconds: number): { index: number; fading: 
     }, [length, seconds]);
 
     return { index, fading };
+}
+
+/**
+ * The backdrop photo — tried in order, first one that loads wins.
+ *
+ * Nothing waits on it. The drawn CSS background is already a finished screen, so
+ * a photo that is slow or never arrives costs a photograph, not a blank page.
+ * It is loaded through an `Image` rather than set straight on the layer so the
+ * fade only starts once the picture is actually decoded — half a photo sliding
+ * in looks worse than none.
+ */
+function useBackdropPhoto(candidates: readonly string[]): string | null {
+    const [url, setUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        let at = 0;
+        const tryNext = () => {
+            if (cancelled || at >= candidates.length) return;
+            const candidate = candidates[at++];
+            const img = new Image();
+            img.onload = () => { if (!cancelled) setUrl(candidate); };
+            img.onerror = tryNext;
+            img.src = candidate;
+        };
+        tryNext();
+        return () => { cancelled = true; };
+    }, [candidates]);
+
+    return url;
 }
 
 // ── The clock, as an outside thing React reads ──────────────────────────────
@@ -86,6 +118,7 @@ function StaffLoginForm() {
     const spotlight = useRotation(LOGIN_SPOTLIGHTS.length, LOGIN_ROTATE_SECONDS);
     const tip = useRotation(LOGIN_TIPS.length, LOGIN_ROTATE_SECONDS);
     const { greet, clock } = useLocalClock();
+    const backdrop = useBackdropPhoto(LOGIN_BACKGROUNDS);
 
     const doSignIn = useCallback(async (emailValue: string, passwordValue: string) => {
         setLoading(true);
@@ -189,12 +222,16 @@ function StaffLoginForm() {
     // hands over the moment this paints. The two look the same on purpose — see the
     // header of `login.module.css`.
     return (
-        <div className={styles.root}>
+        <div className={`${styles.root} ${backdrop ? styles.blobsOut : ""}`}>
             <div className={styles.bg} />
             <div className={`${styles.blob} ${styles.b1}`} />
             <div className={`${styles.blob} ${styles.b2}`} />
             <div className={`${styles.blob} ${styles.b3}`} />
-            <div className={styles.scrim} />
+            <div
+                className={`${styles.bgphoto} ${backdrop ? styles.bgphotoIn : ""}`}
+                style={backdrop ? { backgroundImage: `url("${backdrop}")` } : undefined}
+            />
+            <div className={styles.scrim} style={{ background: `rgba(2, 6, 23, ${LOGIN_SCRIM})` }} />
             <div className={styles.readscrim} />
 
             <div className={styles.stage}>
