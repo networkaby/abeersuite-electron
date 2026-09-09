@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { qrRequest } from "@/modules/pos/lib/qrDisplay";
-import { isElectronEnvironment } from "@/shared/lib/bridge";
+import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { HardwareStatusCard, useHardwareProbe, type HardwareProbe } from "@/modules/settings/components/HardwareStatusCard";
 
 interface RelayConfig {
@@ -48,10 +48,9 @@ export default function QrDisplaySettingsPage() {
     const [testing,      setTesting]      = useState<string | null>(null);
     // Desktop app: the bridge is bundled and reached over IPC, never an HTTP service that
     // can be up or down, so its status line says nothing there — see the card below.
-    const [isElectron,   setIsElectron]   = useState(false);
+    const isElectron = useIsDesktopApp();
 
     const checkRelay = useCallback(async () => {
-        setIsElectron(isElectronEnvironment());
         try {
             const data = await qrRequest<RelayConfig>("config:get");
             setConfig({ ...DEFAULT, ...data });

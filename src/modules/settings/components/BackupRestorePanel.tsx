@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { BackupScheduleCard } from "@/modules/settings/components/BackupScheduleCard";
 import { LocalBackupCard } from "@/modules/settings/components/LocalBackupCard";
-import { isElectronEnvironment } from "@/shared/lib/bridge";
+import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -64,10 +64,8 @@ export function BackupRestorePanel() {
     const [restoring, setRestoring] = useState(false);
     const [availability, setAvailability] = useState<Availability | null>(null);
 
-    // Desktop only, and read after mount: the server render has no `electronAPI`, so
-    // deciding this during render would hydrate a mismatched tree.
-    const [isElectron, setIsElectron] = useState(false);
-    useEffect(() => setIsElectron(isElectronEnvironment()), []);
+    // Desktop only.
+    const isElectron = useIsDesktopApp();
 
     const loadSchedule = useCallback(async () => {
         try {
