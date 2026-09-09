@@ -218,6 +218,13 @@
   "use strict";
 
   // ══ CONFIG — this block is yours. Edit it; leave everything below alone. ═══
+  //
+  // KEEP IN STEP WITH src/shared/lib/constants/loginShowcase.ts — the real
+  // sign-in page (src/app/staff/login/page.tsx) wears the same design and reads
+  // its wording from there. This file cannot import it: it is on screen before
+  // the server has forked. So that file is the source of truth and the lists
+  // below are the one hand-copy. The two screens hand over to each other during
+  // a cold start, and any difference shows as a flicker of different text.
   var CONFIG = {
 
     // Background photos, tried in order until one loads. Use any direct image
