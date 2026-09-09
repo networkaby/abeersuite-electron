@@ -57,6 +57,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
+import PartyBankTab from "@/modules/customer/components/PartyBankTab";
 import { useActivePartyStore } from "@/store/activePartyStore";
 
 interface CustomerListItem extends BrowseListRow {
@@ -81,6 +82,8 @@ interface CustomerDetail {
     isActive: boolean;
     noDiscount: boolean;
     qualityLog: unknown;
+    /** The party's own bank account (how we pay them) — see PartyBankTab. */
+    bankJson: unknown;
     name: string;
     phone: string | null;
     email: string | null;
@@ -110,7 +113,7 @@ const placeholderFromCache = (p: Party): CustomerListItem => ({
     fromCache: true,
 });
 
-type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
+type Tab = "transactions" | "profile" | "bank" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
 
 export default function CustomersPage() {
     const { data: session } = useSession();
@@ -442,7 +445,7 @@ export default function CustomersPage() {
                             {/* ── Tabs ── */}
                             <div className="border-b bg-card px-2">
                                 <div className="flex gap-2 py-2">
-                                    {(["transactions", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as Tab[]).map((item) => (
+                                    {(["transactions", "profile", "bank", "tickets", "devices", "companies", "loyalty", "quality"] as Tab[]).map((item) => (
                                         <Button
                                             key={item}
                                             type="button"
@@ -470,6 +473,17 @@ export default function CustomersPage() {
                                         onConverted={(companyId) => router.push(`/office/customers/all?companyId=${companyId}`)}
                                         onDeleted={handleDeleted}
                                         onReactivated={handleReactivated}
+                                    />
+                                )}
+
+                                {/* Bank — the party's own account, for paying them */}
+                                {tab === "bank" && (
+                                    <PartyBankTab
+                                        key={`bank-${detail.id}`}
+                                        party={{ kind: "person", id: detail.id, name: detail.name }}
+                                        initialBank={detail.bankJson}
+                                        canEdit={canEditCustomer}
+                                        onSaved={refetchDetail}
                                     />
                                 )}
 

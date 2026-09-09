@@ -605,6 +605,7 @@ CREATE TABLE IF NOT EXISTS "Person" (
     "gstStateCode" TEXT,
     "gstRegType" "GstRegType",
     "shippingStateCode" TEXT,
+    "bankJson" JSONB,
     "convertedToCompanyId" INTEGER,
     "convertedAt" TIMESTAMP(3),
     "mergedIntoPersonId" INTEGER,
@@ -631,6 +632,7 @@ ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "gstin" TEXT;
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "gstStateCode" TEXT;
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "gstRegType" "GstRegType";
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "shippingStateCode" TEXT;
+ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "bankJson" JSONB;
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "convertedToCompanyId" INTEGER;
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "convertedAt" TIMESTAMP(3);
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "mergedIntoPersonId" INTEGER;
@@ -656,6 +658,7 @@ CREATE TABLE IF NOT EXISTS "Company" (
     "gstStateCode" TEXT,
     "gstRegType" "GstRegType",
     "shippingStateCode" TEXT,
+    "bankJson" JSONB,
     "financialYearFrom" DATE,
     "booksBeginningFrom" DATE,
     "convertedToPersonId" INTEGER,
@@ -683,6 +686,7 @@ ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "gstin" TEXT;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "gstStateCode" TEXT;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "gstRegType" "GstRegType";
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "shippingStateCode" TEXT;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "bankJson" JSONB;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "financialYearFrom" DATE;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "booksBeginningFrom" DATE;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "convertedToPersonId" INTEGER;

@@ -66,6 +66,15 @@ model Person {
   /// §10(1)(c). Must be a valid 2-char Indian state code.
   shippingStateCode String?
 
+  // ── The party's OWN bank account — how WE pay THEM ───────────────────────
+  /// Supplier payout / customer refund particulars, so staff never hunt for an
+  /// A/C number at payment time. NOT our shop's bank (that is COMPANY_DETAILS
+  /// .bank, printed on vouchers). Shape mirrors Account.bankJson's naming:
+  /// { beneficiary, bankName, branch, accountNumber, ifsc, upiVpa }.
+  /// `upiVpa` drives the scan-to-pay QR on the party's Bank tab. Null (or a
+  /// fully blank form) = not captured. See partyBank.ts for the parser.
+  bankJson Json?
+
   account             Account? // enforced at app level; FK lives on Account.personId
   companies           PersonCompany[]
   portalCredential    PersonPortalCredential?
@@ -133,6 +142,9 @@ model Company {
   gstRegType        GstRegType?
   /// Default destination state for couriered B2C sales — see Person.shippingStateCode.
   shippingStateCode String?
+
+  // ── The party's OWN bank account — see Person.bankJson, same shape ───────
+  bankJson Json?
 
   // Tally-style period anchors (per-company; mid-year migration sets these
   // differently — financial year starts 1 Apr but books begin from cutover date)
