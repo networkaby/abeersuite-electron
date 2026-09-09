@@ -9,10 +9,12 @@
 // never drags the whole book down.
 //
 // `getLedgerOutstanding` reads BOTH directions, so a party who is our customer
-// and our supplier at once shows each side's bills here; the Settle button
-// follows the bill, receiving on a sale and paying on a purchase.
+// and our supplier at once shows each side's bills here. That is the one thing
+// this screen must ask the bill about and the group reports need not: which
+// voucher settles it. The bill's own `side` answers — they owe us, so receive;
+// we owe them, so pay.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -22,11 +24,31 @@ import { fmt } from "@/utils/constants";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
 import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS, ageingStatusClass, ageingStatusLabel } from "@/modules/accountancy/lib/ageing";
-import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import { clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import type { LedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
+import type { AgeingBucket, Buckets, LedgerOutstanding, OutstandingBill } from "@/modules/accountancy/lib/outstandings";
+
+/** The two sides a party's bills can sit on, each with its own ageing.
+ *  Reading them together would add money owed TO us to money owed BY us and
+ *  call the answer a total, which is nothing at all. */
+type SideSummary = { buckets: Buckets; total: number };
+
+function summariseBySide(bills: OutstandingBill[]): { receivable: SideSummary; payable: SideSummary } {
+    const blank = (): SideSummary => ({
+        buckets: { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 },
+        total:   0,
+    });
+    const receivable = blank();
+    const payable    = blank();
+    for (const b of bills) {
+        const side = b.side === 1 ? receivable : payable;
+        side.buckets[b.bucket as AgeingBucket] += b.outstanding;
+        side.total                             += b.outstanding;
+    }
+    return { receivable, payable };
+}
 
 // A profile screen is tabbed, and a customer's open bills barely move between
 // two clicks — so leaving the tab and coming back shows the last answer at once
@@ -47,8 +69,6 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
 }) {
     const [data, setData] = useState<LedgerOutstanding | null>(() => cache.get(accountId)?.data ?? null);
     const [loading, setLoading] = useState(false);
-    // Which bill the link popup is settling.
-    const [linkTarget, setLinkTarget] = useState<{ voucherId: number; billRef: string } | null>(null);
     // The receipt / payment being made, hosted here so the customer stays open
     // behind it — settling must not throw the user off the party they opened.
     const [settle, setSettle] = useState<SettleRequest | null>(null);
@@ -76,7 +96,16 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
     // another counter clears a bill on this screen without an F5.
     useRealtimeTopics(["ledger"], () => load(true));
 
-    const bills = data?.bills ?? [];
+    const bills = useMemo(() => data?.bills ?? [], [data]);
+    const { receivable, payable } = useMemo(() => summariseBySide(bills), [bills]);
+    // A party with money on one side only — nearly all of them — shows one row
+    // of cards. Show the receivable row when there is nothing at all, so the tab
+    // opens with its shape rather than a bare table.
+    const sides: { label: string; summary: SideSummary }[] = [
+        ...(receivable.total > 0.005 || payable.total <= 0.005
+            ? [{ label: "Total Receivable", summary: receivable }] : []),
+        ...(payable.total > 0.005 ? [{ label: "Total Payable", summary: payable }] : []),
+    ];
 
     if (loading && !data) {
         return (
@@ -88,22 +117,22 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
 
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {BUCKET_KEYS.map((k) => (
-                    <div key={k} className="rounded-lg border border-border bg-card px-3 py-1.5 shadow-sm">
-                        <div className="text-xs text-muted-foreground">{BUCKET_LABELS[k]}</div>
-                        <div className={`font-mono text-base font-semibold ${BUCKET_COLORS[k]}`}>
-                            {fmt(data?.buckets[k] ?? 0)}
+            {sides.map(({ label, summary }) => (
+                <div key={label} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    {BUCKET_KEYS.map((k) => (
+                        <div key={k} className="rounded-lg border border-border bg-card px-3 py-1.5 shadow-sm">
+                            <div className="text-xs text-muted-foreground">{BUCKET_LABELS[k]}</div>
+                            <div className={`font-mono text-base font-semibold ${BUCKET_COLORS[k]}`}>
+                                {fmt(summary.buckets[k])}
+                            </div>
                         </div>
-                    </div>
-                ))}
-                <div className="rounded-lg border border-border bg-card px-3 py-1.5 shadow-sm">
-                    <div className="text-xs text-muted-foreground">Total Outstanding</div>
-                    <div className="font-mono text-base font-bold text-primary">
-                        {fmt(data?.totalOutstanding ?? 0)}
+                    ))}
+                    <div className="rounded-lg border border-border bg-card px-3 py-1.5 shadow-sm">
+                        <div className="text-xs text-muted-foreground">{label}</div>
+                        <div className="font-mono text-base font-bold text-primary">{fmt(summary.total)}</div>
                     </div>
                 </div>
-            </div>
+            ))}
 
             <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                 <table className="w-full text-sm">
@@ -129,11 +158,15 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                         ) : bills.map((b) => {
                             const href = referenceHref(voucherSourceForType(b.voucherType), b.id, b.voucherType);
                             const statusClass = ageingStatusClass(b.bucket);
+                            // Which way this bill's money runs is the bill's to
+                            // say — both sides sit in one list here.
+                            const owedToUs = b.side === 1;
                             return (
                                 <tr key={`${b.kind}-${b.id}`} className="border-b last:border-0 hover:bg-muted/40">
                                     <td className="whitespace-nowrap px-3 py-1.5 text-xs text-muted-foreground">{formatDateCompact(b.billDate)}</td>
                                     <td className="px-3 py-1.5 font-mono text-xs">
                                         {href ? <Link href={href} className="text-primary hover:underline">{b.ref}</Link> : b.ref}
+                                        <span className="ml-2 font-sans text-muted-foreground">{b.voucherType.replace(/_/g, " ").toLowerCase()}</span>
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-1.5 text-xs text-muted-foreground">{formatDateCompact(b.dueDate)}</td>
                                     <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>
@@ -150,10 +183,17 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                                                 type="button"
                                                 size="sm"
                                                 variant="outline"
-                                                title="Settle this bill — against a receipt, note or journal of this party, or by taking the money now"
-                                                onClick={() => setLinkTarget({ voucherId: b.universalVoucherId!, billRef: b.ref })}
+                                                title={owedToUs
+                                                    ? "Receive against this bill — opens a receipt with it already ticked"
+                                                    : "Pay against this bill — opens a payment with it already ticked"}
+                                                onClick={() => setSettle({
+                                                    kind:           owedToUs ? "RECEIPT" : "PAYMENT",
+                                                    partyAccountId: accountId,
+                                                    amount:         b.outstanding,
+                                                    billId:         b.universalVoucherId!,
+                                                })}
                                             >
-                                                <HandCoins size={14} className="mr-1" /> Settle
+                                                <HandCoins size={14} className="mr-1" /> {owedToUs ? "Receive" : "Pay"}
                                             </Button>
                                         )}
                                     </td>
@@ -161,35 +201,17 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                             );
                         })}
                     </tbody>
-                    {bills.length > 0 && (
-                        <tfoot className="border-t bg-muted/30 font-semibold">
-                            <tr>
-                                <td colSpan={5} className="px-3 py-1.5 text-right">Total</td>
-                                <td className="px-3 py-1.5 text-right font-mono">{fmt(data?.totalOutstanding ?? 0)}</td>
-                                <td colSpan={2} />
-                            </tr>
-                        </tfoot>
-                    )}
+                    {/* No footer total: the two sides sit in one list here, and a
+                        column that added them up would be money owed TO us plus
+                        money owed BY us. Each side's own total is on its cards. */}
                 </table>
             </div>
 
-            {/* `settleDirectly` — the bill is the starting point here, so a party
-                with nothing open on the other side needs no popup: it goes
-                straight to the receipt / payment. `onSettle` keeps that voucher
-                on this page, as a dialog over the customer. */}
-            {linkTarget && (
-                <BillLinkDialog
-                    open
-                    onOpenChange={(v) => { if (!v) setLinkTarget(null); }}
-                    accountId={accountId}
-                    partyName={partyName}
-                    voucherId={linkTarget.voucherId}
-                    onSaved={() => { clearPartyCache(accountId); load(true); }}
-                    settleDirectly
-                    onSettle={setSettle}
-                />
-            )}
-            {/* Saved or abandoned, the bills are read again: a settled bill must
+            {/* The receipt / payment form carries the open-bills panel itself —
+                this bill ticked, every other open item of the party listed, and
+                the party's existing credits ready to settle from. So the button
+                opens that voucher straight away, as a dialog over the customer.
+                Saved or abandoned, the bills are read again: a settled bill must
                 not still be sitting there, and the open-bill lists both this
                 panel and the link popup hold are now stale. */}
             <GlVoucherDialog

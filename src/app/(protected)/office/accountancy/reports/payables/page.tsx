@@ -10,7 +10,8 @@ export default function PayablesPage() {
             apiPath="/api/accountancy/reports/payables"
             loadError="Failed to load payables"
             emptyText={{ party: "No outstanding payables.", bill: "No outstanding bills." }}
-            settleHint="Settle this bill against a payment, debit note, sale or journal of this party"
+            settleKind="PAYMENT"
+            settleHint="Pay this bill — opens a payment with this bill ticked"
         />
     );
 }
