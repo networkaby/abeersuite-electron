@@ -57,6 +57,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab";
+import { PartyOutstandingsPanel } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import { useActivePartyStore } from "@/store/activePartyStore";
 
 interface CustomerListItem extends BrowseListRow {
@@ -110,7 +111,7 @@ const placeholderFromCache = (p: Party): CustomerListItem => ({
     fromCache: true,
 });
 
-type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
+type Tab = "transactions" | "outstanding" | "profile" | "tickets" | "devices" | "companies" | "loyalty" | "quality";
 
 export default function CustomersPage() {
     const { data: session } = useSession();
@@ -442,7 +443,7 @@ export default function CustomersPage() {
                             {/* ── Tabs ── */}
                             <div className="border-b bg-card px-2">
                                 <div className="flex gap-2 py-2">
-                                    {(["transactions", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as Tab[]).map((item) => (
+                                    {(["transactions", "outstanding", "profile", "tickets", "devices", "companies", "loyalty", "quality"] as Tab[]).map((item) => (
                                         <Button
                                             key={item}
                                             type="button"
@@ -562,6 +563,15 @@ export default function CustomersPage() {
                                         initialQualityLog={detail.qualityLog}
                                         canEditCustomer={canEditCustomer}
                                         onSaved={refetchDetail}
+                                    />
+                                )}
+
+                                {/* Outstanding — this party's open bills, settled from here */}
+                                {tab === "outstanding" && (
+                                    <PartyOutstandingsPanel
+                                        key={`po-${detail.accountId}`}
+                                        accountId={detail.accountId}
+                                        partyName={detail.name}
                                     />
                                 )}
 

@@ -127,6 +127,14 @@ export function businessToday(): Date {
     return startOfDayUtc(businessTodayIso());
 }
 
+/** Compact `05 Sep 26` — for dense report rows that must still show the year
+ *  but cannot spare the width for four digits. */
+export function formatDateCompact(d: Date | string): string {
+    return new Date(d).toLocaleDateString("en-IN", {
+        day: "2-digit", month: "short", year: "2-digit",
+    });
+}
+
 export function formatDateTime(d: Date | string): string {
     return new Date(d).toLocaleString("en-GB", {
         day: "numeric", month: "short", year: "numeric",

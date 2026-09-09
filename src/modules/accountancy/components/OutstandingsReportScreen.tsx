@@ -15,6 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
+import {
+    BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS, ageingStatusClass, ageingStatusLabel,
+} from "@/modules/accountancy/lib/ageing";
 import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -23,34 +27,12 @@ import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings"
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 
-// TODO(config): the four periods are fixed at 30 / 60 / 90 days today — the
-// boundaries live in `bucketFor()` in modules/accountancy/lib/outstandings.ts.
-// They are to become configurable under /office/settings, after which both the
-// bucketing and these labels must read from that config instead.
-const BUCKET_LABELS = {
-    b0_30:    "0–30 days",
-    b30_60:   "30–60 days",
-    b60_90:   "60–90 days",
-    b90_plus: "90+ days",
-} as const;
-
-const BUCKET_COLORS = {
-    b0_30:    "text-foreground",
-    b30_60:   "text-amber-600",
-    b60_90:   "text-orange-600",
-    b90_plus: "text-red-600",
-} as const;
-
+// The period labels and colours live in `lib/ageing.ts` — this report and the
+// party's own Outstanding tab in the customer profile share them.
 type Bucket = keyof typeof BUCKET_LABELS;
 type ViewMode = "party" | "bill";
 
 const EMPTY_BUCKETS = { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 };
-
-function fmtIsoDate(s: string): string {
-    // Mon DD format; year omitted for compact rows
-    const d = new Date(s);
-    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
-}
 
 export function OutstandingsReportScreen({
     title, subtitle, apiPath, loadError, emptyText, settleHint,
@@ -218,7 +200,7 @@ export function OutstandingsReportScreen({
                 <>
                     {/* Each card is the switch for its own period. */}
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                        {(Object.keys(BUCKET_LABELS) as Bucket[]).map((k) => (
+                        {BUCKET_KEYS.map((k) => (
                             <button
                                 key={k}
                                 type="button"
@@ -338,20 +320,14 @@ export function OutstandingsReportScreen({
                                         </td>
                                     </tr>
                                 ) : bills.map((b) => {
-                                    const statusClass =
-                                        b.bucket === "b0_30"    ? "text-muted-foreground" :
-                                        b.bucket === "b30_60"   ? "text-amber-600" :
-                                        b.bucket === "b60_90"   ? "text-orange-600" :
-                                                                  "text-red-600";
-                                    const statusLabel = b.daysOverdue <= 30
-                                        ? `Within ${30 - b.daysOverdue}d`
-                                        : `Overdue ${b.daysOverdue - 30}d`;
+                                    const statusClass = ageingStatusClass(b.bucket);
+                                    const statusLabel = ageingStatusLabel(b.daysOverdue);
                                     return (
                                         <tr
                                             key={`${b.kind}-${b.id}`}
                                             className="border-b last:border-0 hover:bg-muted/40"
                                         >
-                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.billDate)}</td>
+                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{formatDateCompact(b.billDate)}</td>
                                             <td className="px-3 py-1.5 font-mono text-xs">
                                                 {billHref(b) ? (
                                                     <Link href={billHref(b)!} className="text-primary hover:underline">{b.ref}</Link>
@@ -364,7 +340,7 @@ export function OutstandingsReportScreen({
                                             >
                                                 {b.accountName}
                                             </td>
-                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
+                                            <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{formatDateCompact(b.dueDate)}</td>
                                             <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>
                                             <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
                                             <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
