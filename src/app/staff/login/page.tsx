@@ -6,7 +6,7 @@ import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +22,13 @@ function StaffLoginForm() {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const doSignIn = useCallback(async (emailValue: string, passwordValue: string) => {
         setLoading(true);
         setError("");
 
         const res = await signIn("credentials-staff", {
-            email,
-            password,
+            email: emailValue,
+            password: passwordValue,
             redirect: false,
         });
 
@@ -87,7 +86,37 @@ function StaffLoginForm() {
 
             router.push(dest);
         }
+    }, [callbackUrl, router]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await doSignIn(email, password);
     };
+
+    // ── Credentials typed on the counter's sign-in shell ────────────────────────
+    // The desktop app shows its own sign-in screen off disk while Postgres and this
+    // server are still starting (electron/main.ts, resources/shell/login.html), so the
+    // cashier types during the boot instead of watching it. Main parks what they typed
+    // and navigates here; this picks it up and runs the ordinary sign-in.
+    //
+    // It has to land HERE rather than main signing in directly, because everything
+    // below the signIn call — the counter reconciliation, the released-PC reset, the
+    // "login outside counter" rule — is this page's job and must not be skipped.
+    //
+    // Read-once on main's side, so a failed sign-in leaves the cashier at this form
+    // with the error, and their retry is typed here.
+    useEffect(() => {
+        const take = window.electronAPI?.takeShellCredentials;
+        if (!take) return;
+        let cancelled = false;
+        void take().then((held) => {
+            if (cancelled || !held) return;
+            setEmail(held.email);
+            setPassword(held.password);
+            void doSignIn(held.email, held.password);
+        }).catch(() => { /* nothing parked, or an older build — the form just waits */ });
+        return () => { cancelled = true; };
+    }, [doSignIn]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">

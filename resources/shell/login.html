@@ -501,9 +501,17 @@
   });
 
   // ── Sign in ───────────────────────────────────────────────────────────────
-  // Handing the credentials to main, which completes the NextAuth sign-in the
-  // moment the server answers and then navigates. Kept in main on purpose: this
-  // page has no origin the auth cookie could be set against.
+  // Hands what was typed to main, which parks it and navigates to the real
+  // /staff/login — that page collects it and signs in itself.
+  //
+  // Deliberately not signed in from here or from main: /staff/login also
+  // reconciles this PC's counter binding, resets a released counter, and
+  // enforces the "login outside counter" permission. Doing the sign-in behind
+  // its back would skip every one of those. So this screen buys the cashier the
+  // typing time and nothing more.
+  //
+  // A wrong password therefore surfaces on the real page, not here — by then the
+  // window has already moved on, which is why there is no error path below for it.
   elForm.addEventListener("submit", function (e) {
     e.preventDefault();
     elErr.textContent = "";

@@ -61,8 +61,29 @@ export interface ElectronAPI {
         get: () => Promise<DisplaySetting>;
         set: (mode: "auto" | "fixed", factor?: number) => Promise<DisplaySetting>;
     };
-    /** Splash-screen progress text pushed from main while Postgres/the server boot. */
+    /** Boot progress text pushed from main while Postgres/the server boot. */
     onBootProgress: (callback: (message: string) => void) => void;
+    /**
+     * The counter's own sign-in screen — `resources/shell/login.html`, loaded off disk
+     * before the Next server exists so the cashier can type through the boot rather
+     * than watch a spinner. See that file's header for why it is plain HTML.
+     *
+     * `onServerReady` is what un-disables its button; main fires it once the server
+     * answers HTTP. `shellSignIn` hands the typed credentials to main, which parks them
+     * and navigates to the real `/staff/login` — that page then collects them with
+     * `takeShellCredentials` and submits them itself.
+     *
+     * The credentials deliberately do NOT get signed in by main: `/staff/login` also
+     * reconciles this PC's counter binding, and enforces the "login outside counter"
+     * permission (src/app/staff/login/page.tsx). Signing in behind its back would skip
+     * all of it. So the shell saves the typing, and the real page still does the work.
+     */
+    onServerReady: (callback: () => void) => void;
+    shellSignIn: (credentials: { email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+    /** Read-once: returns the parked credentials and clears them in main. */
+    takeShellCredentials: () => Promise<{ email: string; password: string } | null>;
+    /** Keeps a copy of a background the shell fetched, so tomorrow needs no network. */
+    cacheLoginBackground: (url: string) => void;
     /**
      * Fired after the sync worker has COMMITTED pulled rows into the local replica.
      *
@@ -132,6 +153,12 @@ const electronAPI: ElectronAPI = {
     onBootProgress: (callback) => {
         ipcRenderer.on("app:boot-progress", (_event, message: string) => callback(message));
     },
+    onServerReady: (callback) => {
+        ipcRenderer.on("app:server-ready", () => callback());
+    },
+    shellSignIn: (credentials) => ipcRenderer.invoke("shell:sign-in", credentials),
+    takeShellCredentials: () => ipcRenderer.invoke("shell:take-credentials"),
+    cacheLoginBackground: (url) => { void ipcRenderer.invoke("shell:cache-background", url); },
     onSyncApplied: (callback) => {
         ipcRenderer.on("sync:applied", (_event, info: { rows: number; models: string[] }) => callback(info));
     },

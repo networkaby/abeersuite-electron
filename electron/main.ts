@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, session, shell, Tray } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import { pathToFileURL } from "url";
 import * as crypto from "crypto";
 import * as dotenv from "dotenv";
 
@@ -273,6 +274,8 @@ const PORT = resolvePort();
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+/** Set once the Next server answers HTTP. Null means "not ready" — see shellPath(). */
+let serverUrl: string | null = null;
 let currentSyncStatus = "";
 let currentConnectionStatus = "";
 
@@ -636,6 +639,60 @@ ipcMain.handle("counter:start-sync", (): boolean => {
     return true;
 });
 
+// ── The sign-in shell ───────────────────────────────────────────────────────
+// See shellPath() for what this screen is and why main does not sign in itself.
+
+ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password: string }) => {
+    if (!credentials || typeof credentials.email !== "string" || typeof credentials.password !== "string") {
+        return { ok: false, error: "Enter your email and password." };
+    }
+    if (!serverUrl) {
+        // The button is disabled until the server answers, so this is only reachable by
+        // a race — the cashier hitting Enter in the same tick readiness arrived.
+        return { ok: false, error: "Still starting. Try again in a moment." };
+    }
+    parkedCredentials = { email: credentials.email, password: credentials.password };
+    // From here the real /staff/login takes over: it collects these through
+    // shell:take-credentials, submits them, and does the counter reconciliation the
+    // shell has no business doing.
+    await loadApp(serverUrl);
+    return { ok: true };
+});
+
+ipcMain.handle("shell:take-credentials", () => {
+    const held = parkedCredentials;
+    parkedCredentials = null;   // Read once. A retry types them again.
+    return held;
+});
+
+/**
+ * Saves the background the shell just displayed, so a counter that opens tomorrow with
+ * the line down still gets its photograph.
+ *
+ * Best-effort throughout: a failure here costs a picture, never a sign-in. Capped
+ * because this writes a file from a URL that came out of a config block — an oversized
+ * or non-image response is dropped rather than parked in userData.
+ */
+ipcMain.handle("shell:cache-background", async (_, url: string) => {
+    if (typeof url !== "string" || !/^https:\/\//i.test(url)) return false;
+    if (fs.existsSync(loginBackgroundPath())) return false;   // The owner's own picture wins.
+    const cached = path.join(app.getPath("userData"), "login-background-cache.jpg");
+    if (fs.existsSync(cached)) return false;                  // Already held.
+    try {
+        const res = await net.fetch(url);
+        if (!res.ok) return false;
+        const type = res.headers.get("content-type") || "";
+        if (!type.startsWith("image/")) return false;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.byteLength > 8 * 1024 * 1024) return false;
+        fs.writeFileSync(cached, buf);
+        return true;
+    } catch (err) {
+        console.warn("[Shell] Could not cache the login background:", (err as Error).message);
+        return false;
+    }
+});
+
 ipcMain.handle("app:update-window-status", (_, status: { sync: string; connection: string }): void => {
     currentSyncStatus = status.sync;
     currentConnectionStatus = status.connection;
@@ -978,27 +1035,77 @@ function dataUrl(html: string): string {
     return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
-function splashHtml(): string {
-    return `<!doctype html><html><head><meta charset="utf-8"><title>AbeerSuite</title>
-<style>
-  html,body{height:100%;margin:0;background:${SPLASH_BG};color:#e2e8f0;
-    font-family:"Segoe UI",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
-  .box{text-align:center}
-  h1{font-size:20px;font-weight:600;margin:0 0 12px}
-  p{font-size:13px;color:#94a3b8;margin:0}
-  .spin{width:28px;height:28px;margin:0 auto 16px;border:3px solid #334155;border-top-color:#38bdf8;
-    border-radius:50%;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-</style></head>
-<body><div class="box"><div class="spin"></div><h1>AbeerSuite</h1><p id="msg">Starting…</p></div>
-<script>
-  if (window.electronAPI && window.electronAPI.onBootProgress) {
-    window.electronAPI.onBootProgress(function (message) {
-      var el = document.getElementById("msg");
-      if (el) el.textContent = message;
-    });
-  }
-</script></body></html>`;
+/**
+ * The counter's sign-in screen, shown from the first frame.
+ *
+ * This replaced a spinner. The window cannot show the real app until the Next server
+ * answers — ten-odd seconds on a cold counter, with Postgres starting first — and that
+ * used to be dead time in front of a cashier. The same seconds are now spent typing
+ * into a real form, so the wait costs nothing. See the file's own header for the rules
+ * it lives by; it is plain HTML because it runs before any server exists.
+ */
+function shellPath(): string {
+    // Packaged: electron-builder puts `resources/shell` in extraResources. Dev: main.js
+    // runs out of dist-electron/, so the repo copy is one level up.
+    return app.isPackaged
+        ? path.join(process.resourcesPath, "shell", "login.html")
+        : path.join(__dirname, "..", "resources", "shell", "login.html");
+}
+
+/** Where an owner's own background lives, if they have dropped one in. */
+function loginBackgroundPath(): string {
+    return path.join(app.getPath("userData"), "login-background.jpg");
+}
+
+/**
+ * `?bg=` — the counter's own picture, when there is one.
+ *
+ * Passed as a file URL rather than a path because the shell hands it straight to CSS.
+ * Absent when no picture has been dropped in, and the shell then falls back through its
+ * configured photos to a background drawn in CSS, so the screen is never blank.
+ */
+function shellQuery(): Record<string, string> {
+    // The owner's own picture first, then the copy kept from the last time the shell
+    // fetched one. Either way this is a local file, so a counter that has seen its
+    // background once never waits on the network for it again.
+    for (const candidate of [loginBackgroundPath(), path.join(app.getPath("userData"), "login-background-cache.jpg")]) {
+        if (fs.existsSync(candidate)) return { bg: pathToFileURL(candidate).href };
+    }
+    return {};
+}
+
+/**
+ * Credentials the shell collected, held until `/staff/login` asks for them.
+ *
+ * In memory only, read exactly once, and never written anywhere. Main does NOT sign in
+ * with them: `/staff/login` also reconciles this PC's counter binding and enforces the
+ * "login outside counter" permission, and signing in behind its back would skip both.
+ * So the shell saves the cashier the typing and the real page still does the work.
+ */
+let parkedCredentials: { email: string; password: string } | null = null;
+
+/** Tells the shell its button may go live. */
+function notifyServerReady(): void {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("app:server-ready");
+}
+
+/**
+ * Is someone still signed in on this counter?
+ *
+ * Only asks whether the cookie exists — whether it is still *valid* is the server's
+ * business, and `src/proxy.ts` already bounces a stale one back to `/staff/login`. The
+ * question here is narrower: should this boot show a sign-in screen at all, or did the
+ * cashier simply close the app last night without signing out.
+ *
+ * The cookie name is pinned in `src/auth.ts` and must stay in step with it.
+ */
+async function hasStaffSession(): Promise<boolean> {
+    try {
+        const jar = await session.defaultSession.cookies.get({ name: "authjs.session-token" });
+        return jar.length > 0;
+    } catch {
+        return false;   // Unreadable jar → show the sign-in screen. The safe way to be wrong.
+    }
 }
 
 function bootErrorHtml(triedUrl: string): string {
@@ -1192,10 +1299,10 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
         }
     });
     win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
-    win.loadURL(dataUrl(splashHtml())).catch((err) => {
+    win.loadFile(shellPath(), { query: shellQuery() }).catch((err) => {
         // ERR_ABORTED here is the routine case: loadApp() below already navigated on to
         // the real page before this promise settled. That is a race won, not a failure.
-        if (err?.code !== "ERR_ABORTED") console.error("[Boot] Failed to load splash:", err);
+        if (err?.code !== "ERR_ABORTED") console.error("[Boot] Failed to load the sign-in shell:", err);
     });
 
     return win;
@@ -1412,20 +1519,23 @@ app.whenReady().then(async () => {
     }
 
     if (result.ready) {
+        serverUrl = result.url;
         sendBootProgress("Almost there…");
-        // Warm the routes staff actually use once — but only after the login page
-        // itself has finished loading, so the warm requests never compete with it for
-        // the server's single event loop. From then on they run in the idle seconds
-        // between the login screen appearing and staff typing their PIN, not in front
-        // of a spinner. See serverManager.ts's warmRoutes().
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            const readyUrl = result.url;
-            mainWindow.webContents.once("did-finish-load", () => {
-                const routes = Array.from(new Set([...DEFAULT_WARM_ROUTES, ...loadPersistedWarmRoutes()]));
-                warmRoutes(readyUrl, routes);
-            });
+        // Warm the routes staff actually use. This used to wait for the login page to
+        // finish loading so the two would not compete for the server's single event
+        // loop — but the sign-in screen is now served off disk and is already up, so
+        // these seconds ARE the idle ones: the cashier is typing into the shell and
+        // nothing else wants the server yet. See serverManager.ts's warmRoutes().
+        warmRoutes(result.url, Array.from(new Set([...DEFAULT_WARM_ROUTES, ...loadPersistedWarmRoutes()])));
+
+        // A cashier who never signed out still holds a session cookie, and must not be
+        // shown a login screen for a session they already have. Straight in for them;
+        // everyone else stays on the shell, which is now live and takes their typing.
+        if (await hasStaffSession()) {
+            await loadApp(result.url);
+        } else {
+            notifyServerReady();
         }
-        await loadApp(result.url);
     } else {
         // A hidden start normally stays hidden — but a boot failure is the one thing
         // nobody can act on from an invisible window, and the tray icon alone gives no

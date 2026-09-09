@@ -173,6 +173,10 @@
         "to": "local-schema.sql"
       },
       {
+        "from": "resources/shell",
+        "to": "shell"
+      },
+      {
         "from": "sync-engine",
         "to": "sync-engine",
         "filter": [
