@@ -1,49 +1,48 @@
-# AbeerSuite 1.3.1-pre.1
+[urgent] Receivables and Payables were reporting money nobody owed. Every counter should take this update today.
 
-**This is a test build.** It is here to be tried on one machine and compared against
-your current version — not to be put on the counters. The tills will not offer it as an
-update; they only take builds from the live release list.
+# AbeerSuite 1.3.1
 
-What we most want to know: **does the app feel quicker to open?**
+**Why this one is urgent.** The Receivables report was counting cash sales — bills where
+the customer paid there and then and owes nothing — as money still outstanding. On our
+own data it showed **₹2,05,752.61** when the true figure was **₹41,038.75**. Anyone who
+has been chasing customers from that report has been working from wrong numbers.
+
+Your counters will prompt to restart, and will restart on their own shortly after. A bill
+in progress is never interrupted — the update waits for an empty cart.
+
+**After updating, please check Receivables against what you believe is really
+outstanding, and tell us if anything still looks wrong.**
 
 ---
 
-## The counter now opens on a sign-in screen, not a spinner
-
-Starting the app used to show a spinning circle for about ten seconds while the database
-and the server came up. Nothing could be done in those seconds.
-
-Now the sign-in screen itself appears the moment you double-click the icon. You can type
-your email and password straight away, while the app is still starting behind it. Press
-Sign in and it carries on from there.
-
-The screen also shows:
-
-- **Your shop name and logo**, a greeting, and today's date and time.
-- **What the app is doing** — "Starting database…", "Almost there…" — on a progress bar,
-  so a slow morning looks like progress instead of a hang.
-- **Counter tips** that change while you wait — real shortcuts, like F2 for the customer
-  box and F6 for a fresh bill.
-- **A picture behind it**, and the shop's own line at the bottom.
-
-If you were already signed in when you closed the app, it goes straight in as before —
-you will not be asked to sign in again.
-
-**You can change all of it.** The picture, the shop message, the tips, the greeting — put
-your own image at `login-background.jpg` in the app's data folder and it uses that
-instead.
-
 ## Receivables and Payables
 
+- **The figures are now read from the party's own ledger entry**, not from a tag that a
+  voucher might never have carried. A cash sale has no party entry at all, so it can no
+  longer appear as money owed. Payables moved too, for a separate and ordinary reason —
+  a bill was settled in full while the work was going on.
 - **One screen, with a search box.** Receivables and Payables now look and work the same,
   and the search covers every way you might know a party — name, phone, code.
 - **Period cards** at the top switch the view instead of being only a summary.
 - **Settle a bill without a popup.** Clicking a bill opens the actual receipt or payment
   voucher over the report, with that bill already ticked.
-- **The figures were wrong and are now right.** A cash sale with no party involved was
-  being counted as money owed. On our own data, Receivables read **₹2,05,752.61** when the
-  true figure was **₹41,038.75**. Please check your Receivables against what you believe
-  is really outstanding, and tell us if anything still looks off.
+
+## The counter opens on a sign-in screen, not a spinner
+
+Starting the app used to show a spinning circle for about ten seconds while the database
+and the server came up. Nothing could be done in those seconds.
+
+Now the sign-in screen appears the moment you double-click the icon. You can type your
+email and password straight away, while the app is still starting behind it.
+
+It also shows your shop name and logo, a greeting and the date, what the app is doing on
+a progress bar, and counter tips that change while you wait — real shortcuts, like F2 for
+the customer box and F6 for a fresh bill.
+
+If you were already signed in when you closed the app, it goes straight in as before.
+
+The picture, the shop message and the tips can all be changed. Put your own image at
+`login-background.jpg` in the app's data folder and it uses that instead.
 
 ## Settling bill by bill
 
@@ -77,23 +76,11 @@ party row carries its own instrument and note rather than one shared box.
 
 - **A voucher's money must match its goods.** That rule now lives in one place and is
   checked everywhere, instead of each screen having its own idea of it.
-- **An edit that cannot rebuild its ledger is refused**, rather than saved with the
-  ledger left wrong. Earlier such an edit could go through quietly.
+- **An edit that cannot rebuild its ledger is refused**, rather than saved with the ledger
+  left wrong. Earlier such an edit could go through quietly.
 - **The ledger dropdown no longer freezes** when you click into it on a big chart of
   accounts.
 - **The app sizes itself to the counter's screen** — no more sideways scrollbar on a
   smaller monitor, and it remembers the size you set on that PC.
 - **The call follow-up reminder** waits until the last call is written down before it
   appears.
-
----
-
-## Trying it
-
-Install it on **one** machine, not a live counter. Then please tell us:
-
-1. Does it open faster than your current version — and does the waiting feel better?
-2. Does signing in from the new screen work every time?
-3. Do the Receivables and Payables figures match what you know to be outstanding?
-
-If anything is wrong, your current version can be reinstalled over this one.
