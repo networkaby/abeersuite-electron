@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AbeerSuite</title>
+<!--
+  The counter's own sign-in screen, served from disk by BrowserWindow.loadFile().
+
+  It exists because the window used to show a spinner for the ten-odd seconds
+  Postgres and the Next server take to come up. Those seconds are now the seconds
+  the cashier spends typing, so the wait costs nothing.
+
+  Hard rules for this file, all of them consequences of WHEN it runs:
+    - No server. It is on screen before Next has forked, so nothing may be
+      fetched from 127.0.0.1 and no framework may be involved. Plain HTML.
+    - No internet. A counter boots offline routinely (that is what the local
+      replica is for), so every pixel here ships with the app. The background is
+      drawn in CSS, not downloaded — a remote image would leave a blank screen
+      on exactly the machines this screen is for.
+    - Degrades to a demo. With no `window.electronAPI` (opened straight in a
+      browser) it cycles the boot messages by itself, so the design can be
+      reviewed without packaging the app.
+
+  Customising it: drop an image at %APPDATA%/abeersuite-electron/login-background.jpg
+  and main passes it in as `?bg=` — it then replaces the drawn background. The card,
+  the greeting and the tips below are all this one file; edit them here.
+-->
+<style>
+  :root{
+    --ink:#f1f5f9;
+    --ink-dim:#94a3b8;
+    --line:rgba(255,255,255,.14);
+    --glass:rgba(15,23,42,.55);
+    --accent:#38bdf8;
+    --ok:#4ade80;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:#0f172a;
+    color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+  }
+
+  /* ── Background ────────────────────────────────────────────────────────────
+     Three slow-drifting colour fields over deep navy. Pure CSS so it works with
+     no network and adds no files to the installer. `#bg` is swapped for a photo
+     when one has been dropped in (see `applyBackground` below). */
+  #bg{position:fixed;inset:0;z-index:0;background:#0f172a;background-size:cover;background-position:center}
+  .blob{position:fixed;border-radius:50%;filter:blur(90px);opacity:.55;z-index:1}
+  .b1{width:620px;height:620px;background:#1d4ed8;top:-220px;left:-160px;animation:drift1 26s ease-in-out infinite}
+  .b2{width:540px;height:540px;background:#0891b2;bottom:-200px;right:-140px;animation:drift2 31s ease-in-out infinite}
+  .b3{width:420px;height:420px;background:#7c3aed;top:38%;right:22%;opacity:.32;animation:drift3 37s ease-in-out infinite}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(90px,70px) scale(1.12)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-80px,-60px) scale(1.08)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(-60px,50px)}}
+  .scrim{position:fixed;inset:0;z-index:2;background:rgba(2,6,23,.42)}
+  @media (prefers-reduced-motion:reduce){.blob{animation:none}}
+
+  /* ── Card ─────────────────────────────────────────────────────────────── */
+  .card{
+    position:relative;z-index:3;width:372px;padding:30px;
+    background:var(--glass);border:1px solid var(--line);border-radius:18px;
+    backdrop-filter:blur(22px) saturate(140%);
+    -webkit-backdrop-filter:blur(22px) saturate(140%);
+    box-shadow:0 24px 60px rgba(2,6,23,.5);
+  }
+  .logo{background:#fff;border-radius:10px;padding:9px 13px;display:inline-block;margin:0 0 20px}
+  .logo img{display:block;height:21px;width:auto}
+
+  .greet{font-size:21px;font-weight:600;margin:0 0 3px;letter-spacing:-.01em}
+  .clock{font-size:12.5px;color:var(--ink-dim);margin:0 0 22px;font-variant-numeric:tabular-nums}
+
+  label{display:block;font-size:12.5px;color:var(--ink-dim);margin:0 0 6px}
+  .field{margin:0 0 14px;position:relative}
+  input{
+    width:100%;height:42px;padding:0 40px 0 13px;
+    background:rgba(255,255,255,.07);color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;
+    font-size:14px;font-family:inherit;outline:none;
+    transition:border-color .15s,background .15s;
+  }
+  input:focus{border-color:var(--accent);background:rgba(255,255,255,.11)}
+  input::placeholder{color:#64748b}
+  .peek{
+    position:absolute;right:6px;bottom:5px;width:32px;height:32px;
+    display:flex;align-items:center;justify-content:center;
+    background:none;border:0;color:var(--ink-dim);cursor:pointer;border-radius:8px;font-size:11px;
+  }
+  .peek:hover{color:var(--ink);background:rgba(255,255,255,.08)}
+
+  button.go{
+    width:100%;height:44px;margin:6px 0 0;
+    background:var(--accent);color:#082f49;
+    border:0;border-radius:10px;
+    font-size:14.5px;font-weight:600;font-family:inherit;
+    cursor:pointer;transition:opacity .2s,transform .08s;
+  }
+  button.go:disabled{opacity:.4;cursor:default}
+  button.go:not(:disabled):active{transform:scale(.985)}
+
+  .err{margin:12px 0 0;font-size:12.5px;color:#fca5a5;min-height:16px}
+
+  /* ── Boot status ───────────────────────────────────────────────────────── */
+  .status{margin:20px 0 0;padding:14px 0 0;border-top:1px solid var(--line)}
+  .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;margin:0 0 10px}
+  .bar span{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .6s ease}
+  .srow{display:flex;align-items:center;gap:8px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none;animation:pulse 1.4s ease-in-out infinite}
+  .dot.ok{background:var(--ok);animation:none}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .smsg{font-size:12px;color:var(--ink-dim)}
+
+  .tip{margin:14px 0 0;font-size:12px;color:var(--ink-dim);line-height:1.55;min-height:34px;opacity:0;transition:opacity .5s}
+  .tip.in{opacity:1}
+
+  .meta{
+    position:fixed;bottom:14px;left:0;right:0;z-index:3;text-align:center;
+    font-size:11px;color:rgba(148,163,184,.75);
+  }
+</style>
+</head>
+<body>
+
+<div id="bg"></div>
+<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+<div class="scrim"></div>
+
+<form class="card" id="form" autocomplete="on">
+  <span class="logo"><img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IS0tIENyZWF0ZWQgd2l0aCBJbmtzY2FwZSAoaHR0cDovL3d3dy5pbmtzY2FwZS5vcmcvKSAtLT4NCg0KPHN2Zw0KICAgdmVyc2lvbj0iMS4xIg0KICAgaWQ9InN2ZzEiDQogICB3aWR0aD0iNjIyNS4zMzM1Ig0KICAgaGVpZ2h0PSIxODExLjU2ODgiDQogICB2aWV3Qm94PSIwIDAgNjIyNS4zMzM1IDE4MTEuNTY4OCINCiAgIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIg0KICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIg0KICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+DQogIDxkZWZzDQogICAgIGlkPSJkZWZzMSIgLz4NCiAgPGcNCiAgICAgaWQ9ImcxIg0KICAgICB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLC0yNzYuNDMxMSkiPg0KICAgIDxwYXRoDQogICAgICAgc3R5bGU9ImRpc3BsYXk6aW5saW5lO2ZpbGw6IzAxMzNmZjtzdHJva2U6bm9uZSINCiAgICAgICBkPSJtIDQwMDkuMzMzNCwyNzcuODk5MjUgYyAtMjguOTM1MiwzLjc5ODgzIC01Ny43MzUzLDMuNTQzNDYgLTg2LjY2NjYsOS4zNjYyMSAtNzAuMTI0NCwxNC4xMTM0NSAtMTM3LjA5NDgsNDguOTQ4NTcgLTE4Ny43NzM4LDk5LjYyNzYxIC0xNTguMTU4NSwxNTguMTU4NTMgLTE0MS4yODU1LDQ1My4zODM5NSAzNy4xMDcxLDU5MC4xMjY0NiA4OC40ODcsNjcuODI3NDcgMjA5LjYxMDQsODIuMzIzMDcgMzE3LjMzMzMsNjkuMjY2NDcgNjUuMjYwMSwtNy45MDk5IDEyOS42NjI4LC0yOS4xMjEzIDE4Mi42NjY3LC02OC44MTI3NyAxMDEuNzg0NSwtNzYuMjIwNDYgMTQzLjAyMDgsLTIwMS4yMTI5OCAxNDAuMDE5NSwtMzI0LjEzOTkgLTEuNzYsLTcyLjA5ODMgLTE2LjY1MjksLTE0My4zMzA1NiAtNTUuMjUzMiwtMjA1LjMzMzMzIC01My4zNzk5LC04NS43NDI2OCAtMTM5Ljg4MTgsLTE0MS40MjAwOCAtMjM4LjA5OTYsLTE2MS4wNjY4OSAtMzMuOTE3LC02Ljc4NDUxIC03NC44NDI1LC0xMy41NjIwMiAtMTA5LjMzMzQsLTkuMDMzODYgTSAzODUuMzMzMzQsMjc4LjY2NjY3IFYgMTA1MC42NjY3IEggNTgxLjMzMzM1IFYgNTk4LjY2NjY3IGggMS4zMzMzMyBjIDE3Ljg1MzYsMzcuNTczNCA0OS44MjgwOSw3Mi41NTI4OSA3My43MDY3OSwxMDYuNjY2NjYgNTEuOTI5NjEsNzQuMTg3OTEgMTA0LjEwMzExLDE0OC4yMTkxNiAxNTUuNjU5NTEsMjIyLjY2NjY3IDE5LjE0NTgzLDI3LjY0NjU3IDM4LjQ0MzYsNTUuMjEzOTUgNTcuODY2MjEsODIuNjY2NyA3Ljk5MjkyLDExLjI5NzUgMjIuNzQyODQsMjYuMTI1NiAyNC43Njc1LDQwIGggMTk4LjY2NjcxIGMgLTcuODUxOCwtMjEuNTQzMiAtMi42NjY3LC01MS44NDY3MSAtMi42NjY3LC03NC42NjY3IFYgODE3LjMzMzMzIDI4MCBIIDg5NC42NjY2OSBWIDcyNi42NjY2NyBDIDg2Ny41NDk4Myw2OTUuMzI1NjggODQ2LjAzNjQsNjU3LjgzMTU0IDgyMi4xMDA4NSw2MjQgNzY5LjE2OTU0LDU0OS4xODQ5IDcxNy40ODIwMyw0NzMuNDkzODIgNjY0LjU2NTg1LDM5OC42NjY2NyA2NDQuMjI2NjIsMzY5LjkwNTYgNjI0LjA4OTAxLDM0MC45NjEyNiA2MDQuMDMyOTMsMzEyIGMgLTUuOTc5ODEsLTguNjM0OTMgLTE0LjY3MTkxLC0yOC4yMTI1NyAtMjQuNDY2MDIsLTMyLjUyODgxIC0xNC4wMzM0OSwtNi4xODQ1NyAtNDEuNTI5NSwtMC44MDQ1MiAtNTYuOTAwMjMsLTAuODA0NTIgSCAzODUuMzMzMzQgTSAzMjUzLjMzMzQsNzEzLjMzMzMzIGggLTIuNjY2NiBsIC00NC4yMDA2LC0xMDQgTCAzMTE0LjEwNDksMzk2IDMwNzguNDY2MiwzMTMuMzMzMzMgMzA2My4xNDkyLDI4MS4zNzAyOCAzMDQ2LjY2NjcsMjgwIGggLTM4LjY2NjYgLTE1MiBsIDI3LjQzNDIsNjQgNTguMDg1MywxMzIgMTY2LjA3MjksMzc3LjMzMzMzIDYyLjY5OTksMTQyLjY2NjY3IDE2LjM3NTMsMzcuMzMzMyA4LjU1NjcsMTUuOTYzIDE2Ljc3NTcsMS4zNzA0IGggMzguNjY2NyAxNDYuNjY2NiBsIC0zMi4xODYyLC03Ni4wMDAwMyAtNjYuMjc5OSwtMTUzLjMzMzM0IC0zMy41MzM5LC03OC42NjY2NiBoIDEzNC42NjY3IGMgMTIuMTYxMSwwIDM5Ljg1MDYsNS4xOTcxIDUwLjE0NjEsLTEuMzcwMzYgOC4wODQ3LC01LjE1NzA3IDEyLjgxMDMsLTIzLjQ4OTUxIDE2LjgxMjksLTMxLjk2Mjk4IDEzLjU5MzcsLTI4Ljc3OTEzIDI2LjgzNzksLTU3Ljc0MTg2IDQwLjExOTEsLTg2LjY2NjY2IDM1LjU5NDEsLTc3LjUxODg4IDcyLjQwNTYsLTE1NC40ODA2MyAxMDgsLTIzMiAxNi42Mjc5LC0zNi4yMTMzOCA0MC41NjgxLC03My43NDYxIDUxLjU4ODYsLTExMiBoIC0xNTIgLTM4LjY2NjcgYyAtNC42NzU4LDAgLTEyLjQ0MDgsLTEuNDUyNDggLTE2LjQ4MzcsMS4zNzAyOCAtNy42MDAzLDUuMzA2MzEgLTExLjIxNDYsMjEuMjA3ODQgLTE1LjE5MTEsMjkuMjk2MzggLTEzLjAyMzgsMjYuNDkwODkgLTI0Ljg2NTIsNTMuNTY3MDYgLTM3Ljk4ODYsODAgLTM0LjEyMTQsNjguNzI2NCAtNjUuMjYyNywxMzguOTM0NDEgLTk4LjY4MTMsMjA4IC0xNy45MTA1LDM3LjAxNTE0IC00Mi45NDUsNzYuNTA3NjUgLTU0LjMyMiwxMTYgTSA1MzY1LjMzMzUsNTc4LjY2NjY3IFYgMjgwIGggLTE5NC42NjY3IHYgNzcwLjY2NjcgaCAxOTQuNjY2NyBWIDY1Ny4zMzMzMyBjIDc4LjU2MzEsOTAuNzg1NDkgMTQ5LjQzNDksMTg5LjY1MjUxIDIyMy43MTk0LDI4NCAyMC42Mzg3LDI2LjIxMjczIDQxLjA4NzksNTIuNTczOSA2MS44Nzk1LDc4LjY2NjY3IDYuNTU3Myw4LjIyOSAxNS40MDk1LDI1Ljc3ODcgMjUuMjk5NSwyOS44NjIxIDUuODY3MiwyLjQyMjYgMTQuODQ1MSwwLjgwNDYgMjEuMTAxNiwwLjgwNDYgaCA0OCAxNjYuNjY2NyBsIC0zMS41MDIsLTQ0IC02Ni42NjY3LC04OC4wMDAwMyBMIDU1ODUuMzMzNSw2MTYgYyAyNC44Nzk1LC0xNC4wMTIwNCA0NS40NTA1LC00Ni4yNjQ2NSA2NS4zNTI4LC02Ni42NjY2NyA1My41NTA4LC01NC44OTUxOCAxMDQuNzYwNSwtMTEyLjEyNjc5IDE1OC42NTI0LC0xNjYuNjY2NjYgMjQuNTAxOSwtMjQuNzk2NTUgNDkuMzE4NCwtNDkuODU5MjIgNzIuMzc1NiwtNzYgOC4wMTExLC05LjA4MjIgMTkuNzg5OCwtMTYuOTI4NzEgMjQuOTUyNSwtMjggaCAtMTc3LjMzMzMgLTQ5LjMzMzQgbCAtMjIuNjY2NiwxLjM3MDI4IC0yNS4zMzIxLDIzLjk2MzA1IC01NC43ODcxLDU3LjMzMzMzIC0xNDcuODgwOCwxNTIgLTY0LDY1LjMzMzM0IE0gMTEyOS4zMzM0LDI4MCBWIDQ0OCBIIDE1MzIgMTYzNy4zMzM0IGMgOS4zOTU1LDAgMzEuMzQzOSw0LjA3OTU5IDM5LjE1MDIsLTEuMzcwMjggMTEuMzIzMSwtNy45MDUxMSAxOS4wNDY5LC0zNC4zNjU0IDI1LjE3OSwtNDYuNjI5NzIgMTkuOTE0MywtMzkuODI4NDUgNDMuODk5OSwtNzguOTE2MTggNjEuMDA0MSwtMTIwIGggLTYzMy4zMzMzIG0gNjQ4LDAgdiAxNjUuMzMzMzMgaCAyMzQuNjY2NyB2IDYwNS4zMzMzNyBoIDE5NiBWIDQ0NS4zMzMzMyBoIDEzOC42NjY2IGMgMTQuNjI1NCwwIDQyLjI4NjgsNS40MTExNCA1NS40Nzk1LC0wLjgwNDUyIDQuMzU0LC0yLjA1MTI3IDUuNzU5LC04LjUyMjE0IDcuNTk4OCwtMTIuNTI4ODEgNC41MTM1LC05LjgyOTI2IDkuMzQzMywtMTkuNTUzMjIgMTMuOTYyOSwtMjkuMzMzMzMgMTguNjU4OSwtMzkuNTAzMSA0NS41MzUyLC04MC42OTYyOSA1Ny42MjU1LC0xMjIuNjY2NjcgaCAtNzA0IG0gNzI1LjMzMzMsMCAyNi4xMDQ5LDYyLjY2NjY3IDUzLjMzMzMsMTI0IEwgMjc0OC4xODYzLDg1MiBsIDYxLjM0NzYsMTQyLjY2NjY3IDE2Ljc1ODUsMzguNjY2NjMgNy45NzMsMTUuOTYzIDE1LjA2OCwxLjM3MDQgaCAzOC42NjY3IDE0OS4zMzMzIGwgLTc2Ljc2NzYsLTE4MS4zMzMzNyAtMTYxLjMzNzIsLTM4MCAtNjIuOTYxLC0xNDggLTE4LjEyOTcsLTQyLjY2NjY2IC04LjQwMzMsLTE3LjI5NjM5IEwgMjY5NC42NjY3LDI4MCBoIC00MCAtMTUyIG0gMTk0OS4zMzM0LDAgdiA3NzAuNjY2NyBoIDE5NC42NjY3IFYgNjU3LjMzMzMzIGggMS4zMzMzIGwgMjEuMzMzNCwzMiA0NC43NzE0LDYyLjY2NjY3IDE0MC45MzUzLDE5Ny4zMzMzMyA1MS4yMzg2LDcxLjk5OTk3IDIyLjE1NDMsMjguNTI4OCAyMC45MDA0LDAuODA0NiBoIDQ4IDE2OCBsIC01OS4wNDAxLC04NS4zMzMzNyAtMTM2Ljk1OTksLTE5NiBjIDU0LjUwODgsLTE3LjQyOTY4IDEwMi44OTc4LC00MS4wMjQ0OSAxMzYuNzQ5LC04OS4zMzMzMyAyNC44NjcyLC0zNS40ODc5NiAzNi4zNzY2LC03OS45NDIzOCAzOS4zNzAxLC0xMjIuNjY2NjcgNi44Mjc1LC05Ny40Mzg2NCAtMjcuNzY3NiwtMTkxLjUzMDc2IC0xMTYuMTE5MSwtMjQyLjA5NjY4IEMgNDk1OC43ODQzLDI3NC44NTkzNyA0ODc5LjU4OCwyODAgNDgwMS4zMzM1LDI4MCBoIC0zNDkuMzMzNCBtIC00NDUuMzMzMywxNjMuMDQ3MzYgYyAxOC44Mjg3LC0yLjIyMjk4IDM5Ljk5NDEsLTEuMjAwMzUgNTguNjY2NiwxLjczOTc1IDEyNy40NTg0LDIwLjA2OTY2IDE1NS4yOTgyLDE3MC4yMDYwNSAxMzcuNjYxNSwyNzcuODc5NTYgLTEzLjE2MDIsODAuMzQyOTMgLTU4LjMyMTMsMTUxLjY4OTQ1IC0xNDQuMzI4MSwxNjIuMjg0OTkgLTQ1LjUzNTgsNS42MDk3OCAtOTYuMDYyOSwtMS4wMDI2OSAtMTM0LjY2NjcsLTI3LjI3OTg3IC0yNy4zMjU1LC0xOC42MDAyNiAtNDQuNDkwNiwtNDUuOTkxMjkgLTU4Ljk5NTgsLTc1LjAwNTEyIC00NC42MjcyLC04OS4yNjUzIC00MS40NzY1LC0yMjAuOTQ0MDEgMzMuNjgyLC0yOTQuNjE0MjYgMjkuNTgwMSwtMjguOTk0MTQgNjcuOTQxNywtNDAuMjc4IDEwNy45ODA1LC00NS4wMDUwNSBtIDY0MCwxNzEuNjE5MzEgViA0OTMuMzMzMzMgYyAwLC05LjU0ODM0IC00LjYwOTEsLTM1LjY0NTY3IDEuMzcwNCwtNDMuMTk1NDcgMy4xMjAxLC0zLjkzOTI5IDEyLjg3NTcsLTIuMTM3ODYgMTcuMjk2MywtMi4xMzc4NiBoIDUwLjY2NjYgMTI1LjMzMzQgYyAzMi44NjIzLDAgNjUuMjQyOCwwLjcxMjQgODcuMjk0MiwyOS4zMzMzMyAzMy40Nzg5LDQzLjQ1MjggMTQuNDkwOSwxMzQuMjA2ODcgLTQ4LjYyNzYsMTM3LjI3OTc5IC0zMS4zOTUyLDEuNTI4NDggLTYzLjIzMDgsMC4wNTM1IC05NC42NjY2LDAuMDUzNSBIIDQ2NDYuNjY2OCBNIDExMjkuMzMzNCw1NzcuMzMzMzMgViA3NDIuNjY2NjcgSCAxNjc2IFYgNTc3LjMzMzMzIGggLTU0Ni42NjY2IG0gMCwzMDUuMzMzMzQgViAxMDUwLjY2NjcgSCAxNzI0IFYgOTI4IGMgMCwtOS41NDgxOCA0LjYwOTEsLTM1LjY0NTgzIC0xLjM3MDIsLTQzLjE5NTQ4IC00Ljc5OTgsLTYuMDYwMjIgLTI5LjkzNDksLTIuMTM3ODUgLTM3LjI5NjQsLTIuMTM3ODUgSCAxNTc2IDExMjkuMzMzNCBNIDAsMTE5Ny4zMzMzIFYgMjA4OCBIIDYyMjUuMzMzNSBWIDExOTcuMzMzMyBIIDAgbSAzNzQyLjY2NjgsODAuMzgxNyBjIDMyLjM1MzUsLTMuOTczNSA3Mi4xMzE1LDMuMzUyNyA5Mi4yODA5LDMxLjYxODMgMjkuNDMxNiw0MS4yODY3IC0yMS43NTcyLDc4Ljc4MTEgLTU4Ljk0NzYsODMuNjE0MyAtMzAuNDMyNiwzLjk1NDcgLTY5LjAyNTQsLTMuMjA1NyAtODkuNzc0NywtMjcuNzMzNiAtMzUuNzcyMiwtNDIuMjg2MiAxNS45NTIxLC04Mi41MjYzIDU2LjQ0MTQsLTg3LjQ5OSBNIDE2NTIsMTU0NCBoIC00MDQgYyAtMTkuNDE5NCwwIC0zOS45Njk3LC0wLjEyMzUgLTU3LjMzMzMsOS45NTI2IC0yNC42NDk3LDE0LjMwNDQgLTMyLjUwNTMsMzkuNTYxNCAtOCw1OC40NzMzIDMwLjY2MDksMjMuNjYyNiA4MC45ODAxLDE0LjI0MDggMTE3LjMzMzMsMTQuMjQwOCBoIDgwIGMgODcuNjgwNSwwIDIwMy4xNTc0LC05Ljg5MiAyNTcuNzM5OCw3NiA1LjQ2MzQsOC41OTczIDkuMDU1MiwxOC4xMjIgMTEuNDE5NywyOCAxNi45ODM0LDcwLjk0NzcgLTQ4LjM2MTYsMTIwLjk0MTUgLTEwOS4xNTk1LDEzOC4wOTU3IC01Ni4yMTM4LDE1Ljg2MDYgLTExOS41MDYzLDguNTcwOSAtMTc3LjMzMzMsOC41NzA5IGggLTMxNiB2IC04Mi42NjY2IGggMTg4IDEyNS4zMzMzIDg2LjY2NjcgYyAxNy42MDUxLDAgMzUuNTM2NSwxLjcyNDkgNTIsLTUuNzUgNDAuMzgwMSwtMTguMzMzNyAzNy42NTUsLTYxLjY1ODEgLTUuMzMzMywtNzQuNTU1NSAtMjcuMjA3OSwtOC4xNjMgLTU5LjkwMDQsLTMuNjk0NSAtODgsLTMuNjk0NSBoIC0xMzguNjY2NyBjIC00Ni4xMDEsMCAtOTAuMDgyLDAuMzkyMSAtMTMzLjMzMzMsLTE4LjEwNSAtNTguNzQ3NiwtMjUuMTI0MiAtMTEwLjAzMzksLTgzLjc3MzggLTc2Ljk3MzMsLTE0OS44OTUgMjIuMDE5NiwtNDQuMDM5MSA3NC4zMjY1LC02OS41MDU5IDEyMC45NzMzLC03Ny40MzkzIDQzLjQ0NTYsLTcuMzg5IDg4LjA0MTYsLTUuMjI3NCAxMzIsLTUuMjI3NCBIIDE1MDQgMTYxMC42NjY3IGMgOC43OTgsMCAzMi4yMDEsLTQuMTY5MyAzOS4xOTU1LDEuMzcwNCA0LjQyNjQsMy41MDU3IDIuMTM3OCwxNi4yNDc4IDIuMTM3OCwyMS4yOTYzIFYgMTU0NCBtIDcwMC4wMDAxLDE2Ni42NjY3IGggLTQ3My4zMzM0IGMgMjQuMTk5MSw0NS40NTgxIDc1LjIzMDMsNzAuNDYyNyAxMjQsNzkuOTk5IDQxLjQ2ODgsOC4xMDg3IDg1LjkxODIsNC4wMDEgMTI4LDQuMDAxIGggMjIxLjMzMzQgdiA4Mi42NjY2IGggLTI4NS4zMzM0IGMgLTU0LjI2ODcsMCAtMTA3LjE5NDgsLTMuODY1OSAtMTU4LjY2NjcsLTIyLjczNzYgLTg5LjY4MjksLTMyLjg4MTUgLTE3Ni4yODc0LC0xMDkuMjkwNyAtMTU4Ljc3MjYsLTIxMy4yNjI0IDIuNzI1MSwtMTYuMTc2NCA3LjkxNywtMzIuMzE3NSAxNS45MjE5LC00Ni42NjY2IDkuMTg5LC0xNi40NzE5IDIwLjgzNDUsLTMyLjQwOTUgMzQuODUwNywtNDUuMTA3IDEwNC41OTkyLC05NC43NTcgMjcwLjcwMjIsLTExNC4wODEgNDAwLjAwMDEsLTYyLjM2MDIgNTcuNDYzMywyMi45ODYyIDExNS45MDYyLDYzLjU2NTggMTQwLjc2MjMsMTIyLjEzMzggMTMuNjk4OSwzMi4yNzg1IDExLjIzNzcsNjcuMTAzNyAxMS4yMzc3LDEwMS4zMzM0IE0gMjg2OS4zMzM0LDE0NjAgdiA4NCBjIC03My43NjY2LDAgLTE1Ny4xOTI5LC0xMC4zMTYyIC0yMjUuMzMzMywyMy42NzA3IC0yNy43OTA3LDEzLjg2MTUgLTU1LjIzMjUsMzQuMjI4NCAtNjguOTA2Myw2Mi45OTYgLTEyLjQ5ODIsMjYuMjk0MiAtOC40MjcxLDU3LjAyODggLTguNDI3MSw4NS4zMzMzIHYgMTYxLjMzMzMgaCAtMTIwIFYgMTcxNiBjIDAsLTMyLjI4NjYgLTMuMjI1MSwtNjYuMzEzOCA3LjU5MzgsLTk3LjMzMzMgMTMuOTA4OCwtMzkuODc5MSA0Mi42MzI2LC02OS43NTkzIDc2LjQwNjIsLTkzLjg5NTEgQyAyNjMxLjYwNzUsMTQ1Mi42MzU3IDI3NTEuMzY1NiwxNDYwIDI4NjkuMzMzNCwxNDYwIG0gMzk4LjY2NjcsMjUwLjY2NjcgaCAyLjY2NjcgYyA4LjQ5NzMsLTIyLjA4OTcgMjkuNjU0NiwtNDMuMzg4MSA0My40MzgxLC02Mi42NjY3IDI5LjI2MTQsLTQwLjkyNjkgNTguMTQ5NywtODIuMjE3MyA4OC4wNjcxLC0xMjIuNjY2NyAxMC43Mjg4LC0xNC41MDU4IDIxLjA3ODQsLTI5LjMwNjkgMzEuNTQ5NCwtNDQgNC4zNjU2LC02LjEyNTkgOS4xMzAzLC0xNi4yMDIzIDE1Ljg0MzUsLTE5Ljk2MjkgOC4yMzY5LC00LjYxNDUgMjUuMTQ3NCwtMS4zNzA0IDM0LjQzNTIsLTEuMzcwNCBoIDg2LjY2NjcgbCAtMjguNzY3Niw0MS4zMzMzIC01MS4wMzA2LDcwLjY2NjcgLTE0My40MzQzLDE5OC42NjY3IC03Ni43Njc1LDEwNi42NjY2IGggLTIuNjY2NyBsIC03MC4xMDA5LC05NiBMIDMwNTQuODIxLDE1ODQgMjk5NS43OTgzLDE1MDIuNjY2NyAyOTY2LjY2NjcsMTQ2MCBoIDg0IGMgOS4yODg4LDAgMjYuMTk2NywtMy4yNDMzIDM0LjQzNTMsMS4zNzA0IDcuMTM3NywzLjk5NzEgMTIuNTEwNywxNC43Nzk1IDE3LjE3OCwyMS4yOTYzIDEwLjkwMTcsMTUuMjIxNiAyMi4wNjEyLDMwLjMwMzcgMzMuMjI2Myw0NS4zMzMzIDI5LjI0ODMsMzkuMzcyOSA1Ny45MzY4LDc5LjE2MTkgODcuMDA2MiwxMTguNjY2NyAxNC42MDM1LDE5Ljg0NiAzNS45MDA3LDQxLjMyMDYgNDUuNDg3Niw2NCBtIDU1MiwxNjYuNjY2NiBoIC0xMjAgViAxNDYwIGggODYuNjY2NyBsIDMxLjE5NTMsMS4zNzA0IDIuMTM4LDI2LjYyOTYgdiA3NiAzMTMuMzMzMyBtIDczMiwtMjUwLjY2NjYgaCAtODYuNjY2NiBjIC0xMC4zMTg0LDAgLTI3LjU0MTcsMy4zMjQgLTM3LjA0OTUsLTAuODA0NiAtNi4wNDQ2LC0yLjYyNDggLTkuOTA5NSwtMTIuOTEyNCAtMTQuMDUwMiwtMTcuODYyMSAtOC43MjkxLC0xMC40MzQ5IC0xOS4wODE3LC0xOS42ODM5IC0zMC4yMzM3LC0yNy40MTk4IC00Ny4zNjk1LC0zMi44NTg4IC0xMDkuMjk3OCwtNDEuNDU2NSAtMTY1LjMzMzMsLTMzLjM0MjYgLTY0LjQ2NzgsOS4zMzUgLTE1Ny4yMjc2LDU1LjE0OCAtMTQ0LjMyODIsMTM0LjA5NTcgMS42MzE5LDkuOTg3OCA0Ljc2MTEsMTguOTg0MSA5LjMzNjMsMjggNS43MTk3LDExLjI3MTIgMTMuNzk2MiwyMS44NzQxIDIyLjk5NzEsMzAuNTQ3NCAxNS42NDc0LDE0Ljc1IDMyLjc1MTYsMjUuMTMxNSA1MS45OTQ4LDM0LjQ0MTIgNDkuOTM3MiwyNC4xNTk1IDEwNC44NDYzLDIwLjM0NDggMTU4LjY2NjYsMjAuMzQ0OCBoIDI0MS4zMzM0IHYgODIuNjY2NiBoIC0yODEuMzMzNCBjIC01Ni40Njg0LDAgLTExMS45ODM0LC0zLjE0ODIgLTE2NS4zMzMzLC0yMy43NDc5IC0zNC4zMDExLC0xMy4yNDQ2IC02Ni40OTY0LC0zMS43NyAtOTQuNjY2NywtNTUuNTA0MiAtNjAuMzY3OCwtNTAuODYxNSAtODMuODg2NCwtMTM0LjkyMjggLTQ0LjE4NDIsLTIwNi4wODEyIDE0LjQ5NjEsLTI1Ljk4MTYgMzYuMjQxOSwtNDcuMDQwMiA2MC4xODQyLC02NC4zMzk1IDExMy40NDU0LC04MS45NjkxIDI3Ny4zMzA4LC04OC42NjU1IDQwMS4zMzM0LC0yNi42NTY0IDQ4LjQ1OCwyNC4yMzIyIDEwOC43MzcsNjcuNDU3OCAxMTcuMzMzMywxMjUuNjYyNiBtIDcwMCw4NCBoIC00NzMuMzMzMyBjIDE5LjA1OTIsNDQuMTY1IDczLjI3NjcsNjguNjg2NSAxMTcuMzMzMyw3OC44MTY5IDQyLjA5MTIsOS42NzgzIDg3Ljc1OTEsNS4xODMxIDEzMC42NjY3LDUuMTgzMSBoIDIyNS4zMzMzIHYgODIuNjY2NiBoIC0yODUuMzMzMyBjIC01NC43Mjc5LDAgLTEwNi41OTQxLC00LjU1NTggLTE1OC42NjY3LC0yMi42NjY2IC05Mi40NjM4LC0zMi4xNTkxIC0xNzYuNDc3OCwtMTExLjE2MzggLTE1OC43NzI4LC0yMTYgMi43Njc2LC0xNi4zODY5IDguODY3OSwtMzIuMjQ1IDE3LjA2NzEsLTQ2LjY2NjcgMTAuMTQ4NCwtMTcuODQ5OCAyMy42MDU4LC0zNC4wODA0IDM5LjAzOTEsLTQ3LjYxODMgMTA4LjI1MzUsLTk0Ljk1ODggMjg4LjIwMzEsLTExMS4yNjc4IDQxNiwtNDcuMzc3NiA0Ni4wNzAzLDIzLjAzMjIgOTIuOTM0OSw1Ni41NzQgMTE1LjU3MjksMTA0LjMyOTIgMTYuNDkxOCwzNC43ODk5IDE1LjA5MzcsNzEuODQwNyAxNS4wOTM3LDEwOS4zMzM0IG0gLTMzNzMuMzMzNCwtODQgaCAzNDEuMzMzNCBjIC0xNC4xMjIzLC0zMy43NDE2IC01MC45NjcyLC01NS45NDk0IC04NCwtNjguMDYyOSAtODIuNTIyMywtMzAuMjYxNCAtMjExLjY1LC0xNy43NTM1IC0yNTcuMzMzNCw2OC4wNjI5IG0gMjkwMC4wMDAxLDAgaCAzNDEuMzMzMyBjIC0xMi42MzgzLC0yNy4wMzY1IC0zNy45Mjc3LC00NS45NTk4IC02NCwtNTguOTk2IC02MS4wMzUxLC0zMC41MTc1IC0xNDYuMzM0OSwtMzMuNDIgLTIwOCwtMi42NjY2IC0yNy4zODMxLDEzLjY1NjQgLTU2LjY3MzUsMzIuMzI2NiAtNjkuMzMzMyw2MS42NjI2IHoiDQogICAgICAgaWQ9InBhdGgxIiAvPg0KICA8L2c+DQo8L3N2Zz4NCg==" alt="AbeerSuite"></span>
+
+  <h1 class="greet" id="greet">Good morning</h1>
+  <p class="clock" id="clock">&nbsp;</p>
+
+  <div class="field">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" placeholder="name@networkservice.in" autocomplete="username" required>
+  </div>
+
+  <div class="field">
+    <label for="pass">Password</label>
+    <input id="pass" name="password" type="password" placeholder="Your password" autocomplete="current-password" required>
+    <button class="peek" id="peek" type="button" aria-label="Show password">Show</button>
+  </div>
+
+  <button class="go" id="go" type="submit" disabled>Starting&hellip;</button>
+  <p class="err" id="err"></p>
+
+  <div class="status">
+    <div class="bar"><span id="barfill"></span></div>
+    <div class="srow"><i class="dot" id="dot"></i><span class="smsg" id="smsg">Starting&hellip;</span></div>
+    <p class="tip" id="tip"></p>
+  </div>
+</form>
+
+<p class="meta" id="meta">AbeerSuite</p>
+
+<script>
+(function () {
+  "use strict";
+
+  var qs      = new URLSearchParams(location.search);
+  var api     = window.electronAPI;
+  var elGreet = document.getElementById("greet");
+  var elClock = document.getElementById("clock");
+  var elMsg   = document.getElementById("smsg");
+  var elDot   = document.getElementById("dot");
+  var elBar   = document.getElementById("barfill");
+  var elGo    = document.getElementById("go");
+  var elErr   = document.getElementById("err");
+  var elTip   = document.getElementById("tip");
+  var elMeta  = document.getElementById("meta");
+  var elForm  = document.getElementById("form");
+  var elEmail = document.getElementById("email");
+  var elPass  = document.getElementById("pass");
+
+  // ── Owner's own background, when one has been dropped in ──────────────────
+  // A file URL passed by main. Anything else is ignored: this page is opened
+  // with loadFile(), so a remote URL here would be the only thing on the screen
+  // capable of reaching the network.
+  (function applyBackground() {
+    var bg = qs.get("bg");
+    if (!bg || bg.slice(0, 5) !== "file:") return;
+    var img = new Image();
+    img.onload = function () {
+      document.getElementById("bg").style.backgroundImage = "url('" + bg.replace(/'/g, "%27") + "')";
+      var i, blobs = document.getElementsByClassName("blob");
+      for (i = 0; i < blobs.length; i++) blobs[i].style.display = "none";
+    };
+    img.src = bg;  // A broken path simply never loads, and the drawn background stays.
+  })();
+
+  // ── Greeting + clock ──────────────────────────────────────────────────────
+  function tick() {
+    var now = new Date();
+    var h = now.getHours();
+    elGreet.textContent = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+    elClock.textContent = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
+      + "  ·  " + now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+  tick();
+  setInterval(tick, 20000);
+
+  // ── Something to read while it starts ─────────────────────────────────────
+  // Rotated slowly, and only while the app is still booting — once it is ready
+  // the cashier should be signing in, not reading.
+  var TIPS = [
+    "Press F2 at the till to jump straight to the customer box.",
+    "A sale saves to this counter first, so billing keeps working if the internet drops.",
+    "Search a customer by mobile number, not just by name.",
+    "Open your shift before billing — the till account comes from the shift.",
+    "Ctrl and − or + resizes the whole app if the text feels small."
+  ];
+  var tipAt = Math.floor(Math.random() * TIPS.length);
+  var tipTimer = null;
+  function showTip() {
+    elTip.classList.remove("in");
+    setTimeout(function () {
+      elTip.textContent = TIPS[tipAt % TIPS.length];
+      tipAt++;
+      elTip.classList.add("in");
+    }, 500);
+  }
+  showTip();
+  tipTimer = setInterval(showTip, 7000);
+
+  // ── Boot progress ─────────────────────────────────────────────────────────
+  // The bar is deliberately not a real percentage — main reports steps, not a
+  // fraction. It creeps toward 90% so it always looks alive, and only a genuine
+  // "ready" fills it.
+  var pct = 6;
+  function bump(msg) {
+    if (msg) elMsg.textContent = msg;
+    pct = Math.min(90, pct + 17);
+    elBar.style.width = pct + "%";
+  }
+
+  var ready = false;
+  function markReady() {
+    if (ready) return;
+    ready = true;
+    elBar.style.width = "100%";
+    elDot.className = "dot ok";
+    elMsg.textContent = "Ready";
+    elGo.disabled = false;
+    elGo.textContent = "Sign in";
+    clearInterval(tipTimer);
+    elTip.classList.remove("in");
+    if (!elEmail.value) elEmail.focus(); else elPass.focus();
+  }
+
+  if (api && api.onBootProgress) api.onBootProgress(bump);
+  if (api && api.onServerReady)  api.onServerReady(markReady);
+  if (api && api.getCounterSetup) {
+    api.getCounterSetup().then(function (s) {
+      if (s && s.counterNumber) elMeta.textContent = "Counter " + s.counterNumber + "  ·  AbeerSuite";
+    }).catch(function () { /* meta line is decoration; never block sign-in for it */ });
+  }
+
+  // Opened outside Electron (design review): play the real sequence.
+  if (!api) {
+    var demo = ["Starting database…", "Preparing local database…",
+                "Local database ready (embedded).", "Starting server…", "Almost there…"];
+    var i = 0;
+    var t = setInterval(function () {
+      if (i < demo.length) { bump(demo[i++]); return; }
+      clearInterval(t);
+      markReady();
+    }, 1100);
+    elMeta.textContent = "Counter 3  ·  AbeerSuite";
+  }
+
+  // ── Show / hide password ──────────────────────────────────────────────────
+  document.getElementById("peek").addEventListener("click", function () {
+    var showing = elPass.type === "text";
+    elPass.type = showing ? "password" : "text";
+    this.textContent = showing ? "Show" : "Hide";
+    this.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    elPass.focus();
+  });
+
+  // ── Sign in ───────────────────────────────────────────────────────────────
+  // Handing the credentials to main, which completes the NextAuth sign-in the
+  // moment the server answers and then navigates. Kept in main on purpose: this
+  // page has no origin the auth cookie could be set against.
+  elForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    elErr.textContent = "";
+    if (!ready) return;
+    if (!elEmail.value.trim() || !elPass.value) {
+      elErr.textContent = "Enter your email and password.";
+      return;
+    }
+    elGo.disabled = true;
+    elGo.textContent = "Signing in…";
+    if (!api || !api.shellSignIn) {
+      elErr.textContent = "Sign-in is not available on this screen.";
+      elGo.disabled = false;
+      elGo.textContent = "Sign in";
+      return;
+    }
+    api.shellSignIn({ email: elEmail.value.trim(), password: elPass.value })
+      .then(function (res) {
+        if (res && res.ok) return;               // main navigates the window away
+        elErr.textContent = (res && res.error) || "Could not sign in. Check the email and password.";
+        elGo.disabled = false;
+        elGo.textContent = "Sign in";
+        elPass.select();
+      })
+      .catch(function () {
+        elErr.textContent = "Could not sign in. Please try again.";
+        elGo.disabled = false;
+        elGo.textContent = "Sign in";
+      });
+  });
+})();
+</script>
+</body>
+</html>
