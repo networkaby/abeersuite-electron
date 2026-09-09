@@ -198,12 +198,21 @@
     // Shown one at a time while the app is starting, then they stop. Write as
     // many as you like; they are picked in a rotating order, not at random, so
     // every one of them gets seen.
+    // Every shortcut below is a real one — they come from the key handlers in
+    // src/modules/pos/hooks/usePosBilling.ts. If a shortcut changes there,
+    // change it here too, or the counter learns something that is not true.
     TIPS: [
-      "Press F2 at the till to jump straight to the customer box.",
-      "A sale saves to this counter first, so billing keeps working if the internet drops.",
-      "Search a customer by mobile number, not just by name.",
-      "Open your shift before billing — the till account comes from the shift.",
-      "Ctrl and − or + resizes the whole app if the text feels small."
+      "F2 takes you to the customer box from anywhere — even while you are typing.",
+      "Press / to jump back to the scan box.",
+      "F6 opens a fresh bill in a new tab. The bill you are on stays as it is.",
+      "Pick a cart line with ↑ and ↓, then press + or − to change its quantity.",
+      "In checkout, Ctrl and Enter puts the remaining amount on cash.",
+      "Search a customer by mobile number, not only by name.",
+      "Open your shift before billing — the till account and the branch come from the shift.",
+      "A sale is saved on this counter first, so billing keeps working if the line drops.",
+      "Product search runs on this PC, so it stays quick even on a slow connection.",
+      "A half-finished bill is not kept if the app restarts. Finish it or clear it before you close.",
+      "Ctrl and − or + resizes the whole app. This counter remembers the size you set."
     ],
 
     // Seconds each tip stays on screen.
