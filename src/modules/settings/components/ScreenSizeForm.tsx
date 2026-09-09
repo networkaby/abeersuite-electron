@@ -6,12 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { isElectronEnvironment } from "@/shared/lib/bridge";
-import { Monitor, Wand2, Loader2 } from "lucide-react";
+import { Monitor, Wand2, Loader2, Minus, Plus } from "lucide-react";
 
 /** 0.8 → "80%". Kept out of the buttons so the badge and the labels can never disagree. */
 function asPercent(factor: number): string {
     return `${Math.round(factor * 100)}%`;
 }
+
+/**
+ * The slider's range, in percent. Mirrors MIN_ZOOM / MAX_ZOOM in
+ * electron/displayPreference.ts — main clamps to the same bounds, so a value
+ * outside them could never be applied anyway. 5% is one nudge of the − / + buttons.
+ */
+const MIN_PCT = 50;
+const MAX_PCT = 150;
+const STEP_PCT = 5;
+
+const clampPct = (pct: number) => Math.min(MAX_PCT, Math.max(MIN_PCT, Math.round(pct / STEP_PCT) * STEP_PCT));
 
 interface Setting {
     mode: "auto" | "fixed";
@@ -22,6 +33,10 @@ interface Setting {
 export function ScreenSizeForm() {
     const [setting, setSetting] = useState<Setting | null>(null);
     const [busy, setBusy] = useState(false);
+    // What the slider shows while it is being dragged. Applying on every pixel of a
+    // drag would make the whole window jitter, so the size is sent on release; the
+    // number beside the slider still follows the thumb so the user sees where it is.
+    const [draft, setDraft] = useState<number | null>(null);
     const inElectron = isElectronEnvironment();
 
     useEffect(() => {
@@ -46,6 +61,7 @@ export function ScreenSizeForm() {
             toast.error("Could not change the screen size.");
         } finally {
             setBusy(false);
+            setDraft(null);
         }
     }, []);
 
@@ -76,6 +92,9 @@ export function ScreenSizeForm() {
     }
 
     const steps = setting.steps ?? [];
+    const appliedPct = Math.round(setting.applied * 100);
+    const shownPct = draft ?? appliedPct;
+    const nudge = (delta: number) => choose("fixed", clampPct(appliedPct + delta) / 100);
 
     return (
         <Card>
@@ -88,8 +107,9 @@ export function ScreenSizeForm() {
                         </CardTitle>
                         <CardDescription className="mt-1">
                             How large the app draws itself on this PC. A smaller size fits more of a
-                            page on a counter screen, so fewer scrollbars appear. This is saved on
-                            this PC only — every counter can have its own.
+                            page on a counter screen, so fewer scrollbars appear; a larger one is
+                            easier on the eyes. This is saved on this PC only — every counter can
+                            have its own.
                         </CardDescription>
                     </div>
                     <Badge variant="secondary" className="shrink-0 tabular-nums">
@@ -117,26 +137,89 @@ export function ScreenSizeForm() {
                     </Button>
                 </div>
 
-                <div className="space-y-2">
-                    <p className="text-sm font-medium">Or fix it yourself</p>
-                    <div className="flex flex-wrap gap-2">
-                        {steps.map((step) => {
-                            const active = setting.mode === "fixed" && Math.abs(setting.applied - step) < 0.001;
-                            return (
-                                <Button
-                                    key={step}
-                                    type="button"
-                                    size="sm"
-                                    variant={active ? "default" : "outline"}
-                                    disabled={busy}
-                                    onClick={() => choose("fixed", step)}
-                                    className="tabular-nums"
-                                >
-                                    {asPercent(step)}
-                                </Button>
-                            );
-                        })}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">Or set it yourself</p>
+                        {setting.mode === "fixed" && (
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => choose("auto")}
+                                className="text-[11px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                            >
+                                Back to Automatic
+                            </button>
+                        )}
                     </div>
+
+                    <div className="flex items-center gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="Smaller"
+                            disabled={busy || appliedPct <= MIN_PCT}
+                            onClick={() => nudge(-STEP_PCT)}
+                        >
+                            <Minus className="h-4 w-4" />
+                        </Button>
+                        <div className="flex flex-1 flex-col items-center gap-1">
+                            <span className="text-2xl font-semibold tabular-nums leading-none">
+                                {shownPct}%
+                            </span>
+                            <input
+                                type="range"
+                                aria-label="Screen size"
+                                min={MIN_PCT}
+                                max={MAX_PCT}
+                                step={STEP_PCT}
+                                value={shownPct}
+                                disabled={busy}
+                                onChange={(e) => setDraft(Number(e.target.value))}
+                                // Apply once the thumb is let go — mouse, touch or keyboard alike.
+                                onPointerUp={() => draft != null && draft !== appliedPct && void choose("fixed", draft / 100)}
+                                onKeyUp={() => draft != null && draft !== appliedPct && void choose("fixed", draft / 100)}
+                                className="w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                            <div className="flex w-full justify-between text-[10px] text-muted-foreground tabular-nums">
+                                <span>{MIN_PCT}%</span>
+                                <span>100%</span>
+                                <span>{MAX_PCT}%</span>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="Larger"
+                            disabled={busy || appliedPct >= MAX_PCT}
+                            onClick={() => nudge(STEP_PCT)}
+                        >
+                            <Plus className="h-4 w-4" />
+                        </Button>
+                    </div>
+
+                    {steps.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {steps.map((step) => {
+                                const active = setting.mode === "fixed" && Math.abs(setting.applied - step) < 0.001;
+                                return (
+                                    <Button
+                                        key={step}
+                                        type="button"
+                                        size="sm"
+                                        variant={active ? "default" : "outline"}
+                                        disabled={busy}
+                                        onClick={() => choose("fixed", step)}
+                                        className="tabular-nums"
+                                    >
+                                        {asPercent(step)}
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                    )}
+
                     <p className="text-[11px] text-muted-foreground">
                         The change happens straight away, so you can look at a busy page while you
                         try the sizes. Ctrl and + / Ctrl and &minus; on the keyboard do the same
