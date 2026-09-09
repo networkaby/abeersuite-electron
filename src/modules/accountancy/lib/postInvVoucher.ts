@@ -178,8 +178,52 @@ export type PostVoucherInput = {
     userId: number;
 };
 
+/**
+ * The invariant that keeps a trading voucher's money side equal to its goods
+ * side: the payment rows must add up to the voucher total. The party's own
+ * unpaid part is a payment row too (the AR / AP tender), so a credit sale is
+ * covered by this as much as a cash one.
+ *
+ * Returns the complaint to show the user, or null when the voucher is sound.
+ *
+ * This lived inline in POST /api/inventory/vouchers and NOWHERE ELSE, which is
+ * how POS-26-27-0039 came to exist: an edit changed the lines and the total,
+ * kept the old payment rows, and no one checked. The GL builder noticed and its
+ * objection was thrown away (see `GlSkipReason`). One copy, called by every
+ * route that writes a voucher, is the reason that cannot happen twice.
+ *
+ * A voucher with no payment rows at all is left to the GL builder to judge —
+ * some types legitimately have none, and it knows which.
+ */
+export function tenderCoverageComplaint(
+    tenders: { amount: number | string }[],
+    totalAmount: number,
+): string | null {
+    if (tenders.length === 0) return null;
+    const sum = tenders.reduce((s, t) => s + Number(t.amount), 0);
+    // A rupee's worth of rounding is the operator's, not an error.
+    if (Math.abs(sum - totalAmount) <= 0.01) return null;
+    return `The payment rows come to ₹${sum.toFixed(2)} but the voucher total is ₹${totalAmount.toFixed(2)}. `
+        + "Adjust them so they add up — the unpaid part goes on the party's own account.";
+}
+
+/** A refusal the caller should show to the user as-is — not a server fault.
+ *  Raised when a voucher that must carry a ledger entry cannot be given one. */
+export class GlBuildError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "GlBuildError";
+    }
+}
+
+/** Why a build produced no GL lines. "none" — this voucher has no ledger entry
+ *  to make and never had one (a type that does not post, a zero-value voucher);
+ *  carrying on is correct. "refused" — it SHOULD have posted and could not, so
+ *  carrying on would leave a voucher whose invoice and ledger disagree. */
+export type GlSkipReason = "none" | "refused";
+
 type BuiltGl =
-    | { skip: true;  notes: string[] }
+    | { skip: true;  reason: GlSkipReason; notes: string[] }
     | { skip: false; lines: JeLine[]; notes: string[]; ledgers: LedgerLite[] };
 
 /**
@@ -215,7 +259,7 @@ export async function buildInvVoucherGlLines(
     const isSaleReturn       = voucher.type === "SALE_RETURN";
     const isPurchaseReturn   = voucher.type === "PURCHASE_RETURN";
     if (!isPositiveSale && !isPositivePurchase && !isSaleReturn && !isPurchaseReturn) {
-        return { skip: true, notes: ["voucher type does not post to GL"] };
+        return { skip: true, reason: "none", notes: ["voucher type does not post to GL"] };
     }
     // `isSale` (legacy name) reused below as a shorthand for the "sale shape"
     // direction — counter Dr, body Cr. SALE and PURCHASE_RETURN both share it.
@@ -245,7 +289,7 @@ export async function buildInvVoucherGlLines(
     const goodsAmount  = subtotal - taxAmount;
 
     if (totalAmount <= 0) {
-        return { skip: true, notes: ["voucher total is zero — skipping GL post"] };
+        return { skip: true, reason: "none", notes: ["voucher total is zero — skipping GL post"] };
     }
 
     // ── Resolve ledgers ────────────────────────────────────────────────
@@ -266,7 +310,7 @@ export async function buildInvVoucherGlLines(
         if (bodyLedger) notes.push(`no dedicated ${bodyKindLabel} ledger — folded into ${bodyLedger.name}`);
     }
     if (!bodyLedger) {
-        return { skip: true, notes: [
+        return { skip: true, reason: "refused", notes: [
             `no ledger found for ${bodyKindLabel} — skipping GL post`,
         ] };
     }
@@ -279,7 +323,7 @@ export async function buildInvVoucherGlLines(
     // partyType+partyId resolution fallback.
     const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
     if (tenderRows.length === 0) {
-        return { skip: true, notes: [
+        return { skip: true, reason: "refused", notes: [
             ...notes,
             `no tender rows on voucher ${voucher.reference} — caller must supply at least one`,
         ] };
@@ -523,9 +567,9 @@ export async function buildInvVoucherGlLines(
     const debSum = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
     const credSum = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
     if (Math.abs(debSum - credSum) > 0.01) {
-        return { skip: true, notes: [
+        return { skip: true, reason: "refused", notes: [
             ...notes,
-            `JE not balanced (Dr ${debSum.toFixed(2)} vs Cr ${credSum.toFixed(2)}) — skipped`,
+            `the payment rows come to ₹${debSum.toFixed(2)} but the voucher comes to ₹${credSum.toFixed(2)}`,
         ] };
     }
 

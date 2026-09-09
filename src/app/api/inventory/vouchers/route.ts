@@ -11,6 +11,7 @@ import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
+import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib/postInvVoucher";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
@@ -517,19 +518,12 @@ export async function POST(req: NextRequest) {
         chargesNet,
     );
 
-    // Validate tenders sum to totalAmount when supplied. Operator UX: when
-    // the form's "Balance" auto-fill row was rendered, it's included in
-    // the tenders[] array as the customer-AR row, so the sum should match
-    // the total exactly. Tolerate ±₹0.01 for rounding.
-    if (tenders.length > 0) {
-        const tSum = tenders.reduce((s, t) => s + Number(t.amount), 0);
-        if (Math.abs(tSum - totalAmount) > 0.01) {
-            return NextResponse.json(
-                { error: `Tenders sum (₹${tSum.toFixed(2)}) does not match voucher total (₹${totalAmount.toFixed(2)}).` },
-                { status: 400 },
-            );
-        }
-    }
+    // The payment rows must add up to the total — the same rule the edit route
+    // applies, from the same function, so the two can never drift apart again.
+    // The form's "Balance" auto-fill row is itself a tender (the customer-AR
+    // one), so a credit sale satisfies this like any other.
+    const tenderComplaint = tenderCoverageComplaint(tenders, totalAmount);
+    if (tenderComplaint) return NextResponse.json({ error: tenderComplaint }, { status: 400 });
 
     // Resolve place-of-supply for the GST routing. The client (TradingVoucherPage)
     // can send `placeOfSupply` directly when the cashier picked a state override;
@@ -670,6 +664,9 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json(voucher, { status: 201 });
     } catch (e) {
+        // A voucher whose ledger entry cannot be built is the user's to fix (the
+        // payment rows do not add up), not a server fault — show it as it is.
+        if (e instanceof GlBuildError) return NextResponse.json({ error: e.message }, { status: 422 });
         return handleApiError(e, "Failed to save voucher");
     }
 }

@@ -21,6 +21,7 @@
 
 import type { Prisma, VoucherType, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
+import { GlBuildError } from "./postInvVoucher";
 import { round2 } from "@/shared/lib/format";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
@@ -67,6 +68,11 @@ export interface TransactionSpec {
     narration?:  string | null;
     glLines:     EngineGlLine[];
     stockMoves:  EngineStockMoveSpec[];
+    /** Why `glLines` is empty, when it is. "refused" means the voucher SHOULD
+     *  have a ledger entry and one could not be built — the caller must not carry
+     *  on. Set by `saleToSpec`; absent on hand-built specs. */
+    glSkipReason?: "none" | "refused";
+    glNotes?:      string[];
 }
 
 /** A voucher loaded with the fields the GL post routine needs.
@@ -333,6 +339,14 @@ export async function enginePost(
 ): Promise<{ journalEntryId: number | null; universalVoucherId: number | null }> {
     const branchId = opts.branchId ?? null;
     const postedAt = opts.postedAt ?? new Date();
+
+    // A voucher that should post and cannot is a refusal, not a quiet no-op:
+    // posting it anyway leaves an invoice with no ledger entry behind it.
+    if (spec.glSkipReason === "refused") {
+        throw new GlBuildError(
+            `This voucher cannot be posted: its ledger entry could not be built — ${(spec.glNotes ?? []).join("; ")}.`,
+        );
+    }
 
     let journalEntryId: number | null = null;
     // Stock-only vouchers (GRN/Challan/…) have no GL arm but DO have a spine

@@ -1,8 +1,43 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission, userCanRestoreAudit } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+
+// GET /api/audit/[id]
+// One recycle-bin snapshot in full — the removed voucher's header, its lines and
+// the GL it carried at the moment it was taken. The list route deliberately
+// leaves the snapshot out (it is a whole voucher graph per row); this is how you
+// look inside one, to answer "what was in it?" before restoring, and to see what
+// an in-place edit replaced. Read-only; rides the same per-kind key as restore.
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const auditId = Number(id);
+    if (!Number.isInteger(auditId) || auditId < 1) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    const { response, user } = await requireAuth();
+    if (response) return response;
+
+    try {
+        const audit = await prisma.auditLog.findUnique({
+            where:  { id: auditId },
+            select: {
+                id: true, entityType: true, subtype: true, originalId: true, originalRef: true,
+                action: true, reason: true, snapshot: true, createdAt: true, restoredAt: true,
+                actor: { select: { id: true, name: true } },
+            },
+        });
+        if (!audit) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        if (!userCanRestoreAudit(user!, audit.entityType, audit.subtype)) {
+            return NextResponse.json({ error: "You do not have permission to view this voucher kind." }, { status: 403 });
+        }
+        return NextResponse.json(audit);
+    } catch (e) {
+        return handleApiError(e, "Failed to read audit entry");
+    }
+}
 
 // DELETE /api/audit/[id]
 // Permanently destroy ONE recycle-bin snapshot. This is the end of the line: the

@@ -17,6 +17,10 @@
 //      over-allocation, and a non-party ledger.
 //   5. Saving the same plan twice settles the bill once, not twice.
 //   6. A voucher cannot be edited below what is already settled against it.
+//   7. A voucher's money side must equal its goods side — an edit that breaks
+//      that is refused, and the ledger it already had is left alone. This is
+//      the hole POS-26-27-0039 fell through: goods went to ₹211,885.84, the
+//      payment rows stayed at ₹76,319, and the edit saved anyway.
 //
 // Run: pnpm verify:bill-links
 
@@ -42,6 +46,8 @@ async function main(): Promise<void> {
         assertLinkPlan, assertLinksSurviveEdit,
     } = await import("@/modules/accountancy/lib/billLink");
     const { reconcilePicks, assignSources } = await import("@/modules/accountancy/lib/billLinkPlan");
+    const { tenderCoverageComplaint, GlBuildError } = await import("@/modules/accountancy/lib/postInvVoucher");
+    const { reapplyTradingVoucherInPlace } = await import("@/modules/accountancy/lib/reapplyTradingVoucher");
     const { ACCOUNT_GROUPS } = await import("@/shared/lib/constants/accounting");
 
     // ── Pick real ledgers to act on ────────────────────────────────────────
@@ -244,6 +250,54 @@ async function main(): Promise<void> {
                 where: { targetType: "UNIVERSAL_VOUCHER", targetId: idemBill, sourceId: idemReceipt },
             });
             check("and it leaves ONE allocation row for the pair, not two", rows === 1, `${rows} rows`);
+
+            // ── 6b². The money side must equal the goods side ───────────────
+            // A trading voucher whose payment rows do not add up to its total
+            // cannot be given a ledger entry, and an edit that leaves it that
+            // way must not be saved with the OLD ledger still standing.
+            const balancedVoucher = (total: number, tender: number) => ({
+                id: 0,
+                type: "SALE",
+                reference: "verify-tender",
+                date: new Date(),
+                description: "verify tender coverage",
+                partyJson: null,
+                subtotal: total, taxAmount: 0, shippingAmt: 0, roundOff: 0,
+                totalAmount: total,
+                tenders: [{ accountId: party, amount: tender }],
+                charges: [],
+            });
+
+            const editable = await mk("SALE", "DEBIT", 1000, 5);
+            const glBefore = await tx.voucherGlLine.findMany({
+                where:  { universalVoucherId: editable },
+                select: { accountId: true, type: true, amount: true },
+                orderBy: { id: "asc" },
+            });
+
+            let refusedRebuild: unknown = null;
+            try {
+                await reapplyTradingVoucherInPlace(tx, {
+                    // Goods say ₹1000, the payment rows say ₹400 — the shape of
+                    // the voucher that broke.
+                    voucher:        balancedVoucher(1000, 400) as never,
+                    branchId:       "",
+                    lines:          [],
+                    journalEntryId: editable,
+                });
+            } catch (e) { refusedRebuild = e; }
+            check("an edit whose payment rows no longer cover the total is refused",
+                refusedRebuild instanceof GlBuildError,
+                refusedRebuild instanceof Error ? refusedRebuild.message : "no error thrown");
+
+            const glAfter = await tx.voucherGlLine.findMany({
+                where:  { universalVoucherId: editable },
+                select: { accountId: true, type: true, amount: true },
+                orderBy: { id: "asc" },
+            });
+            check("and the ledger entry it already had is left exactly as it was",
+                JSON.stringify(glBefore) === JSON.stringify(glAfter),
+                `${glBefore.length} legs before, ${glAfter.length} after`);
 
             // ── 6c. A settled voucher cannot be edited out from under its link ──
             check("a voucher may still be edited while it covers what it settles",
@@ -501,6 +555,17 @@ async function main(): Promise<void> {
     // Nothing to spend, nothing assigned — a credit on its own settles no bill.
     check("a credit with no bill ticked produces no links",
         assignSources([], 0, [{ id: 17, amount: 1000 }]).length === 0);
+
+    // The one rule both the create and the edit route now call. It is a pure
+    // function precisely so neither route can hold its own private copy again.
+    check("the payment rows must add up to the voucher total",
+        tenderCoverageComplaint([{ amount: 400 }], 1000) !== null);
+    check("rows that do add up pass",
+        tenderCoverageComplaint([{ amount: 600 }, { amount: 400 }], 1000) === null);
+    check("a paisa of rounding is not an error",
+        tenderCoverageComplaint([{ amount: 999.99 }], 1000) === null);
+    check("a voucher with no payment rows is left to the GL builder to judge",
+        tenderCoverageComplaint([], 1000) === null);
 
     // Due dates are whole days on top of the bill date, computed in UTC so the
     // answer does not move with the machine's timezone.
