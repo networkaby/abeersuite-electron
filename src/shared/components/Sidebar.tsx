@@ -37,6 +37,7 @@ import {
 } from "@/utils/constants";
 import { canViewModuleChild } from "@/utils/module-access";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
+import { isElectronEnvironment } from "@/shared/lib/bridge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type SidebarUser = {
@@ -97,6 +98,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     // refreshing. ONE poll feeds every badge here and in NotificationBell; chat
     // unread still jumps instantly because the Supabase broadcast fires
     // "inbox:unread", which refreshes that same shared store.
+    // Decided after mount, not during render: the server has no `window.electronAPI`,
+    // so reading it inline would make the first client paint disagree with the HTML.
+    const [inDesktopApp, setInDesktopApp] = useState(false);
+    useEffect(() => { setInDesktopApp(isElectronEnvironment()); }, []);
+
     const inboxUnread = useInboxUnread();
     const surfaceCount = useNavCounts();
 
@@ -447,7 +453,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     );
 
     const visibleSettings = SETTINGS_NAV.filter(
-        (item) => isAdmin || hasSidebarLink("settings", item.label)
+        (item) => (!item.desktopOnly || inDesktopApp) && (isAdmin || hasSidebarLink("settings", item.label))
     );
 
     const canViewNavItem = (item: NavItem) =>

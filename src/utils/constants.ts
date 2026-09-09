@@ -225,6 +225,12 @@ export type SettingsNavItem = {
      * so existing grants (and the route) don't break.
      */
     sidebarKey?: string;
+    /**
+     * Only meaningful inside the installed desktop app (it drives the Electron
+     * window itself). The sidebar hides the link in a web browser; the `ui:sidebar:*`
+     * grant still decides who sees it in the app.
+     */
+    desktopOnly?: boolean;
 };
 
 export type ButtonBarAction = {
@@ -765,7 +771,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
     { label: "QR Display", href: "/office/settings/qr-display-settings", icon: QrCode, permission: "settings:manage" },
-    { label: "Screen Size", href: "/office/settings/screen-size", icon: MonitorCog, permission: "settings:manage" },
+    { label: "Screen Size", href: "/office/settings/screen-size", icon: MonitorCog, permission: "settings:manage", desktopOnly: true },
     { label: "Print Templates", href: "/office/settings/voucher-templates", icon: Printer, permission: "settings:manage", sidebarKey: "voucher-templates" },
     // { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },

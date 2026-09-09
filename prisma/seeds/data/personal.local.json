@@ -9273,6 +9273,10 @@
     },
     {
       "roleId": "R3",
+      "permissionId": "ui:sidebar:settings:screen-size"
+    },
+    {
+      "roleId": "R3",
       "permissionId": "help:create"
     },
     {
@@ -9538,6 +9542,10 @@
     {
       "roleId": "R2",
       "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "roleId": "R2",
+      "permissionId": "ui:sidebar:settings:screen-size"
     },
     {
       "roleId": "R2",
@@ -10447,6 +10455,10 @@
     },
     {
       "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:settings:screen-size"
+    },
+    {
+      "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:settings:voucher-templates"
     },
     {
@@ -11008,6 +11020,10 @@
     {
       "departmentId": "DEP-SALES",
       "permissionId": "ui:sidebar:settings:qr-display"
+    },
+    {
+      "departmentId": "DEP-SALES",
+      "permissionId": "ui:sidebar:settings:screen-size"
     },
     {
       "departmentId": "DEP-SALES",
