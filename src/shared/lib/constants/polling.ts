@@ -90,7 +90,7 @@ export const CALL_POPUP_POLL_MS = 20_000;   // 20 seconds
  * Two days covers a late call logged the next morning, or a day off, without
  * letting a week of forgotten calls pile up behind the icon.
  */
-export const CALL_POPUP_MAX_AGE_MS = 48 * 60 * 60 * 1000;   // 2 days
+export const CALL_POPUP_MAX_AGE_MS = 72 * 60 * 60 * 1000;   // 2 days
 
 /**
  * The follow-up icon sits quietly with its count until the last call is
