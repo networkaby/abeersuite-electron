@@ -782,7 +782,33 @@ The owner's old Vyapar data (`D:/AbeerSuite/vyapar_closing_24.07.2026/*.vyb`, a 
 
 **Our equivalents.** `kb_transactions` → `UniversalVoucher` + `VoucherDetail`; `kb_lineitems` → `VoucherInventoryLine`; `txn_payment_mapping` → role=TENDER `VoucherGlLine`; `kb_txn_links` → `VoucherAllocation`; their bank/cash adjustments and loans → CONTRA/PAYMENT/JOURNAL vouchers. What they have no table for at all is our BODY/TAX/DISCOUNT/ROUNDOFF GL legs — the reason our books cannot drift.
 
-**Gaps they have that we lack (verified in code, not docs).** Part-credit at the POS checkout — the API already computes `onCredit`, runs `checkCreditLimit` and builds the AR tender, but `sale/route.ts` rejects under-payment and `CheckoutDialog` disables Confirm (the credit-sale screen has it, gated by credit limit + credit period). Discount/write-off on a receipt. Credit note auto-linked to its sale (our POS return in CREDIT mode parks on AR with no allocation). Cheque status tracking. E-invoice IRN / e-way bill / TCS / TDS / reverse charge / ITC flag. Batch, expiry, manufacturing date, per-unit serials. Custom fields on bills and items. SMS/WhatsApp on save. Multi-currency. Recycle bin with one-click restore (we hard-delete; AuditLog keeps the snapshot). Things we cover differently: wholesale price and per-party rate → customer tiers + barcode bands; T&C → print template; multi-firm → branches; loans → journals.
+**What we are missing vs Vyapar (verified in code on 2026-09-11, not from docs).**
+
+| Vyapar has | Our position today |
+| --- | --- |
+| Part cash, part credit on one bill at the till | Credit-sale screen has it (gated by credit limit + credit period); POS checkout blocks Confirm on any unpaid amount — Next-up item 7 |
+| Discount / write-off on a receipt (short payment forgiven, used 74×) | Missing; bill stays open unless a journal is raised |
+| Credit note auto-linked to the sale it came from | Missing; POS return in CREDIT mode parks on AR with no allocation, manual link needed |
+| Cheque tracking with status (received / deposited / bounced) | Missing |
+| Payment-gateway link + QR printed on the bill, EDC card machine | Gateway model exists; no QR on the invoice, no EDC |
+| E-invoice IRN generate / cancel, e-way bill | Missing |
+| TCS, TDS, reverse charge, ITC-applicable flag, cess per unit | Missing (CGST/SGST/IGST split + place of supply only) |
+| Batch number, manufacturing date, expiry per line | Missing |
+| Serial number per unit | Missing; product codes only, not per-unit serials |
+| Wholesale price with minimum qty; per-party item rate | Covered differently: customer tiers + barcode price bands |
+| Fixed-asset purchase / sale document | Missing |
+| Loan accounts with EMI schedule | Journals + a ledger; no dedicated screen |
+| Custom fields on bills and items | Missing |
+| SMS / WhatsApp message template on save | Missing |
+| Recycle bin with one-click restore | Hard delete + AuditLog snapshot (restore exists only via the audit route) |
+| Multi-currency with exchange rate on a bill | Missing |
+| Multi-firm in one database | Branches instead |
+| Terms & conditions per document type | Print template |
+| Service reminders per party + item | Missing |
+| Payment terms (net 15 / net 30) on a bill | Have credit period days per customer / voucher |
+| Dozens of ready-made reports | Fewer report screens, every figure traceable to GL |
+
+First-week pain for a shop moving off Vyapar: the first three rows plus batch/expiry. The GST block matters only once e-invoicing becomes mandatory for this turnover.
 
 **Our numbering has the same ambiguity.** `voucherRef.ts` joins counter and padded sequence with no separator, so counter 1 + seq 10001 = counter 11 + seq 0001 once a counter passes 9,999 bills in a FY (Vyapar's single till did 4,570/yr). Low risk today; fix by putting a separator between the counter and number parts before any counter gets near that.
 
