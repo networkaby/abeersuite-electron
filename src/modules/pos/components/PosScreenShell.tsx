@@ -124,7 +124,7 @@ export function PosScreenShell({
         document.querySelector("[data-pos-selected]")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, [b.cartSelectedId]);
     return (
-        <div className="flex h-full w-full flex-row">
+        <div className="pos-shell flex h-full w-full flex-row">
             {/* Main column — everything except the far-right action rail. */}
             <div className="flex min-w-0 flex-1 flex-col">
                 {/* Awaiting-handover keeps the dedicated bar — its billing-disabled
@@ -256,7 +256,8 @@ export function PosScreenShell({
                                         onChange={(e) => { b.setProductQuery(e.target.value.replaceAll("/", "")); b.setProductHighlight(0); }}
                                         onKeyDown={b.onProductKeyDown}
                                         placeholder="Scan barcode or search · ↵ add · F2 = customer"
-                                        className="h-10 rounded-md border-2 border-emerald-300/70 bg-emerald-50/40 pl-9 pr-12 text-sm shadow-sm outline-none placeholder:text-emerald-900/45 focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:placeholder:text-emerald-100/40"
+                                        data-pos-tinted
+                                        className="h-10 rounded-md border-2 border-emerald-300/70 bg-[#F7FEFB] pl-9 pr-12 text-sm shadow-sm outline-none placeholder:text-emerald-900/45 focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:placeholder:text-emerald-100/40"
                                     />
                                     {/* "/" focuses the scan box from anywhere — a visible key chip so
                                         the cashier can always find the way back after a coupon, etc. */}

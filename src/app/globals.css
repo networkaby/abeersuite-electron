@@ -272,3 +272,15 @@
     @apply font-sans;
   }
 }
+
+/* POS fields — the counter screen has no card behind its panels, so a
+   transparent input takes the page colour and the box disappears. Lift every
+   POS field onto the raised (white) surface, the same tone the voucher cards
+   use. A field that owns its colour opts out with data-pos-tinted (the emerald
+   scan bar). Specificity beats the utility class, so this must stay a rule. */
+@layer utilities {
+  .pos-shell input[data-slot="input"]:not([data-pos-tinted]),
+  .pos-shell textarea[data-slot="textarea"]:not([data-pos-tinted]) {
+    background-color: var(--surface-raised);
+  }
+}
