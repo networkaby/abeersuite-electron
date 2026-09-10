@@ -1,6 +1,6 @@
 /**
- * Server-side reader for the org's period anchors, and the one date rule built
- * on them: a voucher may not be dated before the books begin here.
+ * Server-side reader for the org's period anchor, and the one date rule built
+ * on it: a voucher may not be dated before the books begin here.
  *
  * `BooksConfig.booksBeginningFrom` is the first day whose entries live in this
  * software. Anything earlier belongs to the previous software or the manual
@@ -27,13 +27,17 @@ import type { PrismaClient } from "@/generated/prisma/client";
 const CACHE_TTL_MS = 60_000;
 
 export interface BooksPeriod {
-    /** Start of the first financial year present here. Null = never stated. */
-    financialYearFrom: Date | null;
-    /** First day whose entries live here. Null = never stated, rule inert. */
+    /**
+     * First day whose entries live here. Null = never stated, rule inert.
+     *
+     * The FIRST financial year present here is DERIVED from this and the
+     * restart day — `fyStartYearFor(restartMonth, restartDay, booksBeginningFrom)`
+     * — never stored beside it, because a stored copy could only ever disagree.
+     */
     booksBeginningFrom: Date | null;
 }
 
-const NO_PERIOD: BooksPeriod = { financialYearFrom: null, booksBeginningFrom: null };
+const NO_PERIOD: BooksPeriod = { booksBeginningFrom: null };
 
 type Cache = { period: BooksPeriod; loadedAt: number };
 
@@ -41,12 +45,12 @@ type Cache = { period: BooksPeriod; loadedAt: number };
 const globalForPeriod = globalThis as unknown as { __booksPeriodCache?: Cache };
 
 /**
- * Only the two columns are read, so a transaction client is as good as the full
+ * Only the one column is read, so a transaction client is as good as the full
  * client — every caller already has one or the other in hand.
  */
 type BooksConfigReader = Pick<PrismaClient, "booksConfig">;
 
-/** The org's period anchors, cached for a minute. Fails open to both-null. */
+/** The org's period anchor, cached for a minute. Fails open to null. */
 export async function loadBooksPeriod(db: BooksConfigReader): Promise<BooksPeriod> {
     const cached = globalForPeriod.__booksPeriodCache;
     if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return cached.period;
@@ -55,11 +59,11 @@ export async function loadBooksPeriod(db: BooksConfigReader): Promise<BooksPerio
     try {
         const row = await db.booksConfig.findUnique({
             where: { id: 1 },
-            select: { financialYearFrom: true, booksBeginningFrom: true },
+            select: { booksBeginningFrom: true },
         });
-        if (row) period = { financialYearFrom: row.financialYearFrom, booksBeginningFrom: row.booksBeginningFrom };
+        if (row) period = { booksBeginningFrom: row.booksBeginningFrom };
     } catch {
-        // Left as both-null on purpose — see the fail-open note above.
+        // Left as null on purpose — see the fail-open note above.
     }
 
     globalForPeriod.__booksPeriodCache = { period, loadedAt: Date.now() };

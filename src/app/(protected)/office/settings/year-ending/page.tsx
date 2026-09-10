@@ -36,8 +36,10 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
     assembleReference,
+    formatYear,
     fyClosingDate,
     fyStartDate,
+    fyStartYearFor,
     type SeriesShape,
     type YearFormat,
 } from "@/modules/accountancy/lib/voucherRef";
@@ -53,10 +55,9 @@ interface BooksConfig {
     id: number;
     restartMonth: number;
     restartDay: number;
-    /// Org period anchors. Null = never stated; the page then PREFILLS the 1st
+    /// Org period anchor. Null = never stated; the page then PREFILLS the 1st
     /// of the current FY without saving it, so an install that has not been
     /// told its start date never quietly claims one.
-    financialYearFrom: string | null;
     booksBeginningFrom: string | null;
     updatedAt: string;
 }
@@ -64,8 +65,7 @@ interface BooksConfig {
 interface ConfigDraft {
     restartMonth: number;
     restartDay: number;
-    /** ISO yyyy-mm-dd, or "" for cleared. TallyDateInput binds these directly. */
-    financialYearFrom: string;
+    /** ISO yyyy-mm-dd, or "" for cleared. TallyDateInput binds this directly. */
     booksBeginningFrom: string;
 }
 
@@ -129,10 +129,21 @@ function isoDay(v: string | null | undefined): string {
     return v ? v.slice(0, 10) : "";
 }
 
-/** "2023-04-01" → "1 Apr 2023", for the sentence under the fields. */
+/** "2023-04-01" → "1 Apr 2023", for the sentence under the field. */
 function fmtHuman(iso: string): string {
     const [y, m, d] = iso.split("-").map(Number);
     return `${d} ${MONTHS[m - 1].slice(0, 3)} ${y}`;
+}
+
+/**
+ * The first financial year present here, DERIVED — never a second stored date.
+ * Its month/day are the restart day set just above; its year is whichever FY
+ * contains the books-beginning date. Holds for a mid-year migration too: books
+ * beginning 15 Nov 2023 still gives FY 2023-24.
+ */
+function firstFyLabel(isoBooksBeginning: string, restartMonth: number, restartDay: number): string {
+    const d = new Date(`${isoBooksBeginning}T00:00:00Z`);
+    return formatYear(fyStartYearFor(restartMonth, restartDay, d), "FY_LONG");
 }
 
 export default function YearEndingPage() {
@@ -162,7 +173,6 @@ export default function YearEndingPage() {
                 setConfigDraft({
                     restartMonth:       c.data.restartMonth,
                     restartDay:         c.data.restartDay,
-                    financialYearFrom:  isoDay(c.data.financialYearFrom)  || fyDefault,
                     booksBeginningFrom: isoDay(c.data.booksBeginningFrom) || fyDefault,
                 });
             })
@@ -176,7 +186,6 @@ export default function YearEndingPage() {
          config.restartDay   !== configDraft.restartDay ||
          // Prefilled-but-unsaved counts as dirty on purpose: the whole point of
          // the prefill is that Save is there to accept it.
-         isoDay(config.financialYearFrom)  !== configDraft.financialYearFrom ||
          isoDay(config.booksBeginningFrom) !== configDraft.booksBeginningFrom),
     );
 
@@ -188,7 +197,6 @@ export default function YearEndingPage() {
             // refuse to coerce into a date.
             const { data } = await axios.patch<BooksConfig>("/api/accountancy/books-config", {
                 ...configDraft,
-                financialYearFrom:  configDraft.financialYearFrom  || null,
                 booksBeginningFrom: configDraft.booksBeginningFrom || null,
             });
             setConfig(data);
@@ -335,7 +343,7 @@ export default function YearEndingPage() {
                     </div>
                 </div>
 
-                {/* Books beginning — org period anchors */}
+                {/* Books beginning — the org period anchor */}
                 {configDraft && (
                     <div className="rounded-lg border bg-card p-4">
                         <div className="flex items-start justify-between gap-4">
@@ -347,52 +355,40 @@ export default function YearEndingPage() {
                                     entered here.
                                 </p>
                             </div>
-                            <div className="flex items-end gap-2">
-                                <div className="space-y-1">
-                                    <Label className="text-xs">First financial year from</Label>
-                                    <TallyDateInput
-                                        className="h-9 w-36"
-                                        value={configDraft.financialYearFrom}
-                                        onValueChange={(iso) =>
-                                            setConfigDraft((d) => d && { ...d, financialYearFrom: iso })
-                                        }
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label className="text-xs">Books beginning from</Label>
-                                    <TallyDateInput
-                                        className="h-9 w-36"
-                                        value={configDraft.booksBeginningFrom}
-                                        onValueChange={(iso) =>
-                                            setConfigDraft((d) => d && { ...d, booksBeginningFrom: iso })
-                                        }
-                                    />
-                                </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Books beginning from</Label>
+                                <TallyDateInput
+                                    className="h-9 w-36"
+                                    value={configDraft.booksBeginningFrom}
+                                    onValueChange={(iso) =>
+                                        setConfigDraft((d) => d && { ...d, booksBeginningFrom: iso })
+                                    }
+                                />
                             </div>
                         </div>
-                        {/* Read from the SAVED config, not the draft — this sentence states
-                            what the software will actually enforce, not what is typed. */}
-                        {config?.booksBeginningFrom && (
+                        {/* Read from the SAVED config, not the draft — this states what the
+                            software will actually enforce, not what is half-typed. The first
+                            FY is derived from the restart day above, never stored twice. */}
+                        {config?.booksBeginningFrom ? (
                             <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
-                                Before{" "}
+                                First financial year here:{" "}
+                                <span className="font-medium text-foreground">
+                                    {firstFyLabel(
+                                        isoDay(config.booksBeginningFrom),
+                                        config.restartMonth,
+                                        config.restartDay,
+                                    )}
+                                </span>
+                                . Before{" "}
                                 <span className="font-medium text-foreground">
                                     {fmtHuman(isoDay(config.booksBeginningFrom))}
                                 </span>{" "}
                                 — look in the old books.
-                                {config.financialYearFrom &&
-                                    isoDay(config.financialYearFrom) !== isoDay(config.booksBeginningFrom) && (
-                                    <>
-                                        {" "}The financial year starting{" "}
-                                        {fmtHuman(isoDay(config.financialYearFrom))} is only PART here —
-                                        its earlier months are in the old books.
-                                    </>
-                                )}
                             </p>
-                        )}
-                        {!config?.booksBeginningFrom && (
+                        ) : (
                             <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
-                                Not set yet — the dates above are only a suggestion. Until you save
-                                them, a voucher may be dated any day at all.
+                                Not set yet — the date above is only a suggestion. Until you save
+                                it, a voucher may be dated any day at all.
                             </p>
                         )}
                     </div>
