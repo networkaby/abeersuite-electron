@@ -183,7 +183,6 @@ export function PosScreenShell({
                     onClear={b.clearCustomer}
                     onNewCustomer={() => partySearchRef.current?.openNew()}
                     onReturn={() => b.setReturnDialogOpen(true)}
-                    missingParty={!b.snapshot}
                     changeMode={b.changingParty}
                     activeShift={b.activeShift}
                     shiftLoaded={b.shiftLoaded}
@@ -246,9 +245,9 @@ export function PosScreenShell({
                         <div className="shrink-0 border-b border-border p-3">
                             <div className="flex items-center gap-2">
                                 <div className="relative flex-1">
-                                    {/* The scan bar is THE primary control — emerald-tinted so it's
-                                        unmistakable even when it loses focus (after a coupon, a cart
-                                        edit, etc.), matching the sale header's palette. */}
+                                    {/* The scan bar reads as a plain white field, same as the voucher
+                                        screens. Only the icon stays emerald — the tinted box was too
+                                        loud once every POS field sat on white. */}
                                     <ScanLine className="pointer-events-none absolute left-3 top-1/2 size-4.5 -translate-y-1/2 text-emerald-600 dark:text-emerald-400" />
                                     <Input
                                         ref={productSearchRef}
@@ -256,8 +255,7 @@ export function PosScreenShell({
                                         onChange={(e) => { b.setProductQuery(e.target.value.replaceAll("/", "")); b.setProductHighlight(0); }}
                                         onKeyDown={b.onProductKeyDown}
                                         placeholder="Scan barcode or search · ↵ add · F2 = customer"
-                                        data-pos-tinted
-                                        className="h-10 rounded-md border-2 border-emerald-300/70 bg-[#F7FEFB] pl-9 pr-12 text-sm shadow-sm outline-none placeholder:text-emerald-900/45 focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:placeholder:text-emerald-100/40"
+                                        className="h-10 rounded-md border border-input pl-9 pr-12 text-sm outline-none placeholder:text-muted-foreground/55"
                                     />
                                     {/* "/" focuses the scan box from anywhere — a visible key chip so
                                         the cashier can always find the way back after a coupon, etc. */}
