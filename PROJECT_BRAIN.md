@@ -566,6 +566,8 @@ For the milestone log (M1–M26) prior to 2026-05-14, read `git log` or earlier 
 
 ---
 
+7. **POS part-credit at checkout (asked 2026-09-11, plan agreed in principle, NOT built).** Lift the two guards only — `sale/route.ts` "less than invoice total" rejection and `CheckoutDialog` `onCredit > 0.01` block — keep `checkCreditLimit` as the sole gate, require an identified customer for any credit portion, walk-in stays blocked. Follow-ups from the same Vyapar comparison: (a) discount/write-off line on a receipt so a ₹5 short payment can close the bill; (b) POS return in CREDIT mode should `createLink` against the original sale's open balance; (c) put a separator between counter and number in `voucherRef.ts`. See **🧭 Reference: Vyapar backup comparison**.
+
 ## 🧭 Design: Universal Customer Finder (planned — 2026-06-05)
 
 **Goal.** On `/lab/front`, identify _which_ customer staff mean from **any** shred of evidence — name, phone, email, address, a product they **bought / repaired / inquired about / ordered online**, or **when** they were active (a month / "last active"). Each clue narrows the list; every match shows _why_ (evidence chip).
@@ -772,6 +774,48 @@ Sketch discussed:
 
 **Status update (2026-08-05, later the same day):** Phase 0 + the first slice of Phase 1 are **DONE** — see the "Recently shipped" entry. Office **Category IS the customer-facing "Collection"** — the cross-cutting merchandising axis beside Group's navigation tree (`ShopProductPublic.collection`). It also keys `InvAttributeMaster`, `LoyaltyEarnRule`, `CouponProductRule` and the BRAND → GROUP → CATEGORY → ORG pricing chain, so its rows may be edited freely but must not be re-keyed or restructured casually. _(An earlier draft of this entry said Category was "retired from the storefront / office-only" — that was wrong: being load-bearing office-side does not stop it being customer-facing, and the two-axis Group+Collection model was the agreed design all along.)_. The **Group tree is now the customer-facing taxonomy, un-flattened**. Still **not** built from Plan 1: flat root-level URLs, the `ShopSlug` registry, dedicated category/brand/collection pages, the `ShopCollection` many-to-many model, `InvProductRelated` cross-sell, and per-group facets.
 
+## 🧭 Reference: Vyapar backup comparison (analysed 2026-09-11)
+
+The owner's old Vyapar data (`D:/AbeerSuite/vyapar_closing_24.07.2026/*.vyb`, a zip holding one SQLite file, Apr-2023 → 23-Jul-2026: 13,926 sales, 2,843 receipts, 353 sale returns) was profiled table by table and compared with our engine. Keep this as the reference for "how does Vyapar do it" questions and for the migration import.
+
+**How Vyapar is built (single entry).** One `kb_transactions` row per document with a `txn_type` code; the sale row carries `txn_cash_amount` + `txn_balance_amount` side by side (415 bills were part cash, part credit at the till). `kb_lineitems` stores the NET unit price and tax separately, line total = the gross rupee the customer sees. `txn_payment_mapping` = which cash/bank account the money hit. `kb_txn_links` = receipt→bill settlement with an amount per link; an unlinked receipt IS the advance (297 of them), and a receipt's `txn_discount_amount` counts toward settlement (used 74×). Credit-note returns are linked to the sale (165), cash-refund returns never are (188). There is NO ledger: trial balance / P&L / balance sheet are computed at report time from per-type sign rules in the app, and balances are cached columns (`txn_current_balance` per bill, `kb_names.amount` per party, opening + mappings per bank) that the app nudges on every save. A small journal + chart-of-accounts mapping was bolted on in Jan-2025 for GST input / TDS / manual journals only (17 entries here).
+
+**Mistakes found in their data (do NOT reproduce on import).** 304 sales where items ≠ bill by ±₹0.47 with round-off stored as 0 (older versions rounded silently); line totals with float noise (1050.0018); one sale with a blank invoice number; party `amount` drifted to 0 on parties with open bills; invoice number = prefix + sequence with no separator (`SALE/26-27/786` + `1414` prints as `SALE/26-27/7861414`). Their bill↔receipt link math was correct on every sale.
+
+**Our equivalents.** `kb_transactions` → `UniversalVoucher` + `VoucherDetail`; `kb_lineitems` → `VoucherInventoryLine`; `txn_payment_mapping` → role=TENDER `VoucherGlLine`; `kb_txn_links` → `VoucherAllocation`; their bank/cash adjustments and loans → CONTRA/PAYMENT/JOURNAL vouchers. What they have no table for at all is our BODY/TAX/DISCOUNT/ROUNDOFF GL legs — the reason our books cannot drift.
+
+**What we are missing vs Vyapar (verified in code on 2026-09-11, not from docs).**
+
+| Vyapar has | Our position today |
+| --- | --- |
+| Part cash, part credit on one bill at the till | Credit-sale screen has it (gated by credit limit + credit period); POS checkout blocks Confirm on any unpaid amount — Next-up item 7 |
+| Discount / write-off on a receipt (short payment forgiven, used 74×) | Missing; bill stays open unless a journal is raised |
+| Credit note auto-linked to the sale it came from | Missing; POS return in CREDIT mode parks on AR with no allocation, manual link needed |
+| Cheque tracking with status (received / deposited / bounced) | Missing |
+| Payment-gateway link + QR printed on the bill, EDC card machine | Gateway model exists; no QR on the invoice, no EDC |
+| E-invoice IRN generate / cancel, e-way bill | Missing |
+| TCS, TDS, reverse charge, ITC-applicable flag, cess per unit | Missing (CGST/SGST/IGST split + place of supply only) |
+| Batch number, manufacturing date, expiry per line | Missing |
+| Serial number per unit | Missing; product codes only, not per-unit serials |
+| Wholesale price with minimum qty; per-party item rate | Covered differently: customer tiers + barcode price bands |
+| Fixed-asset purchase / sale document | Missing |
+| Loan accounts with EMI schedule | Journals + a ledger; no dedicated screen |
+| Custom fields on bills and items | Missing |
+| SMS / WhatsApp message template on save | Missing |
+| Recycle bin with one-click restore | Hard delete + AuditLog snapshot (restore exists only via the audit route) |
+| Multi-currency with exchange rate on a bill | Missing |
+| Multi-firm in one database | Branches instead |
+| Terms & conditions per document type | Print template |
+| Service reminders per party + item | Missing |
+| Payment terms (net 15 / net 30) on a bill | Have credit period days per customer / voucher |
+| Dozens of ready-made reports | Fewer report screens, every figure traceable to GL |
+
+First-week pain for a shop moving off Vyapar: the first three rows plus batch/expiry. The GST block matters only once e-invoicing becomes mandatory for this turnover.
+
+**Our numbering has the same ambiguity.** `voucherRef.ts` joins counter and padded sequence with no separator, so counter 1 + seq 10001 = counter 11 + seq 0001 once a counter passes 9,999 bills in a FY (Vyapar's single till did 4,570/yr). Low risk today; fix by putting a separator between the counter and number parts before any counter gets near that.
+
+---
+
 ## 🧠 Key decisions
 
 | Area                  | Choice                                          | Why                                                                                           |
@@ -808,6 +852,7 @@ Sketch discussed:
 
 ## ⚠️ Known gotchas
 
+- **`UniversalVoucher.deletedAt` / `deletedById` / `deleteReason` are vestigial.** Soft-delete was removed 2026-08-01 (Next-up item 6) but the columns stayed; nothing writes them, every delete route hard-deletes, yet `ledgerStatusFilterUv()` and `billLink.ts` still filter on `deletedAt`. Don't describe the app as having soft delete; either wire them back through the hard-delete routes (recycle bin) or drop them with the filter — owner's call, not decided (2026-09-11).
 - **`pnpm electron:pack` does NOT compile the NSIS script.** It runs `electron-builder --dir`, which stops at `win-unpacked` — so `verify:package` can pass green while `build/installer.nsh` has a fatal syntax error. Only `electron:dist` / `electron:release` compile it. To check the installer script alone without redoing `next build`: `pnpm exec electron-builder --prepackaged dist-app/win-unpacked`. _(Found 2026-09-06 the hard way: a rewritten installer.nsh passed the gate twice and only failed when actually compiled.)_
 - **In `build/installer.nsh`, never use `${__FILEDIR__}`.** electron-builder feeds the whole script to makensis on **stdin**, so it resolves to app-builder-lib's own templates directory and any `File` command using it dies with "no files found" — in the **uninstaller** pass first, since that is built first. Use `${BUILD_RESOURCES_DIR}` (electron-builder supplies it to both passes); `${PROJECT_DIR}` is also available.
 - **Run electron-builder through `pnpm`, never `npx`.** Under `npx` it misdetects the package manager as npm and shells out to `npm list -a`, which never returns on a pnpm store — the build sits with flat CPU and no file writes, looking like a hang rather than a misconfiguration.
