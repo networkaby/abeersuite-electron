@@ -41,6 +41,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
+import { separatingField } from "@/shared/lib/parties/partySearch";
 import { invalidateParties } from "@/shared/lib/parties";
 
 export type PickedParty = {
@@ -191,7 +192,7 @@ export const PartySearchAndCreate = forwardRef<
     // Effective group filter — strict to `partyGroup` unless the user opted to
     // widen the search via the "Include Sundry <other> too" checkbox.
     const effectiveGroup = partyGroup && !includeOther ? partyGroup : undefined;
-    const { hits, loading } = usePartySearch(query, { enabled: !locked, group: effectiveGroup });
+    const { hits, loading, guessIds } = usePartySearch(query, { enabled: !locked, group: effectiveGroup });
     // Auto-create lands in the picker's `partyGroup` (or default Sundry Debtors).
     const createUnderGroup = partyGroup ?? undefined;
     const otherGroup: "Sundry Debtors" | "Sundry Creditors" | null =
@@ -238,6 +239,16 @@ export const PartySearchAndCreate = forwardRef<
         }
         return rows;
     }, [activeHits]);
+
+    // Which field would best narrow this list — the question worth asking next.
+    // With several people still matching, the cashier should be told what
+    // separates them ("which area?" vs "last four digits?") instead of reading
+    // every row to work it out. Leading the second line with that field is enough:
+    // the eye lands on the thing that differs.
+    const leadWith = useMemo(() => separatingField(activeHits), [activeHits]);
+
+    /** Exactly one row left — the moment the cashier can greet by name. */
+    const soleMatch = displayRows.length === 1;
 
     // Reset highlight when the visible rows change
     useEffect(() => { setHighlightedHit(0); }, [displayRows]);
@@ -672,7 +683,15 @@ export const PartySearchAndCreate = forwardRef<
                                     type="button"
                                     onClick={() => pickHit(c)}
                                     onMouseEnter={() => setHighlightedHit(i)}
-                                    className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
+                                    /* Confidence by colour: a row a word of the query really
+                                       matched reads normally, a guess — nothing matched outright,
+                                       only a typo or letter-pair closeness — reads amber. And a
+                                       lone survivor gets a ring, because that is the moment the
+                                       cashier can greet by name and it should not need reading
+                                       to spot. */
+                                    className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm ${guessIds.has(`${c.type}:${c.id}`) ? "text-amber-700 dark:text-amber-400" : ""} ${soleMatch
+                                        ? "bg-emerald-50 ring-1 ring-inset ring-emerald-400/70 dark:bg-emerald-950/40 dark:ring-emerald-500/50"
+                                        : i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
                                 >
                                     {c.type === "company"
                                         ? <Building2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
@@ -686,7 +705,9 @@ export const PartySearchAndCreate = forwardRef<
                                         </div>
                                         {(c.phone || c.address || c.email) && (
                                             <div className="truncate text-[11px] text-muted-foreground">
-                                                {[c.phone, c.address?.replace(/\s*\n\s*/g, " · "), c.email]
+                                                {(leadWith === "address"
+                                                    ? [c.address?.replace(/\s*\n\s*/g, " · "), c.phone, c.email]
+                                                    : [c.phone, c.address?.replace(/\s*\n\s*/g, " · "), c.email])
                                                     .filter(Boolean)
                                                     .join(" · ")}
                                             </div>

@@ -11,6 +11,16 @@
  * the whole customer table, repeatedly, to answer questions about a fraction of
  * it.
  *
+ * NOTE, since the file below argues the opposite: this is the WEB and unbridged
+ * story. On a replica-served counter the whole list is held instead — see
+ * `partyFullCatalog.ts`. The premise here is that paying for the customer table
+ * is expensive, and on a counter it simply isn't: Person, Company, Phone, Email,
+ * Account, AccountAlias and PersonCompany are all in the local replica, so
+ * reading every one of them is a local Postgres query. Holding them there buys
+ * the tiered match — splitting "medhidura" into a name and a locality, forgiving
+ * a typo — which no per-query SQL endpoint can offer at all. Everything below
+ * still governs every machine that is NOT a counter.
+ *
  * So this cache is GROWN, NOT SYNCED. It starts empty. Every party in it got
  * there because someone typed a name and the live lookup went and found them —
  * a request that had to happen anyway. From then on that customer is answered
@@ -29,19 +39,21 @@
  * gate (auth:login:outside-counter) ensures only authorised machines reach this
  * code.
  *
- * `matches` deliberately mirrors `lookupAccounts` in /api/person: same token
- * AND-ing, same fields, same 8-row cap, same ledger-group narrowing. That is
- * also why cached rows are fetched with `full=1` — the live lookup DISPLAYS a
- * primary phone but MATCHES on every phone, plus aliases and account group, and
- * a row cached without those would quietly stop finding customers the server
- * finds. Treat that pairing as the contract, not an implementation detail.
+ * Matching is not done here any more: `searchPartyRows` does it, and /api/person
+ * now runs the very same function over its own rows, so a regular answered from
+ * this cache ranks identically to the way that customer ranks anywhere else.
+ * Keeping two hand-written matchers in step was the old contract and it was
+ * always one edit away from breaking.
+ *
+ * Cached rows are still fetched with `full=1`, and that part IS a contract: the
+ * live lookup DISPLAYS a primary phone but MATCHES on every phone, plus aliases
+ * and account group, and a row cached without those would quietly stop finding
+ * customers the server finds.
  */
 
 import axios from "axios";
 import { localDb, type LocalPartyRow, type PartyType } from "@/shared/lib/browser/localDb";
-// Same token-shape tests the server uses in api/person, so the local filter in
-// `matches()` below narrows on exactly the same rules the API would.
-import { looksLikeEmail, looksLikePhone } from "@/shared/lib/parties/tokenShape";
+import { searchPartyRows } from "@/shared/lib/parties/partySearch";
 
 const CHANGED_API = "/api/parties/changed";
 const META_KEY = "parties";
@@ -224,28 +236,6 @@ async function check(): Promise<void> {
 }
 
 /**
- * Does this party match every token? Mirrors `lookupAccounts`'s `tokenOr`:
- * name / any phone / any ledger alias, plus address + any email when `wide`.
- *
- * Phone and email are only checked when the token is shaped like one — the same
- * gate the server applies, kept in step so the cache finds the same rows a live
- * search would.
- */
-function matches(p: Party, token: string, wide: boolean): boolean {
-    const t = token.toLowerCase();
-    if (p.name.toLowerCase().includes(t)) return true;
-    // Phone is matched case-sensitively server-side (digits), but lowercasing a
-    // digit string is a no-op, so one comparison covers both.
-    if (looksLikePhone(token) && p.phones.some((x) => x.includes(token))) return true;
-    if (p.aliases.some((x) => x.toLowerCase().includes(t))) return true;
-    if (wide) {
-        if ((p.address ?? "").toLowerCase().includes(t)) return true;
-        if (looksLikeEmail(token) && p.emails.some((x) => x.toLowerCase().includes(t))) return true;
-    }
-    return false;
-}
-
-/**
  * Search the cache.
  *
  * Returns null when this machine holds no cache at all — the caller must treat
@@ -264,20 +254,14 @@ export async function searchParties(
 ): Promise<Party[] | null> {
     if (!(await ensurePartiesReady()) || !mem) return null;
 
-    const tokens = term.trim().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return [];
+    if (!term.trim()) return [];
 
-    const wide = opts.wide ?? false;
-    const hits = [...mem.values()].filter((p) =>
-        (!opts.group || p.accountGroup === opts.group)
-        && tokens.every((tok) => matches(p, tok, wide)),
-    );
-
-    // The server orders by `createdAt desc` and takes 8. We have no createdAt on
-    // the row, so newest-id-first stands in for it: both Person and Company use
-    // an autoincrement id, so id order and creation order agree.
-    hits.sort((a, b) => b.id - a.id);
-    return hits.slice(0, MAX_HITS);
+    // The same matcher the counter runs over the whole list and the server now
+    // runs over its own rows, so a regular answered from here ranks exactly the
+    // way that customer would rank anywhere else. It replaced a strict
+    // every-token-must-match filter ordered by newest id, which put whoever
+    // registered most recently on top rather than whoever matched best.
+    return searchPartyRows([...mem.values()], term, { group: opts.group, rows: MAX_HITS }).rows;
 }
 
 /**

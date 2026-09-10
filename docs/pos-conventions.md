@@ -71,6 +71,36 @@ field. Only blocked when a modal dialog is open.
 
 The mouse Clear button remains unchanged. F2 is an additive keyboard path.
 
+**What the customer search matches.** Everything the row displays, and a few
+things it doesn't: name, **every** phone, **every** email, **address**, ledger
+aliases and linked company names. If you can see it on the row, you can search
+it — the box used to print a customer's locality and then refuse to find them
+by it.
+
+Fragments are meant to be mixed. The cashier half-remembers a name and a
+locality, then asks for the mobile, and each piece narrows further:
+
+| Typed | Finds |
+|---|---|
+| `hri` | Hridoy / Hriday first — a name **starting** with the fragment outranks one that merely contains it (Tas*hri*f) |
+| `medhi dura` | name fragment + locality fragment, in any order, across different fields |
+| `medhidura` | the same, run together — split into two pieces, each free to land in a different field |
+| `848` | any part of any phone number |
+| `+91 8486-308647` | pasted numbers work: punctuation and an Indian country code are stripped before matching |
+
+**Row colour is confidence**, the same two levels as the product box: normal
+where a word of the query really matched, **amber** where nothing did and the
+row is only near the query (a typo, or letter-pair closeness). `Enter` picks the
+highlighted row as always.
+
+**One row left is highlighted green** — that is the moment to greet the customer
+by name. With several rows left, the second line leads with whatever actually
+separates them, so the next question to ask is obvious: locality when they live
+in different places, mobile when they don't.
+
+On the counter app the whole customer list is held in memory, so all of this
+answers without a round trip. The web keeps the narrower server search.
+
 ### `Ctrl + Enter` — Checkout / save
 
 Opens the checkout dialog (Sale) or saves the order / estimate directly.

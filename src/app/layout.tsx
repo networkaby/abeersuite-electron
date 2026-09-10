@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import CounterSetupGuard from "@/shared/components/CounterSetupGuard";
 import CounterReconciler from "@/shared/components/CounterReconciler";
 import GlAccountsWarmup from "@/shared/components/GlAccountsWarmup";
+import PartiesWarmup from "@/shared/components/PartiesWarmup";
 import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
 import ReplicaReadyGate from "@/shared/components/ReplicaReadyGate";
 import UpdatePrompt from "@/shared/components/UpdatePrompt";
@@ -72,6 +73,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <CounterReconciler />
         <GlAccountsWarmup />
+        <PartiesWarmup />
         <StatusTitleUpdater />
         <ReplicaReadyGate />
         <UpdatePrompt />

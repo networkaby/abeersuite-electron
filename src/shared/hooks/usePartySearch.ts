@@ -11,6 +11,12 @@ import {
     type Party,
 } from "@/shared/lib/parties";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { searchPartyRows } from "@/shared/lib/parties/partySearch";
+import {
+    partyCatalogEnabled,
+    readCachedPartyList,
+    syncPartyList,
+} from "@/shared/lib/parties/partyFullCatalog";
 
 /**
  * Result row from `/api/person?lookup=…`. Shared by `PartyCombobox` and `PosScreen`.
@@ -112,24 +118,72 @@ export function usePartySearch(
          */
         wide?: boolean;
     } = {},
-): { hits: PartyHit[]; loading: boolean } {
+): { hits: PartyHit[]; loading: boolean; guessIds: Set<string> } {
     const { enabled = true, debounceMs = 200, group, wide = false } = opts;
     const [hits, setHits] = useState<PartyHit[]>([]);
+    const [guessIds, setGuessIds] = useState<Set<string>>(() => new Set());
     const [loading, setLoading] = useState(false);
+    /** The whole customer list, on a counter. null everywhere else — see
+     *  partyFullCatalog: held only where reading it is a local Postgres query. */
+    const [fullList, setFullList] = useState<Party[] | null>(null);
 
     // Warm the cache once per page load, whatever else is mounted. Reads what is
     // already on disk — no request, since nothing is fetched until someone types.
     useEffect(() => { void ensurePartiesReady(); }, []);
 
-    // Someone changed a party — here, at another till, on the website. Ask which
-    // ids and forget the ones we hold; the next search for them fetches fresh.
-    // Ids we never cached are ignored, so this stays cheap however busy the shop.
-    useRealtimeTopics(["parties"], () => { void refreshFromChanges(); });
+    // On a counter, take the whole list: held rows first so the box works before
+    // the network answers, then a delta on top. Everywhere else this is a no-op
+    // and the grown cache below stays the only cache.
+    useEffect(() => {
+        if (!partyCatalogEnabled()) return;
+        let cancelled = false;
+        void (async () => {
+            const held = await readCachedPartyList();
+            if (!cancelled && held) setFullList(held);
+            const fresh = await syncPartyList();
+            if (!cancelled && fresh) setFullList(fresh);
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Someone changed a party — here, at another till, on the website. Where the
+    // whole list is held, take the delta; otherwise ask which ids moved and forget
+    // just those, so a busy branch across town cannot fill this machine's cache.
+    useRealtimeTopics(["parties"], () => {
+        void (async () => {
+            if (partyCatalogEnabled()) {
+                const fresh = await syncPartyList();
+                if (fresh) setFullList(fresh);
+                return;
+            }
+            await refreshFromChanges();
+        })();
+    });
+
+    // Rank a live answer the same way the local one is ranked. The server can
+    // only give us `contains` in `createdAt` order; running the tiered matcher
+    // over the rows it returns is what puts a word-start name above a mid-word
+    // one, so "hri" leads with Hridoy rather than with Tas(hri)f.
+    const rankServerHits = (rows: PartyHit[], q: string) => {
+        const { rows: ranked, guessIds: guesses } = searchPartyRows(
+            rows.map((h) => ({
+                ...h,
+                type: h.type,
+                phones: (h as FullHit).phones ?? (h.phone ? [h.phone] : []),
+                emails: (h as FullHit).emails ?? (h.email ? [h.email] : []),
+                aliases: (h as FullHit).aliases ?? [],
+            })),
+            q,
+            { rows: MAX_HITS },
+        );
+        return { ranked: ranked as PartyHit[], guesses: guesses as Set<string> };
+    };
 
     useEffect(() => {
         const trimmed = query.trim();
         if (!enabled || !trimmed) {
             setHits([]);
+            setGuessIds(new Set());
             setLoading(false);
             return;
         }
@@ -138,12 +192,35 @@ export function usePartySearch(
             setLoading(true);
             void (async () => {
                 try {
+                    // On a counter the whole list is here, so the answer is
+                    // complete and no request is made at all. This is the only
+                    // path that can run the looser tiers — a split across name and
+                    // address, a typo, letter-pair closeness — because none of
+                    // them can be asked of Postgres as a `contains`.
+                    if (fullList) {
+                        const { rows, guessIds: guesses } = searchPartyRows(fullList, trimmed, {
+                            group,
+                            rows: MAX_HITS,
+                        });
+                        if (cancelled) return;
+                        setHits(rows.map(toHit));
+                        setGuessIds(guesses as Set<string>);
+                        return;
+                    }
+
                     const local = await searchParties(trimmed, { group, wide });
                     if (cancelled) return;
                     // Paint the regulars immediately — instant, and correct as far
                     // as it goes. What it may be missing is anyone who has never
                     // been searched from THIS machine, which only the server knows.
-                    if (local && local.length > 0) setHits(local.map(toHit));
+                    if (local && local.length > 0) {
+                        const { rows, guessIds: guesses } = searchPartyRows(local, trimmed, {
+                            group,
+                            rows: MAX_HITS,
+                        });
+                        setHits(rows.map(toHit));
+                        setGuessIds(guesses as Set<string>);
+                    }
 
                     // A FULL local page cannot be topped up: the server caps at the
                     // same number, so asking it could only repeat what is already
@@ -167,7 +244,9 @@ export function usePartySearch(
                     // The live answer is the fuller one — it can see every customer,
                     // not just this machine's regulars — so it replaces the local
                     // paint rather than being appended to it.
-                    setHits(res.data);
+                    const { ranked, guesses } = rankServerHits(res.data, trimmed);
+                    setHits(ranked);
+                    setGuessIds(guesses);
                     // Kept after painting, not before — the till waits for the
                     // list, never for the write that makes the next one free. This
                     // also refreshes any already-cached row's `cachedAt`, which is
@@ -176,7 +255,7 @@ export function usePartySearch(
                         void cacheParties((res.data as FullHit[]).map(toParty));
                     }
                 } catch {
-                    if (!cancelled) setHits([]);
+                    if (!cancelled) { setHits([]); setGuessIds(new Set()); }
                 } finally {
                     if (!cancelled) setLoading(false);
                 }
@@ -186,7 +265,7 @@ export function usePartySearch(
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [query, enabled, debounceMs, group, wide]);
+    }, [query, enabled, debounceMs, group, wide, fullList]);
 
-    return { hits, loading };
+    return { hits, loading, guessIds };
 }

@@ -12,6 +12,12 @@ import { looksLikeEmail, looksLikePhone } from "@/shared/lib/parties/tokenShape"
 import { afterCursor, BROWSE_PAGE_SIZE, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { searchPartyRows, normalisePartyQuery } from "@/shared/lib/parties/partySearch";
+
+/** Rows a lookup returns. Each side of the union takes a full page, so the
+ *  ranked merge can choose between them rather than persons crowding companies
+ *  out before anything has been compared. */
+const MAX_LOOKUP_ROWS = 8;
 
 // Multi-value `phones` / `emails` arrays default to []; the first entry is
 // primary unless an entry explicitly carries `isPrimary: true` at the write site.
@@ -58,6 +64,8 @@ type FullFields = {
 async function lookupAccounts(
     term: string,
     group?: string,
+    // `wide` no longer selects any fields — address and email are always
+    // searched now. Accepted so the callers that pass it keep compiling.
     opts?: { wide?: boolean; full?: boolean },
 ): Promise<LookupResult[]> {
     const full = opts?.full ?? false;
@@ -80,14 +88,22 @@ async function lookupAccounts(
         ? { account: { is: { group: { is: { name: group } } } } }
         : {};
 
-    // `wide` widens each token's match to address + email as well as name/phone.
-    // Opt-in only — POS / QuickTicket / party pickers stay strict (name + phone)
-    // so their results don't change. The Front Office helper search passes it so
-    // a query like "rosy delhi" can pair a name token with an address token.
-    const wide = opts?.wide ?? false;
+    // A token may match ANY field the dropdown shows. `wide` used to gate address
+    // and email, and it cost the operator the commonest lookup there is: half a
+    // name plus a locality ("rosy fancy") matched nothing, because `fancy` was
+    // only ever compared against names. Showing an address on the row and then
+    // refusing to search it is not a saving, it is a lie — and it is not even a
+    // saving: `address` is a plain COLUMN on both tables, so unlike `phones` and
+    // `emails` it costs no join, and the email branch is still only built when the
+    // token is actually email-shaped. `wide` is kept for callers that pass it, but
+    // nothing depends on it to reach these two fields any more.
     const tokenOr = (t: string) => ({
         OR: [
             { name: { contains: t, mode: "insensitive" as const } },
+            { address: { contains: t, mode: "insensitive" as const } },
+            ...(looksLikeEmail(t)
+                ? [{ emails: { some: { email: { contains: t, mode: "insensitive" as const } } } }]
+                : []),
             // Phone and email only enter the query when the token is actually
             // shaped like one — the UI already knows what it's typing, so this is
             // the same saving as the exact-match version without the cost of a
@@ -96,22 +112,20 @@ async function lookupAccounts(
             // typed prefix.
             ...(looksLikePhone(t) ? [{ phones: { some: { phone: { contains: t } } } }] : []),
             { account: { is: { aliases: { some: { alias: { contains: t, mode: "insensitive" as const } } } } } },
-            ...(wide
-                ? [
-                    { address: { contains: t, mode: "insensitive" as const } },
-                    ...(looksLikeEmail(t)
-                        ? [{ emails: { some: { email: { contains: t, mode: "insensitive" as const } } } }]
-                        : []),
-                  ]
-                : []),
         ],
     });
 
     // Split multi-word queries (e.g. "abeer 9954") into tokens and AND them —
-    // each token must match name / phone (and, when `wide`, address / email).
-    const tokens = term.trim().split(/\s+/).filter(Boolean);
+    // each token must match name / address / phone / email / alias.
+    //
+    // Normalised first, because a phone is dictated and pasted with punctuation
+    // in it. Phones are STORED as bare digits, so "+91 99540-12345" matched
+    // nothing at all — the "+" and the "-" made it look like a name. See
+    // normalisePartyQuery; it leaves everything that is not a number alone.
+    const normalised = normalisePartyQuery(term);
+    const tokens = normalised.split(/\s+/).filter(Boolean);
     const tokenFilter = tokens.length <= 1
-        ? tokenOr(term)
+        ? tokenOr(normalised)
         : { AND: tokens.map(tokenOr) };
 
     const [persons, companies] = await Promise.all([
@@ -134,7 +148,12 @@ async function lookupAccounts(
                     },
                 },
             },
-            take: 8,
+            // Both sides take a FULL page each, and the merge below ranks them
+            // together before cutting. Taking 8 and 8 then slicing persons-first
+            // meant a company could never appear at all once 8 people matched —
+            // a company whose name is also a common person name was unreachable
+            // from the box.
+            take: MAX_LOOKUP_ROWS,
             orderBy: { createdAt: "desc" },
         }),
         prisma.company.findMany({
@@ -148,7 +167,7 @@ async function lookupAccounts(
                 phones: contacts,
                 emails: contacts,
             },
-            take: 8,
+            take: MAX_LOOKUP_ROWS,
             orderBy: { createdAt: "desc" },
         }),
     ]);
@@ -171,7 +190,7 @@ async function lookupAccounts(
         }
         : {};
 
-    return [
+    const merged = [
         ...persons.map(p => ({
             id: p.id,
             name: p.name,
@@ -198,7 +217,33 @@ async function lookupAccounts(
             linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],
             ...extras(c),
         })),
-    ].slice(0, 8);
+    ];
+
+    // Rank before cutting. Postgres can only give us `contains` in `createdAt`
+    // order — that is "whoever registered most recently", not "whoever matches
+    // best", so an exact name from 2019 fell off the bottom under a partial
+    // match added last week, and typing "hri" led with Tas(hri)f instead of
+    // Hridoy. The same matcher the counter runs in memory does the ordering
+    // here, so the two agree about what belongs at the top.
+    // Rank over the phone/email the row actually carries. Without `full=1` the
+    // arrays are absent and only the primary `phone`/`email` came back — feeding
+    // the matcher a row with no phone in it at all would score a phone query
+    // ZERO and drop every result on the floor.
+    const ranked = searchPartyRows(
+        merged.map((r) => ({
+            ...r,
+            phones: r.phones ?? (r.phone ? [r.phone] : []),
+            emails: r.emails ?? (r.email ? [r.email] : []),
+        })),
+        normalised,
+        { rows: MAX_LOOKUP_ROWS },
+    ).rows;
+    // Hand back the rows as they were built — the arrays above were for matching
+    // only, and `full=1` decides what is allowed on the wire.
+    const order = new Map(ranked.map((r, i) => [`${r.type}:${r.id}`, i]));
+    return merged
+        .filter((r) => order.has(`${r.type}:${r.id}`))
+        .sort((a, b) => order.get(`${a.type}:${a.id}`)! - order.get(`${b.type}:${b.id}`)!);
 }
 
 // GET /api/person?phone=...&q=...&lookup=...&group=Sundry+Debtors|Sundry+Creditors
