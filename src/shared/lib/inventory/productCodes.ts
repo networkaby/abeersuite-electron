@@ -122,21 +122,79 @@ function productWords(p: ProductSearchCandidate): string[] {
 }
 
 /**
- * Fast Levenshtein distance check — returns true if edit distance ≤ 1.
- * Optimised for short strings (product tokens); avoids full matrix allocation.
+ * Fast Levenshtein distance check — true when the edit distance is ≤ `max`
+ * (1 or 2). Row-at-a-time DP with an early bail-out once a whole row is over
+ * budget, so it stays cheap for the short strings we compare (product tokens).
  */
-function editDistance1(a: string, b: string): boolean {
+function editDistanceAtMost(a: string, b: string, max: number): boolean {
     const al = a.length, bl = b.length;
-    if (Math.abs(al - bl) > 1) return false;
-    // Ensure a is the shorter one
-    if (al > bl) return editDistance1(b, a);
-    // al <= bl, difference is 0 or 1
-    let i = 0;
-    while (i < al && a[i] === b[i]) i++;
-    // Skip exactly one mismatch in the longer string, then compare rest
-    let j = i + 1; // skip the extra char in b
-    while (i < al && a[i] === b[j]) { i++; j++; }
-    return i === al;
+    if (Math.abs(al - bl) > max) return false;
+    let prev = Array.from({ length: bl + 1 }, (_, j) => j);
+    for (let i = 1; i <= al; i++) {
+        const row = [i];
+        let best = i;
+        for (let j = 1; j <= bl; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            const v = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + cost);
+            row.push(v);
+            if (v < best) best = v;
+        }
+        if (best > max) return false; // every path already over budget
+        prev = row;
+    }
+    return prev[bl] <= max;
+}
+
+// Match tiers, worst → best. A token scores the highest tier it can reach.
+const TIER_TYPO = 10;
+const TIER_INSIDE = 100;
+const TIER_PREFIX = 200;
+const TIER_SUBSTRING = 300;
+const TIER_WORD_START = 400;
+const TIER_LADDER = [0, TIER_TYPO, TIER_INSIDE, TIER_PREFIX, TIER_SUBSTRING, TIER_WORD_START];
+
+/** One step down the ladder — what a rescued (split) token is allowed to score,
+ *  so a real match always outranks a reconstructed one. Never below the typo
+ *  tier: a split that matched at all is still a signal, and dropping it to 0
+ *  would throw the whole product away. */
+function demoteTier(tier: number): number {
+    const i = TIER_LADDER.indexOf(tier);
+    return i <= 0 ? 0 : Math.max(TIER_LADDER[i - 1], TIER_TYPO);
+}
+
+/** How well one query token matches one product. `fuzzyMax` is the typo budget;
+ *  2 is only ever allowed on tokens long enough that it can't match half the shop. */
+function tokenTier(token: string, text: string, words: string[], fuzzyMax: number): number {
+    const idx = text.indexOf(token);
+    if (idx !== -1) return idx === 0 || text[idx - 1] === " " ? TIER_WORD_START : TIER_SUBSTRING;
+    if (words.some((w) => w.startsWith(token))) return TIER_PREFIX;
+    if (words.some((w) => w.includes(token))) return TIER_INSIDE;
+    const budget = token.length >= 5 ? fuzzyMax : Math.min(fuzzyMax, 1);
+    if (words.some((w) => editDistanceAtMost(token, w, budget))) return TIER_TYPO;
+    return 0;
+}
+
+/** Shortest piece a split is allowed to produce — below this nearly every
+ *  product matches and the rescue turns into noise. */
+const MIN_SPLIT_PIECE = 2;
+
+/**
+ * Rescue for a token the cashier ran together: "pen32", "a4paper", "papera4",
+ * "camcp". Tries every two-way split, scores both halves with the normal
+ * ladder, and keeps the best — worst half wins within a split, demoted one
+ * tier so it never outranks a genuine match. 0 when no split works.
+ */
+function splitTokenTier(token: string, text: string, words: string[], fuzzyMax: number): number {
+    if (token.length < MIN_SPLIT_PIECE * 2) return 0;
+    let best = 0;
+    for (let i = MIN_SPLIT_PIECE; i <= token.length - MIN_SPLIT_PIECE; i++) {
+        const left = tokenTier(token.slice(0, i), text, words, fuzzyMax);
+        if (!left) continue;
+        const right = tokenTier(token.slice(i), text, words, fuzzyMax);
+        if (!right) continue;
+        best = Math.max(best, Math.min(left, right));
+    }
+    return demoteTier(best);
 }
 
 /**
@@ -145,9 +203,12 @@ function editDistance1(a: string, b: string): boolean {
  * (order doesn't matter), so "32 gb pendrive" matches "SanDisk Pendrive 32GB".
  * Returns 0 for no match; higher score = closer match, for ranking results.
  * Falls back to fuzzy matching (Levenshtein ≤ 1) when exact/prefix match fails,
- * so typos like "sadisk" still find "sandisk".
+ * so typos like "sadisk" still find "sandisk", and to a two-way split when the
+ * cashier runs words together ("pen32", "a4paper") — a split can only ever
+ * score a tier below a real match.
  * Used by POS product picker and the office dashboard's product quick-lookup
- * (UniversalCustomerPanel).
+ * (UniversalCustomerPanel). See looseProductScore for the POS-only fallback
+ * that runs when this returns nothing for every product.
  */
 export function scoreProductSearch(p: ProductSearchCandidate, query: string): number {
     const q = query.trim().toLowerCase();
@@ -162,30 +223,52 @@ export function scoreProductSearch(p: ProductSearchCandidate, query: string): nu
     let tier = 0; // worst tier across all tokens (lower = worse)
 
     for (const token of q.split(/\s+/).filter(Boolean)) {
-        // 1) Exact substring match in full text
-        const idx = text.indexOf(token);
-        if (idx !== -1) {
-            // Word-start bonus (token aligns with a word boundary)
-            tier = Math.max(tier, idx === 0 || text[idx - 1] === " " ? 400 : 300);
-            continue;
-        }
-        // 2) Starts-with — token is a prefix of any product word
-        if (words.some((w) => w.startsWith(token))) {
-            tier = Math.max(tier, 200);
-            continue;
-        }
-        // 3) Contains — token appears inside any product word
-        if (words.some((w) => w.includes(token))) {
-            tier = Math.max(tier, 100);
-            continue;
-        }
-        // 4) Fuzzy — Levenshtein ≤ 1 (single typo)
-        if (words.some((w) => editDistance1(token, w))) {
-            tier = Math.max(tier, 10);
-            continue;
-        }
-        // Token not found at all
-        return 0;
+        // Whole token first — unchanged ranking for everything that already
+        // matched. Only a token that scores nothing gets the split rescue.
+        const hit = tokenTier(token, text, words, 1) || splitTokenTier(token, text, words, 1);
+        if (!hit) return 0; // token not found at all
+        tier = Math.max(tier, hit);
     }
     return tier + fullBonus;
+}
+
+/**
+ * Looser sibling of scoreProductSearch, for the POS dropdown only: no token is
+ * mandatory and the tiers ADD UP, so a product matching 3 of 4 tokens outranks
+ * one matching 1. The typo budget widens to 2 edits on tokens of 5+ characters
+ * ("hddseaget" → "hdd" + "seagate"). Returns 0 when not one token lands.
+ *
+ * Only ever run when scoreProductSearch found nothing for the whole catalogue —
+ * its results are guesses and the dropdown colours them as such.
+ */
+export function looseProductScore(p: ProductSearchCandidate, query: string): number {
+    const q = query.trim().toLowerCase();
+    if (!q) return 0;
+    const text = productSearchText(p);
+    if (!text) return 0;
+
+    const words = productWords(p);
+    let total = 0;
+    for (const token of q.split(/\s+/).filter(Boolean)) {
+        const hit = tokenTier(token, text, words, 2) || splitTokenTier(token, text, words, 2);
+        total += hit / 10; // same ladder, scaled down: 400 → 40 … 10 → 1
+    }
+    return total;
+}
+
+/**
+ * Last resort so the dropdown is never blank: what share of the query's letter
+ * pairs appear anywhere in the product text. Deliberately crude — it always
+ * returns a number, so the caller can sort by it and take the top rows even
+ * when nothing really matches.
+ */
+export function rawOverlapScore(p: ProductSearchCandidate, query: string): number {
+    const q = query.trim().toLowerCase().replace(/\s+/g, "");
+    if (!q) return 0;
+    const text = productSearchText(p);
+    if (!text) return 0;
+    if (q.length < 2) return text.includes(q) ? 1 : 0;
+    let hits = 0;
+    for (let i = 0; i < q.length - 1; i++) if (text.includes(q.slice(i, i + 2))) hits++;
+    return hits / (q.length - 1);
 }

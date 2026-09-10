@@ -26,8 +26,8 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
-import { scoreProductSearch, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
+import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer, type MatchKind } from "@/modules/pos/lib/posDraftTypes";
+import { scoreProductSearch, looseProductScore, rawOverlapScore, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
@@ -66,6 +66,10 @@ export function usePosBilling(opts: {
     // ── Product search + cart ───────────────────────────────────────────────
     const [productQuery, setProductQuery] = useState("");
     const [productHighlight, setProductHighlight] = useState(0);
+    // Has the cashier deliberately moved the highlight (arrow keys / hover)?
+    // Guards Enter against silently adding a "guess" row — an unknown barcode
+    // ends in Enter too, and a wrong item on the bill is worse than no item.
+    const [highlightTouched, setHighlightTouched] = useState(false);
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
     // Product Explorer hover — shown standalone on the customer-facing DQ11
     // ("Add this item?") while the cashier's mouse rests on a tile, so the
@@ -370,16 +374,38 @@ export function usePosBilling(opts: {
 
     // Products only — services have no barcode, so they are NOT scannable/typed
     // here; they are added from the "+ Add service charge" button in the cart.
-    const filteredProducts = useMemo(() => {
+    //
+    // Three passes, each one only running when the one before it came back
+    // empty, so a normal scan or a good search behaves exactly as it always
+    // did. The dropdown colours the last two so the cashier can see at a glance
+    // that they are guesses, not hits:
+    //   exact — the real search, unchanged
+    //   fuzzy — every token optional, wider typo budget ("hddseaget")
+    //   guess — letter-pair overlap; whatever is closest, so the box is never
+    //           blank. Up for review after cashiers have lived with it.
+    const { filteredProducts, productMatchKind } = useMemo(() => {
         const q = productQuery.trim();
-        if (!q) return [] as ProductOption[];
-        return allProducts
-            .map((p) => ({ p, score: scoreProductSearch(p, q) }))
-            .filter(({ score }) => score > 0)
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 12)
-            .map(({ p }) => p);
+        if (!q) return { filteredProducts: [] as ProductOption[], productMatchKind: "exact" as MatchKind };
+
+        const rank = (score: (p: ProductOption) => number, keepZero = false) =>
+            allProducts
+                .map((p) => ({ p, score: score(p) }))
+                .filter(({ score }) => keepZero || score > 0)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 12)
+                .map(({ p }) => p);
+
+        const exact = rank((p) => scoreProductSearch(p, q));
+        if (exact.length > 0) return { filteredProducts: exact, productMatchKind: "exact" as MatchKind };
+
+        const fuzzy = rank((p) => looseProductScore(p, q));
+        if (fuzzy.length > 0) return { filteredProducts: fuzzy, productMatchKind: "fuzzy" as MatchKind };
+
+        return { filteredProducts: rank((p) => rawOverlapScore(p, q), true), productMatchKind: "guess" as MatchKind };
     }, [productQuery, allProducts]);
+
+    // A fresh query is a fresh list — the cashier has not aimed at anything yet.
+    useEffect(() => { setHighlightTouched(false); }, [productQuery]);
 
     // Per-line tax via the same calcLineTotals helper office SALE uses, so
     // POS and SALE always compute identical GST. POS has no per-line discount
@@ -1100,14 +1126,25 @@ export function usePosBilling(opts: {
     const onProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "ArrowDown") {
             e.preventDefault();
-            if (filteredProducts.length > 0)
+            if (filteredProducts.length > 0) {
                 setProductHighlight((i) => Math.min(i + 1, filteredProducts.length - 1));
+                setHighlightTouched(true);
+            }
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            if (filteredProducts.length > 0)
+            if (filteredProducts.length > 0) {
                 setProductHighlight((i) => Math.max(i - 1, 0));
+                setHighlightTouched(true);
+            }
         } else if (e.key === "Enter") {
             e.preventDefault();
+            // A scan that found nothing still ends in Enter. Never let that
+            // land a "nearest guess" on the bill by itself — the cashier has
+            // to aim at the row first (arrow keys or click).
+            if (productMatchKind === "guess" && !highlightTouched) {
+                toast.error("No match — pick an item from the list");
+                return;
+            }
             const pick = filteredProducts[productHighlight] ?? filteredProducts[0];
             if (pick) addToCart(pick);
         } else if (e.key === "Escape") {
@@ -1405,7 +1442,7 @@ export function usePosBilling(opts: {
         fetchSnapshot, onPartyPicked, clearCustomer, changingParty,
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
-        filteredProducts, allProducts, hoverPreviewProduct, setHoverPreviewProduct,
+        filteredProducts, productMatchKind, setHighlightTouched, allProducts, hoverPreviewProduct, setHoverPreviewProduct,
         cart, setCart, renderCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
         cartSelectedId, setCartSelectedId,
         saleNoteMissing,

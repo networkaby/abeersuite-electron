@@ -249,6 +249,13 @@ export type PosOffer = {
     freeDiscountPct: number | null;
 };
 
+/**
+ * Which of the POS product search's three passes produced the current
+ * dropdown rows — the dropdown tints "fuzzy" and "guess" so the cashier can
+ * see they are suggestions, not matches. See usePosBilling's filteredProducts.
+ */
+export type MatchKind = "exact" | "fuzzy" | "guess";
+
 export type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
 
 export const newChargeRow = (): ChargeRow => ({
