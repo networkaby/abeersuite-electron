@@ -36,7 +36,7 @@ import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { gridRowClass } from "@/shared/lib/format";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
-import { productMatchesQuery } from "@/shared/lib/inventory";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -834,7 +834,7 @@ export default function GeneratePage() {
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
         let v = rows;
-        if (q) v = v.filter((r) => productMatchesQuery(r, q));
+        if (q) v = v.filter((r) => productMatchesSearch(r, q));
         if (fBrand !== "ALL") v = v.filter((r) => r.brand === fBrand);
         if (fCategory !== "ALL") v = v.filter((r) => r.category === fCategory);
         if (fGroup !== "ALL") v = v.filter((r) => r.group === fGroup);

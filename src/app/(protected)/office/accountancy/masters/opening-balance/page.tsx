@@ -26,7 +26,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { InvProductCombobox } from "@/modules/inventory/components/InvProductCombobox";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
-import { productMatchesQuery } from "@/shared/lib/inventory";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 import { fmt } from "@/utils/constants";
 
 type AccountRow = {
@@ -529,7 +529,7 @@ function ProductOpeningSection({
     const codes = useMemo(() => new Map(catalog.map((p) => [p.id, p.codes ?? []])), [catalog]);
     const q = filter.trim().toLowerCase();
     const visible = q
-        ? products.filter((p) => productMatchesQuery({ name: p.name, sku: p.sku, codes: codes.get(p.id) }, q))
+        ? products.filter((p) => productMatchesSearch({ name: p.name, sku: p.sku, codes: codes.get(p.id) }, q))
         : products;
 
     const handleProductCreated = async (newId: number) => {

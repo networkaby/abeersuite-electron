@@ -79,24 +79,6 @@ export function productSearchWhere(q: string | null | undefined) {
     };
 }
 
-/**
- * Client-side counterpart of {@link productSearchWhere} for lists already
- * fetched into the browser (POS product picker, help-desk universal search,
- * update-print-labels table, …). Same fields, same partial/case-insensitive
- * matching, so a query behaves identically whether filtered server- or
- * client-side.
- */
-export function productMatchesQuery(
-    p: { name: string; sku?: string | null; codes?: readonly { value: string }[] | null },
-    q: string,
-): boolean {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return true;
-    if (p.name.toLowerCase().includes(needle)) return true;
-    if (p.sku && p.sku.toLowerCase().includes(needle)) return true;
-    return (p.codes ?? []).some((c) => c.value.toLowerCase().includes(needle));
-}
-
 export type ProductSearchCandidate = {
     name: string;
     sku?: string | null;

@@ -33,6 +33,7 @@ import {
 } from "@/modules/lab/lib/buildCandidates";
 import { UserPlus } from "lucide-react";
 import { type PickedParty } from "@/shared/components/PartySearchAndCreate";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -200,7 +201,7 @@ export default function UniversalHelperSearch() {
         if (!hasQuery) return [];
         return products
             .filter(p =>
-                `${p.name} ${p.sku ?? ""} ${p.brand?.name ?? ""} ${(p.codes ?? []).map(c => c.value).join(" ")}`.toLowerCase().includes(q)
+                productMatchesSearch(p, q)
             )
             .slice(0, 6);
     }, [q, products, hasQuery]);

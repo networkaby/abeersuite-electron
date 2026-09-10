@@ -109,6 +109,35 @@ export function searchProducts<T>(
 }
 
 /**
+ * The tiered matcher as a PREDICATE — "does this row survive the search box?"
+ *
+ * `searchProducts` is for a dropdown: it ranks and caps. A table filter wants
+ * neither. It keeps its own sort (age, margin, stock, whatever the column
+ * headers say) and shows everything that matches, so all it needs is a
+ * yes/no — but the same yes/no the dropdowns use, so "papera4" and a
+ * multi-word query behave identically wherever the operator types them.
+ *
+ * Pass `text` when the row is not a product-shaped object: a report row that
+ * carries extra searchable columns, a list of group names, a public storefront
+ * product whose internal fields must stay out of it.
+ */
+export function productMatchesSearch<T>(
+    item: T,
+    query: string,
+    opts: { text?: (item: T) => string } = {},
+): boolean {
+    const q = query.trim();
+    if (!q) return true;
+    const text = opts.text ? opts.text(item) : productSearchText(item as ProductSearchCandidate);
+    return scoreSearchText(text, q) > 0;
+}
+
+/** Join whatever a row has into one searchable string, skipping the blanks. */
+export function searchableText(...parts: (string | null | undefined)[]): string {
+    return parts.filter(Boolean).join(" ").toLowerCase();
+}
+
+/**
  * Does this text identify exactly one product — a scanned barcode or a SKU
  * typed in full? A scanner sends the code and then Enter, and Enter must land
  * THAT product, not whichever row the highlight happens to sit on. Ranking

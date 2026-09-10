@@ -24,6 +24,7 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { VoucherActionsMenu, editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,12 +201,7 @@ export default function InventoryDetailsPage() {
     });
 
     const filtered = search
-        ? products.filter(
-            (p) =>
-                p.name.toLowerCase().includes(search.toLowerCase()) ||
-                p.sku.toLowerCase().includes(search.toLowerCase()) ||
-                p.codes.some((c) => c.value.toLowerCase().includes(search.toLowerCase())),
-        )
+        ? products.filter((p) => productMatchesSearch(p, search))
         : products;
 
     return (

@@ -19,7 +19,7 @@ import { useExplorerStore } from "@/store/explorerStore";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
-import { productMatchesQuery, readCachedMasters, syncMasters } from "@/shared/lib/inventory";
+import { productMatchesSearch, readCachedMasters, syncMasters } from "@/shared/lib/inventory";
 import type { ProductOption, CartLine } from "@/modules/pos/lib/posDraftTypes";
 
 /** Number of products to show in the grid before the next scroll-triggered batch. */
@@ -216,7 +216,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
      *  so picking a group empties out brands with nothing in it and vice
      *  versa, instead of the two filters fighting each other silently. */
     const passesOthers = (p: ProductOption, skip: "group" | "category" | "brand" | null) => {
-        if (q && !productMatchesQuery(p, q)) return false;
+        if (q && !productMatchesSearch(p, q)) return false;
         if (skip !== "group" && allowedGroupIds && (p.groupId == null || !allowedGroupIds.has(p.groupId))) return false;
         if (skip !== "category" && selectedCategoryId !== "" && p.categoryId !== selectedCategoryId) return false;
         if (skip !== "brand" && selectedBrand && p.brand?.name !== selectedBrand) return false;

@@ -50,6 +50,7 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { useEscape, useActiveRow } from "@/shared/hooks";
 import { gridRowClass, GRID_FROZEN_CELL, GRID_FROZEN_HEAD, GRID_FROZEN_EDGE } from "@/shared/lib/format";
 import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
+import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
@@ -342,13 +343,11 @@ export default function InventoryProductsPage() {
         const q = search.trim().toLowerCase();
         // 1. free-text search across SKU/name/namePart/model/every scannable code
         //    (barcode, EAN, UPC — not just the primary barcode1).
-        let out = !q ? rows : rows.filter((r) =>
-            r.sku.toLowerCase().includes(q) ||
-            r.name.toLowerCase().includes(q) ||
-            (r.namePart ?? "").toLowerCase().includes(q) ||
-            (r.modelNo ?? "").toLowerCase().includes(q) ||
-            r.codes.some((c) => c.value.toLowerCase().includes(q)),
-        );
+        let out = !q ? rows : rows.filter((r) => productMatchesSearch(r, q, {
+            // namePart and modelNo are this screen's own searchable columns,
+            // beyond the name/sku/codes every product carries.
+            text: (x) => searchableText(x.sku, x.name, x.namePart, x.modelNo, ...x.codes.map((c) => c.value)),
+        }));
         // 2. per-column multi-select filters
         for (const [field, allowed] of colFilters) {
             if (allowed.size === 0) continue;

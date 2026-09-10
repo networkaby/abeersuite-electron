@@ -64,6 +64,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { gridRowClass } from "@/shared/lib/format";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { fmt } from "@/utils/constants";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 
 type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
 type Signal = "buy" | "review" | "ok" | "untouched" | "skipped";
@@ -397,7 +398,7 @@ export default function ReorderPage() {
 
     const q = search.trim().toLowerCase();
     const passesFilters = useCallback((r: ReorderRow): boolean => {
-        if (q && !r.name.toLowerCase().includes(q) && !r.sku.toLowerCase().includes(q) && !r.codes.some((c) => c.value.toLowerCase().includes(q))) return false;
+        if (q && !productMatchesSearch(r, q)) return false;
         for (const [field, set] of filters) {
             const v = fieldValue(r, field);
             if (!set.has(v ?? NONE_KEY)) return false;

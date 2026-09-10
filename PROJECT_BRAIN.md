@@ -745,7 +745,7 @@ The product's score is the **worst** token's tier (every token must match), plus
 
 **Cost.** Every picker reads the shared in-memory catalogue via [useProductCatalog](src/shared/hooks/useProductCatalog.ts) — one array per tab, IndexedDB first, then a server delta, kept live by the `catalogue` realtime topic. `InvProductPicker` used to refetch the whole catalogue on every dialog open; it no longer does. Dropdowns that open on focus are capped at 50 rows with a "type more to narrow down" footer — uncapped, `InvProductCombobox` mounted one `<li>` per catalogue row on every focus, the same shape as the ledger dropdown that used to block the main thread for 1.8s.
 
-**Still on the old substring matcher:** `PosProductExplorer`, `update-print-labels`, `opening-balance`, and `/lab`'s universal search.
+**Two shapes, one matcher.** A dropdown wants ranked and capped rows, so it calls `searchProducts()`. A table filter wants neither — it keeps its own sort (age, margin, stock) and shows everything that matches — so it calls `productMatchesSearch()`, the same scoring as a yes/no. Rows that are not product-shaped (a report row with extra searchable columns, a list of group names, a public storefront product) pass a `text` extractor. The old substring `productMatchesQuery` is **deleted**: every product search in the app, dropdown and table alike, is now one function, so `papera4` and multi-word queries behave the same wherever they are typed.
 
 ## 🧭 Design: Shop category/collection/product routing — Plan 1 (proposed 2026-08-05, NOT yet decided)
 

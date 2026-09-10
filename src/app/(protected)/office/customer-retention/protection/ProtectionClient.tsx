@@ -14,6 +14,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 
 interface ProtectedProduct {
     id: number;
@@ -47,10 +48,7 @@ export default function ProtectionClient() {
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return protectedProducts;
-        return protectedProducts.filter((p) =>
-            p.product.sku.toLowerCase().includes(q) ||
-            p.product.name.toLowerCase().includes(q)
-        );
+        return protectedProducts.filter((p) => productMatchesSearch(p.product, q));
     }, [protectedProducts, search]);
 
     async function addProtection(productId: number) {

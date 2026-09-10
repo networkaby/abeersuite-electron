@@ -59,6 +59,7 @@ import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
 import { sumGroupPointsWithAncestors } from "@/modules/pricing-strategy/lib/groupPointsHierarchy";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 
 // Default rows-per-page for the preview table (full list is paginated, not capped).
 const DEFAULT_PAGE_SIZE = 50;
@@ -457,13 +458,14 @@ export default function PricingStrategiesPage() {
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
         return rows.filter(({ p, pieces, margin }) => {
-            const textOk =
-                !q ||
-                p.name.toLowerCase().includes(q) ||
-                p.sku.toLowerCase().includes(q) ||
-                nameOf(brands, p.brandId).toLowerCase().includes(q) ||
-                nameOf(categories, p.categoryId).toLowerCase().includes(q) ||
-                nameOf(groups, p.groupId).toLowerCase().includes(q);
+            // Brand / category / group are ids on the row, so their names have
+            // to be resolved before they can be searched.
+            const textOk = productMatchesSearch(p, q, {
+                text: (x) => searchableText(
+                    x.name, x.sku,
+                    nameOf(brands, x.brandId), nameOf(categories, x.categoryId), nameOf(groups, x.groupId),
+                ),
+            });
             if (!textOk) return false;
             // Points / margin ranges. pieces = [base, brand, category, group, product].
             if (!inRange(pieces[1].pts, ptRanges.brand)) return false;

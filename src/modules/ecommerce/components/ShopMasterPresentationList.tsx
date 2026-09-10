@@ -27,6 +27,7 @@ import {
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
 import ShopImageField from "@/modules/ecommerce/components/ShopImageField";
+import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 
 export type ShopMasterRow = {
     id: number;
@@ -83,7 +84,7 @@ export default function ShopMasterPresentationList({
 
     const normalizedSearch = search.trim().toLowerCase();
     const searchedRows = normalizedSearch
-        ? rows.filter((r) => r.name.toLowerCase().includes(normalizedSearch))
+        ? rows.filter((r) => productMatchesSearch(r, normalizedSearch, { text: (x) => searchableText(x.name) }))
         : rows;
 
     const { visible, collapsed, toggle, expandAll, collapseAll, hasTree } = useCollapsibleTree(searchedRows);

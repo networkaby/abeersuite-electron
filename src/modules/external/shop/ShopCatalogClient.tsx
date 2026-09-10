@@ -30,7 +30,7 @@ import {
 import { cn } from "@/shared/lib/format/utils";
 // Leaf import, NOT the inventory barrel — the barrel re-exports the Dexie
 // catalogue, and none of that belongs in a public storefront bundle.
-import { scoreSearchText } from "@/shared/lib/inventory/productCodes";
+import { productMatchesSearch } from "@/shared/lib/inventory/productSearch";
 import { Suspense } from "react";
 
 type SortKey = "featured" | "price-asc" | "price-desc" | "name" | "rating";
@@ -79,8 +79,7 @@ function shopSearchText(p: ShopProductPublic) {
  * shopper did not ask for reads as broken, not as helpful.
  */
 function matchesQuery(p: ShopProductPublic, q: string) {
-    if (!q) return true;
-    return scoreSearchText(shopSearchText(p), q) > 0;
+    return productMatchesSearch(p, q, { text: shopSearchText });
 }
 
 function discountPct(p: ShopProductPublic) {

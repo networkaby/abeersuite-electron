@@ -16,6 +16,7 @@ import { fmtQty, fmtDate } from "@/modules/bi/lib/format";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { productMatchesSearch } from "@/shared/lib/inventory";
 
 type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
 
@@ -71,7 +72,7 @@ export default function StockHealthPage() {
         const q = search.trim().toLowerCase();
         return data.rows.filter((r) =>
             (classFilter === "ALL" || r.movementClass === classFilter) &&
-            (!q || r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q) || r.codes.some((c) => c.value.toLowerCase().includes(q))),
+            productMatchesSearch(r, q),
         );
     }, [data, classFilter, search]);
 
