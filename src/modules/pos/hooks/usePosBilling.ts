@@ -26,9 +26,13 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
-import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer, type MatchKind } from "@/modules/pos/lib/posDraftTypes";
-import { scoreProductSearch, looseProductScore, rawOverlapScore, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
+import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
+import { scoreProductSearch, looseProductScore, rawOverlapScore, isWeakScore, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+
+/** How many rows the product dropdown shows — kept constant so the list does
+ *  not change height between a good query and a poor one. */
+const DROPDOWN_ROWS = 12;
 
 // Text-input sanitiser — same shape as TradingVoucherPage's num.
 // Project rule: no <input type="number">; we keep raw strings in state and
@@ -375,33 +379,53 @@ export function usePosBilling(opts: {
     // Products only — services have no barcode, so they are NOT scannable/typed
     // here; they are added from the "+ Add service charge" button in the cart.
     //
-    // Three passes, each one only running when the one before it came back
-    // empty, so a normal scan or a good search behaves exactly as it always
-    // did. The dropdown colours the last two so the cashier can see at a glance
-    // that they are guesses, not hits:
-    //   exact — the real search, unchanged
-    //   fuzzy — every token optional, wider typo budget ("hddseaget")
-    //   guess — letter-pair overlap; whatever is closest, so the box is never
-    //           blank. Up for review after cashiers have lived with it.
-    const { filteredProducts, productMatchKind } = useMemo(() => {
+    // The real search runs first and always ranks the same as it always has.
+    // When it finds nothing genuine, the list is topped up to DROPDOWN_ROWS —
+    // looser scoring, then letter-pair closeness — so a poor query lands on a
+    // full list of suggestions instead of two lonely rows or a blank box. Only
+    // rows that actually score are used; nothing arbitrary is ever shown.
+    //
+    // Every row carries a confidence: a row is a GUESS when no word of the
+    // query really matched it — the fillers, and also a typo-tier hit from the
+    // real search ("abc" reaching "ACC"), which is a suggestion wearing an
+    // exact-match coat. The dropdown colours guesses differently.
+    const { filteredProducts, productGuessIds } = useMemo(() => {
         const q = productQuery.trim();
-        if (!q) return { filteredProducts: [] as ProductOption[], productMatchKind: "exact" as MatchKind };
+        const guesses = new Set<number>();
+        if (!q) return { filteredProducts: [] as ProductOption[], productGuessIds: guesses };
 
-        const rank = (score: (p: ProductOption) => number, keepZero = false) =>
+        const rows: ProductOption[] = [];
+        const taken = new Set<number>();
+
+        /** Rank the not-yet-taken products by `score` and append what fits. */
+        const fill = (score: (p: ProductOption) => number, alwaysGuess: boolean) => {
+            const room = DROPDOWN_ROWS - rows.length;
+            if (room <= 0) return;
             allProducts
+                .filter((p) => !taken.has(p.id))
                 .map((p) => ({ p, score: score(p) }))
-                .filter(({ score }) => keepZero || score > 0)
+                .filter(({ score }) => score > 0)
                 .sort((a, b) => b.score - a.score)
-                .slice(0, 12)
-                .map(({ p }) => p);
+                .slice(0, room)
+                .forEach(({ p, score }) => {
+                    taken.add(p.id);
+                    rows.push(p);
+                    if (alwaysGuess || isWeakScore(score)) guesses.add(p.id);
+                });
+        };
 
-        const exact = rank((p) => scoreProductSearch(p, q));
-        if (exact.length > 0) return { filteredProducts: exact, productMatchKind: "exact" as MatchKind };
+        fill((p) => scoreProductSearch(p, q), false);
 
-        const fuzzy = rank((p) => looseProductScore(p, q));
-        if (fuzzy.length > 0) return { filteredProducts: fuzzy, productMatchKind: "fuzzy" as MatchKind };
+        // Padding only rescues a search that FAILED. "seagate" finding its two
+        // real hard disks must show two rows, not those two buried under ten
+        // "Sata cable" guesses — the cashier already has what they came for.
+        const foundSomethingReal = rows.some((p) => !guesses.has(p.id));
+        if (!foundSomethingReal) {
+            fill((p) => looseProductScore(p, q), true);
+            fill((p) => rawOverlapScore(p, q), true);
+        }
 
-        return { filteredProducts: rank((p) => rawOverlapScore(p, q), true), productMatchKind: "guess" as MatchKind };
+        return { filteredProducts: rows, productGuessIds: guesses };
     }, [productQuery, allProducts]);
 
     // A fresh query is a fresh list — the cashier has not aimed at anything yet.
@@ -1141,11 +1165,11 @@ export function usePosBilling(opts: {
             // A scan that found nothing still ends in Enter. Never let that
             // land a "nearest guess" on the bill by itself — the cashier has
             // to aim at the row first (arrow keys or click).
-            if (productMatchKind === "guess" && !highlightTouched) {
-                toast.error("No match — pick an item from the list");
+            const pick = filteredProducts[productHighlight] ?? filteredProducts[0];
+            if (pick && productGuessIds.has(pick.id) && !highlightTouched) {
+                toast.error("No exact match — pick an item from the list");
                 return;
             }
-            const pick = filteredProducts[productHighlight] ?? filteredProducts[0];
             if (pick) addToCart(pick);
         } else if (e.key === "Escape") {
             if (productQuery.trim()) {
@@ -1442,7 +1466,7 @@ export function usePosBilling(opts: {
         fetchSnapshot, onPartyPicked, clearCustomer, changingParty,
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
-        filteredProducts, productMatchKind, setHighlightTouched, allProducts, hoverPreviewProduct, setHoverPreviewProduct,
+        filteredProducts, productGuessIds, setHighlightTouched, allProducts, hoverPreviewProduct, setHoverPreviewProduct,
         cart, setCart, renderCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
         cartSelectedId, setCartSelectedId,
         saleNoteMissing,

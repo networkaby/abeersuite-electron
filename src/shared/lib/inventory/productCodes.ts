@@ -152,6 +152,18 @@ const TIER_PREFIX = 200;
 const TIER_SUBSTRING = 300;
 const TIER_WORD_START = 400;
 const TIER_LADDER = [0, TIER_TYPO, TIER_INSIDE, TIER_PREFIX, TIER_SUBSTRING, TIER_WORD_START];
+/** Added on top of the tier when the whole query appears as one contiguous run. */
+const FULL_QUERY_BONUS = 100;
+
+/**
+ * Did this score come from the typo tier — i.e. no word actually matched, the
+ * query was merely one or two edits away? Such a row is a suggestion, not a
+ * hit, and the POS dropdown colours it like the fuzzy/guess rows even though
+ * scoreProductSearch (not the fallbacks) produced it.
+ */
+export function isWeakScore(score: number): boolean {
+    return score === TIER_TYPO || score === TIER_TYPO + FULL_QUERY_BONUS;
+}
 
 /** One step down the ladder — what a rescued (split) token is allowed to score,
  *  so a real match always outranks a reconstructed one. Never below the typo
@@ -217,7 +229,7 @@ export function scoreProductSearch(p: ProductSearchCandidate, query: string): nu
     if (!text) return 0;
 
     // Bonus when the full query appears as a contiguous substring
-    const fullBonus = text.includes(q) ? 100 : 0;
+    const fullBonus = text.includes(q) ? FULL_QUERY_BONUS : 0;
 
     const words = productWords(p);
     let tier = 0; // worst tier across all tokens (lower = worse)

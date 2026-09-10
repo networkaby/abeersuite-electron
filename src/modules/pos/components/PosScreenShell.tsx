@@ -263,22 +263,18 @@ export function PosScreenShell({
                                         /
                                     </kbd>
                                     {b.filteredProducts.length > 0 && (
-                                        <ul className={`absolute left-0 right-0 top-full z-20 mt-1 max-h-[28rem] overflow-y-auto rounded-md border bg-popover shadow-lg ${b.productMatchKind === "exact" ? "border-border" : "border-amber-400/70 dark:border-amber-500/50"}`}>
-                                            {/* Nothing matched outright — these rows are the search's best
-                                                guesses, tinted amber so the cashier never mistakes one for a
-                                                scan hit. Provisional: drop it if cashiers find it noisy. */}
-                                            {b.productMatchKind !== "exact" && (
-                                                <li className="sticky top-0 z-10 border-b border-amber-400/40 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-                                                    {b.productMatchKind === "fuzzy" ? "No exact match — closest items" : "No match — showing nearest guesses"}
-                                                </li>
-                                            )}
+                                        <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[28rem] overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                                             {b.filteredProducts.map((p, i) => (
                                                 <li key={p.id}>
                                                     <button
                                                         type="button"
                                                         onClick={() => b.addToCart(p)}
                                                         onMouseEnter={() => { b.setProductHighlight(i); b.setHighlightTouched(true); }}
-                                                        className={`grid w-full grid-cols-[60px_minmax(0,1fr)_45px_80px_20px] items-center gap-x-1 px-2.5 py-1.5 text-left text-sm ${b.productMatchKind === "guess" ? "italic text-muted-foreground " : ""}${i === b.productHighlight ? "bg-muted" : "hover:bg-muted"
+                                                        /* Two confidence levels, told apart by colour alone: a real
+                                                           hit reads in the normal text colour, a guess (nothing in
+                                                           the name/SKU actually matched — see productGuessIds) reads
+                                                           amber with an amber edge. Provisional: cashiers review it. */
+                                                        className={`grid w-full grid-cols-[60px_minmax(0,1fr)_45px_80px_20px] items-center gap-x-1 border-l-2 px-2.5 py-1.5 text-left text-sm ${b.productGuessIds.has(p.id) ? "border-amber-400 text-amber-700 dark:border-amber-500 dark:text-amber-400" : "border-transparent"} ${i === b.productHighlight ? "bg-muted" : "hover:bg-muted"
                                                             }`}
                                                     >
                                                         {/* SKU */}

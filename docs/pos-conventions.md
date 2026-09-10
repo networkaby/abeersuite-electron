@@ -16,7 +16,7 @@ yet.
 | `/` | Focus product search — **or** fill the rest of the bill in checkout | Works from anywhere; skips when typing in a field. With the checkout dialog open, `/` fills the remaining bill amount into the focused payment line (cash by default) |
 | `F1` | Counter help — new tab | Opens the POS help & shortcuts page (`/vouchers/pos/help`) in a new tab — same as the `?` rail button; works from anywhere |
 | `F2` | Focus customer / party picker | Works from **any** context, including inside inputs. If a customer is already selected, enters "change mode": search for a replacement, `Esc` to cancel and restore the original |
-| `Enter` (scan box) | Add the highlighted product | Falls back to the top row. Refuses to add when the dropdown is only showing **nearest guesses** — the cashier must arrow to a row or click it first |
+| `Enter` (scan box) | Add the highlighted product | Falls back to the top row. Refuses to add an **amber guess row** — the cashier must arrow to it or click it first |
 | `Ctrl + Enter` | Checkout / save bill | Cart must have items + customer selected |
 | `Esc` | Clear product search query + dismiss dropdown | If search is already empty, blurs the input so `F2` / `/` become available |
 | `Shift + Esc` | Clear bill + customer (with confirmation) | Mid-bill reset: wipes cart, adjustments and the customer — start fresh with someone else; needs a non-empty cart, no dialog open |
@@ -97,23 +97,37 @@ Opens the checkout dialog (Sale) or saves the order / estimate directly.
 Adds the highlighted row, falling back to the first row, so a barcode scanner
 (which types the code and sends `Enter`) lands the item without a keystroke.
 
-The product search runs in **three passes**, each one used only when the pass
-before it found nothing — so a normal scan or a good search behaves exactly as
-it always has:
+**Every row carries a confidence, shown by colour — two levels, no captions:**
 
-| Pass | What it does | Look |
-|------|--------------|------|
-| Exact | Every query word must match name / SKU / barcode / brand / attributes. Words the cashier ran together are split and retried, so `pen32`, `a4paper`, `papera4` and `camcp` all find their product | Normal |
-| Fuzzy | No word is required and the typo budget widens to two edits on longer words, so `hddseaget` still reaches the Seagate hard disk | Amber border, "No exact match — closest items" |
-| Guess | Closest products by letter-pair overlap — the dropdown is **never blank** | Amber border, italic rows, "No match — showing nearest guesses" |
+| Level | Meaning | Look |
+|-------|---------|------|
+| Hit | A word of the query really matched the name / SKU / barcode / brand / attributes | Normal text |
+| Guess | Nothing really matched — the row is only near the query | Amber text, amber left edge |
 
-**`Enter` will not add a "guess" row on its own.** An unknown barcode also ends
+The search itself runs in up to three passes:
+
+1. **The real search** — every query word must match. Words the cashier ran
+   together are split and retried, so `pen32`, `a4paper`, `papera4` and `camcp`
+   all find their product. A word that matched only through a typo (one or two
+   edits, e.g. `abc` reaching "TV Remote **ACC**") is a **guess**, not a hit.
+2. **Looser scoring** — no word required, wider typo budget, so `hddseaget`
+   still reaches the Seagate hard disk. Always guesses.
+3. **Letter-pair closeness** — the last resort. Always guesses.
+
+**Passes 2 and 3 run only when pass 1 found no genuine hit.** A search that
+worked is never padded: `seagate` shows its two hard disks, not those two
+buried under ten "Sata cable" guesses. A search that failed is topped up to
+**12 rows** so the box keeps its height instead of collapsing — but only with
+rows that actually score, so a query with nothing near it (`xyzq`) shows the
+one or two rows that do, never arbitrary filler.
+
+**`Enter` will not add a guess row on its own.** An unknown barcode also ends
 in `Enter`, and a wrong item on the bill is worse than no item — so the cashier
 has to aim at the row first with `↑` / `↓` or the mouse. Otherwise a toast says
-"No match — pick an item from the list".
+"No exact match — pick an item from the list".
 
-The fuzzy and guess passes are **provisional** — added so the box never goes
-empty on the cashier. Up for review once counters have used them.
+The guess rows are **provisional** — added so the box never goes empty on the
+cashier. Up for review once counters have used them.
 
 ---
 
