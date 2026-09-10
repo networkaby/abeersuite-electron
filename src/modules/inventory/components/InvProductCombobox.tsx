@@ -15,11 +15,11 @@
  *   3. Scrollable hit list (maxHeight clamped to viewport)
  */
 
-import { useEffect, useState, useCallback, useLayoutEffect, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useComboboxNav, useProductCatalog } from "@/shared/hooks";
-import { primaryBarcode, productMatchesQuery } from "@/shared/lib/inventory";
+import { primaryBarcode, searchProducts, findByExactCode } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
 import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
 import type { InvProductFormState } from "./InvProductFormFields";
@@ -67,6 +67,14 @@ type Props = {
      * (e.g. a Journal Voucher dialog that only looks up existing inventory).
      */
     allowCreate?: boolean;
+    /**
+     * Bump this to tell the box "the pick you just reported was not taken —
+     * clear yourself". Needed because the box shows the chosen name straight
+     * away, so a parent that declines a pick (the trading voucher merging a
+     * repeated item into an existing line) would otherwise leave a stale name
+     * sitting over a blank row. Any increase clears the text.
+     */
+    clearNonce?: number;
 };
 
 const formatINR = (paise: number | null) =>
@@ -87,7 +95,11 @@ function toSelected(p: ProductOption): SelectedProduct {
     };
 }
 
-export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true }: Props) {
+/** Rows the dropdown will mount at once. Everything past this needs a
+ *  narrower query — see the note on `filtered`. */
+const MAX_ROWS = 50;
+
+export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0 }: Props) {
     // Shared IndexedDB-backed catalogue — same array every picker on the page
     // reads, kept fresh by delta sync + realtime (see useProductCatalog).
     const { products: catalogProducts, loading } = useProductCatalog<ProductOption>();
@@ -95,9 +107,14 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // round trip merges it into the shared catalogue) so the cashier can
     // select it without waiting.
     const [justCreated, setJustCreated] = useState<ProductOption[]>([]);
-    const products = justCreated.length === 0
-        ? catalogProducts
-        : [...catalogProducts, ...justCreated.filter((jc) => !catalogProducts.some((p) => p.id === jc.id))];
+    // Memoised: a fresh array every render would re-run the ranked search below
+    // on every keystroke's re-render, not just when the query or catalogue moved.
+    const products = useMemo(
+        () => (justCreated.length === 0
+            ? catalogProducts
+            : [...catalogProducts, ...justCreated.filter((jc) => !catalogProducts.some((p) => p.id === jc.id))]),
+        [catalogProducts, justCreated],
+    );
     const [query, setQuery] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -113,10 +130,30 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
         }
     }, [selectedProduct, value]);
     useEffect(syncQuery, [syncQuery]);
+    // The box shows the picked product's name the moment it is picked, before
+    // the parent has had its say. When the parent DECLINES the pick — the
+    // trading voucher merges a repeat into the line that already has it and
+    // blanks this row — `value` never changes, so syncQuery has nothing to
+    // react to and the stale name would sit there over an empty line. The
+    // parent bumps this counter to say "I cleared you".
+    useEffect(() => { if (clearNonce > 0) setQuery(""); }, [clearNonce]);
 
-    const filtered = query.trim()
-        ? products.filter((p) => productMatchesQuery(p, query))
-        : products;
+    // Ranked by the same tiered search the till uses, so an exact SKU or
+    // barcode sorts to the top and a run-together query ("a4paper") still
+    // finds its product. No guess fallback here: a voucher line is a
+    // deliberate choice, so an empty list is honest rather than unhelpful.
+    //
+    // The cap matters as much as the ranking. This dropdown opens on FOCUS,
+    // and an uncapped list mounted one <li> per catalogue row — the same shape
+    // as the ledger dropdown that used to block the main thread for 1.8s. The
+    // footer tells the operator why the list stops.
+    const filtered = useMemo(
+        () => (query.trim()
+            ? searchProducts(products, query, { rows: MAX_ROWS }).rows
+            : products.slice(0, MAX_ROWS)),
+        [products, query],
+    );
+    const truncated = filtered.length >= MAX_ROWS;
 
     const cb = useComboboxNav({
         count: filtered.length,
@@ -213,6 +250,22 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                 cb.setOpen(false);
             }
             return;
+        }
+        // A SCANNED BARCODE ends in Enter, and that Enter must land the product
+        // whose code was scanned — never whichever row the highlight happens to
+        // sit on. Ranking alone puts an exact code first, but "alone" is not a
+        // guarantee, and the cost of being wrong here is the wrong item on a
+        // purchase bill. So an exact SKU / barcode match short-circuits
+        // everything below, highlight included.
+        if (e.key === "Enter" && query.trim().length > 0) {
+            const scanned = findByExactCode(products, query);
+            if (scanned) {
+                e.preventDefault();
+                setQuery(scanned.name);
+                cb.setOpen(false);
+                onChange(toSelected(scanned));
+                return;
+            }
         }
         // No matches + a typed query + create allowed → Enter opens the
         // quick-create dialog. Mirrors PartySearchAndCreate's "Enter on
@@ -353,6 +406,11 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                     );
                                 })}
                             </ul>
+                            {truncated && (
+                                <div className="border-t border-border bg-muted/40 px-3 py-1.5 text-center text-[10px] text-muted-foreground">
+                                    Showing first {MAX_ROWS} — type more to narrow down
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>,

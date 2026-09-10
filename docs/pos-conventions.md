@@ -131,6 +131,28 @@ cashier. Up for review once counters have used them.
 
 ---
 
+### Scanning on the other vouchers
+
+Purchase, sale, returns, orders, challans, GRN and rejections all share one
+screen, and its **item box in each row takes a scan** — there is no separate
+scan bar. Typing or scanning is the operator's choice; the box is the same box.
+
+- A scanned barcode or a SKU typed in full is matched **exactly** on `Enter`,
+  whatever the dropdown highlight is sitting on. This is deliberate: ranking
+  already puts an exact code first, but a wrong item on a purchase bill is too
+  expensive to leave to ranking.
+- **Scanning an item already on the voucher adds to that line's quantity**
+  instead of repeating it — scan the same thing five times and you get one line
+  of 5. The row you were on goes back to blank so you can carry on scanning, and
+  a toast names the line that grew.
+- Same tiered matching as the till, but **no guess rows**: a voucher line is a
+  deliberate choice, so an empty list is honest rather than unhelpful.
+- The dropdown lists **50 rows** at most, with a "type more to narrow down"
+  footer — it opens on focus, and mounting the whole catalogue each time was
+  costing a visible pause.
+
+---
+
 ### `F6` — New POS tab
 
 Opens `/vouchers/pos/new` in a new browser tab. Because the POS supports

@@ -712,6 +712,41 @@ Data queries filter by the resolved branch set (`where.branchId in branchIds`), 
 
 **Migration stance.** The old `module × action × scope` permissions (the `accountancy:create:own` etc. grid) have **no distinct job left** — Axis 1 replaced `view`, the per-kind matrix replaced `create/edit/delete`, postings replaced the scope suffix. They survive **only as `newCheck OR oldCapability` fallbacks** so nothing breaks mid-migration. **Do not build new roles on them.** Retire them (seeds + `OR` fallbacks) in the cleanup pass once Axis-2 write enforcement + Axis-3 branch filtering are wired. See memories `sidebar-visibility-permissions`, `develop-new-then-cleanup`.
 
+## 🧭 Design: Product search — tiers, rescues and confidence (built 2026-09-10)
+
+**One matcher, six callers.** `searchProducts()` in [productSearch.ts](src/shared/lib/inventory/productSearch.ts) is the only product search in the app; the scoring underneath it is [productCodes.ts](src/shared/lib/inventory/productCodes.ts). Before this, four components had each grown their own ranking for the same job and they disagreed: the till had tiers, `ProductScanInput` had exact-SKU-then-prefix, `InvProductCombobox` and `InvProductPicker` had a plain substring test.
+
+**The ladder.** A query is split into whitespace tokens. Each token scores the best tier it can reach against the product's searchable text — name, SKU, brand, string attributes, every scannable code:
+
+| Tier | Token matched | Score |
+|---|---|---|
+| Word start | at a word boundary | 400 |
+| Substring | anywhere in the text | 300 |
+| Prefix | starts a product word | 200 |
+| Inside | inside a word | 100 |
+| Typo | Levenshtein ≤ 1 | 10 |
+| Missing | not found | 0 — product dropped |
+
+The product's score is the **worst** token's tier (every token must match), plus **100** when the whole query appears as one contiguous run. A tier-10 score means *nothing actually matched* — the query was merely one edit away — so those rows count as guesses, not hits.
+
+**Run-together rescue.** A token that scores 0 is retried by splitting it at every position; **both halves must begin a word**, and neither may be fuzzy. This is what makes `pen32`, `a4paper`, `papera4` and `camcp` work. Splitting only at letter↔digit boundaries was tried first and fails on `papera4` (`papera` + `4`). The word-boundary rule was learned the hard way in the browser: allowing a half to match mid-word made `paper` split into `pa` + `per`, found inside "com**pa**tible" and "o**per**ates", and pulled a **CCTV camera** into a storefront search for A4 paper. Splitting is already a guess about what was meant — letting a half be a guess too matches almost anything.
+
+**Fuzzy has a floor.** A token under 4 characters gets no typo tier at all. One edit out of two characters is a 50% error rate: `a4` was reaching the bare word "a" in a product description. This is why `abc` no longer returns "TV Remote **ACC**" as a plain row.
+
+**Three passes, and when the later ones fire.** `fallback: true` is the **till's setting only**. Pass 2 drops the every-token rule and widens the typo budget to 2 edits on tokens of 5+ characters (`hddseaget` → the Seagate disk); pass 3 ranks by letter-pair overlap. They run **only when pass 1 found nothing genuine** — padding a search that worked is worse than a short list, because `seagate` finding its two hard disks must not bury them under ten "Sata cable" guesses. Filler must still score, so nothing arbitrary is ever shown: `xyzq` yields one row, not twelve.
+
+**Confidence is a property of the row, not of the pass.** A row is a guess when no word of the query really matched it — the fallback rows *and* a typo-tier hit from pass 1. The POS dropdown reads normally for hits and amber for guesses, two levels, no captions. **Enter never adds a guess row on its own**: an unknown barcode also ends in Enter, and a wrong item on a bill is worse than no item, so the cashier must aim at the row first.
+
+**Scanning is exact, never ranked.** `findByExactCode()` short-circuits Enter wherever a scanner is used — the voucher item row, `ProductScanInput`. Ranking already puts an exact SKU/barcode first; this makes it a guarantee, because "sorts first" is not good enough when the cost of being wrong is the wrong item on a purchase bill.
+
+**A repeated item merges.** Picking or scanning a product already on a trading voucher adds this row's quantity to that line and blanks the row, with a toast naming the line. Owner's call over bump-unless-rate-differs; the toast is what keeps a two-rates-one-item purchase bill recoverable by hand.
+
+**The web gets the matcher, not the machinery.** `ShopCatalogClient` builds its own searchable text from `displayName` + `description` + `category` and calls `scoreSearchText` — a **leaf import**, never the inventory barrel, which would pull Dexie into a public bundle. No fuzzy, no guesses (on a storefront those read as broken), no local catalogue and no polling: the replica may not hold the full list and polling it costs egress. It fixes a real bug — the old test was one literal substring, so a shopper had to type a contiguous fragment of the title: against the live catalogue **"copier paper a4" matched 4 products where 28 are relevant, and "a4paper" matched none at all**.
+
+**Cost.** Every picker reads the shared in-memory catalogue via [useProductCatalog](src/shared/hooks/useProductCatalog.ts) — one array per tab, IndexedDB first, then a server delta, kept live by the `catalogue` realtime topic. `InvProductPicker` used to refetch the whole catalogue on every dialog open; it no longer does. Dropdowns that open on focus are capped at 50 rows with a "type more to narrow down" footer — uncapped, `InvProductCombobox` mounted one `<li>` per catalogue row on every focus, the same shape as the ledger dropdown that used to block the main thread for 1.8s.
+
+**Still on the old substring matcher:** `PosProductExplorer`, `update-print-labels`, `opening-balance`, and `/lab`'s universal search.
+
 ## 🧭 Design: Shop category/collection/product routing — Plan 1 (proposed 2026-08-05, NOT yet decided)
 
 Reported as "shop category and office product category not matching". Investigation found this is largely **by design, not a bug**: the storefront already runs a deliberate vocabulary bridge — office `InvProductGroup` root name → customer-facing **"Category"** (chips/filter/nav; per-product `InvProduct.shopCategory` free-text can override it) — while office `InvCategory.name` → customer-facing **"Collection"**, computed into `ShopProductPublic.collection` but currently **rendered nowhere** (grepped every `.tsx`, zero usages — dead field). Neither Category nor Collection has its own page today: Category is a same-page anchor-scrollable section (`#cat-<name>`) + `?category=` query filter on `/shop` and `/` (see [groupCategory.ts](src/shared/lib/shop/groupCategory.ts), [productPublic.ts](src/shared/lib/shop/productPublic.ts)); Collection isn't surfaced at all.

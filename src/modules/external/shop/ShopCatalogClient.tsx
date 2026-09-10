@@ -28,6 +28,9 @@ import {
     Star,
 } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
+// Leaf import, NOT the inventory barrel — the barrel re-exports the Dexie
+// catalogue, and none of that belongs in a public storefront bundle.
+import { scoreSearchText } from "@/shared/lib/inventory/productCodes";
 import { Suspense } from "react";
 
 type SortKey = "featured" | "price-asc" | "price-desc" | "name" | "rating";
@@ -52,14 +55,32 @@ function norm(s: string) {
     return s.toLowerCase().trim();
 }
 
+/**
+ * What a shopper may search — name, description, category. Deliberately built
+ * here rather than taken from the office helper: the office one also matches
+ * SKU, barcodes and internal attributes. `ShopProductPublic` carries none of
+ * those (see productPublic.ts), and this keeps it that way on purpose.
+ */
+function shopSearchText(p: ShopProductPublic) {
+    return norm(`${p.displayName} ${p.description ?? ""} ${p.category}`);
+}
+
+/**
+ * The same tiered matcher the counter uses, over public fields only.
+ *
+ * The old test was ONE literal substring, so a shopper had to type a
+ * contiguous fragment of the actual title: "copier paper a4" found 4 products
+ * where 28 are relevant, and "a4paper" found none at all. Tokenised matching
+ * fixes the first, the run-together rescue the second.
+ *
+ * Still a predicate, not a ranking: it feeds the facet counts (matchesExcept)
+ * as much as the list, and the shopper's own Sort control owns the order.
+ * No fuzzy or guess passes either — on a storefront, showing things the
+ * shopper did not ask for reads as broken, not as helpful.
+ */
 function matchesQuery(p: ShopProductPublic, q: string) {
     if (!q) return true;
-    const n = norm(q);
-    return (
-        norm(p.displayName).includes(n) ||
-        (p.description && norm(p.description).includes(n)) ||
-        norm(p.category).includes(n)
-    );
+    return scoreSearchText(shopSearchText(p), q) > 0;
 }
 
 function discountPct(p: ShopProductPublic) {

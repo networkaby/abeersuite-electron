@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { productMatchesQuery } from "@/shared/lib/inventory";
+import { searchProducts } from "@/shared/lib/inventory";
+import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
 
 type InvProductOption = {
     id: number;
@@ -17,6 +17,9 @@ type InvProductOption = {
     brand: { name: string } | null;
     codes?: { kind: string; value: string }[];
 };
+
+/** Rows listed at once — beyond this the operator narrows with a query. */
+const MAX_ROWS = 50;
 
 export function InvProductPicker({
     label = "Inventory SKU",
@@ -28,25 +31,29 @@ export function InvProductPicker({
     onChange: (id: number | null) => void;
 }) {
     const [open, setOpen] = useState(false);
-    const [products, setProducts] = useState<InvProductOption[]>([]);
     const [query, setQuery] = useState("");
-
-    useEffect(() => {
-        if (!open) return;
-        axios
-            .get<InvProductOption[]>("/api/inventory/products")
-            .then((r) => setProducts(r.data))
-            .catch(() => setProducts([]));
-    }, [open]);
+    // The shared IndexedDB-backed catalogue — the same array every other picker
+    // on the page reads, kept fresh by delta sync + realtime. This dialog used
+    // to pull the WHOLE catalogue over the network every single time it opened.
+    // `eager: false` keeps that cost at zero until someone actually opens it.
+    const { products } = useProductCatalog<InvProductOption>({ eager: false });
+    useEffect(() => { if (open) void loadProductCatalog(); }, [open]);
 
     const selected = useMemo(() => {
         if (value == null) return null;
         return products.find((p) => p.id === value) ?? null;
     }, [value, products]);
 
-    const filtered = query.trim()
-        ? products.filter((p) => productMatchesQuery(p, query))
-        : products;
+    // Ranked by the same tiered search the till uses, and capped — the dialog
+    // lists the catalogue when nothing is typed, so it must not mount thousands
+    // of rows at once. No guess fallback: picking an item for a voucher line is
+    // a deliberate choice, so an empty list is honest.
+    const filtered = useMemo(
+        () => (query.trim()
+            ? searchProducts(products, query, { rows: MAX_ROWS }).rows
+            : products.slice(0, MAX_ROWS)),
+        [products, query],
+    );
 
     const pick = (p: InvProductOption) => {
         onChange(p.id);

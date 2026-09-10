@@ -105,7 +105,10 @@ export type ProductSearchCandidate = {
     codes?: readonly { value: string }[] | null;
 };
 
-function productSearchText(p: ProductSearchCandidate): string {
+/** The internal searchable text for a product — name, SKU, brand, string
+ *  attributes and every scannable code, lowercased. The default field set for
+ *  searchProducts; the public storefront passes its own, narrower one. */
+export function productSearchText(p: ProductSearchCandidate): string {
     const parts: string[] = [p.name, p.sku ?? "", p.brand?.name ?? ""];
     if (p.attrsJson && typeof p.attrsJson === "object") {
         for (const v of Object.values(p.attrsJson as Record<string, unknown>)) {
@@ -116,9 +119,9 @@ function productSearchText(p: ProductSearchCandidate): string {
     return parts.join(" ").toLowerCase();
 }
 
-/** Split product text into individual words for fuzzy matching. */
-function productWords(p: ProductSearchCandidate): string[] {
-    return productSearchText(p).split(/\s+/).filter(Boolean);
+/** Split searchable text into individual words for fuzzy matching. */
+function textWords(text: string): string[] {
+    return text.split(/\s+/).filter(Boolean);
 }
 
 /**
@@ -181,8 +184,14 @@ function tokenTier(token: string, text: string, words: string[], fuzzyMax: numbe
     if (idx !== -1) return idx === 0 || text[idx - 1] === " " ? TIER_WORD_START : TIER_SUBSTRING;
     if (words.some((w) => w.startsWith(token))) return TIER_PREFIX;
     if (words.some((w) => w.includes(token))) return TIER_INSIDE;
-    const budget = token.length >= 5 ? fuzzyMax : Math.min(fuzzyMax, 1);
-    if (words.some((w) => editDistanceAtMost(token, w, budget))) return TIER_TYPO;
+    // A short token must NOT be fuzzy-matched. One edit out of two characters
+    // is a 50% error rate, and it matches nearly anything: "a4" reached the
+    // bare word "a" in a product description and pulled a camera into a search
+    // for A4 paper. Below MIN_FUZZY_LEN a token has to match for real.
+    if (token.length >= MIN_FUZZY_LEN && fuzzyMax > 0) {
+        const budget = token.length >= 5 ? fuzzyMax : Math.min(fuzzyMax, 1);
+        if (words.some((w) => editDistanceAtMost(token, w, budget))) return TIER_TYPO;
+    }
     return 0;
 }
 
@@ -190,23 +199,34 @@ function tokenTier(token: string, text: string, words: string[], fuzzyMax: numbe
  *  product matches and the rescue turns into noise. */
 const MIN_SPLIT_PIECE = 2;
 
+/** Shortest token allowed a fuzzy (typo) match — see tokenTier. */
+const MIN_FUZZY_LEN = 4;
+
 /**
  * Rescue for a token the cashier ran together: "pen32", "a4paper", "papera4",
  * "camcp". Tries every two-way split, scores both halves with the normal
  * ladder, and keeps the best — worst half wins within a split, demoted one
  * tier so it never outranks a genuine match. 0 when no split works.
  */
-function splitTokenTier(token: string, text: string, words: string[], fuzzyMax: number): number {
+function splitTokenTier(token: string, text: string): number {
     if (token.length < MIN_SPLIT_PIECE * 2) return 0;
-    let best = 0;
+    // Both halves must land at a WORD BOUNDARY, and neither may be fuzzy.
+    // Splitting is already a guess about what the operator meant; letting a
+    // half match mid-word or through a typo stacks guess on guess and the
+    // result matches almost anything. "paper" split to "pa" + "per" found
+    // both inside "com(pa)tible" and "o(per)ates" — a camera, in a search for
+    // A4 paper. A real run-together query does not need the slack: "pen32",
+    // "a4paper", "papera4" and "camcp" all split into halves that begin words.
+    const startsWord = (piece: string) => {
+        const idx = text.indexOf(piece);
+        return idx === 0 || (idx > 0 && text[idx - 1] === " ");
+    };
     for (let i = MIN_SPLIT_PIECE; i <= token.length - MIN_SPLIT_PIECE; i++) {
-        const left = tokenTier(token.slice(0, i), text, words, fuzzyMax);
-        if (!left) continue;
-        const right = tokenTier(token.slice(i), text, words, fuzzyMax);
-        if (!right) continue;
-        best = Math.max(best, Math.min(left, right));
+        if (startsWord(token.slice(0, i)) && startsWord(token.slice(i))) {
+            return demoteTier(TIER_WORD_START);
+        }
     }
-    return demoteTier(best);
+    return 0;
 }
 
 /**
@@ -223,21 +243,25 @@ function splitTokenTier(token: string, text: string, words: string[], fuzzyMax: 
  * that runs when this returns nothing for every product.
  */
 export function scoreProductSearch(p: ProductSearchCandidate, query: string): number {
+    return scoreSearchText(productSearchText(p), query);
+}
+
+/** scoreProductSearch over text the caller assembled itself. */
+export function scoreSearchText(text: string, query: string): number {
     const q = query.trim().toLowerCase();
     if (!q) return 1;
-    const text = productSearchText(p);
     if (!text) return 0;
 
     // Bonus when the full query appears as a contiguous substring
     const fullBonus = text.includes(q) ? FULL_QUERY_BONUS : 0;
 
-    const words = productWords(p);
+    const words = textWords(text);
     let tier = 0; // worst tier across all tokens (lower = worse)
 
     for (const token of q.split(/\s+/).filter(Boolean)) {
         // Whole token first — unchanged ranking for everything that already
         // matched. Only a token that scores nothing gets the split rescue.
-        const hit = tokenTier(token, text, words, 1) || splitTokenTier(token, text, words, 1);
+        const hit = tokenTier(token, text, words, 1) || splitTokenTier(token, text);
         if (!hit) return 0; // token not found at all
         tier = Math.max(tier, hit);
     }
@@ -254,15 +278,18 @@ export function scoreProductSearch(p: ProductSearchCandidate, query: string): nu
  * its results are guesses and the dropdown colours them as such.
  */
 export function looseProductScore(p: ProductSearchCandidate, query: string): number {
-    const q = query.trim().toLowerCase();
-    if (!q) return 0;
-    const text = productSearchText(p);
-    if (!text) return 0;
+    return looseScoreText(productSearchText(p), query);
+}
 
-    const words = productWords(p);
+/** looseProductScore over text the caller assembled itself. */
+export function looseScoreText(text: string, query: string): number {
+    const q = query.trim().toLowerCase();
+    if (!q || !text) return 0;
+
+    const words = textWords(text);
     let total = 0;
     for (const token of q.split(/\s+/).filter(Boolean)) {
-        const hit = tokenTier(token, text, words, 2) || splitTokenTier(token, text, words, 2);
+        const hit = tokenTier(token, text, words, 2) || splitTokenTier(token, text);
         total += hit / 10; // same ladder, scaled down: 400 → 40 … 10 → 1
     }
     return total;
@@ -275,10 +302,13 @@ export function looseProductScore(p: ProductSearchCandidate, query: string): num
  * when nothing really matches.
  */
 export function rawOverlapScore(p: ProductSearchCandidate, query: string): number {
+    return overlapScoreText(productSearchText(p), query);
+}
+
+/** rawOverlapScore over text the caller assembled itself. */
+export function overlapScoreText(text: string, query: string): number {
     const q = query.trim().toLowerCase().replace(/\s+/g, "");
-    if (!q) return 0;
-    const text = productSearchText(p);
-    if (!text) return 0;
+    if (!q || !text) return 0;
     if (q.length < 2) return text.includes(q) ? 1 : 0;
     let hits = 0;
     for (let i = 0; i < q.length - 1; i++) if (text.includes(q.slice(i, i + 2))) hits++;

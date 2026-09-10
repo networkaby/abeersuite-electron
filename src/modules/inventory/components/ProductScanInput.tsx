@@ -20,6 +20,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { ScanBarcode } from "lucide-react";
 import { useProductCatalog } from "@/shared/hooks";
+import { searchProducts, findByExactCode } from "@/shared/lib/inventory";
 
 export type ScannedProduct = {
     id:        number;
@@ -76,26 +77,11 @@ export function ProductScanInput({
             }
             return [];
         }
-        return products
-            .filter((p) => {
-                if (p.sku.toLowerCase() === q) return true;       // exact SKU/barcode hits win
-                if (p.sku.toLowerCase().includes(q)) return true;
-                if (p.name.toLowerCase().includes(q)) return true;
-                // Scannable codes — exact match only (these are scan codes,
-                // not human-typed identifiers).
-                return (p.codes ?? []).some((c) => c.value.toLowerCase() === q);
-            })
-            // Stable sort: exact SKU/barcode matches first, then prefix matches on SKU, then everything else.
-            .sort((a, b) => {
-                const aExact = a.sku.toLowerCase() === q ? 0 : 1;
-                const bExact = b.sku.toLowerCase() === q ? 0 : 1;
-                if (aExact !== bExact) return aExact - bExact;
-                const aPrefix = a.sku.toLowerCase().startsWith(q) ? 0 : 1;
-                const bPrefix = b.sku.toLowerCase().startsWith(q) ? 0 : 1;
-                if (aPrefix !== bPrefix) return aPrefix - bPrefix;
-                return a.name.localeCompare(b.name);
-            })
-            .slice(0, MAX_RESULTS);
+        // Same tiered search the till and the voucher row use — an exact SKU
+        // or barcode ranks first, and a run-together query still finds its
+        // product. No guess fallback: this input is used for stock-affecting
+        // vouchers, where an empty list is safer than a plausible wrong row.
+        return searchProducts(products, q, { rows: MAX_RESULTS }).rows;
     }, [query, products, browseAll]);
 
     // Close dropdown on outside click.
@@ -160,7 +146,10 @@ export function ProductScanInput({
             setOpen(true);
         } else if (e.key === "Enter") {
             e.preventDefault();
-            const target = matches[highlighted] ?? matches[0];
+            // A scanned code ends in Enter and must land THAT product, not
+            // whichever row the highlight sits on. Ranking already puts an
+            // exact code first; this makes it a guarantee.
+            const target = findByExactCode(matches, query) ?? matches[highlighted] ?? matches[0];
             if (target) pick(target);
         }
     };

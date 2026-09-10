@@ -27,7 +27,7 @@ import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
-import { scoreProductSearch, looseProductScore, rawOverlapScore, isWeakScore, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
+import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 /** How many rows the product dropdown shows — kept constant so the list does
@@ -379,53 +379,17 @@ export function usePosBilling(opts: {
     // Products only — services have no barcode, so they are NOT scannable/typed
     // here; they are added from the "+ Add service charge" button in the cart.
     //
-    // The real search runs first and always ranks the same as it always has.
-    // When it finds nothing genuine, the list is topped up to DROPDOWN_ROWS —
-    // looser scoring, then letter-pair closeness — so a poor query lands on a
-    // full list of suggestions instead of two lonely rows or a blank box. Only
-    // rows that actually score are used; nothing arbitrary is ever shown.
-    //
-    // Every row carries a confidence: a row is a GUESS when no word of the
-    // query really matched it — the fillers, and also a typo-tier hit from the
-    // real search ("abc" reaching "ACC"), which is a suggestion wearing an
-    // exact-match coat. The dropdown colours guesses differently.
+    // `fallback: true` is the till's own setting — a cashier with a customer
+    // waiting is better served by a full list of suggestions than by a blank
+    // box, so a failed search is topped up (see searchProducts). Everywhere
+    // else in the app the fallback stays off. `guessIds` is what the dropdown
+    // colours amber.
     const { filteredProducts, productGuessIds } = useMemo(() => {
-        const q = productQuery.trim();
-        const guesses = new Set<number>();
-        if (!q) return { filteredProducts: [] as ProductOption[], productGuessIds: guesses };
-
-        const rows: ProductOption[] = [];
-        const taken = new Set<number>();
-
-        /** Rank the not-yet-taken products by `score` and append what fits. */
-        const fill = (score: (p: ProductOption) => number, alwaysGuess: boolean) => {
-            const room = DROPDOWN_ROWS - rows.length;
-            if (room <= 0) return;
-            allProducts
-                .filter((p) => !taken.has(p.id))
-                .map((p) => ({ p, score: score(p) }))
-                .filter(({ score }) => score > 0)
-                .sort((a, b) => b.score - a.score)
-                .slice(0, room)
-                .forEach(({ p, score }) => {
-                    taken.add(p.id);
-                    rows.push(p);
-                    if (alwaysGuess || isWeakScore(score)) guesses.add(p.id);
-                });
-        };
-
-        fill((p) => scoreProductSearch(p, q), false);
-
-        // Padding only rescues a search that FAILED. "seagate" finding its two
-        // real hard disks must show two rows, not those two buried under ten
-        // "Sata cable" guesses — the cashier already has what they came for.
-        const foundSomethingReal = rows.some((p) => !guesses.has(p.id));
-        if (!foundSomethingReal) {
-            fill((p) => looseProductScore(p, q), true);
-            fill((p) => rawOverlapScore(p, q), true);
-        }
-
-        return { filteredProducts: rows, productGuessIds: guesses };
+        const { rows, guessIds } = searchProducts(allProducts, productQuery, {
+            rows: DROPDOWN_ROWS,
+            fallback: true,
+        });
+        return { filteredProducts: rows, productGuessIds: guessIds };
     }, [productQuery, allProducts]);
 
     // A fresh query is a fresh list — the cashier has not aimed at anything yet.

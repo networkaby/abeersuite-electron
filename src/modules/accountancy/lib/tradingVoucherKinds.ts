@@ -73,6 +73,28 @@ export function calcLine(l: LineState, opts: CalcOpts = {}) {
 }
 
 
+/**
+ * Re-derive a line's discount and tax after its quantity or rate changed.
+ * `discountPct` is the source of truth here — the amount is recomputed from it,
+ * then tax from what is left. Shared by the qty/rate editors and by the
+ * merge-a-repeated-item path, so a scanned duplicate is priced exactly the way
+ * a hand-typed quantity is.
+ */
+export function reprice(l: LineState, rateInclTax: boolean): LineState {
+    const rawRate = parseFloat(l.rate) || 0;
+    const tRate = parseFloat(l.taxRate) || 0;
+    // Use the exclusive rate for the discount regardless of display mode.
+    const rate = rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
+    const gross = (parseFloat(l.quantity) || 0) * rate;
+    const discAmt = gross * ((parseFloat(l.discountPct) || 0) / 100);
+    const taxAmt = (gross - discAmt) * (tRate / 100);
+    return {
+        ...l,
+        discountAmt: discAmt > 0 ? discAmt.toFixed(2) : "",
+        taxAmount: taxAmt > 0 ? taxAmt.toFixed(2) : "",
+    };
+}
+
 // Numeric input sanitizers — type="text" lets us avoid the awful native
 // number-spinner UI; we filter keystrokes to digits + a single decimal
 // point. `numSigned` additionally permits a leading minus (used for

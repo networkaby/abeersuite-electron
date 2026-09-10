@@ -85,7 +85,7 @@ import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 
 // Per-kind config + pure line math — extracted to lib/tradingVoucherKinds.ts.
 import {
-    type LineState, newLine, nextLineId, calcLine, numSigned,
+    type LineState, newLine, nextLineId, calcLine, numSigned, reprice,
     type TradingKind, PER_KIND,
 } from "@/modules/accountancy/lib/tradingVoucherKinds";
 
@@ -844,6 +844,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const [prefs, setPrefs] = useState<ColumnPrefs>(DEFAULT_PREFS);
     const prefsRef = useRef<ColumnPrefs>(DEFAULT_PREFS);
     useEffect(() => { prefsRef.current = prefs; });
+    // handleProductSelect is a stable useCallback, so it cannot read `lines`
+    // directly — it needs to know what is already on the bill to merge a
+    // repeated item. Same trick as prefsRef above.
+    const linesRef = useRef<LineState[]>([]);
+    useEffect(() => { linesRef.current = lines; });
+    // Which row we blanked after merging a repeat, and how many times — the
+    // item box clears its text off this (see InvProductCombobox's clearNonce).
+    const [clearedRow, setClearedRow] = useState<{ id: number; n: number } | null>(null);
     useEffect(() => {
         if (typeof window === "undefined") return;
         try {
@@ -955,23 +963,36 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         return withTaxFromRate({ ...l, rate: newRate > 0 ? String(Number(newRate.toFixed(6))) : "", amountInput: amt });
     }));
     const setLineQtyOrRate = (id: number, patch: { quantity?: string; rate?: string }) =>
-        setLines((ls) => ls.map((l) => {
-            if (l.id !== id) return l;
-            const next = { ...l, ...patch };
-            const rawRate = parseFloat(next.rate) || 0;
-            const tRate = parseFloat(next.taxRate) || 0;
-            // Use exclusive rate for discount computation regardless of display mode.
-            const rate = prefs.rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
-            const gross = (parseFloat(next.quantity) || 0) * rate;
-            const dPct = parseFloat(next.discountPct) || 0;
-            const newDiscAmt = gross * (dPct / 100);
-            return withTaxFromRate({
-                ...next,
-                discountAmt: newDiscAmt > 0 ? newDiscAmt.toFixed(2) : "",
-            });
-        }));
+        setLines((ls) => ls.map((l) => (l.id === id ? reprice({ ...l, ...patch }, prefs.rateInclTax) : l)));
 
     const handleProductSelect = useCallback((lineId_: number, product: SelectedProduct | null) => {
+        // Already on the bill? Add this row's quantity to that line instead of
+        // repeating the item — scanning the same barcode five times should give
+        // one line of 5, the way the till behaves. The row being edited goes
+        // back to blank so the operator can carry straight on scanning.
+        //
+        // Deliberately NOT silent: a purchase bill can legitimately want the
+        // same item twice at two rates, and this merge takes that away, so the
+        // operator has to be able to see it happen and undo it by hand.
+        if (product) {
+            const twinIndex = linesRef.current.findIndex((l) => l.id !== lineId_ && l.product?.id === product.id);
+            if (twinIndex !== -1) {
+                const twin = linesRef.current[twinIndex];
+                const added = parseFloat(linesRef.current.find((l) => l.id === lineId_)?.quantity ?? "1") || 1;
+                const total = (parseFloat(twin.quantity) || 0) + added;
+                setLines((ls) => ls.map((l) => {
+                    // The twin takes the quantity, repriced off it.
+                    if (l.id === twin.id) return reprice({ ...l, quantity: String(total) }, prefsRef.current.rateInclTax);
+                    // The row being edited goes back to blank, keeping its id so
+                    // focus stays exactly where the operator left it.
+                    if (l.id === lineId_) return { ...newLine(), id: l.id };
+                    return l;
+                }));
+                setClearedRow((c) => ({ id: lineId_, n: (c?.id === lineId_ ? c.n : 0) + 1 }));
+                toast.info(`Already on line ${twinIndex + 1} — quantity now ${total}`);
+                return;
+            }
+        }
         setLines((ls) => {
             const updated = ls.map((l) => {
                 if (l.id !== lineId_) return l;
@@ -1668,6 +1689,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                 <InvProductCombobox
                                                     value={line.product?.id ?? null}
                                                     onChange={(p) => handleProductSelect(line.id, p)}
+                                                    clearNonce={clearedRow?.id === line.id ? clearedRow.n : 0}
                                                     autoFocus={(i === 0 && !line.product) || line.id === lastFocusRowId}
                                                 />
                                             </td>

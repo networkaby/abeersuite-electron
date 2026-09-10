@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { productMatchesQuery } from "@/shared/lib/inventory";
+import { searchProducts, productSearchText } from "@/shared/lib/inventory";
 
 export type BomPickerPayload = {
     id:              number;
@@ -29,6 +29,9 @@ export type BomPickerPayload = {
 };
 
 type RawBom = BomPickerPayload & { isActive: boolean };
+
+/** Rows listed at once — beyond this the operator narrows with a query. */
+const MAX_ROWS = 50;
 
 export function BomPicker({
     label = "Bill of Materials",
@@ -65,12 +68,18 @@ export function BomPicker({
 
     const selected = useMemo(() => boms.find((b) => b.id === value) ?? null, [boms, value]);
 
-    const filtered = query.trim()
-        ? boms.filter((b) =>
-            b.name.toLowerCase().includes(query.toLowerCase()) ||
-            (b.outputProduct != null && productMatchesQuery(b.outputProduct, query)),
-        )
-        : boms;
+    // Ranked by the same tiered search the product pickers use, over the BOM's
+    // own name plus its output product's searchable text — so a BOM is findable
+    // by what it makes, and a run-together query still lands.
+    const filtered = useMemo(
+        () => (query.trim()
+            ? searchProducts(boms, query, {
+                rows: MAX_ROWS,
+                text: (b) => `${b.name} ${b.outputProduct ? productSearchText(b.outputProduct) : ""}`.toLowerCase(),
+            }).rows
+            : boms.slice(0, MAX_ROWS)),
+        [boms, query],
+    );
 
     const pick = (b: BomPickerPayload) => {
         onPick(b);
