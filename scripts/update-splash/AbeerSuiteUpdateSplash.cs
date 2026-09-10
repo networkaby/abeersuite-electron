@@ -54,14 +54,20 @@ class SplashForm : Form
         _sentinel = sentinel;
         _deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
 
-        // No control box and no Escape key: closing this window would not stop the
-        // install, it would only hide it, and the cashier would be back to a blank
-        // screen with no idea what is happening.
+        // Minimise, yes; close, no. Closing this window would not stop the install, it
+        // would only hide it for good, and the cashier would be back to a blank screen
+        // with no idea what is happening. Minimising is the honest version of the same
+        // wish — the counter gets its screen back and the window is still on the
+        // taskbar to come back to, which is why ShowInTaskbar has to be on.
+        //
+        // ControlBox has to be true for the minimise button to be drawn at all, and that
+        // draws the X alongside it; CS_NOCLOSE in CreateParams below is what takes the
+        // X (and the Alt+F4 / system-menu Close with it) back out again.
         FormBorderStyle = FormBorderStyle.FixedDialog;
-        ControlBox = false;
+        ControlBox = true;
         MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
+        MinimizeBox = true;
+        ShowInTaskbar = true;
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
         BackColor = Color.White;
@@ -97,6 +103,20 @@ class SplashForm : Form
         timer.Interval = 1000;
         timer.Tick += OnTick;
         timer.Start();
+    }
+
+    // Greys out the X and removes Close from the system menu. The window can be pushed
+    // aside but not dismissed.
+    const int CS_NOCLOSE = 0x200;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams cp = base.CreateParams;
+            cp.ClassStyle |= CS_NOCLOSE;
+            return cp;
+        }
     }
 
     void OnTick(object sender, EventArgs e)
