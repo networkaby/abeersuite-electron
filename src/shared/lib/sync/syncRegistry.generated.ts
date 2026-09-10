@@ -31,7 +31,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "BiGstPlanningConfig": { model: "BiGstPlanningConfig", delegate: "biGstPlanningConfig", pk: ["id"], exact: ["depositGapPercent", "incomeTaxFreeLimit", "presumptiveRatePercent", "taxRatePercent"], dates: ["updatedAt"], cache: [] },
     "BiGstPlanningFy": { model: "BiGstPlanningFy", delegate: "biGstPlanningFy", pk: ["fyStartYear"], exact: ["allowedDiff"], dates: ["updatedAt"], cache: [] },
     "BiGstPlanningMonth": { model: "BiGstPlanningMonth", delegate: "biGstPlanningMonth", pk: ["yearMonth"], exact: ["depositOverride", "purchaseOverride", "saleOverride"], dates: ["updatedAt"], cache: [] },
-    "BooksConfig": { model: "BooksConfig", delegate: "booksConfig", pk: ["id"], exact: [], dates: ["updatedAt"], cache: [] },
+    "BooksConfig": { model: "BooksConfig", delegate: "booksConfig", pk: ["id"], exact: [], dates: ["booksBeginningFrom", "financialYearFrom", "updatedAt"], cache: [] },
     "Branch": { model: "Branch", delegate: "branch", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "Call": { model: "Call", delegate: "call", pk: ["id"], exact: ["amount"], dates: ["createdAt", "occurredAt", "receivedAt"], cache: [] },
     "ChatMessage": { model: "ChatMessage", delegate: "chatMessage", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },

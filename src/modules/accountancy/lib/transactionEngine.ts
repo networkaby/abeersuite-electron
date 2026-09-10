@@ -27,6 +27,7 @@ import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNatu
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
 import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
 import { retreatReconciliation } from "./reconciliation";
+import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 
 type Drcr = "DEBIT" | "CREDIT";
@@ -214,6 +215,11 @@ export async function engineGlArm(
     }
 
     // CREATE-POSTED-directly: no pre-created draft spine — mint a fresh POSTED one.
+    // The books-beginning guard sits here rather than at the top of the function
+    // because the ATTACH branch above returns already: that spine had its date
+    // checked when engineCreateSpine made it, and re-checking it would refuse to
+    // POST a draft that was legitimately saved before the date was ever set.
+    await assertVoucherDate(tx, date);
     // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
     // Which till raised this. Resolved here, in the one place every voucher kind
     // passes through, so no caller has to remember to pass it.
@@ -269,6 +275,9 @@ export async function engineCreateSpine(
         userId:          number;
     },
 ): Promise<number> {
+    // A date before the books begin here belongs to the old register, not to a
+    // draft. Refused at save, so it never reaches the outbox on a counter PC.
+    await assertVoucherDate(tx, args.date);
     // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
     const counterId = await sourceCounterId(tx);
     const uv = await tx.universalVoucher.create({

@@ -65,6 +65,18 @@ export function fyClosingDate(fyStartYear: number, restartMonth: number, restart
     return new Date(nextRestart - 86_400_000); // minus 1 day
 }
 
+/**
+ * First day of the financial year that `today` falls in — UTC midnight.
+ *
+ * The opening bookend to `fyClosingDate`. Sole source of the "1st day of the
+ * current FY" default the Year Ending page prefills its period anchors with,
+ * so that default can never drift from the restart day the same page sets.
+ */
+export function fyStartDate(restartMonth: number, restartDay: number, today = businessToday()): Date {
+    const fyStartYear = fyStartYearFor(restartMonth, restartDay, today);
+    return new Date(Date.UTC(fyStartYear, restartMonth - 1, restartDay));
+}
+
 export type ReferenceContext = { counterNumber?: number | null } | number | null;
 
 /**

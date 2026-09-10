@@ -269,6 +269,23 @@ model BooksConfig {
   id           Int      @id @default(1) // singleton — always row id=1
   restartMonth Int      @default(4) // 1-12; default April (Indian FY)
   restartDay   Int      @default(1) // 1-31; default 1
+
+  // ── Org period anchors ───────────────────────────────────────────────────
+  // The counterpart of Company.financialYearFrom / booksBeginningFrom, which
+  // are per-PARTY (a customer's own books). These two are OURS: they answer
+  // "from which date have we been on this software", and therefore which FY
+  // is the first one here and which period still lives in the old register.
+  //
+  // They differ on a mid-year migration: the financial year still starts
+  // 1 Apr, but the books here begin on the cutover day. Both null on an
+  // install that has never been told — the date rules below are then inert,
+  // so nothing is enforced against a date nobody has stated.
+  /// Start of the FIRST financial year present in this software.
+  financialYearFrom  DateTime? @db.Date
+  /// First day whose entries live HERE. A voucher may not be dated before it;
+  /// anything earlier belongs to the previous software or manual register.
+  booksBeginningFrom DateTime? @db.Date
+
   updatedAt    DateTime @updatedAt
 }
 

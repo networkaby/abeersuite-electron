@@ -11,6 +11,7 @@ import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
+import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 
 // Phase 5 5E: the UniversalVoucher spine IS the financial voucher (Voucher table
 // dropped). `id` is the spine id; lines are VoucherGlLine. The spine is scalar/
@@ -171,6 +172,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             // Update the spine header. denomJson: undefined = leave untouched;
             // null or an empty/zero-only payload clears the saved capture.
             const denom = body.denomJson === undefined ? undefined : parseDenomJson(body.denomJson);
+            // Editing the date is the one way past the guard in the engine, so
+            // it is checked again here on the value actually being written.
+            await assertVoucherDate(tx, new Date(body.date));
             await tx.universalVoucher.update({
                 where: { id: voucherId },
                 data:  {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { OFFLINE_READ_ONLY, isOfflineWriteBlocked } from "@/shared/lib/prisma/offlineError";
+import { isVoucherDateError } from "@/shared/lib/accountancy/booksPeriodServer";
 
 /**
  * Generic API error envelope. Logs server-side, returns a 500 NextResponse with
@@ -24,6 +25,13 @@ export function handleApiError(e: unknown, fallback = "Internal server error"): 
             { error: OFFLINE_READ_ONLY, message: e.message || "Offline — read only. Reconnect to save." },
             { status: 503 },
         );
+    }
+    // A voucher dated before the books begin here is the user typing the wrong
+    // year, not a fault: 422 with the guard's own sentence, which already names
+    // both dates and says where that entry belongs. Same single-branch trick as
+    // the offline case above — it covers every voucher route at once.
+    if (isVoucherDateError(e)) {
+        return NextResponse.json({ error: e.message }, { status: 422 });
     }
     console.error("[api]", e);
     return NextResponse.json({ error: fallback }, { status: 500 });

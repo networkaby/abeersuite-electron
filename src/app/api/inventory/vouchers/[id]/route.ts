@@ -13,6 +13,7 @@ import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -423,6 +424,9 @@ export async function PATCH(req: Request, { params }: Params) {
             });
             // 5D-4/5D-5/5D-10/5D-12: date + description + party ledger + branch live on the spine.
             if (existing.universalVoucherId != null) {
+                // Editing the date is the one way past the guard in the engine,
+                // so it is checked again here on the value actually written.
+                if (date) await assertVoucherDate(tx, new Date(date));
                 const spinePatch: Prisma.UniversalVoucherUncheckedUpdateInput = {
                     ...(date        ? { date: new Date(date) } : {}),
                     ...(description ? { description: description.trim() } : {}),
