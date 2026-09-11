@@ -69,6 +69,18 @@ async function main(): Promise<void> {
     const takenSku = new Set(bySku.keys());
     const takenCode = new Set(byCode.keys());
 
+    // Fallback index for items with NO barcode — 23 of them, mostly fixed assets
+    // ("New Room", "Aluminum Ladder", a cash drawer). Without it the resolver is not
+    // idempotent: a code-less item can never match on a second run, so every run
+    // mints it a fresh SKU and creates it again. Re-running once produced exactly
+    // 23 duplicates. Name is a weak key and is used ONLY when there is no code at
+    // all; where a barcode exists it always wins.
+    const byName = new Map<string, { id: number; sku: string }>();
+    for (const r of (await pool.query(`select id, sku, name from "InvProduct"`)).rows) {
+        const k = String(r.name).trim().toLowerCase();
+        if (!byName.has(k)) byName.set(k, { id: r.id, sku: r.sku });
+    }
+
     type Owner = { kind: "person" | "company"; id: number; name: string };
     const phoneOwner = new Map<string, Owner>();
     const emailOwner = new Map<string, Owner>();
@@ -137,7 +149,10 @@ async function main(): Promise<void> {
 
     for (const i of items) {
         const code = (i.code ?? "").toUpperCase();
-        const hit = code ? (bySku.get(code) ?? byCode.get(code)) : undefined;
+        // Barcode first — it is the strong key. Name only when there is no code.
+        const hit = code
+            ? (bySku.get(code) ?? byCode.get(code))
+            : byName.get(i.name.trim().toLowerCase());
 
         // Opening stock is today's quantity minus everything that moved this FY.
         const opening = i.qty - (stockMoved.get(i.itemId) ?? 0);
@@ -188,6 +203,7 @@ async function main(): Promise<void> {
         if (!code) stats.noCode++;
         takenSku.add(sku.toUpperCase());
         if (barcode) takenCode.add(barcode.toUpperCase());
+        byName.set(i.name.trim().toLowerCase(), { id: -1, sku });
 
         createRows.push({
             rowIndex: createRows.length,
@@ -323,6 +339,32 @@ async function main(): Promise<void> {
     // (the pattern in src/scripts/opening-bills-backfill.ts).
     const { runProductImport } = await import("@/shared/lib/import/productImport");
     const { runCustomerImport } = await import("@/shared/lib/import/customerImport");
+
+    // Vyapar is the authority on every party's opening position, so clear the lot
+    // first and let the import restate them.
+    //
+    // Without this, a party that HAD an opening here but is square in Vyapar keeps
+    // the old figure forever: `runCustomerImport` writes an opening only when it is
+    // non-zero (customerImport.ts:634), so "now zero" is indistinguishable from
+    // "not mentioned". On this data that left 41 accounts holding ₹1,02,336 of
+    // balances Vyapar says are settled — money owed by nobody.
+    //
+    // Party accounts only. The 12 non-party ledgers (SBI CC A/c, New Room, the
+    // loans, the cash counters) hold real openings that Phase 4 restates from
+    // Vyapar's own bank figures; wiping them here would destroy data this step has
+    // no replacement for.
+    const staleParty = await pool.query(
+        `select count(*)::int n, coalesce(round(sum("openingBalance"), 0), 0) amt from "Account"
+         where ("personId" is not null or "companyId" is not null)
+           and "openingBalance" is not null and "openingBalance" <> 0`,
+    );
+    console.log(`\nclearing ${staleParty.rows[0].n} existing party openings (${inr(Number(staleParty.rows[0].amt))}) — Vyapar restates them`);
+    if (apply) {
+        await pool.query(
+            `update "Account" set "openingBalance" = null, "openingBalanceType" = null
+             where "personId" is not null or "companyId" is not null`,
+        );
+    }
 
     console.log(`\n${apply ? "APPLYING" : "dry run"} …`);
 

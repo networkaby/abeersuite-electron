@@ -90,11 +90,24 @@ async function main(): Promise<void> {
         emailOwner.set(r.email, r.personId != null ? `person:${r.personId}` : `company:${r.companyId}`);
     }
 
+    // The resolver keys contact-less parties on `vyapar-<name_id>@placeholder.invalid`
+    // (deterministic, so re-runs match instead of duplicating). Without knowing that
+    // convention this report calls all 169 of them "new" on a database where they
+    // already exist — 169 false alarms in the one report meant to catch real ones.
+    const placeholderIds = new Set<number>();
+    for (const [addr] of emailOwner) {
+        const m = /^vyapar-(\d+)@placeholder\.invalid$/.exec(addr);
+        if (m) placeholderIds.add(Number(m[1]));
+    }
+
     const parties = extractParties(db).filter((p) => p.include);
     let pPhone = 0, pEmail = 0, pNew = 0, adoptedKind = 0, needPlaceholder = 0;
     let newPerson = 0, newCompany = 0;
     for (const p of parties) {
-        const owner = (p.phone && phoneOwner.get(p.phone)) || (p.email && emailOwner.get(p.email.toLowerCase())) || null;
+        const owner = (p.phone && phoneOwner.get(p.phone))
+            || (p.email && emailOwner.get(p.email.toLowerCase()))
+            || (placeholderIds.has(p.nameId) ? emailOwner.get(`vyapar-${p.nameId}@placeholder.invalid`) : undefined)
+            || null;
         if (owner) {
             if (p.phone && phoneOwner.has(p.phone)) pPhone++; else pEmail++;
             // `kind` is a DESCRIPTIVE field, and Vyapar has no person/company concept
@@ -113,7 +126,7 @@ async function main(): Promise<void> {
 
     console.log(`
 PARTIES — ${parties.length} Vyapar parties to place`);
-    console.log(`  ${rp(pPhone + pEmail, 5)}  already here → update balance only (${pPhone} by phone, ${pEmail} by email)`);
+    console.log(`  ${rp(pPhone + pEmail, 5)}  already here → update balance only (${pPhone} by phone, ${pEmail} by email/placeholder)`);
     console.log(`         ${adoptedKind} of those keep OUR person/company kind over Vyapar's guess`);
     console.log(`  ${rp(pNew, 5)}  new → create  (${newPerson} persons, ${newCompany} companies; ${needPlaceholder} need a placeholder contact)`);
     console.log(`  (we hold ${phoneOwner.size} phones and ${emailOwner.size} emails)`);
