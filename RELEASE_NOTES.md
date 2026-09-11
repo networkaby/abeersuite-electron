@@ -1,16 +1,18 @@
-# v1.3.2
+# v1.3.3
 
 A quiet update — no urgent restart needed. It will install itself at the next safe moment (empty POS cart, or when the counter is sitting on the login screen).
 
-## Staff sign-in
+## Billing counter (POS)
 
-- **The web sign-in page now matches the counter screen.** Earlier, while the app was starting up on a counter, you'd see the nice navy sign-in screen with the shop photo — but the moment it handed over to the actual page, it jumped to a plain-looking one. Now both look the same, with the shop photo, tips and module list carried through.
-- Fixed a bug where that shop photo sometimes failed to appear on the web sign-in page.
+- **Product search is smarter and more consistent.** One search now powers every product box in the app — typing a barcode or a partial name behaves the same way everywhere, and a scanned barcode is treated differently from a typed guess so you get the right item, not the closest-sounding one.
+- **The product dropdown no longer goes blank** while you're mid-search on the counter.
+- **Finding a customer is more forgiving** — the counter can now match a customer from a part of their name or number the cashier half-remembers, instead of needing an exact match.
+- Counter input fields got a visual cleanup — they now sit on a plain white background instead of blending into the page, and look consistent across the billing screen.
 
-## Settings
+## Accounts
 
-- **Screen Size now has a slider.** Along with the existing Automatic option, you can drag a slider (50%–150%) or use the − / + buttons to set a comfortable screen size for your own eyes. This option only shows on the desktop app, not on the web version.
+- **The books now know their own start date (1 April 2023)** and will refuse a voucher dated earlier than that, instead of silently accepting it.
 
-## Other
+## Update notifications
 
-- Increased how long call pop-ups stay visible before disappearing (72 hours), so notifications aren't missed.
+- The "update available" splash screen can now be minimised while it waits, instead of sitting fixed on screen.
