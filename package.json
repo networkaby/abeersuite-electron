@@ -66,6 +66,7 @@
     "vyapar:reconcile": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/reconcile.ts",
     "vyapar:replay-check": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/replay-check.ts",
     "vyapar:resolve": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/resolve.ts",
+    "vyapar:table-audit": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/table-audit.ts",
     "vyapar:payments": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/payments.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
