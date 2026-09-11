@@ -251,7 +251,25 @@ async function main(): Promise<void> {
             console.log(`  ${String(done).padStart(5)} / ${built.length}   ${rate.toFixed(0)}/s`);
         }
     }
-    console.log(`\nposted ${done} voucher(s) in ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
+    console.log(`\nposted ${done} voucher(s) in ${((Date.now() - started) / 1000).toFixed(0)}s`);
+
+    // Rebuild the caches the engine maintains incrementally. Skipping this let the
+    // Balance Sheet show stock at ₹68,427 against a true ₹8,38,393 — purge-vouchers
+    // zeroes InvProduct.stock, the replay increments it, and the two drift. The
+    // reconcile never caught it because it sums InvStockLedger directly, so the only
+    // wrong number was the one on the screen. Done here rather than left as a step
+    // someone has to remember, because for weeks nobody did.
+    const { spawnSync } = await import("node:child_process");
+    for (const [label, script, flag] of [
+        ["stock cache", "src/scripts/recompute-stock.ts", "--fix"],
+        ["ledger balances", "prisma/seeds/recompute-balances.ts", "--apply"],
+    ] as const) {
+        const r = spawnSync("npx", ["tsx", "--tsconfig", "scripts/vyapar/tsconfig.json", script, flag],
+            { stdio: "pipe", shell: process.platform === "win32", encoding: "utf8" });
+        const tail = String(r.stdout ?? "").trim().split("\n").filter(Boolean).slice(-1)[0] ?? "";
+        console.log(`  ${label}: ${r.status === 0 ? tail : `FAILED — run ${script} ${flag} by hand`}`);
+    }
+    console.log("");
 
     await pool.end();
     close();

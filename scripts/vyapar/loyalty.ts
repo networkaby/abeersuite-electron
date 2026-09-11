@@ -1,25 +1,36 @@
 /**
- * Carry Vyapar's loyalty points across, keeping each lot's ORIGINAL earn date.
+ * Carry loyalty points across, under the owner's 300-day rule.
  *
- * The owner chose to apply AbeerSuite's 320-day expiry to the real earn dates
- * rather than restart the clock, so roughly ₹1.19L of old points retire on arrival
- * and ₹1.53L stays live. That is implemented by the data model itself rather than
- * by filtering: every surviving lot is created with the date it was actually
- * earned, and `liveBalance()` already ignores lots older than the cutoff. Nothing
- * here decides what is expired — the dates do, and they keep deciding as time
- * passes, which a one-off filter would not.
+ * The rule, in the owner's words: *"since today any point earned within last 300
+ * days keep them — yes they are getting extra days since new opening day is
+ * 1-4-2026."* So:
  *
- * Balances are reconstructed by replaying all 9,978 loyalty rows in date order and
- * consuming lots FIFO, because only that produces per-lot dates. Two things make it
- * awkward and both are handled rather than ignored:
+ *   • Points earned in the 300 days before today survive; older ones are dropped
+ *     as expired.
+ *   • Every surviving point is carried as ONE lot per party dated **1-Apr-2026**,
+ *     the day the books open. Under the 320-day expiry that gives them until
+ *     14-Feb-2027 — deliberately more life than they would have had, which the
+ *     owner accepted rather than have points die weeks after changeover.
  *
- *   • Vyapar's points are fractional (19.09) and ours are whole. Rounding each lot
- *     independently drifts the party's total, so the LIVE balance is rounded once
- *     per party and the difference is pushed onto that party's largest live lot.
- *     What a customer can actually spend is then exact.
- *   • 42,314 points were redeemed beyond what was ever earned — Vyapar allowed the
- *     balance to go negative. A FIFO model cannot represent that, so those
- *     redemptions consume what exists and the shortfall is reported, never forced.
+ * ── Which backup, and why it matters ────────────────────────────────────────
+ * The FULL backup, never the year-close file. Vyapar's Close Books kept only
+ * loyalty from 2025-11-12 onward and rewrote the rest, which left 159 customers
+ * with a LOWER spendable balance than they had actually earned — 66,063 points,
+ * about ₹19,158, with one customer (Mahadev Saha Electrician) losing 42,676 of it.
+ * That is live in the owner's Vyapar right now and is worth knowing independently
+ * of this migration. The full history is the only honest source.
+ *
+ * ── FIFO, because a total is not a balance ──────────────────────────────────
+ * Whether a point survives depends on WHEN it was earned, so redemptions have to
+ * be matched against the lots they actually consumed. Replaying all 9,978 rows in
+ * date order and consuming oldest-first is the only way to know which points are
+ * left. Two wrinkles, both handled:
+ *
+ *   • Vyapar's points are fractional (19.09); ours are whole. Rounding per lot
+ *     drifts the party total, so the party balance is rounded ONCE.
+ *   • 42,314 points were redeemed beyond what was ever earned — Vyapar allowed a
+ *     negative balance. FIFO cannot, so those redemptions take what exists and the
+ *     shortfall is reported, never forced.
  *
  *   pnpm vyapar:loyalty              # report only
  *   pnpm vyapar:loyalty -- --apply
@@ -36,25 +47,35 @@ import { Pool } from "pg";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+/** The FULL history — the year-close file lost points people had actually earned. */
 const DEFAULT_VYB = "D:/AbeerSuite/11-09-2026_05.55.41_Network_Service_VypBackup.vyb";
-/** Vyapar closed on this date; expiry is measured from it, not from whenever this runs. */
-const AS_AT = new Date("2026-09-11T00:00:00Z");
+/** Owner's rule: keep what was earned in the last 300 days, measured from today. */
+const KEEP_DAYS = 300;
+/** Every surviving point is carried as one lot dated the day the books open. */
+const LOT_DATE = new Date("2026-04-01T00:00:00Z");
 
-type Lot = { at: Date; earned: number; left: number };
+type Lot = { at: Date; left: number };
 
 async function main(): Promise<void> {
     const apply = process.argv.includes("--apply");
     const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
     if (!/localhost|127\.0\.0\.1/.test(url)) throw new Error("REFUSING: local copy only, never live.");
 
+    const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
+    const cutoff = new Date(today.getTime() - KEEP_DAYS * 86_400_000);
+
     const { db, close } = openVyb(process.argv.find((a) => a.endsWith(".vyb")) ?? DEFAULT_VYB, join(tmpdir(), "vy-loy"));
     const pool = new Pool({ connectionString: url, ssl: false, max: 1 });
 
-    const cfg = (await pool.query(`select "expiryEnabled" e, "expiryDays" d, "redeemValue" v from "LoyaltyConfig"`)).rows[0];
+    const cfg = (await pool.query(
+        `select enabled e, "redeemValue" v, "expiryDays" d from "LoyaltyConfig" limit 1`)).rows[0];
     if (!cfg) throw new Error("no LoyaltyConfig row");
-    const cutoff = cfg.e ? new Date(AS_AT.getTime() - Number(cfg.d) * 86_400_000) : new Date(0);
-    console.log(`\nexpiry ${cfg.e ? `on, ${cfg.d} days → cutoff ${cutoff.toISOString().slice(0, 10)}` : "off"}` +
-        ` · redeem value ₹${cfg.v}/point`);
+    console.log(`\ntarget: ${url.replace(/^.*@/, "")}`);
+    console.log(`keeping points earned on or after ${cutoff.toISOString().slice(0, 10)}` +
+        ` (${KEEP_DAYS} days before ${today.toISOString().slice(0, 10)})`);
+    console.log(`carried as one lot per party dated ${LOT_DATE.toISOString().slice(0, 10)}` +
+        ` → expires ${new Date(LOT_DATE.getTime() + Number(cfg.d) * 86_400_000).toISOString().slice(0, 10)}`);
+    console.log(`loyalty is currently ${cfg.e ? "ON" : "OFF"} · redeem value ₹${cfg.v}/point`);
 
     const named = (sql: string) => {
         const m = new Map<number, string>();
@@ -68,14 +89,14 @@ async function main(): Promise<void> {
         named(`select name_id id, full_name nm from kb_names where name_type = 3`),
     );
 
-    // ── Rebuild every party's lots, FIFO, in date order ─────────────────────
-    const lots = new Map<number, Lot[]>();            // vyapar party id → lots
+    // ── Replay every row FIFO to find which lots are still unconsumed ───────
+    const lots = new Map<number, Lot[]>();
     const totals = new Map<number, { earned: number; redeemed: number }>();
     let overRedeemed = 0;
     const overParties = new Set<number>();
 
     for (const r of db.prepare(`
-        select party_id pid, point_rewarded e, point_redeemed rd, rewarded_date rdt
+        select party_id pid, point_rewarded e, point_redeemed rd, rewarded_date dt
         from loyalty_txn where party_id is not null order by rewarded_date, id
     `).all() as Array<Record<string, unknown>>) {
         const pid = Number(r.pid);
@@ -84,7 +105,7 @@ async function main(): Promise<void> {
         const t = totals.get(pid) ?? { earned: 0, redeemed: 0 }; totals.set(pid, t);
 
         if (earned > 0) {
-            L.push({ at: new Date(String(r.rdt).slice(0, 10) + "T00:00:00Z"), earned, left: earned });
+            L.push({ at: new Date(String(r.dt).slice(0, 10) + "T00:00:00Z"), left: earned });
             t.earned += earned;
         }
         if (redeemed > 0) {
@@ -99,91 +120,65 @@ async function main(): Promise<void> {
         }
     }
 
-    // ── Shape into rows, rounding the LIVE balance once per party ───────────
-    type PartyPlan = { accountId: number; live: number; lots: Array<{ at: Date; earned: number; left: number }>;
-                       totalEarned: number; totalRedeemed: number };
-    const plans: PartyPlan[] = [];
-    let unmapped = 0, liveTotal = 0, expiredTotal = 0;
+    // ── Keep only what was earned inside the window ─────────────────────────
+    type Plan = { accountId: number; points: number; earned: number; redeemed: number };
+    const plans: Plan[] = [];
+    let carried = 0, expired = 0, unmapped = 0;
 
     for (const [pid, L] of lots) {
+        const live = L.filter((l) => l.at >= cutoff).reduce((s, l) => s + l.left, 0);
+        const dead = L.filter((l) => l.at < cutoff).reduce((s, l) => s + l.left, 0);
+        expired += dead;
+        const points = Math.round(live);
+        if (points <= 0) continue;
         const acc = maps.party.get(pid);
-        if (!acc) { unmapped++; continue; }
-        const surviving = L.filter((l) => l.left > 0.0001);
-        if (!surviving.length) continue;
-
-        const liveExact = surviving.filter((l) => l.at >= cutoff).reduce((s, l) => s + l.left, 0);
-        const expiredExact = surviving.filter((l) => l.at < cutoff).reduce((s, l) => s + l.left, 0);
-
-        // Round each lot, then true the LIVE total up to the rounded party balance by
-        // adjusting the largest live lot — so what the customer can spend is exact
-        // even though the individual lots are approximations of fractional points.
-        const rows = surviving.map((l) => ({ at: l.at, earned: Math.round(l.earned), left: Math.round(l.left) }));
-        const liveRows = rows.filter((r) => r.at >= cutoff);
-        const target = Math.round(liveExact);
-        const drift = target - liveRows.reduce((s, r) => s + r.left, 0);
-        if (drift !== 0 && liveRows.length) {
-            const biggest = liveRows.reduce((a, b) => (b.left > a.left ? b : a));
-            biggest.left += drift;
-            biggest.earned = Math.max(biggest.earned, biggest.left);
-        }
-
-        liveTotal += target;
-        expiredTotal += Math.round(expiredExact);
+        if (!acc) { unmapped += points; continue; }
         const t = totals.get(pid)!;
-        plans.push({
-            accountId: acc.accountId, live: target, lots: rows,
-            totalEarned: Math.round(t.earned), totalRedeemed: Math.round(t.redeemed),
-        });
+        plans.push({ accountId: acc.accountId, points, earned: Math.round(t.earned), redeemed: Math.round(t.redeemed) });
+        carried += points;
     }
 
     const f = (n: number) => Math.round(n).toLocaleString("en-IN");
     const rs = (n: number) => "₹" + Math.round(n * Number(cfg.v)).toLocaleString("en-IN");
-    console.log(`\n${plans.length} parties carry points · ${plans.reduce((s, p) => s + p.lots.length, 0)} lots`);
-    console.log(`   live    ${f(liveTotal).padStart(10)}  ${rs(liveTotal).padStart(12)}   (spendable)`);
-    console.log(`   expired ${f(expiredTotal).padStart(10)}  ${rs(expiredTotal).padStart(12)}   (kept as history, not spendable)`);
-    if (unmapped) console.log(`   ⚠ ${unmapped} vyapar parties hold points but have no AbeerSuite account`);
+    console.log(`\n  carried  ${f(carried).padStart(10)} points  ${rs(carried).padStart(12)}   across ${plans.length} parties`);
+    console.log(`  expired  ${f(expired).padStart(10)} points  ${rs(expired).padStart(12)}   earned before the cutoff, dropped`);
+    if (unmapped) console.log(`  ⚠ ${f(unmapped)} points belong to parties with no account here`);
     if (overRedeemed > 0.01) {
-        console.log(`   ⚠ ${f(overRedeemed)} points were redeemed beyond what was earned, across ${overParties.size} parties.`);
-        console.log(`     Vyapar allowed a negative balance; FIFO cannot, so those redemptions took what existed.`);
+        console.log(`  ⓘ ${f(overRedeemed)} points were redeemed beyond what was earned, across ${overParties.size} parties.`);
+        console.log(`    Vyapar allowed a negative balance; FIFO cannot, so those redemptions took what existed.`);
     }
 
     if (!apply) { console.log(`\nNothing written. Re-run with --apply.\n`); await pool.end(); close(); return; }
 
     // ── Write ───────────────────────────────────────────────────────────────
-    const user = (await pool.query(`select id from "User" order by id limit 1`)).rows[0];
-    const existing = (await pool.query(`select count(*)::int n from "LoyaltyLot"`)).rows[0].n;
-    if (Number(existing) > 0) {
-        console.log(`\nREFUSING: ${existing} loyalty lot(s) already exist — this would double the balances.` +
-            `\nClear them first (pnpm seed:purge-vouchers cascades them off the vouchers).\n`);
-        await pool.end(); close(); process.exit(1);
-    }
+    // Clear first. Re-running otherwise doubles every balance, and the previous
+    // build of this data carried 9.39 lakh points under the old all-history rule —
+    // stale rows that a later run must replace, not add to.
+    console.log(`\nAPPLYING …`);
+    const wiped = await pool.query(`delete from "LoyaltyLedger"`);
+    const wipedLots = await pool.query(`delete from "LoyaltyLot"`);
+    await pool.query(`update "LoyaltyAccount" set "totalEarned" = 0, "totalRedeemed" = 0`);
+    console.log(`  cleared ${wipedLots.rowCount} lot(s) and ${wiped.rowCount} ledger row(s)`);
 
-    let done = 0;
+    const user = (await pool.query(`select id from "User" order by id limit 1`)).rows[0];
     for (const p of plans) {
         await pool.query(
             `insert into "LoyaltyAccount" ("accountId", "totalEarned", "totalRedeemed", "createdAt", "updatedAt")
              values ($1, $2, $3, now(), now())
              on conflict ("accountId") do update set "totalEarned" = $2, "totalRedeemed" = $3, "updatedAt" = now()`,
-            [p.accountId, p.totalEarned, p.totalRedeemed],
-        );
-        for (const l of p.lots) {
-            await pool.query(
-                `insert into "LoyaltyLot" ("accountId", "universalVoucherId", "pointsEarned", "pointsRemaining", "earnedAt", "createdAt")
-                 values ($1, null, $2, $3, $4, now())`,
-                [p.accountId, l.earned, l.left, l.at],
-            );
-        }
-        // One ledger row per party: the audit trail says these points were carried in,
-        // which is what happened. Reconstructing 9,978 individual movements would imply
-        // a history AbeerSuite did not record.
+            [p.accountId, p.earned, p.redeemed]);
+        await pool.query(
+            `insert into "LoyaltyLot" ("accountId", "universalVoucherId", "pointsEarned", "pointsRemaining", "earnedAt", "createdAt")
+             values ($1, null, $2, $2, $3, now())`, [p.accountId, p.points, LOT_DATE]);
         await pool.query(
             `insert into "LoyaltyLedger" ("accountId", "universalVoucherId", delta, reason, "balanceAfter", note, "createdById", "createdAt")
              values ($1, null, $2, 'ADMIN_ADJUST'::"LoyaltyReason", $2, $3, $4, now())`,
-            [p.accountId, p.live, `carried from Vyapar as at ${AS_AT.toISOString().slice(0, 10)}`, user.id],
-        );
-        done++;
+            [p.accountId, p.points,
+             `carried from Vyapar — earned within ${KEEP_DAYS} days to ${today.toISOString().slice(0, 10)}`, user.id]);
     }
-    console.log(`\nwrote ${done} loyalty accounts\n`);
+    console.log(`  wrote ${plans.length} account(s), ${f(carried)} points`);
+    if (!cfg.e) console.log(`\n  ⓘ loyalty is OFF, so none of this is spendable until it is switched on.`);
+    console.log("");
 
     await pool.end();
     close();
