@@ -14,6 +14,64 @@
 
 import type { DatabaseSync } from "node:sqlite";
 
+/** First day of the financial year we replay. Books begin here. */
+export const FY_START = "2026-04-01";
+
+/**
+ * How each Vyapar transaction type moves a PARTY's balance, as multipliers on
+ * `txn_cash_amount` / `txn_balance_amount`. Positive = receivable (they owe us).
+ *
+ * A sale adds only its UNPAID part to what the customer owes — the cash part was
+ * settled at the counter — so bal=+1, cash=0. A receipt is pure settlement.
+ * Purchases mirror sales with the sign flipped.
+ *
+ * `null` means the type does not touch a party ledger at all: estimates, orders
+ * and challans are documents, not postings.
+ *
+ * These rules are VALIDATED, not assumed: summed over the whole file they
+ * reproduce Vyapar's own `kb_names.amount` on 3,677 of 3,754 parties (97.9%),
+ * with the net across all parties off by ₹18,617 on a ₹3.5cr flow. See
+ * check-balances.ts, which is what proved them.
+ */
+export const PARTY_EFFECT: Record<number, { cash: number; bal: number; label: string } | null> = {
+    1: { cash: 0, bal: +1, label: "Sale" },
+    2: { cash: 0, bal: -1, label: "Purchase" },
+    3: { cash: -1, bal: -1, label: "Payment-In" },
+    4: { cash: +1, bal: +1, label: "Payment-Out" },
+    21: { cash: 0, bal: -1, label: "Credit Note" },
+    23: { cash: 0, bal: +1, label: "Debit Note" },
+    5: { cash: +1, bal: +1, label: "Opening receivable" },
+    6: { cash: -1, bal: -1, label: "Opening payable" },
+    // "Payment In/Out Opening Balance" — NOT postings. They record how much of an
+    // opening was ALREADY settled, and that same money appears again as real
+    // type-3/4 payments; posting both counts it twice. Proven on one party whose
+    // opening payable −405,000, a type-32 of +388,826 and five type-4 payments of
+    // +388,826 produced a 372,652 error that vanished when these were muted.
+    31: null,
+    32: null,
+    7: { cash: 0, bal: -1, label: "Expense" },
+    29: { cash: 0, bal: +1, label: "Other income" },
+    60: { cash: 0, bal: +1, label: "Sale of fixed asset" },
+    61: { cash: 0, bal: -1, label: "Purchase of fixed asset" },
+    27: null, // Estimate — a quotation
+    30: null, // Delivery Challan — goods moved, not yet invoiced
+    65: null, // unidentified; no sign improved the fit
+    // 81/82 are still UNNAMED, but their effect is evidenced: 81 behaves as a
+    // receipt and 82 as a payment, matching the parties involved (81's are
+    // customers, 82's suppliers). Adopting these took the derivation gap from
+    // ₹1,17,862 to ₹82,023 and fixed one supplier to the rupee.
+    81: { cash: -1, bal: -1, label: "unnamed, behaves as a receipt" },
+    82: { cash: +1, bal: +1, label: "unnamed, behaves as a payment" },
+};
+
+/** Stock direction per transaction type: +1 goods in, −1 goods out, 0 no movement. */
+export const STOCK_EFFECT: Record<number, number> = {
+    1: -1,   // Sale — out
+    21: +1,  // Credit Note (sale return) — back in
+    2: +1,   // Purchase — in
+    23: -1,  // Debit Note (purchase return) — back out
+};
+
 // ── Products ────────────────────────────────────────────────────────────────
 
 /** Vyapar's `kb_items.item_type`, confirmed against this client's data. */
@@ -34,6 +92,8 @@ export type VyaparItem = {
     /** True when the code happens to match our own SKU shape and could BE the SKU. */
     codeIsOurSkuShape: boolean;
     itemType: number;
+    /** Our InvUnit.code for this item's base unit — Vyapar's three all map cleanly. */
+    unitCode: string;
     qty: number;
     stockValue: number;
     salePrice: number | null;
@@ -62,12 +122,14 @@ export function classifyCode(code: string | null): { value: string | null; kind:
 
 export function extractItems(db: DatabaseSync): VyaparItem[] {
     const rows = db.prepare(`
-        select item_id, item_name, item_code, item_type,
-               coalesce(item_stock_quantity, 0) qty,
-               coalesce(item_stock_value, 0)    val,
-               item_sale_unit_price, item_purchase_unit_price, item_mrp, item_hsn_sac_code
-        from kb_items
-        order by item_id
+        select i.item_id, i.item_name, i.item_code, i.item_type,
+               coalesce(i.item_stock_quantity, 0) qty,
+               coalesce(i.item_stock_value, 0)    val,
+               i.item_sale_unit_price, i.item_purchase_unit_price, i.item_mrp, i.item_hsn_sac_code,
+               u.unit_short_name ushort, u.unit_name uname
+        from kb_items i
+        left join kb_item_units u on u.unit_id = i.base_unit_id
+        order by i.item_id
     `).all() as Array<Record<string, unknown>>;
 
     return rows.map((r) => {
@@ -106,6 +168,7 @@ export function extractItems(db: DatabaseSync): VyaparItem[] {
             codeKind: code.kind,
             codeIsOurSkuShape: code.ourSkuShape,
             itemType,
+            unitCode: unitCodeFor(r.ushort as string | null, r.uname as string | null),
             qty,
             stockValue: Number(r.val),
             salePrice: num(r.item_sale_unit_price),
@@ -116,6 +179,23 @@ export function extractItems(db: DatabaseSync): VyaparItem[] {
             note,
         };
     });
+}
+
+/**
+ * Vyapar's units → our `InvUnit.code`. All three in use map onto units we already
+ * have, so **no unit master is ever created** — the owner's masters stay as they are.
+ * Anything unexpected falls back to UNIT rather than minting a Vyapar-shaped unit;
+ * a wrong unit on one item is visible and fixable, a junk master is forever.
+ */
+const UNIT_MAP: Record<string, string> = {
+    UNIT: "UNIT", MTR: "MTR", METERS: "MTR", RM: "REAM", REAM: "REAM",
+    PCS: "PCS", BOX: "BOX", KG: "KG", NOS: "NOS", PKT: "PKT", SET: "SET", PAIR: "PAIR",
+};
+
+export function unitCodeFor(short: string | null, full: string | null): string {
+    const a = (short ?? "").trim().toUpperCase();
+    const b = (full ?? "").trim().toUpperCase();
+    return UNIT_MAP[a] ?? UNIT_MAP[b] ?? "UNIT";
 }
 
 // ── Parties ─────────────────────────────────────────────────────────────────

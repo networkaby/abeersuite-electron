@@ -18,61 +18,17 @@
  *   pnpm vyapar:check-balances [-- <path-to.vyb>]
  */
 
+import { PARTY_EFFECT } from "./extract";
 import { openVyb } from "./openVyb";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const DEFAULT_VYB = "D:/AbeerSuite/11-09-2026_05.55.41_Network_Service_VypBackup.vyb";
 
-/**
- * How each Vyapar transaction type moves the party's balance.
- *
- * `cash` and `bal` are multipliers on `txn_cash_amount` / `txn_balance_amount`.
- * A sale adds only its UNPAID part to what the customer owes (the cash part was
- * settled at the counter), so bal=+1, cash=0. A receipt is pure settlement, so
- * cash=-1. Purchases mirror sales with the sign flipped.
- *
- * Types marked `null` do not touch a party ledger at all — estimates, orders and
- * challans are documents, not postings. Getting that wrong is precisely the
- * error that made `txn_current_balance` disagree with `kb_names.amount` on 67
- * parties, so it is encoded here deliberately.
- */
-const EFFECT: Record<number, { cash: number; bal: number; label: string } | null> = {
-    1: { cash: 0, bal: +1, label: "Sale" },
-    2: { cash: 0, bal: -1, label: "Purchase" },
-    3: { cash: -1, bal: -1, label: "Payment-In" },
-    4: { cash: +1, bal: +1, label: "Payment-Out" },
-    21: { cash: 0, bal: -1, label: "Credit Note" },
-    23: { cash: 0, bal: +1, label: "Debit Note" },
-    5: { cash: +1, bal: +1, label: "Opening receivable" },
-    6: { cash: -1, bal: -1, label: "Opening payable" },
-    // "Payment In/Out Opening Balance" — NOT postings, despite looking like them.
-    // They record how much of an opening balance had ALREADY been settled, and
-    // that same money also appears as real Payment-In/Out rows (types 3/4). Posting
-    // both counts it twice. Proven on "Jahidul junmoni": opening payable −405,000,
-    // type 32 +388,826 and five type-4 payments +388,826 — the identical 388,826
-    // twice, producing a 372,652 error that vanished the moment these were muted.
-    // Muting them cut the total derivation gap from ₹7.04L to ₹1.18L.
-    31: null,
-    32: null,
-    7: { cash: 0, bal: -1, label: "Expense" },
-    29: { cash: 0, bal: +1, label: "Other income" },
-    60: { cash: 0, bal: +1, label: "Sale of fixed asset" },
-    61: { cash: 0, bal: -1, label: "Purchase of fixed asset" },
-    27: null, // Estimate — a quotation, no posting
-    30: null, // Delivery Challan — goods moved, not yet invoiced
-    65: null, // unidentified (32 rows) — no effect improved the fit, so left out
-
-    // Types 81 (2 rows) and 82 (10 rows) are still UNNAMED — we have not confirmed
-    // what Vyapar calls them. But their EFFECT is evidence-backed: 81 behaves like a
-    // receipt and 82 like a payment, which fits the parties involved (81's are
-    // customers, 82's are suppliers). Adopting these signs took the derivation gap
-    // from ₹1,17,862 to ₹82,023 and fixed MAHALAXMI INFOTRONICS to the rupee.
-    // They are posted with these signs but still listed for identification — a
-    // correct sign is not the same as a known meaning.
-    81: { cash: -1, bal: -1, label: "unnamed, behaves as a receipt" },
-    82: { cash: +1, bal: +1, label: "unnamed, behaves as a payment" },
-};
+// The sign rules this script exists to validate now live in extract.ts, so the
+// migration and its own proof cannot drift apart. Editing them there re-tests them
+// here automatically.
+const EFFECT = PARTY_EFFECT;
 
 function main(): void {
     const vyb = process.argv[2] ?? DEFAULT_VYB;
