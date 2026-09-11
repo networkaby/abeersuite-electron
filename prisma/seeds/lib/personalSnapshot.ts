@@ -316,7 +316,13 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const accNameById = new Map(accRows.map((a) => [a.id, a.name]));
     const accounts = accRows.map((a) => externalize(
         {
-            ...omit(a, ["id", "parentId", "personId", "companyId", "balance", "createdAt", "aliases"]),
+            // `reconciled*` is bank-reconciliation STATE, not configuration — it belongs
+            // with `balance` on the excluded side. Worse, `reconciledById` is a User id
+            // from the source database, and a fresh install does not have those users, so
+            // restoring a snapshot onto an empty database died on
+            // Account_reconciledById_fkey with nothing imported after it.
+            ...omit(a, ["id", "parentId", "personId", "companyId", "balance", "createdAt", "aliases",
+                "reconciledThrough", "reconciledAt", "reconciledById"]),
             parentName: a.parentId != null ? accNameById.get(a.parentId) ?? null : null,
             aliases: a.aliases.map((x) => x.alias),
         },
@@ -503,6 +509,13 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     const accWhere = (a: Row) => (a.code ? { code: a.code } : { name: a.name, personId: null, companyId: null });
     for (const a of snap.accounts) {
         const { parentName, aliases, ...rest } = internalize(a, { groupId: "accountGroup" }, idx);
+        // Snapshots captured before reconciliation state was excluded still carry
+        // these, and `reconciledById` names a User that a fresh database does not
+        // have. Dropping them on the way in means an old snapshot restores cleanly
+        // instead of dying on Account_reconciledById_fkey partway through.
+        delete (rest as Row).reconciledThrough;
+        delete (rest as Row).reconciledAt;
+        delete (rest as Row).reconciledById;
         await put(prisma.account, accWhere(a), rest);
         // Aliases are a child table, so they can't ride the upsert payload.
         // Replace the ledger's set — upsert-only semantics still hold, nothing

@@ -7,6 +7,9 @@
   "asAt": "2026-03-31",
   "money": [
     {
+      "$comment": "`create` names the group a ledger is minted under when it does not exist. These five were made by a one-off script against the old database and never captured into personal.local.json, so a fresh install does not have them — the clean-room build is what exposed that. They should go into the next `pnpm seed:personal:capture` so the snapshot stops being incomplete."
+    },
+    {
       "vyapar": "Cash",
       "account": "Petty Cash",
       "amount": 4372.66
@@ -29,17 +32,20 @@
     {
       "vyapar": "Amazon Pay 5009",
       "account": "Amazon Pay 5009",
-      "amount": -2909.0
+      "amount": -2909.0,
+      "create": "Wallets"
     },
     {
       "vyapar": "Amazon Pay Balance Income",
       "account": "Amazon Pay Balance Income",
-      "amount": -2360.82
+      "amount": -2360.82,
+      "create": "Wallets"
     },
     {
       "vyapar": "3 Routing A/c",
       "account": "3 Routing A/c",
-      "amount": 0
+      "amount": 0,
+      "create": "Bank Accounts"
     },
     {
       "vyapar": "z Udaan Capital",
@@ -65,12 +71,14 @@
     {
       "vyapar": "Cheque",
       "account": "Cheques in Hand",
-      "amount": 0
+      "amount": 0,
+      "create": "Current Assets"
     },
     {
       "vyapar": "UNI BB Visa 2797",
       "account": "UNI BB Visa 2797",
-      "amount": 0
+      "amount": 0,
+      "create": "Credit Card"
     }
   ],
   "loans": [

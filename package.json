@@ -66,6 +66,8 @@
     "vyapar:reconcile": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/reconcile.ts",
     "vyapar:replay-check": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/replay-check.ts",
     "vyapar:resolve": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/resolve.ts",
+    "vyapar:opening-report": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/opening-report.ts",
+    "vyapar:opening": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/opening.ts",
     "vyapar:pl-check": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/pl-check.ts",
     "vyapar:table-audit": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/table-audit.ts",
     "vyapar:payments": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/payments.ts",
