@@ -304,5 +304,43 @@
   "chequeClearing": {
     "$comment": "kb_cheque_status rows: a cheque taken in tender sits in Cheques in Hand until it is banked. Vyapar shows the ledger at nil on both dates because every cheque was deposited; we posted the receipt and never the deposit, stranding the money. `transferred_To_Account` is a kb_paymentTypes id.",
     "account": "Cheques in Hand"
+  },
+  "gst": {
+    "$comment": "Vyapar never clears its GST ledgers on filing, so both exports show a running total since 2023. The WINDOW's GST is therefore the difference between them -- subtraction of two published figures, not a reconstruction. Our ledgers open at NIL by the owner's decision, so our balance must equal this delta exactly. `account` is our ledger; Vyapar splits Input and Output, we keep one ledger per tax with input as debit and output as credit, so the two sides are netted before comparing.",
+    "cumulative31Mar": {
+      "Input CGST": 854352.06,
+      "Input SGST": 854352.06,
+      "Input IGST": 121443.97,
+      "Output CGST": 1098316.92,
+      "Output SGST": 1098316.92,
+      "Output IGST": 1212.72
+    },
+    "cumulative11Sep": {
+      "Input CGST": 1011061.67,
+      "Input SGST": 1011061.67,
+      "Input IGST": 122267.72,
+      "Output CGST": 1288567.21,
+      "Output SGST": 1288567.21,
+      "Output IGST": 1212.72
+    },
+    "window": {
+      "Input CGST": 156709.61,
+      "Input SGST": 156709.61,
+      "Input IGST": 823.75,
+      "Output CGST": 190250.29,
+      "Output SGST": 190250.29,
+      "Output IGST": 0.0
+    },
+    "netByTax": {
+      "CGST": 33540.68,
+      "SGST": 33540.68,
+      "IGST": -823.75
+    }
+  },
+  "profit": {
+    "$comment": "Vyapar's Net Income (Profit) line on each Balance Sheet. The window's profit is the 11-Sep figure; its Balance Sheet is drawn for 01-04-26 to 11-09-26.",
+    "netIncome11Sep": 82085.15,
+    "netIncome31Mar": -4261.97,
+    "retainedEarnings11Sep": -88121.77
   }
 }
