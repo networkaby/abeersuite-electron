@@ -45,6 +45,8 @@ const YEAR_CLOSE = "D:/AbeerSuite/opeing at 1-4-26 -11-09-2026_23.37.41_Network_
 const OPENINGS = "prisma/seeds/data/vyapar-opening-31mar2026.json";
 /** Vyapar's own opening markers, all dated 1-Apr-2026 in the year-close file. */
 const RECEIVABLE_OPENING = 5, PAYABLE_OPENING = 6, STOCK_OPENING = 10, ASSET_OPENING = 62;
+/** Loans state their opening as a loan_transactions row, not on kb_paymentTypes. */
+const LOAN_OPENING = 44;
 
 const inr = (n: number) => (n < 0 ? "-" : "") + "₹" + Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
@@ -58,7 +60,7 @@ async function main(): Promise<void> {
 
     const V = JSON.parse(readFileSync(OPENINGS, "utf8")) as {
         money: Money[];
-        loans: Array<{ account: string; create?: string }>;
+        loans: Array<{ vyapar: string; account: string; create?: string }>;
         interestLedgers: { create: Array<{ account: string; group: string }> };
         fixedAssets: { items: Array<{ itemId: number; ledger: string }> };
     };
@@ -90,6 +92,27 @@ async function main(): Promise<void> {
         const acc = payAccount.get(String(r.nm).trim());
         if (!acc) { console.log(`  ⚠ Vyapar ledger "${r.nm}" holds ${inr(amt)} and is not mapped`); continue; }
         ledgers.push({ name: acc, amount: amt });
+    }
+
+    // ── 1b. Loans ───────────────────────────────────────────────────────────
+    // These live in `loan_transactions`, NOT `kb_paymentTypes`, and missing that cost
+    // ₹9,78,044: the clear-everything rule wiped their openings and the reload only
+    // covered the money ledgers, so all six read as movement with nothing under it.
+    // Clearing everything is still right — but it obliges this file to reload
+    // everything it clears, and a ledger that lives somewhere unexpected is exactly
+    // what slips through.
+    const loanAccount = new Map<string, string>();
+    for (const l of V.loans) loanAccount.set(l.vyapar, l.account);
+    for (const r of db.prepare(`
+        select a.loan_account_name nm, t.principal_amount p
+        from loan_transactions t join loan_accounts a on a.loan_account_id = t.loan_account_id
+        where t.loan_txn_type = ?`).all(LOAN_OPENING) as Array<Record<string, unknown>>) {
+        const amt = Number(r.p) || 0;
+        // Vyapar leaves floating-point dust (2.5e-12) on settled loans.
+        if (Math.abs(amt) < 0.005) continue;
+        const acc = loanAccount.get(String(r.nm).trim());
+        if (!acc) { console.log(`  ⚠ Vyapar loan "${r.nm}" holds ${inr(amt)} and is not mapped`); continue; }
+        ledgers.push({ name: acc, amount: -amt });   // a loan is a liability
     }
 
     // ── 2. Parties, from Vyapar's own opening transactions ──────────────────
@@ -152,7 +175,7 @@ async function main(): Promise<void> {
     line("party receivable", dr, 26678);
     line("party payable", -cr, -254303.20);
     line("fixed assets", assetTotal, 483395.95);
-    line("ledger openings", ledgers.reduce((s, l) => s + l.amount, 0), -484726.45);
+    line("ledger openings (incl. loans)", ledgers.reduce((s, l) => s + l.amount, 0), -484726.45 - 978044);
     console.log(`  ${"opening stock".padEnd(28)}${inr(stockVal).padStart(16)}${inr(858903.96).padStart(16)}` +
         `   ⓘ ${stockQty.toLocaleString("en-IN")} units at Vyapar's own per-item cost`);
     console.log(`\n  ${ledgers.length} ledgers · ${partyRows.length} parties · ${assetByLedger.size} asset ledgers · ${stock.length} products`);
