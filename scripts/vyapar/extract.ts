@@ -317,6 +317,28 @@ export function extractExpenseHeads(db: DatabaseSync): Array<{ nameId: number; n
     });
 }
 
+/**
+ * Vyapar's OTHER-INCOME heads (`name_type = 3`). A third category beside parties
+ * and expense heads, and easy to miss: type-29 "Other Income" vouchers point
+ * `txn_name_id` at one of these, not at a customer. Treating them as parties makes
+ * those vouchers look like they reference a party that does not exist.
+ */
+export function extractIncomeHeads(db: DatabaseSync): Array<{ nameId: number; name: string; used: number; total: number }> {
+    return db.prepare(`
+        select n.name_id, n.full_name,
+               count(t.txn_id) used,
+               round(coalesce(sum(t.txn_cash_amount + t.txn_balance_amount), 0), 2) total
+        from kb_names n
+        left join kb_transactions t on t.txn_name_id = n.name_id
+        where n.name_type = ${NAME_TYPE.OTHER}
+        group by n.name_id, n.full_name
+        order by total desc
+    `).all().map((r) => {
+        const o = r as Record<string, unknown>;
+        return { nameId: Number(o.name_id), name: String(o.full_name ?? "").trim(), used: Number(o.used), total: Number(o.total) };
+    });
+}
+
 /** Vyapar's cash / bank / card ledgers, with how much actually moved through each. */
 export function extractPaymentLedgers(db: DatabaseSync): Array<{ id: number; name: string; used: number; total: number }> {
     return db.prepare(`

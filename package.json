@@ -61,6 +61,7 @@
     "vyapar:ledger-map": "tsx scripts/vyapar/ledger-map.ts",
     "vyapar:create-ledgers": "tsx scripts/vyapar/create-ledgers.ts",
     "vyapar:dup-report": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/dup-report.ts",
+    "vyapar:replay-check": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/replay-check.ts",
     "vyapar:resolve": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/resolve.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",

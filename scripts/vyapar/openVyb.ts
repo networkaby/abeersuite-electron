@@ -103,6 +103,31 @@ export function openVyb(vybPath: string, workDir: string): OpenedVyb {
     const vypPath = join(workDir, name);
     writeFileSync(vypPath, data);
 
+    // Index the unpacked copy before opening it read-only.
+    //
+    // Vyapar ships its tables with NO secondary indexes at all — kb_transactions has
+    // none — so every lookup is a full scan. One correlated subquery over 3,800
+    // parties hung for minutes at roughly 89 million row visits, and the replay does
+    // far more of that. These are OUR throwaway copy, never the owner's backup, and
+    // they cost a couple of seconds to build once.
+    {
+        const w = new DatabaseSync(vypPath);
+        for (const sql of [
+            `create index if not exists ix_txn_name on kb_transactions(txn_name_id)`,
+            `create index if not exists ix_txn_date on kb_transactions(txn_date)`,
+            `create index if not exists ix_txn_type on kb_transactions(txn_type)`,
+            `create index if not exists ix_txn_cat on kb_transactions(txn_category_id)`,
+            `create index if not exists ix_li_txn on kb_lineitems(lineitem_txn_id)`,
+            `create index if not exists ix_li_item on kb_lineitems(item_id)`,
+            `create index if not exists ix_pay_txn on txn_payment_mapping(txn_id)`,
+            `create index if not exists ix_pay_pid on txn_payment_mapping(payment_id)`,
+            `create index if not exists ix_loy_txn on loyalty_txn(txn_id)`,
+            `create index if not exists ix_adj_bank on kb_bank_adjustments(bank_adj_bank_id)`,
+        ]) w.exec(sql);
+        w.exec("analyze");
+        w.close();
+    }
+
     const db = new DatabaseSync(vypPath, { readOnly: true });
 
     const check = db.prepare("pragma integrity_check").get() as { integrity_check?: string } | undefined;

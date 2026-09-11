@@ -147,6 +147,18 @@ async function main(): Promise<void> {
         stockMoved.set(id, (stockMoved.get(id) ?? 0) + dir * Number(r.q));
     }
 
+    // Items that actually appear on a voucher in the replayed window. A "dead" item
+    // is one with no stock, no value and no match — but a SERVICE legitimately has
+    // no stock and no value while still being sold, so the dead-row rule was about
+    // to drop one that the replay needs (item 1892, a service on voucher 23209).
+    // Being used in the window overrides the rule.
+    const usedInWindow = new Set<number>();
+    for (const r of db.prepare(`
+        select distinct l.item_id id from kb_lineitems l
+        join kb_transactions t on t.txn_id = l.lineitem_txn_id
+        where t.txn_date >= '${FY_START}'
+    `).all() as Array<Record<string, unknown>>) usedInWindow.add(Number(r.id));
+
     const balMoved = new Map<number, number>();     // name_id → signed effect since FY_START
     for (const r of db.prepare(`
         select txn_name_id nid, txn_type ty,
@@ -206,7 +218,7 @@ async function main(): Promise<void> {
         // retired or test rows (`test`, `z MOBILE`, `investment rased`). Skipping
         // them by rule rather than by name list means the rule keeps working on the
         // next backup.
-        if (i.qty === 0 && i.stockValue === 0) {
+        if (i.qty === 0 && i.stockValue === 0 && !usedInWindow.has(i.itemId)) {
             stats.skippedDead++;
             skippedNames.push(i.name);
             continue;

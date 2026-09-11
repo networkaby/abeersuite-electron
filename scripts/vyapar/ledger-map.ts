@@ -29,7 +29,7 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-import { extractExpenseHeads, extractPaymentLedgers } from "./extract";
+import { extractExpenseHeads, extractIncomeHeads, extractPaymentLedgers } from "./extract";
 import { openVyb } from "./openVyb";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -61,6 +61,13 @@ const DECISIONS: Record<string, string | null> = {
     "Amazon Pay 5009": "Amazon Pay 5009",
     "Amazon Pay Balance Income": "Amazon Pay Balance Income",
     "UNI BB Visa 2797": "UNI BB Visa 2797",
+    // ── other income (name_type = 3) ──────────────────────────────────────
+    // Type-29 vouchers point at these instead of a customer, so they need ledgers
+    // like any expense head does.
+    "Bank Interest Income": "Interest Received",
+    "GST Invoice Income/Any Other Income": "income Other Revenue",
+    "Vyapar Commission": "Income Commission Received",
+    "Purona Baki": "income Other Revenue",
     // ── expense ───────────────────────────────────────────────────────────
     "Salary Prokash": "Prakash Salary",
     "Bank Charges Current & SB": "Exp Bank Charges",
@@ -134,12 +141,13 @@ function score(a: Set<string>, b: Set<string>): number {
  * the wrong family is rejected outright rather than merely scored lower, and the
  * head goes to quarantine where a human will see it.
  */
-const PLAUSIBLE: Record<"expense" | "payment", readonly string[]> = {
+const PLAUSIBLE: Record<"expense" | "income" | "payment", readonly string[]> = {
     expense: [
         "Indirect Expenses", "Direct Expenses", "Salary", "Misc. Expenses (Asset)",
         "Fixed Assets", "Duties & Taxes", "Purchase Accounts", "Provisions",
         "Loans (Liability)", "Secured Loans", "Unsecured Loans", "Current Liabilities",
     ],
+    income: ["Indirect Incomes", "Direct Incomes", "Current Liabilities"],
     payment: [
         "Cash-in-Hand", "Bank Accounts", "Bank OD A/c", "Credit Card", "Wallets",
         "Payment Gateway", "BNPL A/c", "Loans (Liability)", "Secured Loans",
@@ -149,7 +157,7 @@ const PLAUSIBLE: Record<"expense" | "payment", readonly string[]> = {
 
 type Decision = {
     vyapar: string;
-    kind: "expense" | "payment";
+    kind: "expense" | "income" | "payment";
     /** Rupees that moved through this head over the WHOLE file — three years. */
     amount: number;
     /** Rupees and vouchers inside the replayed window only — what actually decides relevance. */
@@ -198,6 +206,18 @@ async function main(): Promise<void> {
         fyExpense.set(String(r.nm).trim(), { n: Number(r.n), amt: Number(r.amt) });
     }
 
+    // Income heads attach through txn_name_id, not txn_category_id.
+    const fyIncome = new Map<string, { n: number; amt: number }>();
+    for (const r of db.prepare(`
+        select n.full_name nm, count(*) n,
+               round(coalesce(sum(t.txn_cash_amount + t.txn_balance_amount), 0), 2) amt
+        from kb_names n join kb_transactions t on t.txn_name_id = n.name_id
+        where n.name_type = 3 and t.txn_date >= '${FY_START}'
+        group by n.name_id
+    `).all() as Array<Record<string, unknown>>) {
+        fyIncome.set(String(r.nm).trim(), { n: Number(r.n), amt: Number(r.amt) });
+    }
+
     const fyPayment = new Map<string, { n: number; amt: number }>();
     for (const r of db.prepare(`
         select p.paymentType_name nm, count(*) n, round(coalesce(sum(m.amount), 0), 2) amt
@@ -212,6 +232,7 @@ async function main(): Promise<void> {
 
     const sources: Array<{ kind: Decision["kind"]; name: string; amount: number }> = [
         ...extractExpenseHeads(db).map((h) => ({ kind: "expense" as const, name: h.name, amount: h.total })),
+        ...extractIncomeHeads(db).map((h) => ({ kind: "income" as const, name: h.name, amount: h.total })),
         ...extractPaymentLedgers(db).filter((p) => p.used > 0)
             .map((p) => ({ kind: "payment" as const, name: p.name, amount: p.total })),
     ];
@@ -222,7 +243,8 @@ async function main(): Promise<void> {
     void prior;
 
     const decisions: Decision[] = sources.map((s) => {
-        const fy = (s.kind === "expense" ? fyExpense : fyPayment).get(s.name) ?? { n: 0, amt: 0 };
+        const fy = (s.kind === "expense" ? fyExpense : s.kind === "income" ? fyIncome : fyPayment)
+            .get(s.name) ?? { n: 0, amt: 0 };
         const base = { vyapar: s.name, kind: s.kind, amount: s.amount, fyAmount: fy.amt, fyTxns: fy.n };
 
         // ── The owner's drop rule: nothing moved this FY AND nothing is owed, so
@@ -297,7 +319,7 @@ async function main(): Promise<void> {
     const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
     const MARK = { owner: "●", high: "✓", likely: "~", weak: "?", none: "✗" } as const;
 
-    for (const kind of ["payment", "expense"] as const) {
+    for (const kind of ["payment", "expense", "income"] as const) {
         const rows = decisions.filter((d) => d.kind === kind).sort((a, b) => b.fyAmount - a.fyAmount);
         for (const action of ["map", "create", "drop"] as const) {
             const set = rows.filter((d) => d.action === action);
