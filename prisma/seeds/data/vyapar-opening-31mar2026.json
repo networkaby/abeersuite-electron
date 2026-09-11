@@ -1,40 +1,117 @@
 {
   "$comment": "Vyapar's OWN published position at the close of 31-Mar-2026 — the opening for 1-Apr-2026. Transcribed from BalanceSheet_31_03_26_to_31_03_26.pdf and TRIAL_BALANCE_REPORT_31_03_26_to_31_03_26.pdf, which agree with each other line for line. These figures are READ, never derived: reconstructing them from kb_bank_adjustments produced eight wrong ledgers (3 Routing A/c out by 5.85L, SBI CC by 3.21L) and the error was invisible until these exports arrived. Amounts are signed the natural way — positive = debit/asset, negative = credit/liability. `account` names the AbeerSuite ledger; null means we have no home for it yet.",
-  "source": ["BalanceSheet_31_03_26_to_31_03_26.pdf", "TRIAL_BALANCE_REPORT_31_03_26_to_31_03_26.pdf"],
+  "source": [
+    "BalanceSheet_31_03_26_to_31_03_26.pdf",
+    "TRIAL_BALANCE_REPORT_31_03_26_to_31_03_26.pdf"
+  ],
   "asAt": "2026-03-31",
-
   "money": [
-    { "vyapar": "Cash",                          "account": "Petty Cash",                        "amount": 4372.66 },
-    { "vyapar": "0 SBI CC A/c",                  "account": "SBI CC A/c 873",                    "amount": -511906.06 },
-    { "vyapar": "Bandhan Bank 0020",             "account": "Bankdhan Bank Current A/c  0020",   "amount": 26609.77 },
-    { "vyapar": "Sahanas Parbin 4022",           "account": "Bandhan Bank SB 4022",              "amount": 1467.00 },
-    { "vyapar": "Amazon Pay 5009",               "account": "Amazon Pay 5009",                   "amount": -2909.00 },
-    { "vyapar": "Amazon Pay Balance Income",     "account": "Amazon Pay Balance Income",         "amount": -2360.82 },
-    { "vyapar": "3 Routing A/c",                 "account": "3 Routing A/c",                     "amount": 0 },
-    { "vyapar": "z Udaan Capital",               "account": null,                                "amount": 0 },
-    { "vyapar": "x HDFC Rupay Credit Card 0288", "account": null,                                "amount": 0 },
-    { "vyapar": "Z SBI Credit Card 7677",        "account": null,                                "amount": 0 },
-
-    { "$comment": "Absent from BOTH exports at 31-Mar, so nil — not missing data. Our derivation invented -13,000 for Rakesh Cash and +2,41,890 for Cheque; neither exists.",
-      "vyapar": "Rakesh Cash",                   "account": "Cash – Counter 23 rakesh – Head Office", "amount": 0 },
-    { "vyapar": "Cheque",                        "account": "Cheques in Hand",                   "amount": 0 },
-    { "vyapar": "UNI BB Visa 2797",              "account": "UNI BB Visa 2797",                  "amount": 0 }
+    {
+      "vyapar": "Cash",
+      "account": "Petty Cash",
+      "amount": 4372.66
+    },
+    {
+      "vyapar": "0 SBI CC A/c",
+      "account": "SBI CC A/c 873",
+      "amount": -511906.06
+    },
+    {
+      "vyapar": "Bandhan Bank 0020",
+      "account": "Bankdhan Bank Current A/c  0020",
+      "amount": 26609.77
+    },
+    {
+      "vyapar": "Sahanas Parbin 4022",
+      "account": "Bandhan Bank SB 4022",
+      "amount": 1467.0
+    },
+    {
+      "vyapar": "Amazon Pay 5009",
+      "account": "Amazon Pay 5009",
+      "amount": -2909.0
+    },
+    {
+      "vyapar": "Amazon Pay Balance Income",
+      "account": "Amazon Pay Balance Income",
+      "amount": -2360.82
+    },
+    {
+      "vyapar": "3 Routing A/c",
+      "account": "3 Routing A/c",
+      "amount": 0
+    },
+    {
+      "vyapar": "z Udaan Capital",
+      "account": null,
+      "amount": 0
+    },
+    {
+      "vyapar": "x HDFC Rupay Credit Card 0288",
+      "account": null,
+      "amount": 0
+    },
+    {
+      "vyapar": "Z SBI Credit Card 7677",
+      "account": null,
+      "amount": 0
+    },
+    {
+      "$comment": "Absent from BOTH exports at 31-Mar, so nil — not missing data. Our derivation invented -13,000 for Rakesh Cash and +2,41,890 for Cheque; neither exists.",
+      "vyapar": "Rakesh Cash",
+      "account": "Cash – Counter 23 rakesh – Head Office",
+      "amount": 0
+    },
+    {
+      "vyapar": "Cheque",
+      "account": "Cheques in Hand",
+      "amount": 0
+    },
+    {
+      "vyapar": "UNI BB Visa 2797",
+      "account": "UNI BB Visa 2797",
+      "amount": 0
+    }
   ],
-
   "loans": [
-    { "vyapar": "Bandhan Bank Loan",   "account": "Bandhan Bank Loan 0193", "amount": -405288 },
-    { "vyapar": "Hamid Soceity @1.5%", "account": "Hamid Soceity @1.5%",    "amount": -205710, "create": "Unsecured Loans" },
-    { "vyapar": "Kreditbee 3",         "account": "KreditBee",              "amount": -117046 },
-    { "vyapar": "Mother In Law @ 1%",  "account": "Mother in Law @ 1%",     "amount": -100000 },
-    { "vyapar": "Navi 2",              "account": "Navi 2",                 "amount": -110000, "create": "Unsecured Loans" },
-    { "vyapar": "Wife Loan @2%",       "account": "Wife Loan @ 2%",         "amount": -40000 }
+    {
+      "vyapar": "Bandhan Bank Loan",
+      "account": "Bandhan Bank Loan 0193",
+      "amount": -405288
+    },
+    {
+      "vyapar": "Hamid Soceity @1.5%",
+      "account": "Hamid Soceity @1.5%",
+      "amount": -205710,
+      "create": "Unsecured Loans"
+    },
+    {
+      "vyapar": "Kreditbee 3",
+      "account": "KreditBee",
+      "amount": -117046
+    },
+    {
+      "vyapar": "Mother In Law @ 1%",
+      "account": "Mother in Law @ 1%",
+      "amount": -100000
+    },
+    {
+      "vyapar": "Navi 2",
+      "account": "Navi 2",
+      "amount": -110000,
+      "create": "Unsecured Loans"
+    },
+    {
+      "vyapar": "Wife Loan @2%",
+      "account": "Wife Loan @ 2%",
+      "amount": -40000
+    }
   ],
-
   "totals": {
     "$comment": "Group totals used as cross-checks, not loaded. sundryDebtors/Creditors follow VYAPAR's sign-based classification; ours is relationship-based (Tally), so only the NET is comparable.",
-    "sundryDebtors": 26678.00,
-    "sundryCreditors": -254303.20,
-    "partyNet": -227625.20,
+    "sundryDebtors": 26678.0,
+    "sundryCreditors": -254303.2,
+    "partyNet": -227625.2,
     "loanAccounts": -978044,
     "fixedAssets": 483395.95,
     "stockInHand": 858903.96,
@@ -42,5 +119,171 @@
     "outputGst": -2197846.55,
     "differenceInOpeningBalance": -849415.99,
     "balanceSheetTotal": 2714399.54
+  },
+  "fixedAssets": {
+    "$comment": "Vyapar item_type=5 -- office equipment, not sellable stock. They were imported as ordinary products, which put Rs 4,83,396 of ladders, cabinets and a room into opening INVENTORY and left the fixed-asset ledgers empty; New Room was then counted TWICE, once as stock and once as a ledger opening. `itemId` is Vyapar's kb_items.item_id, so the match is by id and never by name. `ledger` is a judgement call on OUR chart of accounts and is the one thing here the owner may want to re-home -- the TOTAL is what the checks hold to. The Havells fan (item 1947, Rs 2,699) is deliberately absent: it was bought inside the window and arrives through its own replayed voucher, which is why 31-Mar is 4,83,395.95 where 11-Sep is 4,86,094.95.",
+    "items": [
+      {
+        "itemId": 1571,
+        "name": "New Room",
+        "amount": 400001.0,
+        "ledger": "New Room"
+      },
+      {
+        "itemId": 1011,
+        "name": "Softwar",
+        "amount": 29637.2,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 1870,
+        "name": "epbx nenx 312",
+        "amount": 14838.98,
+        "ledger": "Office Equipment"
+      },
+      {
+        "itemId": 839,
+        "name": "Barcode Printer AT-606",
+        "amount": 7160.0,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 929,
+        "name": "Aluminum Ladder",
+        "amount": 6000.0,
+        "ledger": "Tools & Equipment"
+      },
+      {
+        "itemId": 1880,
+        "name": "Aegis RG FCT",
+        "amount": 4000.0,
+        "ledger": "Office Equipment"
+      },
+      {
+        "itemId": 1309,
+        "name": "Bonrix Dynamic QR display",
+        "amount": 3254.24,
+        "ledger": "Office Equipment"
+      },
+      {
+        "itemId": 1833,
+        "name": "GOBBLER GS-406A Cash Drawer",
+        "amount": 2923.73,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 1616,
+        "name": "WL 2D Barcode Reader Helett HT20",
+        "amount": 2399.0,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 1837,
+        "name": "Helett HT20pro Barcode Scanner",
+        "amount": 2333.98,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 1566,
+        "name": "Dazel Home Foldable Table",
+        "amount": 1999.0,
+        "ledger": "Furniture & Fixtures"
+      },
+      {
+        "itemId": 927,
+        "name": "Inverter Cabinet",
+        "amount": 1800.0,
+        "ledger": "Furniture & Fixtures"
+      },
+      {
+        "itemId": 1836,
+        "name": "Automatic Air Freshener Dispenser",
+        "amount": 1498.0,
+        "ledger": "Office Equipment"
+      },
+      {
+        "itemId": 1565,
+        "name": "Monitor Stand for Secondary Display",
+        "amount": 1449.0,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 932,
+        "name": "heat sealing machine",
+        "amount": 1000.0,
+        "ledger": "Plant & Machinery"
+      },
+      {
+        "itemId": 1065,
+        "name": "Logitech Mouse M187",
+        "amount": 1000.0,
+        "ledger": "Computer & Peripherals"
+      },
+      {
+        "itemId": 928,
+        "name": "Jaru Cabinet",
+        "amount": 900.0,
+        "ledger": "Furniture & Fixtures"
+      },
+      {
+        "itemId": 907,
+        "name": "Glass Door Lock",
+        "amount": 703.81,
+        "ledger": "Furniture & Fixtures"
+      },
+      {
+        "itemId": 926,
+        "name": "Plastic Stool",
+        "amount": 299.0,
+        "ledger": "Furniture & Fixtures"
+      },
+      {
+        "itemId": 1570,
+        "name": "GLUN Digital Weighing Scale",
+        "amount": 199.0,
+        "ledger": "Plant & Machinery"
+      }
+    ],
+    "byLedger": {
+      "New Room": 400001.0,
+      "Computer & Peripherals": 46902.91,
+      "Office Equipment": 23591.22,
+      "Tools & Equipment": 6000.0,
+      "Furniture & Fixtures": 5701.81,
+      "Plant & Machinery": 1199.0
+    }
+  },
+  "closing": {
+    "$comment": "Vyapar's published position at 11-Sep-2026, from BalanceSheet_01_04_26_to_11_09_26.xlsx. Not loaded -- this is the TARGET. opening(31-Mar) + the replayed window must land here, and the two ends come from Vyapar while the middle is our GL engine, so agreement is a real test rather than a restatement. `account` keys match the `money`/`loans` entries above.",
+    "asAt": "2026-09-11",
+    "money": {
+      "Cash": 6700.66,
+      "0 SBI CC A/c": -497961.78,
+      "Bandhan Bank 0020": 64130.37,
+      "Sahanas Parbin 4022": 34574.0,
+      "Amazon Pay 5009": 0,
+      "Amazon Pay Balance Income": -7984.82,
+      "3 Routing A/c": 0,
+      "Rakesh Cash": 8068.0,
+      "Cheque": 0,
+      "UNI BB Visa 2797": 0
+    },
+    "loans": {
+      "Bandhan Bank Loan": -325083,
+      "Hamid Soceity @1.5%": -205710,
+      "Kreditbee 3": -75590,
+      "Mother In Law @ 1%": -100000,
+      "Navi 2": -110000,
+      "Wife Loan @2%": -90000
+    },
+    "totals": {
+      "partyNet": -358022.2,
+      "sundryDebtors": 69657.0,
+      "sundryCreditors": -427679.2,
+      "fixedAssets": 486094.95,
+      "stockInHand": 971030.84,
+      "loanAccounts": -906383,
+      "balanceSheetTotal": 3278700.29
+    }
   }
 }

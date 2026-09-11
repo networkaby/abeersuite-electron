@@ -1,5 +1,6 @@
 /**
- * Does the migrated result agree with Vyapar? Party by party, product by product.
+ * Does the migrated result agree with Vyapar? Party by party, product by product,
+ * ledger by ledger.
  *
  * This is the only question that matters, and it is asked against figures Vyapar
  * published rather than figures we derived: `kb_names.amount` and
@@ -26,7 +27,6 @@ dotenv.config({ path: ".env" });
 import { extractItems, extractParties } from "./extract";
 import { buildMaps } from "./mapping";
 import { openVyb } from "./openVyb";
-import { vyaparMoney } from "./payments";
 import { Pool } from "pg";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -102,6 +102,10 @@ async function main(): Promise<void> {
     const sDiffs: Array<{ name: string; theirs: number; mine: number; gap: number }> = [];
     let sOk = 0;
     for (const i of items) {
+        // item_type 5 is office equipment, not stock. It lives in the fixed-asset
+        // ledgers now (payments.ts moved it there), so counting it here would
+        // demand a quantity we deliberately zeroed.
+        if (i.itemType === 5) continue;
         const pid = maps.product.get(i.itemId);
         if (pid == null) continue;
         const mine = round2(stockOurs.get(pid) ?? 0);
@@ -140,10 +144,12 @@ async function main(): Promise<void> {
     // A reconciliation is only worth what it looks at.
     const mDiffs: Diff[] = [];
     let mOk = 0;
-    const money = vyaparMoney(db);
-    const targets = new Map((JSON.parse(readFileSync("prisma/seeds/data/vyapar-ledger-map.json", "utf8")) as
-        { mappings: Array<{ vyapar: string; kind: string; action: string; account: string | null }> })
-        .mappings.filter((m) => m.kind === "payment" && m.action === "map").map((m) => [m.vyapar, m.account!]));
+    const V = JSON.parse(readFileSync("prisma/seeds/data/vyapar-opening-31mar2026.json", "utf8")) as {
+        money: Array<{ vyapar: string; account: string | null }>;
+        loans: Array<{ vyapar: string; account: string | null }>;
+        fixedAssets: { byLedger: Record<string, number> };
+        closing: { money: Record<string, number>; loans: Record<string, number>; totals: Record<string, number> };
+    };
     const byName = new Map<string, number>();
     for (const r of (await pool.query(`
         select a.name,
@@ -152,16 +158,18 @@ async function main(): Promise<void> {
         from "Account" a left join "AccountGroup" g on g.id = a."groupId"
     `)).rows) byName.set(String(r.name), Number(r.closing));
 
-    for (const m of money.values()) {
-        const acc = targets.get(m.name);
-        if (!acc) continue;
-        const mine = round2(byName.get(acc) ?? 0);
-        const gap = round2(mine - m.closing);
+    for (const l of [...V.money, ...V.loans]) {
+        if (!l.account) continue;
+        const theirs = V.closing.money[l.vyapar] ?? V.closing.loans[l.vyapar];
+        if (theirs === undefined) continue;
+        const mine = round2(byName.get(l.account) ?? 0);
+        const gap = round2(mine - theirs);
         if (Math.abs(gap) <= TOL) mOk++;
-        else mDiffs.push({ name: `${m.name} → ${acc}`, theirs: m.closing, mine, gap });
+        else mDiffs.push({ name: `${l.vyapar} → ${l.account}`, theirs, mine, gap });
     }
     const mTotal = mOk + mDiffs.length;
-    console.log(`\nMONEY LEDGERS as at 10-Sep-2026 — cash, bank, wallet and card vs Vyapar`);
+    console.log(`
+MONEY & LOAN LEDGERS as at 11-Sep-2026 — vs Vyapar's own Balance Sheet`);
     console.log(`  agree: ${mOk} of ${mTotal}  (${((mOk / mTotal) * 100).toFixed(1)}%)` +
         `  ·  differ: ${mDiffs.length}, net ${inr(mDiffs.reduce((s, d) => s + d.gap, 0))}`);
     if (mDiffs.length) show(mDiffs, inr);
