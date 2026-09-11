@@ -54,6 +54,8 @@
     "db:local-schema": "tsx scripts/gen-local-schema.ts",
     "db:local-schema:check": "tsx scripts/gen-local-schema.ts --check",
     "db:compare": "tsx scripts/compare-dbs.ts",
+    "vyapar:survey": "tsx scripts/vyapar/survey.ts",
+    "vyapar:check-balances": "tsx scripts/vyapar/check-balances.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
