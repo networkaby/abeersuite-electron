@@ -12,6 +12,8 @@
 //     TicketParticipant, and the per-intake Device (parent of TicketRepair, so
 //     it does NOT cascade off Ticket — listed explicitly to avoid orphans).
 //   • AuditLog — the unified recycle-bin (replaced the 3 *Audit tables 2026-06-09).
+//   • POS counter sessions — shifts, cash drops, expenditures, handovers, receipts.
+//     The COUNTERS and their settings are config and are left alone.
 //
 // With --comms it ALSO clears the communication history, which is NOT
 // transaction data and is never touched by default:
@@ -89,6 +91,20 @@ const TABLES = [
     "InvStockLedger",
     // AuditLog — unified recycle-bin (replaced the 3 *Audit tables 2026-06-09).
     "AuditLog",
+    // POS counter sessions. These are transaction rows like any other: a shift's
+    // declared cash is only meaningful against the sales it was declared for, so
+    // clearing the vouchers and leaving the shifts produces sessions that can never
+    // reconcile again — and voucher links (openingContraVoucherId,
+    // closingContraVoucherId, varianceJournalEntryId) left dangling. They were
+    // missing from this list until 2026-09-11, when a Vyapar migration purged the
+    // books and 24 shifts survived pointing at sales that no longer existed.
+    // The counters themselves (pos_counters, pos_counter_payment_accounts,
+    // pos_services) are CONFIG and are deliberately left alone.
+    "pos_receipts",
+    "pos_cash_drops",
+    "pos_expenditures",
+    "pos_handovers",
+    "pos_shifts",
 ];
 
 // Communication history — cleared only with --comms. Children are listed before
