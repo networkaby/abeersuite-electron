@@ -15,7 +15,7 @@
 
 import type { Pool } from "pg";
 import { readFileSync } from "node:fs";
-import { normalisePhone, type VyaparParty, type VyaparItem } from "./extract";
+import { normalisePhone, sharedPhoneIds, type VyaparParty, type VyaparItem } from "./extract";
 
 const LEDGER_MAP = "prisma/seeds/data/vyapar-ledger-map.json";
 
@@ -50,6 +50,8 @@ type LedgerMapping = {
 export const REQUIRED_LEDGERS = [
     "Sales A/c", "Sales Returns", "Purchase A/c", "Purchase Returns",
     "CGST", "SGST", "IGST", "Round Off", "Discount Allowed", "Income Discount Received",
+    "Loyalty Points Redeemed", "Shipping Income", "Exp Freight Inward (Purchase Courier)",
+    "Office Equipment",
 ] as const;
 
 export async function buildMaps(
@@ -108,9 +110,12 @@ export async function buildMaps(
 
     // ── Parties ─────────────────────────────────────────────────────────────
     const party = new Map<number, PartyRef>();
+    // A phone shared with an earlier party is no key at all — see sharedPhoneIds().
+    const shared = sharedPhoneIds(parties);
     for (const p of parties) {
         if (!p.include) continue;
-        const hit = (p.phone ? partyByPhone.get(p.phone) : undefined)
+        const phone = shared.has(p.nameId) ? null : p.phone;
+        const hit = (phone ? partyByPhone.get(phone) : undefined)
             ?? (p.email ? partyByEmail.get(p.email.toLowerCase()) : undefined)
             ?? partyByEmail.get(`vyapar-${p.nameId}@placeholder.invalid`)
             ?? partyByName.get(p.name.trim().toLowerCase());

@@ -28,7 +28,7 @@ dotenv.config({ path: ".env" });
 
 import {
     FY_START, PARTY_EFFECT, STOCK_EFFECT,
-    extractItems, extractParties, normalisePhone,
+    extractItems, extractParties, normalisePhone, sharedPhoneIds,
 } from "./extract";
 import { openVyb } from "./openVyb";
 import { Pool } from "pg";
@@ -267,18 +267,10 @@ async function main(): Promise<void> {
     // Vyapar parties resolve to the SAME AbeerSuite party and one of the two
     // balances is silently lost. So only the first claimant keeps the number; later
     // ones fall back to a placeholder and are reported for a deliberate merge.
-    const phoneClaim = new Map<string, number>();
-    const sharedPhone = new Set<number>();
-    const sharedPairs: string[] = [];
-    for (const p of parties) {
-        if (!p.phone) continue;
-        const first = phoneClaim.get(p.phone);
-        if (first === undefined) phoneClaim.set(p.phone, p.nameId);
-        else {
-            sharedPhone.add(p.nameId);
-            sharedPairs.push(`${p.name} shares ${p.phone} with an earlier party`);
-        }
-    }
+    const sharedPhone = sharedPhoneIds(parties);
+    const sharedPairs = parties
+        .filter((p) => sharedPhone.has(p.nameId))
+        .map((p) => `${p.name} — phone ${p.phone} is shared, so it identifies nobody`);
 
     const partyRows: PartyRow[] = [];
     /** Existing parties that need a stable address attached before the import runs. */

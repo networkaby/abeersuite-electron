@@ -306,6 +306,36 @@ export function extractParties(db: DatabaseSync): VyaparParty[] {
     });
 }
 
+/**
+ * Every party id whose phone number is carried by more than one party — ALL of
+ * them, not just the later ones.
+ *
+ * Vyapar allows a number to be shared and six pairs here do it. Such a number is
+ * then useless as a key, because looking it up cannot say WHICH party is meant.
+ * Letting the first claimant keep it looks reasonable and is not: the record that
+ * holds the number in AbeerSuite belongs to one particular party, and "first by
+ * name_id" has no reason to be that one. It was not. "Rudrani" won the number on
+ * ordering and was posted onto "DN Enterprise"'s ledger, where its balance replaced
+ * theirs — a cross-contamination worse than the duplicate it was avoiding.
+ *
+ * So the number is disqualified for everyone sharing it, and each party is matched
+ * on its own deterministic placeholder instead. Both then keep their own ledger.
+ *
+ * This lives here because BOTH the importer and the replay must agree. They did not
+ * once, and the reconciliation showed two different customers reporting the
+ * identical balance — which is what that failure looks like from the outside.
+ */
+export function sharedPhoneIds(parties: VyaparParty[]): Set<number> {
+    const byPhone = new Map<string, number[]>();
+    for (const p of parties) {
+        if (!p.include || !p.phone) continue;
+        byPhone.set(p.phone, [...(byPhone.get(p.phone) ?? []), p.nameId]);
+    }
+    const shared = new Set<number>();
+    for (const ids of byPhone.values()) if (ids.length > 1) for (const id of ids) shared.add(id);
+    return shared;
+}
+
 /** Vyapar's expense heads (`name_type = 2`) — these become ledgers, not parties. */
 export function extractExpenseHeads(db: DatabaseSync): Array<{ nameId: number; name: string; used: number; total: number }> {
     return db.prepare(`
