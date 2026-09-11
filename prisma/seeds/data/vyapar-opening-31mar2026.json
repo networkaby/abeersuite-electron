@@ -1,0 +1,46 @@
+{
+  "$comment": "Vyapar's OWN published position at the close of 31-Mar-2026 — the opening for 1-Apr-2026. Transcribed from BalanceSheet_31_03_26_to_31_03_26.pdf and TRIAL_BALANCE_REPORT_31_03_26_to_31_03_26.pdf, which agree with each other line for line. These figures are READ, never derived: reconstructing them from kb_bank_adjustments produced eight wrong ledgers (3 Routing A/c out by 5.85L, SBI CC by 3.21L) and the error was invisible until these exports arrived. Amounts are signed the natural way — positive = debit/asset, negative = credit/liability. `account` names the AbeerSuite ledger; null means we have no home for it yet.",
+  "source": ["BalanceSheet_31_03_26_to_31_03_26.pdf", "TRIAL_BALANCE_REPORT_31_03_26_to_31_03_26.pdf"],
+  "asAt": "2026-03-31",
+
+  "money": [
+    { "vyapar": "Cash",                          "account": "Petty Cash",                        "amount": 4372.66 },
+    { "vyapar": "0 SBI CC A/c",                  "account": "SBI CC A/c 873",                    "amount": -511906.06 },
+    { "vyapar": "Bandhan Bank 0020",             "account": "Bankdhan Bank Current A/c  0020",   "amount": 26609.77 },
+    { "vyapar": "Sahanas Parbin 4022",           "account": "Bandhan Bank SB 4022",              "amount": 1467.00 },
+    { "vyapar": "Amazon Pay 5009",               "account": "Amazon Pay 5009",                   "amount": -2909.00 },
+    { "vyapar": "Amazon Pay Balance Income",     "account": "Amazon Pay Balance Income",         "amount": -2360.82 },
+    { "vyapar": "3 Routing A/c",                 "account": "3 Routing A/c",                     "amount": 0 },
+    { "vyapar": "z Udaan Capital",               "account": null,                                "amount": 0 },
+    { "vyapar": "x HDFC Rupay Credit Card 0288", "account": null,                                "amount": 0 },
+    { "vyapar": "Z SBI Credit Card 7677",        "account": null,                                "amount": 0 },
+
+    { "$comment": "Absent from BOTH exports at 31-Mar, so nil — not missing data. Our derivation invented -13,000 for Rakesh Cash and +2,41,890 for Cheque; neither exists.",
+      "vyapar": "Rakesh Cash",                   "account": "Cash – Counter 23 rakesh – Head Office", "amount": 0 },
+    { "vyapar": "Cheque",                        "account": "Cheques in Hand",                   "amount": 0 },
+    { "vyapar": "UNI BB Visa 2797",              "account": "UNI BB Visa 2797",                  "amount": 0 }
+  ],
+
+  "loans": [
+    { "vyapar": "Bandhan Bank Loan",   "account": "Bandhan Bank Loan 0193", "amount": -405288 },
+    { "vyapar": "Hamid Soceity @1.5%", "account": "Hamid Soceity @1.5%",    "amount": -205710, "create": "Unsecured Loans" },
+    { "vyapar": "Kreditbee 3",         "account": "KreditBee",              "amount": -117046 },
+    { "vyapar": "Mother In Law @ 1%",  "account": "Mother in Law @ 1%",     "amount": -100000 },
+    { "vyapar": "Navi 2",              "account": "Navi 2",                 "amount": -110000, "create": "Unsecured Loans" },
+    { "vyapar": "Wife Loan @2%",       "account": "Wife Loan @ 2%",         "amount": -40000 }
+  ],
+
+  "totals": {
+    "$comment": "Group totals used as cross-checks, not loaded. sundryDebtors/Creditors follow VYAPAR's sign-based classification; ours is relationship-based (Tally), so only the NET is comparable.",
+    "sundryDebtors": 26678.00,
+    "sundryCreditors": -254303.20,
+    "partyNet": -227625.20,
+    "loanAccounts": -978044,
+    "fixedAssets": 483395.95,
+    "stockInHand": 858903.96,
+    "inputGst": 1830148.08,
+    "outputGst": -2197846.55,
+    "differenceInOpeningBalance": -849415.99,
+    "balanceSheetTotal": 2714399.54
+  }
+}
