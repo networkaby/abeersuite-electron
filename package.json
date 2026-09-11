@@ -56,6 +56,8 @@
     "db:compare": "tsx scripts/compare-dbs.ts",
     "vyapar:survey": "tsx scripts/vyapar/survey.ts",
     "vyapar:check-balances": "tsx scripts/vyapar/check-balances.ts",
+    "vyapar:restore-local": "tsx scripts/vyapar/restore-local.ts",
+    "vyapar:match-report": "tsx scripts/vyapar/match-report.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
