@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash } from "crypto";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
@@ -117,6 +117,33 @@ function parseGroup(raw: string | undefined): AccountGroupName | null | undefine
     return null;
 }
 
+/**
+ * Stable dedupe key for a party with no phone and no email.
+ *
+ * Deterministic by design: the same row must yield the same address on every run,
+ * so re-importing a file matches the existing party instead of creating a second
+ * one. 20 hex characters of SHA-256 is ~80 bits — far past any collision risk at
+ * the scale of a customer list, and short enough to stay readable in the address.
+ */
+function placeholderKey(name: string, gstin: string | null): string {
+    const basis = `${name.trim().toLowerCase()}|${(gstin ?? "").trim().toUpperCase()}`;
+    return createHash("sha256").update(basis).digest("hex").slice(0, 20);
+}
+
+/**
+ * The placeholder address a contact-less row would be given, or null if the row
+ * has a contact of its own.
+ *
+ * Derived from the RAW row values so that the existence lookup below and the
+ * row-level assignment further down compute the identical address. A deterministic
+ * key is only half the fix: unless the key is also SEARCHED for, the importer still
+ * cannot see the party it created last time and creates it again.
+ */
+function placeholderFor(v: CustomerImportRowInput["values"]): string | null {
+    if (pickPhones(v).length > 0 || pickEmails(v).length > 0) return null;
+    return `no-contact.${placeholderKey(v.name ?? "", v.gstin ?? null)}@placeholder.invalid`;
+}
+
 export async function runCustomerImport(req: CustomerImportRequest): Promise<CustomerImportResult> {
     // ── 1. Batched existence lookup. One query each for phones and emails;
     //    track which OWNER (person vs company) each contact belongs to so the
@@ -126,6 +153,11 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
     for (const row of req.rows) {
         for (const p of pickPhones(row.values)) allPhones.add(p);
         for (const e of pickEmails(row.values)) allEmails.add(e);
+        // Look up the address a contact-less row WOULD be given, so an existing
+        // party created by a previous run of the same file is found and updated
+        // rather than duplicated.
+        const ph = placeholderFor(row.values);
+        if (ph) allEmails.add(ph);
     }
 
     type Owner = { kind: CustomerKind; id: number };
@@ -294,12 +326,26 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         // A phone or email is normally required so the customer is reachable.
         // Bulk-migrated ledger-only parties (a GST number or a carried-forward
         // balance, but no captured contact) are still worth importing — stamp a
-        // random placeholder email so the row has a contact key instead of
-        // rejecting it. randomUUID keeps it unique across rows and files, so it
-        // can never accidentally dedupe-match a different no-contact party.
+        // placeholder email so the row has a contact key instead of being rejected.
+        //
+        // That key MUST be derived from the row, never random. It was `randomUUID()`
+        // until 2026-09-11, on the reasoning that a unique value "can never
+        // accidentally dedupe-match a different no-contact party". The opposite
+        // turned out to be the problem: a random key cannot match ITSELF either, so
+        // re-importing the same file creates every contact-less party again. One
+        // import run on 25-Jul-2026 was executed twice and left 33 duplicate parties
+        // — TEKTRONIX, M. M. Traders, RYSWARE and others each holding two unreachable
+        // records — which then had to be merged by hand.
+        //
+        // A digest of the identifying fields makes the same row produce the same
+        // address every time, so a re-run updates instead of duplicating. GSTIN is
+        // included because it is what separates two businesses of similar name; where
+        // there is no GSTIN, no contact and no distinguishing data at all, two rows
+        // sharing a name are indistinguishable by anything we hold, and treating them
+        // as one is the better failure.
         if (phones.length === 0 && emails.length === 0) {
             if (gstin || openingBalance != null) {
-                emails = [`no-contact.${randomUUID()}@placeholder.invalid`];
+                emails = [placeholderFor(v)!];
             } else {
                 errors.push("at least one phone or email is required (or a GST number / opening balance)");
             }

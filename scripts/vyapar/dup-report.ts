@@ -7,10 +7,11 @@
  * party twice. Names like TEKTRONIX and M. M. Traders carry two Person rows, both
  * dated 25 July, each with its own unreachable address.
  *
- * READ-ONLY. It writes nothing and merges nothing — merging is destructive and the
- * list wants human eyes first. The proposal is produced by asking the real
- * `previewMerge()` what it would do, so the counts here are the counts that would
- * actually move, not an approximation of them.
+ * Reports by default and writes nothing; `--apply` performs the merges it listed.
+ * Merging is destructive and does not undo, so the list gets human eyes first. The
+ * proposal comes from asking the real `previewMerge()` what it would do, and
+ * `--apply` then calls `mergeParty()` on exactly that plan — so what runs is what
+ * was shown, not a second opinion computed later.
  *
  * Choosing the survivor, in order:
  *   1. transaction history — vouchers, tickets and devices are the expensive things
@@ -19,7 +20,8 @@
  *   3. an opening balance
  *   4. the older row, as a tie-break, since it is the one other records point at
  *
- *   pnpm vyapar:dup-report
+ *   pnpm vyapar:dup-report              # report only, writes nothing
+ *   pnpm vyapar:dup-report -- --apply   # perform the clean merges
  */
 
 import * as dotenv from "dotenv";
@@ -68,14 +70,21 @@ async function main(): Promise<void> {
     const pool = new Pool({ connectionString: url, ssl: false, max: 1 });
 
     const rows = (await pool.query(`
+        -- Tombstones are excluded everywhere below. mergeParty() does not hard-delete
+        -- the loser: it retires the row, sets mergedIntoPersonId / mergedIntoCompanyId
+        -- and detaches the Account. Counting those as live rows would report every
+        -- completed merge as a duplicate forever, so a second run would look exactly
+        -- as though the first had failed.
         with party as (
           select 'person'::text kind, p.id, p.name, p."createdAt" created, a.id account_id,
                  coalesce(a."openingBalance", 0) opening, a."openingBalanceType" otype, coalesce(a.balance, 0) bal
           from "Person" p left join "Account" a on a."personId" = p.id
+          where p."mergedIntoPersonId" is null and p."convertedToCompanyId" is null
           union all
           select 'company', c.id, c.name, c."createdAt", a.id,
                  coalesce(a."openingBalance", 0), a."openingBalanceType", coalesce(a.balance, 0)
-          from "Company" c left join "Account" a on a."companyId" = c.id)
+          from "Company" c left join "Account" a on a."companyId" = c.id
+          where c."mergedIntoCompanyId" is null and c."convertedToPersonId" is null)
         select party.*,
           coalesce((select array_agg(ph.phone) from "Phone" ph
                     where (party.kind='person' and ph."personId"=party.id)
@@ -90,7 +99,9 @@ async function main(): Promise<void> {
         from party
         where lower(trim(party.name)) in (
           select lower(trim(n)) from (
-            select name n from "Person" union all select name from "Company") x
+            select name n from "Person" where "mergedIntoPersonId" is null and "convertedToCompanyId" is null
+            union all
+            select name from "Company" where "mergedIntoCompanyId" is null and "convertedToPersonId" is null) x
           group by 1 having count(*) > 1)
         order by lower(trim(party.name)), party.id
     `)).rows.map((r): Row => ({
@@ -150,25 +161,40 @@ async function main(): Promise<void> {
     }
 
     // ── Ask the real preview what each merge would move ─────────────────────
-    const { previewMerge } = await import("@/modules/customer/lib/convertParty");
-    console.log(`MERGE PREVIEW — what the real mergeParty() would do\n`);
-    let blocked = 0, movable = 0;
+    // Using previewMerge/mergeParty rather than SQL is the whole point: merging a
+    // party means re-pointing vouchers, GL lines, tickets, devices and the tender
+    // details buried in settlementJson, then summing both the cached balance and the
+    // opening. Hand-written SQL would miss some of that, and miss it silently.
+    const apply = process.argv.includes("--apply");
+    const { previewMerge, mergeParty } = await import("@/modules/customer/lib/convertParty");
+    console.log(`MERGE ${apply ? "— APPLYING" : "PREVIEW — what the real mergeParty() would do"}\n`);
+    let blocked = 0, movable = 0, merged = 0;
     for (const p of plan) {
         for (const loser of p.losers) {
             const pv = await previewMerge(p.kind, p.winner.id, loser.id);
             const moved = Object.values(pv.accountRefs).reduce((s, n) => s + n, 0)
                 + pv.partyRefs.phones + pv.partyRefs.emails + pv.partyRefs.deals;
+            const label = p.winner.name.slice(0, 34).padEnd(36);
             if (pv.blockers.length) {
                 blocked++;
-                console.log(`  ✗ ${p.winner.name.slice(0, 34).padEnd(36)} ${loser.id} → ${p.winner.id}` +
-                    `   BLOCKED: ${pv.blockers.map((b) => b.kind).join(", ")}`);
-            } else {
-                movable++;
-                console.log(`  ✓ ${p.winner.name.slice(0, 34).padEnd(36)} ${loser.id} → ${p.winner.id}   moves ${moved} reference(s)`);
+                console.log(`  ✗ ${label} ${loser.id} → ${p.winner.id}   BLOCKED: ${pv.blockers.map((b) => b.kind).join(", ")}`);
+                continue;
+            }
+            movable++;
+            if (!apply) {
+                console.log(`  ✓ ${label} ${loser.id} → ${p.winner.id}   moves ${moved} reference(s)`);
+                continue;
+            }
+            try {
+                await mergeParty(p.kind, p.winner.id, loser.id);
+                merged++;
+                console.log(`  ✓ ${label} ${loser.id} → ${p.winner.id}   merged (${moved} reference(s))`);
+            } catch (e) {
+                console.log(`  ✗ ${label} ${loser.id} → ${p.winner.id}   FAILED: ${(e as Error).message}`);
             }
         }
     }
-    console.log(`\n  ${movable} merge(s) ready · ${blocked} blocked`);
+    console.log(`\n  ${apply ? `${merged} merged` : `${movable} merge(s) ready`} · ${blocked} blocked`);
 
     // ── Products ────────────────────────────────────────────────────────────
     const prods = (await pool.query(`
