@@ -79,6 +79,7 @@ async function main(): Promise<void> {
     if (!user) throw new Error("no User row — the engine stamps createdById");
 
     const txns = loadTxns(db, maps, limit);
+    const contras = loadContras(db, maps);
 
     // ── Build every spec first ──────────────────────────────────────────────
     const built: Array<{ t: VyaparTxn; spec: ReturnType<typeof buildSpec> }> = [];
@@ -115,7 +116,32 @@ async function main(): Promise<void> {
         }
     }
 
-    console.log(`\nbuilt ${built.length} voucher(s) from ${txns.length} in the window`);
+    // Money that moved between our OWN ledgers — cash banked, bank to bank. These are
+    // not transactions in Vyapar's sense and are in none of the tables the loop above
+    // reads, so the first version of this replay simply lost them: ₹22,51,824 of till
+    // takings never left Petty Cash, and every bank was short by what it was paid.
+    // Nothing caught it, because a contra moves money without touching a party or a
+    // product, and reconcile.ts only checked parties and products.
+    for (const c of contras) {
+        built.push({
+            t: { date: c.date, partyAccountId: null, txnId: c.id } as unknown as VyaparTxn,
+            spec: {
+                spec: {
+                    type: "CONTRA", date: c.date, reference: undefined,
+                    narration: c.note || null, description: `CONTRA ${c.id}`,
+                    glLines: [
+                        { accountId: c.toAccountId, type: "DEBIT", amount: c.amount.toFixed(2) },
+                        { accountId: c.fromAccountId, type: "CREDIT", amount: c.amount.toFixed(2) },
+                    ],
+                    stockMoves: [],
+                },
+                residual: 0,
+            } as unknown as ReturnType<typeof buildSpec>,
+        });
+    }
+
+    console.log(`\nbuilt ${built.length} voucher(s) from ${txns.length} in the window` +
+        ` (incl. ${contras.length} contra transfer(s) between our own money ledgers)`);
     for (const [k, n] of skipped) console.log(`  ${String(n).padStart(5)}  skipped — ${k}`);
     if (failures.length) {
         console.log(`\n⚠ ${failures.length} could not be built:`);
@@ -270,3 +296,50 @@ function loadTxns(db: ReturnType<typeof openVyb>["db"], maps: Maps, limit: numbe
 }
 
 main().catch((e: Error) => { console.error(`\n${e.message}\n`); process.exit(1); });
+
+/**
+ * Transfers between our own money ledgers, from `kb_bank_adjustments`.
+ *
+ * Vyapar keeps these apart from `kb_transactions` because no party is involved —
+ * cash banked at the end of a day, a sweep from one account to another. They still
+ * move real money, so without them the till never empties and the banks never fill.
+ * Only two of the five adjustment types occur in this window; the rest (balance
+ * corrections, FD withdrawals, card payments) are all pre-2026 and would need a
+ * second ledger each, so they are reported rather than guessed at.
+ */
+function loadContras(db: ReturnType<typeof openVyb>["db"], maps: Maps): Array<{
+    id: number; date: Date; amount: number; fromAccountId: number; toAccountId: number; note: string;
+}> {
+    const CASH_ID = 1;               // kb_paymentTypes id for plain "Cash"
+    const BANKED = 14, TRANSFER = 25; // cash → bank, and ledger → ledger
+    const out: Array<{ id: number; date: Date; amount: number; fromAccountId: number; toAccountId: number; note: string }> = [];
+    const skipped = new Map<number, number>();
+
+    for (const r of db.prepare(`
+        select bank_adj_id id, bank_adj_type ty, bank_adj_bank_id b, bank_adj_to_bank_id tb,
+               bank_adj_amount amt, bank_adj_date dt, bank_adj_description note
+        from kb_bank_adjustments where date(bank_adj_date) >= ? order by bank_adj_date, bank_adj_id
+    `).all(FY_START) as Array<Record<string, unknown>>) {
+        const ty = Number(r.ty);
+        const fromId = ty === BANKED ? CASH_ID : Number(r.b);
+        const toId = ty === BANKED ? Number(r.b) : Number(r.tb);
+        if (ty !== BANKED && ty !== TRANSFER) { skipped.set(ty, (skipped.get(ty) ?? 0) + 1); continue; }
+
+        const from = maps.payment.get(fromId), to = maps.payment.get(toId);
+        // A ledger the owner chose to drop is still a real place money went. Posting
+        // only one leg would silently unbalance the books, so the whole transfer is
+        // held back and reported instead.
+        if (from == null || to == null) { skipped.set(-ty, (skipped.get(-ty) ?? 0) + 1); continue; }
+
+        out.push({
+            id: Number(r.id), date: new Date(String(r.dt).slice(0, 10) + "T00:00:00Z"),
+            amount: Number(r.amt), fromAccountId: from, toAccountId: to, note: String(r.note ?? "").trim(),
+        });
+    }
+    for (const [ty, n] of skipped) {
+        console.log(ty > 0
+            ? `  ${String(n).padStart(5)}  contra skipped — adjustment type ${ty} has no builder`
+            : `  ${String(n).padStart(5)}  contra skipped — type ${-ty} names a ledger that was not migrated`);
+    }
+    return out;
+}

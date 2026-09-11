@@ -26,7 +26,9 @@ dotenv.config({ path: ".env" });
 import { extractItems, extractParties } from "./extract";
 import { buildMaps } from "./mapping";
 import { openVyb } from "./openVyb";
+import { vyaparMoney } from "./payments";
 import { Pool } from "pg";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -130,13 +132,47 @@ async function main(): Promise<void> {
         `  ·  differ: ${sDiffs.length}, net ${sDiffs.reduce((s, d) => s + d.gap, 0).toFixed(2)} units`);
     if (sDiffs.length) show(sDiffs, (n) => n.toFixed(2));
 
+    // ── Money ledgers ───────────────────────────────────────────────────────
+    // Added after this file reported 100% while Petty Cash read ₹22.5L against
+    // Vyapar's ₹12,479. Parties and products were genuinely right; the ₹22,51,824
+    // of till cash banked in the window had simply never been replayed, because a
+    // contra touches neither a party nor a product and so appeared in neither check.
+    // A reconciliation is only worth what it looks at.
+    const mDiffs: Diff[] = [];
+    let mOk = 0;
+    const money = vyaparMoney(db);
+    const targets = new Map((JSON.parse(readFileSync("prisma/seeds/data/vyapar-ledger-map.json", "utf8")) as
+        { mappings: Array<{ vyapar: string; kind: string; action: string; account: string | null }> })
+        .mappings.filter((m) => m.kind === "payment" && m.action === "map").map((m) => [m.vyapar, m.account!]));
+    const byName = new Map<string, number>();
+    for (const r of (await pool.query(`
+        select a.name,
+               coalesce(case when a."openingBalanceType" = 'CREDIT' then -a."openingBalance" else a."openingBalance" end, 0)
+             + coalesce(a.balance, 0) * (case when g.type in ('LIABILITY', 'INCOME') then -1 else 1 end) closing
+        from "Account" a left join "AccountGroup" g on g.id = a."groupId"
+    `)).rows) byName.set(String(r.name), Number(r.closing));
+
+    for (const m of money.values()) {
+        const acc = targets.get(m.name);
+        if (!acc) continue;
+        const mine = round2(byName.get(acc) ?? 0);
+        const gap = round2(mine - m.closing);
+        if (Math.abs(gap) <= TOL) mOk++;
+        else mDiffs.push({ name: `${m.name} → ${acc}`, theirs: m.closing, mine, gap });
+    }
+    const mTotal = mOk + mDiffs.length;
+    console.log(`\nMONEY LEDGERS as at 10-Sep-2026 — cash, bank, wallet and card vs Vyapar`);
+    console.log(`  agree: ${mOk} of ${mTotal}  (${((mOk / mTotal) * 100).toFixed(1)}%)` +
+        `  ·  differ: ${mDiffs.length}, net ${inr(mDiffs.reduce((s, d) => s + d.gap, 0))}`);
+    if (mDiffs.length) show(mDiffs, inr);
+
     // ── Books-level sanity ──────────────────────────────────────────────────
     const imbalance = (await pool.query(
         `select coalesce(round(sum(case when type = 'DEBIT' then amount else -amount end), 2), 0) v from "VoucherGlLine"`,
     )).rows[0].v;
     const posted = (await pool.query(`select count(*)::int n from "UniversalVoucher"`)).rows[0].n;
     console.log(`\n  ${posted} vouchers posted · GL imbalance ${imbalance}`);
-    console.log(`\n${pDiffs.length === 0 && sDiffs.length === 0 && Number(imbalance) === 0
+    console.log(`\n${pDiffs.length === 0 && sDiffs.length === 0 && mDiffs.length === 0 && Number(imbalance) === 0
         ? "✓ reconciled" : "⚠ differences above — investigate before pushing to live"}\n`);
 
     await pool.end();
