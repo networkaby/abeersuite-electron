@@ -174,7 +174,20 @@ async function main(): Promise<void> {
         const slice = built.slice(i, i + CHUNK);
         await prisma.$transaction(async (tx) => {
             for (const b of slice) {
-                await enginePost(tx, b.spec.spec, user.id, { branchId: branch.id, postedAt: b.t.date });
+                const res = await enginePost(tx, b.spec.spec, user.id, { branchId: branch.id, postedAt: b.t.date });
+                // enginePost does not carry the party onto the spine: TransactionSpec has
+                // no such field, because the app normally creates a DRAFT spine holding
+                // the party and then posts into it, while this creates and posts in one
+                // step. Left unset, every voucher's Party column in the Day Book is blank
+                // and party filters find nothing — the ledgers are still right, since the
+                // GL lines name the account, but the denormalised pointer the UI reads is
+                // empty. Set it here rather than widen shared engine code for a migration.
+                if (b.t.partyAccountId != null && res.universalVoucherId != null) {
+                    await tx.universalVoucher.update({
+                        where: { id: res.universalVoucherId },
+                        data: { partyAccountId: b.t.partyAccountId },
+                    });
+                }
             }
         }, { timeout: 120_000, maxWait: 30_000 });
         done += slice.length;
