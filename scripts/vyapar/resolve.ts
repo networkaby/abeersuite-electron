@@ -108,6 +108,30 @@ async function main(): Promise<void> {
             : { kind: "company", id: r.cid, name: r.nm });
     }
 
+    // Last-resort party index, by name. Used ONLY when a Vyapar party has no usable
+    // contact to match on — never in preference to a phone or email.
+    //
+    // Without it the resolver duplicated 47 parties, for two reasons that look
+    // different and are not:
+    //   • Vyapar holds a BROKEN phone (9 or 11 digits — a typo, not a format), which
+    //     normalisePhone rightly rejects, while AbeerSuite holds a usable one. Match
+    //     on contact therefore fails although both records mean the same person.
+    //   • The party was created by an earlier import keyed on
+    //     `no-contact.<randomUUID>@placeholder.invalid`, which by construction can
+    //     never be matched again by anything.
+    // Both leave a real party unreachable, and creating a second one is the worst
+    // available answer: two ledgers for one customer, and a balance on the wrong one.
+    const partyByName = new Map<string, Owner>();
+    for (const r of (await pool.query(`
+        select id, name, 'person' as kind from "Person"
+        union all select id, name, 'company' from "Company"
+    `)).rows) {
+        const k = String(r.name).trim().toLowerCase();
+        // First writer wins, so a name already duplicated in our own data resolves
+        // to one record rather than flip-flopping between runs.
+        if (!partyByName.has(k)) partyByName.set(k, { kind: r.kind, id: r.id, name: r.name });
+    }
+
     // ── Roll-backs to 31-Mar-2026 ───────────────────────────────────────────
     // Vyapar's figures are all as at 10-Sep. The current-FY vouchers get replayed
     // on top of these openings, so the openings must predate them.
@@ -245,13 +269,40 @@ async function main(): Promise<void> {
     }
 
     const partyRows: PartyRow[] = [];
-    const pstats = { updated: 0, created: 0, keptOurName: 0, keptOurKind: 0, placeholder: 0 };
+    /** Existing parties that need a stable address attached before the import runs. */
+    const healed: Array<{ addr: string; kind: "person" | "company"; id: number }> = [];
+    const pstats = { updated: 0, created: 0, keptOurName: 0, keptOurKind: 0, placeholder: 0, byName: 0 };
 
     for (const p of parties) {
         // A shared number is treated as no number at all for this party.
         const phone = sharedPhone.has(p.nameId) ? null : p.phone;
-        const owner = (phone ? phoneOwner.get(phone) : undefined)
-            ?? (p.email ? emailOwner.get(p.email.toLowerCase()) : undefined);
+        // The placeholder counts as a contact: once a party has been given its stable
+        // address, later runs must find it THERE rather than falling through to the
+        // name index. Without this line a contact-less party matches by name forever
+        // and the healing step reports work it is not doing.
+        const placeholder = `vyapar-${p.nameId}@placeholder.invalid`;
+        const byContact = (phone ? phoneOwner.get(phone) : undefined)
+            ?? (p.email ? emailOwner.get(p.email.toLowerCase()) : undefined)
+            ?? emailOwner.get(placeholder);
+        // Name is consulted only when there is nothing better; a contact always wins.
+        const byNameHit = !byContact && !phone && !p.email
+            ? partyByName.get(p.name.trim().toLowerCase())
+            : undefined;
+        if (byNameHit) pstats.byName++;
+        const owner = byContact ?? byNameHit;
+
+        // A name match is not enough on its own: `runCustomerImport` keys on phone or
+        // email only, so a party findable solely by name is invisible to it too — it
+        // would be rejected for having no contact, or worse, created a second time.
+        //
+        // So heal the record instead of working around it. The existing party is given
+        // the same deterministic address the resolver would have minted, which makes it
+        // matchable by contact from here on — by the importer now, and by every future
+        // run. That is the actual defect being fixed: a record nothing can address.
+        if (byNameHit && !byContact) {
+            healed.push({ addr: placeholder, kind: byNameHit.kind, id: byNameHit.id });
+            emailOwner.set(placeholder, byNameHit);
+        }
 
         const opening = p.balance - (balMoved.get(p.nameId) ?? 0);
         const bal = Math.abs(opening) < 0.01
@@ -272,8 +323,11 @@ async function main(): Promise<void> {
                 values: {
                     name: owner.name,
                     kind: owner.kind,
-                    ...(phone ? { phone1: phone } : {}),
-                    ...(p.email ? { email1: p.email } : {}),
+                    // Always carry a key the importer can match on, falling back to the
+                    // healed address for parties with no real contact anywhere.
+                    ...(phone ? { phone1: phone }
+                        : p.email ? { email1: p.email }
+                            : { email1: placeholder }),
                     ...bal,
                 },
             });
@@ -293,7 +347,10 @@ async function main(): Promise<void> {
         // reserved TLD (RFC 2606) so it can never be delivered to a real person.
         const contact = phone ? { phone1: phone }
             : p.email ? { email1: p.email }
-                : { email1: `vyapar-${p.nameId}@placeholder.invalid` };
+                : { email1: placeholder };
+        // A created party joins the name index, so two contact-less Vyapar rows with
+        // the same name cannot both create.
+        partyByName.set(p.name.trim().toLowerCase(), { kind: p.kind, id: -1, name: p.name });
         if (!phone && !p.email) pstats.placeholder++;
 
         partyRows.push({
@@ -321,6 +378,7 @@ async function main(): Promise<void> {
 
     console.log(`\nPARTIES   ${partyRows.length} rows`);
     console.log(`  ${rp(pstats.updated, 5)}  update balance only  (${pstats.keptOurName} keep our name over Vyapar's, ${pstats.keptOurKind} keep our person/company kind)`);
+    if (pstats.byName) console.log(`         ${pstats.byName} matched by NAME — no usable contact on either side`);
     console.log(`  ${rp(pstats.created, 5)}  create  (${pstats.placeholder} need a placeholder contact)`);
     if (sharedPairs.length) {
         console.log(`  ⚠ ${sharedPairs.length} share a phone with another party — kept separate, MERGE BY HAND later:`);
@@ -364,6 +422,23 @@ async function main(): Promise<void> {
             `update "Account" set "openingBalance" = null, "openingBalanceType" = null
              where "personId" is not null or "companyId" is not null`,
         );
+    }
+
+    // Give the name-matched parties the address they never had, BEFORE the import
+    // runs — that is what lets `runCustomerImport` find them by contact like every
+    // other row, instead of rejecting them or creating a second record.
+    if (healed.length) {
+        console.log(`\nattaching a stable address to ${healed.length} existing parties that had none` +
+            ` — previously findable only by name, and so duplicated on every run`);
+        if (apply) {
+            for (const h of healed) {
+                await pool.query(
+                    `insert into "Email" (email, "personId", "companyId", "isPrimary", "createdAt")
+                     values ($1, $2, $3, false, now()) on conflict (email) do nothing`,
+                    [h.addr, h.kind === "person" ? h.id : null, h.kind === "company" ? h.id : null],
+                );
+            }
+        }
     }
 
     console.log(`\n${apply ? "APPLYING" : "dry run"} …`);
