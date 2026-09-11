@@ -13,11 +13,23 @@
 //     it does NOT cascade off Ticket — listed explicitly to avoid orphans).
 //   • AuditLog — the unified recycle-bin (replaced the 3 *Audit tables 2026-06-09).
 //
+// With --comms it ALSO clears the communication history, which is NOT
+// transaction data and is never touched by default:
+//   • Call logs, internal chat (ChatRoom + members + messages), and the social
+//     wall (WallPost + likes + comments).
+// Opt-in because these are irreplaceable — a voucher can be re-entered from a
+// paper invoice; a conversation cannot be re-had.
+//
 // LEAVES INTACT: chart of accounts, opening balances, products, customers,
 // users, org settings, and master data like ServiceCenter.
 //
-// Run: pnpm seed:purge-vouchers
+// Run: pnpm seed:purge-vouchers [--comms] [--allow-remote]
 // DESTRUCTIVE — every voucher / stock movement / repair ticket is gone after this.
+//
+// It refuses a non-local database unless --allow-remote is passed. Without that
+// guard this script trusts whatever DIRECT_URL happens to hold, and a stray
+// .env.local pointing at production would wipe the real books with no prompt,
+// no confirmation and no undo.
 
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
@@ -29,7 +41,23 @@ const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 
-const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false }, max: 1 });
+const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])/.test(rawUrl);
+const withComms = process.argv.includes("--comms");
+const allowRemote = process.argv.includes("--allow-remote");
+
+// Say out loud what is about to be destroyed, and where. The host is the one
+// detail worth being certain about, so it is printed every run, not just on error.
+const target = rawUrl.replace(/^.*@/, "").replace(/\?.*$/, "") || "(none configured)";
+console.log(`target: ${target}${isLocal ? "" : "  ← NOT LOCAL"}`);
+if (!isLocal && !allowRemote) {
+    console.error(
+        `\nREFUSING: ${target} is not a local database, and this script TRUNCATEs without asking.\n` +
+        `If you really mean to wipe a remote database, re-run with --allow-remote.\n`,
+    );
+    process.exit(1);
+}
+
+const pool = new Pool({ connectionString: rawUrl, ssl: isLocal ? false : { rejectUnauthorized: false }, max: 1 });
 
 // One TRUNCATE ... RESTART IDENTITY CASCADE handles cross-table FKs and ordering.
 // Children that cascade off a listed parent (the Ticket riders off Ticket, the
@@ -63,13 +91,37 @@ const TABLES = [
     "AuditLog",
 ];
 
+// Communication history — cleared only with --comms. Children are listed before
+// parents for readability; TRUNCATE ... CASCADE would reach them anyway.
+const COMMS_TABLES = [
+    "Call",
+    "ChatMessage",
+    "ChatRoomMember",
+    "ChatRoom",
+    "WallPostLike",
+    "WallPostComment",
+    "WallPost",
+];
+
 async function main(): Promise<void> {
     console.log("Purging transaction tables …");
 
+    const all = withComms ? [...TABLES, ...COMMS_TABLES] : TABLES;
+
     // Single TRUNCATE statement — atomic, fast, handles FKs in any order.
-    const list = TABLES.map((t) => `"${t}"`).join(", ");
+    const list = all.map((t) => `"${t}"`).join(", ");
     await pool.query(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
-    for (const t of TABLES) console.log(`  ✓ ${t}`);
+    for (const t of all) console.log(`  ✓ ${t}`);
+    if (!withComms) console.log("  – calls / chat / wall left intact (pass --comms to clear them too)");
+
+    // Loyalty and gift-card balances are CACHES over ledger rows that have just
+    // cascaded away with the vouchers. Left alone they would claim points and
+    // money with nothing behind them — a liability on the books that no ledger
+    // can explain. Zero them so the replay rebuilds them honestly.
+    const loy = await pool.query(`UPDATE "LoyaltyAccount" SET "totalEarned" = 0, "totalRedeemed" = 0`);
+    console.log(`  ✓ LoyaltyAccount totals reset (${loy.rowCount} rows)`);
+    const gc = await pool.query(`UPDATE "GiftCard" SET balance = 0`);
+    console.log(`  ✓ GiftCard.balance reset (${gc.rowCount} rows)`);
 
     // Reset cached running balances on Account (they were derived from
     // the now-gone JournalLines). Opening-balance fields are kept.
