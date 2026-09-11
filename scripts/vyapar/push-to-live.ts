@@ -21,9 +21,11 @@
  * ── Guards ──────────────────────────────────────────────────────────────────
  *   • refuses unless DIRECT_URL is genuinely Supabase
  *   • refuses unless --yes-replace-live is passed, so it cannot run by accident
-ature *   • refuses if no backup exists from the last hour
- *     that do not add up)
- *   • refuses if no backup exists from the last hour
+ *   • refuses if there is no backup from the last hour
+ *
+ * It does NOT check that the local books reconcile — that is `pnpm vyapar:reconcile`
+ * and it is on the operator to have run it. Said plainly here rather than implying a
+ * guard that does not exist.
  *
  *   pnpm vyapar:push-to-live                        # dry run — plan only
  *   pnpm vyapar:push-to-live -- --yes-replace-live
