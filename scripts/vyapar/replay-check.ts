@@ -32,7 +32,11 @@ const HANDLED: Record<number, string> = {
     21: "SALE_RETURN", 23: "PURCHASE_RETURN", 29: "JOURNAL (other income)",
     60: "JOURNAL (sale of fixed asset)", 61: "JOURNAL (purchase of fixed asset)",
     27: "ESTIMATE (no GL, no stock)", 30: "CHALLAN (no GL, no stock)",
+    65: "CANCELLED SALE — deliberately never posted",
 };
+
+/** Types that resolve to nothing at all: real rows in Vyapar, no effect on the books. */
+const POSTS_NOTHING = new Set([27, 30, 65]);
 
 async function main(): Promise<void> {
     const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
@@ -124,6 +128,9 @@ async function main(): Promise<void> {
         const ty = Number(t.txn_type);
         byType.set(ty, (byType.get(ty) ?? 0) + 1);
         if (!(ty in HANDLED)) { note(`type ${ty} is not handled — held back`); continue; }
+        // A cancelled sale still carries amounts and line items; posting it would
+        // invent revenue and a stock movement for a sale that never happened.
+        if (POSTS_NOTHING.has(ty)) continue;
 
         // Type 29 points txn_name_id at an INCOME HEAD, not a customer.
         if (t.txn_name_id != null) {

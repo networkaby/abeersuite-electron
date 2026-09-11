@@ -55,7 +55,13 @@ export const PARTY_EFFECT: Record<number, { cash: number; bal: number; label: st
     61: { cash: 0, bal: -1, label: "Purchase of fixed asset" },
     27: null, // Estimate — a quotation
     30: null, // Delivery Challan — goods moved, not yet invoiced
-    65: null, // unidentified; no sign improved the fit
+    // Cancelled Sale. Identified 11-Sep-2026 from Vyapar's own Party Statement, which
+    // lists these as "Sale[Cancelled]" with "--" in every amount column, on dates that
+    // match these rows exactly. A void invoice moves nothing, which is also why muting
+    // it was the only setting that improved the derivation. It keeps its amounts and
+    // its line items in the file, so posting it would invent both revenue and a stock
+    // movement out of a sale that never happened.
+    65: null,
     // 81/82 are still UNNAMED, but their effect is evidenced: 81 behaves as a
     // receipt and 82 as a payment, matching the parties involved (81's are
     // customers, 82's suppliers). Adopting these took the derivation gap from
