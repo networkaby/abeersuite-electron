@@ -77,34 +77,40 @@
     {
       "vyapar": "Bandhan Bank Loan",
       "account": "Bandhan Bank Loan 0193",
-      "amount": -405288
+      "amount": -405288,
+      "interestLedger": "Exp Bandhan Bank Loan Interest"
     },
     {
       "vyapar": "Hamid Soceity @1.5%",
       "account": "Hamid Soceity @1.5%",
       "amount": -205710,
-      "create": "Unsecured Loans"
+      "create": "Unsecured Loans",
+      "interestLedger": "Exp Loan Interest"
     },
     {
       "vyapar": "Kreditbee 3",
       "account": "KreditBee",
-      "amount": -117046
+      "amount": -117046,
+      "interestLedger": "Exp Loan Interest"
     },
     {
       "vyapar": "Mother In Law @ 1%",
       "account": "Mother in Law @ 1%",
-      "amount": -100000
+      "amount": -100000,
+      "interestLedger": "Exp Loan Interest"
     },
     {
       "vyapar": "Navi 2",
       "account": "Navi 2",
       "amount": -110000,
-      "create": "Unsecured Loans"
+      "create": "Unsecured Loans",
+      "interestLedger": "Exp Loan Interest"
     },
     {
       "vyapar": "Wife Loan @2%",
       "account": "Wife Loan @ 2%",
-      "amount": -40000
+      "amount": -40000,
+      "interestLedger": "Exp Loan Interest"
     }
   ],
   "totals": {
@@ -285,5 +291,18 @@
       "loanAccounts": -906383,
       "balanceSheetTotal": 3278700.29
     }
+  },
+  "interestLedgers": {
+    "$comment": "Where loan interest lands. Bandhan already had its own ledger; the rest share one, created under Indirect Expenses if missing. Re-home by editing here.",
+    "create": [
+      {
+        "account": "Exp Loan Interest",
+        "group": "Indirect Expenses"
+      }
+    ]
+  },
+  "chequeClearing": {
+    "$comment": "kb_cheque_status rows: a cheque taken in tender sits in Cheques in Hand until it is banked. Vyapar shows the ledger at nil on both dates because every cheque was deposited; we posted the receipt and never the deposit, stranding the money. `transferred_To_Account` is a kb_paymentTypes id.",
+    "account": "Cheques in Hand"
   }
 }

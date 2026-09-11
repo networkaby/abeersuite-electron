@@ -23,6 +23,7 @@ import { buildMaps, type Maps } from "./mapping";
 import { openVyb } from "./openVyb";
 import { ROUNDING_TOLERANCE, SpecError, buildSpec, type Ledgers, type VyaparTxn } from "./voucherSpec";
 import { Pool } from "pg";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -80,6 +81,12 @@ async function main(): Promise<void> {
 
     const txns = loadTxns(db, maps, limit);
     const contras = loadContras(db, maps);
+
+    // Ledger ids by name, for the movements that live outside kb_transactions.
+    const acct = new Map<string, number>();
+    for (const r of (await pool.query(`select id, name from "Account"`)).rows) acct.set(String(r.name), Number(r.id));
+    const V = JSON.parse(readFileSync("prisma/seeds/data/vyapar-opening-31mar2026.json", "utf8")) as OpeningFile;
+    const extras = [...loadLoanTxns(db, maps, acct, V), ...loadChequeTransfers(db, maps, acct, V)];
 
     // ── Build every spec first ──────────────────────────────────────────────
     const built: Array<{ t: VyaparTxn; spec: ReturnType<typeof buildSpec> }> = [];
@@ -140,8 +147,29 @@ async function main(): Promise<void> {
         });
     }
 
+    // Loan repayments and cheque deposits. Vyapar keeps both outside kb_transactions
+    // — loans in `loan_transactions`, cheque banking in `kb_cheque_status` — so the
+    // first replay lost them entirely: three loan balances never moved, ₹49,884 of
+    // interest never reached the P&L, and ₹31,100 of banked cheques stayed stuck in
+    // Cheques in Hand. Each also moves a BANK, which is why Bandhan 0020 was wrong in
+    // sympathy. Found by checking against the owner's own Balance Sheet exports, not
+    // by anything in this repo.
+    for (const e of extras) {
+        built.push({
+            t: { date: e.date, partyAccountId: null, txnId: e.id } as unknown as VyaparTxn,
+            spec: {
+                spec: {
+                    type: e.type, date: e.date, reference: undefined,
+                    narration: e.note || null, description: `${e.type} ${e.id}`,
+                    glLines: e.lines, stockMoves: [],
+                },
+                residual: 0,
+            } as unknown as ReturnType<typeof buildSpec>,
+        });
+    }
+
     console.log(`\nbuilt ${built.length} voucher(s) from ${txns.length} in the window` +
-        ` (incl. ${contras.length} contra transfer(s) between our own money ledgers)`);
+        ` (incl. ${contras.length} contra + ${extras.length} loan/cheque movement(s))`);
     for (const [k, n] of skipped) console.log(`  ${String(n).padStart(5)}  skipped — ${k}`);
     if (failures.length) {
         console.log(`\n⚠ ${failures.length} could not be built:`);
@@ -340,6 +368,103 @@ function loadContras(db: ReturnType<typeof openVyb>["db"], maps: Maps): Array<{
         console.log(ty > 0
             ? `  ${String(n).padStart(5)}  contra skipped — adjustment type ${ty} has no builder`
             : `  ${String(n).padStart(5)}  contra skipped — type ${-ty} names a ledger that was not migrated`);
+    }
+    return out;
+}
+
+/** The 31-Mar opening file also names the loan and cheque ledgers these need. */
+type OpeningFile = {
+    loans: Array<{ vyapar: string; account: string | null; interestLedger: string }>;
+    chequeClearing: { account: string };
+};
+type Extra = { id: number; date: Date; type: "PAYMENT" | "RECEIPT" | "CONTRA" | "JOURNAL";
+               note: string; lines: Array<{ accountId: number; type: "DEBIT" | "CREDIT"; amount: string }> };
+
+const ledgerId = (acct: Map<string, number>, name: string): number => {
+    const id = acct.get(name);
+    if (id == null) throw new Error(`ledger "${name}" is missing — run pnpm vyapar:payments -- --apply first`);
+    return id;
+};
+
+/**
+ * Loan repayments and drawdowns, from `loan_transactions`.
+ *
+ * Type 43 is an instalment — principal reduces the loan, interest is an expense, and
+ * both leave the bank named by `payment_acc_id`. Type 42 is money received into that
+ * bank against the loan. The other types (40 loan taken, 44 opening) are all pre-2026
+ * and are already inside the 31-Mar opening, so replaying them would double-count.
+ */
+function loadLoanTxns(db: ReturnType<typeof openVyb>["db"], maps: Maps, acct: Map<string, number>, V: OpeningFile): Extra[] {
+    const EMI = 43, RECEIVED = 42;
+    const byVyapar = new Map(V.loans.map((l) => [l.vyapar, l]));
+    const out: Extra[] = [];
+    const skipped = new Map<string, number>();
+
+    for (const r of db.prepare(`
+        select t.loan_txn_id id, a.loan_account_name nm, t.loan_txn_type ty,
+               t.principal_amount p, t.interest_amount i, t.payment_acc_id pay,
+               t.txn_date dt, t.txn_desc note
+        from loan_transactions t join loan_accounts a on a.loan_account_id = t.loan_account_id
+        where date(t.txn_date) >= ? order by t.txn_date, t.loan_txn_id
+    `).all(FY_START) as Array<Record<string, unknown>>) {
+        const ty = Number(r.ty);
+        if (ty !== EMI && ty !== RECEIVED) { skipped.set(`type ${ty}`, (skipped.get(`type ${ty}`) ?? 0) + 1); continue; }
+
+        const loan = byVyapar.get(String(r.nm).trim());
+        const bank = maps.payment.get(Number(r.pay));
+        if (!loan?.account || bank == null) { skipped.set("unmapped loan or bank", (skipped.get("unmapped loan or bank") ?? 0) + 1); continue; }
+
+        const principal = Number(r.p) || 0, interest = Number(r.i) || 0;
+        if (principal + interest <= 0) continue;
+        const date = new Date(String(r.dt).slice(0, 10) + "T00:00:00Z");
+        const note = String(r.note ?? "").trim() || `${r.nm} ${ty === EMI ? "instalment" : "drawdown"}`;
+        const lines: Extra["lines"] = [];
+
+        if (ty === RECEIVED) {
+            lines.push({ accountId: bank, type: "DEBIT", amount: (principal + interest).toFixed(2) });
+            lines.push({ accountId: ledgerId(acct, loan.account), type: "CREDIT", amount: (principal + interest).toFixed(2) });
+        } else {
+            if (principal > 0) lines.push({ accountId: ledgerId(acct, loan.account), type: "DEBIT", amount: principal.toFixed(2) });
+            if (interest > 0) lines.push({ accountId: ledgerId(acct, loan.interestLedger), type: "DEBIT", amount: interest.toFixed(2) });
+            lines.push({ accountId: bank, type: "CREDIT", amount: (principal + interest).toFixed(2) });
+        }
+        out.push({ id: Number(r.id), date, type: ty === RECEIVED ? "RECEIPT" : "PAYMENT", note, lines });
+    }
+    for (const [k, n] of skipped) console.log(`  ${String(n).padStart(5)}  loan txn skipped — ${k}`);
+    return out;
+}
+
+/**
+ * Cheques banked, from `kb_cheque_status`.
+ *
+ * A cheque taken in tender debits Cheques in Hand; it stays there until it clears.
+ * Vyapar shows that ledger at nil on both 31-Mar and 11-Sep because every cheque was
+ * deposited — we posted the receipt and never the deposit, so ₹31,100 sat stranded and
+ * the receiving bank was short by the same amount. `transferred_To_Account` is a
+ * kb_paymentTypes id, so it resolves through the same map as any tender leg.
+ */
+function loadChequeTransfers(db: ReturnType<typeof openVyb>["db"], maps: Maps, acct: Map<string, number>, V: OpeningFile): Extra[] {
+    const DEPOSITED = 1;
+    const held = ledgerId(acct, V.chequeClearing.account);
+    const out: Extra[] = [];
+
+    for (const r of db.prepare(`
+        select c.cheque_id id, c.transferred_To_Account pay, c.cheque_transfer_date dt, t.txn_cash_amount amt
+        from kb_cheque_status c join kb_transactions t on t.txn_id = c.cheque_txn_id
+        where c.cheque_current_status = ? and date(c.cheque_transfer_date) >= ?
+        order by c.cheque_transfer_date, c.cheque_id
+    `).all(DEPOSITED, FY_START) as Array<Record<string, unknown>>) {
+        const bank = maps.payment.get(Number(r.pay));
+        const amt = Number(r.amt) || 0;
+        if (bank == null || amt <= 0) continue;
+        out.push({
+            id: Number(r.id), date: new Date(String(r.dt).slice(0, 10) + "T00:00:00Z"),
+            type: "CONTRA", note: "cheque banked",
+            lines: [
+                { accountId: bank, type: "DEBIT", amount: amt.toFixed(2) },
+                { accountId: held, type: "CREDIT", amount: amt.toFixed(2) },
+            ],
+        });
     }
     return out;
 }

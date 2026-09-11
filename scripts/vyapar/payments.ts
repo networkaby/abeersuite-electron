@@ -64,6 +64,8 @@ type Line = { vyapar: string; account: string | null; amount: number; create?: s
 type Opening = {
     money: Line[];
     loans: Line[];
+    interestLedgers: { create: Array<{ account: string; group: string }> };
+    chequeClearing: { account: string };
     fixedAssets: { items: Array<{ itemId: number; name: string; amount: number; ledger: string }>;
                    byLedger: Record<string, number> };
     totals: Record<string, number>;
@@ -156,11 +158,21 @@ async function main(): Promise<void> {
     // nil, and only clearing the whole group makes "not mentioned" and "zero" the
     // same thing — the distinction that left ₹1,02,336 of stale party openings
     // behind earlier in this migration.
+    //
+    // Clearing by GROUP alone is not enough: "Cheques in Hand" lives under Current
+    // Assets, so a ₹2,10,790 pre-Vyapar opening survived the group sweep and then
+    // showed up as money Vyapar says does not exist. Every ledger this file NAMES is
+    // cleared too, whatever group it happens to sit in.
+    const namedHere = [
+        ...V.money.map((m) => m.account), ...V.loans.map((l) => l.account),
+        ...Object.keys(V.fixedAssets.byLedger), V.chequeClearing.account,
+    ].filter((n): n is string => !!n);
     await pool.query(
         `update "Account" a set "openingBalance" = null, "openingBalanceType" = null
          from "AccountGroup" g where g.id = a."groupId"
-           and (g.name ~* $1 or g.name in ('Fixed Assets', 'Unsecured Loans', 'Secured Loans'))`,
-        [MONEY_GROUPS]);
+           and (g.name ~* $1 or g.name in ('Fixed Assets', 'Unsecured Loans', 'Secured Loans')
+                or a.name = any($2::text[]))`,
+        [MONEY_GROUPS, namedHere]);
 
     const setOpening = async (name: string, amount: number) => {
         if (Math.abs(amount) < 0.005) return;
@@ -169,6 +181,15 @@ async function main(): Promise<void> {
             [name, Math.abs(amount).toFixed(2), amount >= 0 ? "DEBIT" : "CREDIT"]);
         if (r.rowCount === 0) throw new Error(`no ledger named "${name}"`);
     };
+
+    // Loan interest needs somewhere to land before the replay posts it.
+    for (const c of V.interestLedgers.create) {
+        await pool.query(
+            `insert into "Account" (name, "groupId", "isActive", "createdAt", "updatedAt")
+             select $1, g.id, true, now(), now() from "AccountGroup" g
+             where g.name = $2 and not exists (select 1 from "Account" where name = $1)`,
+            [c.account, c.group]);
+    }
 
     for (const m of V.money) if (m.account) await setOpening(m.account, m.amount);
 
