@@ -72,6 +72,7 @@ async function main(): Promise<void> {
         shippingIncome: maps.ledger("Shipping Income"),
         freightInward: maps.ledger("Exp Freight Inward (Purchase Courier)"),
         fixedAsset: maps.ledger("Office Equipment"),
+        serviceExpense: maps.ledger("Repair & Maintenance"),
     };
 
     const branch = (await pool.query(`select id from "Branch" order by "createdAt" limit 1`)).rows[0];

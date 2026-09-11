@@ -75,10 +75,11 @@
       "amount": 96532.01,
       "fyAmount": 10000,
       "fyTxns": 1,
-      "action": "map",
-      "account": "New Room",
+      "action": "create",
+      "account": "New Room Ready exp",
       "group": "Fixed Assets",
-      "confidence": "high"
+      "confidence": "high",
+      "note": "capitalised: its own ledger so the New Room ASSET (Rs 4,00,001) stays separate from spend on it"
     },
     {
       "vyapar": "1 Electricity Bill",
@@ -425,14 +426,15 @@
       "amount": 213,
       "fyAmount": 213,
       "fyTxns": 1,
-      "action": "map",
-      "account": "Tools & Equipment",
+      "action": "create",
+      "account": "Service Tools and Materials",
       "group": "Fixed Assets",
       "confidence": "likely",
       "alternatives": [
         "Tools & Equipment  [Fixed Assets]",
         "Printing & Stationery (Office Exp/Packaging Materials)  [Indirect Expenses]"
-      ]
+      ],
+      "note": "capitalised: kept apart from the Tools & Equipment asset ledger (Rs 6,000)"
     },
     {
       "vyapar": "exp customer delivery",

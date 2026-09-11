@@ -47,6 +47,11 @@ const NORMAL_BALANCE: Record<string, "DEBIT" | "CREDIT"> = {
     "Credit Card": "CREDIT",   // a card is money owed, not money held
     "Bank OD A/c": "CREDIT",
     "BNPL A/c": "CREDIT",
+    // An asset ledger is a debit balance like any other. Two expense heads are
+    // capitalised into their own Fixed Assets ledgers rather than into the asset
+    // ledgers they relate to, so the ROOM (Rs 4,00,001) stays distinguishable from
+    // money spent getting it ready (Rs 10,000).
+    "Fixed Assets": "DEBIT",
 };
 
 async function main(): Promise<void> {

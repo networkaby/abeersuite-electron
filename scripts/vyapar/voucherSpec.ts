@@ -56,6 +56,8 @@ export type Ledgers = {
     discountAllowed: number; discountReceived: number;
     loyaltyRedeemed: number; shippingIncome: number; freightInward: number;
     fixedAsset: number;
+    /** Where a purchase with NO line items goes — it bought a service, not goods. */
+    serviceExpense: number;
 };
 
 export type BuiltVoucher = {
@@ -137,7 +139,12 @@ export function buildSpec(
 
         case 2:   // Purchase
             type = "PURCHASE";
-            dr(L.purchases, taxable);
+            // A purchase with no line items bought no goods. Vyapar allows a bill with
+            // a total and nothing itemised, and this business uses it for repairs --
+            // txn 23975, "HEAD CABL CHANGE KORA HOISE", a printer head-cable change.
+            // Sending that to Purchase A/c would put a repair into cost of goods and
+            // overstate purchases; it belongs in an expense ledger.
+            dr(t.lines.length ? L.purchases : L.serviceExpense, taxable);
             taxLegs(+1);                                  // input tax is recoverable
             // Freight the SUPPLIER charged us is a cost of buying, not revenue. Booking
             // it to Shipping Income put ₹472 on the wrong side and threw one purchase
