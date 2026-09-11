@@ -123,20 +123,58 @@ async function main(): Promise<void> {
         for (const r of db.prepare(sql).all() as Array<Record<string, unknown>>) m.set(Number(r.id), String(r.nm).trim());
         return m;
     };
+    const allItems = extractItems(db);
     const { maps } = await buildMaps(
-        pool, extractParties(db), extractItems(db),
+        pool, extractParties(db), allItems,
         named(`select paymentType_id id, paymentType_name nm from kb_paymentTypes`),
         named(`select name_id id, full_name nm from kb_names where name_type = 2`),
         named(`select name_id id, full_name nm from kb_names where name_type = 3`),
     );
 
+    // Every item_type 5 row, not just the 20 the 31-Mar sheet lists. The Havells fan
+    // (item 1947) was bought INSIDE the window, so it is absent from the 31-Mar fixed
+    // assets and gets no opening — but it is still office equipment, and it still has
+    // to leave inventory. It did not, because STOCK_EFFECT in extract.ts rolls back
+    // only sales and purchases (types 1/2/21/23); type 61, purchase of a fixed asset,
+    // is not in it, so the fan's in-window purchase never came out of the opening
+    // quantity. Result: ₹2,699 sitting in opening stock AND in Office Equipment — the
+    // New Room double-count again, two orders of magnitude smaller.
     const productIds: number[] = [];
     let missing = 0, inStock = 0;
+    const listed = new Set(V.fixedAssets.items.map((f) => f.itemId));
     for (const f of V.fixedAssets.items) {
         const pid = maps.product.get(f.itemId);
         if (pid == null) { missing++; continue; }
         productIds.push(pid);
     }
+    const extraAssets: number[] = [];
+    for (const i of allItems) {
+        if (i.itemType !== 5 || listed.has(i.itemId)) continue;
+        const pid = maps.product.get(i.itemId);
+        if (pid != null) extraAssets.push(pid);
+    }
+
+    // Services carry a quantity in Vyapar — negative, by design, since they are
+    // "sold" without ever being bought — but are excluded from its Stock-in-hand
+    // VALUE. So only the RATE is zeroed here, never the quantity: zeroing both put
+    // five service items out by 365 units against Vyapar's own figures, trading a
+    // ₹299 valuation difference for a quantity mismatch. Value and quantity are
+    // separate questions and have to be answered separately.
+    const services: number[] = [];
+    for (const i of allItems) {
+        if (i.itemType !== 2 && i.itemType !== 3) continue;
+        const pid = maps.product.get(i.itemId);
+        if (pid != null) services.push(pid);
+    }
+
+    // Vyapar is authoritative on stock, so a product it has never heard of cannot
+    // hold an opening quantity — that is AbeerSuite's own pre-migration data, and the
+    // owner's rule sends it to zero like every other pre-Vyapar opening.
+    const knownProducts = new Set(maps.product.values());
+    const orphans = (await pool.query(`
+        select id, name, coalesce("openingStock", 0) * coalesce("openingRate", 0) v from "InvProduct"
+        where coalesce("openingStock", 0) * coalesce("openingRate", 0) <> 0`)).rows
+        .filter((r) => !knownProducts.has(Number(r.id)));
     if (productIds.length) {
         inStock = Number((await pool.query(
             `select coalesce(sum(coalesce("openingStock",0) * coalesce("openingRate",0)), 0) v
@@ -148,6 +186,10 @@ async function main(): Promise<void> {
     console.log(`\n  ${V.fixedAssets.items.length} item(s) · ${productIds.length} matched here` +
         `${missing ? ` · ⚠ ${missing} NOT FOUND` : ""}`);
     console.log(`  sitting in opening STOCK right now: ${inr(inStock)}  ← moves out to the ledgers above`);
+    if (extraAssets.length) console.log(`  + ${extraAssets.length} fixed asset(s) bought inside the window — stock zeroed, no opening`);
+    if (services.length) console.log(`  + ${services.length} service item(s) — value zeroed, quantity kept (Vyapar excludes services from stock VALUE only)`);
+    for (const o of orphans)
+        console.log(`  ⚠ ${String(o.name).slice(0, 44).padEnd(46)}${inr(Number(o.v)).padStart(12)}  not in Vyapar — opening stock cleared`);
 
     console.log(`\n  ${bad} line(s) disagree with Vyapar's published opening`);
     if (!apply) { console.log(`\nNothing written. Re-run with --apply.\n`); await pool.end(); close(); return; }
@@ -211,7 +253,13 @@ async function main(): Promise<void> {
     // The same rupee cannot be a chair and a saleable product at once.
     await pool.query(
         `update "InvProduct" set "openingStock" = 0, "openingRate" = 0, "openingValue" = 0
-         where id = any($1::int[])`, [productIds]);
+         where id = any($1::int[])`,
+        [[...productIds, ...extraAssets, ...orphans.map((o) => Number(o.id))]]);
+
+    // Services: drop the value, keep the quantity.
+    await pool.query(
+        `update "InvProduct" set "openingRate" = 0, "openingValue" = 0 where id = any($1::int[])`,
+        [services]);
 
     console.log(`\nloaded ${V.money.filter((m) => m.account).length} money · ${V.loans.length} loan` +
         ` · ${Object.keys(V.fixedAssets.byLedger).length} fixed-asset ledger(s)`);
