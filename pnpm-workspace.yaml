@@ -11,6 +11,13 @@ allowBuilds:
   # (Counter builds skip the upload entirely — see COUNTER_BUILD in next.config.ts.)
   '@prisma/engines': true
   '@sentry/cli': true
+  # These four ship prebuilt binaries or only print a postinstall notice — no
+  # build needed. Left undecided, pnpm's pre-run install exits 1 and `pnpm dev`
+  # never starts.
+  '@firebase/util': false
+  protobufjs: false
+  sharp: false
+  unrs-resolver: false
   # Deliberately false: use the shipped N-API prebuild, never a source build.
   # The hardware bridge runs under ELECTRON_RUN_AS_NODE, so its native modules must
   # satisfy Electron 43 (ABI 148) — but a source build here would target the Node that
