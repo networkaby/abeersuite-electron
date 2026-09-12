@@ -380,6 +380,17 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         console.error(`[writeRelay] gateway ${reply.status} (${String(gateway)}) on ${req.method} ${pathname} — outcome unknown, refusing the local fallback.`);
         return NextResponse.json({ error: UNCERTAIN_MESSAGE, code: "relay_uncertain" }, { status: 502 });
     }
+    if ((reply.status === 404 || reply.status === 405) && !bodyIsJson(reply)) {
+        // Next's own "no such route" page, not an app answer: this counter is newer
+        // than the office and posted to a route the office does not have yet. Say so —
+        // the toast would otherwise show the route's generic failure text, which reads
+        // as a bug in the feature rather than an office deploy that has not happened.
+        console.error(`[writeRelay] office has no ${req.method} ${pathname} (${reply.status}) — the office deployment is older than this counter.`);
+        return NextResponse.json(
+            { error: "The office app is older than this counter and does not know this action yet. Update the office deployment, then try again.", code: "relay_office_outdated" },
+            { status: 502 },
+        );
+    }
     if (reply.status >= 200 && reply.status < 300) {
         await pullAndWait(modelsForTopics(topicsForApiPath(pathname)));
     }
