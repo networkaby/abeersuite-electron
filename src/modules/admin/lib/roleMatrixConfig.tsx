@@ -636,7 +636,7 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
         id: "pricing:costing:manage",
         label: "Can manage costing",
     },
-    [sidebarChildPermissionId("pricing-strategy", "update-print-labels")]: {
+    [sidebarChildPermissionId("pricing-strategy", "update-prices")]: {
         id: "pricing:labels:apply",
         label: "Can apply & print",
     },

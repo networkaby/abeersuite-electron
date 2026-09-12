@@ -9757,6 +9757,10 @@
     },
     {
       "roleId": "R2",
+      "permissionId": "pricing:labels:apply"
+    },
+    {
+      "roleId": "R2",
       "permissionId": "pricing:strategy:set"
     },
     {
