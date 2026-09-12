@@ -2,6 +2,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { OfflineWriteBlockedError } from "./offlineError";
+import { noteDeleted } from "@/shared/lib/realtime/deleteAnnounce";
 import {
     getMode,
     maybeReprobe,
@@ -201,6 +202,11 @@ function wrapLive(redirect: ReadRedirect): PrismaClient {
                         try {
                             const out = await query(args);
                             if (localClient) reportLiveUp();
+                            // A hard delete is invisible to every counter's watermark pull;
+                            // say which table lost rows so their workers reconcile it now
+                            // instead of within the hour. See deleteAnnounce.ts.
+                            if (operation === "delete") noteDeleted(model);
+                            else if (operation === "deleteMany" && (out as { count?: number } | null)?.count) noteDeleted(model);
                             return out;
                         } catch (e) {
                             if (localClient && isTransientConnError(e)) reportLiveDown();

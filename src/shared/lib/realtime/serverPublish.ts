@@ -19,6 +19,10 @@ import { createClient } from "@supabase/supabase-js";
 import { CHANGE_CHANNEL_NAME, CHANGE_EVENT_NAME } from "./channel";
 import type { Topic } from "./topics";
 
+/** Optional extras on the wire. `deleted` names Prisma models that lost rows on the
+ *  source — read only by the counter sync worker (see `deleteAnnounce.ts`). */
+export type ServerSignalExtras = { deleted?: readonly string[] };
+
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -26,8 +30,11 @@ const JOIN_TIMEOUT_MS = 5_000;
 
 /** Best-effort — a missed nudge costs nothing but the surface falling back to
  *  its own poll, so a failure here must never break the caller's request. */
-export async function publishChangeServer(topics: readonly Topic[]): Promise<void> {
-    if (topics.length === 0) return;
+export async function publishChangeServer(
+    topics: readonly Topic[],
+    extras: ServerSignalExtras = {},
+): Promise<void> {
+    if (topics.length === 0 && !(extras.deleted && extras.deleted.length > 0)) return;
     let client: ReturnType<typeof createClient> | undefined;
     try {
         client = createClient(url, key);
@@ -40,7 +47,7 @@ export async function publishChangeServer(topics: readonly Topic[]): Promise<voi
             await channel.send({
                 type: "broadcast",
                 event: CHANGE_EVENT_NAME,
-                payload: { topics, at: new Date().toISOString() },
+                payload: { topics, at: new Date().toISOString(), ...extras },
             });
         } finally {
             void client.removeChannel(channel);

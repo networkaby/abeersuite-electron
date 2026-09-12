@@ -81,6 +81,9 @@ let preempting = false;
 let protectedCycle = false;
 /** Carry the protection to the cycle `queued` will start. */
 let queuedProtected = false;
+/** Tables the office reported hard deletes on, not yet handed to a cycle. Drained by the
+ *  next non-relay cycle (`--verify`), so a signal that arrives mid-cycle is not lost. */
+let pendingVerify = new Set();
 /** Set on schema drift (exit 4). A targeted pull cannot succeed until a deploy fixes
  *  it, so it is answered at once instead of spawning a doomed child per bill. */
 let schemaHalted = false;
@@ -117,6 +120,12 @@ function runCycle(reason, targeted = null, opts = {}) {
             : reason;
     const cycleArgs = [path.resolve(__dirname, "sync-once.js"), "--reason", reasonArg];
     if (targeted && targeted.models.length > 0) cycleArgs.push("--only", targeted.models.join(","));
+    // A relay cycle skips the reconcile pass, so the deletes wait for the next one.
+    if (!targeted && pendingVerify.size > 0) {
+        cycleArgs.push("--verify", [...pendingVerify].join(","));
+        log(`  reconciling now after office delete: ${[...pendingVerify].join(", ")}`);
+        pendingVerify = new Set();
+    }
     child = spawn(process.execPath, cycleArgs, {
         cwd: __dirname,
         stdio: ["ignore", "pipe", "pipe"],
@@ -237,7 +246,10 @@ function onRelayPull(request) {
 
 // A signal only ever makes a sync happen SOONER. Correctness lives in the
 // watermarks and the reconcile pass, which run on the interval regardless.
-stopSignal = signal.listen(cfg, () => runCycle("change signal"), log);
+stopSignal = signal.listen(cfg, (deleted) => {
+    for (const m of deleted) pendingVerify.add(m);
+    runCycle("change signal");
+}, log);
 stopLocalSignal = localSignal.listen(cfg, onRelayPull, log);
 
 log(`counter-sync started (interval ${INTERVAL_MS / 60000}m)`);

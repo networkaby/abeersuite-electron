@@ -239,6 +239,21 @@ async function rowHashDiff(source, local, entry, columns) {
  * `confkey` order, and silently mis-matching it would be worse than skipping it.
  */
 async function referencingNullers(client, table) {
+    return referencing(client, table, ["n", "d"]);
+}
+
+/**
+ * Single-column foreign keys onto `table` whose `ON DELETE` action is CASCADE. On the
+ * source a parent delete removed these rows too; here it did not (FK actions are
+ * suspended while applying), so sync-once.js reconciles these tables in the same cycle
+ * as the parent it was told about.
+ */
+async function referencingCascades(client, table) {
+    return referencing(client, table, ["c"]);
+}
+
+/** `confdeltype` codes: a = no action, r = restrict, c = cascade, n = set null, d = set default. */
+async function referencing(client, table, delTypes) {
     const { rows } = await client.query(
         `SELECT c.conrelid::regclass::text AS child_table,
                 a.attname                  AS child_column
@@ -246,10 +261,10 @@ async function referencingNullers(client, table) {
            JOIN pg_attribute a
              ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
           WHERE c.contype = 'f'
-            AND c.confdeltype IN ('n', 'd')
+            AND c.confdeltype = ANY($2::"char"[])
             AND c.confrelid = $1::regclass
             AND array_length(c.conkey, 1) = 1`,
-        [q(table)],
+        [q(table), delTypes],
     );
     return rows.map((r) => ({ table: r.child_table.replace(/^"|"$/g, ""), column: r.child_column }));
 }
@@ -284,5 +299,6 @@ function missingColumns(srcFp, locFp) {
 
 module.exports = {
     fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression,
-    referencingNullers, hashesRowContent, missingColumns,
+    referencingNullers,
+    referencingCascades, hashesRowContent, missingColumns,
 };

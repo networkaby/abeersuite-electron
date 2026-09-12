@@ -11,6 +11,10 @@
  *   node sync-once.js --dry-run     report what would move, write nothing
  *   node sync-once.js               sync
  *   node sync-once.js --only Ticket,Account   sync those models (and their children)
+ *   node sync-once.js --verify Coupon   reconcile these models THIS cycle, hourly
+ *                                       schedule or not — the office reported a hard
+ *                                       delete on them (index.js passes it). Their
+ *                                       cascade children come along.
  *   node sync-once.js --reason signal   what woke this cycle (index.js passes it);
  *                                       signal|queued|relay may trust a recent schema
  *                                       check; relay also skips the reconcile pass
@@ -37,6 +41,11 @@ const onlyIdx = args.indexOf("--only");
 const ONLY = onlyIdx >= 0 && args[onlyIdx + 1]
     ? args[onlyIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
     : null;
+const verifyIdx = args.indexOf("--verify");
+/** Models to reconcile this cycle regardless of when they were last proven. */
+const VERIFY_NOW = verifyIdx >= 0 && args[verifyIdx + 1]
+    ? args[verifyIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 const reasonIdx = args.indexOf("--reason");
 /** Why this cycle runs: startup | interval | signal | queued | relay | manual (default).
  *  `relay` is the app's own targeted pull after a write it relayed to the office
@@ -137,6 +146,30 @@ function loadConfig() {
  *
  * Costs nothing on an ordinary cycle: only reached when a delete actually happened.
  */
+/**
+ * `models` plus every replicated table that loses rows when one of them does: registry
+ * children (`strategy: child`, which ride their parent) and any table whose foreign key
+ * is `ON DELETE CASCADE` onto one of them, followed transitively. The source removed
+ * those rows itself; this replica applies deletes with FK actions suspended and would
+ * keep them until that table's own hourly turn.
+ */
+async function withCascadeChildren(local, tables, models) {
+    const out = new Set(models);
+    const byTable = new Map(Object.entries(tables).map(([m, e]) => [e.table, m]));
+    const queue = [...models];
+    while (queue.length) {
+        const model = queue.shift();
+        for (const [m, e] of Object.entries(tables)) {
+            if (e.strategy === "child" && e.parent === model && !out.has(m)) { out.add(m); queue.push(m); }
+        }
+        for (const ref of await reconcile.referencingCascades(local, tables[model].table)) {
+            const m = byTable.get(ref.table);
+            if (m && !out.has(m)) { out.add(m); queue.push(m); }
+        }
+    }
+    return out;
+}
+
 async function repairReferencing(source, local, tables, fkCache, entry, deletedKeys, changedModels) {
     // `deletedKeys` are keyExpression text. Matching them against a single-column FK
     // is only meaningful when the parent key is itself one column; referencingNullers
@@ -191,6 +224,10 @@ async function main() {
     if (ONLY) {
         const unknown = ONLY.filter((m) => !tables[m]);
         if (unknown.length) console.log(`--only: ignoring unknown model(s) ${unknown.join(", ")}`);
+    }
+    if (VERIFY_NOW.length) {
+        const unknown = VERIFY_NOW.filter((m) => !tables[m]);
+        if (unknown.length) console.log(`--verify: ignoring unknown model(s) ${unknown.join(", ")}`);
     }
 
     // One long-lived client per side for the bookkeeping (guard, state, reconcile,
@@ -431,8 +468,16 @@ async function main() {
         // and signal cycles verify the same tables on the same schedule regardless.
         if (!DRY && REASON !== "relay") {
             const nowMs = Date.now();
+            // The office said these lost rows. They go first, outside the hourly schedule
+            // and outside the budget: a delete is exactly what a watermark cannot see, and
+            // waiting for the table's turn is how eight deleted coupons sat on a counter.
+            // A cascade child loses its rows on the source too, but here the parent is
+            // deleted with FK actions suspended, so the child is reconciled as well.
+            const forced = await withCascadeChildren(local, tables, VERIFY_NOW.filter((m) => tables[m]));
+            const forcedDue = [...order.independent, ...order.children]
+                .filter((m) => forced.has(m) && VERIFY_STRATEGIES.includes(tables[m].strategy));
             const due = [...order.independent, ...order.children]
-                .filter((m) => want(m))
+                .filter((m) => want(m) && !forced.has(m))
                 .filter((m) => VERIFY_STRATEGIES.includes(tables[m].strategy))
                 .filter((m) => {
                     const st = prior.get(tables[m].n);
@@ -449,7 +494,7 @@ async function main() {
                 })
                 .slice(0, VERIFY_BUDGET);
 
-            for (const model of due) {
+            for (const model of [...forcedDue, ...due]) {
                 const entry = tables[model];
                 try {
                     // Source FIRST, not in parallel: a row-content fingerprint (full and

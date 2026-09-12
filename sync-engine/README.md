@@ -384,6 +384,32 @@ covers.
 Configure with `supabaseUrl` / `supabaseAnonKey` (the app's `NEXT_PUBLIC_*` values —
 client-exposed by design, not secrets). Omit them and the worker uses the timer alone.
 
+### A delete is announced by the server, and reconciled at once (2026-09-12)
+
+The browser signal cannot help with a delete: it says a *bucket* moved, and the cycle
+it wakes pulls by watermark — which, as the reconciliation section says, can never see a
+row that is gone. So a delete on the office reached a counter only when that table's
+hourly turn in pass 3 came round: every coupon deleted on the web, all eight still on
+Counter 94 half an hour later.
+
+Prisma knows what it deleted, so the office server now says so itself. `wrapLive` in
+`src/shared/lib/prisma/prismaClient.ts` calls `noteDeleted(model)` after every
+successful `delete` / `deleteMany` that reached Supabase — one choke point, because a
+counter is refused deletes outright — and `src/shared/lib/realtime/deleteAnnounce.ts`
+coalesces those for 300 ms and publishes `{ topics: [], at, deleted: ["Coupon"] }` on
+the same channel. Browser tabs drop a signal with no topics (they were already
+refreshed by the URL-derived one), so nothing refetches twice. `signal.js` collects
+`deleted` across the settle window; `index.js` keeps the names in `pendingVerify` until
+the next non-relay cycle and passes `--verify Coupon`; pass 3 in `sync-once.js`
+reconciles those tables **first, outside the hourly schedule and the budget** — plus
+their registry children and every table with an `ON DELETE CASCADE` foreign key onto
+them (`reconcile.referencingCascades`), because the source removed those rows itself
+while this replica applies the parent delete with FK actions suspended.
+
+Still a hint: raw SQL, seeds and scripts announce nothing, and a lost broadcast is not
+retried — the hourly pass remains the safety net. Model names only travel, never keys;
+an unknown name is logged and ignored.
+
 ## Verifying the replica
 
 ```powershell

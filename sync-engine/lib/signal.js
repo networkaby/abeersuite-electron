@@ -63,7 +63,13 @@ const EVENT = "changed";
 const SETTLE_MS = 750;
 
 /**
- * Subscribe and call `onChange()` once per settled burst of signals.
+ * Subscribe and call `onChange(deleted)` once per settled burst of signals.
+ *
+ * `deleted` is the union of every `payload.deleted` seen in the burst: Prisma model
+ * names the office server reports after a hard delete (src/shared/lib/realtime/
+ * deleteAnnounce.ts). A watermark pull can never see a delete, so the cycle this wakes
+ * reconciles those tables at once instead of on the hourly schedule. Names only, never
+ * keys — an unknown name is ignored by sync-once.js, so a forged payload costs nothing.
  *
  * Returns a stop function. Never throws: Realtime being unavailable must degrade to
  * "sync on the timer only", not take the worker down -- the timer is what makes the
@@ -79,6 +85,8 @@ function listen(cfg, onChange, log) {
 
     let timer = null;
     let client;
+    /** Models named as deleted since the last flush. */
+    let deleted = new Set();
 
     try {
         client = createClient(url, key, { auth: { persistSession: false } });
@@ -89,15 +97,19 @@ function listen(cfg, onChange, log) {
 
     const flush = () => {
         timer = null;
+        const models = [...deleted];
+        deleted = new Set();
         try {
-            onChange();
+            onChange(models);
         } catch (e) {
             log(`realtime: sync from signal failed: ${e.message}`);
         }
     };
 
     const channel = client.channel(CHANNEL);
-    channel.on("broadcast", { event: EVENT }, () => {
+    channel.on("broadcast", { event: EVENT }, ({ payload }) => {
+        const named = payload && Array.isArray(payload.deleted) ? payload.deleted : [];
+        for (const m of named) if (typeof m === "string" && m) deleted.add(m);
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, SETTLE_MS);
     });
