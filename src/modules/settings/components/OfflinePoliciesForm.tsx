@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useCounterMode } from "@/shared/hooks/useCounterMode";
 import {
     DEFAULT_OFFLINE_POLICIES,
@@ -135,16 +136,36 @@ export function OfflinePoliciesForm() {
 
     const handleSave = () => persist(policies, "Offline policies saved — every counter picks them up within a minute.");
 
-    const handleReset = () => {
+    // Pattern C — both of these buttons used to write to the server the instant
+    // they were pressed. They are not local edits waiting for Save: they PATCH the
+    // shop-wide offline policy that every counter picks up within the minute, so
+    // one stray click changed what every till is allowed to do while offline, with
+    // no confirmation and no undo.
+    const handleReset = async () => {
+        const ok = await confirmAction({
+            title: "Reset offline policies to the recommended defaults?",
+            body: "This replaces the current policy for every counter in the shop, not just this PC, and takes effect within a minute. The settings you have now cannot be brought back automatically.",
+            confirmLabel: "Reset to defaults",
+        });
+        if (!ok) return;
         setPolicies(DEFAULT_OFFLINE_POLICIES);
         void persist(DEFAULT_OFFLINE_POLICIES, "Reset to recommended default policies");
     };
 
-    const handleEnableAllSafe = () => {
+    const handleEnableAllSafe = async () => {
         const next = { ...policies };
+        let turnedOn = 0;
         for (const item of POLICY_ITEMS) {
+            if (item.safe && !next[item.key]) turnedOn += 1;
             if (item.safe) next[item.key] = true;
         }
+        const ok = await confirmAction({
+            title: turnedOn === 1 ? "Enable 1 more offline operation?" : `Enable ${turnedOn} more offline operations?`,
+            body: "This applies to every counter in the shop and takes effect within a minute.",
+            confirmLabel: "Enable them",
+            destructive: false,
+        });
+        if (!ok) return;
         setPolicies(next);
         void persist(next, "All safe offline operations enabled");
     };

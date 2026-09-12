@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 
 // Standalone POS Estimate shell — NO office sidebar / chrome / nav.
@@ -16,7 +15,6 @@ export default async function PosEstimateLayout({ children }: { children: React.
     return (
         <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-amber-50 text-foreground dark:bg-amber-950/20">
-                <Toaster position="top-center" richColors />
                 {children}
             </div>
         </SessionWrapper>

@@ -37,7 +37,7 @@ export default function ItemByPartyPage() {
     const [detailLoading, setDetailLoading] = useState(false);
 
     const query = `from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`;
-    const { data, loading, reload } = useBiQuery<Report>(`/api/bi/item-by-party?${query}`);
+    const { data, status, reload } = useBiQuery<Report>(`/api/bi/item-by-party?${query}`);
 
     const rows = (data?.rows ?? []).filter((r) =>
         search === "" || `${r.name} ${r.sku}`.toLowerCase().includes(search.toLowerCase()),
@@ -79,13 +79,9 @@ export default function ItemByPartyPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
                         <thead className="border-b bg-muted text-xs text-muted-foreground">

@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 
 // Standalone POS register shell — NO office sidebar / chrome / nav.
@@ -16,7 +15,6 @@ export default async function PosRegisterLayout({ children }: { children: React.
     return (
         <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
-                <Toaster position="top-center" richColors />
                 {children}
             </div>
         </SessionWrapper>

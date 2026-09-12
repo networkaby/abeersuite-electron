@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
@@ -24,7 +24,7 @@ export default function BasketPage() {
     const [to, setTo] = useState(toIsoDate(new Date()));
     const [branchId, setBranchId] = useState("");
 
-    const { data, loading, reload } = useBiQuery<Report>(
+    const { data, status, reload } = useBiQuery<Report>(
         `/api/bi/basket?from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`,
     );
 
@@ -45,13 +45,9 @@ export default function BasketPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
                         <thead className="border-b bg-muted text-xs text-muted-foreground">

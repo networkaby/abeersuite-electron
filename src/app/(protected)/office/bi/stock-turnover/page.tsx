@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -32,7 +31,7 @@ export default function StockTurnoverPage() {
     const [groupBy, setGroupBy] = useState<GroupBy>("item");
     const [sortDir, setSortDir] = useState<SortDir>("slowest");
 
-    const { data, loading, reload } = useBiQuery<Report>(
+    const { data, status, reload } = useBiQuery<Report>(
         `/api/bi/stock-turnover?from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`,
     );
 
@@ -107,13 +106,9 @@ export default function StockTurnoverPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
                         <thead className="border-b bg-muted text-xs text-muted-foreground">

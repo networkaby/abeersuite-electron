@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 
 // Standalone full-page GL-voucher shell (Payment, Receipt, Contra,
@@ -19,7 +18,6 @@ export default async function GlVoucherLayout({ children }: { children: React.Re
     return (
         <SessionWrapper session={session}>
             <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
-                <Toaster position="top-center" richColors />
                 {children}
             </div>
         </SessionWrapper>

@@ -37,7 +37,7 @@ export default function CustomerProfitPage() {
     const [detailLoading, setDetailLoading] = useState(false);
 
     const query = `from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`;
-    const { data, loading, reload } = useBiQuery<Report>(`/api/bi/customer-profit?${query}`);
+    const { data, status, reload } = useBiQuery<Report>(`/api/bi/customer-profit?${query}`);
 
     const toggle = (accountId: number) => {
         if (expanded === accountId) { setExpanded(null); return; }
@@ -67,13 +67,9 @@ export default function CustomerProfitPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     {data.rows.length > 0 && (
                         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">

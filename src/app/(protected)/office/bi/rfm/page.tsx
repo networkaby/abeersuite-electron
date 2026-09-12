@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -57,7 +56,7 @@ export default function RfmPage() {
     const [branchId, setBranchId] = useState("");
     const [segFilter, setSegFilter] = useState<Segment | "ALL">("ALL");
 
-    const { data, loading, reload } = useBiQuery<Report>(
+    const { data, status, reload } = useBiQuery<Report>(
         `/api/bi/rfm?from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`,
     );
 
@@ -87,13 +86,9 @@ export default function RfmPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                         {data.summary.map((s) => (

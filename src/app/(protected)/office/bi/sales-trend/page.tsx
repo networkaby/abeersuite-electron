@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -27,7 +26,7 @@ export default function SalesTrendPage() {
     const [to, setTo] = useState(toIsoDate(new Date()));
     const [branchId, setBranchId] = useState("");
 
-    const { data, loading, reload } = useBiQuery<Report>(
+    const { data, status, reload } = useBiQuery<Report>(
         `/api/bi/sales-trend?from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`,
     );
 
@@ -47,13 +46,9 @@ export default function SalesTrendPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
                         <div className="mb-2 text-sm font-medium text-foreground">Revenue — this year vs last year</div>

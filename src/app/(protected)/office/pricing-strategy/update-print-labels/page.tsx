@@ -35,6 +35,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { gridRowClass } from "@/shared/lib/format";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { Button } from "@/components/ui/button";
@@ -960,6 +961,23 @@ export default function GeneratePage() {
     const save = async () => {
         const today = todayISO();
         const checked = rows.filter(isSaveTarget);
+
+        // Pattern C — this is the largest write on the screen and it used to go
+        // through on one click. `checked` is every ticked OR edited row in the
+        // WHOLE FILTERED LIST, not just the visible page, and the header checkbox
+        // ticks all of them — so a stray click followed by Save could re-freeze
+        // the sale price of thousands of products shop-wide. The count is the
+        // whole point of the question, so it goes in the button too.
+        const writes = checked.filter((r) => r.id > 0).length;
+        if (writes > 0) {
+            const ok = await confirmAction({
+                title: writes === 1 ? "Freeze the barcode price for 1 product?" : `Freeze the barcode price for ${writes} products?`,
+                body: "The price shown on each row becomes the saved barcode price, which POS and the shop will charge from. Rows set to Strategy or Computed go back to following the live engine. This cannot be undone in one step.",
+                confirmLabel: writes === 1 ? "Freeze 1 price" : `Freeze ${writes} prices`,
+            });
+            if (!ok) return;
+        }
+
         // Rows whose printed tag actually moves — every piece of that stock needs a
         // fresh label, so their copies default to the full stock qty (see defaultCopies).
         const repriced = checked.filter(rowDirty).map((r) => r.id);
@@ -1136,7 +1154,25 @@ export default function GeneratePage() {
                         </Button>
                     ) : (
                         <>
-                            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={queueClear} disabled={selectionIds.size === 0} title="Empty the whole selection (the products stay in the catalogue)">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8"
+                                onClick={async () => {
+                                    // Pattern C — this empties the print queue that the
+                                    // Print labels page shares, so it throws away work
+                                    // done on another screen. Worth one question.
+                                    const ok = await confirmAction({
+                                        title: `Clear all ${selectionIds.size} products from the selection?`,
+                                        body: "The print queue is shared with the Print labels page, so it empties there too. The products themselves stay in the catalogue.",
+                                        confirmLabel: "Clear selection",
+                                    });
+                                    if (ok) queueClear();
+                                }}
+                                disabled={selectionIds.size === 0}
+                                title="Empty the whole selection (the products stay in the catalogue)"
+                            >
                                 Clear selection
                             </Button>
                             <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => router.push("/office/pricing-strategy/print-labels")} title="Open Print labels — the same products laid out as labels (you can add more there)">

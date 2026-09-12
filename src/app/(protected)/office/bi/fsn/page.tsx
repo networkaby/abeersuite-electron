@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -40,7 +39,7 @@ export default function FsnPage() {
     const [branchId, setBranchId] = useState("");
     const [classFilter, setClassFilter] = useState<FsnClass | "ALL">("ALL");
 
-    const { data, loading, reload } = useBiQuery<Report>(
+    const { data, status, reload } = useBiQuery<Report>(
         `/api/bi/fsn?from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`,
     );
 
@@ -66,13 +65,9 @@ export default function FsnPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {data.summary.map((s) => (

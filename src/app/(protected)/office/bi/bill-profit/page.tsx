@@ -72,7 +72,7 @@ export default function BillProfitPage() {
     const [detailLoading, setDetailLoading] = useState(false);
 
     const query = `from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`;
-    const { data, loading, reload } = useBiQuery<Report>(`/api/bi/bill-profit?${query}`);
+    const { data, status, reload } = useBiQuery<Report>(`/api/bi/bill-profit?${query}`);
 
     const rows = useMemo(() => {
         if (!data) return [];
@@ -131,13 +131,9 @@ export default function BillProfitPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
                         <KpiCard label="Bills" value={String(data.totals.bills)} sub={`${fmtQty(data.totals.qty)} units`} />

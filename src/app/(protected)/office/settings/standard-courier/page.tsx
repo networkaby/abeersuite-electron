@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Calculator, Truck, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -347,7 +348,26 @@ export default function StandardCourierPage() {
                                                     <SelectItem value="ZONE">Zone × weight matrix</SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                            <Button type="button" variant="ghost" size="icon" onClick={() => setServices((ss) => ss.filter((_, j) => j !== i))} aria-label="Remove service">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={async () => {
+                                                    // Pattern C — dropping a service takes every zone row
+                                                    // under it, which is the bulk of the work on this page.
+                                                    // Only worth a question when there is something to lose.
+                                                    if (s.zones.length > 0) {
+                                                        const ok = await confirmAction({
+                                                            title: `Remove the "${s.name || "untitled"}" service?`,
+                                                            body: `Its ${s.zones.length} zone row${s.zones.length === 1 ? "" : "s"} go with it. Nothing is written until you press Save.`,
+                                                            confirmLabel: "Remove service",
+                                                        });
+                                                        if (!ok) return;
+                                                    }
+                                                    setServices((ss) => ss.filter((_, j) => j !== i));
+                                                }}
+                                                aria-label={`Remove the ${s.name || "untitled"} service`}
+                                            >
                                                 <Trash2 className="size-4 text-destructive" />
                                             </Button>
                                         </div>

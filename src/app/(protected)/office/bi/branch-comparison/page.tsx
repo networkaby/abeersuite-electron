@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,7 +22,7 @@ export default function BranchComparisonPage() {
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
 
-    const { data, loading, reload } = useBiQuery<Report>(`/api/bi/branch-comparison?from=${from}&to=${to}`);
+    const { data, status, reload } = useBiQuery<Report>(`/api/bi/branch-comparison?from=${from}&to=${to}`);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -48,13 +47,9 @@ export default function BranchComparisonPage() {
                 </div>
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     {data.rows.length > 0 && (
                         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">

@@ -9,6 +9,7 @@ import PartiesWarmup from "@/shared/components/PartiesWarmup";
 import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
 import ReplicaReadyGate from "@/shared/components/ReplicaReadyGate";
 import UpdatePrompt from "@/shared/components/UpdatePrompt";
+import ConfirmHost from "@/shared/components/ConfirmHost";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { CANONICAL_SITE_URL, INDEXABLE } from "@/shared/lib/appMode";
 
@@ -77,6 +78,8 @@ export default function RootLayout({
         <StatusTitleUpdater />
         <ReplicaReadyGate />
         <UpdatePrompt />
+        {/* One dialog for every confirmAction() in the app — see confirmStore.ts. */}
+        <ConfirmHost />
         <ThemeProvider>
           <CounterSetupGuard>{children}</CounterSetupGuard>
         </ThemeProvider>

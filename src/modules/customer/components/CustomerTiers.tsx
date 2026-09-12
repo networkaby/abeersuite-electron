@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { extractApiError } from "@/shared/lib/api";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { parseDecimalInput } from "@/shared/lib/format";
 import { DEFAULT_TIER_FROM_DAY, DEFAULT_TIER_TO_DAY } from "@/shared/lib/schemas/customerTierSchemas";
 import { type TierCurrentSaleScope } from "@/shared/lib/pricing";
@@ -251,6 +252,16 @@ function PeriodCard({ period, onChanged }: { period: Period; onChanged: () => vo
     }
 
     async function removePeriod() {
+        // Pattern C — this takes every level in the period with it, so a misclick
+        // on a bin icon silently wiped a configured discount scheme.
+        const ok = await confirmAction({
+            title: `Delete the "${period.name}" period?`,
+            body: period.levels.length === 0
+                ? "This removes the period. It cannot be undone."
+                : `This also deletes the ${period.levels.length} spend level${period.levels.length === 1 ? "" : "s"} inside it. It cannot be undone.`,
+            confirmLabel: "Delete period",
+        });
+        if (!ok) return;
         try {
             await axios.delete(`/api/customer-tier-periods/${period.id}`);
             onChanged();
@@ -286,6 +297,14 @@ function PeriodCard({ period, onChanged }: { period: Period; onChanged: () => vo
     }
 
     async function removeLevel(id: number) {
+        // Pattern C — one click used to delete a discount level outright.
+        const level = period.levels.find((l) => l.id === id);
+        const ok = await confirmAction({
+            title: level ? `Delete the "${level.name}" level?` : "Delete this level?",
+            body: "Customers in this band stop getting its discount straight away. It cannot be undone.",
+            confirmLabel: "Delete level",
+        });
+        if (!ok) return;
         try {
             await axios.delete(`/api/customer-tiers/${id}`);
             onChanged();
@@ -443,8 +462,20 @@ function PeriodCard({ period, onChanged }: { period: Period; onChanged: () => vo
                                     />
                                     <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
                                 </div>
-                                <Switch className="shrink-0" checked={t.enabled} onCheckedChange={(v) => patchLevel(t.id, { enabled: v })} />
-                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => removeLevel(t.id)}>
+                                <Switch
+                                    className="shrink-0"
+                                    checked={t.enabled}
+                                    onCheckedChange={(v) => patchLevel(t.id, { enabled: v })}
+                                    aria-label={`${t.name} level enabled`}
+                                />
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={() => removeLevel(t.id)}
+                                    aria-label={`Delete the ${t.name} level`}
+                                    title={`Delete the ${t.name} level`}
+                                >
                                     <Trash2 size={13} className="text-destructive" />
                                 </Button>
                             </li>

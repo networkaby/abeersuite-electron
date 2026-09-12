@@ -6,7 +6,6 @@
 // classifier decided per item and WHY (band + source), plus the money locked.
 
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -63,7 +62,7 @@ export default function StockHealthPage() {
     const [classFilter, setClassFilter] = useState<MovementClass | "ALL">("ALL");
     const [search, setSearch] = useState("");
 
-    const { data, loading } = useBiQuery<Report>(
+    const { data, status } = useBiQuery<Report>(
         `/api/bi/stock-health${branchId ? `?branchId=${branchId}` : ""}`,
     );
 
@@ -110,13 +109,9 @@ export default function StockHealthPage() {
                 </div>
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                         {data.summary.map((s) => (

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import { auth } from "@/auth";
+import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 
 // Shared auth wrapper + SessionProvider for ALL `/vouchers/*` routes.
@@ -20,5 +21,10 @@ export default async function VouchersLayout({ children }: { children: React.Rea
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers");
     redirectIfPcWithoutCounter();
 
-    return <SessionWrapper session={session}>{children}</SessionWrapper>;
+    return (
+        <SessionWrapper session={session}>
+            <Toaster position="top-center" richColors />
+            {children}
+        </SessionWrapper>
+    );
 }

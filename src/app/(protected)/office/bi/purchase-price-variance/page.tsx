@@ -32,7 +32,7 @@ export default function PurchasePriceVariancePage() {
     const [detailLoading, setDetailLoading] = useState(false);
 
     const query = `from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`;
-    const { data, loading, reload } = useBiQuery<Report>(`/api/bi/purchase-price-variance?${query}`);
+    const { data, status, reload } = useBiQuery<Report>(`/api/bi/purchase-price-variance?${query}`);
 
     const toggle = (productId: number) => {
         if (expanded === productId) { setExpanded(null); return; }
@@ -67,13 +67,9 @@ export default function PurchasePriceVariancePage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
                         <thead className="border-b bg-muted text-xs text-muted-foreground">
