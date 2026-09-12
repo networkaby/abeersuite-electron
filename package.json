@@ -1,6 +1,6 @@
 {
   "name": "abeersuite-electron",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "AbeerSuite Desktop Operating System",
   "author": "AbeerSuite",
   "main": "dist-electron/main.js",
