@@ -43,6 +43,13 @@
  * scheduled "these are still waiting" nudge. A call older than
  * `CALL_POPUP_MAX_AGE_MS` drops off the icon — the row is untouched and
  * still on the CRM Call Log, it just stops being a counter reminder.
+ * ONCE LOGGED, IT STAYS GONE. A save is two writes (the ticket/deal, then
+ * the PATCH that marks the call handled) and the first of them publishes the
+ * realtime signal that triggers a refresh — so a refresh can read the call as
+ * still unhandled and push it back on screen a moment after staff logged it.
+ * `handledIdsRef` holds the just-logged ids out of the queue until a refresh
+ * confirms the data caught up, then releases them straight away.
+ *
  * `minimized`/`remindAt` persist to localStorage (not component state)
  * because this component is mounted separately in two different layouts
  * (office vs POS) — crossing between them unmounts one copy and mounts the
@@ -131,6 +138,18 @@ export default function CallFollowUpPopup() {
     // Call ids the previous refresh saw — null until the first one lands, so
     // the opening backlog is seeded rather than treated as newly arrived.
     const seenIdsRef = useRef<Set<number> | null>(null);
+    // Calls this counter has just logged. A save writes the ticket/deal first,
+    // and that write publishes the "tickets" realtime signal — which fires a
+    // refresh while the follow-up PATCH that actually marks the call handled is
+    // still in flight (and, in local mode, before the replica has caught up).
+    // That in-flight read still says "unhandled" and would put the just-logged
+    // call straight back on screen. Holding the id here keeps it off the queue
+    // until the data agrees — and the moment a refresh no longer returns it,
+    // the id is dropped. It is a race guard, not a lasting block.
+    const handledIdsRef = useRef<Set<number>>(new Set());
+    // Refresh responses can come back out of order (poll tick vs realtime tick).
+    // Only the newest one is allowed to set the queue.
+    const refreshSeqRef = useRef(0);
     const posRef = useRef(pos);
     useEffect(() => { minimizedRef.current = minimized; }, [minimized]);
     useEffect(() => { posRef.current = pos; }, [pos]);
@@ -153,10 +172,22 @@ export default function CallFollowUpPopup() {
             // screenful — the icon's count has to be the honest total.
             const params: Record<string, string> = { unhandled: "1", limit: "50" };
             if (extension) params.ext = extension;
+            const seq = ++refreshSeqRef.current;
             const { data } = await axios.get<{ items: PendingCall[] }>("/api/calls", { params });
+            if (seq !== refreshSeqRef.current) return; // a newer refresh already answered
             const cutoff = Date.now() - CALL_POPUP_MAX_AGE_MS;
             const fresh = data.items.filter((c) => new Date(c.occurredAt).getTime() >= cutoff);
-            setQueue(fresh);
+
+            // The server has stopped calling it unhandled — the data is now
+            // correct, so release the guard for that call.
+            const serverIds = new Set(data.items.map((c) => c.id));
+            for (const id of handledIdsRef.current) {
+                if (!serverIds.has(id)) handledIdsRef.current.delete(id);
+            }
+            const visible = handledIdsRef.current.size > 0
+                ? fresh.filter((c) => !handledIdsRef.current.has(c.id))
+                : fresh;
+            setQueue(visible);
 
             // A call the previous tick had not seen is a call that just
             // happened — open the panel for it. The very first tick only
@@ -164,13 +195,13 @@ export default function CallFollowUpPopup() {
             // opened the app is not "new", and the scheduled nudge below
             // will raise it soon enough.
             const seen = seenIdsRef.current;
-            const isNew = seen !== null && fresh.some((c) => !seen.has(c.id));
-            seenIdsRef.current = new Set(fresh.map((c) => c.id));
+            const isNew = seen !== null && visible.some((c) => !seen.has(c.id));
+            seenIdsRef.current = new Set(visible.map((c) => c.id));
 
             // Piggyback the "is it time to nudge again" check on the same
             // tick instead of a second timer.
             const due = Date.now() >= remindAtRef.current;
-            if (minimizedRef.current && fresh.length > 0 && (isNew || due)) {
+            if (minimizedRef.current && visible.length > 0 && (isNew || due)) {
                 minimizedRef.current = false;
                 setMinimized(false);
                 savePersisted({ minimized: false, remindAt: 0, pos: posRef.current });
@@ -223,6 +254,7 @@ export default function CallFollowUpPopup() {
 
     /** Remove the acted-on call from the queue — defaults back to the (new) most recent. */
     const advance = (id: number) => {
+        handledIdsRef.current.add(id);
         setQueue((q) => q.filter((c) => c.id !== id));
         setSelectedId((cur) => (cur === id ? null : cur));
     };
