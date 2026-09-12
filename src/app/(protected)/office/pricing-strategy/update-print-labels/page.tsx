@@ -66,7 +66,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Loader2, Plus, Printer, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 
 // ── Cost methods (short code ↔ real CostMethod enum, for later wiring) ────────
 
@@ -499,12 +499,30 @@ const ProductRow = memo(function ProductRow({
     const stratProfit = profitOf(strategyPrice, r.costIncl, r.gst);
     const myProfit = profitOf(myPrice, r.costIncl, r.gst);
     const savedProfit = profitOf(savedPrice, r.costIncl, r.gst);
-    const dirty = r.salePrice.trim() !== r.baseline.trim();
+    // Same test the Save button counts with (rowDirty) — a Selling switch with no
+    // price edit is an unsaved decision too, and must carry the amber mark.
+    const dirty = rowDirty(r);
 
     return (
         <TableRow className={gridRowClass({ selected, dirty, odd: index % 2 === 1 })}>
             <TableCell>
-                <Checkbox checked={selected} onCheckedChange={() => onToggleSel(r.id)} aria-label={`Select ${r.name}`} />
+                <div className="flex items-center gap-1">
+                    <Checkbox checked={selected} onCheckedChange={() => onToggleSel(r.id)} aria-label={`Select ${r.name}`} />
+                    {/* The amber circle both MARKS the unsaved row and undoes it — one
+                        click puts Sale Price + Selling back to the last saved values, so
+                        the row drops out of the Save count without any DB call. */}
+                    {dirty ? (
+                        <button
+                            type="button"
+                            onClick={() => onUpdate(r.id, { salePrice: r.baseline, saleSource: r.baseSource })}
+                            className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                            title="Unsaved change — click to reset this row (Sale Price + Selling)"
+                            aria-label={`Reset ${r.name}`}
+                        >
+                            <RotateCcw className="size-3.5" />
+                        </button>
+                    ) : null}
+                </div>
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
             <TableCell className="max-w-[320px] text-xs font-medium" title={r.sku ? `${r.name} · ${r.sku}` : r.name}>
