@@ -2,8 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
-import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { cancelVoucherInTx } from "@/modules/accountancy/lib/cancelVoucherInTx";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -21,8 +21,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     const voucher = await prisma.universalVoucher.findUnique({
-        where:   { id: Number(id) },
-        include: { lines: true },
+        where:  { id: Number(id) },
+        select: { type: true },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Per-kind cancel gate (falls back to generic finance:voucher:cancel).
@@ -30,26 +30,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Spine lines are scalar — resolve the reversal's nature exactly as the
-    // engine resolved it when posting (group fallback included), or the
-    // null-nature ledgers never get their delta taken back out.
-    const nbById = await loadNormalBalances(prisma, voucher.lines.map((l) => l.accountId));
-
     try {
-        ensureCancelable(voucher);
-
+        // Balance reversal + CANCELLED stamp live in the shared helper (the POS
+        // shift reopen/delete routes void their vouchers through the same path).
         await prisma.$transaction(async (tx) => {
-            // Reverse the cached Account.balance (POSTED only — a DRAFT cancel never
-            // touched balances). No counter-entry: the CANCELLED flag drops it from
-            // the truth path, so a reversing entry would double-reverse.
-            if (voucher.status === "POSTED") {
-                for (const line of voucher.lines) {
-                    const nb = nbById.get(line.accountId);
-                    if (!nb) continue;
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } } });
-                }
-            }
-            await tx.universalVoucher.update({ where: { id: voucher.id }, data: cancelFields(user!.id, data.reason) });
+            await cancelVoucherInTx(tx, Number(id), user!.id, data.reason);
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const cancelled = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });

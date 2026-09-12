@@ -3,19 +3,33 @@
 // /office/pos/shifts/[id] — Shift detail / audit view
 //
 // Header summary, drops timeline, linked Contras, variance JE,
-// and handover chain (received from / handed to). Read-only.
+// and handover chain (received from / handed to).
+//
+// Managers holding `pos:shift:force-close` (or admin) can correct a wrong
+// close from here: "Reopen & re-close" voids the closing vouchers and runs the
+// ordinary close dialog again; "Delete" removes an empty shift. Both ask for a
+// reason, saved on the cancelled vouchers.
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, ArrowDownUp, Lock, ExternalLink, Monitor, Users } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowDownUp, Lock, ExternalLink, Monitor, Users, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { extractApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 
 type ShiftDetail = {
     id: number;
@@ -54,6 +68,7 @@ type ShiftDetail = {
         declaredByAPaise: string; countedByBPaise: string | null;
     } | null;
     drops: { id: number; amountPaise: string; droppedAt: string; notes: string | null; droppedBy: { id: number; name: string } }[];
+    expenditures: { id: number }[];
 };
 
 export default function ShiftDetailPage() {
@@ -61,6 +76,18 @@ export default function ShiftDetailPage() {
     const router  = useRouter();
     const [shift, setShift]   = useState<ShiftDetail | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Correcting a close is the same oversight tick as force-closing (the two
+    // routes enforce the same pair server-side).
+    const { data: session } = useSession();
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canManage = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.POS_SHIFT_FORCE_CLOSE);
+
+    // Which correction is being asked for a reason; then the re-close dialog.
+    const [asking, setAsking]     = useState<"reopen" | "delete" | null>(null);
+    const [reason, setReason]     = useState("");
+    const [busy, setBusy]         = useState(false);
+    const [reclosing, setReclosing] = useState(false);
 
     const load = useCallback(() => {
         axios.get<ShiftDetail>(`/api/pos/shifts/${id}`)
@@ -73,12 +100,35 @@ export default function ShiftDetailPage() {
     // Drops, handovers and the close happen at the till — re-read when the books move.
     useRealtimeTopics(["ledger"], load);
 
+    const submitCorrection = async () => {
+        if (!asking || !reason.trim()) { toast.error("Please give a reason"); return; }
+        setBusy(true);
+        try {
+            await axios.post(`/api/pos/shifts/${id}/${asking}`, { reason: reason.trim() });
+            if (asking === "delete") {
+                toast.success("Shift deleted");
+                router.push("/office/pos/shifts");
+                return;
+            }
+            toast.success("Shift reopened — now close it again with the correct figures");
+            setAsking(null);
+            setReason("");
+            load();
+            setReclosing(true);
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, `Failed to ${asking} shift`));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>;
     if (!shift)  return <div className="py-20 text-center text-muted-foreground">Shift not found.</div>;
 
     const variance = shift.variancePaise != null ? Number(shift.variancePaise) / 100 : null;
     const isOpen   = shift.status === "OPEN";
     const isHandover = shift.status === "AWAITING_HANDOVER";
+    const isClosed = shift.status === "CLOSED";
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -99,6 +149,67 @@ export default function ShiftDetailPage() {
                     {isHandover ? "AWAITING HANDOVER" : shift.status}
                 </span>
             </div>
+
+            {/* Manager corrections — a closed shift can be reopened and closed
+                again; an empty shift (no sales/drops) can be removed. */}
+            {canManage && !isHandover && (
+                <div className="flex flex-wrap items-center gap-2">
+                    {isClosed && (
+                        <Button variant="outline" size="sm" onClick={() => { setReason(""); setAsking("reopen"); }}>
+                            <RotateCcw size={13} /> Reopen &amp; re-close
+                        </Button>
+                    )}
+                    {isOpen && (
+                        <Button variant="outline" size="sm" onClick={() => setReclosing(true)}>
+                            <RotateCcw size={13} /> Close shift
+                        </Button>
+                    )}
+                    {/* Receipts are not in this payload — the route refuses those too. */}
+                    {shift.drops.length === 0 && shift.expenditures.length === 0 && Number(shift.cashSalesPaise) === 0 && (
+                        <Button variant="outline" size="sm" className="text-destructive" onClick={() => { setReason(""); setAsking("delete"); }}>
+                            <Trash2 size={13} /> Delete shift
+                        </Button>
+                    )}
+                </div>
+            )}
+
+            {/* Reason prompt for reopen / delete */}
+            <Dialog open={asking !== null} onOpenChange={(v) => { if (!v && !busy) setAsking(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{asking === "delete" ? "Delete this shift?" : "Reopen this shift?"}</DialogTitle>
+                        <DialogDescription>
+                            {asking === "delete"
+                                ? "Only a shift with no sales, drops or expenditures can be deleted. Its opening and closing vouchers are cancelled."
+                                : "The closing Contra and any variance entry are cancelled and the shift goes back to Open. You then close it again with the correct count."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="shift-reason">Reason</Label>
+                        <Textarea id="shift-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong cash count entered" autoFocus />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAsking(null)} disabled={busy}>Cancel</Button>
+                        <Button variant={asking === "delete" ? "destructive" : "default"} onClick={submitCorrection} disabled={busy || !reason.trim()}>
+                            {busy && <Loader2 size={14} className="animate-spin" />}
+                            {asking === "delete" ? "Delete shift" : "Reopen"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Re-close — the ordinary close dialog, in force-close form (the
+                manager closes on the cashier's behalf; closedBy = the manager). */}
+            {reclosing && (
+                <ShiftCloseDialog
+                    open={true}
+                    onOpenChange={(v) => { if (!v) setReclosing(false); }}
+                    shiftId={shift.id}
+                    allowHandover={false}
+                    forCashierName={shift.user.name}
+                    onClosed={load}
+                />
+            )}
 
             {/* Handover chain */}
             {shift.receivedHandover && (
