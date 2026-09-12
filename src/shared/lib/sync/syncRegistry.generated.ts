@@ -33,7 +33,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "BiGstPlanningMonth": { model: "BiGstPlanningMonth", delegate: "biGstPlanningMonth", pk: ["yearMonth"], exact: ["depositOverride", "purchaseOverride", "saleOverride"], dates: ["updatedAt"], cache: [] },
     "BooksConfig": { model: "BooksConfig", delegate: "booksConfig", pk: ["id"], exact: [], dates: ["booksBeginningFrom", "updatedAt"], cache: [] },
     "Branch": { model: "Branch", delegate: "branch", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
-    "Call": { model: "Call", delegate: "call", pk: ["id"], exact: ["amount"], dates: ["createdAt", "occurredAt", "receivedAt"], cache: [] },
+    "Call": { model: "Call", delegate: "call", pk: ["id"], exact: ["amount"], dates: ["createdAt", "occurredAt", "receivedAt", "updatedAt"], cache: [] },
     "ChatMessage": { model: "ChatMessage", delegate: "chatMessage", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "ChatRoom": { model: "ChatRoom", delegate: "chatRoom", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "ChatRoomMember": { model: "ChatRoomMember", delegate: "chatRoomMember", pk: ["id"], exact: [], dates: ["joinedAt", "lastReadAt"], cache: [] },

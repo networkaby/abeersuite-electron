@@ -160,8 +160,8 @@
       "pk": [
         "id"
       ],
-      "strategy": "append",
-      "column": "createdAt"
+      "strategy": "watermark",
+      "column": "updatedAt"
     },
     "ChatMessage": {
       "n": 12,
