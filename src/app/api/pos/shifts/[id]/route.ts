@@ -12,7 +12,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, sumShiftCashSalesPaise, sumShiftCashRefundsPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any signed-in staff may ASK; access is decided per-shift below. The shift's
@@ -91,6 +91,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             openedAt:      shift.openedAt,
             closedAt:      shift.closedAt,
         });
+        const refundsPaise = await sumShiftCashRefundsPaise(prisma, {
+            tillAccountId: shift.counter.tillAccount.id,
+            openedAt:      shift.openedAt,
+            closedAt:      shift.closedAt,
+        });
         const dropsPaise        = sumPaise(shift.drops);
         const expendituresPaise = sumPaise(shift.expenditures);
 
@@ -127,7 +132,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             cashSalesPaise:      cashSalesPaise.toString(),
             dropsPaise:          dropsPaise.toString(),
             expendituresPaise:   expendituresPaise.toString(),
-            runningExpectedPaise: (shift.openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise).toString(),
+            refundsPaise:        refundsPaise.toString(),
+            runningExpectedPaise: (shift.openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise - refundsPaise).toString(),
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
             expenditures: shift.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
             handover: shift.handover ? {

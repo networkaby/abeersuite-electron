@@ -24,7 +24,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, sumShiftCashRefundsPaise } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
@@ -84,8 +84,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             tillAccountId,
             openedAt: fromShift.openedAt,
         });
+        const refundsPaise = await sumShiftCashRefundsPaise(prisma, {
+            tillAccountId,
+            openedAt: fromShift.openedAt,
+        });
         const dropsPaise    = sumPaise(fromShift.drops);
-        const expectedPaise = computeExpectedCash(fromShift.openingFloatPaise, cashSalesPaise, dropsPaise);
+        const expectedPaise = computeExpectedCash(fromShift.openingFloatPaise, cashSalesPaise, dropsPaise, BigInt(0), refundsPaise);
 
         // Variance = A's declared − expected (A's count vs book expectation).
         // The total impact on the counter till = expected − B's counted

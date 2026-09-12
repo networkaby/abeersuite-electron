@@ -103,7 +103,10 @@ export async function postSettlementVoucher(
     // per tender + one credit line closing the customer's AR. The engine writes
     // the mirror JournalEntry and the per-line Account.balance deltas (with the
     // null-normalBalance group-nature fallback the AR/AP party ledgers need).
-    // `postedAt = args.date` preserves the auto-settled receipt's posting stamp.
+    // `postedAt` is left unset so the engine defaults it to the real posting
+    // time (`new Date()`), like every other voucher type. `date` still carries
+    // the ledger/business date, so shift-window and Day-Book readers that key
+    // off the real timestamp see the transaction at its true moment.
     // Money in debits the till and credits the party; money out is the mirror.
     const tenderSide = args.kind === "RECEIPT" ? "DEBIT" as const : "CREDIT" as const;
     const partySide  = args.kind === "RECEIPT" ? "CREDIT" as const : "DEBIT" as const;
@@ -130,7 +133,6 @@ export async function postSettlementVoucher(
         ],
         post:          true,
         branchId:      args.branchId ?? null,
-        postedAt:      args.date,
         counterNumber: args.counterNumber ?? null,
     });
     const voucherRef = voucher.reference;

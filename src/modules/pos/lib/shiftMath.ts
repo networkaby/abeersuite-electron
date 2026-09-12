@@ -11,6 +11,8 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 //   + Σ cash receipts from billing during the shift
 //   − Σ mid-shift cash drops (physically moved to safe but still in the till
 //     account from a GL standpoint until the closing Contra fires)
+//   − Σ mid-shift cash expenditures (paid out of the till for an expense)
+//   − Σ mid-shift cash refunds (paid out of the till on a SALE_RETURN)
 //
 // Variance is whatever the cashier physically counted vs. what we expect.
 // Positive = drawer over (income via Cash Over); negative = short
@@ -21,10 +23,12 @@ export function computeExpectedCash(
     cashSalesPaise:     bigint,
     dropsPaise:         bigint,
     expendituresPaise:  bigint = BigInt(0),
+    refundsPaise:       bigint = BigInt(0),
 ): bigint {
-    // Drops leave the drawer for the safe; expenditures leave it for an expense.
-    // Both reduce the cash the cashier should physically count.
-    return openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise;
+    // Drops leave the drawer for the safe; expenditures leave it for an expense;
+    // refunds leave it back into a customer's hand. All three reduce the cash
+    // the cashier should physically count.
+    return openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise - refundsPaise;
 }
 
 export function computeVariance(
@@ -45,6 +49,11 @@ export function sumPaise(rows: Array<{ amountPaise: bigint | number | string | n
     }
     return total;
 }
+
+// Sums Decimal-shaped GL amounts (rupees) into paise. Shared by
+// sumShiftCashSalesPaise and sumShiftCashRefundsPaise.
+const sumGlAmountsToPaise = (rows: Array<{ amount: { toString(): string } }>): bigint =>
+    rows.reduce((s, r) => s + BigInt(Math.round(Number(r.amount) * 100)), BigInt(0));
 
 /**
  * Cash that hit the counter's till during a shift window.
@@ -106,10 +115,35 @@ export async function sumShiftCashSalesPaise(
         select: { amount: true },
     });
 
-    const sum = (rows: Array<{ amount: { toString(): string } }>): bigint =>
-        rows.reduce((s, r) => s + BigInt(Math.round(Number(r.amount) * 100)), BigInt(0));
+    return sumGlAmountsToPaise(posTenders) + sumGlAmountsToPaise(receiptLines);
+}
 
-    return sum(posTenders) + sum(receiptLines);
+// Cash refunded out of the till during the shift window (SALE_RETURN, CASH mode).
+export async function sumShiftCashRefundsPaise(
+    tx: Tx,
+    args: {
+        tillAccountId: number;
+        openedAt:      Date;
+        closedAt?:     Date | null;
+    },
+): Promise<bigint> {
+    const end = args.closedAt ?? new Date();
+
+    const returnUvIds = (await tx.voucherDetail.findMany({
+        where:  { universalVoucher: { type: "SALE_RETURN", status: "POSTED", deletedAt: null }, createdAt: { gte: args.openedAt, lte: end } },
+        select: { universalVoucherId: true },
+    })).map((v) => v.universalVoucherId).filter((x): x is number => x != null);
+    const refundTenders = returnUvIds.length === 0 ? [] : await tx.voucherGlLine.findMany({
+        where: {
+            accountId:          args.tillAccountId,
+            role:               "TENDER",
+            type:               "CREDIT",
+            universalVoucherId: { in: returnUvIds },
+        },
+        select: { amount: true },
+    });
+
+    return sumGlAmountsToPaise(refundTenders);
 }
 
 /**

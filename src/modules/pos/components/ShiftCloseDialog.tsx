@@ -43,6 +43,7 @@ type ShiftDetail = {
     cashSalesPaise: string;
     dropsPaise: string;
     expendituresPaise: string;
+    refundsPaise: string;
     runningExpectedPaise: string;
     tenderBreakdown?: TenderRow[];
     counter: { id: number; name: string; tillAccount: { name: string } };
@@ -58,6 +59,7 @@ type ClosedReport = {
     cashSalesPaise:      string;
     dropsPaise:          string;
     expendituresPaise:   string | null;
+    refundsPaise:        string | null;
     expectedCashPaise:   string | null;
     declaredCashPaise:   string | null;
     variancePaise:       string | null;
@@ -330,6 +332,9 @@ export function ShiftCloseDialog({
                                     <Row label="Opening float"   value={fmt(Number(detail.openingFloatPaise) / 100)} />
                                     <Row label="Cash sales"      value={`+ ${fmt(Number(detail.cashSalesPaise) / 100)}`} />
                                     <Row label="Dropped to safe" value={`− ${fmt(Number(detail.dropsPaise) / 100)}`} />
+                                    {Number(detail.refundsPaise) > 0 && (
+                                        <Row label="Cash refunds" value={`− ${fmt(Number(detail.refundsPaise) / 100)}`} />
+                                    )}
                                     {Number(detail.expendituresPaise) > 0 && (
                                         <Row label="Expenditures" value={`− ${fmt(Number(detail.expendituresPaise) / 100)}`} />
                                     )}
@@ -496,6 +501,7 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
         const sales    = Number(report.cashSalesPaise)     / 100;
         const drops    = Number(report.dropsPaise)         / 100;
         const expenditures = Number(report.expendituresPaise ?? 0) / 100;
+        const refunds  = Number(report.refundsPaise ?? 0) / 100;
         const expected = Number(report.expectedCashPaise)  / 100;
         const declared = Number(report.declaredCashPaise)  / 100;
         const variance = Number(report.variancePaise)      / 100;
@@ -526,6 +532,7 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
                     <ReportRow label="Opening float"    value={`₹${fmt(opening)}`} />
                     <ReportRow label="Cash sales"       value={`+ ₹${fmt(sales)}`} />
                     <ReportRow label="Dropped to safe"  value={`− ₹${fmt(drops)}`} />
+                    {refunds > 0 && <ReportRow label="Cash refunds" value={`− ₹${fmt(refunds)}`} />}
                     {expenditures > 0 && <ReportRow label="Expenditures" value={`− ₹${fmt(expenditures)}`} />}
                     <div className="border-t border-border pt-1.5">
                         <ReportRow label="Expected in drawer" value={`₹${fmt(expected)}`} bold />

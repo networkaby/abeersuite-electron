@@ -29,7 +29,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, sumShiftCashRefundsPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
@@ -110,7 +110,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             tillAccountId: shift.counter.tillAccountId,
             openedAt:      shift.openedAt,
         });
-        const expectedPaise = computeExpectedCash(shift.openingFloatPaise, cashSalesPaise, dropsPaise, expendituresPaise);
+        const refundsPaise = await sumShiftCashRefundsPaise(prisma, {
+            tillAccountId: shift.counter.tillAccountId,
+            openedAt:      shift.openedAt,
+        });
+        const expectedPaise = computeExpectedCash(shift.openingFloatPaise, cashSalesPaise, dropsPaise, expendituresPaise, refundsPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);
 
         // Variance ledgers.
@@ -227,6 +231,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             cashSalesPaise:      cashSalesPaise.toString(),
             dropsPaise:          dropsPaise.toString(),
             expendituresPaise:   expendituresPaise.toString(),
+            refundsPaise:        refundsPaise.toString(),
             counter: {
                 id:   result.counter.id,
                 name: result.counter.name,
