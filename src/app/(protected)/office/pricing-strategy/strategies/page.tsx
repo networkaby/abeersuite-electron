@@ -534,9 +534,11 @@ export default function PricingStrategiesPage() {
     }, [visible]);
 
     // Reset clears every point at once, which reprices the whole catalogue on the
-    // next Save. Kept behind its own permission (not pricing:strategy:set) so the
-    // people who tune points day to day aren't one stray click from wiping them,
-    // and confirmed even for those who hold it.
+    // next Save. It is the ONE thing on these pages behind its own permission —
+    // everything else rides page access — so the people who tune points day to day
+    // aren't one stray click from wiping them, and it is confirmed even for those
+    // who hold it. The server enforces the same rule on the Save that carries the
+    // empty set (api/pricing-strategy/points), so hiding this button is not the guard.
     const canReset = hasPermissionWithScope(permissions, PERMISSIONS.PRICING_STRATEGY_RESET);
     const reset = () => {
         if (!canReset) return;

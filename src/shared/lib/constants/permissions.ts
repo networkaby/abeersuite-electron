@@ -133,13 +133,10 @@ export const PERMISSIONS = {
     INVENTORY_MASTERS_EDIT: "inventory:masters:edit",
     INVENTORY_MASTERS_DELETE: "inventory:masters:delete",
 
-    // Pricing Strategy — one edit gate per page. Viewing rides the sidebar link
-    // grant. Each key passes its matching route.
-    PRICING_STRATEGY_SET: "pricing:strategy:set",
-    // Separate from SET: Reset wipes every point in one click.
+    // Pricing Strategy — the work on these pages rides the sidebar link grant
+    // itself (requireModuleAccess). Reset is the lone exception: it wipes every
+    // point in one click, so it keeps a key of its own.
     PRICING_STRATEGY_RESET: "pricing:strategy:reset",
-    PRICING_COSTING_MANAGE: "pricing:costing:manage",
-    PRICING_LABELS_APPLY: "pricing:labels:apply",
 
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN: "pos:shift:open",

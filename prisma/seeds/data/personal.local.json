@@ -8717,19 +8717,7 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "pricing:costing:manage"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pricing:labels:apply"
-    },
-    {
-      "roleId": "R1",
       "permissionId": "pricing:strategy:reset"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "pricing:strategy:set"
     },
     {
       "roleId": "R1",
@@ -9750,18 +9738,6 @@
     {
       "roleId": "R2",
       "permissionId": "pos:voucher:cancel:sale-return"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pricing:costing:manage"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pricing:labels:apply"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "pricing:strategy:set"
     },
     {
       "roleId": "R2",

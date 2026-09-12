@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { salePriceSaveSchema } from "@/shared/lib/schemas/pricingSchemas";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 
@@ -18,9 +17,10 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 // charges; it no longer wipes the saved tag. After the write, recompute
 // re-materializes effectiveSalePricePaise from the source immediately, so POS/shop
 // sell the new price without waiting for a voucher.
-// Gated by pricing:labels:apply (or the inventory:manage umbrella).
+// Gated by Pricing Strategy page access — seeing the module means doing the work
+// on it (only "reset all points" keeps its own permission).
 export async function PUT(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_LABELS_APPLY);
+    const { response } = await requireModuleAccess("pricing-strategy");
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, salePriceSaveSchema);

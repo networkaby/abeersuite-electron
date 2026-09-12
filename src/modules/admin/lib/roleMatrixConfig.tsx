@@ -624,21 +624,13 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
         id: "compliance:tax:edit",
         label: "Can change tax",
     },
-    // Pricing Strategy — one edit toggle per page. "Needs attention" isn't here:
-    // it edits the product, so its edit rides inventory:manage, not a pricing key.
-    [sidebarChildPermissionId("pricing-strategy", "strategies")]: [
-        { id: "pricing:strategy:set", label: "Can set strategy" },
-        // Deliberately separate from "Can set strategy": Reset clears every point
-        // in one click and reprices the whole catalogue.
-        { id: "pricing:strategy:reset", label: "Can reset all points" },
-    ],
-    [sidebarChildPermissionId("pricing-strategy", "costing")]: {
-        id: "pricing:costing:manage",
-        label: "Can manage costing",
-    },
-    [sidebarChildPermissionId("pricing-strategy", "update-prices")]: {
-        id: "pricing:labels:apply",
-        label: "Can apply & print",
+    // Pricing Strategy — no per-page edit toggle. Setting points, costing draws
+    // and applying barcode prices are the ordinary work of these pages, so the
+    // page tick itself allows them. Reset is the one guard: it clears every point
+    // in one click and reprices the whole catalogue.
+    [sidebarChildPermissionId("pricing-strategy", "strategies")]: {
+        id: "pricing:strategy:reset",
+        label: "Can reset all points",
     },
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.

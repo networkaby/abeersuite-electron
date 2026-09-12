@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess, hasPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { strategyPointsSaveSchema, type StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
@@ -8,7 +8,11 @@ import { strategyPointsSaveSchema, type StrategyPoints } from "@/shared/lib/sche
 // The single org-wide additive-margin points configuration.
 //   GET  → the grouped points shape (base + per-master + per-band maps).
 //   PUT  → replaces the whole set (zero-point entries are dropped).
-// Gated by pricing:strategy:set (or the inventory:manage umbrella).
+// Gated by Pricing Strategy page access — seeing the module means doing the work
+// on it. The ONE exception is the wipe: a save that clears every point while the
+// DB still holds some IS the Reset, whichever button produced it, so it demands
+// pricing:strategy:reset. Hiding the Reset button alone stopped nothing — anyone
+// could empty the boxes by hand and press Save.
 
 const emptyPoints = (): StrategyPoints => ({
     base: 0, brand: {}, category: {}, group: {}, product: {}, stockBand: {}, ageBand: {}, moveBand: {},
@@ -40,7 +44,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-    const { response } = await requireAnyPermission(PERMISSIONS.PRICING_STRATEGY_SET);
+    const { user, response } = await requireModuleAccess("pricing-strategy");
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, strategyPointsSaveSchema);
@@ -60,6 +64,19 @@ export async function PUT(req: Request) {
         add("STOCK_BAND", data.stockBand);
         add("AGE_BAND", data.ageBand);
         add("MOVE_BAND", data.moveBand);
+
+        // A save carrying nothing, over a DB that still has points, is a reset —
+        // the accident this permission exists to prevent. An already-empty set
+        // stays open to everyone: there is nothing to lose.
+        if (entries.length === 0) {
+            const existing = await prisma.strategyPoint.count();
+            if (existing > 0 && !hasPermission(user, PERMISSIONS.PRICING_STRATEGY_RESET)) {
+                return NextResponse.json(
+                    { error: "Clearing every strategy point needs the \"Can reset all points\" permission." },
+                    { status: 403 },
+                );
+            }
+        }
 
         // Replace the whole set atomically.
         await prisma.$transaction([

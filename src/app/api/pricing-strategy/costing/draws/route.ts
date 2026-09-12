@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { costPoolDrawCreateSchema } from "@/shared/lib/schemas/costPoolSchemas";
 import { getEntryRemainingPaise } from "@/modules/pricing-strategy/lib/costPool";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
@@ -106,7 +105,7 @@ export async function GET(req: Request) {
 // POST /api/pricing-strategy/costing/draws — record an ALLOCATION or DISMISSAL
 // draw against a posted pool debit. NEVER posts to the GL.
 export async function POST(req: Request) {
-    const { user, response } = await requireAnyPermission(PERMISSIONS.PRICING_COSTING_MANAGE);
+    const { user, response } = await requireModuleAccess("pricing-strategy");
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, costPoolDrawCreateSchema);
