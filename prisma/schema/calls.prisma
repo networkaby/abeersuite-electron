@@ -87,10 +87,18 @@ model Call {
   ticketId Int?
 
   createdAt DateTime @default(now())
+  // Moves on every staff edit (note / spam / ticketId). This is what lets the
+  // counter replica pull edits: with only `createdAt` the table synced as
+  // `append` (new rows only) and a call logged from the popup came back on
+  // every refresh until the slow reconcile pass caught it. `@default(now())`
+  // so `db push` can fill the column on existing rows.
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([phone])
   @@index([occurredAt])
   @@index([spam])
   // Backs the "which bridges are alive" lookup (latest call per sourceHost).
   @@index([sourceHost, occurredAt])
+  // Watermark pull: "anything since <ts>?" must not scan the table to say "no".
+  @@index([updatedAt])
 }
