@@ -62,6 +62,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                     orderBy: { createdAt: "desc" },
                     select:  { id: true, amountPaise: true, description: true, voucherId: true, createdAt: true },
                 },
+                // Receipts taken on the shift (digital ones never touch the till, so
+                // cash sales can read ₹0 while the shift still carries them). The
+                // detail page uses this to know whether the shift can be deleted.
+                _count: { select: { receipts: true } },
             },
         });
         if (!shift) return NextResponse.json({ error: "Not found" }, { status: 404 });

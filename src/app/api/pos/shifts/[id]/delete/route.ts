@@ -51,9 +51,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (shift.status === "AWAITING_HANDOVER") {
             return NextResponse.json({ error: "Shift is awaiting handover. Cancel the handover first." }, { status: 409 });
         }
-        if (shift._count.receipts > 0 || shift._count.drops > 0 || shift._count.expenditures > 0) {
+        const attached = [
+            shift._count.receipts     > 0 ? `${shift._count.receipts} receipt(s)`         : null,
+            shift._count.drops        > 0 ? `${shift._count.drops} cash drop(s)`          : null,
+            shift._count.expenditures > 0 ? `${shift._count.expenditures} expenditure(s)` : null,
+        ].filter((x): x is string => x !== null);
+        if (attached.length > 0) {
             return NextResponse.json(
-                { error: "This shift has sales, drops or expenditures on it and cannot be deleted. Reopen it and close it again with the correct figures." },
+                { error: `This shift has ${attached.join(", ")} on it and cannot be deleted. Reopen it and close it again with the correct figures.` },
                 { status: 409 },
             );
         }

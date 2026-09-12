@@ -69,6 +69,7 @@ type ShiftDetail = {
     } | null;
     drops: { id: number; amountPaise: string; droppedAt: string; notes: string | null; droppedBy: { id: number; name: string } }[];
     expenditures: { id: number }[];
+    _count: { receipts: number };
 };
 
 export default function ShiftDetailPage() {
@@ -129,6 +130,15 @@ export default function ShiftDetailPage() {
     const isOpen   = shift.status === "OPEN";
     const isHandover = shift.status === "AWAITING_HANDOVER";
     const isClosed = shift.status === "CLOSED";
+    // What stops a delete — mirrors the delete route's own refusal. A digital
+    // receipt never touches the till, so cash sales can read ₹0 while the shift
+    // still carries receipts.
+    const attached = [
+        shift._count.receipts > 0       ? `${shift._count.receipts} receipt(s)`         : null,
+        shift.drops.length > 0          ? `${shift.drops.length} cash drop(s)`          : null,
+        shift.expenditures.length > 0   ? `${shift.expenditures.length} expenditure(s)` : null,
+        Number(shift.cashSalesPaise) > 0 ? "cash sales"                                  : null,
+    ].filter((x): x is string => x !== null);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -164,11 +174,15 @@ export default function ShiftDetailPage() {
                             <RotateCcw size={13} /> Close shift
                         </Button>
                     )}
-                    {/* Receipts are not in this payload — the route refuses those too. */}
-                    {shift.drops.length === 0 && shift.expenditures.length === 0 && Number(shift.cashSalesPaise) === 0 && (
+                    {/* Same emptiness test as the delete route: nothing logged on the shift. */}
+                    {attached.length === 0 ? (
                         <Button variant="outline" size="sm" className="text-destructive" onClick={() => { setReason(""); setAsking("delete"); }}>
                             <Trash2 size={13} /> Delete shift
                         </Button>
+                    ) : (
+                        <span className="text-xs text-muted-foreground">
+                            Cannot delete: {attached.join(", ")} on this shift. Reopen and re-close to correct it.
+                        </span>
                     )}
                 </div>
             )}
