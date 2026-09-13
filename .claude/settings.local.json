@@ -260,7 +260,8 @@
       "Bash(gh run *)",
       "Bash(gh workflow *)",
       "Bash(gh repo *)",
-      "Bash(taskkill //F //IM AbeerSuite.exe)"
+      "Bash(taskkill //F //IM AbeerSuite.exe)",
+      "Bash(tasklist /FI \"PID eq 19664\")"
     ]
   }
 }
