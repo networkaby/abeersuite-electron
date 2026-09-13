@@ -5,6 +5,7 @@
 // Same settlement rules as /pending-vouchers.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
@@ -143,7 +144,7 @@ export async function GET(req: NextRequest) {
 
             entry.pendingLines.push({
                 voucherId:  v.id,
-                reference:  v.universalVoucher?.voucherNo ?? "",
+                reference:  voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),
                 type:       v.universalVoucher!.type,   // 5D-11
                 date:       v.universalVoucher!.date.toISOString(),   // 5D-10
                 quantity:   qty,

@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { invNextRef } from "@/modules/inventory/lib/stock";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
@@ -385,9 +386,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // Rejection / Physical Stock / orders) get flipped here so the spine
             // status tracks the voucher even without GL lines.
             if (universalVoucherId != null) {
+                // …and this is where those non-GL types take their NUMBER, since
+                // they never pass through the engine's GL arm. Only when the spine
+                // still has none: a GL path above has already numbered it, and a
+                // draft numbered before numbering moved to post time keeps its own.
+                const spine = await tx.universalVoucher.findUnique({
+                    where:  { id: universalVoucherId },
+                    select: { status: true, voucherNo: true },
+                });
+                const reference = spine?.status === "DRAFT" && !spine.voucherNo
+                    ? await invNextRef(tx, voucher.type as Parameters<typeof invNextRef>[1])
+                    : null;
                 await tx.universalVoucher.updateMany({
                     where: { id: universalVoucherId, status: "DRAFT" },
-                    data:  { status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date() },
+                    data:  {
+                        status: "POSTED", postedAt: new Date(), sourceCreatedAt: new Date(),
+                        ...(reference ? { voucherNo: reference } : {}),
+                    },
                 });
             }
             // Phase 5 5C: link the just-written stock rows (+ goods lines) to the spine.

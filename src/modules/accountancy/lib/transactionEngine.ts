@@ -202,6 +202,18 @@ export async function engineGlArm(
     if (args.existingSpineId != null) {
         const id = args.existingSpineId;
         const voucherNoArg = args.voucherNo?.trim() || null;
+        // Read the spine BEFORE writing it: a draft created since numbering moved
+        // to post time has no number, and this is where it takes one. A spine that
+        // already carries one keeps it — that is what makes a parked voucher's
+        // repost (parkVoucherInTx) land back under the same number, and what stops
+        // a pre-existing draft being renumbered when it is finally posted.
+        const spine = await tx.universalVoucher.findUnique({
+            where:  { id },
+            select: { date: true, type: true, voucherNo: true, sourceCounterId: true },
+        });
+        const allocated = spine && !spine.voucherNo && !voucherNoArg
+            ? await allocateSpineNumber(tx, { ...spine, type: args.type ?? spine.type, date })
+            : null;
         await tx.voucherGlLine.createMany({ data: glLineBase.map((d) => ({ universalVoucherId: id, ...d })) });
         await tx.universalVoucher.update({
             where: { id },
@@ -216,7 +228,7 @@ export async function engineGlArm(
                 // which passed a null check and blanked the column. An empty
                 // string also defeats every `?? formatUvNo(id)` fallback
                 // downstream, since those are nullish coalesces.
-                ...(voucherNoArg ? { voucherNo: voucherNoArg } : {}),
+                ...(voucherNoArg || allocated ? { voucherNo: voucherNoArg ?? allocated } : {}),
                 ...(args.narration   != null ? { narration:      args.narration }   : {}),
                 ...(args.partyAccountId != null ? { partyAccountId: args.partyAccountId } : {}),
                 ...(branchId != null ? { branchId } : {}),   // 5D-12: branch primary on the spine
@@ -453,7 +465,10 @@ export interface CreateGlVoucherSpec {
  *  are all the spine id (self-ref). */
 export interface CreatedVoucher {
     id:                 number;
-    reference:          string;
+    /** The user-facing number — NULL on a draft, since the series only advances
+     *  when the voucher posts. Read it back off the spine after posting, or show
+     *  `formatUvNo(id)` (UV-<id>), which every register already falls back to. */
+    reference:          string | null;
     universalVoucherId: number;
     journalEntryId:     number | null;
     status:             "DRAFT" | "POSTED";
@@ -493,10 +508,59 @@ export async function enginePostSpine(
     // Same reconciliation retreat as engineGlArm — this is the OTHER path a spine
     // can reach POSTED by (engineCreateVoucher → enginePostSpine), and a DRAFT
     // moves no balances, so posting is the moment the window turns dirty.
-    const spine = await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { date: true } });
+    const spine = await tx.universalVoucher.findUnique({
+        where:  { id: spineId },
+        select: { date: true, type: true, voucherNo: true, sourceCounterId: true },
+    });
     if (spine) await retreatReconciliation(tx, ids, spine.date);
 
-    await tx.universalVoucher.updateMany({ where: { id: spineId }, data: { status: "POSTED", postedAt, sourceCreatedAt: postedAt } });
+    // Posting is when the number is taken. Last, so the series row's lock is held
+    // for as little of the caller's (30s) transaction as possible; and only when
+    // the spine has none, so a draft numbered before this change — or a parked
+    // voucher being reposted — keeps the number it already carries.
+    const voucherNo = spine && !spine.voucherNo
+        ? await allocateSpineNumber(tx, spine)
+        : null;
+
+    await tx.universalVoucher.updateMany({
+        where: { id: spineId },
+        data: { status: "POSTED", postedAt, sourceCreatedAt: postedAt, ...(voucherNo ? { voucherNo } : {}) },
+    });
+}
+
+/**
+ * Take a number for a spine that has none, from its OWN type's series.
+ *
+ * Two things travel with it, and both are read off the spine rather than the
+ * machine doing the posting:
+ *   • its DATE, so a March-dated voucher posted in April does not roll the series
+ *     into the new financial year (see nextRefFromSeries);
+ *   • the counter it was RAISED on (`sourceCounterId`), so the counter segment of
+ *     the printed reference names the till that billed it — not whichever PC
+ *     happened to post it. The office posting a counter's draft must not renumber
+ *     it into the office's own run.
+ */
+async function allocateSpineNumber(
+    tx: Prisma.TransactionClient,
+    spine: { type: string; date: Date; sourceCounterId: number | null },
+): Promise<string | null> {
+    let counterNumber: number | null = null;
+    if (spine.sourceCounterId != null) {
+        const counter = await tx.posCounter.findUnique({
+            where:  { id: spine.sourceCounterId },
+            select: { counterNumber: true },
+        });
+        counterNumber = counter?.counterNumber ?? null;
+    }
+    try {
+        return await nextRefFromSeries(tx, spine.type, { counterNumber }, { date: spine.date });
+    } catch {
+        // No VoucherSeries row for this kind (a type that has never been numbered,
+        // a half-seeded install). The voucher still posts — the spine id IS the
+        // Universal Voucher No and every reader falls back to it — rather than a
+        // missing settings row blocking a posting.
+        return null;
+    }
 }
 
 /**
@@ -532,14 +596,31 @@ export async function engineCreateVoucher(
         .filter((l) => l.type === "DEBIT")
         .reduce((s, l) => s + l.amount, 0));
 
-    const reference = await nextRefFromSeries(tx, spec.referenceSeries ?? spec.type, {
-        counterNumber: spec.counterNumber ?? null,
-    });
+    // ── When the number is taken ────────────────────────────────────────────
+    // A draft takes NO number: the series advances when the voucher POSTS, so a
+    // draft that is abandoned never leaves a hole in the register. `enginePostSpine`
+    // allocates on the way through.
+    //
+    // The one exception is a voucher numbered from a series that is not its own
+    // type's — the Journal Voucher dialog numbers a CONTRA from the JV- series —
+    // because the spine has nowhere to remember that choice, and at post time all
+    // it can see is its type. Those still take their number now. Removing the
+    // exception needs a `seriesKind` column on the spine, which cannot reach the
+    // live database before a counter build carries it (see docs/migrations.md,
+    // "Counters come before the server").
+    const seriesKind = spec.referenceSeries ?? spec.type;
+    const numberNow = spec.post || seriesKind !== spec.type;
+    const reference = numberNow
+        ? await nextRefFromSeries(tx, seriesKind, { counterNumber: spec.counterNumber ?? null }, { date: spec.date })
+        : null;
 
     const spineId = await engineCreateSpine(tx, {
         type:           spec.type,
         date:           spec.date,
-        description:    `${spec.type} ${reference}: ${spec.narration ?? ""}`.trim(),
+        // The number is a COLUMN, not prose. It used to be interpolated here at
+        // create time and never rewritten at post, so a deferred number would
+        // have frozen the string "JOURNAL null: …" into the Day Book.
+        description:    `${spec.type}: ${spec.narration ?? ""}`.trim(),
         narration:      spec.narration ?? null,
         voucherNo:    reference,
         partyAccountId: spec.partyAccountId ?? null,

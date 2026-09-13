@@ -8,6 +8,7 @@
 // If neither param is supplied the route still works but returns vouchers for any party.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, VoucherStatus } from "@/generated/prisma/client";
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
         take: 100,
         select: {
             id:          true,
-            universalVoucher: { select: { voucherNo: true, date: true, type: true } },   // 5D-6: ref + 5D-10 date + 5D-11 type on spine
+            universalVoucher: { select: { id: true, voucherNo: true, date: true, type: true } },   // 5D-6: ref + 5D-10 date + 5D-11 type on spine
             partyId:     true,
             partyJson:   true,
             totalAmount: true,
@@ -76,6 +77,6 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, type: universalVoucher?.type, date: universalVoucher?.date, reference: universalVoucher?.voucherNo ?? "", partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
+        rows: rows.map(({ universalVoucher, ...r }) => ({ ...r, type: universalVoucher?.type, date: universalVoucher?.date, reference: voucherDisplayNo(universalVoucher?.voucherNo, universalVoucher?.id), partyName: readPartyName(r.partyJson), totalAmount: Number(r.totalAmount) })),
     });
 }

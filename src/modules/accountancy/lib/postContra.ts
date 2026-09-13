@@ -48,7 +48,9 @@ export type PostContraInput = {
 export type PostContraResult = {
     voucherId:      number;
     journalEntryId: number;
-    reference:      string;
+    /** Always set here: `postContra` posts immediately, and a posting is
+     *  exactly when the series advances. */
+    reference:      string | null;
 };
 
 /**

@@ -40,7 +40,7 @@ async function resolveSystemActorId(): Promise<number | null> {
     return any?.id ?? null;
 }
 
-export type OnlineReceiptResult = { voucherId: number; voucherRef: string };
+export type OnlineReceiptResult = { voucherId: number; voucherRef: string | null };
 
 /**
  * Post the advance RECEIPT for a just-paid online order. Returns the voucher, or

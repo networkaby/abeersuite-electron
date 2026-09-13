@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { notFound } from "next/navigation";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
@@ -258,7 +259,7 @@ export default async function InvoiceReceipt({
     // printed via /receipt/payment/[id]) — NOT on this invoice. The invoice stays
     // a clean record of the sale at the bill amount.
     const sample: ThermalReceiptSample = {
-        reference:  voucher.universalVoucher?.voucherNo ?? "",
+        reference:  voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId),
         date:       voucher.universalVoucher!.date.toISOString().slice(0, 10),   // 5D-10: date on spine
         partyName,
         partyPhone,
@@ -319,7 +320,7 @@ export default async function InvoiceReceipt({
     // sends at sale time, so a reprint matches the original slip. Only built for
     // POS (the ladder surface); SALE invoices print in the browser.
     const posRelayPayload = isSaleKind ? {
-        invoiceNumber:  voucher.universalVoucher?.voucherNo ?? "",
+        invoiceNumber:  voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId),
         date:           voucher.universalVoucher!.date.toISOString(),   // 5D-10: date on spine
         customerName:   partyName,
         customerGstin:  partyGstin,
@@ -378,7 +379,7 @@ export default async function InvoiceReceipt({
                     currentPaper={format}
                 />
             }
-            docTitle={`Invoice ${voucher.universalVoucher?.voucherNo ?? ""}`}
+            docTitle={`Invoice ${voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId)}`}
         />
     );
 }

@@ -1,5 +1,5 @@
 import { defaultNormalBalanceForGroupType } from "./groupNature";
-import { dateOnOrBefore, businessToday } from "@/shared/lib/format/formatDate";
+import { dateOnOrBefore, businessToday, startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
@@ -194,6 +194,12 @@ export async function nextRefFromSeries(
     tx: import("@/generated/prisma/client").Prisma.TransactionClient,
     kind: string,
     ctx?: import("./voucherRef").ReferenceContext,
+    // The date the NUMBER belongs to — the voucher's own date, not the wall
+    // clock. Since a voucher takes its number when it POSTS, a draft dated
+    // 25 March and posted on 2 April would otherwise roll the series into the
+    // new financial year and hand a 2025-26 voucher a 2026-27 number. Omit it
+    // and the series rolls on the shop's today, as it always did.
+    opts?: { date?: Date | null },
 ): Promise<string> {
     const { assembleReference, fyClosingDate } = await import("./voucherRef");
 
@@ -235,7 +241,13 @@ export async function nextRefFromSeries(
     // financial year during 31 March itself (06:00 IST), numbering that day's
     // vouchers under the wrong FY. `businessToday()` is UTC midnight of the
     // SHOP's day, so 31 Mar is not > 31 Mar and the roll happens on 1 April.
-    const today = businessToday();
+    // The day the series is judged against: the voucher's own date when the
+    // caller knows it, else the shop's today. This stops a March-dated voucher
+    // from ROLLING the series when it is posted in April. It cannot un-roll one:
+    // a series is a single running counter, so once an April voucher has moved it
+    // into the new FY, a March voucher posted after that still numbers from the
+    // new year. Numbering old-year vouchers means posting them before the roll.
+    const today = opts?.date ? startOfDayUtc(businessTodayIso(opts.date)) : businessToday();
     const fyStartYear = row.fyStartYear ?? current.fyStartYear;
     if (fyStartYear != null) {
         const closing = fyClosingDate(fyStartYear, config.restartMonth, config.restartDay);

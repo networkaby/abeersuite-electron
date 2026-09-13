@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
@@ -33,7 +34,7 @@ export async function GET(_req: Request, { params }: Params) {
             universalVoucher: { select: { createdById: true, voucherNo: true, type: true, date: true, description: true, narration: true, postedAt: true, branchId: true, partyAccountId: true, status: true, deletedAt: true, cancelledAt: true, branch: { select: { id: true, name: true } } } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
-            refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
+            refVoucher: { select: { id: true, universalVoucher: { select: { id: true, voucherNo: true, type: true } } } },   // 5D-11 type on spine
         },
     });
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -90,8 +91,8 @@ export async function GET(_req: Request, { params }: Params) {
         // `accountId` so edit-mode hydration (POS screen, forms) can load the customer.
         accountId:    voucher.universalVoucher?.partyAccountId ?? null,
         branch:       voucher.universalVoucher?.branch ?? null,
-        reference:    voucher.universalVoucher?.voucherNo ?? "",
-        refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.universalVoucher?.type, reference: voucher.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
+        reference:    voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId),
+        refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.universalVoucher?.type, reference: voucherDisplayNo(voucher.refVoucher.universalVoucher?.voucherNo, voucher.refVoucher.universalVoucher?.id) } : null,
         createdBy:    creator,
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),

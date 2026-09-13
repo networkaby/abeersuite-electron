@@ -5,6 +5,7 @@
 // date-range, paginated, optional kind + search filters.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
@@ -79,7 +80,7 @@ export async function GET(req: Request) {
             skip: (page - 1) * limit,
             take: limit,
             include: {
-                refVoucher: { select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } } },   // 5D-11 type on spine
+                refVoucher: { select: { id: true, universalVoucher: { select: { id: true, voucherNo: true, type: true } } } },   // 5D-11 type on spine
                 universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true, date: true, type: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-11 type
             },
         }),
@@ -104,7 +105,7 @@ export async function GET(req: Request) {
         id:          v.id,
         date:        v.universalVoucher?.date,   // 5D-10: date on spine
         type:        vType,
-        reference:   v.universalVoucher?.voucherNo ?? "",
+        reference:   voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),
         description: v.universalVoucher?.description ?? "",
         partyName:   readPartyName(v.partyJson),
         partyType:   v.partyType,
@@ -115,7 +116,7 @@ export async function GET(req: Request) {
         stockDir:    STOCK_IN_TYPES.has(vType) ? "IN"
                    : STOCK_OUT_TYPES.has(vType) ? "OUT"
                    : "NONE",
-        refVoucher: v.refVoucher ? { id: v.refVoucher.id, type: v.refVoucher.universalVoucher?.type, reference: v.refVoucher.universalVoucher?.voucherNo ?? "" } : null,
+        refVoucher: v.refVoucher ? { id: v.refVoucher.id, type: v.refVoucher.universalVoucher?.type, reference: voucherDisplayNo(v.refVoucher.universalVoucher?.voucherNo, v.refVoucher.universalVoucher?.id) } : null,
         lineCount:  linesFor(v).length,
         lines: linesFor(v).map((l) => ({
             id:          l.id,

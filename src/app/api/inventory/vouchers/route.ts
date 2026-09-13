@@ -1,7 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
-import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
+import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
@@ -227,7 +228,7 @@ export async function GET(req: NextRequest) {
             sourceCounterId: v.universalVoucher?.sourceCounterId ?? null,
         };
         if (v.partyId == null) {
-            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: v.universalVoucher?.voucherNo ?? "", description: v.universalVoucher?.description ?? null, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId), description: v.universalVoucher?.description ?? null, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -250,7 +251,7 @@ export async function GET(req: NextRequest) {
             type:            v.universalVoucher?.type,   // 5D-11: type on spine
             branch:          v.universalVoucher?.branch ?? null,   // 5D-12: branch on spine
             date:            v.universalVoucher?.date,   // 5D-10: date on spine
-            reference:       v.universalVoucher?.voucherNo ?? "",   // 5D-6
+            reference:       voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),   // 5D-6
             description:     v.universalVoucher?.description ?? null,   // 5D-5: narration on spine
             ...spineLifecycle,   // 5D-8: status/deletedAt/cancelledAt/createdAt on spine
             ...partyDisplay,
@@ -586,7 +587,11 @@ export async function POST(req: NextRequest) {
 
     try {
         const voucher = await prisma.$transaction(async (tx) => {
-            const reference = await invNextRef(tx, type);
+            // No number on a draft: the series advances when the voucher POSTS
+            // (see engineCreateVoucher), so a draft that is never posted leaves no
+            // hole in the register. Until then the spine id IS its identifier —
+            // every list and print falls back to UV-<id>.
+            //
             // Phase 5 5.0/5C: spine FIRST (the document anchor) so the goods lines
             // can hang off it. POST attaches GL lines + flips the spine; non-GL
             // types just flip the status. Gated out of balances while DRAFT.
@@ -594,7 +599,7 @@ export async function POST(req: NextRequest) {
                 type,
                 date:           new Date(date),
                 description:    description.trim(),
-                voucherNo:    reference,
+                voucherNo:    null,
                 partyAccountId: resolvedAccountId,
                 branchId,   // 5D-12: branch primary on the spine
                 userId,

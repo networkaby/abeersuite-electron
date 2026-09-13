@@ -10,6 +10,7 @@
 // CREDIT_NOTE / DEBIT_NOTE (GL-only) do NOT count as settlement here.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, VoucherStatus, type Prisma } from "@/generated/prisma/client";
@@ -142,7 +143,7 @@ export async function GET(req: NextRequest) {
         const daysOpen = Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000));
         return {
             id:          v.id,
-            reference:   v.universalVoucher?.voucherNo ?? "",
+            reference:   voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),
             type:        v.universalVoucher!.type,   // 5D-11
             date:        v.universalVoucher!.date,   // 5D-10
             partyId:     v.partyId,

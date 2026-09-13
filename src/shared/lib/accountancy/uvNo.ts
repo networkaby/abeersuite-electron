@@ -11,3 +11,18 @@
 export function formatUvNo(id: number | null | undefined): string {
     return id != null ? `UV-${id}` : "";
 }
+
+/**
+ * What to SHOW for a voucher: its own Voucher No when it has one, else the
+ * Universal Voucher No (`UV-<id>`).
+ *
+ * A voucher takes its Voucher No when it POSTS, so a draft legitimately has
+ * none — and an empty string in its place renders a blank document number, or
+ * silently drops a barcode that is gated on the reference being truthy.
+ */
+export function voucherDisplayNo(
+    voucherNo: string | null | undefined,
+    spineId: number | null | undefined,
+): string {
+    return voucherNo?.trim() || formatUvNo(spineId);
+}

@@ -81,7 +81,7 @@ export type PostReceiptVoucherArgs = {
 
 export type PostReceiptVoucherResult = {
     voucherId:      number;
-    voucherRef:     string;
+    voucherRef:     string | null;
     journalEntryId: number;
     /** First/only allocation id (back-compat with the single-target callers). */
     allocationId:   number | null;

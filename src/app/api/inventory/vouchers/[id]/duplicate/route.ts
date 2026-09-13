@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
-import { invNextRef } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 
 // POST /api/inventory/vouchers/[id]/duplicate
 //
@@ -40,9 +40,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const created = await prisma.$transaction(async (tx) => {
             const srcType = source.universalVoucher!.type as InvVoucherType;   // 5D-11: type on the spine
-            // No counter — a duplicate is raised from the office, not a till. (Was
-            // passing `user!.id` into the counter slot; see CreateGlVoucherSpec.)
-            const reference = await invNextRef(tx, srcType);
             const today = requestBusinessDate(req);
 
             // Phase 5 5.0c/5C: spine FIRST (the document anchor) — the duplicate is
@@ -51,7 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 type:           srcType,
                 date:           today,
                 description:    source.universalVoucher?.description ?? srcType,
-                voucherNo:    reference,
+                // A duplicate is a fresh DRAFT, so it takes no number until it is
+                // posted — duplicating a bill to look at it no longer burns one.
+                voucherNo:    null,
                 partyAccountId: source.universalVoucher?.partyAccountId ?? null,
                 branchId:       source.universalVoucher?.branchId,   // 5D-12: branch primary on the spine
                 userId:         user!.id,
@@ -98,7 +97,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     amount:      l.amount,
                 })),
             });
-            return { id: voucher.id, type: voucher.universalVoucher?.type, reference: voucher.universalVoucher?.voucherNo ?? "" };
+            return { id: voucher.id, type: voucher.universalVoucher?.type, reference: voucher.universalVoucher?.voucherNo ?? formatUvNo(spineId) };
         });
 
         return NextResponse.json(created);

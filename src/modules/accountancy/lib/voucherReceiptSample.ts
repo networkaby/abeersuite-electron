@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import { formatUvNo, voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import type { Prisma, InvVoucherType } from "@/generated/prisma/client";
 import type {
     ThermalReceiptSample,
@@ -378,7 +378,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const ledgerBalance = await partyBalanceAroundVoucher(partyAccountId, v.universalVoucherId);
 
     const sample: ThermalReceiptSample = {
-        reference:  v.universalVoucher?.voucherNo ?? "",
+        reference:  voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),
         date:       voucherDate,   // 5D-10: date on spine
         partyName:  party.name ?? readPartyName(v.partyJson) ?? "Walk-in",
         partyPhone: party.phone,
@@ -407,7 +407,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
 
     const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
     const kind = isVoucherTemplateKind(vType) ? vType : "SALE";
-    return { kind, sample, docTitle: `${vType} ${v.universalVoucher?.voucherNo ?? ""}` };
+    return { kind, sample, docTitle: `${vType} ${voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId)}` };
 }
 
 // ── GL voucher (PAYMENT / RECEIPT / CONTRA / CREDIT_NOTE / DEBIT_NOTE / JOURNAL) ──

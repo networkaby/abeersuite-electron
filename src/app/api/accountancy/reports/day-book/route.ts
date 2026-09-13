@@ -79,6 +79,9 @@ export async function GET(req: Request) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const search = searchParams.get("search")?.trim() ?? "";
+    // "UV-812" / "uv 812" / "812" → the spine id it names.
+    const uvMatch = search ? /^\s*(?:uv[-\s]?)?(\d{1,10})\s*$/i.exec(search) : null;
+    const uvSearchId = uvMatch ? Number(uvMatch[1]) : null;
     const branchId = searchParams.get("branchId");
     const refsSince = parseSince(searchParams.get("refsSince"));
     const since = parseSince(searchParams.get("since"));
@@ -140,6 +143,10 @@ export async function GET(req: Request) {
                     { voucherNo:   { contains: search, mode: "insensitive" } },
                     { description: { contains: search, mode: "insensitive" } },
                     { narration:   { contains: search, mode: "insensitive" } },
+                    // A numberless voucher DISPLAYS as UV-<id> (see the row mapper
+                    // below), so typing that back must find it — otherwise the one
+                    // identifier a draft has is the one thing you cannot search by.
+                    ...(uvSearchId != null ? [{ id: uvSearchId }] : []),
                     ...(searchAccountIds.length > 0 ? [{ partyAccountId: { in: searchAccountIds } }] : []),
                 ],
             } : {}),
