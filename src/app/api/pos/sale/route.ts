@@ -1164,21 +1164,13 @@ export async function POST(req: Request) {
                     branchId: activeBranchId,
                     narration,
                     allocations,
+                    // Ties the surplus receipt to the shift on the voucher itself
+                    // (mirrors shifts/[id]/receipts).
+                    shiftId: shift.id,
                 });
                 receiptVoucherId = receipt.voucherId;
                 receiptVoucherRef = receipt.voucherRef;
 
-                // Audit row tying the receipt to the shift (mirrors shifts/[id]/receipts).
-                await tx.posReceipt.create({
-                    data: {
-                        shiftId: shift.id,
-                        amountPaise: BigInt(Math.round(paymentTotal * 100)),
-                        accountId: customerAccount.id,
-                        note: narration,
-                        voucherId: receipt.voucherId,
-                        createdById: user!.id,
-                    },
-                });
                 await touchPosShift(tx, shift.id);
             }
 

@@ -685,7 +685,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
  *  moves "expected in drawer" with no per-type math. Post a POS sale with a ₹118
  *  cash tender + a ₹50 cash RECEIPT linked to a temporary shift, assert the till
  *  balance moved by 16800 paise and that sumShiftTendersByAccount (the
- *  informational "collected" tally: POS tenders + the shift's PosReceipt links)
+ *  informational "collected" tally: POS tenders + receipts, both by shift)
  *  reports the same. Rolled back. */
 async function runShiftCashMath(): Promise<boolean> {
     const [branch, product, cash, user, debtor, counter] = await Promise.all([
@@ -702,12 +702,12 @@ async function runShiftCashMath(): Promise<boolean> {
         await prisma.$transaction(async (tx) => {
             const openedAt = new Date(Date.now() - 60_000);
             const tillBefore = effectiveBalancePaise((await tx.account.findUniqueOrThrow({ where: { id: cash.id }, select: EFFECTIVE_BALANCE_SELECT_FIELDS })));
-            // A temporary shift so the receipt can carry its PosReceipt link (the
-            // "collected" tally reads receipts through that link, never a window).
+            // A temporary shift so the sale and the receipt can carry it (the
+            // "collected" tally reads `sourceShiftId`, never a time window).
             const shift = counter
                 ? await tx.posShift.create({ data: { userId: user.id, counterId: counter.id, branchId: counter.branchId, openedById: user.id, openingFloatPaise: tillBefore, carryOverFloatPaise: tillBefore, openedAt }, select: { id: true } })
                 : null;
-            const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, userId: user.id, shiftId: shift?.id ?? null });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -725,19 +725,17 @@ async function runShiftCashMath(): Promise<boolean> {
             // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
             await tx.voucherDetail.update({ where: { id: v.id }, data: { universalVoucherId } });   // 5D-8: status POSTED set on the spine by enginePost
             // A counter RECEIPT at the till (Dr Till 50 / Cr Debtor) moves the book
-            // balance like any other posting; its PosReceipt link is what the
+            // balance like any other posting; the shift it carries is what the
             // "collected" tally reads.
             const expectReceipt = debtor != null && shift != null;
             if (debtor && shift) {
-                const r = await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id });
-                await tx.posReceipt.create({ data: { shiftId: shift.id, amountPaise: BigInt(5000), accountId: debtor.id, voucherId: r.voucherId, createdById: user.id } });
+                await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id, shiftId: shift.id });
             }
-            const end = new Date(Date.now() + 60_000);
             const tillAfter = effectiveBalancePaise((await tx.account.findUniqueOrThrow({ where: { id: cash.id }, select: EFFECTIVE_BALANCE_SELECT_FIELDS })));
             const expected = BigInt(expectReceipt ? 16800 : 11800);   // POS 11800 + receipt 5000
             const bookMoved = tillAfter - tillBefore === expected;
             const collected = shift
-                ? (await sumShiftTendersByAccount(tx, { shiftId: shift.id, accountIds: [cash.id], openedAt, closedAt: end })).get(cash.id) ?? BigInt(0)
+                ? (await sumShiftTendersByAccount(tx, { shiftId: shift.id, accountIds: [cash.id] })).get(cash.id) ?? BigInt(0)
                 : expected;   // no counter seeded → skip the tally half
             ok = bookMoved && collected === expected;
             throw new Error(ROLLBACK);

@@ -100,9 +100,7 @@ const TABLES = [
     // books and 24 shifts survived pointing at sales that no longer existed.
     // The counters themselves (pos_counters, pos_counter_payment_accounts,
     // pos_services) are CONFIG and are deliberately left alone.
-    "pos_receipts",
     "pos_cash_drops",
-    "pos_expenditures",
     "pos_handovers",
     "pos_shifts",
 ];

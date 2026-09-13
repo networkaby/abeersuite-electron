@@ -8,8 +8,8 @@
 //
 // One transaction on the AUTHORITATIVE client: cancel the opening Contra
 // (vault top-up), the closing Contra and the variance Journal if present —
-// reversing their balances — then delete the row (drops/expenditures/receipts
-// cascade, but the guard above means there are none).
+// reversing their balances — then delete the row (drops cascade, but the guard
+// above means there are none).
 
 import { prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
@@ -21,6 +21,7 @@ import { cancelVoucherInTx } from "@/modules/accountancy/lib/cancelVoucherInTx";
 import { lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { shiftManageBlock } from "@/modules/pos/lib/shiftManage";
+import { listShiftMovements } from "@/modules/pos/lib/shiftMath";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Reason required").max(500) });
 
@@ -44,17 +45,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 openingContraVoucherId: true, closingContraVoucherId: true, varianceJournalEntryId: true,
                 handover: { select: { id: true } },
                 receivedHandover: { select: { id: true } },
-                _count: { select: { drops: true, expenditures: true, receipts: true } },
+                _count: { select: { drops: true } },
             },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status === "AWAITING_HANDOVER") {
             return NextResponse.json({ error: "Shift is awaiting handover. Cancel the handover first." }, { status: 409 });
         }
+        // Receipts and expenditures are vouchers carrying this shift, not rows in a
+        // side table any more — so a deleted voucher stops blocking the delete, and
+        // a live one still does.
+        const movements = await listShiftMovements(db, shift.id);
         const attached = [
-            shift._count.receipts     > 0 ? `${shift._count.receipts} receipt(s)`         : null,
-            shift._count.drops        > 0 ? `${shift._count.drops} cash drop(s)`          : null,
-            shift._count.expenditures > 0 ? `${shift._count.expenditures} expenditure(s)` : null,
+            movements.receipts.length     > 0 ? `${movements.receipts.length} receipt(s)`         : null,
+            shift._count.drops            > 0 ? `${shift._count.drops} cash drop(s)`              : null,
+            movements.expenditures.length > 0 ? `${movements.expenditures.length} expenditure(s)` : null,
         ].filter((x): x is string => x !== null);
         if (attached.length > 0) {
             return NextResponse.json(

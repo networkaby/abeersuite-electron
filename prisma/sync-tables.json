@@ -50,7 +50,10 @@
       "strategy": "full"
     }
   },
-  "retired": [],
+  "retired": [
+    64,
+    68
+  ],
   "tables": {
     "Account": {
       "n": 1,
@@ -654,16 +657,6 @@
       "parent": "PosCounter",
       "fk": "counterId"
     },
-    "PosExpenditure": {
-      "n": 64,
-      "table": "pos_expenditures",
-      "pk": [
-        "id"
-      ],
-      "strategy": "child",
-      "parent": "PosShift",
-      "fk": "shiftId"
-    },
     "PosHandover": {
       "n": 65,
       "table": "pos_handovers",
@@ -691,16 +684,6 @@
       "strategy": "child",
       "parent": "Position",
       "fk": "positionId"
-    },
-    "PosReceipt": {
-      "n": 68,
-      "table": "pos_receipts",
-      "pk": [
-        "id"
-      ],
-      "strategy": "child",
-      "parent": "PosShift",
-      "fk": "shiftId"
     },
     "PosService": {
       "n": 69,

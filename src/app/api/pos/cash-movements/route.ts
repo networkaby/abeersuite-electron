@@ -1,12 +1,19 @@
 // GET /api/pos/cash-movements
-import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 //
-// Recent counter cash movements for the POS register's "Cash In/Out" tab:
+// Recent counter cash movements for the POS register's "Payment/Receipt" tab:
 // receipts collected from parties (the Rcv flow) and expenditures paid from the
-// drawer (the Exp flow). Both are shift-linked (PosReceipt / PosExpenditure),
-// which is what makes them definitively "counter" movements vs. office vouchers.
+// drawer (the Exp flow).
+//
+// Reads the VOUCHERS themselves, filtered by the shift they were raised on.
+// Until 2026-09-13 this read the pos_receipts / pos_expenditures side tables and
+// only looked the voucher up afterwards to print its number — so a deleted
+// voucher left its side row on this list forever, showing a dash where the
+// reference belonged. The shift link lives on the voucher now
+// (`UniversalVoucher.sourceShiftId`), which means a deleted voucher simply is
+// not here: one row, one lifecycle.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -18,61 +25,78 @@ export async function GET(req: NextRequest) {
     try {
         const params = new URL(req.url).searchParams;
         const limit = Math.min(200, Math.max(1, Number(params.get("limit")) || 100));
-        // "Only this counter". These rows are already shift-linked, so unlike the
-        // voucher tables the counter is reachable without `sourceCounterId` — the
-        // shift knows it. Filtered on the shift's counter for that reason.
+        // "Only this counter". A voucher's shift knows its counter, so the filter
+        // is a shift lookup rather than a column on the voucher: `sourceCounterId`
+        // says where a voucher was RAISED, which is the same thing here but would
+        // also drag in POS sales and every other counter document.
         const counterIdRaw = Number(params.get("counterId"));
         const counterId = Number.isInteger(counterIdRaw) && counterIdRaw > 0 ? counterIdRaw : null;
-        const scope = counterId != null ? { shift: { counterId } } : {};
+        const shiftIds = counterId == null ? null : (await prisma.posShift.findMany({
+            where:  { counterId },
+            select: { id: true },
+        })).map((s) => s.id);
+        if (shiftIds != null && shiftIds.length === 0) return NextResponse.json({ items: [] });
 
-        const shiftSelect = {
-            select: { counter: { select: { name: true } }, user: { select: { name: true } } },
-        } as const;
+        // RECEIPT = money in at the counter, PAYMENT = money out of the drawer.
+        // Both must be raised ON a shift to belong here — an office receipt into
+        // the same till is not a counter movement.
+        const vouchers = await prisma.universalVoucher.findMany({
+            where: {
+                type:          { in: ["RECEIPT", "PAYMENT"] },
+                status:        "POSTED",
+                deletedAt:     null,
+                sourceShiftId: shiftIds == null ? { not: null } : { in: shiftIds },
+            },
+            orderBy: { createdAt: "desc" },
+            take:    limit,
+            select: {
+                id: true, type: true, voucherNo: true, narration: true, description: true,
+                createdAt: true, sourceShiftId: true, partyAccountId: true,
+                lines: { select: { accountId: true, type: true, amount: true } },
+            },
+        });
+        if (vouchers.length === 0) return NextResponse.json({ items: [] });
 
-        const [receipts, expenditures] = await Promise.all([
-            prisma.posReceipt.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: limit, include: { shift: shiftSelect } }),
-            prisma.posExpenditure.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: limit, include: { shift: shiftSelect } }),
-        ]);
+        // Batch-resolve the shift (counter + cashier) and the party ledger name.
+        // `partyAccountId` is the settled party on a receipt; an expenditure has
+        // none, so its party column shows the expense ledger — the debit leg.
+        const shifts = await prisma.posShift.findMany({
+            where:  { id: { in: [...new Set(vouchers.map((v) => v.sourceShiftId!))] } },
+            select: { id: true, counter: { select: { name: true } }, user: { select: { name: true } } },
+        });
+        const shiftById = new Map(shifts.map((s) => [s.id, s]));
 
-        // Batch-resolve voucher refs + account names (plain-int FKs, no relations).
-        const voucherIds = [...receipts, ...expenditures].map((m) => m.voucherId).filter((x): x is number => x != null);
-        const accountIds = [...receipts.map((r) => r.accountId), ...expenditures.map((e) => e.expenseAccountId)];
-        const [vouchers, accounts] = await Promise.all([
-            // Phase 5 5E: receipt/expenditure voucherId points at the spine now.
-            prisma.universalVoucher.findMany({ where: { id: { in: voucherIds } }, select: { id: true, voucherNo: true } }),
-            prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, name: true } }),
-        ]);
-        const refById  = new Map(vouchers.map((v) => [v.id, v.voucherNo ?? formatUvNo(v.id)]));
+        // One debit leg names an expenditure; on a receipt the party is explicit.
+        const partyIdFor = (v: (typeof vouchers)[number]): number | null =>
+            v.type === "RECEIPT"
+                ? v.partyAccountId
+                : (v.lines.find((l) => l.type === "DEBIT")?.accountId ?? null);
+        const accountIds = [...new Set(vouchers.map(partyIdFor).filter((x): x is number => x != null))];
+        const accounts = accountIds.length === 0 ? [] : await prisma.account.findMany({
+            where: { id: { in: accountIds } }, select: { id: true, name: true },
+        });
         const nameById = new Map(accounts.map((a) => [a.id, a.name]));
 
-        const items = [
-            ...receipts.map((r) => ({
-                id:        `r-${r.id}`,
-                voucherId: r.voucherId ?? null,   // → /receipt/payment/[voucherId] reprint
-                kind:      "IN" as const,
-                reference: r.voucherId != null ? (refById.get(r.voucherId) ?? "—") : "—",
-                date:      r.createdAt.toISOString(),
-                amount:    (Number(r.amountPaise) / 100).toFixed(2),
-                party:     nameById.get(r.accountId) ?? "—",
-                note:      r.note,
-                counter:   r.shift.counter.name,
-                cashier:   r.shift.user.name,
-            })),
-            ...expenditures.map((e) => ({
-                id:        `e-${e.id}`,
-                voucherId: e.voucherId ?? null,   // → /receipt/payment/[voucherId] reprint
-                kind:      "OUT" as const,
-                reference: e.voucherId != null ? (refById.get(e.voucherId) ?? "—") : "—",
-                date:      e.createdAt.toISOString(),
-                amount:    (Number(e.amountPaise) / 100).toFixed(2),
-                party:     nameById.get(e.expenseAccountId) ?? "—",
-                note:      e.description,
-                counter:   e.shift.counter.name,
-                cashier:   e.shift.user.name,
-            })),
-        ]
-            .sort((a, b) => (a.date < b.date ? 1 : -1))
-            .slice(0, limit);
+        // The amount is the voucher itself — one side of a balanced voucher.
+        const sumSide = (v: (typeof vouchers)[number], side: "DEBIT" | "CREDIT"): number =>
+            v.lines.filter((l) => l.type === side).reduce((s, l) => s + Number(l.amount), 0);
+
+        const items = vouchers.map((v) => {
+            const shift = shiftById.get(v.sourceShiftId!);
+            const partyId = partyIdFor(v);
+            return {
+                id:        `v-${v.id}`,
+                voucherId: v.id,                  // → /receipt/payment/[voucherId] reprint
+                kind:      v.type === "RECEIPT" ? ("IN" as const) : ("OUT" as const),
+                reference: v.voucherNo ?? formatUvNo(v.id),
+                date:      v.createdAt.toISOString(),
+                amount:    sumSide(v, "DEBIT").toFixed(2),
+                party:     (partyId != null ? nameById.get(partyId) : null) ?? "—",
+                note:      v.narration ?? v.description ?? null,
+                counter:   shift?.counter.name ?? "—",
+                cashier:   shift?.user.name ?? "—",
+            };
+        });
 
         return NextResponse.json({ items });
     } catch (e) {

@@ -50,7 +50,7 @@ const ADMIN_EMAIL = "admin@networkservice.in";
 
 // Phase 1 — pure-transaction tables (CASCADE handles cross-FK)
 const TRANSACTION_TABLES = [
-    "pos_handovers", "pos_cash_drops", "pos_expenditures", "pos_receipts", "pos_shifts",
+    "pos_handovers", "pos_cash_drops", "pos_shifts",
     // Phase 4 universal-voucher spine + GL-arm lines — the lone GL representation
     // since the JournalEntry/JournalLine drop (G5); transactional, never
     // bootstrap. Child before parent; cascade also covers the child when the

@@ -93,25 +93,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 ],
                 post:      true,
                 branchId:  shift.branchId,
+                // Ties the expenditure to the shift on the voucher itself — the
+                // shift report and the drawer tally read it from there. The old
+                // pos_expenditures side row held a copy of these same figures and
+                // outlived the voucher whenever one was deleted.
+                shiftId,
             });
 
-            const exp = await tx.posExpenditure.create({
-                data: {
-                    shiftId,
-                    amountPaise:      BigInt(data.amountPaise),
-                    description:      data.description,
-                    expenseAccountId: data.expenseAccountId,
-                    voucherId:        voucher.id,
-                    createdById:      user!.id,
-                },
-                select: { id: true },
-            });
             await touchPosShift(tx, shiftId);
-            return { expId: exp.id, voucherId: voucher.id, voucherRef: voucher.reference };
+            return { voucherId: voucher.id, voucherRef: voucher.reference };
         });
 
         return NextResponse.json(
-            { id: created.expId, voucherId: created.voucherId, voucherRef: created.voucherRef, amountPaise: String(data.amountPaise) },
+            { id: created.voucherId, voucherId: created.voucherId, voucherRef: created.voucherRef, amountPaise: String(data.amountPaise) },
             { status: 201 },
         );
     } catch (e) {

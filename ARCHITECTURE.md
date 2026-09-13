@@ -102,7 +102,7 @@ Both arms also maintain the **reconciliation watermark**. Each ledger carries `A
 ## 7) POS
 
 - Tills are **counter-based, not user-based** — any cashier works any counter; variance lands on the counter account, and human accountability comes from the shift report.
-- Models (`pos.prisma`): `PosCounter` (+ `PosCounterPaymentAccount`, `PaymentGateway`), `PosShift` (`OPEN → AWAITING_HANDOVER → CLOSED`), `PosCashDrop`, `PosExpenditure`, `PosReceipt`, `PosHandover`.
+- Models (`pos.prisma`): `PosCounter` (+ `PosCounterPaymentAccount`, `PaymentGateway`), `PosShift` (`OPEN → AWAITING_HANDOVER → CLOSED`), `PosCashDrop`, `PosHandover`. Receipts taken (Rcv) and expenditures paid (Exp) are ordinary RECEIPT / PAYMENT vouchers carrying `UniversalVoucher.sourceShiftId` — the `PosReceipt` / `PosExpenditure` side tables were dropped on 2026-09-13.
 - A sale requires an **OPEN shift on a counter** — the create route returns `NO_OPEN_SHIFT` otherwise. Branch context comes from the shift, not the session cookie (parallel billing from many browsers).
 - POS create routes gate on **`requirePosVoucher`** (the `pos:voucher:create:<kind>` tick), because a counter operator holds `ui:sidebar:workspace:pos`, not the office `ui:sidebar:pos:*` module.
 - A POS sale is a `UniversalVoucher` (`type=POS`) with tender/charge GL lines, stock movement, GST routing, and optional loyalty/coupon/gift-card effects — one balanced posting via `enginePost`.
@@ -188,7 +188,7 @@ Repair, deals, delivery, and refund all ride this one engine. **The `Account` is
 | `accounts.prisma` | AccountGroup, Account, AccountAlias, CustomerTierPeriod, CustomerTier |
 | `finance.prisma` | **UniversalVoucher**, **VoucherGlLine**, VoucherLink, VoucherAllocation, VoucherSeries, VoucherPrintTemplate, BooksConfig, AuditLog |
 | `inventory.prisma` | InvProduct(+Code/Branch), masters (InvUnit/Category/ProductGroup/Brand/WarrantyTerm/AttributeMaster/GstRate), **VoucherDetail**, **VoucherInventoryLine**, InvStockLedger, StockReservation, RedemptionHold, InvBom(+Line), StrategyPoint, AdditionalCostAllocation |
-| `pos.prisma` | PosCounter(+PaymentAccount), PaymentGateway, PosShift, PosCashDrop, PosExpenditure, PosReceipt, PosHandover |
+| `pos.prisma` | PosCounter(+PaymentAccount), PaymentGateway, PosShift, PosCashDrop, PosHandover |
 | `pipeline.prisma` | Pipeline, TicketStatus, TicketWorker, WorkGroup, Work, WorkerTransition, StatusTransition |
 | `tickets.prisma` | Ticket, TicketRepair/Deal/Order(+Line)/Delivery/Refund/Help, TicketLog, TicketParticipant, Device, ServiceCenter, TaskRecurrence |
 | `org.prisma` | Branch, Department, Position, UserPosition, PositionRole, OrgDefaults |

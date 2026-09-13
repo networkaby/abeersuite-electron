@@ -239,10 +239,15 @@ model PosShift {
   // If this shift was opened via handover acceptance, link back.
   receivedHandover   PosHandover? @relation("HandoverToShift")
 
-  notes        String?
-  drops        PosCashDrop[]
-  expenditures PosExpenditure[]
-  receipts     PosReceipt[]
+  notes String?
+  drops PosCashDrop[]
+  // Receipts taken and expenditures paid on this shift are NOT children here.
+  // They are ordinary RECEIPT / PAYMENT vouchers carrying `sourceShiftId`
+  // (finance.prisma) — read them with listShiftMovements() in
+  // src/modules/pos/lib/shiftMath.ts. The old pos_receipts / pos_expenditures
+  // tables that used to hang here were dropped on 2026-09-13: each held a copy
+  // of the voucher whose only real content was this shift link, and because the
+  // link lived outside the voucher, a deleted voucher left the row behind.
 
   // The counter's Postgres replica delta-syncs on "what changed since <ts>?".
   // `openedAt` cannot serve: a shift is written once at open and then mutated at
@@ -280,50 +285,6 @@ model PosCashDrop {
 
   @@index([shiftId, droppedAt])
   @@map("pos_cash_drops")
-}
-
-// ── Mid-shift counter expenditure ─────────────────────────────────────────────
-// Small cash expense paid OUT OF the counter drawer (tea, sundry donation,
-// etc.). Unlike a cash DROP (log-only — cash stays in custody), this is real
-// money leaving the business, so it posts a PAYMENT voucher
-// (Dr <expense ledger> / Cr counter till) and reduces the expected drawer at
-// shift close. `voucherId` links the posted PV; `expenseAccountId` is the GL
-// expense ledger (an EXPENSE-group account). Plain int FKs to keep the change
-// local to this model — joins are done explicitly where a name is needed.
-model PosExpenditure {
-  id               Int      @id @default(autoincrement())
-  shiftId          Int
-  shift            PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  amountPaise      BigInt
-  description      String
-  expenseAccountId Int
-  voucherId        Int?     @unique
-  createdById      Int
-  createdAt        DateTime @default(now())
-
-  @@index([shiftId, createdAt])
-  @@map("pos_expenditures")
-}
-
-// ── Mid-shift counter receipt ─────────────────────────────────────────────────
-// Cash collected from a party at the counter (the POS "Rcv" flow) — a customer
-// clears credit or pays an advance. Posts a RECEIPT voucher (Dr counter till /
-// Cr party AR); this row links that voucher to the shift for audit (which
-// receipts a cashier took on which shift). The cash is already folded into the
-// shift's cash sales via sumShiftCashSalesPaise, so this row is log/audit only.
-model PosReceipt {
-  id          Int      @id @default(autoincrement())
-  shiftId     Int
-  shift       PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  amountPaise BigInt
-  accountId   Int // party AR ledger credited
-  note        String?
-  voucherId   Int?     @unique
-  createdById Int
-  createdAt   DateTime @default(now())
-
-  @@index([shiftId, createdAt])
-  @@map("pos_receipts")
 }
 
 // ── POS Handover (two-step cashier-to-cashier) ───────────────────────────────

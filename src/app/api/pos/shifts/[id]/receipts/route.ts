@@ -4,8 +4,8 @@
 // customer clears their outstanding credit, or pays an advance. Posts a RECEIPT
 // voucher (Dr counter till / Cr party AR) via postReceiptVoucher. The till debit
 // moves the till's book balance, which is what the shift close reads — no
-// separate bookkeeping needed here. The PosReceipt row is the audit link that
-// feeds the "Payments collected this shift" tally.
+// separate bookkeeping needed here. The voucher's own `sourceShiftId` is the
+// shift link that feeds the "Payments collected this shift" tally.
 //
 // Funding destination is always the shift's counter till (cash into the drawer),
 // mirroring the per-counter routing at /office/admin/counters.
@@ -93,17 +93,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 userId:    user!.id,
                 branchId:  shift.branchId,
                 narration: data.note ? `POS receipt — ${data.note}` : `POS receipt from ${party.name}`,
-            });
-            // Audit link: tie this receipt to the shift (which receipts on which shift).
-            await tx.posReceipt.create({
-                data: {
-                    shiftId,
-                    amountPaise: BigInt(totalPaise),
-                    accountId:   party.id,
-                    note:        data.note ?? null,
-                    voucherId:   r.voucherId,
-                    createdById: user!.id,
-                },
+                // Ties the receipt to the shift. On the voucher itself, so deleting
+                // the voucher takes the shift link with it — the old pos_receipts
+                // side row used to survive and haunt the Payment/Receipt tab.
+                shiftId,
             });
             await touchPosShift(tx, shiftId);
             return r;

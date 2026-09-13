@@ -30,7 +30,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
@@ -60,7 +60,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 },
                 branch: { select: { id: true, name: true, vaultAccountId: true } },
                 drops:  { select: { amountPaise: true } },
-                expenditures: { select: { amountPaise: true } },
             },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
@@ -92,7 +91,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const declaredPaise     = BigInt(data.declaredCashPaise);
         const dropsPaise        = sumPaise(shift.drops);
-        const expendituresPaise = sumPaise(shift.expenditures);
+        // Paid out of the drawer this shift — read off the vouchers that carry the
+        // shift, so a deleted expenditure stops counting the moment it is deleted.
+        const expendituresPaise = sumPaise((await listShiftMovements(prisma, shift.id)).expenditures);
         // Sweep BOTH the counted drawer surplus AND the cash dropped to the safe
         // this shift — both physically leave the counter for the vault, so the
         // till GL closes at exactly the carry-over. (Drops were log-only until
@@ -206,10 +207,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Per-method tally of everything collected this shift (cash + digital),
         // for the closing report. Uses the real closedAt window.
         const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
-            shiftId:  result.id,
-            counter:  result.counter,
-            openedAt: result.openedAt,
-            closedAt: result.closedAt,
+            shiftId: result.id,
+            counter: result.counter,
         });
 
         // Explicit fields only — never spread the Prisma object (BigInt fields

@@ -29,6 +29,7 @@ import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
 import { retreatReconciliation } from "./reconciliation";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
+import { shiftIdForCounter } from "@/shared/lib/counter/sourceShift";
 
 type Drcr = "DEBIT" | "CREDIT";
 
@@ -126,6 +127,10 @@ export async function engineGlArm(
         // spine and flip it to POSTED (instead of minting a fresh spine). Lets a
         // draft carry a spine id from create time; POST fills its lines + balances.
         existingSpineId?: number | null;
+        // The POS shift this voucher is raised on. Omit and the engine resolves it
+        // from the source counter; pass it when the caller already knows (the POS
+        // routes are handed the shift in the URL). See sourceShift.ts.
+        shiftId?: number | null;
     },
 ): Promise<{ journalEntryId: number; universalVoucherId: number }> {
     const { date, description, lines, userId, branchId, postedAt } = args;
@@ -224,6 +229,9 @@ export async function engineGlArm(
     // Which till raised this. Resolved here, in the one place every voucher kind
     // passes through, so no caller has to remember to pass it.
     const counterId = await sourceCounterId(tx);
+    // …and which shift was standing there. Resolved in the same one place, so a
+    // counter voucher carries its shift without any caller remembering to pass it.
+    const shiftId = args.shiftId !== undefined ? args.shiftId : await shiftIdForCounter(tx, counterId);
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -239,6 +247,7 @@ export async function engineGlArm(
             partyAccountId:       args.partyAccountId ?? null,
             branchId:             branchId ?? null,   // 5D-12: branch primary on the spine
             sourceCounterId:      counterId,
+            sourceShiftId:        shiftId,
             createdById:          userId,
             lines: { create: glLineBase },
         },
@@ -273,6 +282,8 @@ export async function engineCreateSpine(
         partyAccountId?: number | null;
         branchId?:       string | null;
         userId:          number;
+        /** See engineGlArm — omit to resolve from the source counter. */
+        shiftId?:        number | null;
     },
 ): Promise<number> {
     // A date before the books begin here belongs to the old register, not to a
@@ -280,6 +291,7 @@ export async function engineCreateSpine(
     await assertVoucherDate(tx, args.date);
     // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
     const counterId = await sourceCounterId(tx);
+    const shiftId = args.shiftId !== undefined ? args.shiftId : await shiftIdForCounter(tx, counterId);
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -293,6 +305,7 @@ export async function engineCreateSpine(
             partyAccountId: args.partyAccountId ?? null,
             branchId:       args.branchId ?? null,   // 5D-12: branch primary on the spine
             sourceCounterId: counterId,
+            sourceShiftId:  shiftId,
             createdById:    args.userId,
         },
     });
@@ -421,6 +434,12 @@ export interface CreateGlVoucherSpec {
      * depending on who happened to save it.
      */
     counterNumber?:   number | null;
+    /**
+     * POS shift the voucher is raised on. Omit (the office, and every caller that
+     * does not know) and the engine resolves it from the source counter; the POS
+     * routes pass it because the shift is named in their URL. See sourceShift.ts.
+     */
+    shiftId?:         number | null;
 }
 
 /** The shape engineCreateVoucher returns — Voucher table dropped (Phase 5 5E), so
@@ -520,6 +539,7 @@ export async function engineCreateVoucher(
         partyAccountId: spec.partyAccountId ?? null,
         branchId:       spec.branchId ?? null,   // 5D-12: branch primary on the spine
         userId:         spec.userId,
+        shiftId:        spec.shiftId,
     });
     await tx.voucherGlLine.createMany({
         data: spec.lines.map((l, idx) => ({

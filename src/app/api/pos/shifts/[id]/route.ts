@@ -12,7 +12,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, computeExpectedCash, effectiveBalancePaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, computeExpectedCash, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements } from "@/modules/pos/lib/shiftMath";
 import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -59,14 +59,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                     orderBy: { droppedAt: "desc" },
                     include: { droppedBy: { select: { id: true, name: true } } },
                 },
-                expenditures: {
-                    orderBy: { createdAt: "desc" },
-                    select:  { id: true, amountPaise: true, description: true, voucherId: true, createdAt: true },
-                },
-                // Receipts taken on the shift (digital ones never touch the till, so
-                // cash sales can read ₹0 while the shift still carries them). The
-                // detail page uses this to know whether the shift can be deleted.
-                _count: { select: { receipts: true } },
             },
         });
         if (!shift) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -87,9 +79,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // Live drawer figure straight off the till's book: balance now − drops.
         // Every till movement (sales, receipts, refunds, expenditures) is already
         // on that ledger, so nothing is re-derived per voucher type.
+        // Receipts taken and expenditures paid on this shift, straight off the
+        // vouchers (digital receipts never touch the till, so cash sales can read
+        // ₹0 while the shift still carries them). The detail page uses the counts
+        // to know whether the shift can be deleted.
+        const movements = await listShiftMovements(prisma, shift.id);
         const tillBookBalancePaise = effectiveBalancePaise(shift.counter.tillAccount);
         const dropsPaise           = sumPaise(shift.drops);
-        const expendituresPaise    = sumPaise(shift.expenditures);
+        const expendituresPaise    = sumPaise(movements.expenditures);
 
         // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
         // Resolve them by id to keep the old response shape the UI consumes.
@@ -103,10 +100,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         // Per-method tally of everything collected this shift (cash + digital).
         const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
-            shiftId:  shift.id,
-            counter:  shift.counter,
-            openedAt: shift.openedAt,
-            closedAt: shift.closedAt,
+            shiftId: shift.id,
+            counter: shift.counter,
         });
 
         return NextResponse.json({
@@ -128,7 +123,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             expendituresPaise:    expendituresPaise.toString(),
             runningExpectedPaise: computeExpectedCash(tillBookBalancePaise, dropsPaise).toString(),
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
-            expenditures: shift.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
+            expenditures: movements.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
+            _count: { receipts: movements.receipts.length },
             handover: shift.handover ? {
                 ...shift.handover,
                 declaredByAPaise: shift.handover.declaredByAPaise.toString(),

@@ -22,22 +22,34 @@ export async function getRefundPipeline() {
 }
 
 /**
- * Resolve the advance collected against an inv order — the sum of its POS advance
- * receipts (linked by the note "Advance against <ref>") plus one source voucher id
- * for the GL pay-back step. Returns 0 when nothing was collected. (Shop advances are
- * a follow-up; only counter/office orders carry POS advance receipts today.)
+ * Resolve the advance collected against an inv order — the sum of its advance
+ * receipts plus one source voucher id for the GL pay-back step. Returns 0 when
+ * nothing was collected. (Shop advances are a follow-up; only counter/office
+ * orders carry advance receipts today.)
+ *
+ * Found through the receipt's ADVANCE_FOR VoucherLink, which points at the
+ * order's spine. Until 2026-09-13 this matched the text "Advance against <ref>"
+ * in the old pos_receipts table — so it missed the advance whenever the order's
+ * reference changed, and counted a deleted receipt as money still collected.
  */
 async function resolveAdvance(ref: OrderRef): Promise<{ amountPaise: number; sourceVoucherId: number | null }> {
     if (ref.source !== "inv") return { amountPaise: 0, sourceVoucherId: null };
-    const order = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { universalVoucher: { select: { voucherNo: true } } } });   // 5D-6
-    if (!order) return { amountPaise: 0, sourceVoucherId: null };
-    const receipts = await prisma.posReceipt.findMany({
-        where: { note: { contains: `Advance against ${order.universalVoucher?.voucherNo ?? ""}` } },
-        select: { amountPaise: true, voucherId: true },
+    const order = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });   // 5D-6
+    if (order?.universalVoucherId == null) return { amountPaise: 0, sourceVoucherId: null };
+    const receipts = await prisma.universalVoucher.findMany({
+        where: {
+            type:      "RECEIPT",
+            status:    "POSTED",
+            deletedAt: null,
+            links:     { some: { kind: "ADVANCE_FOR", targetId: String(order.universalVoucherId) } },
+        },
+        select: { id: true, lines: { select: { type: true, amount: true } } },
     });
-    const amountPaise = receipts.reduce((s, r) => s + Number(r.amountPaise), 0);
-    const sourceVoucherId = receipts.find((r) => r.voucherId != null)?.voucherId ?? null;
-    return { amountPaise, sourceVoucherId };
+    const amountPaise = receipts.reduce(
+        (s, r) => s + Math.round(r.lines.filter((l) => l.type === "DEBIT").reduce((t, l) => t + Number(l.amount), 0) * 100),
+        0,
+    );
+    return { amountPaise, sourceVoucherId: receipts[0]?.id ?? null };
 }
 
 /**

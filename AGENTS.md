@@ -20,7 +20,7 @@ Project is nearly complete. Prefer **simple, maintainable, DRY code**; remove du
 ### Database — `CURRENT_DB=demo`
 
 - **demo** = local PostgreSQL demo data, reset allowed. **live** = production data, **never full-reset**.
-- Schema changes must include migrations committed to `origin/dev` or `main`, and deployment must apply them without causing problems.
+- Schema changes must include migrations committed to `origin/dev` or `main`, and deployment must apply them without causing problems. How: `docs/migrations.md` (`pnpm db:migrate`; every pre-2026-09-13 database needs `pnpm db:migrate:baseline` once).
 
 ## 4. Reuse First
 

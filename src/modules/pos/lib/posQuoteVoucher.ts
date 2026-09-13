@@ -72,7 +72,7 @@ export async function createPosQuoteVoucher(opts: {
     /** "Today" when the body carries no date — the caller's
      *  `requestBusinessDate(req)`, so a quote saved at 01:00 gets the shop's day. */
     today: Date;
-}): Promise<{ voucherId: number; reference: string; dealId: number | null }> {
+}): Promise<{ voucherId: number; universalVoucherId: number; reference: string; dealId: number | null }> {
     const { type, branchId, userId, body, today } = opts;
     const lines = Array.isArray(body.lines) ? body.lines : [];
     if (lines.length === 0) throw new Error("At least one line item required");
@@ -254,6 +254,7 @@ export async function createPosQuoteVoucher(opts: {
             await syncVoucherLink(tx, spineId, "DEAL", dealId);
         }
 
-        return { voucherId: voucher.id, reference, dealId };
+        // `universalVoucherId` is the spine — what an advance Receipt links to.
+        return { voucherId: voucher.id, universalVoucherId: spineId, reference, dealId };
     }, { timeout: 30_000, maxWait: 10_000 });
 }

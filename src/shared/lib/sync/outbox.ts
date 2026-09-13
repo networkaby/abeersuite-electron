@@ -40,8 +40,6 @@ export const OUTBOX_MODEL_DELEGATES: Record<string, string> = {
     TicketDeal: "ticketDeal",
     PosShift: "posShift",
     PosCashDrop: "posCashDrop",
-    PosExpenditure: "posExpenditure",
-    PosReceipt: "posReceipt",
 };
 
 export interface OutboxRecord {

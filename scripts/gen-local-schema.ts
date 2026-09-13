@@ -10,8 +10,10 @@
  * A fresh embedded PostgreSQL cluster has no tables. Something has to create 113 of
  * them, plus 52 enums, before a single row can be synced. The three ways to do that:
  *
- *   1. Replay committed migrations — impossible here. This repo has NO
- *      `prisma/migrations/` directory; it is `db push`-based, so there is no history.
+ *   1. Replay committed migrations — the repo has `prisma/migrations/` again since
+ *      2026-09-13, but replaying a whole history on a fresh shop PC is slower and
+ *      more fragile than one snapshot, and the migrations start from a BASELINE of
+ *      an already-live schema rather than from nothing.
  *   2. `pg_dump` the schema from Supabase at first run — needs `DIRECT_URL` (port 5432;
  *      pgbouncer cannot serve a dump) on every shop PC, and `scripts/counterEnv.ts`
  *      deliberately withholds that credential from counters.

@@ -104,6 +104,20 @@ model UniversalVoucher {
   // already carries it here, and PosCounter.branchId carries it for tickets.
   // Set once, at creation, by sourceCounterId() (shared/lib/counter/sourceCounter).
   sourceCounterId           Int?
+  // Source shift — the POS shift this voucher was raised ON. Plain int, no FK,
+  // for the same reason as sourceCounterId above: provenance must survive the
+  // shift row, and an optional relation's SetNull would quietly erase it.
+  // Null = not raised on a shift (every office voucher, and any counter voucher
+  // written while no shift was open). Set once, at creation, by sourceShiftId()
+  // (shared/lib/counter/sourceShift) — or passed explicitly by the POS routes
+  // that already know which shift they are writing for.
+  //
+  // This column REPLACED the old pos_receipts / pos_expenditures side tables.
+  // Those held a copy of the voucher (amount, account, note, creator, time) whose
+  // only non-duplicate column was the shift link, and because the link lived
+  // outside the voucher, deleting a voucher left the POS row behind as an orphan.
+  // The shift link belongs on the voucher: one row, one lifecycle.
+  sourceShiftId             Int?
   partyAccountId            Int?
   postedAt                  DateTime?
   cancelledAt               DateTime?
@@ -148,6 +162,9 @@ model UniversalVoucher {
   @@index([branchId])
   // "Only this counter" on the POS register filters on this alone.
   @@index([sourceCounterId])
+  // Everything a shift did — the Payment/Receipt tab, the shift close tally and
+  // the shift report all filter on this alone.
+  @@index([sourceShiftId])
   // Poll-and-skip: the finance top bar asks "any voucher touched since <ts>?" on
   // every tick. Without this the common answer (no) costs a full table scan,
   // because proving no row matches means visiting all of them.
@@ -212,6 +229,11 @@ enum VoucherLinkKind {
   SHOP_ORDER
   ORDER_PIPELINE
   ORDER_STATUS
+  // A counter advance Receipt, pointing at the order it was collected against.
+  // `targetId` = the ORDER's UniversalVoucher id (as text, like every other
+  // kind here). Replaced matching the old pos_receipts.note text
+  // ("Advance against <ref>"), which broke whenever the order was renumbered.
+  ADVANCE_FOR
 }
 
 model VoucherLink {

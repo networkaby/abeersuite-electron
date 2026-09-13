@@ -5,6 +5,7 @@ import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
+import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { holdRedemptions, type RedemptionIntent } from "@/modules/order/lib/redemptionHold";
@@ -119,17 +120,13 @@ export async function POST(req: NextRequest) {
                     userId: user!.id,
                     branchId: shiftBranchId,
                     narration: `Advance against ${order.reference}`,
+                    shiftId,
                 });
-                await tx.posReceipt.create({
-                    data: {
-                        shiftId,
-                        amountPaise: BigInt(Math.round(advance * 100)),
-                        accountId: body.accountId!,
-                        note: `Advance against ${order.reference}`,
-                        voucherId: rv.voucherId,
-                        createdById: user!.id,
-                    },
-                });
+                // Which order this advance was collected against. A real link to the
+                // order's spine, so a renumbered or re-referenced order still finds
+                // its advance — the refund path used to match the note text
+                // "Advance against <ref>" against the old pos_receipts table.
+                await syncVoucherLink(tx, rv.voucherId, "ADVANCE_FOR", order.universalVoucherId);
                 return rv;
             }, { timeout: 30_000, maxWait: 10_000 });
             receiptVoucherId = r.voucherId;

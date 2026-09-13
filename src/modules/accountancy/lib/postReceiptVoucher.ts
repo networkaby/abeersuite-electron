@@ -57,6 +57,13 @@ export type PostReceiptVoucherArgs = {
      *  Omit for office / online receipts that belong to no counter. */
     counterNumber?:    number | null;
     /**
+     * POS shift the receipt was taken on — stamped onto the voucher's
+     * `sourceShiftId`, which is how the counter's Payment/Receipt tab and the
+     * shift close tally find it. Omit for office / online receipts; the engine
+     * then falls back to whichever shift is standing at the source counter.
+     */
+    shiftId?:          number | null;
+    /**
      * When set, a VoucherAllocation row links this receipt to the originating
      * bill's universal-voucher spine — Receivables nets the amount out. Pass
      * `InvVoucher.universalVoucherId` for POS sales / office credit settlements.
@@ -134,6 +141,7 @@ export async function postSettlementVoucher(
         post:          true,
         branchId:      args.branchId ?? null,
         counterNumber: args.counterNumber ?? null,
+        shiftId:       args.shiftId,
     });
     const voucherRef = voucher.reference;
 

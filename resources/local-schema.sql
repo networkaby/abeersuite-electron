@@ -271,7 +271,7 @@ END $$;
 
 -- CreateEnum
 DO $$ BEGIN
-    CREATE TYPE "VoucherLinkKind" AS ENUM ('TICKET', 'DEAL', 'SHOP_ORDER', 'ORDER_PIPELINE', 'ORDER_STATUS');
+    CREATE TYPE "VoucherLinkKind" AS ENUM ('TICKET', 'DEAL', 'SHOP_ORDER', 'ORDER_PIPELINE', 'ORDER_STATUS', 'ADVANCE_FOR');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -1057,6 +1057,7 @@ CREATE TABLE IF NOT EXISTS "UniversalVoucher" (
     "binding" "VoucherBinding" NOT NULL DEFAULT 'REGULAR',
     "branchId" TEXT,
     "sourceCounterId" INTEGER,
+    "sourceShiftId" INTEGER,
     "partyAccountId" INTEGER,
     "postedAt" TIMESTAMP(3),
     "cancelledAt" TIMESTAMP(3),
@@ -1083,6 +1084,7 @@ ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "status" "VoucherStatus"
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "binding" "VoucherBinding" NOT NULL DEFAULT 'REGULAR';
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "sourceCounterId" INTEGER;
+ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "sourceShiftId" INTEGER;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "partyAccountId" INTEGER;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "postedAt" TIMESTAMP(3);
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);
@@ -2791,50 +2793,6 @@ ALTER TABLE "pos_cash_drops" ADD COLUMN IF NOT EXISTS "droppedById" INTEGER NOT 
 ALTER TABLE "pos_cash_drops" ADD COLUMN IF NOT EXISTS "notes" TEXT;
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "pos_expenditures" (
-    "id" SERIAL NOT NULL,
-    "shiftId" INTEGER NOT NULL,
-    "amountPaise" BIGINT NOT NULL,
-    "description" TEXT NOT NULL,
-    "expenseAccountId" INTEGER NOT NULL,
-    "voucherId" INTEGER,
-    "createdById" INTEGER NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "pos_expenditures_pkey" PRIMARY KEY ("id")
-);
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "shiftId" INTEGER NOT NULL;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "amountPaise" BIGINT NOT NULL;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER NOT NULL;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "voucherId" INTEGER;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
-ALTER TABLE "pos_expenditures" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- CreateTable
-CREATE TABLE IF NOT EXISTS "pos_receipts" (
-    "id" SERIAL NOT NULL,
-    "shiftId" INTEGER NOT NULL,
-    "amountPaise" BIGINT NOT NULL,
-    "accountId" INTEGER NOT NULL,
-    "note" TEXT,
-    "voucherId" INTEGER,
-    "createdById" INTEGER NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "pos_receipts_pkey" PRIMARY KEY ("id")
-);
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "shiftId" INTEGER NOT NULL;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "amountPaise" BIGINT NOT NULL;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "accountId" INTEGER NOT NULL;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "note" TEXT;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "voucherId" INTEGER;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
-ALTER TABLE "pos_receipts" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- CreateTable
 CREATE TABLE IF NOT EXISTS "pos_handovers" (
     "id" SERIAL NOT NULL,
     "fromShiftId" INTEGER NOT NULL,
@@ -3764,6 +3722,9 @@ CREATE INDEX IF NOT EXISTS "UniversalVoucher_branchId_idx" ON "UniversalVoucher"
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_sourceCounterId_idx" ON "UniversalVoucher"("sourceCounterId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "UniversalVoucher_sourceShiftId_idx" ON "UniversalVoucher"("sourceShiftId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_updatedAt_idx" ON "UniversalVoucher"("updatedAt");
 
 -- CreateIndex
@@ -4074,18 +4035,6 @@ CREATE INDEX IF NOT EXISTS "pos_shifts_updatedAt_idx" ON "pos_shifts"("updatedAt
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "pos_cash_drops_shiftId_droppedAt_idx" ON "pos_cash_drops"("shiftId", "droppedAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "pos_expenditures_voucherId_key" ON "pos_expenditures"("voucherId");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "pos_expenditures_shiftId_createdAt_idx" ON "pos_expenditures"("shiftId", "createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "pos_receipts_voucherId_key" ON "pos_receipts"("voucherId");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "pos_receipts_shiftId_createdAt_idx" ON "pos_receipts"("shiftId", "createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "pos_handovers_fromShiftId_key" ON "pos_handovers"("fromShiftId");
@@ -5296,20 +5245,6 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "pos_expenditures" ADD CONSTRAINT "pos_expenditures_shiftId_fkey" FOREIGN KEY ("shiftId") REFERENCES "pos_shifts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
-    ALTER TABLE "pos_receipts" ADD CONSTRAINT "pos_receipts_shiftId_fkey" FOREIGN KEY ("shiftId") REFERENCES "pos_shifts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
     ALTER TABLE "pos_handovers" ADD CONSTRAINT "pos_handovers_fromShiftId_fkey" FOREIGN KEY ("fromShiftId") REFERENCES "pos_shifts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -6330,13 +6265,6 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
-    IF to_regclass('public."pos_expenditures"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_expenditures";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_expenditures"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
-    END IF;
-END $$;
-DO $$ BEGIN
     IF to_regclass('public."pos_handovers"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_handovers";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_handovers"
@@ -6355,13 +6283,6 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "PositionRole";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PositionRole"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('positionId', 'roleId');
-    END IF;
-END $$;
-DO $$ BEGIN
-    IF to_regclass('public."pos_receipts"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_receipts";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_receipts"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN
