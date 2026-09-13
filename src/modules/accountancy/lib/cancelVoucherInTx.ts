@@ -8,7 +8,7 @@
 // the shift-row change.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, isCancelled } from "@/modules/accountancy/lib/voucherLifecycle";
 
 export async function cancelVoucherInTx(
@@ -29,17 +29,9 @@ export async function cancelVoucherInTx(
     if (opts.skipIfCancelled && isCancelled(voucher)) return;
     ensureCancelable(voucher);
 
-    // Spine lines are scalar — resolve the reversal's nature exactly as the
-    // engine resolved it when posting (group fallback included), or the
-    // null-nature ledgers never get their delta taken back out.
-    const nbById = await loadNormalBalances(tx, voucher.lines.map((l) => l.accountId));
-    for (const line of voucher.lines) {
-        const nb = nbById.get(line.accountId);
-        if (!nb) continue;
-        await tx.account.update({
-            where: { id: line.accountId },
-            data:  { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } },
-        });
-    }
+    // Spine lines are scalar — the shared helper resolves the reversal's nature
+    // exactly as the engine resolved it when posting (group fallback included),
+    // or the null-nature ledgers never get their delta taken back out.
+    await applyLineBalances(tx, voucher.lines, "reverse");
     await tx.universalVoucher.update({ where: { id: voucher.id }, data: cancelFields(userId, reason) });
 }

@@ -5,11 +5,20 @@
 //
 // One transaction, on the AUTHORITATIVE client (a counter's replica push drops
 // any pos_shifts write against a shift the DB says is CLOSED — see push.ts):
-//   1. Cancel the closing Contra (till → vault sweep) and the variance Journal,
-//      reversing their ledger balances exactly as the voucher cancel route does.
-//      One already cancelled by hand is left as it is — that is the state we want.
-//   2. Clear every closing figure and put the shift back to OPEN.
+//   1. PARK the closing Contra (till -> vault sweep) and the variance Journal back
+//      to DRAFT: ledger balances taken back out exactly as cancel does, but the
+//      rows -- and their voucher numbers -- kept. One already cancelled by hand is
+//      parked too; that reversal already happened, so only its status moves.
+//   2. Clear the closing FIGURES and put the shift back to OPEN, but KEEP the two
+//      voucher ids on the shift, so the re-close finds the parked rows and reposts
+//      them in place instead of raising fresh ones.
 // The manager then re-closes through the ordinary close route.
+//
+// Why park and not cancel: these two are raised by the system for itself, never
+// printed and never handed to anyone. A wrong close is not "this voucher happened
+// and was undone", it is "these figures were wrong". Cancelling burned two voucher
+// numbers and left two dead CANCELLED rows in the register on every single reopen.
+// See parkVoucherInTx.ts.
 //
 // Refused when a later shift already ran on this counter — it started from
 // this one's carry-over, so the till would be rewritten under it — and when
@@ -21,7 +30,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { cancelVoucherInTx } from "@/modules/accountancy/lib/cancelVoucherInTx";
+import { parkVoucherAsDraftInTx } from "@/modules/accountancy/lib/parkVoucherInTx";
 import { lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { shiftManageBlock } from "@/modules/pos/lib/shiftManage";
@@ -51,10 +60,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const block = await shiftManageBlock(db, shift);
         if (block) return NextResponse.json({ error: block }, { status: 409 });
 
-        const reason = `Shift #${shift.id} reopened: ${data.reason}`;
         await db.$transaction(async (tx) => {
-            if (shift.closingContraVoucherId != null) await cancelVoucherInTx(tx, shift.closingContraVoucherId, user!.id, reason, { skipIfCancelled: true });
-            if (shift.varianceJournalEntryId != null) await cancelVoucherInTx(tx, shift.varianceJournalEntryId, user!.id, reason, { skipIfCancelled: true });
+            // Park, don't cancel -- and keep the ids, so the re-close reposts these
+            // same two rows under the same two voucher numbers. A row that has since
+            // been hard-deleted parks to nothing; the re-close raises a fresh one.
+            const parkedContra   = shift.closingContraVoucherId != null && await parkVoucherAsDraftInTx(tx, shift.closingContraVoucherId);
+            const parkedVariance = shift.varianceJournalEntryId != null && await parkVoucherAsDraftInTx(tx, shift.varianceJournalEntryId);
             await tx.posShift.update({
                 where: { id: shift.id },
                 data: {
@@ -66,8 +77,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     variancePaise:          null,
                     carryOverNextPaise:     null,
                     toVaultPaise:           null,
-                    closingContraVoucherId: null,
-                    varianceJournalEntryId: null,
+                    closingContraVoucherId: parkedContra   ? shift.closingContraVoucherId : null,
+                    varianceJournalEntryId: parkedVariance ? shift.varianceJournalEntryId : null,
                     notes: shift.notes ? `${shift.notes}\nReopened: ${data.reason}` : `Reopened: ${data.reason}`,
                 },
             });

@@ -6,7 +6,7 @@
 // skipped on both sides and can never drift.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { ensureRestorable, restoreFields } from "@/modules/accountancy/lib/voucherLifecycle";
 
 export async function restoreVoucherInTx(
@@ -20,14 +20,6 @@ export async function restoreVoucherInTx(
     if (!voucher) return; // hard-deleted — nothing left to restore
     ensureRestorable(voucher);
 
-    const nbById = await loadNormalBalances(tx, voucher.lines.map((l) => l.accountId));
-    for (const line of voucher.lines) {
-        const nb = nbById.get(line.accountId);
-        if (!nb) continue;
-        await tx.account.update({
-            where: { id: line.accountId },
-            data:  { balance: { increment: balanceDelta(nb, line.type, toNumber(line.amount)) } },
-        });
-    }
+    await applyLineBalances(tx, voucher.lines, "apply");
     await tx.universalVoucher.update({ where: { id: voucher.id }, data: restoreFields() });
 }

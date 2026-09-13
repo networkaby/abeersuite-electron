@@ -25,6 +25,14 @@
 //
 // NOTE: No Contra is needed for the carry-over portion — that cash simply
 // stays in the counter till GL account (balance remains non-zero overnight).
+//
+// RE-CLOSE after a reopen: the reopen PARKED the previous close's Contra and
+// variance Journal as DRAFTs and left their ids on the shift. So steps 3 and 4
+// repost those same rows — same voucher numbers, fresh figures — instead of
+// raising new ones. A parked row the corrected close no longer needs (cash now
+// matches, or nothing left to sweep) is discarded outright: it never posted, so
+// there is no ledger effect, no print and nothing for an audit snapshot to
+// protect. See parkVoucherInTx.ts.
 
 import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
@@ -35,6 +43,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
+import { repostParkedVoucherInTx, discardParkedDraftInTx } from "@/modules/accountancy/lib/parkVoucherInTx";
 import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
@@ -158,6 +167,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const tillAccountId = shift.counter.tillAccountId;
 
+        // Rows the previous close raised and the reopen parked as DRAFTs. Reused
+        // below when the corrected close still needs them, discarded when it does not.
+        const parkedContraId   = shift.closingContraVoucherId;
+        const parkedVarianceId = shift.varianceJournalEntryId;
+
         const result = await prisma.$transaction(async (tx) => {
             // 3. Variance adjustment JE (counter till is debited/credited to match physical).
             let varianceJeId: number | null = null;
@@ -172,33 +186,57 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         { accountId: shortAccountId!, type: "DEBIT"  as const, amount: absRupees, description: "Cash Short (POS variance)" },
                         { accountId: tillAccountId,   type: "CREDIT" as const, amount: absRupees, description: "Cash drawer short" },
                     ];
-                // Variance through the engine (JE + balance deltas + spine in one
-                // place), posted as a JOURNAL voucher. `lines` already matches the
-                // engine's GL-line shape.
-                const { journalEntryId } = await enginePost(tx, {
-                    type:        "JOURNAL",
-                    date:        voucherDate,
-                    description: `Shift #${shift.id} variance — ${variance > 0 ? "over" : "short"} ₹${absRupees}`,
-                    glLines:     lines,
-                    stockMoves:  [],
-                }, user!.id);
-                varianceJeId = journalEntryId;
+                const description = `Shift #${shift.id} variance — ${variance > 0 ? "over" : "short"} ₹${absRupees}`;
+                // A parked Journal from the wrong close is reposted in place, so the
+                // variance keeps its original voucher number across any number of
+                // reopens. Nothing parked (first close, or the row was deleted) →
+                // raise a fresh one through the engine as before.
+                const reposted = parkedVarianceId != null && await repostParkedVoucherInTx(tx, {
+                    voucherId: parkedVarianceId, type: "JOURNAL", date: voucherDate,
+                    description, glLines: lines, userId: user!.id,
+                });
+                if (reposted) {
+                    varianceJeId = parkedVarianceId;
+                } else {
+                    // Variance through the engine (JE + balance deltas + spine in one
+                    // place), posted as a JOURNAL voucher. `lines` already matches the
+                    // engine's GL-line shape.
+                    const { journalEntryId } = await enginePost(tx, {
+                        type:        "JOURNAL",
+                        date:        voucherDate,
+                        description,
+                        glLines:     lines,
+                        stockMoves:  [],
+                    }, user!.id);
+                    varianceJeId = journalEntryId;
+                }
+            } else if (parkedVarianceId != null) {
+                // The corrected count matches: there is no variance to record at all,
+                // so the parked draft is dropped rather than reposted as a zero entry.
+                await discardParkedDraftInTx(tx, parkedVarianceId);
             }
 
             // 4. Closing Contra — sweep surplus to vault (only the non-carry-over portion).
             let closingContraId: number | null = null;
             if (toVaultPaise > BigInt(0)) {
                 const rupees = Number(toVaultPaise) / 100;
-                const closing = await postContra(tx, {
-                    date:      voucherDate,
-                    narration: `Shift close — ${shift.counter.name} → Vault (${shift.branch.name})`,
-                    userId:    user!.id,
-                    lines: [
-                        { accountId: shift.branch.vaultAccountId!, type: "DEBIT",  amount: rupees, description: "Cash received from counter" },
-                        { accountId: tillAccountId,                 type: "CREDIT", amount: rupees, description: `Cash swept to vault (keep ₹${Number(carryOverPaise) / 100} in counter)` },
-                    ],
+                const narration = `Shift close — ${shift.counter.name} → Vault (${shift.branch.name})`;
+                const lines = [
+                    { accountId: shift.branch.vaultAccountId!, type: "DEBIT"  as const, amount: rupees, description: "Cash received from counter" },
+                    { accountId: tillAccountId,                type: "CREDIT" as const, amount: rupees, description: `Cash swept to vault (keep ₹${Number(carryOverPaise) / 100} in counter)` },
+                ];
+                // Same rule as the variance Journal: repost the parked Contra in place
+                // so the sweep keeps its voucher number, else raise a fresh one.
+                const reposted = parkedContraId != null && await repostParkedVoucherInTx(tx, {
+                    voucherId: parkedContraId, type: "CONTRA", date: voucherDate,
+                    description: narration, narration, glLines: lines, userId: user!.id,
                 });
-                closingContraId = closing.voucherId;
+                closingContraId = reposted
+                    ? parkedContraId
+                    : (await postContra(tx, { date: voucherDate, narration, userId: user!.id, lines })).voucherId;
+            } else if (parkedContraId != null) {
+                // Nothing left to sweep on the corrected close — drop the parked draft.
+                await discardParkedDraftInTx(tx, parkedContraId);
             }
 
             // 5. Mark shift CLOSED.

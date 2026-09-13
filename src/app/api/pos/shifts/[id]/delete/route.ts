@@ -10,6 +10,10 @@
 // (vault top-up), the closing Contra and the variance Journal if present —
 // reversing their balances — then delete the row (drops cascade, but the guard
 // above means there are none).
+//
+// A shift that was reopened carries its closing vouchers as parked DRAFTs
+// (see parkVoucherInTx.ts). Those never posted, so they are discarded outright
+// rather than cancelled — there is nothing to reverse and nothing to keep.
 
 import { prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
@@ -18,6 +22,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { cancelVoucherInTx } from "@/modules/accountancy/lib/cancelVoucherInTx";
+import { discardParkedDraftInTx } from "@/modules/accountancy/lib/parkVoucherInTx";
 import { lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { shiftManageBlock } from "@/modules/pos/lib/shiftManage";
@@ -76,7 +81,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const reason = `Shift #${shift.id} deleted: ${data.reason}`;
         await db.$transaction(async (tx) => {
             for (const vid of [shift.openingContraVoucherId, shift.closingContraVoucherId, shift.varianceJournalEntryId]) {
-                if (vid != null) await cancelVoucherInTx(tx, vid, user!.id, reason, { skipIfCancelled: true });
+                if (vid == null) continue;
+                // A parked DRAFT goes for good; anything POSTED is cancelled as before.
+                if (await discardParkedDraftInTx(tx, vid)) continue;
+                await cancelVoucherInTx(tx, vid, user!.id, reason, { skipIfCancelled: true });
             }
             await tx.posShift.delete({ where: { id: shift.id } });
         }, { timeout: 30_000, maxWait: 10_000 });

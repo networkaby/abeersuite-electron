@@ -104,6 +104,30 @@ export async function loadNormalBalances(
     return out;
 }
 
+/**
+ * Apply — or take back — the cached `Account.balance` deltas for a voucher's GL
+ * lines. `"apply"` is what posting does; `"reverse"` is what cancel, park and
+ * hard-delete do. Nature resolves exactly as the engine resolved it on the way in
+ * (group fallback included), so a null-nature ledger is skipped on BOTH sides and
+ * can never drift. One place, so the two directions can never fall out of step.
+ */
+export async function applyLineBalances(
+    tx: import("@/generated/prisma/client").Prisma.TransactionClient,
+    lines: { accountId: number; type: "DEBIT" | "CREDIT"; amount: { toString(): string } | number | string }[],
+    direction: "apply" | "reverse",
+): Promise<void> {
+    const nbById = await loadNormalBalances(tx, lines.map((l) => l.accountId));
+    for (const line of lines) {
+        const nb = nbById.get(line.accountId);
+        if (!nb) continue;
+        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
+        await tx.account.update({
+            where: { id: line.accountId },
+            data:  { balance: direction === "apply" ? { increment: delta } : { decrement: delta } },
+        });
+    }
+}
+
 /** True when sum(debits) === sum(credits) within a rounding tolerance. */
 export function isBalanced(lines: LineForBalance[]): boolean {
     let net = 0;

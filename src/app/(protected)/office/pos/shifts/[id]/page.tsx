@@ -199,7 +199,7 @@ export default function ShiftDetailPage() {
                         <DialogDescription>
                             {asking === "delete"
                                 ? "Only a shift with no sales, drops or expenditures can be deleted. Its opening and closing vouchers are cancelled."
-                                : "The closing Contra and any variance entry are cancelled and the shift goes back to Open. You then close it again with the correct count."}
+                                : "The shift goes back to Open and its closing Contra and variance entry are held as drafts, keeping their voucher numbers. Close it again with the correct count and those same vouchers are rewritten — no cancelled entries pile up in the register."}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-1.5">
