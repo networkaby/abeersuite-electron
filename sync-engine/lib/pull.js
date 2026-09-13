@@ -150,7 +150,7 @@ async function upsert(client, table, pk, rows, jsonCols, cacheCols, force) {
  * `limit` bounds one cycle so a long-offline counter catches up in steps rather than
  * buffering an unbounded backlog; `more` tells the caller to come straight back.
  */
-async function pullWatermark(source, local, entry, since, sinceId, limit) {
+async function pullWatermark(source, local, entry, since, sinceId, limit, force) {
     const col = entry.column;
     // Compound-key tables cannot express this cursor; only InvProductBranch is both
     // compound-keyed and watermarked, and it falls back to the timestamp alone.
@@ -178,7 +178,15 @@ async function pullWatermark(source, local, entry, since, sinceId, limit) {
     if (rows.length === 0) return { pulled: 0, watermark: null, watermarkId: null, ids: [], more: false };
 
     const jsonCols = jsonColumnsOf(res.fields);
-    await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, rows, jsonCols, entry.cacheColumns));
+    // `force` is passed only on the cycle where this table's cursor definition changed
+    // (see state.cursorFor). The monotonic guard exists to stop an OLDER copy of a row
+    // overwriting a newer local one — but on that one cycle the two sides' `updatedAt`
+    // values are not comparable at all: one is the backfill stamped when the source got
+    // the column, the other the backfill stamped when this replica's schema was
+    // re-applied. Whichever happened later wins an argument it was never in. Leaving the
+    // guard on there is what silently discards the whole re-drain, which is exactly the
+    // failure this reset exists to repair.
+    await inReplicaTransaction(local, () => upsert(local, entry.table, entry.pk, rows, jsonCols, entry.cacheColumns, force));
 
     const last = rows[rows.length - 1];
     return {

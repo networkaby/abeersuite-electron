@@ -370,7 +370,13 @@ async function main() {
                     }
                     res = DRY ? { pulled: -1, ids: [] } : await pullFull(source, local, entry);
                 } else {
-                    const since = prior.get(entry.n) ? prior.get(entry.n).watermark : null;
+                    // Not `prior.watermark` directly: a stored high-water mark is only
+                    // comparable against the column it was read from, and that column
+                    // changes when a model gains @updatedAt. `cursorFor` drops the
+                    // cursor in that case so the table re-drains once, and says so.
+                    const resume = state.cursorFor(prior.get(entry.n), entry);
+                    if (resume.reason) console.log(`  ${model.padEnd(28)} ${resume.reason}`);
+                    const since = resume.since;
                     if (DRY) {
                         const where = since ? `WHERE ${JSON.stringify(entry.column)} > $1` : "";
                         const { rows } = await source.query(
@@ -385,10 +391,10 @@ async function main() {
                         // catches up while changes keep arriving.
                         res = { pulled: 0, watermark: null, watermarkId: null, ids: [], more: true };
                         let cursor = since;
-                        let cursorId = prior.get(entry.n) ? prior.get(entry.n).watermark_id : null;
+                        let cursorId = resume.sinceId;
                         let pages = 0;
                         while (res.more && pages < MAX_PAGES) {
-                            const page = await pullWatermark(source, local, entry, cursor, cursorId, PAGE);
+                            const page = await pullWatermark(source, local, entry, cursor, cursorId, PAGE, resume.reason != null);
                             if (page.pulled === 0) break;
                             res.pulled += page.pulled;
                             res.ids.push(...page.ids);

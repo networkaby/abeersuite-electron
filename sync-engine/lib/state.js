@@ -29,6 +29,16 @@ CREATE TABLE IF NOT EXISTS ${q(TABLE)} (
   -- no retry, just rows that never arrive. Pagination is therefore keyed on
   -- (watermark, watermark_id), which is a total order.
   watermark_id text,
+  -- WHICH source column the watermark above was read from. A stored high-water mark
+  -- only means something against the column it was taken from, and that column can
+  -- change underneath it: when a model gains @updatedAt the generator re-files the
+  -- table from append/createdAt to watermark/updatedAt, and the old createdAt value
+  -- is then read as an updatedAt cursor. Nothing about that is an error - it
+  -- silently skips rows or silently re-reads them, with no log either way. Call is
+  -- the worked example (2026-09-13): notes staff had already saved sat in Supabase
+  -- and never reached a counter. NULL on a row written by an engine older than this
+  -- column; see cursorFor for why that is not treated as a change.
+  cursor_column text,
   row_count   bigint,
   checksum    text,
   last_ok_at  timestamptz,
@@ -45,6 +55,37 @@ async function ensure(client) {
     // Additive upgrade for a replica whose _sync_state predates the tie-breaker.
     await client.query(`ALTER TABLE ${q(TABLE)} ADD COLUMN IF NOT EXISTS watermark_id text`);
     await client.query(`ALTER TABLE ${q(TABLE)} ADD COLUMN IF NOT EXISTS last_verify_at timestamptz`);
+    await client.query(`ALTER TABLE ${q(TABLE)} ADD COLUMN IF NOT EXISTS cursor_column text`);
+}
+
+/**
+ * Where to resume this table's delta pull - or nowhere, when the registry has changed
+ * what the stored cursor MEANS.
+ *
+ * Returns `{ since, sinceId, reason }`. `reason` is null in the ordinary case and a
+ * printable sentence when the cursor definition has moved; in that case the cursor is
+ * dropped and the table re-drains from the beginning. That is the cheap outcome: a
+ * re-drain costs one pass, whereas a mis-read cursor costs rows that never arrive at
+ * all and nothing to notice it by.
+ *
+ * A NULL `cursor_column` is deliberately NOT treated as a change. Every replica has
+ * one on the first cycle after this column ships, and resetting on that would re-read
+ * all ~111 tables out of Supabase - exactly the egress this engine exists to avoid.
+ * `strategy` has always been stored, and it carries the transition that matters today
+ * (append -> watermark) on its own.
+ */
+function cursorFor(row, entry) {
+    const none = { since: null, sinceId: null, reason: null };
+    if (!row) return none;
+
+    const wantColumn = entry.column || null;
+    if (row.strategy !== entry.strategy) {
+        return { ...none, reason: `strategy changed (${row.strategy} -> ${entry.strategy}) - cursor reset` };
+    }
+    if (row.cursor_column != null && row.cursor_column !== wantColumn) {
+        return { ...none, reason: `cursor column changed (${row.cursor_column} -> ${wantColumn}) - cursor reset` };
+    }
+    return { since: row.watermark || null, sinceId: row.watermark_id != null ? row.watermark_id : null, reason: null };
 }
 
 /** @returns {Promise<Map<number, any>>} */
@@ -55,12 +96,13 @@ async function readAll(client) {
 
 async function recordSuccess(client, entry, model, watermark, watermarkId) {
     await client.query(
-        `INSERT INTO ${q(TABLE)} (table_num, model, table_name, strategy, watermark, watermark_id, last_ok_at, last_error)
-         VALUES ($1, $2, $3, $4, $5, $6, now(), NULL)
+        `INSERT INTO ${q(TABLE)} (table_num, model, table_name, strategy, cursor_column, watermark, watermark_id, last_ok_at, last_error)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now(), NULL)
          ON CONFLICT (table_num) DO UPDATE SET
            model = EXCLUDED.model,
            table_name = EXCLUDED.table_name,
            strategy = EXCLUDED.strategy,
+           cursor_column = EXCLUDED.cursor_column,
            -- Never move a watermark backwards. A cycle that legitimately finds
            -- nothing new returns null, and letting that overwrite a real high-water
            -- mark would re-pull the table from the beginning next time.
@@ -70,7 +112,7 @@ async function recordSuccess(client, entry, model, watermark, watermarkId) {
                                ELSE EXCLUDED.watermark_id END,
            last_ok_at = now(),
            last_error = NULL`,
-        [entry.n, model, entry.table, entry.strategy, watermark || null, watermarkId != null ? String(watermarkId) : null],
+        [entry.n, model, entry.table, entry.strategy, entry.column || null, watermark || null, watermarkId != null ? String(watermarkId) : null],
     );
 }
 
@@ -91,4 +133,4 @@ async function recordVerified(client, entry, count, checksum) {
     );
 }
 
-module.exports = { ensure, readAll, recordSuccess, recordFailure, recordVerified, TABLE };
+module.exports = { ensure, readAll, cursorFor, recordSuccess, recordFailure, recordVerified, TABLE };
