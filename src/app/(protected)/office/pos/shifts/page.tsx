@@ -117,6 +117,7 @@ export default function ShiftsReportPage() {
                     <table className="w-full text-sm">
                         <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                             <tr>
+                                <th className="px-4 py-3 text-left font-medium">Shift #</th>
                                 <th className="px-4 py-3 text-left font-medium">Opened</th>
                                 <th className="px-4 py-3 text-left font-medium">User</th>
                                 <th className="px-4 py-3 text-left font-medium">Counter</th>
@@ -134,6 +135,9 @@ export default function ShiftsReportPage() {
                                 const variance = r.variancePaise ? Number(r.variancePaise) / 100 : null;
                                 return (
                                     <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
+                                        <td className="px-4 py-3 font-mono text-xs">
+                                            <Link href={`/office/pos/shifts/${r.id}`} className="hover:text-primary hover:underline">#{r.id}</Link>
+                                        </td>
                                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                                             {formatDate(r.openedAt)} · {new Date(r.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                         </td>
