@@ -52,7 +52,8 @@ or it breaks every fresh install. See
 ## Counters come before the server
 
 A schema change reaches Supabase and each counter replica separately, and the
-order is fixed: **release the counter build first, then run `pnpm db:migrate`.**
+order is fixed: **release the counter build first, then deploy to Vercel** (the
+deploy is what runs the migration now — see above).
 
 `sync-engine/lib/schemaGuard.js` halts a counter when the source has a column the
 replica lacks — `SCHEMA DRIFT — refusing to sync`, `exit 4`, **every table on that
@@ -60,6 +61,40 @@ till, not just the changed one**. A column the replica has spare is harmless, so
 build-first costs only an error on the one table until the migration lands, while
 server-first stops the shop. `docs/commands.md` §0 and the release skill say the
 same thing.
+
+## Fold, don't add
+
+Aim for **one migration per release**, not one per change. A migration file is
+editable right up until the moment a database records it, so while the current
+file is still unapplied anywhere, put the next schema edit *into that same file*
+and re-run it locally rather than starting a new one. Fewer files means fewer
+things to read before a deploy and fewer checksums to keep straight.
+
+Start a new file when either is true:
+
+- the current one has been deployed (its checksum is now frozen — see below), or
+- Postgres forces the split: a value added to an enum cannot be *used* in the
+  same transaction that adds it, and Prisma runs one migration per transaction.
+
+Re-running an edited unapplied migration locally: `pnpm db:migrate:status` to
+confirm it is still pending, fix the SQL, then `pnpm db:migrate`. If it half-ran
+on demo, reset demo and re-apply — demo is resettable, live is not.
+
+## Vercel applies them
+
+`package.json` has a `vercel-build` script — `prisma migrate deploy && pnpm build`
+— and Vercel prefers it over `build`. So a deploy updates live's schema and
+carries its data move, with no hand-run step. The plain `build` is left alone, so
+electron and local builds never migrate anything.
+
+Two conditions:
+
+- **`DIRECT_URL` must be set in Vercel's environment.** `prisma.config.ts` reads
+  `DIRECT_URL ?? DATABASE_URL`, and our `DATABASE_URL` is the transaction pooler
+  (port 6543, `pgbouncer=true`), which cannot run migrations.
+- **The counter release goes out first**, then the Vercel deploy — for the reason
+  in the next section. The build fails if a migration fails, which is wanted: a
+  half-migrated schema never goes live.
 
 ## Day-to-day
 

@@ -17,10 +17,14 @@ Every printable document must be customizable through the print template.
 
 Project is nearly complete. Prefer **simple, maintainable, DRY code**; remove duplicate logic and abstractions. Before deleting or changing a table, field or relation, check **seeds, APIs and UI**.
 
-### Database — `CURRENT_DB=demo`
+### Database — `CURRENT_DB=live`
 
 - **demo** = local PostgreSQL demo data, reset allowed. **live** = production data, **never full-reset**.
-- Schema changes must include migrations committed to `origin/dev` or `main`, and deployment must apply them without causing problems. How: `docs/migrations.md` (`pnpm db:migrate`; every pre-2026-09-13 database needs `pnpm db:migrate:baseline` once).
+- Schema changes ship as **committed migrations**, and **Vercel applies them**: the `vercel-build` script runs `prisma migrate deploy` before the build, so a deploy brings the live DB's tables, columns and carried data with it. `pnpm db:migrate` by hand is now only for demo, counters and recovery. Vercel must have `DIRECT_URL` set — `prisma.config.ts` prefers it, and the pooled `DATABASE_URL` (port 6543, pgbouncer) cannot run migrations.
+- **One migration per release, not one per change.** While a migration file has not been applied to *any* database, keep folding further schema edits into that same file and re-run it locally. Start a new file only once it has been deployed, or when Postgres forces it — an enum `ADD VALUE` cannot be used in the transaction that adds it (see the `ADVANCE_FOR` pair).
+- **An applied migration is frozen.** Its checksum is recorded in `_prisma_migrations`; editing it makes `migrate deploy` refuse to run at all. Never edit `0_init`. Every pre-2026-09-13 database needs `pnpm db:migrate:baseline` once.
+- **Counter release goes out before the Vercel deploy** that carries the migration. The server getting ahead of a replica halts every table on that till (`schemaGuard.js`, exit 4), not just the changed one.
+- How, in full: `docs/migrations.md`.
 
 ## 4. Reuse First
 
@@ -47,13 +51,13 @@ Commands: `pnpm seed:check-docs` · `pnpm seed:fix-docs` · `pnpm precommit` · 
 Priority: **UX → DB → Server**.
 
 - **UX:** optimistic updates with rollback, prefetch, no blank flicker, show cached data while refreshing.
-- **DB:** DB pagination, select needed columns only, avoid `SELECT *` and query-per-item.
+- **DB:** DB pagination, select needed columns only, avoid `SELECT `\* and query-per-item.
 - **Server:** browser cache, batch mutations, defer non-critical work, ISR for store pages, short TTL for office.
 
 ## 8. Branches
 
-- Worktree work **starts from `main`** (`git merge --ff-only main` before editing) and **merges back into `main`**. If the checkout is currently on `dev`, merge it into `dev` as well — `dev` is not a substitute for `main`.
-- **Releases go out from `main` only** — never `dev`, `d_office`, or a detached HEAD; the tag points at `HEAD`.
+- Worktree work **starts from** `main` (`git merge --ff-only main` before editing) and **merges back into** `main`. If the checkout is currently on `dev`, merge it into `dev` as well — `dev` is not a substitute for `main`.
+- **Releases go out from** `main` **only** — never `dev`, `d_office`, or a detached HEAD; the tag points at `HEAD`.
 - **Never push.** Release is the one exception — §9 steps 5, 7 and 8 are pushes the owner asked for by saying "release". Everything else stops at the commit.
 
 ## 9. Release — the agent carries it out
@@ -62,10 +66,10 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 1. `git checkout main && git merge --ff-only dev` — not fast-forwardable → stop and report, never force.
 2. Bump `version` in `package.json`.
-3. **Write `RELEASE_NOTES.md` yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. `[urgent]` in the first line only when every counter must restart today. Never leave last version's notes.
+3. **Write** `RELEASE_NOTES.md` **yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. `[urgent]` in the first line only when every counter must restart today. Never leave last version's notes.
 4. Commit the bump + notes on `main`.
 5. `git push origin main && git push production main` — push before building.
-6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push tag to `origin`, publish. **A `-` in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
+6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push tag to `origin`, publish. **A** `-` **in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
 7. `git push production main --tags`.
 8. `git checkout dev && git merge --ff-only main && git push origin dev`.
 9. Report: both remotes level, and installer + blockmap + `latest.yml` + notes present on every release repo.

@@ -18,6 +18,7 @@
     "build:downloader": "tsx scripts/build-downloader.ts",
     "build:downloader:dev": "tsx scripts/build-downloader-dev.ts",
     "build:update-splash": "tsx scripts/build-update-splash.ts",
+    "vercel-build": "prisma migrate deploy && pnpm build",
     "build": "tsx scripts/strip-build.ts && prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/counter-build.ts",
     "start": "next start",
     "lint": "eslint",
