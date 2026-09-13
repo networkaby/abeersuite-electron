@@ -15,8 +15,9 @@ export type { LoyaltyRates, EarnRule, EarnLine, RulesIndex, TaxonomyMaps } from 
 export {
     applyLoyaltyForSale,
     reverseLoyaltyForReturn,
+    restoreLoyaltyAfterCancel,
     adjustPoints,
     applyMilestones,
     liveBalance,
 } from "./applyLoyalty";
-export type { ApplySaleArgs, ReverseReturnArgs, MilestoneTier, AwardMilestonesArgs } from "./applyLoyalty";
+export type { ApplySaleArgs, ReverseReturnArgs, RestoreAfterCancelArgs, MilestoneTier, AwardMilestonesArgs } from "./applyLoyalty";

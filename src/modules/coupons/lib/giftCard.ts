@@ -172,3 +172,50 @@ export async function refundGiftCard(
     });
     return newBal;
 }
+
+/// Undo the refund a CANCEL put back on the card — the mirror of `refundGiftCard`,
+/// used when a cancelled sale is restored.
+///
+/// Only REFUND rows keyed to the sale's OWN spine are cancel's work: a refund
+/// caused by goods coming back is recorded against the credit note's spine, so a
+/// sale that was partly returned and then cancelled gives back only the cancel
+/// half here and leaves the return's refund standing.
+///
+/// The card can have been spent since the cancel, so the draw is re-taken with a
+/// plain decrement (the balance may legitimately land below what the office
+/// expects — the office adjusts the card afterwards rather than the restore
+/// refusing). Deleting the rows also resets `refundGiftCard`'s own
+/// already-refunded guard, so a later re-cancel refunds once more, not twice.
+export async function undoGiftCardRefundForVoucher(
+    tx: Tx, args: { universalVoucherId: number },
+): Promise<{ giftCardId: number; amount: number }[]> {
+    const refunds = await tx.giftCardTxn.findMany({
+        where:  { universalVoucherId: args.universalVoucherId, type: "REFUND" },
+        select: { id: true, giftCardId: true, amount: true },
+    });
+    if (refunds.length === 0) return [];
+
+    const byCard = new Map<number, number>();
+    for (const r of refunds) {
+        byCard.set(r.giftCardId, round2((byCard.get(r.giftCardId) ?? 0) + moneyNumber(r.amount)));
+    }
+
+    const undone: { giftCardId: number; amount: number }[] = [];
+    for (const [giftCardId, amount] of byCard) {
+        if (amount <= 0.005) continue;
+        const gc = await tx.giftCard.update({
+            where:  { id: giftCardId },
+            data:   { balance: { decrement: amount } },
+            select: { balance: true, status: true },
+        });
+        // A card the refund revived goes back to REDEEMED once the draw empties it
+        // again. DRAFT / EXPIRED / VOID stay put, exactly as on the refund side.
+        if (gc.status === "ACTIVE" && round2(moneyNumber(gc.balance)) <= 0.005) {
+            await tx.giftCard.update({ where: { id: giftCardId }, data: { status: "REDEEMED" } });
+        }
+        undone.push({ giftCardId, amount });
+    }
+
+    await tx.giftCardTxn.deleteMany({ where: { id: { in: refunds.map((r) => r.id) } } });
+    return undone;
+}

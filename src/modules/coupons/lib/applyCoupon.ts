@@ -407,3 +407,22 @@ export async function reverseCouponRedemption(
     });
     return { reversed: res.count };
 }
+
+/// Re-consume the usage slot a CANCEL freed — the mirror of
+/// `reverseCouponRedemption`, used when a cancelled sale is restored.
+///
+/// The coupon's own limits are NOT re-checked: the slot belonged to this sale
+/// before it was cancelled, so taking it back is restoring the truth, not a new
+/// redemption. If the freed slot was meanwhile spent elsewhere the coupon ends up
+/// over its limit and the office adjusts it — the restore never refuses.
+export async function restoreCouponRedemption(
+    tx: Tx,
+    args: { originalUniversalVoucherId: number | null },
+): Promise<{ restored: number }> {
+    if (args.originalUniversalVoucherId == null) return { restored: 0 };
+    const res = await tx.couponRedemption.updateMany({
+        where: { universalVoucherId: args.originalUniversalVoucherId, reversedAt: { not: null } },
+        data: { reversedAt: null },
+    });
+    return { restored: res.count };
+}

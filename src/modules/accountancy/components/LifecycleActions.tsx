@@ -1,12 +1,19 @@
 "use client";
-// Shared Cancel / Delete / Hard-Delete button strip + dialogs.
+// Shared Cancel / Restore / Delete / Hard-Delete button strip + dialogs.
 // Used on every voucher detail page (Sales, Purchases, Estimates, JournalEntry) so the
 // lifecycle UX is uniform across voucher types.
 //
-// Soft-delete + Restore were retired (2026-06-09): Cancel (void, stays visible) and
+// SOFT-delete + its restore were retired (2026-06-09): Cancel (void, stays visible) and
 // Hard-Delete (purge, but recoverable from the Recycle Bin via the AuditLog snapshot)
 // cover the same ground without a third hidden-but-recoverable tier. A DRAFT (impact-free)
 // is removed straight through Hard-Delete — it lands in the Recycle Bin like everything else.
+//
+// RESTORE here is a different thing: it un-cancels, putting a CANCELLED voucher back to
+// POSTED and re-applying exactly what the cancel reversed. It is gated by `canCancel` —
+// whoever may cancel a voucher may restore it. When the rewards a cancel handed back
+// (gift-card money, a coupon slot, loyalty points) have since been spent on another bill,
+// the API answers 409 with a `conflicts` list instead of acting; the dialog shows those in
+// plain words and the user may still go ahead, which re-sends with `force`.
 //
 // The caller supplies the API base path (e.g. /api/inventory/vouchers/42) and the resource
 // label for dialog copy. The component handles state, requests, and toasts.
@@ -16,7 +23,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { useRouter } from "next/navigation";
-import { Loader2, XCircle, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, XCircle, Trash2, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +37,9 @@ export interface LifecycleVoucher {
     deletedAt?:  string | null;
     cancelledAt?: string | null;
 }
+
+/** One thing that will go short if the cancelled rewards are taken back. */
+type RestoreConflict = { kind: string; label: string; message: string };
 
 export function LifecycleActions({
     voucher, apiBasePath, listPath, label,
@@ -54,6 +64,10 @@ export function LifecycleActions({
     const [showHardDelete, setShowHardDelete] = useState(false);
     const [hardDeleteReason, setHardDeleteReason] = useState("");
 
+    const [showRestore, setShowRestore] = useState(false);
+    const [restoreReason, setRestoreReason] = useState("");
+    const [restoreConflicts, setRestoreConflicts] = useState<RestoreConflict[]>([]);
+
     const post = async (path: string, body?: object, successMsg = "Done") => {
         setBusy(path);
         try {
@@ -62,6 +76,26 @@ export function LifecycleActions({
             onChanged();
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Failed"));
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    // `force` is sent only after the user has read the conflict list and chosen to
+    // go ahead — a first attempt never forces, so the warning can never be skipped.
+    const submitRestore = async (force: boolean) => {
+        setBusy("restore");
+        try {
+            await axios.post(`${apiBasePath}/restore`, { reason: restoreReason, force });
+            toast.success(`${label} restored`);
+            setShowRestore(false); setRestoreReason(""); setRestoreConflicts([]);
+            onChanged();
+        } catch (err: unknown) {
+            const conflicts = axios.isAxiosError(err) && err.response?.status === 409
+                ? (err.response.data?.conflicts as RestoreConflict[] | undefined)
+                : undefined;
+            if (conflicts?.length) setRestoreConflicts(conflicts);
+            else toast.error(extractApiError(err, "Failed to restore"));
         } finally {
             setBusy(null);
         }
@@ -82,6 +116,11 @@ export function LifecycleActions({
                 {isPosted && canCancel && !isCancelled && (
                     <Button variant="outline" onClick={() => setShowCancel(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10">
                         <XCircle size={14} /> Cancel
+                    </Button>
+                )}
+                {isCancelled && canCancel && (
+                    <Button variant="outline" onClick={() => { setRestoreConflicts([]); setShowRestore(true); }}>
+                        <RotateCcw size={14} /> Restore
                     </Button>
                 )}
                 {canRemove && (
@@ -110,6 +149,51 @@ export function LifecycleActions({
                             setShowCancel(false); setCancelReason("");
                         }}>
                             {busy === "cancel" && <Loader2 size={14} className="animate-spin" />} Confirm Cancel
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showRestore} onOpenChange={(o) => { if (!o) { setShowRestore(false); setRestoreConflicts([]); } }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className={restoreConflicts.length > 0 ? "flex items-center gap-2 text-destructive" : undefined}>
+                            {restoreConflicts.length > 0 && <AlertTriangle size={18} />}
+                            {restoreConflicts.length > 0 ? `Restoring ${label} will go short` : `Restore ${label}`}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {restoreConflicts.length > 0
+                                ? "Some of what the cancel gave back has already been used on another bill. Restoring takes it back anyway — you can adjust it afterwards."
+                                : "Puts the voucher back to POSTED and re-applies the stock / GL impact the cancel reversed, along with any gift card, coupon or loyalty points it gave back."}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {restoreConflicts.length > 0 ? (
+                        <ul className="space-y-2 text-sm">
+                            {restoreConflicts.map((c, i) => (
+                                <li key={i} className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5">
+                                    {c.message}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="space-y-1.5">
+                            <Label>Reason</Label>
+                            <Textarea value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} rows={3} placeholder="Reason for restoring..." />
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setShowRestore(false); setRestoreConflicts([]); }}>
+                            {restoreConflicts.length > 0 ? "Cancel restore" : "Back"}
+                        </Button>
+                        <Button
+                            variant={restoreConflicts.length > 0 ? "destructive" : "default"}
+                            disabled={!restoreReason.trim() || busy === "restore"}
+                            onClick={() => submitRestore(restoreConflicts.length > 0)}
+                        >
+                            {busy === "restore" && <Loader2 size={14} className="animate-spin" />}
+                            {restoreConflicts.length > 0 ? "Restore anyway" : "Confirm Restore"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

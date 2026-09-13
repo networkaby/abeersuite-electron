@@ -264,6 +264,54 @@ export async function reverseStockMovement(
 //   InvProductBranch.stock = Σ(inQty − outQty) per branch
 // `openingStock` is folded in exactly as GL folds Account.openingBalance into
 // aggregateClosingAsOf — it is NOT a ledger row.
+/**
+ * Remove the counter-entries a CANCEL wrote for one voucher — the mirror of
+ * `reverseStockMovement`, used when a cancelled voucher is restored. Returns the
+ * product ids touched so the caller can `recomputeProductStock` them.
+ *
+ * Cancel appends EXACTLY ONE counter per original row, so the spine's ledger
+ * holds 2N rows and the newest N are the reversal. Splitting by id beats testing
+ * `amount < 0`: a free-issue line (zero rate) reverses to `amount` 0, which no
+ * sign test can tell apart from its own original, and that row left behind would
+ * silently hold the stock down after the restore.
+ *
+ * The halves are checked to mirror each other (in↔out swapped) before anything is
+ * deleted; an unexpected trail throws rather than guessing, because a wrong guess
+ * here corrupts stock quietly.
+ */
+export async function deleteCancelCounterRows(
+    tx: Prisma.TransactionClient,
+    universalVoucherId: number,
+): Promise<number[]> {
+    const rows = await tx.invStockLedger.findMany({
+        where:   { universalVoucherId },
+        orderBy: { id: "asc" },
+        select:  { id: true, productId: true, branchId: true, inQty: true, outQty: true },
+    });
+    if (rows.length === 0) return [];
+    if (rows.length % 2 !== 0) {
+        throw new Error(`Stock trail for voucher ${universalVoucherId} has ${rows.length} rows — cannot tell the cancel reversal apart. Restore aborted.`);
+    }
+
+    const half = rows.length / 2;
+    const originals = rows.slice(0, half);
+    const counters = rows.slice(half);
+    for (let i = 0; i < half; i++) {
+        const o = originals[i];
+        const c = counters[i];
+        const mirrors = o.productId === c.productId
+            && o.branchId === c.branchId
+            && Math.round(toNumber(o.inQty)) === Math.round(toNumber(c.outQty))
+            && Math.round(toNumber(o.outQty)) === Math.round(toNumber(c.inQty));
+        if (!mirrors) {
+            throw new Error(`Stock trail for voucher ${universalVoucherId} is not a clean cancel reversal. Restore aborted.`);
+        }
+    }
+
+    await tx.invStockLedger.deleteMany({ where: { id: { in: counters.map((r) => r.id) } } });
+    return [...new Set(rows.map((r) => r.productId))];
+}
+
 export async function recomputeProductStock(
     tx: Prisma.TransactionClient,
     productIds: number[],

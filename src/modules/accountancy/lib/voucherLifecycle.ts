@@ -2,9 +2,18 @@
 // the finance Voucher table. Two tiers:
 //
 //   POSTED  ──cancel──►  CANCELLED   (reference number kept, GL reversed)
+//      ▲                     │
+//      └──────restore────────┘        (re-applies exactly what cancel reversed)
 //      │
 //      └─delete──► row REMOVED, whole graph snapshotted to AuditLog = the
 //                  Recycle Bin (restore via POST /api/audit/[id]/restore)
+//
+// Restore is the mirror of cancel, not a fresh posting: cancel's every artifact
+// is identifiable (negative stock-ledger row, gift-card REFUND txn, coupon
+// `reversedAt` stamp, REVERSAL_RETURN loyalty rows — all keyed to the voucher's
+// OWN spine), so restore deletes those rows and puts the counters back. It is
+// gated by the same permission as cancel: whoever may cancel a voucher kind may
+// restore it.
 //
 // There is only ONE delete. The middle soft-delete tier (set `deletedAt`, hide
 // from views, restore flips it back) was removed on 2026-08-01: it had no UI
@@ -69,6 +78,11 @@ export function ensureCancelable(v: LifecycleVoucher): void {
   if (!isPosted(v)) throw new LifecycleError(409, "Only POSTED vouchers can be cancelled");
 }
 
+export function ensureRestorable(v: LifecycleVoucher): void {
+  if (isDeleted(v)) throw new LifecycleError(409, "Cannot restore a deleted voucher — use the Recycle Bin");
+  if (!isCancelled(v)) throw new LifecycleError(409, "Only cancelled vouchers can be restored");
+}
+
 // ── Field-shape helpers for prisma `data` payloads ────────────────────────
 
 /** Cancel-tier field updates for vouchers using VoucherStatus (every voucher kind, post-2026-05-24). */
@@ -78,6 +92,16 @@ export function cancelFields(userId: number, reason: string) {
     cancelledAt: new Date(),
     cancelledById: userId,
     cancelReason: reason,
+  };
+}
+
+/** Restore-tier field updates — clears every stamp `cancelFields` set. */
+export function restoreFields() {
+  return {
+    status: "POSTED" as const,
+    cancelledAt: null,
+    cancelledById: null,
+    cancelReason: null,
   };
 }
 

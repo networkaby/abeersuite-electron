@@ -275,6 +275,77 @@ export async function reverseLoyaltyForReturn(
     return { pointsClawedBack, pointsRestored, newBalance };
 }
 
+export type RestoreAfterCancelArgs = {
+    accountId: number;
+    /// The cancelled sale's own spine. Cancel passed this as BOTH the original and
+    /// the return spine, so its REVERSAL_RETURN rows sit here — a genuine
+    /// SALE_RETURN keys its rows to the return's spine and is left alone.
+    universalVoucherId: number | null;
+    rates: LoyaltyRates;
+};
+
+/// Undo the loyalty reversal a CANCEL wrote — the mirror of
+/// `reverseLoyaltyForReturn` as cancel calls it, used when a cancelled sale is
+/// restored. Claw-back rows go back onto the sale's earn lot; the restore lot
+/// cancel created is removed; the lifetime counters are put back; the ledger rows
+/// are deleted so a later re-cancel reverses once, not twice.
+export async function restoreLoyaltyAfterCancel(
+    tx: Tx,
+    args: RestoreAfterCancelArgs,
+): Promise<{ pointsClawedBack: number; pointsRestored: number; newBalance: number } | null> {
+    if (args.universalVoucherId == null) return null;
+    const rows = await tx.loyaltyLedger.findMany({
+        where:  { universalVoucherId: args.universalVoucherId, reason: "REVERSAL_RETURN" },
+        select: { id: true, delta: true },
+    });
+    if (rows.length === 0) return null;
+
+    await ensureAccount(tx, args.accountId);
+    const pointsClawedBack = rows.filter((r) => r.delta < 0).reduce((s, r) => s - r.delta, 0);
+    const pointsRestored = rows.filter((r) => r.delta > 0).reduce((s, r) => s + r.delta, 0);
+
+    // ── Put the clawed-back points back on the sale's own earn lot. That lot is
+    // the EARLIEST on this spine — the same `id: "asc"` pick cancel used to take
+    // them off, so the points land exactly where they came from.
+    if (pointsClawedBack > 0) {
+        const lot = await tx.loyaltyLot.findFirst({
+            where:   { accountId: args.accountId, universalVoucherId: args.universalVoucherId },
+            orderBy: { id: "asc" },
+            select:  { id: true, pointsRemaining: true },
+        });
+        if (lot) {
+            await tx.loyaltyLot.update({ where: { id: lot.id }, data: { pointsRemaining: lot.pointsRemaining + pointsClawedBack } });
+        }
+    }
+
+    // ── Drop the lot cancel minted to hand redeemed points back. Both lots hang
+    // off this spine, so match on the amount and take the NEWEST — never the
+    // original earn lot, which is older and carries a different `pointsEarned`
+    // unless the two happen to be equal, in which case the newest is still the
+    // minted one.
+    if (pointsRestored > 0) {
+        const minted = await tx.loyaltyLot.findFirst({
+            where:   { accountId: args.accountId, universalVoucherId: args.universalVoucherId, pointsEarned: pointsRestored },
+            orderBy: { id: "desc" },
+            select:  { id: true },
+        });
+        if (minted) await tx.loyaltyLot.delete({ where: { id: minted.id } });
+    }
+
+    await tx.loyaltyLedger.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+    if (pointsClawedBack > 0 || pointsRestored > 0) {
+        await tx.loyaltyAccount.update({
+            where: { accountId: args.accountId },
+            data:  {
+                totalEarned:   { increment: pointsClawedBack },
+                totalRedeemed: { increment: pointsRestored },
+            },
+        });
+    }
+
+    return { pointsClawedBack, pointsRestored, newBalance: await liveBalance(tx, args.accountId, args.rates) };
+}
+
 /// A milestone tier, narrowed to what the awarder needs.
 export type MilestoneTier = { id: number; threshold: number; bonusPoints: number; label: string | null; issuesCouponTemplateId: number | null };
 
