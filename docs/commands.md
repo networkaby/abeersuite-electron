@@ -409,9 +409,11 @@ more than once.** A one-time fix that ships with a schema change goes into
 There are two appliers: `seed:apply-taxonomy` and `seed:sync-permissions`. The rest were
 deleted once it was clear the code already did their job: `seed:apply-permissions` (the
 permission catalog is the source of truth and both seeds apply it in full) and
-`seed:apply-voucher-series-counters` (`seedVoucherSeries` creates the counter-1 rows, and
-`GET /api/accountancy/voucher-series` runs it on every request, so the rows self-heal just
-by opening the page).
+`seed:apply-voucher-series-counters` (`ensureVoucherSeries` creates the counter-1 rows, and
+`GET /api/accountancy/voucher-series` runs it on every request from the office or Vercel, so
+the rows self-heal just by opening the page — never on a local-write counter, whose replica
+is a mirror; the one-time fixups with deletes run only from the seed scripts via
+`seedVoucherSeries`).
 
 Shipping a permission is normally a plain `pnpm prisma db seed`. `seed:sync-permissions`
 exists for the case where that hammer is too big — chiefly a **new nav link**, which

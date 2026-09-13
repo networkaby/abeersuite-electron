@@ -1,20 +1,23 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { seedVoucherSeries } from "@/modules/accountancy/lib/seedVoucherSeries";
+import { ensureVoucherSeries } from "@/modules/accountancy/lib/seedVoucherSeries";
+import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/accountancy/voucher-series
-// Returns all 7 VoucherSeries rows. Auto-seeds on first call if the table is empty.
+// Returns every VoucherSeries row with its per-counter numbers.
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
 
     try {
-        // Always-run seed: uses skipDuplicates so existing rows aren't touched,
-        // but newly-added kinds (e.g. SALE / PURCHASE / ESTIMATE for inventory
-        // vouchers) get auto-inserted on first visit after the seed expands.
-        await seedVoucherSeries(prisma);
+        // Self-heal: create-only, so a newly-added kind appears on first visit
+        // without a seed. Only where the data is authored — a counter writing
+        // locally holds a mirror (the rows arrive by pull), and the one-time
+        // fixups with deletes stay in the seed scripts, where the replica guard
+        // cannot refuse them. See ensureVoucherSeries.
+        if (!shouldWriteLocal()) await ensureVoucherSeries(prisma);
 
         const series = await prisma.voucherSeries.findMany({
             orderBy: [
