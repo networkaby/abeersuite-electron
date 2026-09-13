@@ -110,12 +110,14 @@ export function todayIso(): string {
 
 /** Today as yyyy-mm-dd in the SHOP's timezone — for server code stamping a
  *  voucher/order/refund date from "now". Never use `todayIso()` /
- *  `new Date().toISOString()` server-side for this; both read the wrong clock. */
-export function businessTodayIso(): string {
+ *  `new Date().toISOString()` server-side for this; both read the wrong clock.
+ *  Pass an instant to get the shop's calendar day of THAT moment instead
+ *  (a back-dated shift close, for instance). */
+export function businessTodayIso(at: Date = new Date()): string {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: BUSINESS_TIME_ZONE,
         year: "numeric", month: "2-digit", day: "2-digit",
-    }).formatToParts(new Date());
+    }).formatToParts(at);
     const get = (t: string) => parts.find((p) => p.type === t)!.value;
     return `${get("year")}-${get("month")}-${get("day")}`;
 }

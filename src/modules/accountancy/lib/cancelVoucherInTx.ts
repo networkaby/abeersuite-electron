@@ -9,19 +9,24 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
-import { ensureCancelable, cancelFields } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureCancelable, cancelFields, isCancelled } from "@/modules/accountancy/lib/voucherLifecycle";
 
 export async function cancelVoucherInTx(
     tx: Prisma.TransactionClient,
     voucherId: number,
     userId: number,
     reason: string,
+    // Shift reopen/delete: a voucher someone already cancelled by hand from the
+    // vouchers screen is exactly the state we want — skip it instead of refusing
+    // the whole correction with "already cancelled".
+    opts: { skipIfCancelled?: boolean } = {},
 ): Promise<void> {
     const voucher = await tx.universalVoucher.findUnique({
         where:   { id: voucherId },
         include: { lines: true },
     });
     if (!voucher) return; // already hard-deleted — nothing left to void
+    if (opts.skipIfCancelled && isCancelled(voucher)) return;
     ensureCancelable(voucher);
 
     // Spine lines are scalar — resolve the reversal's nature exactly as the

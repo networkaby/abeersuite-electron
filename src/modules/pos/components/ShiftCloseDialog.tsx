@@ -31,6 +31,8 @@ import { fmt } from "@/utils/constants";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDigitsInput } from "@/shared/lib/format";
+import { toDateTimeLocalInput } from "@/shared/lib/format/dateInput";
+import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,7 +83,7 @@ const DEFAULT_DENOMS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ShiftCloseDialog({
-    open, onOpenChange, shiftId, onClosed, allowHandover = true, forCashierName,
+    open, onOpenChange, shiftId, onClosed, allowHandover = true, forCashierName, initialClosedAt,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -92,6 +94,11 @@ export function ShiftCloseDialog({
     // the dialog as closing on that cashier's behalf.
     allowHandover?: boolean;
     forCashierName?: string;
+    // Re-close after a reopen (shift detail page): shows an editable "Closed on"
+    // date-time, prefilled with the ORIGINAL close moment so the corrected close
+    // lands on the same day in the books. Manager-only server-side. Absent →
+    // the field is hidden and the close is stamped "now".
+    initialClosedAt?: string | null;
 }) {
     const [detail, setDetail]     = useState<ShiftDetail | null>(null);
     const [loading, setLoading]   = useState(false);
@@ -119,6 +126,8 @@ export function ShiftCloseDialog({
 
     // Vault mode — carry-over
     const [carryOver, setCarryOver] = useState("");
+    // Back-dated close (re-close flow only) — `yyyy-MM-ddTHH:mm` local.
+    const [closedAt, setClosedAt]   = useState("");
 
     // Handover mode
     const [candidates, setCandidates]               = useState<Candidate[]>([]);
@@ -136,6 +145,8 @@ export function ShiftCloseDialog({
         setSelectedUserId(null);
         setReport(null);
         setDenoms({});
+        // null = open shift closed from the detail page: default to now, still editable.
+        setClosedAt(initialClosedAt !== undefined ? toDateTimeLocalInput(initialClosedAt ?? new Date().toISOString()) : "");
         // Load the org's configured cash denominations (country-specific). Falls
         // back to DEFAULT_DENOMS if unset or the call fails.
         getOrgDefaults()
@@ -149,7 +160,7 @@ export function ShiftCloseDialog({
             })
             .catch(() => toast.error("Failed to load shift summary"))
             .finally(() => setLoading(false));
-    }, [open, shiftId]);
+    }, [open, shiftId, initialClosedAt]);
 
     // Load handover candidates when mode switches to "handover".
     useEffect(() => {
@@ -176,12 +187,15 @@ export function ShiftCloseDialog({
         if (!detail) return;
         if (declaredNum < 0) { toast.error("Declared count can't be negative"); return; }
         if (carryOverNum > declaredNum) { toast.error("Carry-over cannot exceed declared count"); return; }
+        if (initialClosedAt !== undefined && !closedAt) { toast.error("Enter the close date and time"); return; }
         setSubmitting(true);
         try {
             const { data } = await axios.patch<ClosedReport>(`/api/pos/shifts/${shiftId}/close`, {
                 declaredCashPaise:  Math.round(declaredNum * 100),
                 carryOverNextPaise: Math.round(carryOverNum * 100),
                 notes:              notes.trim() || undefined,
+                // Local wall-clock → ISO instant, so the server stores the exact moment.
+                closedAt:           initialClosedAt !== undefined ? new Date(closedAt).toISOString() : undefined,
             });
             onClosed();          // refresh parent (clears ActiveShiftBar)
             setReport(data);     // swap form → report
@@ -376,6 +390,15 @@ export function ShiftCloseDialog({
                                 {/* Vault mode */}
                                 {mode === "vault" && (
                                     <>
+                                        {initialClosedAt !== undefined && (
+                                            <div className="space-y-1.5">
+                                                <Label>Closed on</Label>
+                                                <TallyDateTimeInput value={closedAt} onValueChange={setClosedAt} />
+                                                <p className="text-xs text-muted-foreground">
+                                                    Prefilled with the original close time — change it if that was wrong. The Contra and variance entry are dated this day.
+                                                </p>
+                                            </div>
+                                        )}
                                         <div className="space-y-1.5">
                                             <Label htmlFor="carry-over">Keep in counter overnight (₹)</Label>
                                             <Input

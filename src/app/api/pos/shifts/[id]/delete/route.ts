@@ -76,7 +76,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const reason = `Shift #${shift.id} deleted: ${data.reason}`;
         await db.$transaction(async (tx) => {
             for (const vid of [shift.openingContraVoucherId, shift.closingContraVoucherId, shift.varianceJournalEntryId]) {
-                if (vid != null) await cancelVoucherInTx(tx, vid, user!.id, reason);
+                if (vid != null) await cancelVoucherInTx(tx, vid, user!.id, reason, { skipIfCancelled: true });
             }
             await tx.posShift.delete({ where: { id: shift.id } });
         }, { timeout: 30_000, maxWait: 10_000 });

@@ -89,6 +89,9 @@ export default function ShiftDetailPage() {
     const [reason, setReason]     = useState("");
     const [busy, setBusy]         = useState(false);
     const [reclosing, setReclosing] = useState(false);
+    // The close moment the shift had BEFORE reopen — the re-close dialog offers
+    // it back as the default "Closed on", so the correction stays on that day.
+    const [originalClosedAt, setOriginalClosedAt] = useState<string | null>(null);
 
     const load = useCallback(() => {
         axios.get<ShiftDetail>(`/api/pos/shifts/${id}`)
@@ -105,6 +108,7 @@ export default function ShiftDetailPage() {
         if (!asking || !reason.trim()) { toast.error("Please give a reason"); return; }
         setBusy(true);
         try {
+            if (asking === "reopen") setOriginalClosedAt(shift?.closedAt ?? null);
             await axios.post(`/api/pos/shifts/${id}/${asking}`, { reason: reason.trim() });
             if (asking === "delete") {
                 toast.success("Shift deleted");
@@ -221,6 +225,7 @@ export default function ShiftDetailPage() {
                     shiftId={shift.id}
                     allowHandover={false}
                     forCashierName={shift.user.name}
+                    initialClosedAt={originalClosedAt}
                     onClosed={load}
                 />
             )}
@@ -264,7 +269,7 @@ export default function ShiftDetailPage() {
                 <StatBox label="Carry-over (start)"   value={`₹${fmt(Number(shift.carryOverFloatPaise) / 100)}`} />
                 <StatBox label="Vault top-up"          value={`₹${fmt(Number(shift.vaultTopUpPaise) / 100)}`} />
                 <StatBox label="Till movement"         value={`${Number(shift.tillMovementPaise) < 0 ? "−" : "+"}₹${fmt(Math.abs(Number(shift.tillMovementPaise)) / 100)}`} />
-                <StatBox label="Expected / Declared"
+                <StatBox label="Declared / Expected"
                     value={
                         shift.declaredCashPaise != null
                             ? `₹${fmt(Number(shift.declaredCashPaise) / 100)} / ₹${fmt(Number(shift.expectedCashPaise) / 100)}`

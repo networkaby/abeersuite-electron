@@ -7,6 +7,7 @@
 // any pos_shifts write against a shift the DB says is CLOSED — see push.ts):
 //   1. Cancel the closing Contra (till → vault sweep) and the variance Journal,
 //      reversing their ledger balances exactly as the voucher cancel route does.
+//      One already cancelled by hand is left as it is — that is the state we want.
 //   2. Clear every closing figure and put the shift back to OPEN.
 // The manager then re-closes through the ordinary close route.
 //
@@ -52,8 +53,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const reason = `Shift #${shift.id} reopened: ${data.reason}`;
         await db.$transaction(async (tx) => {
-            if (shift.closingContraVoucherId != null) await cancelVoucherInTx(tx, shift.closingContraVoucherId, user!.id, reason);
-            if (shift.varianceJournalEntryId != null) await cancelVoucherInTx(tx, shift.varianceJournalEntryId, user!.id, reason);
+            if (shift.closingContraVoucherId != null) await cancelVoucherInTx(tx, shift.closingContraVoucherId, user!.id, reason, { skipIfCancelled: true });
+            if (shift.varianceJournalEntryId != null) await cancelVoucherInTx(tx, shift.varianceJournalEntryId, user!.id, reason, { skipIfCancelled: true });
             await tx.posShift.update({
                 where: { id: shift.id },
                 data: {

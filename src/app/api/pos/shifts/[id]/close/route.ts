@@ -2,7 +2,12 @@
 //
 // Close a shift and sweep surplus cash to the vault.
 //
-// Body: { declaredCashPaise, carryOverNextPaise?, notes? }
+// Body: { declaredCashPaise, carryOverNextPaise?, notes?, closedAt? }
+//
+// closedAt — ISO date-time. Manager-only (the force-close tick): a re-close
+//   after a wrong close is stamped with the ORIGINAL close moment, not now, so
+//   the shift and its Contra / variance Journal fall on the right day in the
+//   books. Must sit between openedAt and now. Absent → now.
 //
 // carryOverNextPaise — how much cash to LEAVE in the counter overnight.
 //   Default: the counter's defaultFloatPaise (set once on PosCounter).
@@ -33,11 +38,13 @@ import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
+import { startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 
 const closeSchema = z.object({
     declaredCashPaise:  z.number().int().min(0),
     carryOverNextPaise: z.number().int().min(0).optional(), // defaults to counter.defaultFloatPaise
     notes:              z.string().trim().max(500).optional(),
+    closedAt:           z.string().datetime({ offset: true }).optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -81,6 +88,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }
+
+        // Back-dated close (re-close after reopen). Only the manager may date it;
+        // a cashier's close is always "now".
+        let closedAt = new Date();
+        if (data.closedAt !== undefined) {
+            if (!canManage) return NextResponse.json({ error: "Only a manager can set the close time" }, { status: 403 });
+            closedAt = new Date(data.closedAt);
+            if (closedAt.getTime() > Date.now())              return NextResponse.json({ error: "Close time cannot be in the future" }, { status: 400 });
+            if (closedAt.getTime() < shift.openedAt.getTime()) return NextResponse.json({ error: "Close time cannot be before the shift opened" }, { status: 400 });
+        }
+        // GL date of the closing vouchers: the close day (calendar day in the
+        // shop's timezone), or the ordinary business date when not back-dated.
+        const voucherDate = data.closedAt !== undefined ? startOfDayUtc(businessTodayIso(closedAt)) : requestBusinessDate(req);
 
         // Resolve carry-over amount — defaults to 0 if not provided in body.
         // The cashier always enters the overnight amount manually; there is no
@@ -157,7 +177,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 // engine's GL-line shape.
                 const { journalEntryId } = await enginePost(tx, {
                     type:        "JOURNAL",
-                    date:        requestBusinessDate(req),
+                    date:        voucherDate,
                     description: `Shift #${shift.id} variance — ${variance > 0 ? "over" : "short"} ₹${absRupees}`,
                     glLines:     lines,
                     stockMoves:  [],
@@ -170,7 +190,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (toVaultPaise > BigInt(0)) {
                 const rupees = Number(toVaultPaise) / 100;
                 const closing = await postContra(tx, {
-                    date:      requestBusinessDate(req),
+                    date:      voucherDate,
                     narration: `Shift close — ${shift.counter.name} → Vault (${shift.branch.name})`,
                     userId:    user!.id,
                     lines: [
@@ -186,7 +206,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 where: { id: shift.id },
                 data: {
                     status:                 "CLOSED",
-                    closedAt:               new Date(),
+                    closedAt,
                     closedById:             user!.id,
                     declaredCashPaise:      declaredPaise,
                     expectedCashPaise:      expectedPaise,
