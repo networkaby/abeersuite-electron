@@ -9,7 +9,18 @@ const KINDS = [
     { kind: "DEBIT_NOTE",  label: "Debit Note",      typeValue: "DRN", voucherType: "DEBIT_NOTE" as const },
 ] as const;
 
-export async function seedVoucherSeries(prisma: PrismaClient) {
+/**
+ * Create-or-relabel only: BooksConfig singleton, every series row, its counter-1 row,
+ * and label sync. Never deletes. This is what the Voucher Series page may run on
+ * every open, so a newly-added kind appears without a seed — Vercel runs migrations
+ * on deploy but no seed, so this is how the live DB learns a new kind.
+ *
+ * The one-time fixups (prefix migrations, retiring GL_POSTING) live in
+ * `seedVoucherSeries` below and run from the seed scripts only: migration-style work
+ * has no place in a GET, and a counter's replica guard refuses every delete — even one
+ * matching nothing — which took the Year Ending page down on a local-write till.
+ */
+export async function ensureVoucherSeries(prisma: PrismaClient) {
     // Ensure BooksConfig singleton exists (default Apr 1)
     const config = await prisma.booksConfig.upsert({
         where: { id: 1 },
@@ -124,6 +135,15 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
             data:  { label: r.label },
         }).catch(() => { /* ignore if row doesn't exist yet */ })
     ));
+}
+
+/**
+ * The seed-script entry (bootstrap-seed, codeOwnedCatalog): ensure the rows, then
+ * apply the one-time fixups. Idempotent — every fixup matches nothing on a DB that
+ * already carries it.
+ */
+export async function seedVoucherSeries(prisma: PrismaClient) {
+    await ensureVoucherSeries(prisma);
 
     // One-time typeValue migration: JOURNAL series used to emit `JE-…` which
     // collided visually with the engine's GL postings. Flip to `JV-` so the
