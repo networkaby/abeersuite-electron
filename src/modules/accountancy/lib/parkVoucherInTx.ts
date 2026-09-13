@@ -14,6 +14,18 @@
 //   POSTED ──park──► DRAFT ──repost──► POSTED     (same id, same voucherNo)
 //                      └───discard───► gone       (never posted → nothing to audit)
 //
+// ── These two DELETE, so they are office-only ───────────────────────────────
+// `repostParkedVoucherInTx` clears the old GL lines before the engine writes the
+// new ones, and `discardParkedDraftInTx` removes the draft outright. A counter's
+// replica refuses EVERY delete (the replica write guard in prismaClient.ts: a
+// delete replayed against a row another machine has since changed cannot be
+// recovered). So both must run on a client that reaches the authoritative
+// database — either `prismaAuthoritative`, or the mode-routed `prisma` on a
+// machine whose writes are not going local. Callers check first and say so
+// plainly; see the shift close route, which refuses a re-close of a reopened
+// shift while the till is writing locally rather than throwing from inside its
+// transaction.
+//
 // `discardParkedDraftInTx` writes NO AuditLog on purpose, and refuses anything
 // that is not a DRAFT. A draft carries no ledger effect, no print and no history,
 // so there is nothing for an audit snapshot to protect — but a POSTED system

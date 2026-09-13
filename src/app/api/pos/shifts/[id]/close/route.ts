@@ -35,6 +35,7 @@
 // protect. See parkVoucherInTx.ts.
 
 import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { NextResponse } from "next/server";
@@ -171,6 +172,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // below when the corrected close still needs them, discarded when it does not.
         const parkedContraId   = shift.closingContraVoucherId;
         const parkedVarianceId = shift.varianceJournalEntryId;
+
+        // Re-closing a REOPENED shift rewrites those parked vouchers, and rewriting
+        // them means deleting rows — the old GL lines on the repost, the whole draft
+        // on a discard. A counter's replica refuses every delete (see the replica
+        // write guard in prismaClient.ts: a delete replayed against a row another
+        // machine has since changed cannot be recovered), so doing this on a till
+        // that has fallen back to local writes would throw from inside the
+        // transaction and the cashier would simply be unable to close.
+        //
+        // Say so before starting instead. This costs an ordinary close nothing —
+        // only a reopened shift carries parked ids — and it asks for no more than
+        // the reopen already did: that correction was made at the office, on the
+        // authoritative database, and finishing it needs the same connection.
+        if ((parkedContraId != null || parkedVarianceId != null) && shouldWriteLocal()) {
+            return NextResponse.json(
+                { error: "This shift was reopened at the office, so closing it again needs the office connection. Try once the counter is back online." },
+                { status: 409 },
+            );
+        }
 
         const result = await prisma.$transaction(async (tx) => {
             // 3. Variance adjustment JE (counter till is debited/credited to match physical).
