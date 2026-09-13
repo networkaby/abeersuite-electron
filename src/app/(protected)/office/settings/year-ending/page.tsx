@@ -248,7 +248,7 @@ export default function YearEndingPage() {
             const { data } = await axios.post<SeriesRow>(`/api/accountancy/voucher-series/${kind}/reset`);
             setSeries((prev) => prev.map((r) => (r.kind === kind ? data : r)));
             setResetKind(null);
-            toast.success("Counter reset to 0");
+            toast.success("Counter reset — tills follow on their next bill");
         } catch (err) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
             toast.error(msg ?? "Failed to reset");
@@ -803,7 +803,9 @@ export default function YearEndingPage() {
                         <DialogHeader>
                             <DialogTitle>Reset Counter — {resetRow?.label}</DialogTitle>
                             <DialogDescription>
-                                This sets <strong>nextSeq → 0</strong>. The next voucher will be:
+                                The office restarts from <strong>1</strong> now. Each counter restarts on its
+                                own next bill — even one that is offline today — so nothing a till has
+                                already numbered is lost. The next voucher will be:
                                 <br />
                                 <code className="mt-2 inline-block rounded bg-muted px-2 py-1 font-mono text-sm">
                                     {resetRow ? assembleReference({ ...resetRow, nextSeq: 1 }, 24) : ""}

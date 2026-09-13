@@ -19,6 +19,13 @@ export interface SyncRegistryEntry {
     dates: string[];
     /** Running totals rebuilt from the ledger on each side — never sent on an UPDATE. */
     cache: string[];
+    /**
+     * This machine owns its rows outright; the cloud is never the authority on them.
+     * The push path never drops such a row as "superseded" by a newer cloud copy —
+     * for VoucherSeriesCounter that drop is a lost increment and a re-issued invoice
+     * number. The sync engine reads the same flag to hold its deletes.
+     */
+    localAuthority?: boolean;
 }
 
 export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
@@ -128,7 +135,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "VoucherLink": { model: "VoucherLink", delegate: "voucherLink", pk: ["id"], exact: [], dates: [], cache: [] },
     "VoucherPrintTemplate": { model: "VoucherPrintTemplate", delegate: "voucherPrintTemplate", pk: ["kind"], exact: [], dates: ["updatedAt"], cache: [] },
     "VoucherSeries": { model: "VoucherSeries", delegate: "voucherSeries", pk: ["kind"], exact: [], dates: ["updatedAt"], cache: [] },
-    "VoucherSeriesCounter": { model: "VoucherSeriesCounter", delegate: "voucherSeriesCounter", pk: ["kind", "counterNumber"], exact: [], dates: ["updatedAt"], cache: [] },
+    "VoucherSeriesCounter": { model: "VoucherSeriesCounter", delegate: "voucherSeriesCounter", pk: ["kind", "counterNumber"], exact: [], dates: ["updatedAt"], cache: [], localAuthority: true },
     "WallPost": { model: "WallPost", delegate: "wallPost", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "WallPostComment": { model: "WallPostComment", delegate: "wallPostComment", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "WallPostLike": { model: "WallPostLike", delegate: "wallPostLike", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },

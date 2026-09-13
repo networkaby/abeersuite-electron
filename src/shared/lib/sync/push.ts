@@ -319,8 +319,20 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
 
             if (incoming && !Number.isNaN(incoming.getTime())) {
                 if (existing?.updatedAt && existing.updatedAt >= incoming) {
-                    pushedIds.push(rec.id);
-                    continue;
+                    // A row this machine owns (`localAuthority`: VoucherSeriesCounter,
+                    // one row per counter and only that counter writes it) is never
+                    // "superseded" — a newer cloud copy is a write that should not have
+                    // happened, and dropping the local image loses an increment and
+                    // re-issues a printed invoice number. It goes up regardless.
+                    if (!entry.localAuthority) {
+                        pushedIds.push(rec.id);
+                        continue;
+                    }
+                    console.warn(
+                        `[SyncPush] ${rec.table_name} ${JSON.stringify(where)}: cloud row is newer ` +
+                        `(${existing.updatedAt.toISOString()} >= ${incoming.toISOString()}) but this ` +
+                        `machine owns it — pushing the local row over it.`,
+                    );
                 }
             }
 

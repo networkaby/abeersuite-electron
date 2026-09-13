@@ -257,7 +257,11 @@ through it:
 - **`localAuthority`** tables (registry `overrides`): this machine owns its rows and
   the cloud is never the authority. Nothing is deleted, pushed or not — this closes the
   dead-letter and upstream-delete cases for the one table where the loss is
-  unacceptable. Adds and updates from the source still apply.
+  unacceptable. Adds and updates from the source still apply — which is why the
+  writers upstream must never touch another machine's row: the office's "Reset Counter"
+  bumps `VoucherSeries.resetGen` instead of zeroing every counter's row, and each
+  counter zeroes its own the next time it numbers. The app's push path reads the same
+  flag and never drops such a row as "superseded" by a newer cloud copy.
 
 The log says `held N local row(s) not yet pushed`; such a table stays unverified until
 the push lands, which is the truthful state.

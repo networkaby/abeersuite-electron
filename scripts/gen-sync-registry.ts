@@ -107,9 +107,10 @@ function renderTsMirror(tables: Record<string, TableEntry>, models: Model[]): st
             const exact = exactFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
             const dates = dateFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
             const cache = (t.cacheColumns ?? []).map((c) => JSON.stringify(c)).join(", ");
+            const local = t.localAuthority ? ", localAuthority: true" : "";
             return `    ${JSON.stringify(t.table)}: { model: ${JSON.stringify(model)}, `
                 + `delegate: ${JSON.stringify(model.charAt(0).toLowerCase() + model.slice(1))}, `
-                + `pk: [${pk}], exact: [${exact}], dates: [${dates}], cache: [${cache}] },`;
+                + `pk: [${pk}], exact: [${exact}], dates: [${dates}], cache: [${cache}]${local} },`;
         });
 
     return `// GENERATED FILE — DO NOT EDIT BY HAND.
@@ -133,6 +134,13 @@ export interface SyncRegistryEntry {
     dates: string[];
     /** Running totals rebuilt from the ledger on each side — never sent on an UPDATE. */
     cache: string[];
+    /**
+     * This machine owns its rows outright; the cloud is never the authority on them.
+     * The push path never drops such a row as "superseded" by a newer cloud copy —
+     * for VoucherSeriesCounter that drop is a lost increment and a re-issued invoice
+     * number. The sync engine reads the same flag to hold its deletes.
+     */
+    localAuthority?: boolean;
 }
 
 export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
