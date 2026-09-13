@@ -94,7 +94,7 @@ export async function saleToSpec(
     return {
         type:       voucher.type,
         date:       voucher.date,
-        reference:  voucher.reference,
+        reference:  voucher.reference ?? undefined,   // unnumbered until it posts
         narration:  readPartyName(voucher.partyJson) ?? voucher.description,
         // Why there are no GL lines, in the builder's own words. An empty
         // `glLines` on its own cannot tell "this type never posts to GL" from

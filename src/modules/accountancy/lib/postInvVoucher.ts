@@ -26,6 +26,7 @@
 //     intra-state, matching pre-refactor behaviour.
 
 import type { Prisma, PrismaClient, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { toNumber } from "./balance";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
@@ -106,7 +107,10 @@ export type PostVoucherInput = {
     voucher: {
         id: number;
         type: string;
-        reference: string;
+        /// The voucher's user-facing number. Null on a voucher that has not been
+        /// numbered yet — the spine takes its number when it POSTS, so a draft
+        /// being posted right now still has none at spec-build time.
+        reference: string | null;
         date: Date;
         description: string;
         /// Frozen party snapshot — name used for JE descriptions (read via readPartyName).
@@ -325,7 +329,7 @@ export async function buildInvVoucherGlLines(
     if (tenderRows.length === 0) {
         return { skip: true, reason: "refused", notes: [
             ...notes,
-            `no tender rows on voucher ${voucher.reference} — caller must supply at least one`,
+            `no tender rows on voucher ${voucher.reference ?? formatUvNo(voucher.id)} — caller must supply at least one`,
         ] };
     }
 

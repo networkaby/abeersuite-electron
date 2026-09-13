@@ -315,7 +315,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 // bridge produced them (no branchId passed to the engine).
                 const spec = await saleToSpec(
                     tx,
-                    { ...voucher, date: voucher.universalVoucher!.date, reference: voucher.universalVoucher?.voucherNo ?? "", description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
+                    { ...voucher, date: voucher.universalVoucher!.date, reference: voucher.universalVoucher?.voucherNo ?? null, description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
                     { branchId: voucher.branchId, lines: voucher.lines },
                 );
                 const out = await enginePost(tx, spec, userId, { existingSpineId: voucher.universalVoucherId });

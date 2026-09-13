@@ -201,6 +201,7 @@ export async function engineGlArm(
     // voucher-save by engineCreateSpine). Fill its GL lines + flip DRAFT→POSTED.
     if (args.existingSpineId != null) {
         const id = args.existingSpineId;
+        const voucherNoArg = args.voucherNo?.trim() || null;
         await tx.voucherGlLine.createMany({ data: glLineBase.map((d) => ({ universalVoucherId: id, ...d })) });
         await tx.universalVoucher.update({
             where: { id },
@@ -210,7 +211,12 @@ export async function engineGlArm(
                 sourceCreatedAt: postedAt,
                 description,
                 ...(args.type        != null ? { type:           args.type }        : {}),
-                ...(args.voucherNo != null ? { voucherNo:    args.voucherNo } : {}),
+                // Truthiness, not `!= null`: the inventory post path hands us the
+                // spine's own voucherNo and an absent one used to arrive as "",
+                // which passed a null check and blanked the column. An empty
+                // string also defeats every `?? formatUvNo(id)` fallback
+                // downstream, since those are nullish coalesces.
+                ...(voucherNoArg ? { voucherNo: voucherNoArg } : {}),
                 ...(args.narration   != null ? { narration:      args.narration }   : {}),
                 ...(args.partyAccountId != null ? { partyAccountId: args.partyAccountId } : {}),
                 ...(branchId != null ? { branchId } : {}),   // 5D-12: branch primary on the spine
@@ -237,7 +243,7 @@ export async function engineGlArm(
         data: {
             type:                 args.type ?? "JOURNAL",
             binding:              bindingForType(args.type ?? "JOURNAL"),   // 5D-9
-            voucherNo:          args.voucherNo ?? null,
+            voucherNo:            args.voucherNo?.trim() || null,
             date,
             description,
             narration:            args.narration ?? null,
@@ -297,7 +303,7 @@ export async function engineCreateSpine(
         data: {
             type:           args.type,
             binding:        bindingForType(args.type),   // 5D-9
-            voucherNo:    args.voucherNo ?? null,
+            voucherNo:    args.voucherNo?.trim() || null,
             date:           args.date,
             description:    args.description,
             narration:      args.narration ?? null,
@@ -385,7 +391,7 @@ export async function enginePost(
             branchId,
             postedAt,
             type:        spec.type,
-            voucherNo: spec.reference ?? null,
+            voucherNo:   spec.reference?.trim() || null,   // "" is not a number
             narration:   spec.narration ?? null,
             existingSpineId: opts.existingSpineId ?? null,   // Phase 5 5.0: attach to draft spine
         });
