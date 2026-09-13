@@ -55,7 +55,7 @@ export type ActiveShift = {
 };
 
 type Summary = {
-    cashSalesPaise: string;
+    tillMovementPaise: string;
     dropsPaise: string;
     runningExpectedPaise: string;
 };
@@ -80,7 +80,7 @@ export function ActiveShiftBar({
     const refresh = useCallback(() => {
         axios.get<Summary>(`/api/pos/shifts/${shift.id}`)
             .then((r) => setSummary({
-                cashSalesPaise:       r.data.cashSalesPaise,
+                tillMovementPaise:    r.data.tillMovementPaise,
                 dropsPaise:           r.data.dropsPaise,
                 runningExpectedPaise: r.data.runningExpectedPaise,
             }))
@@ -106,7 +106,7 @@ export function ActiveShiftBar({
 
     const openedTime = new Date(shift.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const expected   = summary ? Number(summary.runningExpectedPaise) / 100 : Number(shift.openingFloatPaise) / 100;
-    const cashSales  = summary ? Number(summary.cashSalesPaise) / 100        : 0;
+    const movement   = summary ? Number(summary.tillMovementPaise) / 100     : 0;
     const drops      = summary ? Number(summary.dropsPaise) / 100            : 0;
 
     // ── AWAITING_HANDOVER state ───────────────────────────────────────────
@@ -156,7 +156,7 @@ export function ActiveShiftBar({
                     <Clock size={12} /> {openedTime}
                 </span>
                 <span className="text-muted-foreground">·</span>
-                <span>Sales <span className="font-mono font-semibold">₹{fmt(cashSales)}</span></span>
+                <span title="Net movement on the till ledger since open">Till <span className="font-mono font-semibold">{movement < 0 ? "−" : "+"}₹{fmt(Math.abs(movement))}</span></span>
                 <span className="text-muted-foreground">·</span>
                 <span>Drops <span className="font-mono font-semibold">₹{fmt(drops)}</span></span>
                 <span className="text-muted-foreground">·</span>

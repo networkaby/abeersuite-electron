@@ -2,9 +2,9 @@
 //
 // Counter-centric status board (manager view). For each active counter in scope,
 // returns its latest shift classified as:
-//   • OPEN / AWAITING_HANDOVER — occupied: cashier, day opening, cash sales, and
-//     the live cash-in-drawer (running expected = opening + cashSales − drops −
-//     expenditures — the same math ActiveShiftBar / the close route use).
+//   • OPEN / AWAITING_HANDOVER — occupied: cashier, day opening, the till's
+//     movement per book since open, and the live cash-in-drawer (running
+//     expected = till book balance − drops — the same math the close route uses).
 //   • FREE — no open shift: the last close (declared / variance / to-vault /
 //     closed-by) plus the till GL balance (carry-over float sitting in the drawer).
 //
@@ -18,8 +18,8 @@ import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/acti
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { sumPaise, computeExpectedCash, effectiveBalancePaise } from "@/modules/pos/lib/shiftMath";
+import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 type Person = { id: number; name: string };
 
@@ -28,7 +28,7 @@ type OpenInfo = {
     user:                 Person;
     openedAt:             Date;
     openingFloatPaise:    string;
-    cashSalesPaise:       string;
+    tillMovementPaise:    string;
     runningExpectedPaise: string;
     // AWAITING_HANDOVER only — who is taking over + what A declared.
     handoverToUser:       Person | null;
@@ -83,35 +83,28 @@ export async function GET(req: NextRequest) {
                         user:         { select: { id: true, name: true } },
                         closedBy:     { select: { id: true, name: true } },
                         drops:        { select: { amountPaise: true } },
-                        expenditures: { select: { amountPaise: true } },
-                        handover:     { select: { declaredByAPaise: true, toUser: { select: { id: true, name: true } } } },
+                        handover:    { select: { declaredByAPaise: true, toUser: { select: { id: true, name: true } } } },
                     },
                 },
             },
         });
 
         const cards = await Promise.all(counters.map(async (c) => {
-            const tillBalancePaise = BigInt(Math.round(effectiveAccountBalance(c.tillAccount) * 100));
+            const tillBalancePaise = effectiveBalancePaise(c.tillAccount);
             const shift = c.shifts[0] ?? null;
             const live  = !!shift && (shift.status === "OPEN" || shift.status === "AWAITING_HANDOVER");
 
             let open: OpenInfo | null = null;
             if (live && shift) {
-                const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
-                    tillAccountId: c.tillAccount.id,
-                    openedAt:      shift.openedAt,
-                    closedAt:      null, // still open → sums up to now
-                });
-                const dropsPaise        = sumPaise(shift.drops);
-                const expendituresPaise = sumPaise(shift.expenditures);
-                const runningExpectedPaise = shift.openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise;
+                const dropsPaise           = sumPaise(shift.drops);
+                const runningExpectedPaise = computeExpectedCash(tillBalancePaise, dropsPaise);
                 const awaiting = shift.status === "AWAITING_HANDOVER";
                 open = {
                     shiftId:              shift.id,
                     user:                 shift.user,
                     openedAt:             shift.openedAt,
                     openingFloatPaise:    shift.openingFloatPaise.toString(),
-                    cashSalesPaise:       cashSalesPaise.toString(),
+                    tillMovementPaise:    (tillBalancePaise - shift.openingFloatPaise).toString(),
                     runningExpectedPaise: runningExpectedPaise.toString(),
                     handoverToUser:       awaiting ? (shift.handover?.toUser ?? null) : null,
                     declaredByAPaise:     awaiting ? (shift.handover?.declaredByAPaise?.toString() ?? null) : null,

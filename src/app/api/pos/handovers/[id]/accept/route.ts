@@ -5,7 +5,7 @@
 //
 // One atomic transaction:
 //   1. Variance JE on A's shift (against the counter till):
-//        expected = A's opening + A's cash sales − A's drops
+//        expected = counter till book balance now − A's drops
 //        variance = A's declared − A's expected  (A's count vs books)
 //        discrepancy = A's declared − B's counted (A handed X, B received Y)
 //        total variance against counter till = expected − B's counted
@@ -17,14 +17,15 @@
 // The counter till balance after = B's counted − (B's counted − carryOver) = carryOver ✓
 // A is accountable for any gap between books and B's count (shown on A's shift).
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, sumShiftCashRefundsPaise } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
@@ -77,19 +78,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const counterId     = fromShift.counter.id;
         const branchId      = fromShift.branchId;
 
-        // Cash sales on A's shift — sum of debits to the counter till from
-        // receipt vouchers in A's shift window (replaces the legacy CASH
-        // Payment query; Payment table retired 2026-05-24).
-        const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
-            tillAccountId,
-            openedAt: fromShift.openedAt,
+        // Expected on A's shift = the till's book balance now − A's drops. Read
+        // AUTHORITATIVE (as shift open/close do) — this figure posts the variance JE.
+        const tillNow = await prismaAuthoritative.account.findUnique({
+            where:  { id: tillAccountId },
+            select: EFFECTIVE_BALANCE_SELECT_FIELDS,
         });
-        const refundsPaise = await sumShiftCashRefundsPaise(prisma, {
-            tillAccountId,
-            openedAt: fromShift.openedAt,
-        });
+        if (!tillNow) return NextResponse.json({ error: "Counter till account not found" }, { status: 500 });
         const dropsPaise    = sumPaise(fromShift.drops);
-        const expectedPaise = computeExpectedCash(fromShift.openingFloatPaise, cashSalesPaise, dropsPaise, BigInt(0), refundsPaise);
+        const expectedPaise = computeExpectedCash(effectiveBalancePaise(tillNow), dropsPaise);
 
         // Variance = A's declared − expected (A's count vs book expectation).
         // The total impact on the counter till = expected − B's counted

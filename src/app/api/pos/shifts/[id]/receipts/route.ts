@@ -3,8 +3,9 @@
 // Collect a cash payment from a party (customer) at the counter — e.g. a
 // customer clears their outstanding credit, or pays an advance. Posts a RECEIPT
 // voucher (Dr counter till / Cr party AR) via postReceiptVoucher. The till debit
-// falls inside the shift window, so sumShiftCashSalesPaise already folds it into
-// the expected drawer at shift close — no separate bookkeeping needed here.
+// moves the till's book balance, which is what the shift close reads — no
+// separate bookkeeping needed here. The PosReceipt row is the audit link that
+// feeds the "Payments collected this shift" tally.
 //
 // Funding destination is always the shift's counter till (cash into the drawer),
 // mirroring the per-counter routing at /office/admin/counters.

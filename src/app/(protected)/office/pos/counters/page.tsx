@@ -40,7 +40,7 @@ type CounterCard = {
         user:                 Person;
         openedAt:             string;
         openingFloatPaise:    string;
-        cashSalesPaise:       string;
+        tillMovementPaise:    string;
         runningExpectedPaise: string;
         handoverToUser:       Person | null;
         declaredByAPaise:     string | null;
@@ -290,7 +290,7 @@ function OpenBody({ card }: { card: CounterCard }) {
                 {awaiting ? (
                     <Line label="Declared" value={o.declaredByAPaise != null ? `₹${fmt(rupees(o.declaredByAPaise))}` : "—"} />
                 ) : (
-                    <Line label="Cash sales" value={`₹${fmt(rupees(o.cashSalesPaise))}`} />
+                    <Line label="Till movement" value={`${rupees(o.tillMovementPaise) < 0 ? "−" : "+"}₹${fmt(Math.abs(rupees(o.tillMovementPaise)))}`} />
                 )}
                 <Line label={awaiting ? "Expected ≈" : "In drawer ≈"} value={`₹${fmt(rupees(o.runningExpectedPaise))}`} strong />
             </dl>

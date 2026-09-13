@@ -1,8 +1,8 @@
 // GET /api/pos/shifts/[id]
 //
-// Full shift detail — header info, drops list, linked Contras, and the
-// running cash-sales total computed from CASH-method Payment rows tied
-// to this counter in the shift window. Used by ActiveShiftBar polling,
+// Full shift detail — header info, drops list, linked Contras, and the live
+// drawer figure: the till's book balance (the same read shift OPEN took for the
+// opening float) less the shift's drops. Used by ActiveShiftBar polling,
 // ShiftCloseDialog, and the audit page.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
@@ -12,7 +12,8 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, sumShiftCashSalesPaise, sumShiftCashRefundsPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, computeExpectedCash, effectiveBalancePaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any signed-in staff may ASK; access is decided per-shift below. The shift's
@@ -33,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 branch:  { select: { id: true, name: true, vaultAccountId: true } },
                 counter: {
                     include: {
-                        tillAccount: { select: { id: true, name: true, balance: true } },
+                        tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
                         paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } },
                     },
                 },
@@ -83,21 +84,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "No access to this shift" }, { status: 403 });
         }
 
-        // Running cash-sales total — sum of debits to the counter till from
-        // receipt vouchers posted during the shift window. Replaces the
-        // legacy CASH Payment query (Payment table retired 2026-05-24).
-        const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
-            tillAccountId: shift.counter.tillAccount.id,
-            openedAt:      shift.openedAt,
-            closedAt:      shift.closedAt,
-        });
-        const refundsPaise = await sumShiftCashRefundsPaise(prisma, {
-            tillAccountId: shift.counter.tillAccount.id,
-            openedAt:      shift.openedAt,
-            closedAt:      shift.closedAt,
-        });
-        const dropsPaise        = sumPaise(shift.drops);
-        const expendituresPaise = sumPaise(shift.expenditures);
+        // Live drawer figure straight off the till's book: balance now − drops.
+        // Every till movement (sales, receipts, refunds, expenditures) is already
+        // on that ledger, so nothing is re-derived per voucher type.
+        const tillBookBalancePaise = effectiveBalancePaise(shift.counter.tillAccount);
+        const dropsPaise           = sumPaise(shift.drops);
+        const expendituresPaise    = sumPaise(shift.expenditures);
 
         // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
         // Resolve them by id to keep the old response shape the UI consumes.
@@ -111,6 +103,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         // Per-method tally of everything collected this shift (cash + digital).
         const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
+            shiftId:  shift.id,
             counter:  shift.counter,
             openedAt: shift.openedAt,
             closedAt: shift.closedAt,
@@ -129,11 +122,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             variancePaise:       shift.variancePaise?.toString()      ?? null,
             carryOverNextPaise:  shift.carryOverNextPaise?.toString() ?? null,
             toVaultPaise:        shift.toVaultPaise?.toString()       ?? null,
-            cashSalesPaise:      cashSalesPaise.toString(),
-            dropsPaise:          dropsPaise.toString(),
-            expendituresPaise:   expendituresPaise.toString(),
-            refundsPaise:        refundsPaise.toString(),
-            runningExpectedPaise: (shift.openingFloatPaise + cashSalesPaise - dropsPaise - expendituresPaise - refundsPaise).toString(),
+            tillBookBalancePaise: tillBookBalancePaise.toString(),
+            tillMovementPaise:    (tillBookBalancePaise - shift.openingFloatPaise).toString(),
+            dropsPaise:           dropsPaise.toString(),
+            expendituresPaise:    expendituresPaise.toString(),
+            runningExpectedPaise: computeExpectedCash(tillBookBalancePaise, dropsPaise).toString(),
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
             expenditures: shift.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
             handover: shift.handover ? {

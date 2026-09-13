@@ -49,7 +49,7 @@ type ShiftDetail = {
     variancePaise:       string | null;
     carryOverNextPaise:  string | null;
     toVaultPaise:        string | null;
-    cashSalesPaise:      string;
+    tillMovementPaise:   string;
     dropsPaise:          string;
     runningExpectedPaise: string;
     notes: string | null;
@@ -131,13 +131,13 @@ export default function ShiftDetailPage() {
     const isHandover = shift.status === "AWAITING_HANDOVER";
     const isClosed = shift.status === "CLOSED";
     // What stops a delete — mirrors the delete route's own refusal. A digital
-    // receipt never touches the till, so cash sales can read ₹0 while the shift
+    // receipt never touches the till, so the till can sit still while the shift
     // still carries receipts.
     const attached = [
-        shift._count.receipts > 0       ? `${shift._count.receipts} receipt(s)`         : null,
-        shift.drops.length > 0          ? `${shift.drops.length} cash drop(s)`          : null,
-        shift.expenditures.length > 0   ? `${shift.expenditures.length} expenditure(s)` : null,
-        Number(shift.cashSalesPaise) > 0 ? "cash sales"                                  : null,
+        shift._count.receipts > 0            ? `${shift._count.receipts} receipt(s)`         : null,
+        shift.drops.length > 0               ? `${shift.drops.length} cash drop(s)`          : null,
+        shift.expenditures.length > 0        ? `${shift.expenditures.length} expenditure(s)` : null,
+        Number(shift.tillMovementPaise) !== 0 ? "till movement"                              : null,
     ].filter((x): x is string => x !== null);
 
     return (
@@ -263,7 +263,7 @@ export default function ShiftDetailPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <StatBox label="Carry-over (start)"   value={`₹${fmt(Number(shift.carryOverFloatPaise) / 100)}`} />
                 <StatBox label="Vault top-up"          value={`₹${fmt(Number(shift.vaultTopUpPaise) / 100)}`} />
-                <StatBox label="Cash sales"            value={`₹${fmt(Number(shift.cashSalesPaise) / 100)}`} />
+                <StatBox label="Till movement"         value={`${Number(shift.tillMovementPaise) < 0 ? "−" : "+"}₹${fmt(Math.abs(Number(shift.tillMovementPaise)) / 100)}`} />
                 <StatBox label="Expected / Declared"
                     value={
                         shift.declaredCashPaise != null

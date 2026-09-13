@@ -32,7 +32,8 @@ import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyT
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
 import { sumLinked, assertLinkable, createLink } from "@/modules/accountancy/lib/billLink";
-import { sumShiftCashSalesPaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
+import { effectiveBalancePaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
+import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 
@@ -679,23 +680,33 @@ async function runAllocationDualTarget(): Promise<boolean> {
     return ok;
 }
 
-/** G4b-3: POS shift cash reconciliation reads tenders from the spine (role=TENDER)
- *  instead of InvVoucherTender. Post a POS sale with a ₹118 cash tender, assert
- *  sumShiftCashSalesPaise + sumShiftTendersByAccount both report 11800 paise on
- *  the till for the window. Rolled back. */
+/** Shift cash reconciliation reads the till's BOOK BALANCE (the same
+ *  effectiveAccountBalance shift open/close use), so every posting on the till
+ *  moves "expected in drawer" with no per-type math. Post a POS sale with a ₹118
+ *  cash tender + a ₹50 cash RECEIPT linked to a temporary shift, assert the till
+ *  balance moved by 16800 paise and that sumShiftTendersByAccount (the
+ *  informational "collected" tally: POS tenders + the shift's PosReceipt links)
+ *  reports the same. Rolled back. */
 async function runShiftCashMath(): Promise<boolean> {
-    const [branch, product, cash, user, debtor] = await Promise.all([
+    const [branch, product, cash, user, debtor, counter] = await Promise.all([
         prisma.branch.findFirst({ select: { id: true } }),
         prisma.invProduct.findFirst({ select: { id: true, stock: true } }),
         prisma.account.findFirst({ where: { name: { equals: "Cash", mode: "insensitive" }, personId: null, companyId: null }, select: { id: true } }),
         prisma.user.findFirst({ select: { id: true } }),
         prisma.account.findFirst({ where: { isActive: true, group: { name: { equals: "Sundry Debtors", mode: "insensitive" } } }, select: { id: true } }),
+        prisma.posCounter.findFirst({ select: { id: true, branchId: true } }),
     ]);
     if (!branch || !product || !cash || !user) { console.log("\nshift-cash skipped — missing seed data"); return true; }
     let ok = false;
     try {
         await prisma.$transaction(async (tx) => {
             const openedAt = new Date(Date.now() - 60_000);
+            const tillBefore = effectiveBalancePaise((await tx.account.findUniqueOrThrow({ where: { id: cash.id }, select: EFFECTIVE_BALANCE_SELECT_FIELDS })));
+            // A temporary shift so the receipt can carry its PosReceipt link (the
+            // "collected" tally reads receipts through that link, never a window).
+            const shift = counter
+                ? await tx.posShift.create({ data: { userId: user.id, counterId: counter.id, branchId: counter.branchId, openedById: user.id, openingFloatPaise: tillBefore, carryOverFloatPaise: tillBefore, openedAt }, select: { id: true } })
+                : null;
             const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, userId: user.id });
             const v = await tx.voucherDetail.create({
                 data: {
@@ -713,24 +724,29 @@ async function runShiftCashMath(): Promise<boolean> {
             const { universalVoucherId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
             // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
             await tx.voucherDetail.update({ where: { id: v.id }, data: { universalVoucherId } });   // 5D-8: status POSTED set on the spine by enginePost
-            // G5: an office RECEIPT at the till (Dr Till 50 / Cr Debtor) must ALSO
-            // count toward shift cash — now read off the spine (sourceCreatedAt window).
-            const expectReceipt = debtor != null;
-            if (debtor) {
-                await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id });
+            // A counter RECEIPT at the till (Dr Till 50 / Cr Debtor) moves the book
+            // balance like any other posting; its PosReceipt link is what the
+            // "collected" tally reads.
+            const expectReceipt = debtor != null && shift != null;
+            if (debtor && shift) {
+                const r = await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id });
+                await tx.posReceipt.create({ data: { shiftId: shift.id, amountPaise: BigInt(5000), accountId: debtor.id, voucherId: r.voucherId, createdById: user.id } });
             }
             const end = new Date(Date.now() + 60_000);
-            const cashPaise = await sumShiftCashSalesPaise(tx, { tillAccountId: cash.id, openedAt, closedAt: end });
-            const byAcct = await sumShiftTendersByAccount(tx, { accountIds: [cash.id], openedAt, closedAt: end });
+            const tillAfter = effectiveBalancePaise((await tx.account.findUniqueOrThrow({ where: { id: cash.id }, select: EFFECTIVE_BALANCE_SELECT_FIELDS })));
             const expected = BigInt(expectReceipt ? 16800 : 11800);   // POS 11800 + receipt 5000
-            ok = cashPaise === expected && (byAcct.get(cash.id) ?? BigInt(0)) === expected;
+            const bookMoved = tillAfter - tillBefore === expected;
+            const collected = shift
+                ? (await sumShiftTendersByAccount(tx, { shiftId: shift.id, accountIds: [cash.id], openedAt, closedAt: end })).get(cash.id) ?? BigInt(0)
+                : expected;   // no counter seeded → skip the tally half
+            ok = bookMoved && collected === expected;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {
         if ((e as Error)?.message !== ROLLBACK) throw e;
     }
-    console.log("\n=== G4b-3/G5 shift cash math (POS sale + RECEIPT → spine, rolled back) ===");
-    console.log("till cash (POS tender + RECEIPT debit) from spine:", ok ? "✓" : "✗");
+    console.log("\n=== shift cash math (POS sale + RECEIPT → till book balance, rolled back) ===");
+    console.log("till book balance moved by sale + receipt; collected tally agrees:", ok ? "✓" : "✗");
     return ok;
 }
 

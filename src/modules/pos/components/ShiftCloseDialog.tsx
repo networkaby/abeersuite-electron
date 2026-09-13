@@ -40,10 +40,10 @@ type TenderRow = { method: string; label: string; amountPaise: string };
 type ShiftDetail = {
     id: number;
     openingFloatPaise: string;
-    cashSalesPaise: string;
+    // Net movement on the till ledger since open (sales + receipts − refunds −
+    // expenditures − anything else posted there). Signed.
+    tillMovementPaise: string;
     dropsPaise: string;
-    expendituresPaise: string;
-    refundsPaise: string;
     runningExpectedPaise: string;
     tenderBreakdown?: TenderRow[];
     counter: { id: number; name: string; tillAccount: { name: string } };
@@ -56,10 +56,8 @@ type ClosedReport = {
     closedAt: string;
     notes: string | null;
     openingFloatPaise:   string;
-    cashSalesPaise:      string;
+    tillMovementPaise:   string;
     dropsPaise:          string;
-    expendituresPaise:   string | null;
-    refundsPaise:        string | null;
     expectedCashPaise:   string | null;
     declaredCashPaise:   string | null;
     variancePaise:       string | null;
@@ -329,19 +327,16 @@ export function ShiftCloseDialog({
 
                                 {/* Expected breakdown */}
                                 <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
-                                    <Row label="Opening float"   value={fmt(Number(detail.openingFloatPaise) / 100)} />
-                                    <Row label="Cash sales"      value={`+ ${fmt(Number(detail.cashSalesPaise) / 100)}`} />
-                                    <Row label="Dropped to safe" value={`− ${fmt(Number(detail.dropsPaise) / 100)}`} />
-                                    {Number(detail.refundsPaise) > 0 && (
-                                        <Row label="Cash refunds" value={`− ${fmt(Number(detail.refundsPaise) / 100)}`} />
-                                    )}
-                                    {Number(detail.expendituresPaise) > 0 && (
-                                        <Row label="Expenditures" value={`− ${fmt(Number(detail.expendituresPaise) / 100)}`} />
-                                    )}
+                                    <Row label="Opening float"            value={fmt(Number(detail.openingFloatPaise) / 100)} />
+                                    <Row label="Till movement this shift" value={signed(Number(detail.tillMovementPaise) / 100)} />
+                                    <Row label="Dropped to safe"          value={`− ${fmt(Number(detail.dropsPaise) / 100)}`} />
                                     <div className="border-t border-border pt-1.5 flex justify-between font-semibold">
                                         <span>Expected in drawer</span>
                                         <span className="font-mono">₹{fmt(expected)}</span>
                                     </div>
+                                    <p className="text-xs text-muted-foreground pt-1">
+                                        Per the till ledger — see the Cash Book tab for line-by-line detail.
+                                    </p>
                                 </div>
 
                                 {/* All payment methods collected this shift (cash + digital).
@@ -498,10 +493,8 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
         const fmtDate    = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
         const opening  = Number(report.openingFloatPaise)  / 100;
-        const sales    = Number(report.cashSalesPaise)     / 100;
+        const movement = Number(report.tillMovementPaise)  / 100;
         const drops    = Number(report.dropsPaise)         / 100;
-        const expenditures = Number(report.expendituresPaise ?? 0) / 100;
-        const refunds  = Number(report.refundsPaise ?? 0) / 100;
         const expected = Number(report.expectedCashPaise)  / 100;
         const declared = Number(report.declaredCashPaise)  / 100;
         const variance = Number(report.variancePaise)      / 100;
@@ -529,11 +522,9 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
                 {/* Cash reconciliation */}
                 <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cash reconciliation</p>
-                    <ReportRow label="Opening float"    value={`₹${fmt(opening)}`} />
-                    <ReportRow label="Cash sales"       value={`+ ₹${fmt(sales)}`} />
-                    <ReportRow label="Dropped to safe"  value={`− ₹${fmt(drops)}`} />
-                    {refunds > 0 && <ReportRow label="Cash refunds" value={`− ₹${fmt(refunds)}`} />}
-                    {expenditures > 0 && <ReportRow label="Expenditures" value={`− ₹${fmt(expenditures)}`} />}
+                    <ReportRow label="Opening float"            value={`₹${fmt(opening)}`} />
+                    <ReportRow label="Till movement this shift" value={`₹${signed(movement)}`} />
+                    <ReportRow label="Dropped to safe"          value={`− ₹${fmt(drops)}`} />
                     <div className="border-t border-border pt-1.5">
                         <ReportRow label="Expected in drawer" value={`₹${fmt(expected)}`} bold />
                         <ReportRow label="Physical count"     value={`₹${fmt(declared)}`} bold />
@@ -597,6 +588,11 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
 );
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
+
+// "+ 1,234.00" / "− 1,234.00" — the till movement carries a sign of its own.
+function signed(n: number): string {
+    return `${n < 0 ? "−" : "+"} ${fmt(Math.abs(n))}`;
+}
 
 function Row({ label, value }: { label: string; value: string }) {
     return (

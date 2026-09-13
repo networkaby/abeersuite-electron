@@ -18,7 +18,8 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { effectiveBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { blockStartFor } from "@/shared/lib/counter/idRange";
 
 const openSchema = z.object({
@@ -228,8 +229,8 @@ export async function POST(req: NextRequest) {
     // in the till's master opening balance (effectiveAccountBalance) — some
     // tills are funded via an opening-balance entry rather than a GL voucher,
     // and the raw `Account.balance` cache alone would miss that.
-    const carryOverPaise = Math.round(effectiveAccountBalance(counter.tillAccount) * 100);
-    const totalFloatPaise = carryOverPaise + body.vaultTopUpPaise;
+    const carryOverPaise  = effectiveBalancePaise(counter.tillAccount);
+    const totalFloatPaise = carryOverPaise + BigInt(body.vaultTopUpPaise);
 
     try {
         const shift = await prisma.$transaction(async (tx) => {
@@ -279,8 +280,8 @@ export async function POST(req: NextRequest) {
                     counterId:             counter.id,
                     branchId,
                     openedById:            user!.id,
-                    openingFloatPaise:     BigInt(totalFloatPaise),
-                    carryOverFloatPaise:   BigInt(carryOverPaise),
+                    openingFloatPaise:     totalFloatPaise,
+                    carryOverFloatPaise:   carryOverPaise,
                     vaultTopUpPaise:       BigInt(body.vaultTopUpPaise),
                     openingContraVoucherId: openingContraId,
                     notes:                 body.notes ?? null,

@@ -21,15 +21,16 @@
 // NOTE: No Contra is needed for the carry-over portion — that cash simply
 // stays in the counter till GL account (balance remains non-zero overnight).
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, sumShiftCashRefundsPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
@@ -104,17 +105,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({ error: `Branch ${shift.branch.name} has no Vault account configured.` }, { status: 400 });
         }
 
-        // Cash-sales total — sum of debits to the counter till from receipt
-        // vouchers in this shift window (replaces the legacy Payment query).
-        const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
-            tillAccountId: shift.counter.tillAccountId,
-            openedAt:      shift.openedAt,
+        // Expected = the till's book balance now − drops. Read AUTHORITATIVE, as
+        // shift open does: this figure posts the variance JE, and a counter's
+        // replica can lag the last posting by a sync cycle.
+        const tillNow = await prismaAuthoritative.account.findUnique({
+            where:  { id: shift.counter.tillAccountId },
+            select: EFFECTIVE_BALANCE_SELECT_FIELDS,
         });
-        const refundsPaise = await sumShiftCashRefundsPaise(prisma, {
-            tillAccountId: shift.counter.tillAccountId,
-            openedAt:      shift.openedAt,
-        });
-        const expectedPaise = computeExpectedCash(shift.openingFloatPaise, cashSalesPaise, dropsPaise, expendituresPaise, refundsPaise);
+        if (!tillNow) return NextResponse.json({ error: "Counter till account not found" }, { status: 500 });
+        const tillBookBalancePaise = effectiveBalancePaise(tillNow);
+        const tillMovementPaise    = tillBookBalancePaise - shift.openingFloatPaise;
+        const expectedPaise = computeExpectedCash(tillBookBalancePaise, dropsPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);
 
         // Variance ledgers.
@@ -205,6 +206,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Per-method tally of everything collected this shift (cash + digital),
         // for the closing report. Uses the real closedAt window.
         const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
+            shiftId:  result.id,
             counter:  result.counter,
             openedAt: result.openedAt,
             closedAt: result.closedAt,
@@ -228,10 +230,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             variancePaise:       result.variancePaise?.toString()      ?? null,
             carryOverNextPaise:  result.carryOverNextPaise?.toString() ?? null,
             toVaultPaise:        result.toVaultPaise?.toString()       ?? null,
-            cashSalesPaise:      cashSalesPaise.toString(),
-            dropsPaise:          dropsPaise.toString(),
-            expendituresPaise:   expendituresPaise.toString(),
-            refundsPaise:        refundsPaise.toString(),
+            tillBookBalancePaise: tillBookBalancePaise.toString(),
+            tillMovementPaise:    tillMovementPaise.toString(),
+            dropsPaise:           dropsPaise.toString(),
+            expendituresPaise:    expendituresPaise.toString(),
             counter: {
                 id:   result.counter.id,
                 name: result.counter.name,
