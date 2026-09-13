@@ -150,6 +150,47 @@ async function shiftIsAlreadyClosed(where: Record<string, unknown>): Promise<boo
 }
 
 /**
+ * A voucher that has left DRAFT never goes back there by a replayed push.
+ *
+ * Posting is a one-way transition, not a value to arbitrate, so last-write-wins is
+ * the wrong rule for it — and it genuinely can lose. A counter holds a voucher it
+ * still believes is a draft; the office posts it; the counter, offline, writes to
+ * that row again (the capture trigger ships `to_jsonb(NEW)`, the WHOLE row, so even
+ * an edit that only touches a narration re-asserts the stale `status`). That write
+ * is honestly LATER, so LWW lets it through and the cloud's POSTED row is overwritten
+ * with a DRAFT image. Nothing about clocks is needed for this; it is simply what
+ * last-write-wins means when one of the values is a lifecycle state.
+ *
+ * Since numbering moved to post time the cost is permanent: the DRAFT image carries
+ * `voucherNo: null`, so an allocated number is blanked out of a GST-relevant series
+ * and the series never re-issues it.
+ *
+ * ── Why `binding`, and not `status` alone ───────────────────────────────────
+ * There IS a legitimate counter-side POSTED → DRAFT writer: the "Mark Draft" toggle
+ * on the POS Sales Register (PATCH /api/inventory/vouchers/[id]/status). It refuses
+ * anything whose `binding` is not OPTIONAL, because only a non-binding document
+ * (estimate, order) carries a free lifecycle status. So the exact rule is REGULAR —
+ * a real transaction, whose status belongs to the post/cancel flow — and a blanket
+ * status check would have silently eaten every estimate a cashier un-finalised.
+ *
+ * ── The coupling this depends on ────────────────────────────────────────────
+ * The one other POSTED → DRAFT writer is `parkVoucherAsDraftInTx` (the POS shift
+ * reopen), and its vouchers ARE regular. It is safe only because the reopen route
+ * writes through `prismaAuthoritative`, which is live-only — so a park never reaches
+ * a replica and never enters the outbox. If reopen is ever moved onto the mode-routed
+ * `prisma`, or a local-write fallback is added to `wrapLive`, this guard will start
+ * eating legitimate un-posts. Change them together.
+ */
+function voucherWouldUnpost(
+    server: { status?: string | null; binding?: string | null } | null,
+    payload: Record<string, unknown>,
+): boolean {
+    if (!server || payload.status !== "DRAFT") return false;
+    if (server.status === "CANCELLED") return true;                      // no legitimate producer at all
+    return server.status === "POSTED" && server.binding === "REGULAR";   // …and none for a real transaction
+}
+
+/**
  * A local datetime, exactly as `to_jsonb` renders `timestamp(3) without time zone`.
  * Anchored at both ends: a value carrying an offset or a `Z` is already complete and
  * must be left alone.
@@ -247,11 +288,36 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
             // offline may be replaying an edit the office has already superseded;
             // applying it would silently undo the newer change. Dropping it counts as
             // success — the counter should stop carrying it, not retry forever.
+            //
+            // The voucher lifecycle rides along in the SAME read (see
+            // voucherWouldUnpost): it has to be checked even when the row is newer
+            // than the cloud's, because that is exactly the case LWW would wave
+            // through, so it cannot sit behind the short-circuit below.
+            const isVoucher = rec.table_name === "UniversalVoucher";
             const incoming = typeof payload.updatedAt === "string" || payload.updatedAt instanceof Date
                 ? new Date(payload.updatedAt as string | Date)
                 : null;
+            const needsServerRow = isVoucher || (incoming != null && !Number.isNaN(incoming.getTime()));
+            const existing = needsServerRow
+                ? await delegate.findUnique({
+                    where,
+                    select: isVoucher
+                        ? { updatedAt: true, status: true, binding: true }
+                        : { updatedAt: true },
+                }) as ({ updatedAt?: Date; status?: string | null; binding?: string | null } | null)
+                : null;
+
+            if (isVoucher && voucherWouldUnpost(existing, payload)) {
+                console.warn(
+                    `[SyncPush] UniversalVoucher ${JSON.stringify(where)}: dropping a replayed write — ` +
+                    `it carries status DRAFT, and this voucher is already ${existing?.status} ` +
+                    `(binding ${existing?.binding}) upstream. Posting does not un-happen.`,
+                );
+                pushedIds.push(rec.id);
+                continue;
+            }
+
             if (incoming && !Number.isNaN(incoming.getTime())) {
-                const existing = await delegate.findUnique({ where, select: { updatedAt: true } });
                 if (existing?.updatedAt && existing.updatedAt >= incoming) {
                     pushedIds.push(rec.id);
                     continue;

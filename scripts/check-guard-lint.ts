@@ -112,6 +112,42 @@ function findBalanceWriters(): string[] {
     return offenders;
 }
 
+
+// ── Rule 3: un-posting is an office-only move ────────────────────────────────
+//
+// `parkVoucherAsDraftInTx` turns a POSTED voucher back into a DRAFT, and its two
+// companions DELETE rows (the old GL lines on a repost, the whole draft on a
+// discard). Two separate things depend on that never happening against a
+// counter's replica:
+//
+//   • the replica write guard refuses EVERY delete, so a re-close of a reopened
+//     shift on a till writing locally throws from inside its transaction and the
+//     cashier cannot close (fixed 2026-09-13 by refusing up front);
+//   • the sync push guard `voucherWouldUnpost` drops an incoming DRAFT for a
+//     REGULAR voucher the cloud has POSTED. That is only correct while no
+//     legitimate un-post can reach the outbox — i.e. while these calls stay on
+//     the authoritative database. Move one onto the mode-routed `prisma` without
+//     a guard and the push would start silently eating real un-posts.
+//
+// So: a file that calls any of them must also name `prismaAuthoritative` (it
+// writes upstream) or `shouldWriteLocal` (it checks first and refuses).
+const PARK_FNS = ["parkVoucherAsDraftInTx", "repostParkedVoucherInTx", "discardParkedDraftInTx"];
+const PARK_MODULE = "src/modules/accountancy/lib/parkVoucherInTx.ts";
+
+function findUnguardedParkCallers(): string[] {
+    const offenders: string[] = [];
+    for (const file of findTsFiles(SRC_DIR)) {
+        const rel = path.relative(REPO, file).replace(/\\/g, "/");
+        if (rel === PARK_MODULE) continue;   // the definitions themselves
+        const content = fs.readFileSync(file, "utf8");
+        const calls = PARK_FNS.filter((fn) => new RegExp(`\\b${fn}\\s*\\(`).test(content));
+        if (calls.length === 0) continue;
+        if (/\bprismaAuthoritative\b/.test(content) || /\bshouldWriteLocal\b/.test(content)) continue;
+        offenders.push(`${rel} (calls ${calls.join(", ")})`);
+    }
+    return offenders;
+}
+
 function main() {
     console.log("[guard-lint] Checking staff/office API route auth guards...");
 
@@ -156,8 +192,20 @@ function main() {
         process.exit(1);
     }
 
+    const parkOffenders = findUnguardedParkCallers();
+    if (parkOffenders.length > 0) {
+        console.error(`
+[guard-lint] ERROR: ${parkOffenders.length} un-post caller(s) with no authoritative client and no offline check:`);
+        for (const hit of parkOffenders) console.error(`  - ${hit}`);
+        console.error(`  These delete rows, which a counter's replica refuses, and the sync`);
+        console.error(`  push guard assumes an un-post can never reach the outbox. Use`);
+        console.error(`  prismaAuthoritative, or check shouldWriteLocal() and refuse first.`);
+        process.exit(1);
+    }
+
     console.log(`[guard-lint] PASS: All ${officeCount} office API route handlers enforce authentication.`);
     console.log(`[guard-lint] PASS: Account.balance deltas all go through the shared writer.`);
+    console.log(`[guard-lint] PASS: un-posting stays on the authoritative database.`);
     process.exit(0);
 }
 
