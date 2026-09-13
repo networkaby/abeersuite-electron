@@ -8,9 +8,14 @@ import { resolveCounterNumber } from "@/modules/accountancy/lib/balance";
 // Preview the next voucher reference (e.g. JOURNAL/26-27/0042) WITHOUT
 // incrementing the series. The dialog uses this to show the expected number.
 //
-// Race-safe? No — the actual reference is generated atomically inside a
-// transaction at save time via nextRefFromSeries(). If two users save
-// concurrently, the live reference may differ by ±1 from this preview.
+// Race-safe? No — and since numbering moved to POST time it is weaker than it
+// used to be. The real number is minted atomically by nextRefFromSeries() inside
+// the POSTING transaction, from the series of the counter the voucher was RAISED
+// on. This preview peeks at THIS machine's row, now. So it is off by more than
+// the old ±1 whenever the voucher is saved as a draft and posted later, or
+// raised on a counter and posted at the office. Treat it as "what this voucher
+// would take if it were posted from here, right now" — an indication, not a
+// promise. A draft carries no number at all until it posts.
 
 export async function GET(req: Request) {
     const { response } = await requireAuth();

@@ -451,8 +451,10 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
                     lines:           payloadLines,
                 },
             );
-            if (postAfterSave) toast.success(`Journal voucher ${res.data.reference} saved & posted`);
-            else               toast.success(`Journal voucher ${res.data.reference} saved as draft`);
+            // A draft has no number until it posts — show UV-<id> meanwhile.
+            const shownNo = res.data.reference ?? `UV-${res.data.voucherId}`;
+            if (postAfterSave) toast.success(`Journal voucher ${shownNo} saved & posted`);
+            else               toast.success(`Journal voucher ${shownNo} saved as draft`);
             if (print) openReceipt(res.data.voucherId);
             router.push(listPath);
         } catch (err: unknown) {

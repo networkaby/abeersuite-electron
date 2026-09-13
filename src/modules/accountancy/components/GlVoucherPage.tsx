@@ -950,7 +950,12 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, s
         // ── Create mode: POST (+ optional post) ─────────────────────────────
         setSaving(true);
         try {
-            const created = await axios.post<{ id: number; reference: string }>(
+            // ONE request: create, and post in the same transaction when asked.
+            // It used to be create-then-POST-[id]/post — two round trips for what
+            // the user sees as a single action, with the voucher sitting as a
+            // DRAFT in between. `reference` is null on a draft: the number is
+            // taken when the voucher posts, so a draft shows as UV-<id>.
+            const created = await axios.post<{ id: number; reference: string | null }>(
                 "/api/accountancy/vouchers",
                 {
                     type:      kind,
@@ -959,12 +964,13 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, s
                     ...(partyLedgerId != null ? { partyAccountId: partyLedgerId } : {}),
                     lines:     allLines,
                     ...(isContra ? { denomJson: buildDenomPayload() } : {}),
+                    ...(postAfterSave ? { post: true } : {}),
                 },
             );
+            const shownNo = created.data.reference ?? `UV-${created.data.id}`;
             if (postAfterSave) {
-                await axios.post(`/api/accountancy/vouchers/${created.data.id}/post`);
                 clearOpenBillsCache();   // the party's dues just moved
-                toast.success(`${copy.title} ${created.data.reference} saved & posted`);
+                toast.success(`${copy.title} ${shownNo} saved & posted`);
                 // Now it is posted, so it can legally settle a bill. The panel
                 // has already said which — including any credit the party had
                 // lying with us, and an opening balance that still needs making
@@ -995,7 +1001,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, s
                     setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId });
                 }
             } else {
-                toast.success(`${copy.title} ${created.data.reference} saved as draft`);
+                toast.success(`${copy.title} ${shownNo} saved as draft`);
             }
             if (print) openReceipt(created.data.id);
             // Reset for the next voucher instead of navigating away — same as the
@@ -1038,7 +1044,11 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, s
                 rightContent={
                     <div className="flex items-center gap-4 text-xs">
                         <div className="flex items-center gap-2">
-                            <label className="text-muted-foreground uppercase tracking-wide">No.</label>
+                            {/* On a NEW voucher this is a preview, not the number:
+                                the series advances when the voucher posts, so a
+                                draft saved now carries none, and the figure can
+                                move if someone else posts first. */}
+                            <label className="text-muted-foreground uppercase tracking-wide" title={isEditing ? undefined : "The number this voucher would take if posted from here now. A draft takes no number until it is posted."}>No.</label>
                             <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
                                 {isEditing
                                     ? (loadedVoucher?.reference ?? (loading ? "Loading…" : "—"))

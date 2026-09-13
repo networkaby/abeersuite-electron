@@ -39,6 +39,11 @@ const createSchema = z.object({
     partyAccountId: z.number().int().positive().optional(),
     lines:          z.array(lineSchema).min(2, "At least 2 lines required"),
     denomJson:      denomJsonSchema.nullable().optional(),
+    // Save & Post in ONE request. The form used to create the draft and then call
+    // [id]/post, which is two round trips for what the user sees as one action —
+    // and the voucher existed as a DRAFT in between. Same shape as
+    // /api/accountancy/journal-vouchers `postImmediately`.
+    post:           z.boolean().optional(),
 });
 
 // GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT
@@ -123,6 +128,14 @@ export async function POST(req: Request) {
     const { user, response } = await requireVoucherPermission(body.type, "create");
     if (response) return response;
 
+    // Posting is a SEPARATE right. Someone who may raise a voucher but not post it
+    // keeps the draft button and nothing else — the flag must not be a way around
+    // the gate the standalone post route enforces.
+    if (body.post) {
+        const posting = await requireVoucherPermission(body.type, "post");
+        if (posting.response) return posting.response;
+    }
+
     if (!isBalanced(body.lines)) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
@@ -141,8 +154,9 @@ export async function POST(req: Request) {
     }
 
     try {
-        // Create a DRAFT financial transaction via the Transaction Engine
-        // (engine computes totalAmount + reference; posting is a separate step).
+        // Create the voucher through the Transaction Engine — DRAFT, or straight
+        // to POSTED when the caller asked for both. A draft takes no number; the
+        // series advances only on the posting leg.
         const voucher = await prisma.$transaction(async (tx) => {
             const v = await engineCreateVoucher(tx, {
                 type:           body.type,
@@ -152,7 +166,7 @@ export async function POST(req: Request) {
                 narration:      body.narration ?? null,
                 partyAccountId: body.partyAccountId ?? null,
                 branchId,
-                post:           false,
+                post:           body.post ?? false,
             });
             // Deposit-slip capture (CONTRA only) — drop empty/zero-only payloads.
             const denom = body.type === "CONTRA" ? parseDenomJson(body.denomJson) : null;

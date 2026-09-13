@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -68,23 +69,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             { accountId: payout.customerAccountId, type: "DEBIT", amount: payout.amount, description: "Advance refund" },
                             { accountId: payout.cashBankAccountId, type: "CREDIT", amount: payout.amount, description: "Advance refund" },
                         ],
+                        // Create AND post in one call. Two calls left the refund as
+                        // a DRAFT if the second failed, and a draft carries no
+                        // number now, so `payoutRef` would have been null.
+                        post: true,
                     }),
                 });
                 if (!createRes.ok) {
                     const e = (await createRes.json().catch(() => ({}))) as { error?: string };
                     return NextResponse.json({ error: e.error || "Couldn't create the refund payment.", code: "PAYOUT_CREATE_FAILED" }, { status: 422 });
                 }
-                const pv = (await createRes.json()) as { id: number; reference: string };
-                const postRes = await fetch(new URL(`/api/accountancy/vouchers/${pv.id}/post`, req.url), {
-                    method: "POST",
-                    headers: { "content-type": "application/json", cookie },
-                });
-                if (!postRes.ok) {
-                    const e = (await postRes.json().catch(() => ({}))) as { error?: string };
-                    return NextResponse.json({ error: e.error || "Refund payment created but posting failed.", code: "PAYOUT_POST_FAILED" }, { status: 422 });
-                }
+                const pv = (await createRes.json()) as { id: number; reference: string | null };
                 await markRefundPaid(id, pv.id);
-                payoutRef = pv.reference;
+                payoutRef = pv.reference ?? formatUvNo(pv.id);
             }
         }
 
