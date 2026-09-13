@@ -1197,6 +1197,7 @@ CREATE TABLE IF NOT EXISTS "VoucherSeries" (
     "startFrom" INTEGER NOT NULL DEFAULT 1,
     "padWidth" INTEGER NOT NULL DEFAULT 4,
     "nextSeq" INTEGER NOT NULL DEFAULT 0,
+    "resetGen" INTEGER NOT NULL DEFAULT 0,
     "partOrder" TEXT NOT NULL DEFAULT 'type,-,year,-,counter,number',
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -1213,6 +1214,7 @@ ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "yearFormat" TEXT NOT NULL 
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "startFrom" INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "padWidth" INTEGER NOT NULL DEFAULT 4;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "nextSeq" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "resetGen" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "partOrder" TEXT NOT NULL DEFAULT 'type,-,year,-,counter,number';
 ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
@@ -1222,6 +1224,7 @@ CREATE TABLE IF NOT EXISTS "VoucherSeriesCounter" (
     "counterNumber" INTEGER NOT NULL,
     "nextSeq" INTEGER NOT NULL DEFAULT 0,
     "fyStartYear" INTEGER,
+    "resetGen" INTEGER NOT NULL DEFAULT 0,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "VoucherSeriesCounter_pkey" PRIMARY KEY ("kind","counterNumber")
@@ -1230,6 +1233,7 @@ ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL
 ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "counterNumber" INTEGER NOT NULL;
 ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "nextSeq" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "fyStartYear" INTEGER;
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "resetGen" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable

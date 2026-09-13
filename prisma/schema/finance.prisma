@@ -340,6 +340,11 @@ model VoucherSeries {
   startFrom Int @default(1)
   padWidth  Int @default(4)
   nextSeq   Int @default(0)
+  /// Reset generation. The office's "Reset Counter" bumps this instead of zeroing
+  /// every counter's row; each counter catches up on its OWN row the next time it
+  /// numbers (see VoucherSeriesCounter.resetGen), so an offline till's queued
+  /// increments are never overwritten.
+  resetGen  Int @default(0)
 
   // Assembly: comma-separated list of parts. Reserved tokens — type, counter,
   // year, number — expand to their values. Anything else is a literal,
@@ -369,6 +374,9 @@ model VoucherSeriesCounter {
   nextSeq       Int  @default(0)
   /// Per-row FY tracker, same rollover rule as the series (BooksConfig restart day).
   fyStartYear   Int?
+  /// The series' resetGen this row has applied. Behind the series → the owning
+  /// counter zeroes nextSeq and catches up, in the same write as the FY rollover.
+  resetGen      Int  @default(0)
   updatedAt     DateTime @updatedAt
 
   series VoucherSeries @relation(fields: [kind], references: [kind])

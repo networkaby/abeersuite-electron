@@ -231,6 +231,8 @@ export async function nextRefFromSeries(
             counterNumber,
             nextSeq: counterNumber === 1 ? current.nextSeq : 0,
             fyStartYear: current.fyStartYear,
+            // A fresh row has nothing to reset: it is born at the current generation.
+            resetGen: current.resetGen,
         },
         update: {},
     });
@@ -249,14 +251,22 @@ export async function nextRefFromSeries(
     // new year. Numbering old-year vouchers means posting them before the roll.
     const today = opts?.date ? startOfDayUtc(businessTodayIso(opts.date)) : businessToday();
     const fyStartYear = row.fyStartYear ?? current.fyStartYear;
+    const restart: { fyStartYear?: number; resetGen?: number } = {};
     if (fyStartYear != null) {
         const closing = fyClosingDate(fyStartYear, config.restartMonth, config.restartDay);
-        if (today > closing) {
-            await tx.voucherSeriesCounter.update({
-                where: key,
-                data: { fyStartYear: fyStartYear + 1, nextSeq: 0 },
-            });
-        }
+        if (today > closing) restart.fyStartYear = fyStartYear + 1;
+    }
+    // The office's "Reset Counter" is an intent on the series row, not a write to this
+    // one: it bumps `VoucherSeries.resetGen` and only THIS counter zeroes its own row,
+    // here, the next time it numbers. A till that was offline through the reset keeps
+    // every increment it queued and restarts when it next bills — nothing the office
+    // wrote can land on top of its unpushed row.
+    if (row.resetGen < current.resetGen) restart.resetGen = current.resetGen;
+    if (Object.keys(restart).length > 0) {
+        await tx.voucherSeriesCounter.update({
+            where: key,
+            data: { ...restart, nextSeq: 0 },
+        });
     }
 
     // Atomic post-increment on this counter's own row.

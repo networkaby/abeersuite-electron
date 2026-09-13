@@ -47,3 +47,24 @@ ALTER TABLE "Call" ALTER COLUMN "updatedAt" SET DEFAULT CURRENT_TIMESTAMP;
 
 -- Backs the watermark pull: "anything since <ts>?" must not scan the table to say "no".
 CREATE INDEX IF NOT EXISTS "Call_updatedAt_idx" ON "Call"("updatedAt");
+
+-- ── Folded in (2026-09-14): "Reset Counter" becomes an intent ─────────────────
+--
+-- The office's reset used to run `updateMany({ kind }, { nextSeq: 0 })` across EVERY
+-- counter's VoucherSeriesCounter row. That row has one writer by design — the machine
+-- numbering on it — because two writers under last-write-wins re-issue invoice
+-- numbers. The reset broke that rule: an offline till kept billing, its increments
+-- queued in _outbox, and on reconnect push.ts dropped them as "superseded" by the
+-- office's newer zero, then the pull copied the zero onto the replica. The till then
+-- printed numbers already on customers' bills.
+--
+-- Now the office bumps `VoucherSeries.resetGen` (its own row) and zeroes counter 1
+-- only. Each counter compares its row's `resetGen` with the series' the next time
+-- it numbers and, if behind, zeroes ITS OWN nextSeq and catches up — the same shape
+-- as the per-row FY rollover. Nothing queued is ever overwritten.
+--
+-- Both columns default to 0, so every existing row is "already at generation 0";
+-- no backfill is needed and no counter resets on upgrade.
+
+ALTER TABLE "VoucherSeries" ADD COLUMN IF NOT EXISTS "resetGen" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "VoucherSeriesCounter" ADD COLUMN IF NOT EXISTS "resetGen" INTEGER NOT NULL DEFAULT 0;

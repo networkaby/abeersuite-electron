@@ -285,7 +285,10 @@ row writes it. The office is counter 1; a PC cannot take number 1. The table car
 `localAuthority` in the registry `overrides`: the reconcile pass never deletes from it,
 because a counter's own row absent upstream is not an office delete — it is a row the
 cloud has not seen yet, and losing it restarts the series from 1 on bills already
-printed. The same pass holds back any row still pending in `_outbox`, for every table
+printed. The same flag makes `push.ts` never drop such a row as "superseded" by a
+newer cloud copy. And the office's "Reset Counter" never writes another machine's row:
+it bumps `VoucherSeries.resetGen`, and each counter zeroes its own row the next time it
+numbers (2026-09-14). The same pass holds back any row still pending in `_outbox`, for every table
 (`sync-engine/lib/outboxGuard.js`; see `sync-engine/README.md`).
 
 Gift cards are the residual: a single till cannot overdraw a card (conditional draw), but
