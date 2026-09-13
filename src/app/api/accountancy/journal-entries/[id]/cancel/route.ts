@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -28,10 +28,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const nbById = new Map(
-        (await prisma.account.findMany({ where: { id: { in: [...new Set(entry.lines.map((l) => l.accountId))] } }, select: { id: true, normalBalance: true } }))
-            .map((a) => [a.id, a.normalBalance]),
-    );
     if (entry.deletedAt) {
         return NextResponse.json({ error: "Cannot cancel a deleted entry — restore it first" }, { status: 409 });
     }
@@ -41,13 +37,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         await prisma.$transaction(async (tx) => {
-            for (const line of entry.lines) {
-                const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
-                await tx.account.update({
-                    where: { id: line.accountId },
-                    data: { balance: { decrement: delta } },
-                });
-            }
+            // Nature resolves with the group fallback, exactly as the engine
+            // resolved it when posting — a party ledger carries a null
+            // normalBalance, and a bare read used to sign-flip its delta.
+            await applyLineBalances(tx, entry.lines, "reverse");
 
             // Phase 4 (flag-only cancel): the POSTED-only gate already excludes a
             // CANCELLED entry from every count, so we do NOT post a reversal JE.

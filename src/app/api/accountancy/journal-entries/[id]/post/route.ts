@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -17,10 +17,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const nbById = new Map(
-        (await prisma.account.findMany({ where: { id: { in: [...new Set(entry.lines.map((l) => l.accountId))] } }, select: { id: true, normalBalance: true } }))
-            .map((a) => [a.id, a.normalBalance]),
-    );
     if (entry.deletedAt) {
         return NextResponse.json({ error: "Cannot post a deleted entry — restore it first" }, { status: 409 });
     }
@@ -35,13 +31,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     try {
         await prisma.$transaction(async (tx) => {
             // Update each account balance atomically
-            for (const line of entry.lines) {
-                const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
-                await tx.account.update({
-                    where: { id: line.accountId },
-                    data: { balance: { increment: delta } },
-                });
-            }
+            // Nature resolves with the group fallback, exactly as the engine
+            // resolved it when posting — a party ledger carries a null
+            // normalBalance, and a bare read used to sign-flip its delta.
+            await applyLineBalances(tx, entry.lines, "apply");
             await setSpineLifecycle(tx, Number(id), { status: "POSTED", postedAt: new Date() });
         // Per-line account.update over the Supabase pooler can exceed the
         // default 5s interactive-tx ceiling (P2028) on multi-line entries.

@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
-import { toNumber, balanceDelta, loadNormalBalances } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances, toNumber } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -88,13 +88,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     // balanceDelta, which fails `=== "DEBIT"` and silently reverses
                     // a null-nature ledger on the CREDIT side — a sign flip, not a
                     // no-op. Skip a line whose nature is genuinely unknown instead.
-                    const nbById = await loadNormalBalances(tx, spine.lines.map((l) => l.accountId));
-                    for (const line of spine.lines) {
-                        const nb = nbById.get(line.accountId);
-                        if (!nb) continue;
-                        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
-                        await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
-                    }
+                    await applyLineBalances(tx, spine.lines, "reverse");
                     await setSpineLifecycle(tx, voucher.universalVoucherId, {
                         status: "CANCELLED", cancelledAt: new Date(), cancelledById: userId,
                         cancelReason: `Voucher ${voucher.universalVoucher?.voucherNo ?? ""} cancelled: ${reason.trim()}`,

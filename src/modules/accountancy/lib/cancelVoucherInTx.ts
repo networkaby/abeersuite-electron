@@ -9,6 +9,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { applyLineBalances } from "@/modules/accountancy/lib/balance";
+import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { ensureCancelable, cancelFields, isCancelled } from "@/modules/accountancy/lib/voucherLifecycle";
 
 export async function cancelVoucherInTx(
@@ -33,5 +34,9 @@ export async function cancelVoucherInTx(
     // exactly as the engine resolved it when posting (group fallback included),
     // or the null-nature ledgers never get their delta taken back out.
     await applyLineBalances(tx, voucher.lines, "reverse");
+    // Taking a voucher out of the books dirties a reconciled window exactly as much
+    // as posting one — same retreat as the posting path. Idempotent, and the
+    // watermark only ever travels backwards.
+    await retreatReconciliation(tx, voucher.lines.map((l) => l.accountId), voucher.date);
     await tx.universalVoucher.update({ where: { id: voucher.id }, data: cancelFields(userId, reason) });
 }

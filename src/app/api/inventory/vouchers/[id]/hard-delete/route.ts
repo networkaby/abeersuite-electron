@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { toNumber, balanceDelta, loadNormalBalances } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
@@ -94,13 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 if (origJe && origJe.status === "POSTED" && !origJe.deletedAt) {
                     // Spine lines are scalar — resolve nature in one lookup, the
                     // same way the engine did when it applied these deltas.
-                    const nbById = await loadNormalBalances(tx, origJe.lines.map((l) => l.accountId));
-                    for (const line of origJe.lines) {
-                        const nb = nbById.get(line.accountId);
-                        if (!nb) continue;
-                        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
-                        await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
-                    }
+                    await applyLineBalances(tx, origJe.lines, "reverse");
                     // Removing a posted voucher dirties a reconciled window exactly
                     // as much as adding one — same retreat as the posting path.
                     await retreatReconciliation(tx, origJe.lines.map((l) => l.accountId), origJe.date);

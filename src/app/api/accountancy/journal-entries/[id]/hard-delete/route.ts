@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -29,10 +29,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         include: { lines: { select: { accountId: true, type: true, amount: true, description: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const nbById = new Map(
-        (await prisma.account.findMany({ where: { id: { in: [...new Set(entry.lines.map((l) => l.accountId))] } }, select: { id: true, normalBalance: true } }))
-            .map((a) => [a.id, a.normalBalance]),
-    );
 
     // Live balance is currently affected only by entries that are POSTED and not deleted.
     // cancel() reverses + writes a counter-entry; delete() reverses without a counter-entry.
@@ -41,13 +37,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const audit = await prisma.$transaction(async (tx) => {
             if (needsLedgerReversal) {
-                for (const line of entry.lines) {
-                    const delta = balanceDelta(nbById.get(line.accountId)!, line.type, toNumber(line.amount));
-                    await tx.account.update({
-                        where: { id: line.accountId },
-                        data: { balance: { decrement: delta } },
-                    });
-                }
+                // Nature resolves with the group fallback, exactly as the engine
+                // resolved it when posting — a party ledger carries a null
+                // normalBalance, and a bare read used to sign-flip its delta.
+                await applyLineBalances(tx, entry.lines, "reverse");
                 // Removing a posted entry dirties a reconciled window exactly as
                 // much as adding one — same retreat as the posting path.
                 await retreatReconciliation(tx, entry.lines.map((l) => l.accountId), entry.date);

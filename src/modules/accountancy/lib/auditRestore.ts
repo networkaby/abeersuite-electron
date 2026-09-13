@@ -14,7 +14,7 @@
 // violation. The truth path self-corrects from the recreated JE's own status.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 type Tx = Prisma.TransactionClient;
@@ -95,23 +95,19 @@ async function recreateJournalEntry(tx: Tx, cols: Map<string, Set<string>>, je: 
 }
 
 /**
- * Apply POSTED, non-deleted lines forward to the cached Account.balance. Lines may
- * carry an `account.normalBalance` (voucher-line snapshots) or be scalar-only (spine
- * GL-line snapshots); the latter resolve normalBalance from the DB in one lookup.
+ * Apply POSTED, non-deleted lines forward to the cached Account.balance.
+ *
+ * Nature comes from the LIVE account through the shared writer, not from the
+ * snapshot's own `account.normalBalance`: the snapshot may be months old, and a
+ * bare normalBalance read skipped every party ledger (they carry null and take
+ * their nature from the group), so a restore used to recreate the lines and
+ * leave those legs' balance untouched.
  */
 async function reapplyBalance(tx: Tx, lines: JeLine[]): Promise<void> {
-    if (lines.length === 0) return;
-    const ids = [...new Set(lines.map((l) => l.accountId).filter((x): x is number => x != null))];
-    const rows = await tx.account.findMany({ where: { id: { in: ids } }, select: { id: true, normalBalance: true } });
-    const nbById = new Map(rows.map((a) => [a.id, a.normalBalance]));
-    for (const l of lines) {
-        const nb = l.account?.normalBalance ?? nbById.get(l.accountId);
-        if (!nb) continue;
-        await tx.account.update({
-            where: { id: l.accountId },
-            data: { balance: { increment: balanceDelta(nb, l.type, toNumber(l.amount)) } },
-        });
-    }
+    // A snapshot line can be account-less; `applyLineBalances` writes per account.
+    const withAccount = lines.filter((l): l is JeLine & { accountId: number } => l.accountId != null);
+    if (withAccount.length === 0) return;
+    await applyLineBalances(tx, withAccount, "apply");
 }
 
 function isLive(status: unknown, deletedAt: unknown, cancelledAt: unknown): boolean {

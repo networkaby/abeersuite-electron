@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
@@ -88,27 +88,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Journal entry is not balanced — debits must equal credits" }, { status: 422 });
     }
 
-    // Spine lines are scalar — resolve normalBalance for the old lines up front.
-    const oldAcctIds = [...new Set(existing.lines.map((l) => l.accountId))];
-    const nbRows = await prisma.account.findMany({
-        where:  { id: { in: oldAcctIds } },
-        select: { id: true, normalBalance: true },
-    });
-    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
-
     try {
         const updated = await prisma.$transaction(async (tx) => {
             // ── POSTED: reverse the old GL impact first ─────────────────
             if (existing.status === "POSTED" && body.lines) {
-                for (const line of existing.lines) {
-                    const nb = nbById.get(line.accountId);
-                    if (!nb) continue;
-                    const delta = balanceDelta(nb, line.type, toNumber(line.amount));
-                    await tx.account.update({
-                        where: { id: line.accountId },
-                        data:  { balance: { decrement: delta } },
-                    });
-                }
+                await applyLineBalances(tx, existing.lines, "reverse");
             }
 
             // Swap lines if provided
@@ -128,18 +112,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             // ── POSTED: apply the new GL impact ─────────────────────────
             if (existing.status === "POSTED" && body.lines) {
-                for (const line of body.lines) {
-                    const acct = await tx.account.findUnique({
-                        where:  { id: line.accountId },
-                        select: { normalBalance: true },
-                    });
-                    if (!acct?.normalBalance) continue;
-                    const delta = balanceDelta(acct.normalBalance, line.type, line.amount);
-                    await tx.account.update({
-                        where: { id: line.accountId },
-                        data:  { balance: { increment: delta } },
-                    });
-                }
+                await applyLineBalances(tx, body.lines, "apply");
             }
 
             const updatedJe = await tx.universalVoucher.update({

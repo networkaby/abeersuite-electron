@@ -3,7 +3,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { balanceDelta, toNumber, loadNormalBalances } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
@@ -34,18 +34,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
-    // Same nature resolution the engine used when it applied these deltas —
-    // bare `normalBalance` would skip the null-nature ledgers and drift the cache.
-    const nbById = await loadNormalBalances(prisma, voucher.lines.map((l) => l.accountId));
 
     try {
         const audit = await prisma.$transaction(async (tx) => {
             if (needsReversal) {
-                for (const line of voucher.lines) {
-                    const nb = nbById.get(line.accountId);
-                    if (!nb) continue;
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } } });
-                }
+                await applyLineBalances(tx, voucher.lines, "reverse");
                 // Removing a posted voucher dirties a reconciled window exactly as
                 // much as adding one — same retreat as the posting path.
                 await retreatReconciliation(tx, voucher.lines.map((l) => l.accountId), voucher.date);

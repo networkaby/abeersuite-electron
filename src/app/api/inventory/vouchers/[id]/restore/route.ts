@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
-import { toNumber, balanceDelta, loadNormalBalances } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { deleteCancelCounterRows, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -102,13 +102,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     // Resolve nature exactly as cancel resolved it (group fallback
                     // included) and skip a genuinely unknown one, so the two sides
                     // touch the same set of ledgers and can never drift.
-                    const nbById = await loadNormalBalances(tx, spine.lines.map((l) => l.accountId));
-                    for (const line of spine.lines) {
-                        const nb = nbById.get(line.accountId);
-                        if (!nb) continue;
-                        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
-                        await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
-                    }
+                    await applyLineBalances(tx, spine.lines, "apply");
                     await setSpineLifecycle(tx, spineId, {
                         status: "POSTED", cancelledAt: null, cancelledById: null, cancelReason: null,
                     });

@@ -6,12 +6,13 @@ import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
+import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 
 // Phase 5 5E: the UniversalVoucher spine IS the financial voucher (Voucher table
 // dropped). `id` is the spine id; lines are VoucherGlLine. The spine is scalar/
@@ -116,11 +117,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
 
-    // Spine lines are scalar — resolve normalBalance for the reverse/apply.
-    const allAcctIds = [...new Set([...existing.lines.map((l) => l.accountId), ...body.lines.map((l) => l.accountId)])];
-    const nbRows = await prisma.account.findMany({ where: { id: { in: allAcctIds } }, select: { id: true, normalBalance: true } });
-    const nbById = new Map(nbRows.map((a) => [a.id, a.normalBalance]));
-
     try {
         await prisma.$transaction(async (tx) => {
             const wasPosted = existing.status === "POSTED";
@@ -137,12 +133,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         actorId:     user!.id,
                     }),
                 });
-                // Reverse the old GL impact.
-                for (const line of existing.lines) {
-                    const nb = nbById.get(line.accountId);
-                    if (!nb) continue;
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: balanceDelta(nb, line.type, toNumber(line.amount)) } } });
-                }
+                // Reverse the old GL impact. Through the shared writer, so nature
+                // resolves with the group fallback exactly as the engine resolved
+                // it when posting — a bare normalBalance read skipped the party
+                // ledgers on BOTH legs here, leaving the old delta on the account
+                // and never applying the new one.
+                await applyLineBalances(tx, existing.lines, "reverse");
             }
 
             // Rewrite the spine's GL lines.
@@ -162,11 +158,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             if (wasPosted) {
                 // Apply the new GL impact.
-                for (const line of body.lines) {
-                    const nb = nbById.get(line.accountId);
-                    if (!nb) continue;
-                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: balanceDelta(nb, line.type, line.amount) } } });
-                }
+                await applyLineBalances(tx, body.lines, "apply");
             }
 
             // Update the spine header. denomJson: undefined = leave untouched;
@@ -193,6 +185,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 partyBefore: existing.partyAccountId,
                 partyAfter:  body.partyAccountId ?? null,
             });
+
+            // An edit dirties a reconciled window exactly as much as a posting
+            // does — the amounts moved, and the date may have moved too. Retreat
+            // at the EARLIER of the old and new dates; the watermark only ever
+            // travels backwards, so one call covers both.
+            if (wasPosted) {
+                const newDate = new Date(body.date);
+                const from = newDate < existing.date ? newDate : existing.date;
+                await retreatReconciliation(
+                    tx,
+                    [...existing.lines.map((l) => l.accountId), ...body.lines.map((l) => l.accountId)],
+                    from,
+                );
+            }
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const updated = await prisma.universalVoucher.findUnique({ where: { id: voucherId }, include: { lines: true } });

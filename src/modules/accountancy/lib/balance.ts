@@ -1,5 +1,6 @@
 import { defaultNormalBalanceForGroupType } from "./groupNature";
 import { dateOnOrBefore, businessToday } from "@/shared/lib/format/formatDate";
+import { round2 } from "@/shared/lib/format/moneyInr";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
 
@@ -120,7 +121,12 @@ export async function applyLineBalances(
     for (const line of lines) {
         const nb = nbById.get(line.accountId);
         if (!nb) continue;
-        const delta = balanceDelta(nb, line.type, toNumber(line.amount));
+        // Round at the money boundary, exactly where the engine rounds
+        // (transactionEngine.ts engineGlArm): the stored VoucherGlLine.amount is
+        // Decimal(14,2), so an unrounded caller float would move the cached
+        // balance by a hair the lines can never account for. A no-op for callers
+        // that already hand us 2dp Decimals.
+        const delta = balanceDelta(nb, line.type, round2(toNumber(line.amount)));
         await tx.account.update({
             where: { id: line.accountId },
             data:  { balance: direction === "apply" ? { increment: delta } : { decrement: delta } },
