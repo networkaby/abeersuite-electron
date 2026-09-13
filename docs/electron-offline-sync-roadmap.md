@@ -281,7 +281,12 @@ side against its own ledger; `pnpm recompute:caches` is the one-shot repair.
 
 Voucher numbers are the one total that is an allocator, not a sum: they live per
 `(kind, counterNumber)` in `VoucherSeriesCounter`, and only the machine numbering on a
-row writes it. The office is counter 1; a PC cannot take number 1.
+row writes it. The office is counter 1; a PC cannot take number 1. The table carries
+`localAuthority` in the registry `overrides`: the reconcile pass never deletes from it,
+because a counter's own row absent upstream is not an office delete — it is a row the
+cloud has not seen yet, and losing it restarts the series from 1 on bills already
+printed. The same pass holds back any row still pending in `_outbox`, for every table
+(`sync-engine/lib/outboxGuard.js`; see `sync-engine/README.md`).
 
 Gift cards are the residual: a single till cannot overdraw a card (conditional draw), but
 two tills apart can each spend the same card. After the rebuild the balance is negative,

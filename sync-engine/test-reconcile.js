@@ -28,7 +28,7 @@
 
 const { pool } = require("./lib/db");
 const reconcile = require("./lib/reconcile");
-const { pullByKeys } = require("./lib/pull");
+const { pullByKeys, deleteByKeys } = require("./lib/pull");
 const { repairReferencing } = require("./sync-once.js");
 
 const SOURCE_URL = process.env.TEST_SOURCE_URL;
@@ -46,6 +46,17 @@ const tables = {
     UserSurfaceSeen: {
         n: 3, table: "UserSurfaceSeen", pk: ["userId", "surface"],
         strategy: "child", parent: "User", fk: "userId",
+    },
+    // Compound-keyed, like the real one — that is what makes check 4 bite: a guard
+    // joined on `_outbox.row_pk` passes on single-column keys and silently fails here.
+    VoucherSeriesCounter: {
+        n: 4, table: "VoucherSeriesCounter", pk: ["kind", "counterNumber"],
+        strategy: "watermark", column: "updatedAt", localAuthority: true,
+    },
+    // The same table WITHOUT the ownership flag: the outbox hold on its own.
+    PlainCounter: {
+        n: 5, table: "VoucherSeriesCounter", pk: ["kind", "counterNumber"],
+        strategy: "watermark", column: "updatedAt",
     },
 };
 
@@ -71,6 +82,22 @@ INSERT INTO "Person" VALUES
 INSERT INTO "UserSurfaceSeen" VALUES
   (7, 'help',  '2026-09-05 21:32:02.777'),
   (7, 'deals', '2026-09-01 10:00:00');
+DROP TABLE IF EXISTS "VoucherSeriesCounter";
+CREATE TABLE "VoucherSeriesCounter" (
+  kind text, "counterNumber" int, "nextSeq" int NOT NULL DEFAULT 0,
+  "updatedAt" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY (kind, "counterNumber")
+);
+`;
+
+/** The replica's outbox, cut down to the columns the guard reads (local-schema.sql). */
+const OUTBOX = `
+DROP TABLE IF EXISTS "_outbox";
+CREATE TABLE "_outbox" (
+  id serial PRIMARY KEY, table_name text NOT NULL, row_pk text NOT NULL,
+  row_key jsonb NOT NULL DEFAULT '{}'::jsonb, operation text NOT NULL,
+  payload jsonb NOT NULL, pushed_at timestamptz, dead_lettered_at timestamptz
+);
 `;
 
 let failures = 0;
@@ -175,6 +202,53 @@ async function main() {
         const tLoc = await reconcile.fingerprint(local, tables.UserSurfaceSeen, tSrc.columns || []);
         check("a replica-only column is still tolerated",
             reconcile.missingColumns(tSrc, tLoc), ["sourceCounterId"]);
+
+        console.log("\n4. A row this counter wrote and has not pushed yet is not an upstream delete");
+
+        // Three counter rows exist here and none on the source. Counter 2's row is still
+        // waiting in the outbox (the case that re-issued invoice numbers), counter 3's
+        // was pushed and then genuinely deleted upstream, counter 4's was refused.
+        // `row_pk` is written the way the real trigger writes it — chr(31) — so a guard
+        // joined on it would match nothing; the assertions below would then fail.
+        await local.query(OUTBOX);
+        await local.query(`
+            INSERT INTO "VoucherSeriesCounter" (kind, "counterNumber", "nextSeq")
+            VALUES ('SALE', 2, 418), ('SALE', 3, 7), ('SALE', 4, 1);
+            INSERT INTO "_outbox" (table_name, row_pk, row_key, operation, payload, pushed_at, dead_lettered_at) VALUES
+              ('VoucherSeriesCounter', 'SALE' || chr(31) || '2', '{"kind":"SALE","counterNumber":2}', 'create', '{}', NULL,   NULL),
+              ('VoucherSeriesCounter', 'SALE' || chr(31) || '3', '{"kind":"SALE","counterNumber":3}', 'create', '{}', now(), NULL),
+              ('VoucherSeriesCounter', 'SALE' || chr(31) || '4', '{"kind":"SALE","counterNumber":4}', 'create', '{}', NULL,   now());
+        `);
+        const sep = reconcile.KEY_SEPARATOR;
+        const k2 = `SALE${sep}2`, k3 = `SALE${sep}3`, k4 = `SALE${sep}4`;
+
+        check("keyExpression renders the key with KEY_SEPARATOR — the constant is the truth",
+            (await local.query(`SELECT ${reconcile.keyExpression(tables.PlainCounter)} AS k
+                                  FROM "VoucherSeriesCounter" WHERE "counterNumber" = 2`)).rows[0].k, k2);
+
+        const diff = await reconcile.keyDiff(source, local, tables.PlainCounter);
+        check("keyDiff reports all three as onlyLocal", diff.onlyLocal.sort(), [k2, k3, k4]);
+
+        const plain = await deleteByKeys(local, tables.PlainCounter, diff.onlyLocal);
+        check("the pending row is held back", plain.heldKeys, [k2]);
+        check("the pushed and dead-lettered rows are deleted — a real repair still repairs",
+            [plain.removed, plain.deletedKeys.sort()], [2, [k3, k4]]);
+        check("...and counter 2's number survived on disk",
+            (await local.query(`SELECT "nextSeq" AS n FROM "VoucherSeriesCounter" WHERE "counterNumber" = 2`)).rows[0].n, 418);
+
+        // With the ownership flag nothing goes, whatever the outbox says: this is the
+        // second lock, for the table where a lost row means duplicate bills.
+        await local.query(`INSERT INTO "VoucherSeriesCounter" (kind, "counterNumber", "nextSeq") VALUES ('SALE', 3, 7), ('SALE', 4, 1)`);
+        const owned = await deleteByKeys(local, tables.VoucherSeriesCounter, [k2, k3, k4]);
+        check("a localAuthority table deletes nothing, pushed or not",
+            [owned.removed, owned.heldKeys.sort(), owned.deletedKeys], [0, [k2, k3, k4], []]);
+        check("...all three rows still there",
+            (await local.query(`SELECT count(*)::int AS c FROM "VoucherSeriesCounter"`)).rows[0].c, 3);
+
+        // A machine with no outbox (the office) is simply unguarded, not broken.
+        await local.query('DROP TABLE "_outbox"');
+        const bare = await deleteByKeys(local, tables.PlainCounter, [k2]);
+        check("no _outbox table → nothing held", [bare.removed, bare.heldKeys], [1, []]);
     } finally {
         local.release();
         source.release();

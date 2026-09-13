@@ -13,6 +13,7 @@
 
 const { q, inReplicaTransaction } = require("./db");
 const { keyExpression } = require("./reconcile");
+const outboxGuard = require("./outboxGuard");
 const totals = require("./rebuildTotals");
 
 /** Rows per INSERT. Postgres caps a statement at 65535 parameters. */
@@ -152,9 +153,10 @@ async function upsert(client, table, pk, rows, jsonCols, cacheCols, force) {
  */
 async function pullWatermark(source, local, entry, since, sinceId, limit, force) {
     const col = entry.column;
-    // Compound-key tables cannot express this cursor; only InvProductBranch is both
-    // compound-keyed and watermarked, and it falls back to the timestamp alone.
-    // Safe there because a tie would have to exceed a whole page to lose anything.
+    // Compound-key tables cannot express this cursor; InvProductBranch and
+    // VoucherSeriesCounter are both compound-keyed and watermarked, and they fall back
+    // to the timestamp alone. Safe there because a tie would have to exceed a whole
+    // page to lose anything.
     const keyed = entry.pk.length === 1;
     const idCol = entry.pk[0];
 
@@ -291,21 +293,46 @@ async function pullByKeys(source, local, entry, keys, force = true) {
     return written;
 }
 
-/** Remove rows the source no longer has. */
+/**
+ * Remove rows the source no longer has — except the ones the source has never SEEN.
+ *
+ * `keys` is "present here, absent upstream". Two very different things look like
+ * that: a row the office deleted, and a row this counter created and has not pushed
+ * yet. The guard lives inside this function rather than at its callers so that no
+ * call site, present or future, can delete the second kind by forgetting to ask.
+ *
+ * Two holds, each for its own reason:
+ *   - `entry.localAuthority` — this machine owns its rows in the table outright and
+ *     the cloud is never the authority on them (VoucherSeriesCounter: one row per
+ *     counter, and losing it re-issues printed invoice numbers). Nothing is deleted,
+ *     pushed or not.
+ *   - the outbox — a row still waiting to be pushed (see outboxGuard.js).
+ *
+ * @returns {{ removed: number, deletedKeys: string[], heldKeys: string[] }}
+ *   `deletedKeys` is what repairReferencing should act on; `heldKeys` is for the log.
+ */
 async function deleteByKeys(local, entry, keys) {
-    if (!keys || keys.length === 0) return 0;
+    const out = { removed: 0, deletedKeys: [], heldKeys: [] };
+    if (!keys || keys.length === 0) return out;
+
+    if (entry.localAuthority) {
+        out.heldKeys = [...keys];
+        return out;
+    }
+    const pending = await outboxGuard.pendingKeys(local, entry);
+    for (const k of keys) (pending.has(k) ? out.heldKeys : out.deletedKeys).push(k);
+    if (out.deletedKeys.length === 0) return out;
 
     const keyExpr = keyExpression(entry);
 
-    let removed = 0;
-    for (const batch of chunk(keys, CHUNK)) {
+    for (const batch of chunk(out.deletedKeys, CHUNK)) {
         const r = await inReplicaTransaction(local, async () => {
             await totals.noteBeforeDelete(local, entry.table, `${keyExpr} = ANY($1)`, [batch]);
             return local.query(`DELETE FROM ${q(entry.table)} WHERE ${keyExpr} = ANY($1)`, [batch]);
         });
-        removed += r.rowCount || 0;
+        out.removed += r.rowCount || 0;
     }
-    return removed;
+    return out;
 }
 
 module.exports = { pullWatermark, pullFull, pullChildren, pullByKeys, deleteByKeys, upsert, jsonColumnsOf, coerce, CHUNK };

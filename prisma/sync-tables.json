@@ -46,6 +46,9 @@
     "UserPosition": {
       "strategy": "full"
     },
+    "VoucherSeriesCounter": {
+      "localAuthority": true
+    },
     "WorkGroup": {
       "strategy": "full"
     }
@@ -1046,7 +1049,8 @@
         "counterNumber"
       ],
       "strategy": "watermark",
-      "column": "updatedAt"
+      "column": "updatedAt",
+      "localAuthority": true
     },
     "WallPost": {
       "n": 107,

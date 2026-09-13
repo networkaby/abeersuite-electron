@@ -178,6 +178,21 @@ type TableEntry = {
      * engine all read this one list.
      */
     cacheColumns?: string[];
+    /**
+     * This machine owns its rows in the table; the cloud is never the authority on them.
+     *
+     * The reconcile pass deletes a replica row the source lacks, reading its absence
+     * as an upstream delete. For a table where a counter's own row is the master copy
+     * — `VoucherSeriesCounter`, one row per (kind, counter), and only that counter
+     * ever writes it — that reading is never right: the row may simply not have
+     * reached the cloud yet, or the cloud copy may have been refused or removed, and
+     * deleting it here makes the allocator start the series again from zero on bills
+     * already printed. So `deleteByKeys` removes nothing from such a table, pushed or
+     * not. Adds and updates from the source still apply (other counters' rows, and a
+     * rebuilt till recovering its own). Hand-maintained in `overrides`; only the sync
+     * engine reads it.
+     */
+    localAuthority?: boolean;
 };
 
 type Registry = {
@@ -343,6 +358,7 @@ function normalize(t: TableEntry): TableEntry {
     if (t.strategy === "child") Object.assign(base, { parent: t.parent, fk: t.fk });
     if (t.strategy === "watermark" || t.strategy === "append") Object.assign(base, { column: t.column });
     if (t.cacheColumns?.length) base.cacheColumns = [...t.cacheColumns].sort();
+    if (t.localAuthority) base.localAuthority = true;
     return base;
 }
 

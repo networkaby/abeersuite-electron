@@ -26,6 +26,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "test:bridge": "node --test hardware-bridge/thermal.test.js",
+    "test:reconcile": "node sync-engine/test-reconcile.js",
     "reconcile:shop-orders": "tsx src/scripts/reconcile-shop-order-accounts.ts",
     "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts",
     "seed:helper-brands": "tsx prisma/seeds/helper-brands.ts",

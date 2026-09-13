@@ -193,9 +193,9 @@ Adding the primary key makes the ordering total, so a page boundary can fall ins
 a tie without losing anything. Verified by deleting 1500 rows locally, clearing the
 cursor, and re-syncing: all 3529 came back and the fingerprints matched exactly.
 
-(`InvProductBranch` is the one watermarked table with a compound key and falls back
-to the timestamp alone; a tie there would have to exceed a whole page to lose
-anything.)
+(`InvProductBranch` and `VoucherSeriesCounter` are the watermarked tables with a
+compound key and fall back to the timestamp alone; a tie there would have to exceed
+a whole page to lose anything.)
 
 The stored cursor is the largest value **seen**, never `now()` — taking the clock
 would skip any row committed during the query but stamped just before it, the same
@@ -232,6 +232,43 @@ pays to move keys, and then both directions are repaired:
 
 After repairing, the table is re-fingerprinted before being marked verified — if it
 still differs, no proof is recorded and the next cycle looks again.
+
+#### A row the cloud has never seen is not an upstream delete
+
+`onlyLocal` has a second meaning the comparison cannot see: **a row this counter wrote
+and has not pushed yet.** A counter is not a pure downstream replica — it is an origin
+for its own sales, shifts and counter rows, which reach Supabase later through
+`_outbox`. Until the push lands, such a row is absent upstream because the cloud has
+not seen it, and deleting it destroys the only copy. For most tables the outbox payload
+survives and the row returns once pushed (a sale vanishing from the till for a while).
+For `VoucherSeriesCounter` — one row per `(kind, counterNumber)`, written only by that
+counter — the allocator re-creates the missing row from zero first, and the till
+re-issues invoice numbers already printed on customers' bills. Silently.
+
+So `deleteByKeys` (`lib/pull.js`) holds back two kinds of key, and every caller goes
+through it:
+
+- **Still in the outbox** (`lib/outboxGuard.js`): keys with a pending `_outbox` row
+  (`pushed_at IS NULL AND dead_lettered_at IS NULL`, the pending index's predicate).
+  Dead-lettered rows are deliberately *not* held — a permanently refused row would keep
+  its table from ever verifying, and every till would pay a full key transfer from
+  Supabase hourly for it. The badge already shouts about dead letters and the payload
+  is still in `_outbox`.
+- **`localAuthority`** tables (registry `overrides`): this machine owns its rows and
+  the cloud is never the authority. Nothing is deleted, pushed or not — this closes the
+  dead-letter and upstream-delete cases for the one table where the loss is
+  unacceptable. Adds and updates from the source still apply.
+
+The log says `held N local row(s) not yet pushed`; such a table stays unverified until
+the push lands, which is the truthful state.
+
+The join is on `_outbox.row_key` (typed jsonb), **not** `row_pk`: the trigger joins
+compound keys with `chr(31)` while `keyExpression` joins them with the four-character
+literal `\x1f` (`standard_conforming_strings` is on), so `row_pk` would never match and
+the guard would silently protect nothing on exactly the compound-keyed tables. The
+separator is one exported constant, `KEY_SEPARATOR`.
+
+Covered by `pnpm test:reconcile` (check 4).
 
 Verified by injecting divergence in both directions at once (5 rows deleted locally,
 1 bogus row inserted) and watching a cycle report `Device repair -1 +5`, after which

@@ -20,6 +20,9 @@ const path = require("node:path");
  * @property {string}  [column]   watermark column (watermark | append)
  * @property {string}  [parent]   parent MODEL name (child)
  * @property {string}  [fk]       local FK column pointing at the parent (child)
+ * @property {string[]} [cacheColumns] running totals never applied on an UPDATE
+ * @property {boolean} [localAuthority] this machine owns its rows; reconcile never
+ *                                deletes from the table (see pull.js deleteByKeys)
  */
 
 /** @returns {{ tables: Record<string, TableEntry>, ignore: string[] }} */

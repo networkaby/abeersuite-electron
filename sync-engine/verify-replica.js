@@ -163,7 +163,10 @@ async function main() {
 
                 if (!REPAIR) continue;
 
-                const removed = await deleteByKeys(local, b.entry, diff.onlyLocal);
+                const { removed, heldKeys } = await deleteByKeys(local, b.entry, diff.onlyLocal);
+                // A local row still waiting in _outbox is not an upstream delete, and
+                // deleteByKeys keeps it. Name them so "-0" reads as a decision, not a miss.
+                show("kept: written here and not yet pushed", heldKeys);
                 const added = await pullByKeys(source, local, b.entry, diff.onlySource);
                 const refreshed = await pullByKeys(source, local, b.entry, drifted);
                 repairedTables++;

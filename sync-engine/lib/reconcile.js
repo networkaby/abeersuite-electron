@@ -64,6 +64,22 @@ const { q } = require("./db");
 const HASHES_ROW_CONTENT = new Set(["full", "child"]);
 
 /**
+ * What sits between the columns of a compound key once it is rendered as text.
+ *
+ * This is the FOUR characters backslash, x, 1, f — not the US control character the
+ * sequence looks like. The SQL literal was written meaning 0x1f, but with
+ * `standard_conforming_strings = on` (the default; db.js changes nothing) Postgres
+ * takes a backslash in an ordinary string literally. It has always been four
+ * characters, so it stays four: both sides of every comparison render keys with the
+ * one expression below, so it is self-consistent, and changing the bytes would only
+ * risk that. What must never exist is a SECOND rendering that disagrees —
+ * `_outbox.row_pk` is exactly that (the trigger joins with `chr(31)`), which is why
+ * outboxGuard.js builds keys from `row_key` with this constant instead. Any code that
+ * needs a key outside SQL takes the separator from here.
+ */
+const KEY_SEPARATOR = "\\x1f";
+
+/**
  * SQL that renders a row's primary key as one text value.
  *
  * Defined once and shared by everything that compares, deletes or fetches by key.
@@ -71,13 +87,13 @@ const HASHES_ROW_CONTENT = new Set(["full", "child"]);
  * simply stop agreeing on what a key looks like, and every row would read as
  * different from itself.
  *
- * Compound keys are joined with US (0x1f), a control character that cannot occur in
- * an id, so ('a','bc') and ('ab','c') cannot collide.
+ * Compound keys are joined with KEY_SEPARATOR, a sequence that does not occur in an
+ * id, so ('a','bc') and ('ab','c') cannot collide.
  */
 function keyExpression(entry) {
     return entry.pk.length === 1
         ? `${q(entry.pk[0])}::text`
-        : entry.pk.map((c) => `${q(c)}::text`).join(` || '\\x1f' || `);
+        : entry.pk.map((c) => `${q(c)}::text`).join(` || '${KEY_SEPARATOR}' || `);
 }
 
 /**
@@ -298,7 +314,7 @@ function missingColumns(srcFp, locFp) {
 }
 
 module.exports = {
-    fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression,
+    fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression, KEY_SEPARATOR,
     referencingNullers,
     referencingCascades, hashesRowContent, missingColumns,
 };

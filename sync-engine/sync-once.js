@@ -518,7 +518,15 @@ async function main() {
                     }
                     // Only now pay to move keys.
                     const diff = await reconcile.keyDiff(source, local, entry);
-                    const removed = await deleteByKeys(local, entry, diff.onlyLocal);
+                    // Not every onlyLocal key is an upstream delete: a row this counter
+                    // wrote and has not pushed yet looks identical, and deleteByKeys
+                    // holds those back (lib/outboxGuard.js). Say so, because a table
+                    // with held rows stays unverified until the push lands, and a log
+                    // reading "-0" every hour with no reason would look like a fault.
+                    const { removed, deletedKeys, heldKeys } = await deleteByKeys(local, entry, diff.onlyLocal);
+                    if (heldKeys.length > 0) {
+                        console.log(`  ${model.padEnd(28)} held      ${heldKeys.length} local row(s) not yet pushed`);
+                    }
                     const added = await pullByKeys(source, local, entry, diff.onlySource);
                     repaired += removed + added;
                     // The source's ON DELETE SET NULL rewrote the rows that referenced
@@ -526,7 +534,7 @@ async function main() {
                     // suspended while applying. Re-read them. See repairReferencing.
                     if (removed > 0) {
                         repaired += await repairReferencing(
-                            source, local, tables, fkCache, entry, diff.onlyLocal, changedModels,
+                            source, local, tables, fkCache, entry, deletedKeys, changedModels,
                         );
                     }
                     // A content fingerprint can disagree while the KEYS match perfectly —
