@@ -63,7 +63,7 @@ Read the actual diffs behind those commits — subject lines are not enough to k
 - **Customer-readable.** Plain Indian English, project vocabulary (`docs/vocabulary.md`). "The Offline Policies page now works", not "fix(policies): persist toggles to DB".
 - **Grouped by what a user notices** — one `##` heading per area (counter setup, billing, sync, printing), each with short bullets.
 - **First line is `# v<version>`**, optionally `[urgent]`. Then one short paragraph saying who should install it and why.
-- **Call out a schema change explicitly** if the release adds or changes a table — say the server database must have it before counters update, or their sync pauses until it does.
+- **Call out a schema change explicitly** if the release adds or changes a table — say the counter must be updated first, and that its sync pauses until it is. The order is not a preference: `schemaGuard` halts a counter on a column the SOURCE has and the replica lacks, so migrating Supabase first makes every till print `SCHEMA DRIFT — refusing to sync` and stop **all** its tables, not just the changed one. Build first, migrate within minutes (`docs/commands.md` §0).
 
 **The urgency tier decides how counters take it** (`docs/commands.md` §9, `electron/updateManager.ts`):
 

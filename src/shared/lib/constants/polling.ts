@@ -87,10 +87,28 @@ export const CALL_POPUP_POLL_MS = 20_000;   // 20 seconds
  * **Edit this one line to widen or narrow that window.** It is a display rule
  * only — the call row itself is never deleted or hidden from the CRM Call Log
  * page; this decides only how long the counter keeps being reminded about it.
- * Two days covers a late call logged the next morning, or a day off, without
+ * Three days covers a late call logged the next morning, or a day off, without
  * letting a week of forgotten calls pile up behind the icon.
  */
-export const CALL_POPUP_MAX_AGE_MS = 72 * 60 * 60 * 1000;   // 2 days
+export const CALL_POPUP_MAX_AGE_MS = 72 * 60 * 60 * 1000;   // 3 days
+
+/**
+ * How long the follow-up popup trusts its own "I just saved this" memory while
+ * the server still says the call is unhandled.
+ *
+ * A save is two writes (the ticket or deal, then the PATCH that marks the call
+ * handled), and on a counter the PATCH is relayed to the office and has to come
+ * back down through the replica — so a refresh in between honestly reads the
+ * call as still unlogged. Hiding it for this long keeps it off the screen while
+ * that settles.
+ *
+ * **It is a delay, never a permanent hide.** Past this window the call comes
+ * back WITH a line saying it was logged and has not arrived yet, so a save that
+ * genuinely failed — or a replica that is not receiving — surfaces instead of
+ * disappearing. Edit this one line to give the sync more or less benefit of the
+ * doubt.
+ */
+export const CALL_POPUP_HANDLED_TTL_MS = 15 * 60 * 1000;   // 15 minutes
 
 /**
  * The follow-up icon sits quietly with its count until the last call is

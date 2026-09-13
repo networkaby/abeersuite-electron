@@ -38,6 +38,29 @@ and just runs `pnpm db:migrate`, which applies `0_init` for real.
 Getting this wrong is loud, not silent: without the baseline row Prisma tries to
 create 116 tables that already exist and stops on the first one.
 
+**`0_init` is frozen the moment any database records it.** Its checksum is stored
+in that `_prisma_migrations` row, and editing the file makes `prisma migrate
+deploy` refuse to run at all. That has a consequence worth knowing: `0_init` was
+generated from the schema a little *after* 2026-09-12, so it already declares a
+few things added just after that date — `Call."updatedAt"` is the first. A brand
+new database therefore RUNS them as part of the baseline, while a baselined one
+never does. **Any later migration touching something `0_init` already declares
+must be idempotent** (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`),
+or it breaks every fresh install. See
+`prisma/migrations/20260913120000_call_updated_at/migration.sql`.
+
+## Counters come before the server
+
+A schema change reaches Supabase and each counter replica separately, and the
+order is fixed: **release the counter build first, then run `pnpm db:migrate`.**
+
+`sync-engine/lib/schemaGuard.js` halts a counter when the source has a column the
+replica lacks — `SCHEMA DRIFT — refusing to sync`, `exit 4`, **every table on that
+till, not just the changed one**. A column the replica has spare is harmless, so
+build-first costs only an error on the one table until the migration lands, while
+server-first stops the shop. `docs/commands.md` §0 and the release skill say the
+same thing.
+
 ## Day-to-day
 
 | Command | What it does |

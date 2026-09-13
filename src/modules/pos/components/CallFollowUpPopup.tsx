@@ -43,18 +43,25 @@
  * scheduled "these are still waiting" nudge. A call older than
  * `CALL_POPUP_MAX_AGE_MS` drops off the icon — the row is untouched and
  * still on the CRM Call Log, it just stops being a counter reminder.
- * ONCE LOGGED, IT STAYS GONE. A save is two writes (the ticket/deal, then
- * the PATCH that marks the call handled) and the first of them publishes the
+ * HOW A SAVE STAYS SAVED. A save is two writes (the ticket/deal, then the
+ * PATCH that marks the call handled) and the first of them publishes the
  * realtime signal that triggers a refresh — so a refresh can read the call as
  * still unhandled and push it back on screen a moment after staff logged it.
- * `handledIdsRef` holds the just-logged ids out of the queue until a refresh
- * confirms the data caught up, then releases them straight away.
+ * On a till the gap is wider still: the PATCH is relayed to the office and has
+ * to come back down through the replica. `handledIdsRef` holds the just-logged
+ * ids out of the queue until a refresh confirms the data caught up.
  *
- * `minimized`/`remindAt` persist to localStorage (not component state)
- * because this component is mounted separately in two different layouts
- * (office vs POS) — crossing between them unmounts one copy and mounts the
- * other, and a plain in-memory flag would forget it was minimized the moment
- * that happens.
+ * It EXPIRES rather than hiding for ever. Past `CALL_POPUP_HANDLED_TTL_MS` the
+ * call comes back on screen carrying a line saying staff logged it and this
+ * counter has not received it. Both silences it could have kept are worse:
+ * hiding for ever buries a save that never landed (the 2026-09-13 sync bug did
+ * exactly that — `Call` synced as `append`, so an edit never came down), and
+ * coming back unannounced invites a second ticket for the same call.
+ *
+ * `minimized`/`remindAt`/`pos` and the handled set persist to localStorage (not
+ * component state) because this component is mounted separately in two different
+ * layouts (office vs POS) — crossing between them unmounts one copy and mounts
+ * the other, and a plain in-memory value would forget the moment that happens.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -69,7 +76,7 @@ import {
 import { usePolling } from "@/shared/hooks/usePolling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useMyCounterExtension } from "@/modules/pos/hooks/useMyCounterExtension";
-import { CALL_POPUP_POLL_MS, CALL_POPUP_MAX_AGE_MS, CALL_POPUP_REMIND_MS } from "@/shared/lib/constants/polling";
+import { CALL_POPUP_POLL_MS, CALL_POPUP_MAX_AGE_MS, CALL_POPUP_REMIND_MS, CALL_POPUP_HANDLED_TTL_MS } from "@/shared/lib/constants/polling";
 import { formatCallerNumber, formatDateTime } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 
@@ -78,21 +85,50 @@ const STORAGE_KEY = "call-followup-popup:v1";
 // Floating-button screen position — dragged once, remembered everywhere
 // (same cross-layout-mount reasoning as minimized/remindAt below).
 type Pos = { x: number; y: number };
-type Persisted = { minimized: boolean; remindAt: number; pos: Pos | null };
+// `handled` is call id -> when staff saved it (epoch ms). It has to outlive a
+// remount for the same reason `minimized` does — this component is mounted in
+// both the office and POS layouts, and crossing between them unmounts one copy
+// and mounts the other. See HOW A SAVE STAYS SAVED in the module doc.
+type Persisted = { minimized: boolean; remindAt: number; pos: Pos | null; handled: Record<string, number> };
+const EMPTY: Persisted = { minimized: false, remindAt: 0, pos: null, handled: {} };
 function loadPersisted(): Persisted {
-    if (typeof window === "undefined") return { minimized: false, remindAt: 0, pos: null };
+    if (typeof window === "undefined") return EMPTY;
     try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) return { minimized: false, remindAt: 0, pos: null };
+        if (!raw) return EMPTY;
         const parsed = JSON.parse(raw) as Partial<Persisted>;
         const pos = parsed.pos && typeof parsed.pos.x === "number" && typeof parsed.pos.y === "number" ? parsed.pos : null;
-        return { minimized: Boolean(parsed.minimized), remindAt: Number(parsed.remindAt) || 0, pos };
+        const handled = parsed.handled && typeof parsed.handled === "object" ? parsed.handled : {};
+        return { minimized: Boolean(parsed.minimized), remindAt: Number(parsed.remindAt) || 0, pos, handled };
     } catch {
-        return { minimized: false, remindAt: 0, pos: null };
+        return EMPTY;
     }
 }
-function savePersisted(next: Persisted) {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* private mode etc */ }
+// Merge, not replace: the four callers each own one field, and a whole-object
+// write from any of them would drop whatever the others had just stored.
+function savePersisted(patch: Partial<Persisted>) {
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...loadPersisted(), ...patch })); } catch { /* private mode etc */ }
+}
+
+/**
+ * The saved-just-now set, read back from localStorage and pruned on the way in.
+ *
+ * Anything older than the icon's own age window is dropped outright — the call
+ * has left the icon by then, so remembering it buys nothing — and the newest 50
+ * are kept, which is the page size the popup asks for anyway.
+ */
+function loadHandled(): Map<number, number> {
+    const cutoff = Date.now() - CALL_POPUP_MAX_AGE_MS;
+    return new Map(
+        Object.entries(loadPersisted().handled)
+            .map(([id, at]) => [Number(id), Number(at)] as [number, number])
+            .filter(([id, at]) => Number.isFinite(id) && at >= cutoff)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 50),
+    );
+}
+function saveHandled(map: Map<number, number>) {
+    savePersisted({ handled: Object.fromEntries([...map].map(([id, at]) => [String(id), at])) });
 }
 
 /** "just now" / "5m ago" / "1h ago" — the pending-calls picker's labels. */
@@ -138,15 +174,25 @@ export default function CallFollowUpPopup() {
     // Call ids the previous refresh saw — null until the first one lands, so
     // the opening backlog is seeded rather than treated as newly arrived.
     const seenIdsRef = useRef<Set<number> | null>(null);
-    // Calls this counter has just logged. A save writes the ticket/deal first,
-    // and that write publishes the "tickets" realtime signal — which fires a
-    // refresh while the follow-up PATCH that actually marks the call handled is
-    // still in flight (and, in local mode, before the replica has caught up).
-    // That in-flight read still says "unhandled" and would put the just-logged
-    // call straight back on screen. Holding the id here keeps it off the queue
-    // until the data agrees — and the moment a refresh no longer returns it,
-    // the id is dropped. It is a race guard, not a lasting block.
-    const handledIdsRef = useRef<Set<number>>(new Set());
+    // Calls this counter has just logged, and when. A save writes the ticket/deal
+    // first, and that write publishes the "tickets" realtime signal — which fires
+    // a refresh while the follow-up PATCH that actually marks the call handled is
+    // still in flight (and, on a till, before the relay's write has come back down
+    // through the replica). That in-flight read still says "unhandled" and would
+    // put the just-logged call straight back on screen. Holding the id here keeps
+    // it off the queue until the data agrees — and the moment a refresh no longer
+    // returns it, the id is dropped.
+    //
+    // Persisted, unlike the other refs: a reload or a crossing between the office
+    // and POS layouts remounts this component and would otherwise empty the set
+    // mid-race. And it times out rather than hiding for ever — see `staleHandled`.
+    const handledIdsRef = useRef<Map<number, number>>(new Map());
+    useEffect(() => { handledIdsRef.current = loadHandled(); }, []);
+    // Ids the guard has held longer than it should: staff logged them, the server
+    // still disagrees. These are NOT hidden — they come back with a warning line.
+    const [staleHandled, setStaleHandled] = useState<Set<number>>(new Set());
+    /** More unhandled calls than one page — the icon says "50+" rather than lying. */
+    const [morePending, setMorePending] = useState(false);
     // Refresh responses can come back out of order (poll tick vs realtime tick).
     // Only the newest one is allowed to set the queue.
     const refreshSeqRef = useRef(0);
@@ -173,7 +219,7 @@ export default function CallFollowUpPopup() {
             const params: Record<string, string> = { unhandled: "1", limit: "50" };
             if (extension) params.ext = extension;
             const seq = ++refreshSeqRef.current;
-            const { data } = await axios.get<{ items: PendingCall[] }>("/api/calls", { params });
+            const { data } = await axios.get<{ items: PendingCall[]; pagination?: { total: number } }>("/api/calls", { params });
             if (seq !== refreshSeqRef.current) return; // a newer refresh already answered
             const cutoff = Date.now() - CALL_POPUP_MAX_AGE_MS;
             const fresh = data.items.filter((c) => new Date(c.occurredAt).getTime() >= cutoff);
@@ -181,13 +227,39 @@ export default function CallFollowUpPopup() {
             // The server has stopped calling it unhandled — the data is now
             // correct, so release the guard for that call.
             const serverIds = new Set(data.items.map((c) => c.id));
-            for (const id of handledIdsRef.current) {
-                if (!serverIds.has(id)) handledIdsRef.current.delete(id);
+            let released = false;
+            for (const id of handledIdsRef.current.keys()) {
+                if (!serverIds.has(id)) { handledIdsRef.current.delete(id); released = true; }
             }
-            const visible = handledIdsRef.current.size > 0
-                ? fresh.filter((c) => !handledIdsRef.current.has(c.id))
-                : fresh;
+            if (released) saveHandled(handledIdsRef.current);
+
+            // A held id splits in two by age. Inside the TTL it stays hidden —
+            // that is the race guard doing its job. Past it, the save is not
+            // arriving and silence would be a lie: the call goes back on screen
+            // flagged, so staff can check the Call Log instead of raising a
+            // second ticket for the same call.
+            const staleAfter = Date.now() - CALL_POPUP_HANDLED_TTL_MS;
+            const stale = new Set<number>();
+            const visible = fresh.filter((c) => {
+                const at = handledIdsRef.current.get(c.id);
+                if (at === undefined) return true;
+                if (at >= staleAfter) return false;
+                stale.add(c.id);
+                return true;
+            });
+            setStaleHandled(stale);
             setQueue(visible);
+            // The count has to be honest, and neither number alone is. `total` counts
+            // every unhandled call the server knows of, including ones older than the
+            // icon's own age window — calls it has deliberately decided not to show.
+            // `items` is capped at the page size. So: exact whenever the page reached
+            // the stale zone (fewer fresh rows than rows returned), and "50+" only when
+            // a full page of fresh rows sits in front of a bigger total.
+            setMorePending(
+                fresh.length === data.items.length
+                && data.items.length >= 50
+                && (data.pagination?.total ?? 0) > data.items.length,
+            );
 
             // A call the previous tick had not seen is a call that just
             // happened — open the panel for it. The very first tick only
@@ -254,7 +326,8 @@ export default function CallFollowUpPopup() {
 
     /** Remove the acted-on call from the queue — defaults back to the (new) most recent. */
     const advance = (id: number) => {
-        handledIdsRef.current.add(id);
+        handledIdsRef.current.set(id, Date.now());
+        saveHandled(handledIdsRef.current);
         setQueue((q) => q.filter((c) => c.id !== id));
         setSelectedId((cur) => (cur === id ? null : cur));
     };
@@ -319,6 +392,8 @@ export default function CallFollowUpPopup() {
     };
 
     const phoneDisplay = current ? formatCallerNumber(current.rawNumber, current.direction) : "";
+    /** When staff saved this call — only read for ids the TTL has flagged stale. */
+    const handledAt = (id: number) => handledIdsRef.current.get(id) ?? Date.now();
 
     const save = async () => {
         if (!current) return;
@@ -391,7 +466,7 @@ export default function CallFollowUpPopup() {
                     className="fixed bottom-4 right-4 z-50 flex touch-none items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90"
                 >
                     <PhoneIncoming size={15} />
-                    {queue.length} call{queue.length > 1 ? "s" : ""} to log
+                    {queue.length}{morePending ? "+" : ""} call{queue.length > 1 ? "s" : ""} to log
                 </button>
             )}
 
@@ -418,6 +493,18 @@ export default function CallFollowUpPopup() {
                                     {" · "}{formatDateTime(current.occurredAt)}
                                 </DialogDescription>
                             </DialogHeader>
+
+                            {/* Staff logged this one, and the counter still has not
+                                been told. Saying so beats both alternatives: hiding it
+                                for ever would bury a save that never landed, and
+                                showing it plainly invites a second ticket for the same
+                                call. See the module doc's HOW A SAVE STAYS SAVED. */}
+                            {staleHandled.has(current.id) && (
+                                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
+                                    You logged this {relativeLabel(new Date(handledAt(current.id)).toISOString())} and this counter
+                                    has not received it yet. Check the Call Log before raising another ticket.
+                                </p>
+                            )}
 
                             {/* Which pending call is on screen — several can queue up
                                 (staff was away, or a few came in back to back). Picking
