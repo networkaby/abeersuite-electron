@@ -28,6 +28,7 @@ import { SYNC_REGISTRY, type SyncRegistryEntry } from "./syncRegistry.generated"
 import type { OutboxRecord } from "./outbox";
 import { NEVER_PUSH_MODELS } from "./neverPush";
 import { emptyTouches, noteTouches, rebuildTotalsAfterPush } from "./rebuildTotals";
+import { CLOUD_RANGE_END } from "@/shared/lib/counter/idRange";
 
 /**
  * Tables a counter has no business pushing. The list lives in `neverPush.ts` because
@@ -191,6 +192,104 @@ function voucherWouldUnpost(
 }
 
 /**
+ * Voucher line tables whose ids the office RECYCLES, and which a counter also writes.
+ *
+ * Both carry no `updatedAt` and no `createdAt` (registry `dates: []`), so the
+ * last-write-wins branch below never runs for them and every push of one is an
+ * unconditional upsert. That is only safe while nothing can replay a line the office
+ * has since thrown away — and the office edit routes throw them away by the voucherful:
+ * `voucherGlLine.deleteMany` + `createMany` in the voucher PATCH, the journal-entry
+ * PATCH, the opening-bill rewrite, `reapplyTradingVoucherInPlace` and the shift repost;
+ * `voucherInventoryLine.deleteMany` + recreate in the inventory voucher PATCH and the
+ * order route. Every one of those mints FRESH ids for the replacement lines.
+ *
+ * So a counter still holding an unpushed `_outbox` row for one of the discarded ids
+ * resurrects it. The line lands under a voucher that is still POSTED, which is exactly
+ * the set `recomputeAccountBalances` re-sums — and that re-sum is authoritative, so the
+ * inflated figure becomes `Account.balance` cloud-wide with no error raised and nothing
+ * reporting that the voucher's debits and credits have stopped agreeing.
+ *
+ * The window is only rows still PENDING on a counter (a pushed row is never re-sent,
+ * and a pulled row never re-enters the outbox), but it is not exotic: the drain is 50
+ * rows at a time in `_outbox.id` order, so a counter that queued through an outage
+ * routinely puts a batch boundary mid-voucher — spine up, its lines still waiting — and
+ * a line that fails stops the whole run for hours of backoff. During those hours the
+ * office is looking at a voucher whose lines are missing or partial, which is the very
+ * thing someone reaches in to correct.
+ */
+const RECYCLED_CHILD_LINES = new Set<string>(["VoucherGlLine", "VoucherInventoryLine"]);
+
+/**
+ * Has the OFFICE authored this voucher's lines since the counter wrote its own?
+ *
+ * If it has, the counter's copy was discarded upstream and must not be re-created.
+ *
+ * The test is the id range, and it works because a counter physically cannot mint an id
+ * in the cloud's. `idRange.ts` gives the cloud 1 … CLOUD_RANGE_END - 1 and each counter
+ * a ten-million block above it, and `prismaClient.ts` refuses EVERY local write until
+ * that reservation is confirmed applied — precisely so an unreserved sequence cannot
+ * mint from 1 and collide. So a cloud-range line hanging off this voucher can only have
+ * been written upstream, and its presence says the office has rewritten the line set.
+ *
+ * ── Why not the obvious guard ───────────────────────────────────────────────
+ * "Refuse lines when the parent voucher is POSTED upstream" would reject every ordinary
+ * sale. A POS sale creates its spine DRAFT, attaches the lines, then flips the spine to
+ * POSTED (transactionEngine's `existingSpineId` branch), so the lines carry a HIGHER
+ * `_outbox.id` than the spine and push after it; and the handover-accept path inserts
+ * the spine already POSTED with its lines nested in the same statement. Both are honest
+ * writes arriving at a POSTED parent.
+ *
+ * Nor does an `updatedAt` on these tables help. Last-write-wins can only drop a row when
+ * the cloud row EXISTS; a resurrected line's row was deleted, `findUnique` answers null,
+ * and the upsert takes its CREATE half regardless of any timestamp.
+ *
+ * ── What keeps this correct ─────────────────────────────────────────────────
+ * A counter only ever CREATES these lines, and only for a voucher it created itself —
+ * it has no path that edits an existing one. So the cloud parent of a legitimate push
+ * holds nothing but counter-range lines: none at all on the first batch, and this
+ * counter's own on the tail of a sale split across several. The day some counter route
+ * starts writing lines onto a voucher the office authored, this guard will begin eating
+ * them, which is why `check-guard-lint.ts` makes a new recycler announce itself.
+ */
+export interface LineDelegate {
+    findFirst: (a: unknown) => Promise<{ id: number } | null>;
+}
+
+/**
+ * Should this replayed voucher line be dropped as superseded?
+ *
+ * The WHOLE decision lives here rather than inline in the push loop, so the
+ * verification script exercises the same code the counter runs instead of a
+ * re-spelling of it that could drift. `memo` holds one answer per parent voucher for
+ * the life of a push run — safe, because a run only ever ADDS counter-range lines and
+ * so cannot turn a "no" into a "yes" underneath itself.
+ */
+export async function lineReplayWasSuperseded(
+    delegate: LineDelegate,
+    tableName: string,
+    lineId: number,
+    universalVoucherId: number,
+    memo: Map<number, boolean>,
+): Promise<boolean> {
+    if (!RECYCLED_CHILD_LINES.has(tableName)) return false;
+    // Only a counter-minted line can be a stale replay. A cloud-range id here was not
+    // written by this counter, so it is none of this guard's business.
+    if (!Number.isFinite(lineId) || lineId < CLOUD_RANGE_END) return false;
+    if (!Number.isFinite(universalVoucherId)) return false;
+
+    const cached = memo.get(universalVoucherId);
+    if (cached !== undefined) return cached;
+
+    const officeLine = await delegate.findFirst({
+        where:  { universalVoucherId, id: { lt: CLOUD_RANGE_END } },
+        select: { id: true },
+    });
+    const superseded = officeLine != null;
+    memo.set(universalVoucherId, superseded);
+    return superseded;
+}
+
+/**
  * A local datetime, exactly as `to_jsonb` renders `timestamp(3) without time zone`.
  * Anchored at both ends: a value carrying an offset or a `Z` is already complete and
  * must be left alone.
@@ -262,6 +361,9 @@ export interface PushOutcome {
 export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcome> {
     const pushedIds: number[] = [];
     const touches = emptyTouches();
+    // One answer per parent voucher per run. Safe to hold: this run only ever ADDS
+    // counter-range lines, so it cannot turn a "no" into a "yes" underneath itself.
+    const rewrittenParents = new Map<number, boolean>();
 
     for (const rec of records) {
         try {
@@ -276,6 +378,7 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
             const delegate = (prismaLive as unknown as Record<string, {
                 upsert: (a: unknown) => Promise<unknown>;
                 findUnique: (a: unknown) => Promise<{ updatedAt?: Date } | null>;
+                findFirst: (a: unknown) => Promise<{ id: number } | null>;
             }>)[entry.delegate];
             if (!delegate?.upsert) {
                 throw new PermanentPushError(`Prisma has no delegate '${entry.delegate}' for ${entry.model}`);
@@ -334,6 +437,23 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
                 console.warn(
                     `[SyncPush] pos_shifts ${JSON.stringify(where)}: dropping a replayed write — ` +
                     `the office has already closed this shift.`,
+                );
+                pushedIds.push(rec.id);
+                continue;
+            }
+
+            // A voucher line the office has already replaced never comes back. Dropping
+            // counts as success — the counter must stop carrying this row, not retry it
+            // forever; the office's edit is the later, human-authored truth, and the
+            // counter converges on it at the next pull.
+            const lineId = Number(rec.row_key.id);
+            const parentId = Number(payload.universalVoucherId);
+            if (await lineReplayWasSuperseded(delegate, rec.table_name, lineId, parentId, rewrittenParents)) {
+                console.warn(
+                    `[SyncPush] ${rec.table_name} ${lineId}: dropping a replayed write — ` +
+                    `voucher ${parentId} already carries office-written (cloud-range) lines, ` +
+                    `so its line set has been rewritten upstream and this line was discarded. ` +
+                    `Re-creating it would unbalance the voucher and drift Account.balance.`,
                 );
                 pushedIds.push(rec.id);
                 continue;

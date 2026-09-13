@@ -148,6 +148,59 @@ function findUnguardedParkCallers(): string[] {
     return offenders;
 }
 
+
+// ── Rule 4: recycling voucher-line ids is an announced move ──────────────────
+//
+// `VoucherGlLine` and `VoucherInventoryLine` carry no `updatedAt` and no
+// `createdAt`, so the sync push has no timestamp to arbitrate them with and every
+// push of one is an unconditional upsert. What keeps that safe is a guard in
+// `push.ts` (`parentLinesWereRewritten`): a line whose parent voucher already
+// carries a CLOUD-RANGE line has been superseded by the office, because a counter
+// cannot mint an id in the cloud's range, and it is dropped instead of resurrected.
+//
+// That guard reads the id range as a proxy for "the office rewrote this line set",
+// which holds only while the office is the one doing the rewriting. Each of the
+// routes below deletes a voucher's lines and re-creates them with FRESH ids — the
+// move that strands a counter's unpushed row in the first place. A NEW one is not
+// forbidden; it just has to be seen, because two things must be re-checked when it
+// appears: that it runs upstream (a counter's replica refuses deletes outright), and
+// that it does not introduce the one case the guard cannot tell from a stale replay —
+// a counter writing lines onto a voucher the office authored.
+//
+// What this rule does NOT catch, on purpose: `updateMany` repointing of existing
+// lines (convertParty's account merge). That keeps the ids, so nothing is stranded.
+const LINE_RECYCLER_ALLOWLIST = new Set([
+    "src/app/api/accountancy/vouchers/[id]/route.ts",       // office voucher PATCH
+    "src/app/api/accountancy/journal-entries/[id]/route.ts", // office JE PATCH
+    "src/app/api/inventory/vouchers/[id]/route.ts",          // office inventory PATCH + delete
+    "src/app/api/orders/[source]/[id]/route.ts",             // order line rewrite
+    "src/modules/accountancy/lib/openingBills.ts",           // opening-bill rewrite
+    "src/modules/accountancy/lib/reapplyTradingVoucher.ts",  // in-place re-apply
+    "src/modules/accountancy/lib/parkVoucherInTx.ts",        // shift repost (office-only, rule 3)
+]);
+
+const RECYCLED_LINE_MODELS = ["voucherGlLine", "voucherInventoryLine"];
+
+/** `voucherGlLine.deleteMany(` / `voucherInventoryLine.deleteMany(` outside the allowlist. */
+function findLineRecyclers(): string[] {
+    const offenders: string[] = [];
+    for (const file of findTsFiles(SRC_DIR)) {
+        const rel = path.relative(REPO, file).replace(/\\/g, "/");
+        if (LINE_RECYCLER_ALLOWLIST.has(rel)) continue;
+        if (rel.startsWith("src/scripts/")) continue;   // verification tooling, never shipped
+        const lines = fs.readFileSync(file, "utf8").split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            for (const model of RECYCLED_LINE_MODELS) {
+                if (new RegExp(`\\.${model}\\.delete(?:Many)?\\s*\\(`).test(lines[i])) {
+                    offenders.push(`${rel}:${i + 1} (${model})`);
+                }
+            }
+        }
+    }
+    return offenders;
+}
+
+
 function main() {
     console.log("[guard-lint] Checking staff/office API route auth guards...");
 
@@ -203,9 +256,21 @@ function main() {
         process.exit(1);
     }
 
+    const recyclerOffenders = findLineRecyclers();
+    if (recyclerOffenders.length > 0) {
+        console.error(`
+[guard-lint] ERROR: ${recyclerOffenders.length} unannounced voucher-line recycler(s):`);
+        for (const hit of recyclerOffenders) console.error(`  - ${hit}`);
+        console.error(`  Deleting a voucher's lines strands any unpushed copy on a counter.`);
+        console.error(`  Read parentLinesWereRewritten in src/shared/lib/sync/push.ts, confirm`);
+        console.error(`  this runs upstream, then add the file to LINE_RECYCLER_ALLOWLIST here.`);
+        process.exit(1);
+    }
+
     console.log(`[guard-lint] PASS: All ${officeCount} office API route handlers enforce authentication.`);
     console.log(`[guard-lint] PASS: Account.balance deltas all go through the shared writer.`);
     console.log(`[guard-lint] PASS: un-posting stays on the authoritative database.`);
+    console.log(`[guard-lint] PASS: every voucher-line recycler is announced.`);
     process.exit(0);
 }
 
