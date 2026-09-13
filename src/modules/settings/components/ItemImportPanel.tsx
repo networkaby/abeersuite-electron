@@ -11,7 +11,7 @@ import { type ProductImportField } from "@/shared/lib/import/productImportFields
 
 const FIELD_LABELS: Record<ProductImportField, string> = {
     name: "Name (required)",
-    sku: "SKU (required)",
+    sku: "SKU / part no (required — match key)",
     unit: "Unit (code or label)",
     category: "Category — by name",
     group: "Group — by name (HSN / tax bucket)",
@@ -69,6 +69,8 @@ interface RowResult {
     rowIndex: number;
     action: "create" | "update" | "skip" | "error";
     sku: string | null;
+    /** How the server found the product — our SKU, or a scannable code. */
+    matchedBy: "sku" | "code" | null;
     name: string | null;
     errors: string[];
     resolved?: {
@@ -113,7 +115,9 @@ function autoSuggestField(header: string): ProductImportField | typeof IGNORE {
     const h = header.toLowerCase().replace(/[\s_-]/g, "");
     // Required + identification
     if (/^(name|productname|itemname|description)$/.test(h)) return "name";
-    if (/^(sku|code|itemcode|productcode|skucode)$/.test(h)) return "sku";
+    // A supplier file often heads this column with THEIR part no. It is still
+    // the match key: the importer tries our SKU first, then the scannable codes.
+    if (/^(sku|code|itemcode|productcode|skucode|partno|partnumber|partcode|mpn)$/.test(h)) return "sku";
     if (/^(unit|uom|measure|baseunit)$/.test(h)) return "unit";
     // Classification (must come before "code" / "id" generic matches)
     if (/^(category|cat|categoryname|itemcategory)$/.test(h)) return "category";
@@ -386,8 +390,10 @@ export function ItemImportPanel() {
                             Pick which product field each of your columns maps to.{" "}
                             {mode === "patch" ? (
                                 <>
-                                    In Patch mode only <strong>SKU</strong> is required — map just the columns you want
-                                    to update.
+                                    In Patch mode only <strong>SKU / part no</strong> is required — map just the columns
+                                    you want to update. That column is matched against our SKU first, then against every
+                                    scannable code (barcode / EAN / UPC), so a supplier file carrying their own part no
+                                    still finds the right item.
                                 </>
                             ) : (
                                 <>
@@ -562,7 +568,7 @@ export function ItemImportPanel() {
                         <p className="text-[10px] text-muted-foreground">
                             {mode === "skip" && "Existing SKUs are left untouched. Only new products are created."}
                             {mode === "update" && "Existing rows are fully replaced — columns not in your CSV become NULL. Upload a complete snapshot."}
-                            {mode === "patch" && "Only the columns you mapped are written. Other fields stay untouched. Patch mode never creates — SKUs not in the DB error out. Useful for opening-stock refresh, brand fixes, etc."}
+                            {mode === "patch" && "Only the columns you mapped are written. Other fields stay untouched. Patch mode never creates — a code matching neither a SKU nor a scannable code errors out. Useful for price refresh, opening-stock refresh, brand fixes, etc. A row matched by barcode keeps its existing SKU."}
                         </p>
                     </div>
                     <div className="space-y-1">
@@ -695,6 +701,7 @@ export function ItemImportPanel() {
                                     <th className="py-1 px-1.5 text-left">Row</th>
                                     <th className="py-1 px-1.5 text-left">Action</th>
                                     <th className="py-1 px-1.5 text-left">SKU</th>
+                                    <th className="py-1 px-1.5 text-left">Matched by</th>
                                     <th className="py-1 px-1.5 text-left">Name</th>
                                     <th className="py-1 px-1.5 text-left">Unit</th>
                                     <th className="py-1 px-1.5 text-left">Brand</th>
@@ -714,6 +721,17 @@ export function ItemImportPanel() {
                                         <td className="py-1 px-1.5 font-mono text-muted-foreground">{r.rowIndex + 2}</td>
                                         <td className="py-1 px-1.5">{r.action}</td>
                                         <td className="py-1 px-1.5 font-mono">{r.sku ?? "—"}</td>
+                                        <td className="py-1 px-1.5">
+                                            {r.matchedBy === "code" ? (
+                                                <span className="text-amber-600" title="Found by a scannable code — the existing SKU is left as it is">
+                                                    barcode
+                                                </span>
+                                            ) : r.matchedBy === "sku" ? (
+                                                "SKU"
+                                            ) : (
+                                                "—"
+                                            )}
+                                        </td>
                                         <td className="py-1 px-1.5">{r.name ?? "—"}</td>
                                         <td className="py-1 px-1.5">{r.resolved?.unitCode ?? "—"}</td>
                                         <td className="py-1 px-1.5">{r.resolved?.brandName ?? "—"}</td>

@@ -25,7 +25,14 @@ export interface ProductImportRowInput {
     values: Partial<Record<ProductImportField, string>>;
 }
 
-/// Three behaviours when a row's SKU matches an existing product:
+/// A row is matched to an existing product by the mapped `sku` column: our own
+/// `InvProduct.sku` first, then any scannable `InvProductCode.value` (barcode /
+/// EAN / UPC) — the same order the POS scanner resolves a scan in. That second
+/// step is what lets a supplier price list match, when their part no was kept as
+/// the item's barcode and we generated our own SKU. A row matched that way never
+/// writes the `sku` column.
+///
+/// Three behaviours when a row matches an existing product:
 ///   • "skip"   — leave the existing product untouched
 ///   • "update" — full-row replace (writes every mapped column, NULLs columns
 ///                that aren't in the CSV — the legacy behaviour, useful when
@@ -52,6 +59,11 @@ export interface RowResult {
     rowIndex: number;
     action: "create" | "update" | "skip" | "error";
     sku: string | null;
+    /** How the row found its existing product — by `sku`, or by a scannable
+     *  code (barcode / EAN / UPC). `null` when nothing matched (a create, or
+     *  an error). Shown in the preview so the operator can see which rows came
+     *  in through the supplier's own part no rather than our SKU. */
+    matchedBy: "sku" | "code" | null;
     name: string | null;
     errors: string[];
     /** Resolved master-data IDs etc., for display. */
@@ -220,11 +232,22 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     const pendingBrandNames = req.autoCreateMasters && req.dryRun ? new Set(missingBrands.keys()) : new Set<string>();
     const pendingWarrantyNames = req.autoCreateMasters && req.dryRun ? new Set(missingWarrantyTerms.keys()) : new Set<string>();
 
-    // Collect SKUs we'll need to check existence for.
+    // Collect the match keys we'll need to check existence for. The mapped
+    // `sku` column is really "SKU or any scannable code": a supplier file
+    // carries THEIR part no, which for many products is stored here as a
+    // barcode/EAN/UPC while our own generated SKU sits in `sku`.
     const skusFromInput = new Set<string>();
+    const codesFromInput = new Set<string>();
     for (const r of req.rows) {
-        const sku = r.values.sku?.trim().toUpperCase();
-        if (sku) skusFromInput.add(sku);
+        const raw = r.values.sku?.trim();
+        if (!raw) continue;
+        skusFromInput.add(raw.toUpperCase());
+        // Codes are compared exactly (InvProductCode.value has no case-folded
+        // index), so try the three spellings that actually occur in supplier
+        // files. Dashes/spaces are still significant.
+        codesFromInput.add(raw);
+        codesFromInput.add(raw.toUpperCase());
+        codesFromInput.add(raw.toLowerCase());
     }
     const existingBySku = new Map<string, { id: number }>();
     if (skusFromInput.size > 0) {
@@ -235,10 +258,41 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         for (const e of existing) existingBySku.set(e.sku, { id: e.id });
     }
 
+    // Second pass: resolve the rows that missed on SKU against the scannable
+    // code space. Same order the POS scanner uses (see the products/lookup
+    // route): an exact SKU wins, a code is the fallback. `InvProductCode.value`
+    // is globally unique and the write-time collision guard keeps the two
+    // namespaces disjoint, so a code match is never ambiguous.
+    const existingByCode = new Map<string, { id: number }>();
+    const unresolvedCodes = [...codesFromInput].filter((c) => !existingBySku.has(c.toUpperCase()));
+    if (unresolvedCodes.length > 0) {
+        const hits = await prisma.invProductCode.findMany({
+            where: { value: { in: unresolvedCodes } },
+            select: { productId: true, value: true },
+        });
+        for (const h of hits) existingByCode.set(h.value, { id: h.productId });
+    }
+
+    /// Resolve one CSV match key to an existing product. Returns how it matched
+    /// so the caller can (a) show it in the preview and (b) refuse to overwrite
+    /// our generated SKU with the supplier's code on a code match.
+    const resolveExisting = (raw: string): { id: number; matchedBy: "sku" | "code" } | null => {
+        const bySku = existingBySku.get(raw.toUpperCase());
+        if (bySku) return { id: bySku.id, matchedBy: "sku" };
+        const byCode =
+            existingByCode.get(raw)
+            ?? existingByCode.get(raw.toUpperCase())
+            ?? existingByCode.get(raw.toLowerCase());
+        return byCode ? { id: byCode.id, matchedBy: "code" } : null;
+    };
+
     const results: RowResult[] = [];
     const validRows: Array<{
         rowIndex: number;
         existingId: number | null;
+        /// Matched through a scannable code, not the SKU column — the value in
+        /// the CSV is the supplier's part no, so `sku` must never be written.
+        matchedByCode: boolean;
         /// CSV columns this row carried a non-empty value for. Used by
         /// buildPatchPayload to write only the touched columns.
         present: Set<ProductImportField>;
@@ -298,13 +352,23 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             else unitId = u.id;
         }
 
-        const skuRaw = v.sku?.trim().toUpperCase();
+        // The incoming match key, kept in BOTH spellings: upper-cased for the
+        // SKU namespace (that's how SKUs are stored/created), verbatim for the
+        // code namespace (a part no can be mixed case).
+        const matchKey = v.sku?.trim();
+        const skuRaw = matchKey?.toUpperCase();
         if (!skuRaw) errors.push("SKU is required — auto-SKU generation is disabled on bulk import");
-        const existing = skuRaw ? existingBySku.get(skuRaw) ?? null : null;
+        const existing = matchKey ? resolveExisting(matchKey) : null;
+        // A code match means our own generated SKU lives in `sku` and the value
+        // in the CSV is the supplier's code — writing it into `sku` would clobber
+        // our convention and break the SKU/code disjointness guard.
+        const matchedByCode = existing?.matchedBy === "code";
         // Patch mode targets existing products only — creating from a partial
         // CSV would produce broken rows (no name / no unit).
         if (isPatch && skuRaw && !existing) {
-            errors.push(`SKU "${skuRaw}" not found — patch mode only updates existing products`);
+            errors.push(
+                `"${matchKey}" matched no product SKU and no scannable code (barcode / EAN / UPC) — patch mode only updates existing products`,
+            );
         }
 
         let categoryId: number | null = null;
@@ -384,6 +448,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 rowIndex: row.rowIndex,
                 action: "error",
                 sku: skuRaw ?? null,
+                matchedBy: existing?.matchedBy ?? null,
                 name: name ?? null,
                 errors,
                 resolved,
@@ -398,6 +463,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             rowIndex: row.rowIndex,
             action,
             sku: skuRaw ?? null,
+            matchedBy: existing?.matchedBy ?? null,
             name: name ?? null,
             errors: [],
             resolved,
@@ -417,6 +483,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         validRows.push({
             rowIndex: row.rowIndex,
             existingId: existing?.id ?? null,
+            matchedByCode,
             present,
             data: {
                 sku: finalSku,
@@ -519,7 +586,10 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // buildPayload) so regenerate stays lossless.
             out.namePart = v.data.name;
         }
-        if (p.has("sku")) out.sku = v.data.sku;
+        // Only when the row was found BY its SKU. On a code match the CSV value
+        // is the supplier's part no and `sku` holds our own generated code —
+        // writing it would clobber our convention and collide with the code.
+        if (p.has("sku") && !v.matchedByCode) out.sku = v.data.sku;
         if (p.has("unit") && v.data.unitId != null) out.unitId = v.data.unitId;
         if (p.has("category")) out.categoryId = v.data.categoryId;
         if (p.has("group")) out.groupId = v.data.groupId;
@@ -568,7 +638,18 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
 
     const newRows = validRows.filter((v) => v.existingId == null).map(buildPayload);
     const updateRows = validRows.filter((v) => v.existingId != null);
-    const writeOne = req.mode === "patch" ? buildPatchPayload : buildPayload;
+    /// Full-replace payload for an EXISTING row. A code-matched row keeps the
+    /// SKU it already has: the CSV carried the supplier's part no, not ours.
+    /// (Creates go through buildPayload directly and always need their SKU, so
+    /// the drop lives here rather than inside buildPayload.)
+    const buildUpdatePayload = (v: (typeof validRows)[number]) => {
+        const payload = buildPayload(v);
+        if (!v.matchedByCode) return payload;
+        const { sku: _keepExisting, ...rest } = payload;
+        return rest;
+    };
+
+    const writeOne = req.mode === "patch" ? buildPatchPayload : buildUpdatePayload;
 
     const CHUNK = 500;
     await prisma.$transaction(
