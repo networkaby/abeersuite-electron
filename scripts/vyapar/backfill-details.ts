@@ -135,6 +135,9 @@ type Kind = {
 const KINDS: Record<string, Kind> = {
     SALE:     { sign: -1, value: ["Sales A/c"], discount: "Discount Allowed", shipping: "Shipping Income", loyalty: "Loyalty Points Redeemed", stockCol: "outQty" },
     PURCHASE: { sign: +1, value: ["Purchase A/c", "Repair & Maintenance"], discount: "Income Discount Received", shipping: "Exp Freight Inward (Purchase Courier)", loyalty: null, stockCol: "inQty" },
+    // A return unwinds the same legs on the opposite side (voucherSpec.ts 21 / 23).
+    SALE_RETURN:     { sign: +1, value: ["Sales Returns"],    discount: "Discount Allowed",         shipping: "Shipping Income",                       loyalty: "Loyalty Points Redeemed", stockCol: "inQty" },
+    PURCHASE_RETURN: { sign: -1, value: ["Purchase Returns"], discount: "Income Discount Received", shipping: "Exp Freight Inward (Purchase Courier)", loyalty: null,                      stockCol: "outQty" },
 };
 
 type Plan = {
