@@ -12,7 +12,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, computeExpectedCash, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, computeExpectedCash, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
 import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -104,11 +104,42 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             counter: shift.counter,
         });
 
+        // Line-by-line breakdown of how the till moved (cash sales, receipts, expenses, refunds, etc.)
+        const movementBreakdown = await buildShiftMovementBreakdown(prisma, {
+            shiftId: shift.id,
+            tillAccountId: shift.counter.tillAccount.id,
+            tillBookBalancePaise,
+            openingFloatPaise: shift.openingFloatPaise,
+        });
+
+        // Breakdown of all collections across all tenders (sales, receipts, returns)
+        const collectionsBreakdown = await buildShiftCollectionsBreakdown(prisma, {
+            shiftId: shift.id,
+            counter: shift.counter,
+        });
+
         return NextResponse.json({
             ...shift,
             openingContraVoucher,
             closingContraVoucher,
             tenderBreakdown,
+            movementBreakdown: {
+                cashSalesPaise:    movementBreakdown.cashSalesPaise.toString(),
+                receiptsPaise:     movementBreakdown.receiptsPaise.toString(),
+                expendituresPaise: movementBreakdown.expendituresPaise.toString(),
+                refundsPaise:      movementBreakdown.refundsPaise.toString(),
+                otherPaise:        movementBreakdown.otherPaise.toString(),
+                netMovementPaise:  movementBreakdown.netMovementPaise.toString(),
+            },
+            collectionsBreakdown: {
+                salesPaise:        collectionsBreakdown.salesPaise.toString(),
+                salesCount:        collectionsBreakdown.salesCount,
+                receiptsPaise:     collectionsBreakdown.receiptsPaise.toString(),
+                receiptsCount:     collectionsBreakdown.receiptsCount,
+                refundsPaise:      collectionsBreakdown.refundsPaise.toString(),
+                refundsCount:      collectionsBreakdown.refundsCount,
+                netCollectedPaise: collectionsBreakdown.netCollectedPaise.toString(),
+            },
             openingFloatPaise:   shift.openingFloatPaise.toString(),
             carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
             vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),

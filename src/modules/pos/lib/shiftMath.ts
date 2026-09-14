@@ -213,3 +213,203 @@ export async function buildShiftTenderBreakdown(
     }
     return rows;
 }
+
+export type ShiftMovementBreakdown = {
+    cashSalesPaise:    bigint;
+    receiptsPaise:     bigint;
+    expendituresPaise: bigint;
+    refundsPaise:      bigint;
+    otherPaise:        bigint;
+    netMovementPaise:  bigint;
+};
+
+/**
+ * Detailed breakdown of the till movement during a shift:
+ *   • cash sales (POS vouchers)
+ *   • receipts (Rcv vouchers)
+ *   • expenditures (Exp vouchers paid from till)
+ *   • refunds (Sales return / refund vouchers paid from till)
+ *   • other (residual / manual adjustments on till account)
+ */
+export async function buildShiftMovementBreakdown(
+    tx: Tx,
+    args: {
+        shiftId:              number;
+        tillAccountId:        number;
+        tillBookBalancePaise: bigint;
+        openingFloatPaise:    bigint;
+    },
+): Promise<ShiftMovementBreakdown> {
+    const toPaise = (amount: { toString(): string } | null | undefined): bigint =>
+        amount == null ? BigInt(0) : BigInt(Math.round(Number(amount) * 100));
+
+    // 1. POS cash sales raised on this shift
+    const posUvIds = (await tx.universalVoucher.findMany({
+        where:  { type: "POS", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        select: { id: true },
+    })).map((v) => v.id);
+
+    const posCashTenders = posUvIds.length === 0 ? null : await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:          args.tillAccountId,
+            role:               "TENDER",
+            universalVoucherId: { in: posUvIds },
+        },
+        _sum: { amount: true },
+    });
+    const cashSalesPaise = toPaise(posCashTenders?._sum?.amount);
+
+    // 2. Receipts collected in cash on this shift
+    const receiptTenders = await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:        args.tillAccountId,
+            type:             "DEBIT",
+            universalVoucher: { type: "RECEIPT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        },
+        _sum: { amount: true },
+    });
+    const receiptsPaise = toPaise(receiptTenders?._sum?.amount);
+
+    // 3. Counter expenditures paid from till on this shift
+    const expenseTenders = await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:        args.tillAccountId,
+            type:             "CREDIT",
+            universalVoucher: { type: "PAYMENT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        },
+        _sum: { amount: true },
+    });
+    const expendituresPaise = toPaise(expenseTenders?._sum?.amount);
+
+    // 4. Returns / refunds paid in cash from till on this shift
+    const refundTenders = await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:        args.tillAccountId,
+            type:             "CREDIT",
+            universalVoucher: { type: { in: ["SALES_RETURN", "REFUND"] }, status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        },
+        _sum: { amount: true },
+    });
+    const refundsPaise = toPaise(refundTenders?._sum?.amount);
+
+    const netMovementPaise = args.tillBookBalancePaise - args.openingFloatPaise;
+
+    // 5. Any residual/other difference on the till ledger
+    // netMovement = cashSales + receipts - expenditures - refunds + other
+    const knownInflow  = cashSalesPaise + receiptsPaise;
+    const knownOutflow = expendituresPaise + refundsPaise;
+    const otherPaise   = netMovementPaise - (knownInflow - knownOutflow);
+
+    return {
+        cashSalesPaise,
+        receiptsPaise,
+        expendituresPaise,
+        refundsPaise,
+        otherPaise,
+        netMovementPaise,
+    };
+}
+
+export type ShiftCollectionsBreakdown = {
+    salesPaise:        bigint;
+    salesCount:        number;
+    receiptsPaise:     bigint;
+    receiptsCount:     number;
+    refundsPaise:      bigint;
+    refundsCount:      number;
+    netCollectedPaise: bigint;
+};
+
+/**
+ * Breakdown of all payments collected at the counter across all tender channels
+ * (Cash, Bank, UPI, etc.) categorized by business transaction type (Sales,
+ * Customer Receipts, Returns). This directly justifies the "Total Collected" figure.
+ */
+export async function buildShiftCollectionsBreakdown(
+    tx: Tx,
+    args: { shiftId: number; counter: CounterRouting },
+): Promise<ShiftCollectionsBreakdown> {
+    const toPaise = (amount: { toString(): string } | null | undefined): bigint =>
+        amount == null ? BigInt(0) : BigInt(Math.round(Number(amount) * 100));
+
+    const c = args.counter;
+    const accountIds = [...new Set([
+        c.tillAccount.id,
+        ...c.paymentAccounts.map((a) => a.accountId),
+    ])];
+
+    if (accountIds.length === 0) {
+        return {
+            salesPaise:        BigInt(0),
+            salesCount:        0,
+            receiptsPaise:     BigInt(0),
+            receiptsCount:     0,
+            refundsPaise:      BigInt(0),
+            refundsCount:      0,
+            netCollectedPaise: BigInt(0),
+        };
+    }
+
+    // 1. POS sales raised on this shift
+    const posVouchers = await tx.universalVoucher.findMany({
+        where:  { type: "POS", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        select: { id: true },
+    });
+    const posUvIds = posVouchers.map((v) => v.id);
+    const posTendersSum = posUvIds.length === 0 ? null : await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:          { in: accountIds },
+            role:               "TENDER",
+            universalVoucherId: { in: posUvIds },
+        },
+        _sum: { amount: true },
+    });
+    const salesPaise = toPaise(posTendersSum?._sum?.amount);
+    const salesCount = posUvIds.length;
+
+    // 2. Customer receipts collected on this shift
+    const receiptVouchers = await tx.universalVoucher.findMany({
+        where:  { type: "RECEIPT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        select: { id: true },
+    });
+    const receiptUvIds = receiptVouchers.map((v) => v.id);
+    const receiptTendersSum = receiptUvIds.length === 0 ? null : await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:          { in: accountIds },
+            type:               "DEBIT",
+            universalVoucherId: { in: receiptUvIds },
+        },
+        _sum: { amount: true },
+    });
+    const receiptsPaise = toPaise(receiptTendersSum?._sum?.amount);
+    const receiptsCount = receiptUvIds.length;
+
+    // 3. Sales returns / refunds paid on this shift
+    const refundVouchers = await tx.universalVoucher.findMany({
+        where:  { type: { in: ["SALES_RETURN", "REFUND"] }, status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        select: { id: true },
+    });
+    const refundUvIds = refundVouchers.map((v) => v.id);
+    const refundTendersSum = refundUvIds.length === 0 ? null : await tx.voucherGlLine.aggregate({
+        where: {
+            accountId:          { in: accountIds },
+            type:               "CREDIT",
+            universalVoucherId: { in: refundUvIds },
+        },
+        _sum: { amount: true },
+    });
+    const refundsPaise = toPaise(refundTendersSum?._sum?.amount);
+    const refundsCount = refundUvIds.length;
+
+    const netCollectedPaise = salesPaise + receiptsPaise - refundsPaise;
+
+    return {
+        salesPaise,
+        salesCount,
+        receiptsPaise,
+        receiptsCount,
+        refundsPaise,
+        refundsCount,
+        netCollectedPaise,
+    };
+}

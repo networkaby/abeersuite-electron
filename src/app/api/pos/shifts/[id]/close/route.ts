@@ -45,7 +45,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { repostParkedVoucherInTx, discardParkedDraftInTx } from "@/modules/accountancy/lib/parkVoucherInTx";
-import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
@@ -148,6 +148,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const tillMovementPaise    = tillBookBalancePaise - shift.openingFloatPaise;
         const expectedPaise = computeExpectedCash(tillBookBalancePaise, dropsPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);
+
+        const movementBreakdown = await buildShiftMovementBreakdown(prisma, {
+            shiftId: shift.id,
+            tillAccountId: shift.counter.tillAccountId,
+            tillBookBalancePaise,
+            openingFloatPaise: shift.openingFloatPaise,
+        });
 
         // Variance ledgers.
         const variance = Number(variancePaise);
@@ -289,6 +296,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             counter: result.counter,
         });
 
+        // Breakdown of all collections across all tenders (sales, receipts, returns)
+        const collectionsBreakdown = await buildShiftCollectionsBreakdown(prisma, {
+            shiftId: result.id,
+            counter: result.counter,
+        });
+
         // Explicit fields only — never spread the Prisma object (BigInt fields
         // like counter.defaultFloatPaise would crash JSON.stringify after the
         // transaction commits, leaving a closed shift with no UI confirmation).
@@ -311,6 +324,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             tillMovementPaise:    tillMovementPaise.toString(),
             dropsPaise:           dropsPaise.toString(),
             expendituresPaise:    expendituresPaise.toString(),
+            movementBreakdown: {
+                cashSalesPaise:    movementBreakdown.cashSalesPaise.toString(),
+                receiptsPaise:     movementBreakdown.receiptsPaise.toString(),
+                expendituresPaise: movementBreakdown.expendituresPaise.toString(),
+                refundsPaise:      movementBreakdown.refundsPaise.toString(),
+                otherPaise:        movementBreakdown.otherPaise.toString(),
+                netMovementPaise:  movementBreakdown.netMovementPaise.toString(),
+            },
+            collectionsBreakdown: {
+                salesPaise:        collectionsBreakdown.salesPaise.toString(),
+                salesCount:        collectionsBreakdown.salesCount,
+                receiptsPaise:     collectionsBreakdown.receiptsPaise.toString(),
+                receiptsCount:     collectionsBreakdown.receiptsCount,
+                refundsPaise:      collectionsBreakdown.refundsPaise.toString(),
+                refundsCount:      collectionsBreakdown.refundsCount,
+                netCollectedPaise: collectionsBreakdown.netCollectedPaise.toString(),
+            },
             counter: {
                 id:   result.counter.id,
                 name: result.counter.name,
