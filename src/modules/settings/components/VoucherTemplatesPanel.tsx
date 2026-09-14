@@ -19,10 +19,12 @@ import ShippingLabel from "@/shared/components/print/ShippingLabel";
 import OrderParcelLabel from "@/shared/components/print/OrderParcelLabel";
 import CouponCard from "@/shared/components/print/CouponCard";
 import GiftCardCard from "@/shared/components/print/GiftCardCard";
+import { ShiftCloseBody } from "@/shared/components/print/ShiftCloseBody";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     resolveTemplateForFormat,
     REPAIR_DOCUMENT_KINDS,
+    POS_DOCUMENT_KINDS,
     type VoucherTemplateDefaults,
     type VoucherTemplateKind,
     type PaperFormat,
@@ -38,6 +40,7 @@ import {
     SAMPLE_PARCEL_LABEL,
     SAMPLE_COUPON_CARD,
     SAMPLE_GIFT_CARD,
+    SAMPLE_SHIFT_CLOSE,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
@@ -121,7 +124,7 @@ const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: Bool
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
     "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
 ]);
-const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD"]);
+const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD", "SHIFT_CLOSE"]);
 // The cards read only logo / brand / phone (foot) — the rest of the chrome has no place on them.
 const CARD_KINDS = new Set<VoucherTemplateKind>(["COUPON", "GIFT_CARD"]);
 const CARD_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
@@ -164,11 +167,10 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         return <div className="text-sm text-muted-foreground">No templates loaded.</div>;
     }
 
-    // "Default paper" only means something for the repair family — their forms
-    // have no Print / Thermal ticks. Every voucher form decides per save
-    // (Thermal tick → silent bridge print; else the format-selection page), so
-    // the field is hidden there and the preview opens on A4.
-    const hasDefaultPaper = (REPAIR_DOCUMENT_KINDS as readonly string[]).includes(selectedKind);
+    // "Default paper" only means something for documents with no Print / Thermal
+    // ticks on their voucher forms (repair ticket, shipping slip, shift close).
+    const hasDefaultPaper = (REPAIR_DOCUMENT_KINDS as readonly string[]).includes(selectedKind)
+        || (POS_DOCUMENT_KINDS as readonly string[]).includes(selectedKind);
     const kindDefaultPaper: PaperFormat = hasDefaultPaper ? current.defaultPaper : "A4";
 
     // Which paper the preview shows, and the org-merged template both the inline
@@ -198,6 +200,16 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                 }}
             />
         ) :
+        selectedKind === "SHIFT_CLOSE" ? (
+            <ShiftCloseBody
+                data={{
+                    ...SAMPLE_SHIFT_CLOSE,
+                    cashierSignatureLabel: current.signatureLabel || "Cashier Signature",
+                }}
+                thermal={previewFormat === "THERMAL_80MM"}
+                showSignature={slipFlags.showSignature}
+            />
+        ) :
         null;
 
     // The shipping label is its OWN postcard document (not the letterhead chrome),
@@ -222,6 +234,10 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         if (isParcelLabel) return [];
         const hidden = new Set(BESPOKE_HIDDEN_ELEMENTS);
         if (isCard) for (const k of CARD_HIDDEN_ELEMENTS) hidden.add(k);
+        if (selectedKind === "SHIFT_CLOSE") {
+            hidden.add("showBank");
+            hidden.add("showPartyBalance");
+        }
         // The slip has its own Sent/Received/Prepared toggles, so drop the
         // generic Signature row for it (it never drove the slip anyway).
         if (isSlip) hidden.add("showSignature");
@@ -305,6 +321,15 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                 <KindGroup
                     title="Inventory"
                     kinds={VOUCHER_TEMPLATE_KIND_GROUPS.inventory}
+                    selected={selectedKind}
+                    onSelect={setSelectedKind}
+                    workingMap={working}
+                    savedMap={saved}
+                />
+                <div className="my-2 border-t" />
+                <KindGroup
+                    title="POS & Register"
+                    kinds={VOUCHER_TEMPLATE_KIND_GROUPS.pos}
                     selected={selectedKind}
                     onSelect={setSelectedKind}
                     workingMap={working}

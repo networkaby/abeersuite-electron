@@ -86,11 +86,17 @@ export const MARKETING_DOCUMENT_KINDS = [
     "GIFT_CARD",
 ] as const;
 
+// POS Register documents — end-of-shift cash reconciliation & till summary.
+export const POS_DOCUMENT_KINDS = [
+    "SHIFT_CLOSE",
+] as const;
+
 export const VOUCHER_TEMPLATE_KINDS = [
     ...ACCOUNTING_VOUCHER_KINDS,
     ...INVENTORY_VOUCHER_KINDS,
     ...REPAIR_DOCUMENT_KINDS,
     ...MARKETING_DOCUMENT_KINDS,
+    ...POS_DOCUMENT_KINDS,
 ] as const;
 
 export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
@@ -98,6 +104,7 @@ export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
 export const VOUCHER_TEMPLATE_KIND_GROUPS = {
     accounting: ACCOUNTING_VOUCHER_KINDS,
     inventory: INVENTORY_VOUCHER_KINDS,
+    pos: POS_DOCUMENT_KINDS,
     repair: REPAIR_DOCUMENT_KINDS,
     marketing: MARKETING_DOCUMENT_KINDS,
 } as const;
@@ -139,6 +146,7 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     DELIVERY_SHIPPING_LABEL: "Parcel Shipping Label",
     COUPON: "Coupon",
     GIFT_CARD: "Gift Card",
+    SHIFT_CLOSE: "Shift Closing & Cash Reconciliation",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -160,6 +168,7 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     "DELIVERY_SHIPPING_LABEL",
     "COUPON",
     "GIFT_CARD",
+    "SHIFT_CLOSE",
 ]);
 
 // Repair-shop documents that show customer + staff signature lines by default.
@@ -167,6 +176,7 @@ const WITH_SIGNATURE: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     "REPAIR_TICKET",
     // Cash paid out needs proof it reached the payee — the receiver signs.
     "PAYMENT",
+    "SHIFT_CLOSE",
 ]);
 
 // Kinds that print a scannable barcode of the voucher number by default — the
@@ -210,6 +220,7 @@ const DEFAULT_DISCLAIMER_LINE = "This is a computer-generated document and does 
 const SIGNATURE_LABEL_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     SHIPPING_SLIP: "Sent by (Shop)",
     PAYMENT: "Receiver's Signature",
+    SHIFT_CLOSE: "Cashier Signature",
 };
 
 const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
@@ -274,6 +285,7 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     // Cards print as a fixed 360px face in the browser; A4 only satisfies the registry.
     COUPON: "A4",
     GIFT_CARD: "A4",
+    SHIFT_CLOSE: "THERMAL_80MM",
 };
 
 // Per-kind default for the voucher form's "Print after save" toggle
@@ -318,6 +330,7 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     DELIVERY_SHIPPING_LABEL: false,
     COUPON:                false,
     GIFT_CARD:             false,
+    SHIFT_CLOSE:           true,
 };
 
 /** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
@@ -366,6 +379,7 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     DELIVERY_SHIPPING_LABEL: false,
     COUPON:                false,
     GIFT_CARD:             false,
+    SHIFT_CLOSE:           true,
 };
 
 /** Initial "Thermal" toggle state for a voucher kind (false → browser print). */

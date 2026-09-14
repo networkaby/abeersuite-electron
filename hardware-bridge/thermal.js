@@ -283,9 +283,16 @@ async function printFooter(printer, t, reference, tag) {
     if (t.showSignature) {
         printer.println("");
         printer.println("");
-        printer.alignRight();
-        printer.println(t.signatureLabel || "Authorised Signatory");
-        printer.alignLeft();
+        if (t.kind === "SHIFT_CLOSE") {
+            printer.tableCustom([
+                { text: t.signatureLabel || "Cashier Signature", align: "CENTER", width: 0.5 },
+                { text: "Manager Signature",                   align: "CENTER", width: 0.5 },
+            ]);
+        } else {
+            printer.alignRight();
+            printer.println(t.signatureLabel || "Authorised Signatory");
+            printer.alignLeft();
+        }
     }
     printer.drawLine();
     printer.alignCenter();
@@ -820,12 +827,138 @@ function printShippingSlipMiddle(printer, body) {
     }
 }
 
+// Shift close report — cash reconciliation, declared physical count, variance,
+// tender breakdown, collections breakdown, safe drops, and linked vouchers.
+// Mirrors ShiftCloseBody (thermal). Data rides in payload's `body` (ShiftCloseBodyData).
+function printShiftCloseMiddle(printer, body) {
+    const b = body || {};
+    const fmt = (n) =>
+        Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const signed = (n) => {
+        const val = Number(n || 0);
+        if (val > 0) return `+Rs. ${fmt(val)}`;
+        if (val < 0) return `-Rs. ${fmt(Math.abs(val))}`;
+        return `Rs. ${fmt(0)}`;
+    };
+    const row = (label, val) => printer.tableCustom([
+        { text: String(label),      align: "LEFT",  width: 0.55 },
+        { text: String(val ?? "-"), align: "RIGHT", width: 0.45 },
+    ]);
+    const subRow = (label, val) => printer.tableCustom([
+        { text: `  . ${label}`,     align: "LEFT",  width: 0.55 },
+        { text: String(val ?? "-"), align: "RIGHT", width: 0.45 },
+    ]);
+
+    printer.alignCenter();
+    printer.bold(true);
+    printer.println(`Shift #${b.id || ""} (${b.status || "CLOSED"})`);
+    printer.bold(false);
+    if (b.openedAt) printer.println(String(b.openedAt));
+    printer.drawLine();
+
+    printer.alignLeft();
+    row("Counter", b.counterName || "-");
+    row("Cashier", b.cashierName || "-");
+    if (b.duration) row("Duration", b.duration);
+    if (b.closedAt) row("Closed At", b.closedAt);
+    printer.drawLine();
+
+    printer.bold(true); printer.println("CASH RECONCILIATION"); printer.bold(false);
+    row("Counter Opening Cash", `Rs. ${fmt(b.openingFloat)}`);
+    if (b.carryOverFloat != null || b.vaultTopUp != null) {
+        if (b.carryOverFloat != null) subRow("Start Float", `Rs. ${fmt(b.carryOverFloat)}`);
+        if (b.vaultTopUp != null)     subRow("Top-up", `Rs. ${fmt(b.vaultTopUp)}`);
+    }
+
+    row("Counter Cash Flow", signed(b.tillMovement));
+    if (b.movementBreakdown) {
+        const m = b.movementBreakdown;
+        if (Number(m.cashSales || 0) > 0)    subRow("Cash Sales", `+Rs. ${fmt(m.cashSales)}`);
+        if (Number(m.receipts || 0) > 0)     subRow("Customer Receipts", `+Rs. ${fmt(m.receipts)}`);
+        if (Number(m.expenditures || 0) > 0) subRow("Expenses", `-Rs. ${fmt(m.expenditures)}`);
+        if (Number(m.refunds || 0) > 0)      subRow("Refunds", `-Rs. ${fmt(m.refunds)}`);
+        if (Number(m.other || 0) !== 0)      subRow("Other Adjustments", signed(m.other));
+    }
+
+    if (Number(b.drops || 0) > 0) {
+        row("Dropped to Safe", `-Rs. ${fmt(b.drops)}`);
+    }
+
+    printer.bold(true);
+    row("Expected in Drawer", `Rs. ${fmt(b.expectedCash)}`);
+    if (b.declaredCash != null) {
+        row("Physical Count (Declared)", `Rs. ${fmt(b.declaredCash)}`);
+        const v = Number(b.variance || 0);
+        const varText = v === 0 ? "Rs. 0.00 (Balanced)" : (v > 0 ? `+Rs. ${fmt(v)} (Over)` : `-Rs. ${fmt(Math.abs(v))} (Short)`);
+        row("Variance", varText);
+    }
+    printer.bold(false);
+
+    if (b.carryOverNext != null || b.toVault != null) {
+        printer.drawLine();
+        printer.bold(true); printer.println("CLOSING DISTRIBUTION"); printer.bold(false);
+        if (b.carryOverNext != null) row("Kept in Counter", `Rs. ${fmt(b.carryOverNext)}`);
+        if (b.toVault != null)       row("Swept to Vault", `Rs. ${fmt(b.toVault)}`);
+    }
+
+    if (Array.isArray(b.tenderBreakdown) && b.tenderBreakdown.length > 0) {
+        printer.drawLine();
+        printer.bold(true); printer.println("PAYMENTS COLLECTED"); printer.bold(false);
+        let total = 0;
+        for (const t of b.tenderBreakdown) {
+            total += Number(t.amount || 0);
+            row(t.label || t.method, `Rs. ${fmt(t.amount)}`);
+        }
+        printer.bold(true);
+        row("Total Collected", `Rs. ${fmt(total)}`);
+        printer.bold(false);
+    }
+
+    if (b.collectionsBreakdown) {
+        printer.drawLine();
+        printer.bold(true); printer.println("COLLECTIONS BY ACTIVITY"); printer.bold(false);
+        const cb = b.collectionsBreakdown;
+        row(`POS Sales (${cb.salesCount || 0})`, `+Rs. ${fmt(cb.salesAmount)}`);
+        if (cb.receiptsCount > 0) row(`Receipts (${cb.receiptsCount})`, `+Rs. ${fmt(cb.receiptsAmount)}`);
+        if (cb.refundsCount > 0)  row(`Refunds (${cb.refundsCount})`, `-Rs. ${fmt(cb.refundsAmount)}`);
+        printer.bold(true);
+        row("Net Total", `Rs. ${fmt(cb.netCollected)}`);
+        printer.bold(false);
+    }
+
+    if (Array.isArray(b.dropsList) && b.dropsList.length > 0) {
+        printer.drawLine();
+        printer.bold(true); printer.println(`CASH DROPS TO SAFE (${b.dropsList.length})`); printer.bold(false);
+        for (const d of b.dropsList) {
+            printer.tableCustom([
+                { text: `${d.droppedAt || ""} (${d.droppedBy || ""})`, align: "LEFT",  width: 0.6 },
+                { text: `Rs. ${fmt(d.amount)}`,                        align: "RIGHT", width: 0.4 },
+            ]);
+            if (d.notes) printer.println(`  ${d.notes}`);
+        }
+    }
+
+    if (Array.isArray(b.vouchers) && b.vouchers.length > 0) {
+        printer.drawLine();
+        printer.bold(true); printer.println("LINKED VOUCHERS"); printer.bold(false);
+        for (const v of b.vouchers) {
+            row(v.type, v.reference);
+        }
+    }
+
+    if (b.notes) {
+        printer.drawLine();
+        printer.bold(true); printer.println("NOTES"); printer.bold(false);
+        printer.println(String(b.notes));
+    }
+}
+
 // ── Generic voucher builder ─────────────────────────────────────────────────────
 // Prints ANY office voucher (GL · inventory · journal) from the SAME
 // ThermalReceiptSample + VoucherTemplateDefaults the browser slip uses, so the
 // thermal output honours each kind's configured template. Mirrors the web
 // <ThermalReceiptPreview> ReceiptBody. Sent by the app's /receipt/voucher,
-// /receipt/[id] (repair ticket) and /shipping-slip pages → POST /print/voucher.
+// /receipt/[id] (repair ticket), /shipping-slip, and /receipt/shift/[id] pages → POST /print/voucher.
 async function buildVoucherBuffer(data) {
     const { sample = {}, template: tpl } = data || {};
 
@@ -852,13 +985,15 @@ async function buildVoucherBuffer(data) {
     await printHeader(printer, t, sample.branchAddress, "voucher");
 
     // ── Kind-aware middle — bespoke bodies mirror the browser ReceiptBody ───
-    // Non-invoice kinds (repair ticket, shipping slip, deposit/handover
+    // Non-invoice kinds (repair ticket, shipping slip, shift close, deposit/handover
     // worksheet, journal) each render their own middle; everything else falls
     // through to the generic Item/Qty invoice below.
     if (kind === "REPAIR_TICKET") {
         printRepairTicketMiddle(printer, data.body);
     } else if (kind === "SHIPPING_SLIP") {
         printShippingSlipMiddle(printer, data.body);
+    } else if (kind === "SHIFT_CLOSE") {
+        printShiftCloseMiddle(printer, data.body || sample.shiftClose || sample);
     } else if ((kind === "BANK_DEPOSIT" || kind === "CASH_HANDOVER") && sample.depositSlip) {
         printDepositMiddle(printer, sample, fmtAmt, formattedDate);
     } else if (kind === "CONTRA" || kind === "JOURNAL") {
@@ -1206,14 +1341,16 @@ function start({ getConfig, setConfig }) {
         },
 
         // Every document except the POS ladder slip (GL · inventory · journal ·
-        // money slips · repair · shipping) — renders the app's ThermalReceiptSample
+        // money slips · repair · shipping · shift close) — renders the app's ThermalReceiptSample
         // + thermal-resolved per-kind template. Payload: { kind, title, sample, template }.
         "print/voucher": async (payload) => {
-            const { sample } = payload || {};
-            if (!sample || !Array.isArray(sample.lines)) throw new Error("Missing required field: sample.lines");
+            const { sample, kind, body } = payload || {};
+            if (kind !== "SHIFT_CLOSE" && !body && (!sample || !Array.isArray(sample.lines))) {
+                throw new Error("Missing required field: sample.lines");
+            }
             const cfg = getConfig();
             await sendBuffer(cfg, await buildVoucherBuffer(payload));
-            console.log(`[thermal] Voucher printed: ${sample.reference || ""}`);
+            console.log(`[thermal] Voucher printed: ${(sample && sample.reference) || (body && `Shift #${body.id}`) || ""}`);
             return { ok: true };
         },
     };

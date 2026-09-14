@@ -1679,10 +1679,10 @@ function A4SignOff({ template, sample, showBank }: A4ChromeProps & { showBank?: 
                 should sit on a common baseline rather than stacked. The QR
                 travels with the account lines: a bare scan code says nothing
                 about who is being paid. */}
-            {(bank || template.showSignature) && (
+            {(bank || (template.kind !== "SHIFT_CLOSE" && template.showSignature)) && (
                 <div className="signoff-row">
                     <div className="signoff-bank">{bank && <BankBlock template={template} />}</div>
-                    {template.showSignature && (
+                    {template.kind !== "SHIFT_CLOSE" && template.showSignature && (
                         <div className="sig-block">{template.signatureLabel}</div>
                     )}
                 </div>

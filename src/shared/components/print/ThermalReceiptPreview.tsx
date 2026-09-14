@@ -558,7 +558,7 @@ function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults
                 </>
             )}
 
-            {template.showSignature && (
+            {template.kind !== "SHIFT_CLOSE" && template.showSignature && (
                 <div style={{ marginTop: 20 }}>
                     <div className="sig-line">{template.signatureLabel}</div>
                 </div>

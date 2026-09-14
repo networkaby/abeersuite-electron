@@ -11,9 +11,10 @@ import {
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
 import type { OrganisationView } from "@/shared/lib/org/organisationView";
-import { buildSampleForKind, VOUCHER_KIND_LABEL, SAMPLE_COUPON_CARD, SAMPLE_GIFT_CARD } from "@/modules/settings/lib/voucherTemplateSamples";
+import { buildSampleForKind, VOUCHER_KIND_LABEL, SAMPLE_COUPON_CARD, SAMPLE_GIFT_CARD, SAMPLE_SHIFT_CLOSE } from "@/modules/settings/lib/voucherTemplateSamples";
 import CouponCard from "@/shared/components/print/CouponCard";
 import GiftCardCard from "@/shared/components/print/GiftCardCard";
+import { ShiftCloseBody } from "@/shared/components/print/ShiftCloseBody";
 
 interface Props {
     templates:    VoucherTemplateDefaults[];
@@ -59,6 +60,11 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                     </optgroup>
                     <optgroup label="Inventory">
                         {VOUCHER_TEMPLATE_KIND_GROUPS.inventory.map((k) => (
+                            <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="POS & Register">
+                        {VOUCHER_TEMPLATE_KIND_GROUPS.pos.map((k) => (
                             <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
                         ))}
                     </optgroup>
@@ -118,7 +124,22 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                         no horizontal scroll. 0.6 keeps A4 readable while
                         fitting in a typical 600-700px pane on a laptop. */}
                     <div style={{ zoom: 0.6 }}>
-                        <ReceiptPreview format="A4" template={template} sample={sample} previewMode />
+                        <ReceiptPreview
+                            format="A4"
+                            template={template}
+                            sample={sample}
+                            previewMode
+                            body={selectedKind === "SHIFT_CLOSE" ? (
+                                <ShiftCloseBody
+                                    data={{
+                                        ...SAMPLE_SHIFT_CLOSE,
+                                        cashierSignatureLabel: template.signatureLabel || "Cashier Signature",
+                                    }}
+                                    thermal={false}
+                                    showSignature={template.showSignatureA4}
+                                />
+                            ) : undefined}
+                        />
                     </div>
                 </PreviewPane>
 
@@ -128,7 +149,22 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                     description="80mm-wide thermal slip. Used at POS counters and for compact receipts."
                 >
                     <div className="flex justify-center">
-                        <ReceiptPreview format="THERMAL_80MM" template={template} sample={sample} previewMode />
+                        <ReceiptPreview
+                            format="THERMAL_80MM"
+                            template={template}
+                            sample={sample}
+                            previewMode
+                            body={selectedKind === "SHIFT_CLOSE" ? (
+                                <ShiftCloseBody
+                                    data={{
+                                        ...SAMPLE_SHIFT_CLOSE,
+                                        cashierSignatureLabel: template.signatureLabel || "Cashier Signature",
+                                    }}
+                                    thermal={true}
+                                    showSignature={template.showSignatureThermal}
+                                />
+                            ) : undefined}
+                        />
                     </div>
                 </PreviewPane>
             </div>

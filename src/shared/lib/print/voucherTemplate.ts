@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
+    POS_DOCUMENT_KINDS,
     REPAIR_DOCUMENT_KINDS,
     buildVoucherTemplateDefaults,
     isVoucherTemplateKind,
@@ -56,8 +57,8 @@ export async function getThermalTemplate(kind: string): Promise<VoucherTemplateD
 }
 
 // Kinds whose form has NO "Print / Thermal" ticks (repair ticket, slip,
-// labels). Only these still read the template's stored `defaultPaper`.
-const USES_DEFAULT_PAPER: ReadonlySet<string> = new Set(REPAIR_DOCUMENT_KINDS);
+// labels, shift close). Only these still read the template's stored `defaultPaper`.
+const USES_DEFAULT_PAPER: ReadonlySet<string> = new Set([...REPAIR_DOCUMENT_KINDS, ...POS_DOCUMENT_KINDS]);
 
 /**
  * Decide which paper format the format-selection page opens on.

@@ -182,3 +182,118 @@ test("generic invoice via print/voucher: Customer/Supplier row, no narration, re
     assert.ok(out.includes("Balance due"));
     assert.ok(out.includes("136.00"));
 });
+
+test("SHIFT_CLOSE via print/voucher: mirrors ShiftCloseBody with reconciliation, cash flow, and tenders", async () => {
+    const payload = {
+        kind: "SHIFT_CLOSE",
+        title: "Shift #42 Closing Report",
+        template: {
+            ...baseTemplate,
+            kind: "SHIFT_CLOSE",
+            headerLine1: "AbeerSuite Retail",
+            headerLine2: "Shift Closing & Cash Reconciliation",
+        },
+        sample: {
+            reference: "Shift #42",
+            date: "2026-09-14 18:30",
+            partyName: "Rahul Sharma",
+            partyPhone: null,
+            lines: [],
+        },
+        body: {
+            id: 42,
+            status: "CLOSED",
+            openedAt: "14 Sep 2026, 09:00 AM",
+            closedAt: "14 Sep 2026, 06:30 PM",
+            duration: "9 hrs 30 mins",
+            cashierName: "Rahul Sharma",
+            counterName: "POS Counter 1",
+            branchName: "Main Branch",
+            openingFloat: 2000,
+            carryOverFloat: 1500,
+            vaultTopUp: 500,
+            tillMovement: 12500,
+            drops: 10000,
+            expectedCash: 4500,
+            declaredCash: 4500,
+            variance: 0,
+            carryOverNext: 2000,
+            toVault: 2500,
+            movementBreakdown: {
+                cashSales: 13000,
+                receipts: 500,
+                expenditures: 800,
+                refunds: 200,
+                other: 0,
+                netMovement: 12500,
+            },
+            tenderBreakdown: [
+                { method: "CASH", label: "Cash", amount: 13000 },
+                { method: "UPI", label: "UPI / QR", amount: 8500 },
+            ],
+            collectionsBreakdown: {
+                salesAmount: 21500,
+                salesCount: 45,
+                receiptsAmount: 500,
+                receiptsCount: 2,
+                refundsAmount: 200,
+                refundsCount: 1,
+                netCollected: 21800,
+            },
+            dropsList: [
+                { amount: 10000, droppedAt: "02:15 PM", droppedBy: "Rahul", notes: "Midday safe drop" },
+            ],
+            vouchers: [
+                { type: "Opening Float", reference: "CON-001" },
+                { type: "Closing Sweep", reference: "CON-002" },
+            ],
+            notes: "End of shift handover completed.",
+        },
+    };
+    const out = text(await buildVoucherBuffer(payload));
+    assert.ok(out.includes("Shift #42 (CLOSED)"));
+    assert.ok(out.includes("POS Counter 1"));
+    assert.ok(out.includes("Rahul Sharma"));
+    assert.ok(out.includes("CASH RECONCILIATION"));
+    assert.ok(out.includes("Counter Opening Cash"));
+    assert.ok(out.includes("2,000.00"));
+    assert.ok(out.includes("Expected in Drawer"));
+    assert.ok(out.includes("4,500.00"));
+    assert.ok(out.includes("Physical Count (Declared)"));
+    assert.ok(out.includes("Balanced"));
+    assert.ok(out.includes("CLOSING DISTRIBUTION"));
+    assert.ok(out.includes("Kept in Counter"));
+    assert.ok(out.includes("Swept to Vault"));
+    assert.ok(out.includes("PAYMENTS COLLECTED"));
+    assert.ok(out.includes("Cash"));
+    assert.ok(out.includes("UPI / QR"));
+    assert.ok(out.includes("COLLECTIONS BY ACTIVITY"));
+    assert.ok(out.includes("CASH DROPS TO SAFE (1)"));
+    assert.ok(out.includes("Midday safe drop"));
+    assert.ok(out.includes("LINKED VOUCHERS"));
+    assert.ok(out.includes("CON-001"));
+    assert.ok(out.includes("End of shift handover completed."));
+});
+
+test("SHIFT_CLOSE signature obeys the template toggle", async () => {
+    const makePayload = (showSignature) => ({
+        kind: "SHIFT_CLOSE",
+        template: {
+            ...baseTemplate,
+            kind: "SHIFT_CLOSE",
+            signatureLabel: "Cashier Signature",
+            showSignature,
+        },
+        sample: { reference: "Shift #42", date: "2026-09-14", lines: [] },
+        body: { id: 42, status: "CLOSED", openingFloat: 1000, expectedCash: 1000, tillMovement: 0 },
+    });
+
+    const off = text(await buildVoucherBuffer(makePayload(false)));
+    assert.ok(!off.includes("Cashier Signature"), "Cashier signature hidden when toggle is off");
+    assert.ok(!off.includes("Manager Signature"), "Manager signature hidden when toggle is off");
+
+    const on = text(await buildVoucherBuffer(makePayload(true)));
+    assert.ok(on.includes("Cashier Signature"), "Cashier signature shown when toggle is on");
+    assert.ok(on.includes("Manager Signature"), "Manager signature shown when toggle is on");
+});
+

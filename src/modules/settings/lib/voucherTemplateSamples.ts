@@ -15,6 +15,7 @@ import type { ShippingLabelData } from "@/shared/components/print/ShippingLabel"
 import type { ParcelLabelData } from "@/shared/components/print/OrderParcelLabel";
 import type { CouponCardData } from "@/shared/components/print/CouponCard";
 import type { GiftCardData } from "@/shared/components/print/GiftCardCard";
+import type { ShiftCloseBodyData } from "@/shared/components/print/ShiftCloseBody";
 
 // 1×1 transparent PNG stands in for the QR in the editor preview.
 const SAMPLE_QR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -90,6 +91,50 @@ export const SAMPLE_PARCEL_LABEL: ParcelLabelData = {
     weightGrams: 500,
     items:   1,
     footer:  "Handle with care",
+};
+
+// POS Shift Close fixture — realistic cash reconciliation and till movement.
+export const SAMPLE_SHIFT_CLOSE: ShiftCloseBodyData = {
+    shiftId: 12,
+    status: "CLOSED",
+    openedAt: "2026-09-14T09:00:00.000Z",
+    closedAt: "2026-09-14T18:30:00.000Z",
+    durationStr: "9h 30m",
+    cashierName: "Wasim Akram",
+    counterName: "Counter 1",
+    tillAccountName: "Till 1 Cash",
+    branchName: "Main Branch",
+    openingFloatPaise: "200000",
+    tillMovementPaise: "1455000",
+    dropsPaise: "500000",
+    expectedCashPaise: "1155000",
+    declaredCashPaise: "1155000",
+    variancePaise: "0",
+    carryOverNextPaise: "200000",
+    toVaultPaise: "955000",
+    movementBreakdown: {
+        cashSalesPaise: "1350000",
+        receiptsPaise: "250000",
+        expendituresPaise: "100000",
+        refundsPaise: "45000",
+        otherPaise: "0",
+    },
+    tenderBreakdown: [
+        { label: "Cash", amountPaise: "1350000" },
+        { label: "UPI / QR", amountPaise: "820000" },
+        { label: "Card (HDFC)", amountPaise: "450000" },
+    ],
+    collectionsBreakdown: {
+        salesPaise: "2620000",
+        salesCount: 18,
+        receiptsPaise: "250000",
+        receiptsCount: 2,
+        refundsPaise: "45000",
+        refundsCount: 1,
+        netCollectedPaise: "2825000",
+    },
+    closingContraVoucher: { reference: "CV/26-27/0045" },
+    notes: "Shift closed on time. Cash tallied and swept to vault.",
 };
 
 /** Sample-only date shift — the credit-sale due date in the preview. */
@@ -509,6 +554,15 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 subtotal: null, taxAmount: null, total: null,
                 notes: null,
             };
+        case "SHIFT_CLOSE":
+            // Shift close renders its bespoke ShiftCloseBody fixture (SAMPLE_SHIFT_CLOSE).
+            return {
+                reference: "Shift #12", date: today,
+                partyName: "Wasim Akram (Counter 1)", partyPhone: null,
+                lines: [],
+                subtotal: null, taxAmount: null, total: null,
+                notes: null,
+            };
     }
 }
 
@@ -545,4 +599,5 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     DELIVERY_SHIPPING_LABEL: "Parcel Shipping Label",
     COUPON: "Coupon Card",
     GIFT_CARD: "Gift Card",
+    SHIFT_CLOSE: "Shift Close",
 };
