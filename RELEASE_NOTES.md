@@ -1,20 +1,38 @@
-# v1.3.6
+# AbeerSuite 1.3.7
 
-Fixes for voucher links and the till balance, plus two counter setup improvements. Everyone should install this one — the till balance fix affects every counter's shift open/close numbers.
+Faster bill saving at the counter, and the groundwork that makes every future update
+almost instant.
 
-## Schema change — update the counter after deploying
+## Saving a bill is quicker
 
-This release drops a database index (a counter's EPBX extension is no longer required to be unique, since a counter can now have more than one). **Deploy this build to Supabase/Vercel first, then update each counter within a few minutes** — until a counter updates, its sync pauses and it will show `SCHEMA DRIFT — refusing to sync` for every table, not just this one.
+Saving a voucher used to make about 45 separate trips to the database. It now makes
+about 23, and the screen comes back without waiting for the balance recalculation to
+finish.
 
-## Billing and vouchers
+- **Save and post is one request.** Choosing "Save & Post" used to save the bill, come
+  back, and then post it in a second request. It is now one.
+- **A bill meant to be posted is posted from the start.** It used to be written as a
+  draft and changed to posted a moment later — two versions of the same document. On a
+  counter that also meant the same bill was sent up to the office twice. A draft is now
+  only what somebody deliberately chooses to save as a draft.
 
-- Three places in the app (the Accountancy voucher link, Bill Profit, and the Account Ledger row menu) could open the wrong inventory voucher, or fail to open one at all with "Failed to load voucher for editing." All three now open the correct voucher, and Cancel/Delete/Print in the Account Ledger menu are fixed along with it.
+## Updates will stop interrupting the counter
 
-## Till and shift accounting
+Until now, installing an update meant the counter shut down, unpacked around 670 MB of
+program files with nothing on screen but a splash, and only then came back. On a busy
+till that is several minutes of not being able to bill, and it happened on every single
+release.
 
-- The cash shown at shift open (carry-over), shift close (expected in drawer), handover, and on the counter board could disagree with what the ledger actually shows, because these all read a cached balance that could drift out of sync. They now read straight from the posted ledger, so the numbers always tie out.
+From this version on, the counter unpacks an update **quietly in the background while
+you are still billing**, running gently enough that it does not slow the till down. When
+the moment comes to restart, there is nothing heavy left to do — it simply swaps the old
+program folder for the new one, which takes seconds however large the update is.
 
-## Counter setup
+**Please note:** this version is the one that *brings* the new method. The update from
+1.3.6 to 1.3.7 is still carried out the old, slower way, because a counter updates using
+the mechanism it already has. The very next update after this one will be the first
+quick one.
 
-- A counter can now be given more than one EPBX extension (phone number), separated by commas — useful when a counter answers calls on two lines.
-- Right-click on any sidebar link now offers the same "open in new window" quick-action menu.
+If anything is not right — not enough free disk space, or the program folder cannot be
+written to — the counter quietly falls back to the old way of updating. It never gets
+stuck, and a counter that cannot take the fast path still updates normally.
