@@ -157,6 +157,27 @@ async function main() {
     report(`postVoucherInTx — whole post arm, ${LINES} lines (create+post path)`);
     tx = makeTx();
 
+    // ── A stock-only kind (CHALLAN): no GL entry, so the tail block is what
+    //    flips its spine to POSTED and gives it its number. This is the case the
+    //    `journalEntryId == null` guard above must keep working — look for
+    //    universalVoucher.updateMany and the voucherSeries* numbering below.
+    await postVoucherInTx(tx, {
+        voucher: {
+            id: 502, universalVoucherId: 9001, type: "CHALLAN", branchId: "BR-HQ",
+            destinationBranchId: null, placeOfSupply: null, deliveryMode: "COUNTER",
+            partyType: null, partyId: null, settlementJson: null, partyJson: null,
+            subtotal: 0, taxAmount: 0, shippingAmt: 0, roundOff: 0, totalAmount: 0,
+            universalVoucher: { date: new Date(), voucherNo: null, description: "probe challan", branch: { gstStateCode: "19" } },
+            lines: Array.from({ length: LINES }, (_, i) => ({
+                productId: 100 + i, quantity: 2, rate: 100, amount: 200,
+                product: { id: 100 + i, stock: 50 },
+            })),
+        },
+        userId: 1, sellerStateCode: "", buyerStateCode: "",
+    });
+    report(`postVoucherInTx — CHALLAN (stock only, no GL), ${LINES} lines`);
+    tx = makeTx();
+
     // ── Stock arm: one move per item line.
     await recordStockMovementsBatch(tx, Array.from({ length: LINES }, (_, i) => ({
         universalVoucherId: 9001, productId: 100 + i, branchId: "BR-HQ",

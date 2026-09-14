@@ -412,12 +412,18 @@ export async function postVoucherInTx(
         }
     }
 
-    // Phase 5 5.0: flip the draft spine to POSTED. Idempotent — the GL
-    // paths (enginePost existingSpineId) already flipped it (the DRAFT
-    // guard makes this a no-op then); non-GL types (GRN / Challan /
-    // Rejection / Physical Stock / orders) get flipped here so the spine
-    // status tracks the voucher even without GL lines.
-    if (universalVoucherId != null) {
+    // Phase 5 5.0: flip the draft spine to POSTED — for the kinds that need it
+    // here. Non-GL types (GRN / Challan / Rejection / Physical Stock / orders,
+    // Branch Transfer) never pass through the engine's GL arm, so this is where
+    // their spine takes its status and its NUMBER.
+    //
+    // A GL-posting voucher skips the whole block. `engineGlArm` has already set
+    // status, postedAt, sourceCreatedAt and voucherNo on the same spine, so the
+    // read and the update below could only ever match nothing — this used to run
+    // anyway and spend two round trips discovering that, on every single sale.
+    // `journalEntryId` is the honest test: it is non-null exactly when the GL arm
+    // ran, and a trading voucher that produced no entry has already thrown.
+    if (universalVoucherId != null && journalEntryId == null) {
         // …and this is where those non-GL types take their NUMBER, since
         // they never pass through the engine's GL arm. Only when the spine
         // still has none: a GL path above has already numbered it, and a
