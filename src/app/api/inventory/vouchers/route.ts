@@ -621,119 +621,163 @@ export async function POST(req: NextRequest) {
 
     try {
         const voucher = await prisma.$transaction(async (tx) => {
-            // No number on a draft: the series advances when the voucher POSTS
-            // (see engineCreateVoucher), so a draft that is never posted leaves no
-            // hole in the register. Until then the spine id IS its identifier —
-            // every list and print falls back to UV-<id>.
-            //
-            // Phase 5 5.0/5C: spine FIRST (the document anchor) so the goods lines
-            // can hang off it. POST attaches GL lines + flips the spine; non-GL
-            // types just flip the status. Gated out of balances while DRAFT.
-            const spineId = await engineCreateSpine(tx, {
-                type,
-                date:           new Date(date),
-                description:    description.trim(),
-                voucherNo:    null,
-                partyAccountId: resolvedAccountId,
-                branchId,   // 5D-12: branch primary on the spine
-                userId,
-            });
-            const created = await tx.voucherDetail.create({
-                data: {
-                    // 5D-11/5D-12: type + branch live on the spine (engineCreateSpine set them).
-                    // 5D-6: reference (voucherNo) lives on the spine.
-                    universalVoucherId: spineId,
-                    // 5A-3: orderPipelineId/orderStatusId dropped — live on VoucherLink (syncVoucherLinks below).
-                    // 5D-5/5D-10: description + date + 5D-4 party ledger live on the spine (set at engineCreateSpine).
-                    partyJson:    buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull,
-                    partyType:    partyType  || null,
-                    partyId:      partyId    || null,
-                    creditPeriodDays: creditPeriodDays ?? null,
-                    refNumber:       refNumber || null,
-                    refDate:         refDate ? new Date(refDate) : null,
-                    refVoucherId:    refVoucherId ?? null,
-                    bomId:           isManufacturingJournal && bomId ? bomId : null,
-                    destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
-                    shippingAmt,
-                    roundOff,
-                    discountPct: discountPct != null ? Number(discountPct) : null,
-                    // Tax-INCLUSIVE, as typed (clamped to the bill) — subtracted
-                    // from the bottom line: totalAmount = subtotal − discountAmt + …
-                    discountAmt: billDiscIncl > 0 ? billDiscIncl : null,
-                    ...(typeof showPrices === "boolean" ? { showPrices } : {}),
-                    subtotal,
-                    taxAmount,
-                    totalAmount,
-                    deliveryMode:  resolvedDeliveryMode,
-                    placeOfSupply: resolvedPlaceOfSupply || null,
-                    // 5D-2: creator lives on the spine (engineCreateSpine set it).
-                    // G4b: tender + charge INPUT → settlementJson.
-                    settlementJson: buildSettlementJson(tenders, charges),
-                },
-            });
             // 5D-2: creator name comes from the spine's createdById — which on a
             // create is always the person making the request, so it comes from the
             // session instead of a lookup for a name we were already holding.
             const creator = { name: session?.user?.name ?? null };
-            // Phase 5 5C: goods lines hang off the spine (universalVoucherId).
-            // A pure-service invoice (charges only, no stock item) has none — skip
-            // the statement rather than send an empty insert.
-            const createdLines = computedLines.length === 0 ? [] : await tx.voucherInventoryLine.createManyAndReturn({
-                data: computedLines.map((l) => ({
-                    universalVoucherId: spineId,
-                    productId:   l.productId,
-                    description: l.description || null,
-                    direction:   isManufacturingJournal ? l.direction ?? null : null,
-                    quantity:    l.quantity,
-                    freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
-                    rate:        l.rate,
-                    mrpPaise:    l.mrpPaise ?? null,
-                    discountPct: l.discountPct ?? 0,
-                    discountAmt: l.discountAmt,
-                    taxRate:     l.taxRate    ?? 0,
-                    taxAmount:   l.taxAmount,
-                    amount:      l.amount,
-                })),
+
+            // The two rows this route owns, as data. Written against whichever spine
+            // we end up with, so the draft path and the posted path cannot drift
+            // apart in what they store.
+            const detailData = (universalVoucherId: number) => ({
+                // 5D-11/5D-12: type + branch live on the spine.
+                // 5D-6: reference (voucherNo) lives on the spine.
+                universalVoucherId,
+                // 5A-3: orderPipelineId/orderStatusId dropped — live on VoucherLink (syncVoucherLinks below).
+                // 5D-5/5D-10: description + date + 5D-4 party ledger live on the spine.
+                partyJson:    buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? Prisma.DbNull,
+                partyType:    partyType  || null,
+                partyId:      partyId    || null,
+                creditPeriodDays: creditPeriodDays ?? null,
+                refNumber:       refNumber || null,
+                refDate:         refDate ? new Date(refDate) : null,
+                refVoucherId:    refVoucherId ?? null,
+                bomId:           isManufacturingJournal && bomId ? bomId : null,
+                destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
+                shippingAmt,
+                roundOff,
+                discountPct: discountPct != null ? Number(discountPct) : null,
+                // Tax-INCLUSIVE, as typed (clamped to the bill) — subtracted
+                // from the bottom line: totalAmount = subtotal − discountAmt + …
+                discountAmt: billDiscIncl > 0 ? billDiscIncl : null,
+                ...(typeof showPrices === "boolean" ? { showPrices } : {}),
+                subtotal,
+                taxAmount,
+                totalAmount,
+                deliveryMode:  resolvedDeliveryMode,
+                placeOfSupply: resolvedPlaceOfSupply || null,
+                // G4b: tender + charge INPUT → settlementJson.
+                settlementJson: buildSettlementJson(tenders, charges),
             });
-            // `createManyAndReturn` hands back the rows it just wrote, so the
-            // response is dressed from them and the product names fetched before the
-            // transaction — instead of reading the same rows straight back out.
-            const lines = createdLines.map((l) => ({ ...l, product: productById.get(l.productId) ?? null }));
-            // Phase 5 5A: dual-write the order-pipeline link (SALES_ORDER rides the board).
-            // `fresh` — the spine was created just above, so a null link is nothing
-            // to clear (see syncVoucherLinks).
-            await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId }, { fresh: true });
 
-            // ── Post it, here, in this same transaction ──────────────────────
-            // Saving and posting is ONE action at the counter, and it is now one
-            // request: the client used to save a draft, wait for its id, then call
-            // /[id]/post — two HTTP round trips, two transactions, and the second
-            // one re-reading the voucher the first had just written. Doing it here
-            // also means a voucher that cannot post leaves no orphan draft behind,
-            // because the whole thing rolls back together.
-            if (!postNow) return { ...created, lines, createdBy: creator, posted: false };
+            // Phase 5 5C: goods lines hang off the spine (universalVoucherId).
+            const lineData = (universalVoucherId: number) => computedLines.map((l) => ({
+                universalVoucherId,
+                productId:   l.productId,
+                description: l.description || null,
+                direction:   isManufacturingJournal ? l.direction ?? null : null,
+                quantity:    l.quantity,
+                freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
+                rate:        l.rate,
+                mrpPaise:    l.mrpPaise ?? null,
+                discountPct: l.discountPct ?? 0,
+                discountAmt: l.discountAmt,
+                taxRate:     l.taxRate    ?? 0,
+                taxAmount:   l.taxAmount,
+                amount:      l.amount,
+            }));
 
-            const { result, notes } = await postVoucherInTx(tx, {
+            /** Write the document itself against a spine that already exists. */
+            const writeDocument = async (universalVoucherId: number) => {
+                const created = await tx.voucherDetail.create({ data: detailData(universalVoucherId) });
+                // A pure-service invoice (charges only, no stock item) has no goods
+                // lines — skip the statement rather than send an empty insert.
+                // `createManyAndReturn` hands back the rows it just wrote, so the
+                // response is dressed from them and the product names fetched before
+                // the transaction, instead of reading the same rows straight back out.
+                const createdLines = computedLines.length === 0
+                    ? []
+                    : await tx.voucherInventoryLine.createManyAndReturn({ data: lineData(universalVoucherId) });
+                const lines = createdLines.map((l) => ({ ...l, product: productById.get(l.productId) ?? null }));
+                // Phase 5 5A: dual-write the order-pipeline link (SALES_ORDER rides
+                // the board). A spine created moments ago has no link to clear, so
+                // there is nothing to do unless there is one to write.
+                if (orderPipelineId || orderStatusId) {
+                    await syncVoucherLinks(tx, universalVoucherId, { orderPipelineId, orderStatusId }, { fresh: true });
+                }
+                return { created, lines };
+            };
+
+            // ── Saving a DRAFT ───────────────────────────────────────────────
+            // Born DRAFT because someone chose a draft. No number: the series
+            // advances when the voucher POSTS, so a draft that is never posted
+            // leaves no hole in the register. Until then the spine id IS its
+            // identifier — every list and print falls back to UV-<id>.
+            if (!postNow) {
+                const spineId = await engineCreateSpine(tx, {
+                    type,
+                    date:           new Date(date),
+                    description:    description.trim(),
+                    voucherNo:      null,
+                    partyAccountId: resolvedAccountId,
+                    branchId,   // 5D-12: branch primary on the spine
+                    userId,
+                });
+                const { created, lines } = await writeDocument(spineId);
+                return { ...created, lines, createdBy: creator, posted: false };
+            }
+
+            // ── Saving a POSTED voucher ──────────────────────────────────────
+            // The spine is born POSTED and numbered, so the POSTING runs first and
+            // the document hangs off the spine it returns. This voucher was created
+            // in order to be posted; writing it DRAFT and updating it a moment later
+            // was two row versions, an extra read and an extra write for one
+            // document — and on a counter replica, two outbox rows instead of one.
+            //
+            // It is also one HTTP request: the client used to save a draft, wait for
+            // its id, then call /[id]/post. And a voucher that cannot post now
+            // leaves nothing behind at all, because none of it was written.
+            const { universalVoucherId, notes } = await postVoucherInTx(tx, {
                 voucher: {
-                    ...created,
+                    // No detail row yet — `id` is only used to exclude THIS voucher
+                    // from the Physical Stock same-day lookup, and there is nothing
+                    // to exclude.
+                    id:                  0,
+                    // Null is what asks for a spine born POSTED.
+                    universalVoucherId:  null,
                     type,
                     branchId,
-                    lines: lines.map((l) => ({ ...l, product: l.product ?? { id: l.productId, stock: null } })),
+                    destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
+                    placeOfSupply:       resolvedPlaceOfSupply || null,
+                    deliveryMode:        resolvedDeliveryMode,
+                    partyType:           partyType || null,
+                    partyId:             partyId   || null,
+                    partyAccountId:      resolvedAccountId,
+                    // The same two snapshots the detail row stores. Both builders are
+                    // typed for Prisma INPUT, which is why each needs saying that it
+                    // is plain JSON here; the post path only ever READS them.
+                    settlementJson:      buildSettlementJson(tenders, charges) as unknown as Prisma.JsonValue,
+                    partyJson:           (buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? null) as unknown as Prisma.JsonValue,
+                    subtotal,
+                    taxAmount,
+                    shippingAmt:         Number(shippingAmt),
+                    roundOff:            Number(roundOff),
+                    totalAmount,
+                    discountAmt:         billDiscIncl > 0 ? billDiscIncl : null,
                     universalVoucher: {
                         date:        new Date(date),
-                        voucherNo:   null,   // a draft takes its number as it posts
+                        voucherNo:   null,   // allocated as the spine is created
                         description: description.trim(),
                         branch:      { gstStateCode: branch?.gstStateCode ?? null },
                     },
+                    lines: computedLines.map((l) => ({
+                        ...l,
+                        product: {
+                            id:       l.productId,
+                            stock:    productById.get(l.productId)?.stock ?? null,
+                            mrpPaise: productById.get(l.productId)?.mrpPaise ?? null,
+                        },
+                    })),
                 },
                 userId,
                 sellerStateCode,
                 buyerStateCode,
             });
-            return { ...result, createdBy: creator, posted: true, _postNotes: notes };
-        // This transaction now carries the posting too, so it takes the same
-        // headroom the /[id]/post route has always had. It does far less work than
-        // the two transactions it replaces, but a 200-line stock-take is still long.
+            const { created, lines } = await writeDocument(universalVoucherId!);
+            return { ...created, lines, createdBy: creator, posted: true, _postNotes: notes };
+        // This transaction carries the posting too, so it takes the same headroom
+        // the /[id]/post route has always had. It does far less work than the two
+        // transactions it replaces, but a 200-line stock-take is still long.
         }, { timeout: 30_000, maxWait: 10_000 });
 
         // Pricing recompute runs AFTER the response has gone — it is explicitly

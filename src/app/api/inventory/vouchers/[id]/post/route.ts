@@ -85,12 +85,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         const { sellerStateCode, buyerStateCode } = await resolvePostGstStates(voucher as unknown as PostableVoucher);
 
         const { result, notes } = await prisma.$transaction(
-            (tx) => postVoucherInTx(tx, {
-                voucher: voucher as unknown as PostableVoucher,
-                userId,
-                sellerStateCode,
-                buyerStateCode,
-            }),
+            async (tx) => {
+                const { universalVoucherId, notes: postNotes } = await postVoucherInTx(tx, {
+                    voucher: voucher as unknown as PostableVoucher,
+                    userId,
+                    sellerStateCode,
+                    buyerStateCode,
+                });
+                // The detail row is this route's — it already exists, and this links
+                // it to the spine that was just posted. Posting does not own it.
+                const updated = await tx.voucherDetail.update({
+                    where: { id: voucher.id },
+                    data:  { universalVoucherId },
+                });
+                // Posting does not change the goods lines, so the rows loaded before
+                // the transaction are still the rows.
+                return { result: { ...updated, lines: goodsLines }, notes: postNotes };
+            },
             // Stock-ledger walk + GL post + the balance update are sequential round
             // trips; over the Supabase pooler this used to overrun the default 5s
             // interactive-transaction ceiling (P2028). Far fewer statements now, but

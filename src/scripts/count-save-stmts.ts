@@ -136,10 +136,9 @@ async function main() {
     // ── The whole post arm, as the create route now runs it in ONE transaction.
     //    This really executes postVoucherInTx against the recording stub, so a
     //    missing field or a wrong branch shows up here rather than at a till.
-    await postVoucherInTx(tx, {
-        voucher: {
-            id: 501, universalVoucherId: 9001, type: "SALE", branchId: "BR-HQ",
-            destinationBranchId: null, placeOfSupply: "19", deliveryMode: "COUNTER",
+    const saleVoucher = (universalVoucherId: number | null) => ({
+            id: 501, universalVoucherId, type: "SALE", branchId: "BR-HQ",
+            destinationBranchId: null, placeOfSupply: "19", deliveryMode: "COUNTER" as const,
             partyType: null, partyId: null,
             settlementJson: { tenders: [{ accountId: 14, amount: 1180 }], charges: [] },
             partyJson: null,
@@ -151,20 +150,27 @@ async function main() {
                 productId: 100 + i, quantity: 2, rate: 100, amount: 200,
                 product: { id: 100 + i, stock: 50 },
             })),
-        },
-        userId: 1, sellerStateCode: "19", buyerStateCode: "19",
     });
-    report(`postVoucherInTx — whole post arm, ${LINES} lines (create+post path)`);
+
+    // ATTACH: a voucher saved as a draft earlier and posted now. Its spine exists
+    // and is flipped DRAFT -> POSTED.
+    await postVoucherInTx(tx, { voucher: saleVoucher(9001), userId: 1, sellerStateCode: "19", buyerStateCode: "19" });
+    report(`postVoucherInTx — SALE, existing draft being posted (attach)`);
+    tx = makeTx();
+
+    // CREATE: a voucher created in order to be posted. No spine yet, so one is
+    // BORN posted and numbered — no DRAFT row written and then updated.
+    await postVoucherInTx(tx, { voucher: saleVoucher(null), userId: 1, sellerStateCode: "19", buyerStateCode: "19" });
+    report(`postVoucherInTx — SALE, created posted (direct post)`);
     tx = makeTx();
 
     // ── A stock-only kind (CHALLAN): no GL entry, so the tail block is what
     //    flips its spine to POSTED and gives it its number. This is the case the
     //    `journalEntryId == null` guard above must keep working — look for
     //    universalVoucher.updateMany and the voucherSeries* numbering below.
-    await postVoucherInTx(tx, {
-        voucher: {
-            id: 502, universalVoucherId: 9001, type: "CHALLAN", branchId: "BR-HQ",
-            destinationBranchId: null, placeOfSupply: null, deliveryMode: "COUNTER",
+    const challanVoucher = (universalVoucherId: number | null) => ({
+            id: 502, universalVoucherId, type: "CHALLAN", branchId: "BR-HQ",
+            destinationBranchId: null, placeOfSupply: null, deliveryMode: "COUNTER" as const,
             partyType: null, partyId: null, settlementJson: null, partyJson: null,
             subtotal: 0, taxAmount: 0, shippingAmt: 0, roundOff: 0, totalAmount: 0,
             universalVoucher: { date: new Date(), voucherNo: null, description: "probe challan", branch: { gstStateCode: "19" } },
@@ -172,10 +178,16 @@ async function main() {
                 productId: 100 + i, quantity: 2, rate: 100, amount: 200,
                 product: { id: 100 + i, stock: 50 },
             })),
-        },
-        userId: 1, sellerStateCode: "", buyerStateCode: "",
     });
-    report(`postVoucherInTx — CHALLAN (stock only, no GL), ${LINES} lines`);
+    await postVoucherInTx(tx, { voucher: challanVoucher(9001), userId: 1, sellerStateCode: "", buyerStateCode: "" });
+    report(`postVoucherInTx — CHALLAN (stock only), existing draft (attach)`);
+    tx = makeTx();
+
+    // The same kind created posted. No ledger lines means the engine has nothing to
+    // mint a spine FROM, so this is the createPostedSpine path — still exactly one
+    // universalVoucher write, and still numbered.
+    await postVoucherInTx(tx, { voucher: challanVoucher(null), userId: 1, sellerStateCode: "", buyerStateCode: "" });
+    report(`postVoucherInTx — CHALLAN (stock only), created posted (direct post)`);
     tx = makeTx();
 
     // ── Stock arm: one move per item line.

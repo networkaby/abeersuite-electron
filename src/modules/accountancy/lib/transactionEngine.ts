@@ -330,6 +330,18 @@ export async function engineCreateSpine(
         userId:          number;
         /** See engineGlArm — omit to resolve from the source counter. */
         shiftId?:        number | null;
+        /**
+         * The state the spine is BORN in. Default DRAFT.
+         *
+         * "POSTED" is for a voucher that was created in order to be posted — the
+         * overwhelmingly common case at a counter. Writing it DRAFT and updating it
+         * a moment later is two row versions for one document, which also means the
+         * replica's outbox trigger fires twice and the till pushes that spine to the
+         * office twice. A draft is a state someone CHOSE; it is not a step on the
+         * way to posting. The caller must hand in `voucherNo` — a posted voucher
+         * with no number is not a thing.
+         */
+        status?:         "DRAFT" | "POSTED";
     },
 ): Promise<number> {
     // A date before the books begin here belongs to the old register, not to a
@@ -338,6 +350,7 @@ export async function engineCreateSpine(
     // 5D-7: the spine's `id` IS the Universal Voucher No (no `reference` string).
     const counterId = await sourceCounterId(tx);
     const shiftId = args.shiftId !== undefined ? args.shiftId : await shiftIdForCounter(tx, counterId);
+    const now = new Date();
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
@@ -347,7 +360,10 @@ export async function engineCreateSpine(
             date:           args.date,
             description:    args.description,
             narration:      args.narration ?? null,
-            status:         "DRAFT",
+            status:         args.status ?? "DRAFT",
+            // Only meaningful on a spine born POSTED; a draft has not been posted
+            // and carries no posting wall-clock.
+            ...(args.status === "POSTED" ? { postedAt: now, sourceCreatedAt: now } : {}),
             partyAccountId: args.partyAccountId ?? null,
             branchId:       args.branchId ?? null,   // 5D-12: branch primary on the spine
             sourceCounterId: counterId,
@@ -403,7 +419,20 @@ export async function enginePost(
     tx: Prisma.TransactionClient,
     spec: TransactionSpec,
     userId: number,
-    opts: { branchId?: string | null; postedAt?: Date; existingSpineId?: number | null } = {},
+    opts: {
+        branchId?: string | null;
+        postedAt?: Date;
+        existingSpineId?: number | null;
+        /**
+         * The party's ledger, stamped on the spine.
+         *
+         * Matters most when the engine MINTS the spine (no existingSpineId): the
+         * attach path inherits it from the draft that engineCreateSpine already
+         * stamped, but a spine created here starts blank, and a spine with no
+         * party ledger drops out of every outstanding and party-ledger view.
+         */
+        partyAccountId?: number | null;
+    } = {},
 ): Promise<{ journalEntryId: number | null; universalVoucherId: number | null }> {
     const branchId = opts.branchId ?? null;
     const postedAt = opts.postedAt ?? new Date();
@@ -433,6 +462,7 @@ export async function enginePost(
             type:        spec.type,
             voucherNo:   spec.reference?.trim() || null,   // "" is not a number
             narration:   spec.narration ?? null,
+            partyAccountId: opts.partyAccountId ?? null,
             existingSpineId: opts.existingSpineId ?? null,   // Phase 5 5.0: attach to draft spine
         });
         journalEntryId = gl.journalEntryId;
@@ -568,7 +598,15 @@ export async function enginePostSpine(
  *     happened to post it. The office posting a counter's draft must not renumber
  *     it into the office's own run.
  */
-async function allocateSpineNumber(
+/**
+ * Allocate the user-facing voucher number for a spine.
+ *
+ * Exported because a voucher created POSTED needs its number BEFORE the row is
+ * written, and it must be the same allocator the attach path uses. The date
+ * matters: it is the VOUCHER's date, not today's, so a 28-March voucher posted on
+ * 2 April does not roll the series into the new financial year.
+ */
+export async function allocateSpineNumber(
     tx: Prisma.TransactionClient,
     spine: { type: string; date: Date; sourceCounterId: number | null },
 ): Promise<string | null> {

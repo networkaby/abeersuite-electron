@@ -20,7 +20,8 @@ import { recordStockMovement, stockDirectionForType } from "@/modules/inventory/
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
-import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { allocateSpineNumber, engineCreateSpine, enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 
@@ -62,6 +63,9 @@ export interface PostableVoucher {
     deliveryMode:        InvVoucherDeliveryMode | null;
     partyType:           string | null;
     partyId:             number | null;
+    /** The party's ledger. Only needed when this call CREATES the spine — an
+     *  existing draft already carries it. */
+    partyAccountId?:     number | null;
     settlementJson:      Prisma.JsonValue | null;
     // The money the GL builder posts against — frozen on the detail row.
     partyJson:           Prisma.JsonValue | null;
@@ -163,13 +167,44 @@ export async function postVoucherInTx(
         sellerStateCode: string;
         buyerStateCode:  string;
     },
-): Promise<{ result: { id: number } & Record<string, unknown>; notes: string[] }> {
+): Promise<{ universalVoucherId: number | null; journalEntryId: number | null; notes: string[] }> {
     const { voucher, userId, sellerStateCode, buyerStateCode } = args;
     const {
         isPurchase, isSale, isCommitment, isPhysicalStock,
         isManufacturingJournal, isBranchTransfer, isFixedDirection, isTradingVoucher,
     } = classifyVoucherPost(voucher.type);
-    const goodsLines = voucher.lines;
+
+    // ── Which spine are we posting? ──────────────────────────────────────────
+    // ATTACH  — the voucher already has one, because someone saved it as a draft
+    //           and is posting it now. It is flipped DRAFT -> POSTED.
+    // CREATE  — there is no spine, because this voucher is being created in order
+    //           to be posted. It is BORN posted and numbered: writing it DRAFT and
+    //           updating it a moment later is two row versions for one document,
+    //           an extra read and an extra write, and on a counter replica the
+    //           outbox trigger fires twice so the till pushes the same spine to
+    //           the office twice. A draft is a state someone CHOSE.
+    //
+    // The number is allocated HERE, once, before anything is written, using the
+    // same allocator the attach path uses — it takes the VOUCHER's date, so a
+    // 28-March voucher posted on 2 April does not roll the series into the new
+    // financial year.
+    let universalVoucherId: number | null = voucher.universalVoucherId ?? null;
+    const creating = universalVoucherId == null;
+    let allocatedNo: string | null = null;
+    if (creating) {
+        allocatedNo = await allocateSpineNumber(tx, {
+            type:            voucher.type,
+            date:            voucher.universalVoucher!.date,
+            sourceCounterId: await sourceCounterId(tx),
+        });
+        // Only a fixed-direction voucher WITH ledger lines can have its spine minted
+        // by the engine (spine + GL lines in a single statement, which is the whole
+        // point). Every other kind writes stock rows below that need the spine id
+        // first, so it is created here.
+        if (!isFixedDirection) {
+            universalVoucherId = await createPostedSpine(tx, voucher, userId, allocatedNo);
+        }
+    }
 
     // ── 1. Stock ledger + cached InvProduct.stock ─────────────────
     // Commitments (SO / PO) skip stock entirely. Trading vouchers
@@ -193,7 +228,7 @@ export async function postVoucherInTx(
 
             // Source side: OUT
             await recordStockMovement(tx, {
-                universalVoucherId: voucher.universalVoucherId!,
+                universalVoucherId: universalVoucherId!,
                 productId: line.productId,
                 branchId:  voucher.branchId,
                 date:      voucher.universalVoucher!.date,
@@ -206,7 +241,7 @@ export async function postVoucherInTx(
 
             // Destination side: IN
             await recordStockMovement(tx, {
-                universalVoucherId: voucher.universalVoucherId!,
+                universalVoucherId: universalVoucherId!,
                 productId: line.productId,
                 branchId:  destBranchId,
                 date:      voucher.universalVoucher!.date,
@@ -308,7 +343,7 @@ export async function postVoucherInTx(
                 // box, not derived, so we still stamp it from supplier
                 // paperwork on purchase lines.
                 await recordStockMovement(tx, {
-                    universalVoucherId: voucher.universalVoucherId!,
+                    universalVoucherId: universalVoucherId!,
                     productId: line.productId,
                     branchId:  voucher.branchId,
                     date:      voucher.universalVoucher!.date,
@@ -332,9 +367,6 @@ export async function postVoucherInTx(
     // Other types (GRN, Challan, Rejections, Physical Stock, Sales/
     // Purchase Order) intentionally don't touch GL on POST.
     let journalEntryId: number | null = null;
-    // Phase 5 5.0: the draft spine created at voucher-save (POST attaches
-    // its GL lines + flips it). Null for pre-5.0 drafts → engine create-posted.
-    let universalVoucherId: number | null = voucher.universalVoucherId ?? null;
     const postNotes: string[] = [];
     // G4b: tender/charge input from settlementJson (replaced the tables).
     const settlement = readSettlement(voucher.settlementJson);
@@ -348,10 +380,21 @@ export async function postVoucherInTx(
         // bridge produced them (no branchId passed to the engine).
         const spec = await saleToSpec(
             tx,
-            { ...voucher, date: voucher.universalVoucher!.date, reference: voucher.universalVoucher?.voucherNo ?? null, description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
+            { ...voucher, date: voucher.universalVoucher!.date, reference: voucher.universalVoucher?.voucherNo ?? allocatedNo, description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
             { branchId: voucher.branchId, lines: voucher.lines },
         );
-        const out = await enginePost(tx, spec, userId, { existingSpineId: voucher.universalVoucherId });
+        // A stock-only fixed-direction kind (GRN / Challan / Rejection) builds no
+        // ledger lines, so the engine has nothing to mint a spine FROM — it would
+        // refuse the stock moves for want of one. Those get their spine here.
+        if (creating && universalVoucherId == null && spec.glLines.length === 0) {
+            universalVoucherId = await createPostedSpine(tx, voucher, userId, allocatedNo);
+        }
+        const out = await enginePost(tx, spec, userId, {
+            existingSpineId: universalVoucherId,
+            // Only read when the engine mints the spine; the attach path already
+            // has it from the draft.
+            partyAccountId:  voucher.partyAccountId ?? null,
+        });
         journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
         // A GL-posting trading voucher (SALE / PURCHASE / returns) MUST
         // produce a balanced JE — Balance Sheet / Day Book / P&L read GL
@@ -406,7 +449,7 @@ export async function postVoucherInTx(
                     },
                 ],
                 stockMoves: [],
-            }, userId, { existingSpineId: voucher.universalVoucherId });
+            }, userId, { existingSpineId: universalVoucherId });
             journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
             postNotes.push(`Posted ${settlement.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)}.`);
         }
@@ -423,7 +466,7 @@ export async function postVoucherInTx(
     // anyway and spend two round trips discovering that, on every single sale.
     // `journalEntryId` is the honest test: it is non-null exactly when the GL arm
     // ran, and a trading voucher that produced no entry has already thrown.
-    if (universalVoucherId != null && journalEntryId == null) {
+    if (!creating && universalVoucherId != null && journalEntryId == null) {
         // …and this is where those non-GL types take their NUMBER, since
         // they never pass through the engine's GL arm. Only when the spine
         // still has none: a GL path above has already numbered it, and a
@@ -443,22 +486,32 @@ export async function postVoucherInTx(
             },
         });
     }
-    // Phase 5 5C: link the just-written stock rows (+ goods lines) to the spine.
+    // The detail row is the CALLER's: the post route already has one and links it
+    // to the spine; the create route has not written one yet and creates it against
+    // the spine id returned here. Posting does not own that row, and pretending it
+    // did is what forced the create path to write it and then update it.
+    return { universalVoucherId, journalEntryId, notes: postNotes };
+}
 
-    // ── 3. Link the detail to its (now POSTED) spine ──────────────
-    // 5D-8: status POSTED set on the spine above; 5D-5: postedAt too.
-    const updated = await tx.voucherDetail.update({
-        where: { id: voucher.id },
-        data:  {
-            universalVoucherId,
-        },
-        include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine
+/**
+ * A spine born POSTED and numbered, for a voucher created in order to be posted.
+ * Used for every kind the engine cannot mint one for — anything with no ledger
+ * lines to nest into the same statement.
+ */
+async function createPostedSpine(
+    tx: Prisma.TransactionClient,
+    voucher: PostableVoucher,
+    userId: number,
+    voucherNo: string | null,
+): Promise<number> {
+    return engineCreateSpine(tx, {
+        type:        voucher.type,
+        date:        voucher.universalVoucher!.date,
+        description: voucher.universalVoucher?.description ?? voucher.type,
+        voucherNo,
+        branchId:       voucher.branchId,
+        partyAccountId: voucher.partyAccountId ?? null,
+        userId,
+        status:         "POSTED",
     });
-    // Phase 5 5C: goods lines hang off the spine. Posting does not change
-    // them, so the rows loaded before the transaction are still the rows —
-    // reading them back out would be a round trip for the same answer. The
-    // creator's name is resolved after the commit (below), so a lookup for
-    // one display field does not sit inside the transaction.
-    const updatedWithLines = { ...updated, lines: goodsLines };
-    return { result: updatedWithLines, notes: postNotes };
 }
