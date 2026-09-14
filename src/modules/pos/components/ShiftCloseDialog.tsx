@@ -438,7 +438,7 @@ export function ShiftCloseDialog({
                                                     System Ledger
                                                 </span>
                                             </div>
-                                            <Row label="Opening float" value={fmt(Number(detail.openingFloatPaise) / 100)} />
+                                            <Row label="Counter opening cash" value={fmt(Number(detail.openingFloatPaise) / 100)} />
                                             <Row
                                                 label="Till movement this shift"
                                                 value={signed(Number(detail.tillMovementPaise) / 100)}
@@ -754,7 +754,7 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
                 {/* Cash reconciliation */}
                 <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cash reconciliation</p>
-                    <ReportRow label="Opening float"            value={`₹${fmt(opening)}`} />
+                    <ReportRow label="Counter opening cash"     value={`₹${fmt(opening)}`} />
                     <ReportRow
                         label="Till movement this shift"
                         value={signed(movement)}

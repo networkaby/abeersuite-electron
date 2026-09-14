@@ -422,7 +422,7 @@ export default function ShiftDetailPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div className="rounded-md border border-border bg-card p-2.5 space-y-0.5">
-                        <span className="text-[11px] text-muted-foreground">Opening float</span>
+                        <span className="text-[11px] text-muted-foreground">Counter opening cash</span>
                         <div className="font-mono font-semibold text-base">₹{fmt(Number(shift.openingFloatPaise) / 100)}</div>
                         <div className="text-[10px] text-muted-foreground">
                             Start: ₹{fmt(Number(shift.carryOverFloatPaise) / 100)} · Top-up: ₹{fmt(Number(shift.vaultTopUpPaise) / 100)}
