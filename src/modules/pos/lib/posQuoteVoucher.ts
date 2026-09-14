@@ -214,7 +214,8 @@ export async function createPosQuoteVoucher(opts: {
             })),
         });
         // Phase 5 5A: dual-write the order-pipeline link (POS_ORDER rides the board).
-        await syncVoucherLinks(tx, spineId, { orderPipelineId: orderPipeline?.id ?? null, orderStatusId });
+        // `fresh` — spine created just above, so a null link has nothing to clear.
+        await syncVoucherLinks(tx, spineId, { orderPipelineId: orderPipeline?.id ?? null, orderStatusId }, { fresh: true });
 
         let dealId: number | null = null;
         if (hasParty && entry && actor) {

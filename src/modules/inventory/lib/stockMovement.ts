@@ -132,11 +132,30 @@ export async function recordStockMovement(
 
 /**
  * Batched form of recordStockMovement for multi-line posts (e.g. a POS sale with
- * N lines). Identical net effect to calling recordStockMovement once per line, but
- * the N ledger INSERTs collapse into a single createMany — cutting N-1 round-trips
- * inside the transaction (the dominant cost on a pooled connection). The per-product
- * balance updates stay individual (they target different rows). Keep this in lockstep
- * with recordStockMovement.
+ * N lines). Identical net effect to calling recordStockMovement once per line, in
+ * THREE statements regardless of how many lines the bill has — one ledger insert,
+ * one org-wide cache update, one per-branch balance upsert.
+ *
+ * Why it matters: every statement inside the transaction is a separate round trip
+ * to the database, and on the office/Vercel path that is a trip to Supabase. This
+ * used to be 2N+1 statements (a 10-line bill = 21 trips); it is now 3.
+ *
+ * Keep this in lockstep with recordStockMovement.
+ *
+ * ── Why the rows are summed first ───────────────────────────────────────────
+ * The same product can legitimately appear on two lines of one bill. Postgres
+ * refuses an ON CONFLICT insert that touches the same key twice in one statement
+ * ("cannot affect row a second time"), so the per-line rows are folded by product
+ * (and by product+branch) before the statement is built. Two increments of 3 and
+ * 2 and one increment of 5 leave the same number behind.
+ *
+ * ── Why raw SQL ─────────────────────────────────────────────────────────────
+ * Prisma cannot express "update N different rows by N different amounts" in one
+ * call. The counter replica's outbox trigger is `FOR EACH ROW AFTER INSERT OR
+ * UPDATE`, so it captures these exactly as it captured the per-row Prisma writes
+ * — raw SQL is not a way around it (see the note in prismaClient.ts). `updatedAt`
+ * is stamped by hand because `@updatedAt` is a client-side Prisma feature that
+ * raw SQL does not get for free.
  */
 export async function recordStockMovementsBatch(
     tx: Prisma.TransactionClient,
@@ -158,34 +177,71 @@ export async function recordStockMovementsBatch(
         })),
     });
 
-    // 2 + 3. Per-product org-wide cache + per-branch balance (same logic as the
-    // single-row helper; different rows so they can't be a single statement).
+    // Fold the per-line rows into one entry per target row. `absolute` carries the
+    // single-row helper's null-cache rule: when the caller passed
+    // `productCurrentStock: null` the cache was uninitialised and the delta is
+    // written as an absolute value, because Postgres silently no-ops NULL + n.
+    const orgWide  = new Map<number, { delta: number; absolute: boolean; mrp: number | null }>();
+    const perBranch = new Map<string, { productId: number; branchId: string; delta: number }>();
+
     for (const a of items) {
         const delta = Math.round(toNumber(a.inQty)) - Math.round(toNumber(a.outQty));
         if (delta === 0 && a.newMrpPaise == null) continue;
-        const updateOrgWide = a.updateOrgWideStock !== false;
-        const updateBranch  = a.updateBranchBalance !== false;
 
-        if (updateOrgWide) {
-            const productData: Prisma.InvProductUpdateInput = {};
-            if (delta !== 0) {
-                productData.stock = a.productCurrentStock === null
-                    ? delta
-                    : delta > 0 ? { increment: delta } : { decrement: -delta };
-            }
-            if (a.newMrpPaise != null) productData.mrpPaise = a.newMrpPaise;
-            if (Object.keys(productData).length > 0) {
-                await tx.invProduct.update({ where: { id: a.productId }, data: productData });
-            }
+        if (a.updateOrgWideStock !== false) {
+            const cur = orgWide.get(a.productId) ?? { delta: 0, absolute: false, mrp: null };
+            cur.delta   += delta;
+            // Absolute wins: the first write sets the value and later ones add to
+            // it, which comes to the same as writing the sum absolutely.
+            cur.absolute = cur.absolute || a.productCurrentStock === null;
+            if (a.newMrpPaise != null) cur.mrp = a.newMrpPaise;   // last line wins, as before
+            orgWide.set(a.productId, cur);
         }
 
-        if (updateBranch && delta !== 0) {
-            await tx.invProductBranch.upsert({
-                where:  { productId_branchId: { productId: a.productId, branchId: a.branchId } },
-                create: { productId: a.productId, branchId: a.branchId, stock: delta },
-                update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
-            });
+        if (a.updateBranchBalance !== false && delta !== 0) {
+            const key = `${a.productId}|${a.branchId}`;
+            const cur = perBranch.get(key) ?? { productId: a.productId, branchId: a.branchId, delta: 0 };
+            cur.delta += delta;
+            perBranch.set(key, cur);
         }
+    }
+
+    // 2. Org-wide InvProduct cache (stock + optional MRP stamp) — one statement.
+    const org = [...orgWide].filter(([, v]) => v.delta !== 0 || v.mrp != null);
+    if (org.length > 0) {
+        await tx.$executeRaw`
+            UPDATE "InvProduct" AS p
+               SET "stock"     = CASE WHEN v."absolute" THEN v."delta" ELSE p."stock" + v."delta" END,
+                   "mrpPaise"  = COALESCE(v."mrp", p."mrpPaise"),
+                   "updatedAt" = NOW()
+              FROM (
+                    SELECT * FROM UNNEST(
+                        ${org.map(([id]) => id)}::int[],
+                        ${org.map(([, v]) => v.delta)}::int[],
+                        ${org.map(([, v]) => v.absolute)}::boolean[],
+                        ${org.map(([, v]) => v.mrp)}::int[]
+                    ) AS t("id", "delta", "absolute", "mrp")
+                   ) AS v
+             WHERE p."id" = v."id"
+        `;
+    }
+
+    // 3. Per-branch balance — one statement. Insert-or-add, the multi-row form of
+    // the upsert this used to run once per line.
+    const branches = [...perBranch.values()];
+    if (branches.length > 0) {
+        await tx.$executeRaw`
+            INSERT INTO "inv_product_branches" ("productId", "branchId", "stock", "updatedAt")
+            SELECT t."productId", t."branchId", t."delta", NOW()
+              FROM UNNEST(
+                    ${branches.map((b) => b.productId)}::int[],
+                    ${branches.map((b) => b.branchId)}::text[],
+                    ${branches.map((b) => b.delta)}::int[]
+                   ) AS t("productId", "branchId", "delta")
+            ON CONFLICT ("productId", "branchId") DO UPDATE
+               SET "stock"     = "inv_product_branches"."stock" + EXCLUDED."stock",
+                   "updatedAt" = NOW()
+        `;
     }
 }
 

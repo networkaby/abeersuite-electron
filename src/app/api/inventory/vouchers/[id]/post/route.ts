@@ -40,20 +40,30 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const userId = user!.id;
 
+    // The voucher AND its goods lines in ONE query. The lines hang off the spine
+    // (Phase 5 5C), and the spine is already being joined here, so asking for them
+    // separately was a second round trip to Supabase for rows the first query could
+    // have carried. `sku`/`name` come along too, so the response at the end does
+    // not have to read the same rows a third time.
     const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         include: {
             // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch(+state) live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows / direction / the CGST/SGST-vs-IGST split.
-            universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true, type: true, branchId: true, branch: { select: { id: true, gstStateCode: true } } } },
+            universalVoucher: {
+                select: {
+                    description: true, voucherNo: true, status: true, date: true, type: true,
+                    branchId: true, createdById: true,
+                    branch: { select: { id: true, gstStateCode: true } },
+                    inventoryLines: {
+                        orderBy: { id: "asc" },
+                        include: { product: { select: { id: true, sku: true, name: true, mrpPaise: true, stock: true } } },
+                    },
+                },
+            },
         },
     });
-    // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
-    const goodsLines = voucherRow
-        ? await prisma.voucherInventoryLine.findMany({
-            where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
-            include: { product: { select: { id: true, mrpPaise: true, stock: true } } },
-        })
-        : [];
+    // Phase 5 5C: goods lines hang off the spine — attach as `voucher.lines`.
+    const goodsLines = voucherRow?.universalVoucher?.inventoryLines ?? [];
     // 5D-8/5D-11/5D-12: status + type + branch live on the spine — attach for the DRAFT gate + direction guards + stock rows.
     const voucher = voucherRow ? { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT" } : null;
 
@@ -416,18 +426,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 },
                 include: { universalVoucher: { select: { createdById: true } } },   // 5D-2: creator on spine
             });
-            // Phase 5 5C: goods lines hang off the spine.
-            const creator = updated.universalVoucher?.createdById != null
-                ? await tx.user.findUnique({ where: { id: updated.universalVoucher.createdById }, select: { name: true } })
-                : null;
-            const updatedWithLines = {
-                ...updated,
-                createdBy: creator,
-                lines: await tx.voucherInventoryLine.findMany({
-                    where:   { universalVoucherId: updated.universalVoucherId ?? -1 },
-                    include: { product: { select: { id: true, sku: true, name: true } } },
-                }),
-            };
+            // Phase 5 5C: goods lines hang off the spine. Posting does not change
+            // them, so the rows loaded before the transaction are still the rows —
+            // reading them back out would be a round trip for the same answer. The
+            // creator's name is resolved after the commit (below), so a lookup for
+            // one display field does not sit inside the transaction.
+            const updatedWithLines = { ...updated, lines: goodsLines };
             return { result: updatedWithLines, notes: postNotes };
         // Stock-ledger walk + GL post + N account-balance updates are all
         // sequential round-trips; over the Supabase pooler this overruns the
@@ -438,13 +442,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         // After-commit pricing recompute. Failure must NOT roll back the
         // voucher — log + Sentry-capture and continue.
+        //
+        // The creator's name rides alongside it rather than after it: it is only a
+        // display field on the response, and running it in parallel with work that
+        // was happening anyway costs no extra wait. It is a different person from
+        // the poster whenever a draft is posted later by someone else, so it cannot
+        // come from the session the way the create route's can.
         const touchedProductIds = voucher.lines.map((l) => l.productId);
-        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
-            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
-            console.error("[price-recompute] failed for voucher", voucher.id, err);
-        });
+        const createdById = voucherRow?.universalVoucher?.createdById ?? null;
+        const [, creator] = await Promise.all([
+            recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
+                console.error("[price-recompute] failed for voucher", voucher.id, err);
+            }),
+            createdById != null
+                ? prisma.user.findUnique({ where: { id: createdById }, select: { name: true } })
+                : Promise.resolve(null),
+        ]);
 
-        return NextResponse.json({ ...result, _postNotes: notes });
+        return NextResponse.json({ ...result, createdBy: creator, _postNotes: notes });
     } catch (e) {
         if (e instanceof GlPostFailedError) {
             return NextResponse.json(

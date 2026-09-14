@@ -167,14 +167,42 @@ export async function engineGlArm(
     // Round once to 2dp here so the stored line and the balance delta are the
     // SAME number — the Decimal(14,2) column would round on write anyway, and an
     // unrounded delta would drift the cached Account.balance away from its lines.
+    //
+    // ONE statement for every line, not one per line. Each statement inside the
+    // transaction is a separate round trip to Supabase, and a bill's GL legs
+    // (body + CGST + SGST + one per tender + charges) add up fast. Two legs can
+    // land on the SAME ledger (two tender rows against one bank account), so the
+    // deltas are summed per account — in Postgres `numeric`, not in JS floats, so
+    // the arithmetic is exactly what N separate increments produced. `updatedAt`
+    // is stamped by hand: `@updatedAt` is a Prisma client-side feature that raw
+    // SQL does not get for free.
+    const deltaRows: { id: number; delta: string }[] = [];
     for (const l of lines) {
         const side = natureById.get(l.accountId) ?? null;
         if (!side) continue;
-        const delta = balanceDelta(side, l.type, round2(toNumber(l.amount)));
-        await tx.account.update({
-            where: { id: l.accountId },
-            data:  { balance: { increment: delta } },
+        deltaRows.push({
+            id:    l.accountId,
+            delta: balanceDelta(side, l.type, round2(toNumber(l.amount))).toFixed(2),
         });
+    }
+    if (deltaRows.length > 0) {
+        await tx.$executeRaw`
+            UPDATE "Account" AS a
+               SET "balance"   = a."balance" + v."delta",
+                   "updatedAt" = NOW()
+              FROM (
+                    -- The deltas travel as text and are cast one element at a time:
+                    -- they are exact 2dp strings, and a whole-array text[]→numeric[]
+                    -- cast is a far less certain thing to rely on than this.
+                    SELECT t."id", SUM(t."delta"::numeric) AS "delta"
+                      FROM UNNEST(
+                            ${deltaRows.map((d) => d.id)}::int[],
+                            ${deltaRows.map((d) => d.delta)}::text[]
+                           ) AS t("id", "delta")
+                     GROUP BY t."id"
+                   ) AS v
+             WHERE a."id" = v."id"
+        `;
     }
 
     // A posting dated inside an already-reconciled window invalidates that

@@ -83,21 +83,66 @@ const NAMES = {
     SUNDRY_CRED:      [ACCOUNT_GROUPS.SUNDRY_CREDITORS], // ledger fallback (rare)
 } as const;
 
-async function findLedgerByNames(tx: Tx, names: readonly string[]): Promise<LedgerLite | null> {
-    for (const n of names) {
-        const a = await tx.account.findFirst({
-            where: {
-                name: { equals: n, mode: "insensitive" },
-                personId: null, companyId: null, isActive: true,
-            },
-            select: {
-                id: true, name: true, normalBalance: true,
-                group: { select: { type: true } },
-            },
+/** Every ledger name above, flattened and de-duplicated — the one list the loader asks for. */
+const ALL_LEDGER_NAMES: readonly string[] = [
+    ...new Set(Object.values(NAMES).flatMap((v) => [...v] as string[]).map((n) => n.toLowerCase())),
+];
+
+/**
+ * Every named ledger the GL builder can possibly want, in ONE query.
+ *
+ * This used to be a query PER CANDIDATE NAME, run in a loop: resolving the body
+ * ledger alone asked for "Sales A/c", then "Sales", then "Sales Account", one
+ * round trip each, and a sale with shipping, a bill discount and round-off could
+ * spend eight trips inside the transaction before a single line was written.
+ * The whole set is at most ~30 rows, so fetching it outright is cheaper than
+ * asking even twice.
+ *
+ * Raw SQL because the match has to stay case-insensitive (a chart of accounts
+ * spelled "SALES A/C" must keep resolving, as it did under `mode: "insensitive"`),
+ * and Prisma cannot express a case-insensitive `in`.
+ *
+ * Deliberately NOT cached across requests. It is one statement, and a cache would
+ * mean that for its whole lifetime a freshly-created "Shipping Income" ledger is
+ * not found — which does not fail loudly, it quietly folds shipping into the body
+ * ledger and leaves a posting that has to be spotted by eye later.
+ */
+async function loadLedgerMap(tx: Tx): Promise<Map<string, LedgerLite>> {
+    const rows = await tx.$queryRaw<Array<{
+        id: number; name: string; normalBalance: string | null; groupType: string | null;
+    }>>`
+        SELECT a."id", a."name",
+               a."normalBalance"::text AS "normalBalance",
+               g."type"::text          AS "groupType"
+          FROM "Account" a
+          LEFT JOIN "AccountGroup" g ON g."id" = a."groupId"
+         WHERE a."personId" IS NULL
+           AND a."companyId" IS NULL
+           AND a."isActive" = true
+           AND LOWER(a."name") = ANY(${[...ALL_LEDGER_NAMES]}::text[])
+         ORDER BY a."id" ASC
+    `;
+    const map = new Map<string, LedgerLite>();
+    for (const r of rows) {
+        const key = r.name.toLowerCase();
+        // Lowest id wins, so two ledgers sharing a name resolve the same way every
+        // time. The per-name `findFirst` this replaces had no ordering at all.
+        if (map.has(key)) continue;
+        map.set(key, {
+            id:            r.id,
+            name:          r.name,
+            normalBalance: r.normalBalance as LedgerLite["normalBalance"],
+            groupType:     r.groupType as LedgerLite["groupType"],
         });
-        if (a) {
-            return { id: a.id, name: a.name, normalBalance: a.normalBalance, groupType: a.group?.type ?? null };
-        }
+    }
+    return map;
+}
+
+/** First name in `names` that the chart of accounts actually has. Pure — no I/O. */
+function pickLedger(ledgers: Map<string, LedgerLite>, names: readonly string[]): LedgerLite | null {
+    for (const n of names) {
+        const hit = ledgers.get(n.toLowerCase());
+        if (hit) return hit;
     }
     return null;
 }
@@ -297,6 +342,9 @@ export async function buildInvVoucherGlLines(
     }
 
     // ── Resolve ledgers ────────────────────────────────────────────────
+    // Every named ledger this voucher could need, in one statement — see
+    // loadLedgerMap. All the picks below are then pure map lookups.
+    const ledgers = await loadLedgerMap(tx);
     // Body ledger — Sales / Purchase / Sales Returns / Purchase Returns per kind.
     // Returns fall back to the parent ledger (Sales / Purchase) when the
     // dedicated returns ledger isn't seeded, so old installs keep working.
@@ -308,9 +356,9 @@ export async function buildInvVoucherGlLines(
     else if (isSaleReturn)         { bodyNames = NAMES.SALES_RETURNS;    bodyFallbackNames = NAMES.SALES;    bodyKindLabel = "Sales Returns"; }
     else /* isPurchaseReturn */    { bodyNames = NAMES.PURCHASE_RETURNS; bodyFallbackNames = NAMES.PURCHASE; bodyKindLabel = "Purchase Returns"; }
 
-    let bodyLedger = await findLedgerByNames(tx, bodyNames);
+    let bodyLedger = pickLedger(ledgers, bodyNames);
     if (!bodyLedger && bodyFallbackNames) {
-        bodyLedger = await findLedgerByNames(tx, bodyFallbackNames);
+        bodyLedger = pickLedger(ledgers, bodyFallbackNames);
         if (bodyLedger) notes.push(`no dedicated ${bodyKindLabel} ledger — folded into ${bodyLedger.name}`);
     }
     if (!bodyLedger) {
@@ -367,11 +415,11 @@ export async function buildInvVoucherGlLines(
         if (split.kind === "INTRA") {
             const cgst = split.cgst;
             const sgst = split.sgst;
-            const cgstLedger = await findLedgerByNames(
-                tx, isOutputTax ? NAMES.GST_OUTPUT_CGST : NAMES.GST_INPUT_CGST,
+            const cgstLedger = pickLedger(
+                ledgers, isOutputTax ? NAMES.GST_OUTPUT_CGST : NAMES.GST_INPUT_CGST,
             );
-            const sgstLedger = await findLedgerByNames(
-                tx, isOutputTax ? NAMES.GST_OUTPUT_SGST : NAMES.GST_INPUT_SGST,
+            const sgstLedger = pickLedger(
+                ledgers, isOutputTax ? NAMES.GST_OUTPUT_SGST : NAMES.GST_INPUT_SGST,
             );
             if (cgstLedger && cgst > 0) {
                 taxLegs.push({ ledger: cgstLedger, amount: cgst, label: `${isOutputTax ? "Output" : "Input"} CGST` });
@@ -386,8 +434,8 @@ export async function buildInvVoucherGlLines(
                 notes.push(`no SGST ledger — ${sgst.toFixed(2)} folded into ${bodyLedger.name}`);
             }
         } else {
-            const igstLedger = await findLedgerByNames(
-                tx, isOutputTax ? NAMES.GST_OUTPUT_IGST : NAMES.GST_INPUT_IGST,
+            const igstLedger = pickLedger(
+                ledgers, isOutputTax ? NAMES.GST_OUTPUT_IGST : NAMES.GST_INPUT_IGST,
             );
             if (igstLedger) {
                 taxLegs.push({ ledger: igstLedger, amount: split.igst, label: `${isOutputTax ? "Output" : "Input"} IGST` });
@@ -401,7 +449,7 @@ export async function buildInvVoucherGlLines(
     // Round-off ledger (optional)
     let roundOffLedger: LedgerLite | null = null;
     if (Math.abs(roundOff) >= 0.005) {
-        roundOffLedger = await findLedgerByNames(tx, NAMES.ROUND_OFF);
+        roundOffLedger = pickLedger(ledgers, NAMES.ROUND_OFF);
         if (!roundOffLedger) {
             notes.push(`no Round Off ledger — rounding of ${roundOff.toFixed(2)} folded into ${bodyLedger.name}`);
         }
@@ -413,8 +461,8 @@ export async function buildInvVoucherGlLines(
     // legacy installs that haven't seeded the ledger still post correctly.
     let shippingLedger: LedgerLite | null = null;
     if (shippingAmt > 0.005) {
-        shippingLedger = await findLedgerByNames(
-            tx, isDebtorParty ? NAMES.SHIPPING_INCOME : NAMES.SHIPPING_EXPENSE,
+        shippingLedger = pickLedger(
+            ledgers, isDebtorParty ? NAMES.SHIPPING_INCOME : NAMES.SHIPPING_EXPENSE,
         );
         if (!shippingLedger) {
             notes.push(`no ${isDebtorParty ? "Shipping Income" : "Freight Charges"} ledger — shipping of ${shippingNet.toFixed(2)} folded into ${bodyLedger.name}`);
@@ -427,8 +475,8 @@ export async function buildInvVoucherGlLines(
     // line so the JE still balances on legacy installs.
     let discountLedger: LedgerLite | null = null;
     if (discountAmt > 0.005) {
-        discountLedger = await findLedgerByNames(
-            tx, isDebtorParty ? NAMES.DISCOUNT_ALLOWED : NAMES.DISCOUNT_RECEIVED,
+        discountLedger = pickLedger(
+            ledgers, isDebtorParty ? NAMES.DISCOUNT_ALLOWED : NAMES.DISCOUNT_RECEIVED,
         );
         if (!discountLedger) {
             notes.push(`no ${isDebtorParty ? "Discount Allowed" : "Discount Received"} ledger — discount of ${discountAmt.toFixed(2)} folded into ${bodyLedger.name}`);

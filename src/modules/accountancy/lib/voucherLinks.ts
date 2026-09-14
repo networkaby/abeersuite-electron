@@ -54,15 +54,34 @@ export type VoucherLinkSet = {
 /** Dual-write every provided link for a voucher's spine in one call. Only the keys
  *  present in `links` are touched (so a partial update — e.g. just orderStatusId —
  *  leaves the others alone). */
+const LINK_KINDS = [
+    ["ticketId",        "TICKET"],
+    ["dealId",          "DEAL"],
+    ["shopOrderId",     "SHOP_ORDER"],
+    ["orderPipelineId", "ORDER_PIPELINE"],
+    ["orderStatusId",   "ORDER_STATUS"],
+] as const satisfies ReadonlyArray<readonly [keyof VoucherLinkSet, VoucherLinkKind]>;
+
 export async function syncVoucherLinks(
     tx: Prisma.TransactionClient,
     universalVoucherId: number | null | undefined,
     links: VoucherLinkSet,
+    /**
+     * `fresh` = this spine was created moments ago in this same transaction.
+     *
+     * It cannot have a link to clear, so a null target on a fresh voucher is
+     * nothing to do. Without this, every plain sale paid for two `voucherLink`
+     * lookups — one for ORDER_PIPELINE and one for ORDER_STATUS — searching a
+     * row that by definition did not exist. Two round trips on the busiest write
+     * in the app, for an answer known in advance.
+     */
+    opts: { fresh?: boolean } = {},
 ): Promise<void> {
     if (universalVoucherId == null) return;
-    if ("ticketId"        in links) await syncVoucherLink(tx, universalVoucherId, "TICKET",         links.ticketId);
-    if ("dealId"          in links) await syncVoucherLink(tx, universalVoucherId, "DEAL",           links.dealId);
-    if ("shopOrderId"     in links) await syncVoucherLink(tx, universalVoucherId, "SHOP_ORDER",     links.shopOrderId);
-    if ("orderPipelineId" in links) await syncVoucherLink(tx, universalVoucherId, "ORDER_PIPELINE", links.orderPipelineId);
-    if ("orderStatusId"   in links) await syncVoucherLink(tx, universalVoucherId, "ORDER_STATUS",   links.orderStatusId);
+    for (const [key, kind] of LINK_KINDS) {
+        if (!(key in links)) continue;
+        const targetId = links[key];
+        if (targetId == null && opts.fresh) continue;
+        await syncVoucherLink(tx, universalVoucherId, kind, targetId);
+    }
 }

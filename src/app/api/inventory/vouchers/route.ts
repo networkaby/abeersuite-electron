@@ -539,39 +539,44 @@ export async function POST(req: NextRequest) {
             { status: 400 },
         );
     }
+    // Everything the save needs from the database BEFORE the transaction opens, in
+    // ONE round trip instead of four in a row. None of these depend on each other:
+    // the branch's state, the party's state, the party's ledger and the item names
+    // are four independent questions that used to be asked one after the other,
+    // each waiting for the last to come back from Supabase.
+    const isCustomer = partyType === "customer" && !!partyId;
+    const isCompany  = partyType === "company"  && !!partyId;
+    const productIds = [...new Set(lines.map((l) => l.productId))];
+    const [branch, partyPerson, partyCompany, partyAccount, productsForResponse] = await Promise.all([
+        resolvedPlaceOfSupply ? null : prisma.branch.findUnique({ where: { id: branchId }, select: { gstStateCode: true } }),
+        !resolvedPlaceOfSupply && isCustomer
+            ? prisma.person.findUnique({ where: { id: partyId }, select: { gstin: true, gstStateCode: true, shippingStateCode: true } })
+            : null,
+        !resolvedPlaceOfSupply && isCompany
+            ? prisma.company.findUnique({ where: { id: partyId }, select: { gstin: true, gstStateCode: true, shippingStateCode: true } })
+            : null,
+        // Resolve the canonical ledger account from the party identity so accountId is
+        // always populated — not just the legacy partyType/partyId pair. (Account.personId
+        // / companyId are unique.)
+        isCustomer ? prisma.account.findUnique({ where: { personId: partyId }, select: { id: true } })
+            : isCompany ? prisma.account.findUnique({ where: { companyId: partyId }, select: { id: true } })
+                : null,
+        // Only to dress the response's `lines[].product`; fetched here so the
+        // transaction does not have to read back the rows it just wrote.
+        productIds.length > 0
+            ? prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, sku: true, name: true } })
+            : [],
+    ]);
+
     if (!resolvedPlaceOfSupply) {
-        const branch = await prisma.branch.findUnique({
-            where: { id: branchId },
-            select: { gstStateCode: true },
-        });
         const org = getOrganisation();
         const sellerState = (branch?.gstStateCode || org.gstStateCode || "").trim();
-        let party: { gstin: string | null; gstStateCode: string | null; shippingStateCode: string | null } | null = null;
-        if (partyType === "customer" && partyId) {
-            party = await prisma.person.findUnique({
-                where: { id: partyId },
-                select: { gstin: true, gstStateCode: true, shippingStateCode: true },
-            });
-        } else if (partyType === "company" && partyId) {
-            party = await prisma.company.findUnique({
-                where: { id: partyId },
-                select: { gstin: true, gstStateCode: true, shippingStateCode: true },
-            });
-        }
-        resolvedPlaceOfSupply = resolveBuyerStateCode(party, sellerState, resolvedDeliveryMode);
+        resolvedPlaceOfSupply = resolveBuyerStateCode(partyPerson ?? partyCompany, sellerState, resolvedDeliveryMode);
     }
 
     const userId = user!.id;
-
-    // Resolve the canonical ledger account from the party identity so accountId is
-    // always populated — not just the legacy partyType/partyId pair. (Account.personId
-    // / companyId are unique.)
-    let resolvedAccountId: number | null = null;
-    if (partyType === "customer" && partyId) {
-        resolvedAccountId = (await prisma.account.findUnique({ where: { personId: partyId }, select: { id: true } }))?.id ?? null;
-    } else if (partyType === "company" && partyId) {
-        resolvedAccountId = (await prisma.account.findUnique({ where: { companyId: partyId }, select: { id: true } }))?.id ?? null;
-    }
+    const resolvedAccountId: number | null = partyAccount?.id ?? null;
+    const productById = new Map(productsForResponse.map((p) => [p.id, p]));
 
     // Orders ride the unified Orders pipeline (P7) so they show on the Orders board
     // AND get an entry stage (New) — which is what makes them editable (order edits
@@ -637,11 +642,14 @@ export async function POST(req: NextRequest) {
                     settlementJson: buildSettlementJson(tenders, charges),
                 },
             });
-            // 5D-2: creator name comes from the spine's createdById — resolve it for
-            // the response shape (the create response carried `createdBy.name`).
-            const creator = await tx.user.findUnique({ where: { id: userId }, select: { name: true } });
+            // 5D-2: creator name comes from the spine's createdById — which on a
+            // create is always the person making the request, so it comes from the
+            // session instead of a lookup for a name we were already holding.
+            const creator = { name: session?.user?.name ?? null };
             // Phase 5 5C: goods lines hang off the spine (universalVoucherId).
-            await tx.voucherInventoryLine.createMany({
+            // A pure-service invoice (charges only, no stock item) has none — skip
+            // the statement rather than send an empty insert.
+            const createdLines = computedLines.length === 0 ? [] : await tx.voucherInventoryLine.createManyAndReturn({
                 data: computedLines.map((l) => ({
                     universalVoucherId: spineId,
                     productId:   l.productId,
@@ -658,12 +666,14 @@ export async function POST(req: NextRequest) {
                     amount:      l.amount,
                 })),
             });
-            const lines = await tx.voucherInventoryLine.findMany({
-                where:   { universalVoucherId: spineId },
-                include: { product: { select: { id: true, sku: true, name: true } } },
-            });
+            // `createManyAndReturn` hands back the rows it just wrote, so the
+            // response is dressed from them and the product names fetched before the
+            // transaction — instead of reading the same rows straight back out.
+            const lines = createdLines.map((l) => ({ ...l, product: productById.get(l.productId) ?? null }));
             // Phase 5 5A: dual-write the order-pipeline link (SALES_ORDER rides the board).
-            await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId });
+            // `fresh` — the spine was created just above, so a null link is nothing
+            // to clear (see syncVoucherLinks).
+            await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId }, { fresh: true });
             return { ...created, lines, createdBy: creator };
         });
 
