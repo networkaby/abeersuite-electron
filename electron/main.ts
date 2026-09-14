@@ -421,11 +421,44 @@ function createSystemTray(): void {
     tray = new Tray(icon);
     tray.setToolTip(`AbeerSuite POS (Port ${PORT})`);
 
+    // "Up to date" is not a phase the updater keeps — a check that finds nothing just
+    // goes back to idle. The tray holds the good news itself for a few seconds so a
+    // click is never answered by a menu that looks exactly like it did before.
+    let upToDateUntil = 0;
+    let upToDateTimer: NodeJS.Timeout | null = null;
+
+    const updateItemLabel = (): { label: string; enabled: boolean } => {
+        const state = getUpdateState();
+        switch (state.phase) {
+            case "checking":
+                return { label: "Checking for updates…", enabled: false };
+            case "downloading":
+                return {
+                    label:
+                        state.percent === null
+                            ? "Downloading update…"
+                            : `Downloading update ${Math.round(state.percent)}%`,
+                    enabled: false,
+                };
+            case "ready":
+                return { label: `Update ready${state.version ? ` — v${state.version}` : ""}`, enabled: true };
+            case "installing":
+                return { label: "Installing update…", enabled: false };
+            case "error":
+                return { label: "Check for updates (last check failed)", enabled: true };
+            default:
+                return upToDateUntil > Date.now()
+                    ? { label: "You are up to date", enabled: false }
+                    : { label: "Check for updates", enabled: true };
+        }
+    };
+
     const updateContextMenu = () => {
         const autoStart = isAutoStartEnabled();
+        const updateItem = updateItemLabel();
         const contextMenu = Menu.buildFromTemplate([
             {
-                label: "Open AbeerSuite",
+                label: `Open AbeerSuite ${app.getVersion()}`,
                 click: () => showMainWindow(),
             },
             {
@@ -449,9 +482,27 @@ function createSystemTray(): void {
                 },
             },
             {
-                label: "Check for updates",
+                label: updateItem.label,
+                enabled: updateItem.enabled,
                 click: () => {
-                    void checkNow("tray");
+                    // A ready update is not restarted from here: the window's update
+                    // prompt knows whether a cart is open and asks first. The tray only
+                    // carries the news and puts that prompt in front of the owner.
+                    if (getUpdateState().phase === "ready") {
+                        showMainWindow();
+                        return;
+                    }
+                    upToDateUntil = 0;
+                    void checkNow("tray").then(() => {
+                        if (getUpdateState().phase !== "idle") return;
+                        upToDateUntil = Date.now() + 5000;
+                        updateContextMenu();
+                        if (upToDateTimer) clearTimeout(upToDateTimer);
+                        upToDateTimer = setTimeout(() => {
+                            upToDateTimer = null;
+                            updateContextMenu();
+                        }, 5000);
+                    });
                     showMainWindow();
                 },
             },
@@ -468,6 +519,10 @@ function createSystemTray(): void {
     };
 
     updateContextMenu();
+
+    // Every phase change (checking → downloading → ready) redraws the menu, so the
+    // label is right even when the check was not started from the tray.
+    onUpdateState(() => updateContextMenu());
 
     tray.on("click", () => {
         if (!mainWindow || mainWindow.isDestroyed()) {
@@ -929,7 +984,7 @@ import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
-import { setupAutoUpdater, stopAutoUpdater, getUpdateState, install, checkNow, setCartBusy, clearUpdateSplash } from "./updateManager";
+import { setupAutoUpdater, stopAutoUpdater, getUpdateState, onUpdateState, install, checkNow, setCartBusy, clearUpdateSplash } from "./updateManager";
 import { repairAfterSwap } from "./stagedUpdate";
 import { attachZoom, fitToScreen, stepZoom, readDisplayPreference, writeDisplayPreference, applyPreferenceToAllWindows, resolveZoomFactor, ZOOM_STEPS } from "./displayPreference";
 

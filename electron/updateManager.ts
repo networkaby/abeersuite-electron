@@ -118,9 +118,28 @@ export function getUpdateState(): UpdateState {
     return { ...state };
 }
 
+/**
+ * Main-process listeners on the same state the renderer gets. The tray uses this:
+ * its menu is built in the main process, so it cannot listen on the IPC channel.
+ */
+const stateListeners = new Set<(state: UpdateState) => void>();
+
+export function onUpdateState(listener: (state: UpdateState) => void): () => void {
+    stateListeners.add(listener);
+    return () => stateListeners.delete(listener);
+}
+
 function broadcast(): void {
     for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send("update:state", getUpdateState());
+    }
+    const snapshot = getUpdateState();
+    for (const listener of stateListeners) {
+        try {
+            listener(snapshot);
+        } catch (err) {
+            console.error("[Updater] A state listener threw:", err);
+        }
     }
 }
 
