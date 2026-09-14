@@ -1,30 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { OrgNode } from "@/shared/types/orgChart";
+import UserAvatar from "@/shared/components/UserAvatar";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
-
-const AVATAR_COLOR: Record<string, string> = {
-    R1: "bg-purple-100 text-purple-700",
-    R2: "bg-blue-100 text-blue-700",
-    R3: "bg-green-100 text-green-700",
-    R4: "bg-orange-100 text-orange-700",
-    R5: "bg-pink-100 text-pink-700",
-};
-
-function avatarBg(role: string | null) {
-    return (role ? AVATAR_COLOR[role] : null) ?? "bg-gray-100 text-gray-600";
-}
 
 function containsHighlight(node: OrgNode, id: number): boolean {
     return node.id === id || node.children.some(c => containsHighlight(c, id));
@@ -33,31 +17,7 @@ function containsHighlight(node: OrgNode, id: number): boolean {
 // ── Avatar (photo or initials fallback) ──────────────────────────────────────
 
 function NodeAvatar({ node, sizePx = 40 }: { node: OrgNode; sizePx?: number }) {
-    const [imgError, setImgError] = useState(false);
-
-    if (node.avatarUrl && !imgError) {
-        return (
-            <div className="rounded-full overflow-hidden shrink-0" style={{ width: sizePx, height: sizePx }}>
-                <Image
-                    src={node.avatarUrl}
-                    alt={node.name}
-                    width={sizePx}
-                    height={sizePx}
-                    className="object-cover w-full h-full"
-                    onError={() => setImgError(true)}
-                />
-            </div>
-        );
-    }
-
-    return (
-        <div
-            className={`flex shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarBg(node.role)}`}
-            style={{ width: sizePx, height: sizePx }}
-        >
-            {initials(node.name)}
-        </div>
-    );
+    return <UserAvatar avatarUrl={node.avatarUrl} name={node.name} role={node.role} sizePx={sizePx} />;
 }
 
 // ── Node wrapper (owns open/close state) ──────────────────────────────────────

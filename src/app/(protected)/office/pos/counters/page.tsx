@@ -25,6 +25,7 @@ import { fmt } from "@/utils/constants";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { initials } from "@/shared/lib/format/initials";
 
 type Person = { id: number; name: string };
 
@@ -63,9 +64,6 @@ const since  = (iso: string) => {
     const h = Math.floor(mins / 60), m = mins % 60;
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
-const initials = (name: string) =>
-    name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
-
 export default function CountersStatusPage() {
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];

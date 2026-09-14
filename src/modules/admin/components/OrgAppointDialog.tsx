@@ -14,6 +14,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { initials } from "@/shared/lib/format/initials";
 
 interface UserHit {
     id: number;
@@ -30,10 +31,6 @@ interface Props {
     existingHolderIds: number[];
     onClose: () => void;
     onAppointed: () => void;
-}
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 export default function OrgAppointDialog({

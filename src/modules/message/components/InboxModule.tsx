@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { INBOX_MESSAGES_POLL_MS } from "@/shared/lib/constants/polling";
 import { writeCache } from "@/shared/lib/browser/pollCache";
+import { initials } from "@/shared/lib/format/initials";
 
 /** Cross-tab mirror of "which room is open" — see `GlobalInboxListener.tsx`'s reader. */
 const ACTIVE_ROOM_KEY = "inbox-active-room:v1";
@@ -73,10 +74,6 @@ function playNotificationSound() {
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.45);
     } catch { /* unsupported — silently skip */ }
-}
-
-function initials(name: string) {
-    return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 /** Returns true when this message should start a new visual group (new avatar + name row). */

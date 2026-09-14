@@ -27,12 +27,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
+import { initials } from "@/shared/lib/format/initials";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
 
 const AVATAR_COLOR: Record<string, string> = {
     R1: "bg-purple-100 text-purple-700 ring-purple-200",

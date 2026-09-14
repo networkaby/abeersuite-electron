@@ -20,12 +20,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { Crown, Building2, Layers, Briefcase, Users, AlertCircle } from "lucide-react";
 import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
+import { initials } from "@/shared/lib/format/initials";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
 
 const AVATAR_COLOR: Record<string, string> = {
     R1: "bg-purple-200 text-purple-900",

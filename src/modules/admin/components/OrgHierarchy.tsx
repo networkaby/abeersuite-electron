@@ -22,7 +22,6 @@
 // dotted divs anchored on parent and child nodes.
 
 import { useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
     Building2, Layers, Briefcase, Users, AlertCircle,
@@ -30,19 +29,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
+import UserAvatar from "@/shared/components/UserAvatar";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
-
-const AVATAR_COLOR: Record<string, string> = {
-    R1: "bg-purple-100 text-purple-700",
-    R2: "bg-blue-100 text-blue-700",
-    R3: "bg-green-100 text-green-700",
-    R4: "bg-orange-100 text-orange-700",
-};
 
 type NodeId = string; // synthetic for tier 1/2, real IDs for tier 3
 
@@ -56,26 +45,7 @@ const deptId   = (b: string, d: string | "no-dept") => `dept::${b}::${d}`;
 // ── Holder avatar ─────────────────────────────────────────────────────────────
 
 function HolderAvatar({ user, size = 22 }: { user: PositionNode["holders"][number]["user"]; size?: number }) {
-    const [imgErr, setImgErr] = useState(false);
-    if (user.avatarUrl && !imgErr) {
-        return (
-            <Image
-                src={user.avatarUrl} alt={user.name} width={size} height={size}
-                style={{ width: size, height: size }}
-                className="rounded-full object-cover ring-2 ring-card"
-                onError={() => setImgErr(true)}
-            />
-        );
-    }
-    const cls = user.role ? (AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600") : "bg-gray-100 text-gray-600";
-    return (
-        <div
-            style={{ width: size, height: size, fontSize: size * 0.4 }}
-            className={`flex shrink-0 items-center justify-center rounded-full font-bold ring-2 ring-card ${cls}`}
-        >
-            {initials(user.name)}
-        </div>
-    );
+    return <UserAvatar avatarUrl={user.avatarUrl} name={user.name} role={user.role} sizePx={size} className="ring-2 ring-card" />;
 }
 
 // ── Node card variants ────────────────────────────────────────────────────────
