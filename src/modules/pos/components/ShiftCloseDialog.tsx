@@ -387,12 +387,13 @@ export function ShiftCloseDialog({
 
                                         <div className="space-y-1">
                                             <Label htmlFor="close-notes">Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                                            <Input
+                                            <Textarea
                                                 id="close-notes"
                                                 value={notes}
                                                 onChange={(e) => setNotes(e.target.value)}
-                                                placeholder="e.g. Safe drop already done"
-                                                className="h-9"
+                                                placeholder="e.g. Safe drop already done or handover notes"
+                                                rows={3}
+                                                className="resize-none overflow-y-auto text-sm"
                                             />
                                         </div>
                                     </div>
