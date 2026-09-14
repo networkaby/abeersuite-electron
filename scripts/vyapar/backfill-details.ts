@@ -62,7 +62,8 @@ async function main(): Promise<void> {
     const from = arg("--from") ?? date;
     const to = arg("--to") ?? date;
     if (!from || !to) throw new Error("pass --date YYYY-MM-DD, or --from and --to");
-    if (type !== "SALE") throw new Error(`only SALE is modelled so far (asked for ${type})`);
+    const K = KINDS[type];
+    if (!K) throw new Error(`no model for ${type} — one of ${Object.keys(KINDS).join(", ")}`);
 
     const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "");
     if (!url) throw new Error("no DIRECT_URL / DATABASE_URL");
@@ -73,7 +74,7 @@ async function main(): Promise<void> {
     const c = await pool.connect();
     try {
         // Ledgers the replay's spec builder posts a sale against (voucherSpec.ts).
-        const L = await ledgers(c, ["Sales A/c", "CGST", "SGST", "IGST", "Discount Allowed", "Loyalty Points Redeemed", "Shipping Income", "Round Off"]);
+        const L = await ledgers(c, [...new Set([...K.value, K.discount, K.shipping, K.loyalty, "CGST", "SGST", "IGST", "Round Off"].filter((n): n is string => !!n))]);
 
         const spines = (await c.query(
             `select u.id, u."voucherNo", u.date::text as date, u."partyAccountId", u.status
@@ -90,7 +91,7 @@ async function main(): Promise<void> {
         for (const s of spines) {
             const label = `${s.voucherNo ?? "UV-" + s.id} (${s.date.slice(0, 10)}, spine ${s.id})`;
             try {
-                const plan = await buildPlan(c, s, L);
+                const plan = await buildPlan(c, s, L, K);
                 console.log(`${label}: ${plan.lines.length} line(s), total ${inr(plan.totalAmount)}, party ${plan.partyName ?? "—"}, tenders ${plan.tenders.length}${plan.notes.length ? " · " + plan.notes.join("; ") : ""}`);
                 if (apply) {
                     await writePlan(c, s.id, plan);
@@ -118,6 +119,24 @@ async function ledgers(c: PoolClient, names: string[]): Promise<Record<string, n
     return out;
 }
 
+/**
+ * How the replay (voucherSpec.ts) lays each kind out on the ledger. `sign` is
+ * the side the VALUE sits on: +1 when the goods value is a DEBIT (a purchase),
+ * -1 when it is a CREDIT (a sale). Tenders and the party's own leg sit on the
+ * opposite side; discount on the same side as tenders.
+ */
+type Kind = {
+    sign: 1 | -1;
+    /** Ledger(s) carrying the goods value. The first is where an un-itemised bill's value goes as a charge. */
+    value: string[];
+    discount: string; shipping: string | null; loyalty: string | null;
+    stockCol: "inQty" | "outQty";
+};
+const KINDS: Record<string, Kind> = {
+    SALE:     { sign: -1, value: ["Sales A/c"], discount: "Discount Allowed", shipping: "Shipping Income", loyalty: "Loyalty Points Redeemed", stockCol: "outQty" },
+    PURCHASE: { sign: +1, value: ["Purchase A/c", "Repair & Maintenance"], discount: "Income Discount Received", shipping: "Exp Freight Inward (Purchase Courier)", loyalty: null, stockCol: "inQty" },
+};
+
 type Plan = {
     lines: Array<{ productId: number; quantity: number; rate: number; taxRate: number; taxAmount: number; amount: number }>;
     subtotal: number; taxAmount: number; totalAmount: number;
@@ -129,7 +148,7 @@ type Plan = {
     notes: string[];
 };
 
-async function buildPlan(c: PoolClient, s: { id: number; partyAccountId: number | null }, L: Record<string, number>): Promise<Plan> {
+async function buildPlan(c: PoolClient, s: { id: number; partyAccountId: number | null }, L: Record<string, number>, K: Kind): Promise<Plan> {
     const notes: string[] = [];
     const legs = (await c.query(
         `select id, "accountId", type, amount::float8 as amount, description from "VoucherGlLine" where "universalVoucherId" = $1 order by seq, id`,
@@ -137,32 +156,35 @@ async function buildPlan(c: PoolClient, s: { id: number; partyAccountId: number 
     )).rows as GlLeg[];
     if (legs.length === 0) throw new Error("no GL legs");
     const stock = (await c.query(
-        `select "productId", "outQty"::float8 as qty, amount::float8 as amount from "InvStockLedger" where "universalVoucherId" = $1 order by id`,
+        `select "productId", "${K.stockCol}"::float8 as qty, amount::float8 as amount from "InvStockLedger" where "universalVoucherId" = $1 order by id`,
         [s.id],
     )).rows as StockRow[];
 
     const sum = (pred: (l: GlLeg) => boolean) => r2(legs.filter(pred).reduce((t, l) => t + (l.type === "DEBIT" ? l.amount : -l.amount), 0));
-    const credit = (acct: number) => -sum((l) => l.accountId === acct);   // credits positive
-    const taxable   = credit(L["Sales A/c"]);
-    const tax       = r2(credit(L.CGST) + credit(L.SGST) + credit(L.IGST));
-    const shipping  = credit(L["Shipping Income"]);
-    const discount  = sum((l) => l.accountId === L["Discount Allowed"]);
-    const loyalty   = sum((l) => l.accountId === L["Loyalty Points Redeemed"]);
+    // Amounts on the VALUE side read positive: for a sale that is the credit side,
+    // for a purchase the debit side.
+    const onValueSide = (acct: number) => r2(K.sign * sum((l) => l.accountId === acct));
+    const taxable   = r2(K.value.reduce((t, n) => t + onValueSide(L[n]), 0));
+    const tax       = r2(onValueSide(L.CGST) + onValueSide(L.SGST) + onValueSide(L.IGST));
+    const shipping  = K.shipping ? onValueSide(L[K.shipping]) : 0;
+    const discount  = -onValueSide(L[K.discount]);
+    const loyalty   = K.loyalty ? -onValueSide(L[K.loyalty]) : 0;
     const roundLeg  = sum((l) => l.accountId === L["Round Off"]);
     const partyAcct = s.partyAccountId;
-    const known = new Set([L["Sales A/c"], L.CGST, L.SGST, L.IGST, L["Shipping Income"], L["Discount Allowed"], L["Loyalty Points Redeemed"], L["Round Off"]]);
-    // What the customer settled or owes: every debit leg that is not a known
-    // sale-side ledger. The party's own leg is the outstanding (AR) row.
+    const known = new Set(Object.values(L));
+    // What the party settled or owes: every leg on the tender side that is not a
+    // known value-side ledger. The party's own leg is the outstanding (AR/AP) row.
+    const tenderSide = K.sign === -1 ? "DEBIT" : "CREDIT";
     const tenders = legs
-        .filter((l) => l.type === "DEBIT" && !known.has(l.accountId))
+        .filter((l) => l.type === tenderSide && !known.has(l.accountId))
         .map((l) => ({ accountId: l.accountId, amount: r2(l.amount), method: null as null, reference: null as null }));
     const totalAmount = r2(tenders.reduce((t, x) => t + x.amount, 0));
     // A bill discounted to nothing has no tender or outstanding leg at all —
     // two such sales exist (100% Discount Allowed against the sale value).
     if (totalAmount <= 0 && discount + loyalty <= 0) throw new Error("no tender / outstanding leg — nothing was received or owed");
     if (totalAmount <= 0) notes.push("zero-total bill (fully discounted)");
-    const stray = legs.filter((l) => l.type === "CREDIT" && !known.has(l.accountId) && l.accountId !== partyAcct);
-    if (stray.length) notes.push(`unexpected credit leg(s) on account ${stray.map((l) => l.accountId).join(",")}`);
+    const stray = legs.filter((l) => l.type !== tenderSide && !known.has(l.accountId) && l.accountId !== partyAcct);
+    if (stray.length) notes.push(`unexpected value-side leg(s) on account ${stray.map((l) => l.accountId).join(",")}`);
 
     // Goods lines from the stock rows. Tax is spread by ex-tax value; the last
     // line takes the rounding so Σ taxAmount equals the tax legs exactly.
@@ -185,16 +207,18 @@ async function buildPlan(c: PoolClient, s: { id: number; partyAccountId: number 
             amount:    r2(value + lineTax),
         });
     });
-    if (stock.length && Math.abs(stockValue - taxable) > 0.02) notes.push(`stock value ${inr(stockValue)} ≠ sales leg ${inr(taxable)}`);
+    if (stock.length && Math.abs(stockValue - taxable) > 0.02) notes.push(`stock value ${inr(stockValue)} ≠ value leg ${inr(taxable)}`);
 
     const charges: Plan["charges"] = [];
     if (!stock.length && taxable > 0) {
         // Vyapar allows an invoice with a total and no items. Carry its value as a
-        // charge to Sales A/c so the form has one row and the total still foots.
-        charges.push({ accountId: L["Sales A/c"], amount: taxable, description: "Un-itemised sale (Vyapar)", taxAmount: tax || null });
-        notes.push("no goods lines — value carried as a Sales A/c charge");
+        // charge to the ledger the replay used, so the form has one row and the
+        // total still foots. (An un-itemised purchase went to Repair & Maintenance.)
+        const acct = K.value.map((n) => L[n]).find((id) => onValueSide(id) > 0) ?? L[K.value[0]];
+        charges.push({ accountId: acct, amount: taxable, description: "Un-itemised bill (Vyapar)", taxAmount: tax || null });
+        notes.push("no goods lines — value carried as a charge");
     }
-    if (loyalty > 0) charges.push({ accountId: L["Loyalty Points Redeemed"], amount: -loyalty, description: "Loyalty points redeemed", taxAmount: null });
+    if (K.loyalty && loyalty > 0) charges.push({ accountId: L[K.loyalty], amount: -loyalty, description: "Loyalty points redeemed", taxAmount: null });
 
     // calcVoucherTotals: subtotal = Σ line.amount (incl. tax);
     // total = subtotal + shipping − discount + roundOff + chargesNet.
