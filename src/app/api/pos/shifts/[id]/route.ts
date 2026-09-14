@@ -84,9 +84,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // ₹0 while the shift still carries them). The detail page uses the counts
         // to know whether the shift can be deleted.
         const movements = await listShiftMovements(prisma, shift.id);
-        const tillBookBalancePaise = effectiveBalancePaise(shift.counter.tillAccount);
         const dropsPaise           = sumPaise(shift.drops);
         const expendituresPaise    = sumPaise(movements.expenditures);
+
+        // For a closed shift with recorded expected cash, reconstruct the till's book balance
+        // at close time (expectedCashPaise + dropsPaise) before the closing Contra sweep ran.
+        // For an open / in-progress shift, read the live drawer figure straight off the till account.
+        const tillBookBalancePaise = (shift.status === "CLOSED" && shift.expectedCashPaise != null)
+            ? shift.expectedCashPaise + dropsPaise
+            : effectiveBalancePaise(shift.counter.tillAccount);
 
         // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
         // Resolve them by id to keep the old response shape the UI consumes.
