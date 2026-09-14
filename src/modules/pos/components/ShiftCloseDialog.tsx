@@ -439,8 +439,11 @@ export function ShiftCloseDialog({
                                             </div>
                                         </div>
 
-                                        {/* Shift Close Inputs */}
-                                        <div className="space-y-3">
+                                        {/* Reconciliation & Closing Inputs Card */}
+                                        <div className="rounded-md border border-border bg-muted/40 p-3 text-xs sm:text-sm space-y-3">
+                                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                                Physical Count & Reconciliation
+                                            </p>
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-baseline">
                                                     <Label htmlFor="declared-amt">Physical count (₹)</Label>
@@ -468,7 +471,7 @@ export function ShiftCloseDialog({
                                                         onFocus={(e) => e.target.select()}
                                                         onClick={(e) => e.currentTarget.select()}
                                                         placeholder="0 (sweeps all to vault)"
-                                                        className="h-9 font-mono"
+                                                        className="h-9 font-mono bg-background"
                                                     />
                                                 </div>
                                             ) : (
@@ -481,7 +484,7 @@ export function ShiftCloseDialog({
                                                         onFocus={(e) => e.target.select()}
                                                         onClick={(e) => e.currentTarget.select()}
                                                         placeholder="0"
-                                                        className="h-9 font-mono"
+                                                        className="h-9 font-mono bg-background"
                                                     />
                                                 </div>
                                             )}
@@ -510,7 +513,7 @@ export function ShiftCloseDialog({
                                                             value={selectedUserId?.toString() ?? ""}
                                                             onValueChange={(v) => setSelectedUserId(Number(v))}
                                                         >
-                                                            <SelectTrigger className="h-9">
+                                                            <SelectTrigger className="h-9 bg-background">
                                                                 <SelectValue placeholder="Select cashier…" />
                                                             </SelectTrigger>
                                                             <SelectContent>
