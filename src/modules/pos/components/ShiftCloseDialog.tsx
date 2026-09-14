@@ -10,13 +10,13 @@
 // After a successful vault close, the form swaps to a closing report that
 // shows the full cash reconciliation summary and GL references.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     Loader2, ArrowRightLeft, TrendingUp, TrendingDown,
-    CheckCheck, Users, Vault, Printer, CircleCheck,
-    Banknote, Calculator, ShieldCheck, CreditCard, Receipt, FileText,
+    CheckCheck, Users, Vault,
+    Banknote, Calculator, ShieldCheck, CreditCard, Receipt,
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
@@ -34,6 +34,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { parseDigitsInput, parseDecimalInput } from "@/shared/lib/format";
 import { toDateTimeLocalInput } from "@/shared/lib/format/dateInput";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
+import { FooterToggle } from "@/modules/accountancy/components/FooterToggle";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,9 @@ type Mode = "vault" | "handover";
 // edited in Settings → Org Defaults).
 const DEFAULT_DENOMS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 
+const PRINT_AFTER_SAVE_KEY = "pos_shift_print_after_save";
+const THERMAL_KEY          = "pos_shift_print_thermal";
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ShiftCloseDialog({
@@ -174,16 +178,42 @@ export function ShiftCloseDialog({
     const [loadingCandidates, setLoadingCandidates] = useState(false);
     const [selectedUserId, setSelectedUserId]       = useState<number | null>(null);
 
-    // After successful vault close — swap form for report.
-    const [report, setReport] = useState<ClosedReport | null>(null);
-    const reportRef           = useRef<HTMLDivElement>(null);
+    // Print after save + Thermal toggles (persisted in localStorage)
+    const [printAfterSave, setPrintAfterSave] = useState(() => {
+        if (typeof window === "undefined") return true;
+        try {
+            const stored = window.localStorage.getItem(PRINT_AFTER_SAVE_KEY);
+            return stored !== null ? stored === "true" : true;
+        } catch {
+            return true;
+        }
+    });
+
+    const [thermal, setThermal] = useState(() => {
+        if (typeof window === "undefined") return true;
+        try {
+            const stored = window.localStorage.getItem(THERMAL_KEY);
+            return stored !== null ? stored === "true" : true;
+        } catch {
+            return true;
+        }
+    });
+
+    const updatePrintAfterSave = (val: boolean) => {
+        setPrintAfterSave(val);
+        try { window.localStorage.setItem(PRINT_AFTER_SAVE_KEY, String(val)); } catch { /* ignore */ }
+    };
+
+    const updateThermal = (val: boolean) => {
+        setThermal(val);
+        try { window.localStorage.setItem(THERMAL_KEY, String(val)); } catch { /* ignore */ }
+    };
 
     useEffect(() => {
-        if (!open) { setReport(null); return; }
+        if (!open) return;
         setLoading(true);
         setMode("vault");
         setSelectedUserId(null);
-        setReport(null);
         setDenoms({});
         setOtherCash("");
         // null = open shift closed from the detail page: default to now, still editable.
@@ -239,8 +269,12 @@ export function ShiftCloseDialog({
                 // Local wall-clock → ISO instant, so the server stores the exact moment.
                 closedAt:           initialClosedAt !== undefined ? new Date(closedAt).toISOString() : undefined,
             });
-            onClosed();          // refresh parent (clears ActiveShiftBar)
-            setReport(data);     // swap form → report
+            toast.success(`Shift #${shiftId} closed successfully`);
+            if (printAfterSave) {
+                printShiftCloseReport(data, thermal);
+            }
+            onClosed();
+            onOpenChange(false);
         } catch (e: unknown) {
             toast.error(extractApiError(e, "Failed to close shift"));
         } finally {
@@ -270,34 +304,6 @@ export function ShiftCloseDialog({
         }
     };
 
-    const handlePrint = () => {
-        const el = reportRef.current;
-        if (!el) return;
-        const win = window.open("", "_blank", "width=420,height=640");
-        if (!win) return;
-        win.document.write(`
-            <html><head><title>Shift #${report?.id} Closing Report</title>
-            <style>
-                body { font-family: 'Courier New', monospace; font-size: 12px; padding: 16px; color: #000; }
-                h2 { font-size: 15px; margin: 0 0 4px; }
-                .sub { font-size: 11px; color: #555; margin-bottom: 12px; }
-                hr { border: none; border-top: 1px dashed #999; margin: 8px 0; }
-                .row { display: flex; justify-content: space-between; margin: 3px 0; }
-                .row.bold { font-weight: bold; }
-                .row.over  { color: #166534; }
-                .row.short { color: #991b1b; }
-                .row.zero  { color: #166534; }
-                .label { flex: 1; }
-                .val { text-align: right; min-width: 90px; }
-                .ref { font-size: 10px; color: #555; margin-top: 2px; }
-                @media print { body { padding: 0; } }
-            </style></head><body>${el.innerHTML}</body></html>
-        `);
-        win.document.close();
-        win.focus();
-        win.print();
-    };
-
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <Dialog open={open} onOpenChange={(v) => { if (!submitting) onOpenChange(v); }}>
@@ -308,52 +314,24 @@ export function ShiftCloseDialog({
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
-
-                {/* ── Report view (post-close) ── */}
-                {report ? (
-                    <>
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                                <CircleCheck size={18} /> Shift #{report.id} closed
-                            </DialogTitle>
-                            <DialogDescription>
-                                {report.counter.name} · {report.branch.name}
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div className="flex-1 overflow-y-auto pr-1">
-                            <CloseReport report={report} ref={reportRef} />
+                <DialogHeader className="pb-1">
+                    <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-sm border border-emerald-300/40">
+                            <Vault size={18} />
                         </div>
+                        <div>
+                            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+                                {allowHandover ? "Close shift" : "Force close shift"}
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                {forCashierName
+                                    ? `Count the physical cash and close ${forCashierName}'s shift on their behalf.`
+                                    : "Count the physical cash in the drawer and choose how to close."}
+                            </DialogDescription>
+                        </div>
+                    </div>
+                </DialogHeader>
 
-                        <DialogFooter className="pt-2 border-t border-border gap-2">
-                            <Button variant="outline" size="sm" onClick={handlePrint}>
-                                <Printer size={13} /> Print
-                            </Button>
-                            <Button onClick={() => onOpenChange(false)} className="bg-green-600 hover:bg-green-700 text-white">
-                                Done
-                            </Button>
-                        </DialogFooter>
-                    </>
-                ) : (
-                    /* ── Close form ── */
-                    <>
-                        <DialogHeader className="pb-1">
-                            <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-sm border border-emerald-300/40">
-                                    <Vault size={18} />
-                                </div>
-                                <div>
-                                    <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
-                                        {allowHandover ? "Close shift" : "Force close shift"}
-                                    </DialogTitle>
-                                    <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                                        {forCashierName
-                                            ? `Count the physical cash and close ${forCashierName}'s shift on their behalf.`
-                                            : "Count the physical cash in the drawer and choose how to close."}
-                                    </DialogDescription>
-                                </div>
-                            </div>
-                        </DialogHeader>
 
                         {loading || !detail ? (
                             <div className="flex justify-center py-8">
@@ -688,8 +666,22 @@ export function ShiftCloseDialog({
                             </div>
                         )}
 
-                        <DialogFooter className="pt-2 border-t border-border">
+                        <DialogFooter className="pt-2 border-t border-border flex items-center justify-end gap-2 flex-wrap">
                             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+                            <FooterToggle
+                                label="Print after save"
+                                checked={printAfterSave}
+                                onChange={updatePrintAfterSave}
+                                disabled={submitting}
+                            />
+                            {printAfterSave && (
+                                <FooterToggle
+                                    label="Thermal"
+                                    checked={thermal}
+                                    onChange={updateThermal}
+                                    disabled={submitting}
+                                />
+                            )}
                             {mode === "vault" ? (
                                 <Button onClick={submitVault} disabled={submitting || loading} className="bg-green-600 hover:bg-green-700 text-white">
                                     {submitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
@@ -702,193 +694,275 @@ export function ShiftCloseDialog({
                                 </Button>
                             )}
                         </DialogFooter>
-                    </>
-                )}
             </DialogContent>
         </Dialog>
     );
 }
-
-// ── Closing Report ────────────────────────────────────────────────────────────
-
-import { forwardRef } from "react";
-
-const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
-    function CloseReport({ report }, ref) {
-        const openedAt   = new Date(report.openedAt);
-        const closedAt   = new Date(report.closedAt!);
-        const durationMs = closedAt.getTime() - openedAt.getTime();
-        const durationH  = Math.floor(durationMs / 3_600_000);
-        const durationM  = Math.floor((durationMs % 3_600_000) / 60_000);
-        const fmtTime    = (d: Date) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-        const fmtDate    = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-
-        const opening  = Number(report.openingFloatPaise)  / 100;
-        const movement = Number(report.tillMovementPaise)  / 100;
-        const drops    = Number(report.dropsPaise)         / 100;
-        const expenses = Number(report.expendituresPaise)  / 100;
-        const expected = Number(report.expectedCashPaise)  / 100;
-        const declared = Number(report.declaredCashPaise)  / 100;
-        const variance = Number(report.variancePaise)      / 100;
-        const keepAmt  = Number(report.carryOverNextPaise) / 100;
-        const vaultAmt = Number(report.toVaultPaise)       / 100;
-
-        const varColor = variance === 0
-            ? "text-green-700 dark:text-green-400"
-            : variance > 0
-            ? "text-emerald-700 dark:text-emerald-400"
-            : "text-red-700 dark:text-red-400";
-
-        return (
-            <div ref={ref} className="space-y-3 text-sm py-2">
-                {/* Header */}
-                <div className="rounded-md border border-border bg-muted/40 px-3 py-2.5 space-y-0.5">
-                    <p className="text-xs text-muted-foreground">{fmtDate(openedAt)}</p>
-                    <p className="font-medium">{report.counter.name} · {report.branch.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                        {fmtTime(openedAt)} → {fmtTime(closedAt)}
-                        <span className="ml-2 text-foreground font-medium">{durationH}h {durationM}m</span>
-                    </p>
-                </div>
-
-                {/* Cash reconciliation */}
-                <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cash reconciliation</p>
-                    <ReportRow label="Counter opening cash"     value={`₹${fmt(opening)}`} />
-                    <ReportRow
-                        label="Counter cash flow"
-                        value={signed(movement)}
-                    />
-                    {report.movementBreakdown && (
-                        <div className="pl-3 py-1 space-y-0.5 text-[11px] text-muted-foreground border-l-2 border-primary/30 my-0.5 font-normal">
-                            {Number(report.movementBreakdown.cashSalesPaise) > 0 && (
-                                <div className="flex justify-between">
-                                    <span>Cash sales</span>
-                                    <span className="font-mono text-foreground">+ ₹{fmt(Number(report.movementBreakdown.cashSalesPaise) / 100)}</span>
-                                </div>
-                            )}
-                            {Number(report.movementBreakdown.receiptsPaise) > 0 && (
-                                <div className="flex justify-between">
-                                    <span>Customer receipts (Rcv)</span>
-                                    <span className="font-mono text-foreground">+ ₹{fmt(Number(report.movementBreakdown.receiptsPaise) / 100)}</span>
-                                </div>
-                            )}
-                            {Number(report.movementBreakdown.expendituresPaise) > 0 && (
-                                <div className="flex justify-between text-amber-700 dark:text-amber-400">
-                                    <span>Counter expenses (Exp)</span>
-                                    <span className="font-mono">− ₹{fmt(Number(report.movementBreakdown.expendituresPaise) / 100)}</span>
-                                </div>
-                            )}
-                            {Number(report.movementBreakdown.refundsPaise) > 0 && (
-                                <div className="flex justify-between text-amber-700 dark:text-amber-400">
-                                    <span>Cash refunds / returns</span>
-                                    <span className="font-mono">− ₹{fmt(Number(report.movementBreakdown.refundsPaise) / 100)}</span>
-                                </div>
-                            )}
-                            {Number(report.movementBreakdown.otherPaise) !== 0 && (
-                                <div className="flex justify-between">
-                                    <span>Other adjustments</span>
-                                    <span className="font-mono text-foreground">{signed(Number(report.movementBreakdown.otherPaise) / 100)}</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <ReportRow label="Dropped to safe"          value={`− ₹${fmt(drops)}`} />
-                    <div className="border-t border-border pt-1.5">
-                        <ReportRow label="Expected in drawer" value={`₹${fmt(expected)}`} bold />
-                        <ReportRow label="Physical count"     value={`₹${fmt(declared)}`} bold />
-                    </div>
-                    <div className={`flex justify-between font-semibold pt-0.5 ${varColor}`}>
-                        <span>
-                            {variance === 0 ? "✓ No variance" : variance > 0 ? "Over" : "Short"}
-                        </span>
-                        <span className="font-mono">
-                            {variance === 0 ? "—" : `${variance > 0 ? "+" : "−"} ₹${fmt(Math.abs(variance))}`}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Payments collected this shift — all methods (cash + digital) */}
-                {report.tenderBreakdown && report.tenderBreakdown.length > 0 && (
-                    <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Payments collected</p>
-                        {report.tenderBreakdown.map((t) => (
-                            <ReportRow key={t.method} label={t.label} value={`₹${fmt(Number(t.amountPaise) / 100)}`} />
-                        ))}
-                        <div className="border-t border-border pt-1.5">
-                            <ReportRow
-                                label="Total collected"
-                                value={`₹${fmt(report.tenderBreakdown.reduce((s, t) => s + Number(t.amountPaise) / 100, 0))}`}
-                                bold
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Total collected breakdown — justifies total collected across all methods */}
-                {report.collectionsBreakdown && (
-                    <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Total collected breakdown</p>
-                        <ReportRow
-                            label={`POS Sales${report.collectionsBreakdown.salesCount > 0 ? ` (${report.collectionsBreakdown.salesCount} ${report.collectionsBreakdown.salesCount === 1 ? "bill" : "bills"})` : ""}`}
-                            value={`+ ₹${fmt(Number(report.collectionsBreakdown.salesPaise) / 100)}`}
-                        />
-                        <ReportRow
-                            label={`Customer receipts (Rcv)${report.collectionsBreakdown.receiptsCount > 0 ? ` (${report.collectionsBreakdown.receiptsCount} ${report.collectionsBreakdown.receiptsCount === 1 ? "rcv" : "rcvs"})` : ""}`}
-                            value={`+ ₹${fmt(Number(report.collectionsBreakdown.receiptsPaise) / 100)}`}
-                        />
-                        {Number(report.collectionsBreakdown.refundsPaise) > 0 && (
-                            <ReportRow
-                                label={`Sales returns / refunds${report.collectionsBreakdown.refundsCount > 0 ? ` (${report.collectionsBreakdown.refundsCount})` : ""}`}
-                                value={`− ₹${fmt(Number(report.collectionsBreakdown.refundsPaise) / 100)}`}
-                            />
-                        )}
-                        <div className="border-t border-border pt-1.5">
-                            <ReportRow
-                                label="Net total collected"
-                                value={`₹${fmt(Number(report.collectionsBreakdown.netCollectedPaise) / 100)}`}
-                                bold
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Disposition */}
-                <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Disposition</p>
-                    <ReportRow label="Swept to vault"         value={`₹${fmt(vaultAmt)}`} bold />
-                    <ReportRow label="Kept in counter"        value={`₹${fmt(keepAmt)}`} />
-                </div>
-
-                {/* GL references */}
-                {(report.closingContraVoucher || report.varianceJournalEntry) && (
-                    <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">GL references</p>
-                        {report.closingContraVoucher && (
-                            <ReportRow label="Closing Contra" value={report.closingContraVoucher.reference} mono />
-                        )}
-                        {report.varianceJournalEntry && (
-                            <ReportRow label="Variance JE" value={report.varianceJournalEntry.reference} mono />
-                        )}
-                    </div>
-                )}
-
-                {/* Notes */}
-                {report.notes && (
-                    <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">Notes: </span>{report.notes}
-                    </div>
-                )}
-            </div>
-        );
-    }
-);
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
 // "+ ₹1,234.00" / "− ₹1,234.00" — the till movement carries a sign of its own.
 function signed(n: number): string {
     return `${n < 0 ? "−" : "+"} ₹${fmt(Math.abs(n))}`;
+}
+
+// ── Shift Close Print ─────────────────────────────────────────────────────────
+
+function printShiftCloseReport(report: ClosedReport, isThermal: boolean) {
+    const win = window.open("", "_blank", isThermal ? "width=380,height=650" : "width=440,height=700");
+    if (!win) {
+        toast.error("Popup blocked. Please allow popups to print shift report.");
+        return;
+    }
+
+    const openedAt = new Date(report.openedAt);
+    const closedAt = new Date(report.closedAt);
+    const durationMs = closedAt.getTime() - openedAt.getTime();
+    const durationH = Math.floor(durationMs / 3_600_000);
+    const durationM = Math.floor((durationMs % 3_600_000) / 60_000);
+    const durationStr = `${durationH}h ${durationM}m`;
+    const fmtTime = (d: Date) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    const fmtDateStr = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+    const opening = Number(report.openingFloatPaise) / 100;
+    const movement = Number(report.tillMovementPaise) / 100;
+    const drops = Number(report.dropsPaise) / 100;
+    const expected = Number(report.expectedCashPaise ?? "0") / 100;
+    const declared = report.declaredCashPaise != null ? Number(report.declaredCashPaise) / 100 : null;
+    const varianceVal = report.variancePaise != null ? Number(report.variancePaise) / 100 : null;
+    const carryOver = report.carryOverNextPaise != null ? Number(report.carryOverNextPaise) / 100 : null;
+    const toVault = report.toVaultPaise != null ? Number(report.toVaultPaise) / 100 : null;
+    const tenderTotal = (report.tenderBreakdown ?? []).reduce((s, t) => s + Number(t.amountPaise) / 100, 0);
+
+    const tenderRowsHtml = (report.tenderBreakdown ?? [])
+        .map((t) => `<div class="row"><span class="label">${t.label}</span><span class="val font-mono">₹${fmt(Number(t.amountPaise) / 100)}</span></div>`)
+        .join("");
+
+    const vouchersHtml = [
+        report.closingContraVoucher ? `<div class="row text-xs"><span class="label">Closing Contra</span><span class="val font-mono">${report.closingContraVoucher.reference}</span></div>` : "",
+        report.varianceJournalEntry ? `<div class="row text-xs"><span class="label">Variance JE</span><span class="val font-mono">${report.varianceJournalEntry.reference}</span></div>` : "",
+    ].filter(Boolean).join("");
+
+    const pageStyles = isThermal
+        ? `
+            @page { size: 80mm auto; margin: 3mm; }
+            body {
+                font-family: 'Courier New', Courier, monospace, system-ui;
+                font-size: 11px;
+                line-height: 1.3;
+                color: #000;
+                padding: 4px;
+                max-width: 74mm;
+                margin: 0 auto;
+            }
+        `
+        : `
+            @page { margin: 8mm; }
+            body {
+                font-family: 'Courier New', Courier, monospace, system-ui;
+                font-size: 12px;
+                line-height: 1.35;
+                color: #111;
+                padding: 14px;
+                max-width: 420px;
+                margin: 0 auto;
+            }
+        `;
+
+    win.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Shift #${report.id} Closing Report</title>
+            <style>
+                ${pageStyles}
+                .center { text-align: center; }
+                .header-title { font-size: ${isThermal ? "13px" : "15px"}; font-weight: bold; margin-bottom: 2px; }
+                .header-sub { font-size: 10px; color: #444; margin-bottom: 4px; }
+                hr { border: none; border-top: 1px dashed #666; margin: 6px 0; }
+                .row { display: flex; justify-content: space-between; margin: 2px 0; }
+                .row.bold { font-weight: bold; }
+                .sec-title { font-size: 10px; font-weight: bold; text-transform: uppercase; margin: 6px 0 2px; color: #333; }
+                .sub-row { display: flex; justify-content: space-between; padding-left: 8px; font-size: 10px; color: #555; }
+                .label { flex: 1; }
+                .val { text-align: right; min-width: 70px; }
+                .font-mono { font-family: monospace; }
+                .over { color: #166534; }
+                .short { color: #991b1b; }
+                .text-xs { font-size: 10px; }
+                .footer { margin-top: 10px; padding-top: 4px; border-top: 1px solid #ccc; font-size: 9px; color: #666; text-align: center; }
+                .sig-block { display: flex; justify-content: space-between; margin-top: 18px; padding-top: 4px; }
+                .sig-line { border-top: 1px solid #444; width: 45%; text-align: center; font-size: 9px; padding-top: 3px; }
+                @media print {
+                    body { padding: 0; max-width: 100%; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="center">
+                <div class="header-title">${report.branch.name}</div>
+                <div class="header-sub">SHIFT CLOSING &amp; CASH RECONCILIATION</div>
+                <div class="row bold">
+                    <span>Shift #${report.id} (CLOSED)</span>
+                    <span>${fmtDateStr(openedAt)}</span>
+                </div>
+                <div class="row" style="font-size: 10px;">
+                    <span>${report.counter.name} (${report.counter.tillAccount.name})</span>
+                </div>
+                <div class="row" style="font-size: 10px;">
+                    <span>Duration: ${durationStr}</span>
+                </div>
+                <div class="row" style="font-size: 10px;">
+                    <span>Opened: ${fmtTime(openedAt)}</span>
+                    <span>Closed: ${fmtTime(closedAt)}</span>
+                </div>
+            </div>
+
+            <hr />
+
+            <div class="sec-title">CASH RECONCILIATION</div>
+            <div class="row">
+                <span class="label">Counter opening cash</span>
+                <span class="val font-mono bold">₹${fmt(opening)}</span>
+            </div>
+
+            <div class="row">
+                <span class="label">Counter cash flow</span>
+                <span class="val font-mono bold">${signed(movement)}</span>
+            </div>
+            ${report.movementBreakdown ? `
+                ${Number(report.movementBreakdown.cashSalesPaise) > 0 ? `
+                    <div class="sub-row">
+                        <span>· Cash sales</span>
+                        <span class="font-mono">+ ₹${fmt(Number(report.movementBreakdown.cashSalesPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+                ${Number(report.movementBreakdown.receiptsPaise) > 0 ? `
+                    <div class="sub-row">
+                        <span>· Customer receipts (Rcv)</span>
+                        <span class="font-mono">+ ₹${fmt(Number(report.movementBreakdown.receiptsPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+                ${Number(report.movementBreakdown.expendituresPaise) > 0 ? `
+                    <div class="sub-row">
+                        <span>· Counter expenses (Exp)</span>
+                        <span class="font-mono">− ₹${fmt(Number(report.movementBreakdown.expendituresPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+                ${Number(report.movementBreakdown.refundsPaise) > 0 ? `
+                    <div class="sub-row">
+                        <span>· Cash refunds / returns</span>
+                        <span class="font-mono">− ₹${fmt(Number(report.movementBreakdown.refundsPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+                ${report.movementBreakdown.otherPaise !== undefined && Number(report.movementBreakdown.otherPaise) !== 0 ? `
+                    <div class="sub-row">
+                        <span>· Other adjustments</span>
+                        <span class="font-mono">${signed(Number(report.movementBreakdown.otherPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+            ` : ""}
+
+            ${drops > 0 ? `
+                <div class="row">
+                    <span class="label">Dropped to safe</span>
+                    <span class="val font-mono">− ₹${fmt(drops)}</span>
+                </div>
+            ` : ""}
+
+            <div class="row bold" style="margin-top: 4px;">
+                <span class="label">Expected in drawer</span>
+                <span class="val font-mono">₹${fmt(expected)}</span>
+            </div>
+            ${declared != null ? `
+                <div class="row bold">
+                    <span class="label">Physical count (Declared)</span>
+                    <span class="val font-mono">₹${fmt(declared)}</span>
+                </div>
+                <div class="row bold ${varianceVal === 0 ? "" : (varianceVal ?? 0) > 0 ? "over" : "short"}">
+                    <span class="label">Variance</span>
+                    <span class="val font-mono">${varianceVal === 0 ? "₹0.00 (Balanced)" : `${(varianceVal ?? 0) > 0 ? "+" : "−"}₹${fmt(Math.abs(varianceVal ?? 0))} (${(varianceVal ?? 0) > 0 ? "Over" : "Short"})`}</span>
+                </div>
+            ` : ""}
+
+            ${carryOver != null || toVault != null ? `
+                <hr />
+                <div class="sec-title">CLOSING DISTRIBUTION</div>
+                ${carryOver != null ? `
+                    <div class="row">
+                        <span class="label">Kept in counter</span>
+                        <span class="val font-mono">₹${fmt(carryOver)}</span>
+                    </div>
+                ` : ""}
+                ${toVault != null ? `
+                    <div class="row">
+                        <span class="label">Swept to vault</span>
+                        <span class="val font-mono">₹${fmt(toVault)}</span>
+                    </div>
+                ` : ""}
+            ` : ""}
+
+            ${tenderRowsHtml ? `
+                <hr />
+                <div class="sec-title">PAYMENTS COLLECTED</div>
+                ${tenderRowsHtml}
+                <div class="row bold" style="border-top: 1px solid #bbb; padding-top: 2px; margin-top: 2px;">
+                    <span class="label">Total Collected</span>
+                    <span class="val font-mono">₹${fmt(tenderTotal)}</span>
+                </div>
+            ` : ""}
+
+            ${report.collectionsBreakdown ? `
+                <hr />
+                <div class="sec-title">COLLECTIONS BY ACTIVITY</div>
+                <div class="row">
+                    <span class="label">POS Sales (${report.collectionsBreakdown.salesCount} bills)</span>
+                    <span class="val font-mono">+ ₹${fmt(Number(report.collectionsBreakdown.salesPaise) / 100)}</span>
+                </div>
+                ${report.collectionsBreakdown.receiptsCount > 0 ? `
+                    <div class="row">
+                        <span class="label">Customer receipts (${report.collectionsBreakdown.receiptsCount} rcv)</span>
+                        <span class="val font-mono">+ ₹${fmt(Number(report.collectionsBreakdown.receiptsPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+                ${report.collectionsBreakdown.refundsCount > 0 ? `
+                    <div class="row">
+                        <span class="label">Refunds / returns (${report.collectionsBreakdown.refundsCount})</span>
+                        <span class="val font-mono">− ₹${fmt(Number(report.collectionsBreakdown.refundsPaise) / 100)}</span>
+                    </div>
+                ` : ""}
+                <div class="row bold" style="border-top: 1px solid #bbb; padding-top: 2px; margin-top: 2px;">
+                    <span class="label">Net Total</span>
+                    <span class="val font-mono">₹${fmt(Number(report.collectionsBreakdown.netCollectedPaise) / 100)}</span>
+                </div>
+            ` : ""}
+
+            ${vouchersHtml ? `
+                <hr />
+                <div class="sec-title">LINKED VOUCHERS</div>
+                ${vouchersHtml}
+            ` : ""}
+
+            ${report.notes ? `
+                <hr />
+                <div class="sec-title">NOTES</div>
+                <div style="font-size: 10px; white-space: pre-wrap;">${report.notes}</div>
+            ` : ""}
+
+            <div class="sig-block">
+                <div class="sig-line">Cashier Signature</div>
+                <div class="sig-line">Manager Signature</div>
+            </div>
+
+            <div class="footer">
+                Printed on ${new Date().toLocaleString("en-IN")} · AbeerSuite POS
+            </div>
+        </body>
+        </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 250);
 }
 
 function Row({ label, value, sub, className }: { label: string; value: string; sub?: string; className?: string }) {
@@ -975,17 +1049,6 @@ function DenominationCounter({
     );
 }
 
-function ReportRow({ label, value, bold, mono, sub }: { label: string; value: string; bold?: boolean; mono?: boolean; sub?: string }) {
-    return (
-        <div className={`flex justify-between gap-4 ${bold ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-            <span className="flex-1">
-                {label}
-                {sub && <span className="block text-[10px] leading-tight opacity-60 font-normal">{sub}</span>}
-            </span>
-            <span className={mono ? "font-mono text-foreground text-xs" : "font-mono"}>{value}</span>
-        </div>
-    );
-}
 
 function VarianceChip({ variance }: { variance: number }) {
     if (variance === 0) return <p className="text-xs text-green-700 dark:text-green-400">✓ Matches expected — no variance</p>;
