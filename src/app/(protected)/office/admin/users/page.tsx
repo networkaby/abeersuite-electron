@@ -27,6 +27,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Position {
     id:           string;
@@ -245,7 +246,7 @@ export default function UsersPage() {
     useEffect(() => { fetchUsers(); }, []);
 
     const handleDelete = async (id: number) => {
-        if (!confirm("Delete this user?")) return;
+        if (!(await confirmAction({ title: "Delete this user?", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/users/${id}`);
             toast.success("User deleted");

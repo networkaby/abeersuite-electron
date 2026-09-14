@@ -24,6 +24,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
 import type { PosPayChannel } from "@/generated/prisma/client";
 import { splitExtensions } from "@/shared/lib/counter/idRange";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type Branch = { id: string; number: number; name: string; isActive: boolean };
 
@@ -303,7 +304,7 @@ export default function CountersAdminPage() {
     // so the range stays correct for whichever PC claims the counter next. Only a
     // counterNumber CHANGE invalidates it, and the route clears it there.
     const handleRelease = async (c: Counter) => {
-        if (!confirm(`Release "${c.name}" (${c.branch.name})? The bound PC loses this counter, and the next computer to open a shift here claims it through counter setup. The counter number and its reserved offline id range stay unchanged.`)) return;
+        if (!(await confirmAction({ title: `Release "${c.name}" (${c.branch.name})?`, body: `The bound PC loses this counter, and the next computer to open a shift here claims it through counter setup. The counter number and its reserved offline id range stay unchanged.`, confirmLabel: "Release" }))) return;
         try {
             await axios.patch(`/api/pos/counters/${c.id}`, { releaseLock: true });
             toast.success("Counter released — device lock cleared");
@@ -314,7 +315,7 @@ export default function CountersAdminPage() {
     };
 
     const handleDelete = async (c: Counter) => {
-        if (!confirm(`Delete counter "${c.name}" (${c.branch.name})? Till account will be unlinked but kept for audit.`)) return;
+        if (!(await confirmAction({ title: `Delete counter "${c.name}" (${c.branch.name})?`, body: `Till account will be unlinked but kept for audit.`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/pos/counters/${c.id}`);
             toast.success("Counter deleted");

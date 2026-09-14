@@ -39,14 +39,12 @@ import { Button } from "@/components/ui/button";
 import OrgRegionsCreateDialog, { type Intent } from "./OrgRegionsCreateDialog";
 import OrgAppointDialog from "./OrgAppointDialog";
 import OrgTransferDialog from "./OrgTransferDialog";
+import { initials } from "@/shared/lib/format/initials";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 const HQ_BRANCH_ID = "BR-HQ";
 
 // ── Avatar / helpers ─────────────────────────────────────────────────────────
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
 
 const AVATAR_COLOR: Record<string, string> = {
     R1: "bg-purple-100 text-purple-700",
@@ -654,7 +652,7 @@ export default function OrgRegions({
 
     const handleDelete = useCallback(async (kind: "branch" | "dept" | "position", id: string, label: string) => {
         const noun = kind === "branch" ? "branch" : kind === "dept" ? "department" : "position";
-        if (!window.confirm(`Delete ${noun} "${label}"?\n\nThis cannot be undone. The server will refuse if the ${noun} still has linked records (e.g. a position can't be deleted while a user still holds it).`)) return;
+        if (!(await confirmAction({ title: `Delete ${noun} "${label}"?`, body: `This cannot be undone. The server will refuse if the ${noun} still has linked records (e.g. a position can't be deleted while a user still holds it).`, confirmLabel: "Delete" }))) return;
         const endpoint = kind === "branch" ? "branches" : kind === "dept" ? "departments" : "positions";
         try {
             await axios.delete(`/api/${endpoint}/${encodeURIComponent(id)}`);
@@ -669,7 +667,7 @@ export default function OrgRegions({
 
     // ── Holder management (assign / unassign) ────────────────────────────────
     const unassignHolder = useCallback(async (positionId: string, userId: number, userName: string, positionTitle: string) => {
-        if (!window.confirm(`Remove ${userName} from "${positionTitle}"?\n\nThe position stays; only the holder is detached.`)) return;
+        if (!(await confirmAction({ title: `Remove ${userName} from "${positionTitle}"?`, body: `The position stays; only the holder is detached.`, confirmLabel: "Remove" }))) return;
         try {
             await axios.delete(`/api/positions/${encodeURIComponent(positionId)}/holders/${userId}`);
             toast.success(`${userName} removed from ${positionTitle}`);

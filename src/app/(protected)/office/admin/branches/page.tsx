@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { branchAddressSummary } from "@/shared/lib/org/formatBranchAddress";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Branch {
     id:           string;
@@ -160,7 +161,7 @@ export default function BranchesPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Delete this branch?")) return;
+        if (!(await confirmAction({ title: "Delete this branch?", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/branches/${id}`);
             toast.success("Branch deleted");

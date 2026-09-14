@@ -22,6 +22,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { initials } from "@/shared/lib/format/initials";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,10 +50,6 @@ type FormState = { id: string; title: string; branchId: string; parentPositionId
 const EMPTY: FormState = { id: "", title: "", branchId: "", parentPositionId: "", roleTemplateIds: [] };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
 
 const AVATAR_COLOR: Record<string, string> = {
     R1: "bg-purple-100 text-purple-700", R2: "bg-blue-100 text-blue-700",
@@ -508,7 +506,7 @@ export default function PositionsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Delete this position?")) return;
+        if (!(await confirmAction({ title: "Delete this position?", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/positions/${id}`);
             toast.success("Position deleted");
