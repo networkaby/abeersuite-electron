@@ -55,10 +55,11 @@ export type CreatedProductOption = {
 
 type Unit = { id: number; code: string; label: string };
 
-// ₹ → paise; empty / non-numeric → null so optional fields stay unset.
+// ₹ → paise; empty / non-numeric / negative → null so optional fields stay unset.
+// A typed 0 is a real price (free item) — same rule as InvProductDialog.
 function rupeesToPaise(s: string): number | null {
     const v = parseFloat(s);
-    if (!isFinite(v) || v <= 0) return null;
+    if (!isFinite(v) || v < 0) return null;
     return Math.round(v * 100);
 }
 
@@ -152,13 +153,18 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                 sku: sku.trim().toUpperCase(),
                 name: name.trim(),
                 unitId: parseInt(unitId, 10),
-                pricePaise: rupeesToPaise(salePrice),
+                // The human sale price. `pricePaise` is a read-side alias only
+                // (lookup route) — the create schema strips it, so it must be
+                // sent under the real column or the typed price is lost.
+                savedSalePricePaise: rupeesToPaise(salePrice),
                 isActive: true,
             });
             const p = res.data as {
                 id: number; sku: string; name: string;
                 stock: number | null; lowStockThreshold: number;
-                pricePaise: number | null; mrpPaise: number | null;
+                savedSalePricePaise: number | null;
+                effectiveSalePricePaise: number | null;
+                mrpPaise: number | null;
                 unit: { code: string };
                 brand: { name: string } | null;
                 codes?: { kind: string; value: string }[];
@@ -168,7 +174,10 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
             onCreated({
                 id: p.id, sku: p.sku, name: p.name,
                 stock: p.stock, lowStockThreshold: p.lowStockThreshold,
-                pricePaise: p.pricePaise, lastPurchasePaise: null, mrpPaise: p.mrpPaise,
+                // The row comes back before the price recompute has materialised
+                // effectiveSalePricePaise, so fall back to the price just typed.
+                pricePaise: p.effectiveSalePricePaise ?? p.savedSalePricePaise,
+                lastPurchasePaise: null, mrpPaise: p.mrpPaise,
                 unit: { code: p.unit.code },
                 brand: p.brand,
                 barcode1: primaryBarcode(p.codes),
