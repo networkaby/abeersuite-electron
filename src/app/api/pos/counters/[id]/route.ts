@@ -8,7 +8,7 @@ import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
-import { normalizeExtension } from "@/shared/lib/counter/idRange";
+import { normalizeExtensions, splitExtensions } from "@/shared/lib/counter/idRange";
 import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
@@ -35,15 +35,16 @@ const updateSchema = z.object({
     name: z.string().trim().min(1).max(60).optional(),
     counterNumber: z.coerce.number().int().positive("Counter number must be greater than 0").optional(),
     isActive: z.boolean().optional(),
-    // EPBX/intercom extension of the phone at this counter. Empty string/null clears
-    // it; an absent field is left untouched (.optional() outermost so the transform
-    // never runs on undefined and accidentally nulls it on unrelated PATCHes).
-    epbxExtension: z.union([z.string().trim().max(20), z.null()])
+    // EPBX/intercom extension(s) of the phone(s) at this counter — one number, or
+    // several as a comma-separated list ("201,202"). Empty string/null clears it; an
+    // absent field is left untouched (.optional() outermost so the transform never
+    // runs on undefined and accidentally nulls it on unrelated PATCHes).
+    epbxExtension: z.union([z.string().trim().max(200), z.null()])
         .transform((v, ctx) => {
             if (typeof v !== "string" || !v.trim().length) return null;
-            const normalized = normalizeExtension(v);
+            const normalized = normalizeExtensions(v);
             if (normalized === null) {
-                ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a whole number" });
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter whole numbers, separated by commas" });
                 return z.NEVER;
             }
             return normalized;
@@ -134,6 +135,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const a = byId.get(aid);
                 if (!a) return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
                 if (a.group?.type !== "EXPENSE") return NextResponse.json({ error: `"${a.name}" is not an expense ledger.` }, { status: 400 });
+            }
+        }
+
+        // Extensions are no longer unique in the DB — a comma-separated list cannot be
+        // indexed per entry — so the overlap check lives here: no single extension may
+        // sit on two counters, or an incoming call would pop up at both.
+        if (data.epbxExtension !== undefined && data.epbxExtension !== existing.epbxExtension) {
+            const wanted = splitExtensions(data.epbxExtension);
+            if (wanted.length > 0) {
+                const others = await prismaAuthoritative.posCounter.findMany({
+                    where: { NOT: { id }, epbxExtension: { not: null } },
+                    select: { name: true, epbxExtension: true },
+                });
+                for (const other of others) {
+                    const clash = splitExtensions(other.epbxExtension).find((e) => wanted.includes(e));
+                    if (clash) {
+                        return NextResponse.json(
+                            { error: `Extension ${clash} is already used by "${other.name}"` },
+                            { status: 409 },
+                        );
+                    }
+                }
             }
         }
 
@@ -290,7 +313,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             boundAt: (released ?? updated).boundAt,
         });
     } catch (e) {
-        const conflict = prismaUniqueError(e, { epbxExtension: "That extension number is already used by another counter" });
+        const conflict = prismaUniqueError(e, {});
         if (conflict) return conflict;
         return handleApiError(e, "Failed to update counter");
     }

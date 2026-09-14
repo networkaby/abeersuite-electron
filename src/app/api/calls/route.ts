@@ -8,6 +8,7 @@ import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/c
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
 import type { CallDirection } from "@/generated/prisma/client";
+import { splitExtensions } from "@/shared/lib/counter/idRange";
 
 // ── /api/calls ────────────────────────────────────────────────────────────────
 //
@@ -238,8 +239,9 @@ export async function GET(req: Request) {
         const search = sp.get("search")?.trim() ?? "";
         // Which extension answered/dialled — the counter follow-up popup's own
         // lookup, matching either side (an outgoing callback dials FROM the
-        // counter's extension; an incoming call is answered TO it).
-        const ext = sp.get("ext")?.trim();
+        // counter's extension; an incoming call is answered TO it). A counter may
+        // sit at several extensions, so this accepts a comma-separated list.
+        const exts = splitExtensions(sp.get("ext"));
         // Filter by normalized phone key (for showing an unknown caller's call log).
         const phoneKey = sp.get("phone")?.trim();
         // Never triaged: no note (not even a dismissal) and no linked ticket/deal.
@@ -247,7 +249,7 @@ export async function GET(req: Request) {
 
         const and: Prisma.CallWhereInput[] = [];
         if (phoneKey) and.push({ phone: phoneKey });
-        else if (ext) and.push({ OR: [{ toExt: ext }, { fromExt: ext }] });
+        else if (exts.length) and.push({ OR: [{ toExt: { in: exts } }, { fromExt: { in: exts } }] });
         if (unhandled) and.push({ note: null, ticketId: null });
         if (parsedDir.success) {
             and.push({ direction: parsedDir.data });

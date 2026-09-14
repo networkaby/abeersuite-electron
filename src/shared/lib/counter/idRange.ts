@@ -7,7 +7,7 @@
  *   Counter n:         1,000,000,000 + (n-1) × 10,000,000  …  + 10,000,000 - 1
  *
  * With a block size of 10 million ids per counter and 99 counters (the real-world
- * ceiling — EPBX extensions here are 2 digits), the highest reserved id is
+ * ceiling for counterNumber), the highest reserved id is
  * 1,989,999,999 — safely within int4.
  *
  * Only tables whose Prisma model carries `@default(autoincrement())` need a
@@ -25,7 +25,6 @@ export const BLOCK_SIZE = 10_000_000;
 
 /**
  * Maximum counter number supported by this scheme.
- * Matches the real-world ceiling — EPBX extensions here are 2 digits (1–99).
  * Counter 99's block ends at 1,989,999,999, safely within int4.
  */
 export const MAX_COUNTER_NUMBER = 99;
@@ -33,14 +32,33 @@ export const MAX_COUNTER_NUMBER = 99;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Trims a counter's EPBX extension input and confirms it's a whole number —
- * no padding, no range cap (epbxExtension itself has no ceiling; only the
- * offline id-range derived from it in claim-number/route.ts is capped at
- * MAX_COUNTER_NUMBER). Returns null if it isn't a whole number.
+ * Trims a counter's EPBX extension input and confirms every entry is a whole
+ * number. A counter may sit at several extensions, typed as one comma-separated
+ * value ("201,202"), so this splits on commas, drops blanks, removes duplicates
+ * and joins back with no spaces. A single number behaves exactly as before.
+ *
+ * No range cap — epbxExtension is the phone extension only. The offline id-range
+ * is derived from `counterNumber`, not from this (see blockStartFor below).
+ *
+ * Returns null if any entry is not a whole number, or nothing is left.
  */
-export function normalizeExtension(input: string): string | null {
-    const trimmed = input.trim();
-    return /^\d+$/.test(trimmed) ? trimmed : null;
+export function normalizeExtensions(input: string): string | null {
+    const parts = input
+        .split(",")
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+    if (!parts.length) return null;
+    if (!parts.every((p) => /^\d+$/.test(p))) return null;
+    return [...new Set(parts)].join(",");
+}
+
+/**
+ * Splits a stored epbxExtension value back into its individual extensions.
+ * Tolerates null, spaces and stray commas, so callers need no guard of their own.
+ */
+export function splitExtensions(stored: string | null | undefined): string[] {
+    if (!stored) return [];
+    return stored.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
 /**

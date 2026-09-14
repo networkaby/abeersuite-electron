@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * useMyCounterExtension — which EPBX extension THIS PC sits at, without
- * needing a shift open.
+ * useMyCounterExtension — which EPBX extension(s) THIS PC sits at, without
+ * needing a shift open. A counter may have several, stored and returned as one
+ * comma-separated string ("201,202"); GET /api/calls?ext= accepts that list as-is.
  *
  * `PosCounter.boundDeviceId` is set once, on a counter's FIRST shift-open
  * (see ShiftOpenDialog), and persists after the shift closes — so "which

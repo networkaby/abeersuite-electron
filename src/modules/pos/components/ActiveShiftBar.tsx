@@ -26,7 +26,8 @@ export type ActiveShift = {
     counter: {
         id:   number;
         name: string;
-        // EPBX/intercom extension of the phone at this counter — drives the call
+        // EPBX/intercom extension(s) of the phone(s) at this counter, comma-separated
+        // when there are several — drives the call
         // follow-up popup (CallFollowUpPopup) matching calls to this shift.
         epbxExtension: string | null;
         tillAccount: { id: number; name: string };
