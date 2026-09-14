@@ -19,6 +19,7 @@ import {
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { AllocateVoucherDialog } from "@/modules/pricing-strategy/components/AllocateVoucherDialog";
 import { AllocationDetailDialog, type AllocationDoc } from "@/modules/pricing-strategy/components/AllocationDetailDialog";
+import { parseRupeesToPaise } from "@/shared/lib/format";
 
 // Sticky-header scroll frame: a plain overflow-auto div (NOT Radix ScrollArea —
 // the shadcn Table's own [data-slot=table-container] overflow breaks `sticky`
@@ -95,14 +96,6 @@ interface Doc {
 type SortKey = "date" | "kind" | "payment" | "inv" | "items" | "amount" | "by";
 
 const rupee = (paise: number | null): string => (paise == null ? "—" : `₹${(paise / 100).toFixed(2)}`);
-function rupeesToPaise(s: string): number | null {
-    const t = s.trim();
-    if (t === "") return null;
-    const n = parseFloat(t);
-    if (!isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-}
-
 export default function CostingPage() {
     const [pool, setPool] = useState<PoolSummary | null>(null);
     const [draws, setDraws] = useState<DrawRow[]>([]);
@@ -330,7 +323,7 @@ export default function CostingPage() {
 
     async function submitDismiss() {
         if (!entry) return;
-        const amountPaise = rupeesToPaise(amount);
+        const amountPaise = parseRupeesToPaise(amount);
         if (amountPaise == null || amountPaise <= 0) return toast.error("Enter a valid amount to dismiss.");
         if (amountPaise > entry.remainingPaise) {
             return toast.error(`Amount exceeds the entry's remaining ${rupee(entry.remainingPaise)}.`);

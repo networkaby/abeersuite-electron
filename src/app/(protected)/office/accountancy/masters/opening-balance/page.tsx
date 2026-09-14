@@ -28,6 +28,7 @@ import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { fmt } from "@/utils/constants";
+import { parseRupeesToPaise } from "@/shared/lib/format";
 
 type AccountRow = {
     id: number; code: string; name: string;
@@ -867,12 +868,6 @@ function QuickCreateProductDialog({
         openingQty: "", openingRate: "",
     });
 
-    const rupeesToPaise = (r: string): number | null => {
-        const t = r.trim(); if (t === "") return null;
-        const n = parseFloat(t); if (!Number.isFinite(n) || n < 0) return null;
-        return Math.round(n * 100);
-    };
-
     const save = async () => {
         if (!form.sku.trim() || !form.name.trim()) { toast.error("SKU and name required"); return; }
         if (!form.unitId) { toast.error("Pick a unit"); return; }
@@ -885,7 +880,7 @@ function QuickCreateProductDialog({
                 sku: form.sku.trim(),
                 name: form.name.trim(),
                 unitId: Number(form.unitId),
-                savedSalePricePaise: rupeesToPaise(form.priceRupees),
+                savedSalePricePaise: parseRupeesToPaise(form.priceRupees),
                 openingStock: hasOpening ? openingQty : null,
                 openingRate: hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
             });

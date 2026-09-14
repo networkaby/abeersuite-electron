@@ -13,6 +13,7 @@ import {
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { parseRupeesToPaise } from "@/shared/lib/format";
 
 export interface DetailDraw {
     id: number;
@@ -35,14 +36,6 @@ export interface AllocationDoc {
 }
 
 const rupee = (paise: number | null): string => (paise == null ? "—" : `₹${(paise / 100).toFixed(2)}`);
-function rupeesToPaise(s: string): number | null {
-    const t = s.trim();
-    if (t === "") return null;
-    const n = parseFloat(t);
-    if (!isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-}
-
 interface LineEdit { perUnit: string; qty: string; amount: string; note: string }
 
 export function AllocationDetailDialog({
@@ -74,7 +67,7 @@ export function AllocationDetailDialog({
         setEdits((p) => ({ ...p, [id]: { ...p[id], [key]: val } }));
     }
 
-    const totalPaise = lines.reduce((s, d) => s + (rupeesToPaise(edits[d.id]?.amount ?? "") ?? 0), 0);
+    const totalPaise = lines.reduce((s, d) => s + (parseRupeesToPaise(edits[d.id]?.amount ?? "") ?? 0), 0);
 
     async function deleteLine(id: number) {
         if (!confirm("Delete this line? The amount returns to the entry's waiting pool.")) return;
@@ -97,11 +90,11 @@ export function AllocationDetailDialog({
             for (const d of lines) {
                 const e = edits[d.id];
                 if (!e) continue;
-                const amountPaise = rupeesToPaise(e.amount);
+                const amountPaise = parseRupeesToPaise(e.amount);
                 if (amountPaise == null || amountPaise <= 0) { toast.error("Each line needs a valid amount."); setSaving(false); return; }
                 const body: Record<string, unknown> = { amountPaise, note: e.note.trim() || null };
                 if (d.kind === "ALLOCATION") {
-                    const pu = rupeesToPaise(e.perUnit);
+                    const pu = parseRupeesToPaise(e.perUnit);
                     if (pu == null) { toast.error("Each line needs a per-unit value."); setSaving(false); return; }
                     body.perUnitPaise = pu;
                     const q = e.qty.trim() === "" ? null : parseFloat(e.qty);

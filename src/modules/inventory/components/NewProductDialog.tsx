@@ -22,7 +22,7 @@ import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "r
 import axios from "axios";
 import { toast } from "sonner";
 import { generateSku } from "@/modules/inventory/lib/sku";
-import { parseDecimalInput } from "@/shared/lib/format";
+import { parseDecimalInput, parseRupeesToPaise } from "@/shared/lib/format";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { primaryBarcode } from "@/shared/lib/inventory";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
@@ -54,14 +54,6 @@ export type CreatedProductOption = {
 };
 
 type Unit = { id: number; code: string; label: string };
-
-// ₹ → paise; empty / non-numeric / negative → null so optional fields stay unset.
-// A typed 0 is a real price (free item) — same rule as InvProductDialog.
-function rupeesToPaise(s: string): number | null {
-    const v = parseFloat(s);
-    if (!isFinite(v) || v < 0) return null;
-    return Math.round(v * 100);
-}
 
 export type AdvancedDefaults = {
     name: string;
@@ -156,7 +148,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                 // The human sale price. `pricePaise` is a read-side alias only
                 // (lookup route) — the create schema strips it, so it must be
                 // sent under the real column or the typed price is lost.
-                savedSalePricePaise: rupeesToPaise(salePrice),
+                savedSalePricePaise: parseRupeesToPaise(salePrice),
                 isActive: true,
             });
             const p = res.data as {
