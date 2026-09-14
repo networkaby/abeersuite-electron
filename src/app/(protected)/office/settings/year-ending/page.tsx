@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Pencil, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { gridRowClass } from "@/shared/lib/format";
+import { gridRowClass, toDateOnlyUtc } from "@/shared/lib/format";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -120,10 +120,6 @@ function previewNext(row: SeriesShape, sampleCounter = 24): string {
     return assembleReference({ ...row, nextSeq: row.nextSeq + 1 }, sampleCounter);
 }
 
-function fmtDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
-}
-
 /** API datetime → the ISO yyyy-mm-dd TallyDateInput binds. "" when unset. */
 function isoDay(v: string | null | undefined): string {
     return v ? v.slice(0, 10) : "";
@@ -169,7 +165,7 @@ export default function YearEndingPage() {
                 // Unset anchors open showing the 1st of the CURRENT financial
                 // year, computed from the very restart day this page sets, so
                 // the common case is one click. Nothing is written until Save.
-                const fyDefault = fmtDate(fyStartDate(c.data.restartMonth, c.data.restartDay));
+                const fyDefault = toDateOnlyUtc(fyStartDate(c.data.restartMonth, c.data.restartDay));
                 setConfigDraft({
                     restartMonth:       c.data.restartMonth,
                     restartDay:         c.data.restartDay,
@@ -435,7 +431,7 @@ export default function YearEndingPage() {
                                                 const next = previewNext(row);
                                                 const closing =
                                                     row.fyStartYear != null && config
-                                                        ? fmtDate(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
+                                                        ? toDateOnlyUtc(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
                                                         : "—";
                                                 return (
                                                     <TableRow
@@ -509,7 +505,7 @@ export default function YearEndingPage() {
                                                 const next = previewNext(row);
                                                 const closing =
                                                     row.fyStartYear != null && config
-                                                        ? fmtDate(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
+                                                        ? toDateOnlyUtc(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
                                                         : "—";
                                                 return (
                                                     <TableRow
