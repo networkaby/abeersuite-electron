@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
 import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
@@ -16,6 +16,7 @@ import { useCreateDialogStore } from "@/store/createDialogStore";
 // GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
 // Sale uses the full-page /sale route now — no dialog store.
 // Purchase uses the full-page /purchase route now — no dialog store.
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
@@ -57,52 +58,6 @@ const ACTION_HREFS: Partial<Record<NonNullable<ModuleCreateAction["action"]>, st
     "new-estimate": "/vouchers/estimates/new",
 };
 
-interface BtnBarMenuState { x: number; y: number; href: string; }
-
-function ActionContextMenu({ menu, onClose }: { menu: BtnBarMenuState | null; onClose: () => void }) {
-    const closeRef = useRef(onClose);
-    useEffect(() => { closeRef.current = onClose; }, [onClose]);
-
-    useEffect(() => {
-        if (!menu) return;
-        const onDown = (e: MouseEvent) => {
-            if ((e.target as HTMLElement).closest("[data-bb-ctx-menu]")) return;
-            closeRef.current();
-        };
-        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
-        const onScroll = () => closeRef.current();
-        document.addEventListener("mousedown", onDown);
-        document.addEventListener("keydown", onKey);
-        document.addEventListener("scroll", onScroll, true);
-        return () => {
-            document.removeEventListener("mousedown", onDown);
-            document.removeEventListener("keydown", onKey);
-            document.removeEventListener("scroll", onScroll, true);
-        };
-    }, [menu]);
-
-    if (!menu) return null;
-    const x = Math.min(menu.x, window.innerWidth - 200);
-    const y = Math.min(menu.y, window.innerHeight - 60);
-
-    return (
-        <div
-            data-bb-ctx-menu
-            className="fixed z-50 min-w-45 rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
-            style={{ left: x, top: y }}
-            onContextMenu={(e) => e.preventDefault()}
-        >
-            <button
-                type="button"
-                onClick={() => { window.open(menu.href, "_blank", "noopener"); onClose(); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-foreground hover:bg-muted"
-            >
-                Open in new window
-            </button>
-        </div>
-    );
-}
-
 type UserType = {
     name?: string | null;
     role?: string;
@@ -115,7 +70,7 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 export default function ButtonBar({ user }: { user?: UserType }) {
     const pathname = usePathname();
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
-    const [ctxMenu, setCtxMenu] = useState<BtnBarMenuState | null>(null);
+    const { menu: ctxMenu, openAt: openCtxMenu, close: closeCtxMenu } = useLinkContextMenu();
     // usePanelStore's own `persist` middleware is the single source of truth for
     // bar mode (localStorage key "panel-store") — no separate bridge needed.
     const { barMode, setBarMode } = usePanelStore();
@@ -378,7 +333,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                             } : undefined}
                                             onContextMenu={(e) => {
                                                 e.preventDefault();
-                                                setCtxMenu({ x: e.clientX, y: e.clientY, href: resolvedHref });
+                                                openCtxMenu(e, resolvedHref);
                                             }}
                                             {...(action.newTab
                                                 ? { target: "_blank", rel: "noopener noreferrer" }
@@ -422,7 +377,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             <HelpQuickForm open={helpOpen} onOpenChange={setHelpOpen} onSaved={() => { /* no list on-screen to refresh */ }} />
             <DealFormDialog open={dealOpen} onOpenChange={setDealOpen} positions={positions} deal={null} onSaved={() => { /* no list on-screen to refresh */ }} />
             <TaskFormDialog open={taskOpen} onOpenChange={setTaskOpen} positions={positions} task={null} onSaved={() => { /* no list on-screen to refresh */ }} />
-            <ActionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
+            <LinkContextMenu menu={ctxMenu} onClose={closeCtxMenu} />
             <GlVoucherDialog kind={glDialogKind} initialParty={glDialogParty} onClose={() => setGlDialogKind(null)} />
         </>
     );

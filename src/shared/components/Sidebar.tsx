@@ -26,6 +26,7 @@ import { moduleActiveStyle, moduleIconStyle } from "@/shared/lib/format/moduleTh
 const surfaceModule = (href: string): string | undefined =>
     href.startsWith("/vouchers/pos") ? "pos" : undefined;
 import UserAvatar from "@/shared/components/UserAvatar";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
     WORKSPACE_NAV,
@@ -90,6 +91,7 @@ function countTitle(fresh: number, total: number, noun: string) {
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const { resolvedTheme, setTheme } = useTheme();
+    const { menu: navMenu, close: closeNavMenu, onContainerContextMenu: onNavContextMenu } = useLinkContextMenu();
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
@@ -472,6 +474,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
                 transition: sidebarDragging ? "none" : "width 0.3s ease",
             }}
+            // One handler for every sidebar link — same right-click menu the
+            // Quick Actions bar shows.
+            onContextMenu={onNavContextMenu}
         >
 
             {/* Drag-to-resize handle — right edge, expanded only; stays outside the slide wrapper */}
@@ -963,6 +968,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 </div>
 
             </div>{/* end slide wrapper */}
+            <LinkContextMenu menu={navMenu} onClose={closeNavMenu} />
         </aside>
     );
 }
