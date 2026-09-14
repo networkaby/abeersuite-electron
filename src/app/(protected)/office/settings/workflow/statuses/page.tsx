@@ -37,6 +37,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Pipeline {
     id: string;
@@ -229,7 +230,7 @@ export default function StatusesPage() {
             return;
         }
 
-        if (!confirm("Delete this status? This cannot be undone.")) return;
+        if (!(await confirmAction({ title: "Delete this status?", body: "This cannot be undone.", confirmLabel: "Delete" }))) return;
 
         try {
             await axios.delete(`/api/ticket-statuses/${id}`);

@@ -42,6 +42,7 @@ import {
     SAMPLE_GIFT_CARD,
     SAMPLE_SHIFT_CLOSE,
 } from "@/modules/settings/lib/voucherTemplateSamples";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Props {
     initialTemplates: VoucherTemplateDefaults[];
@@ -281,9 +282,12 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     }
 
     async function handleReset() {
-        if (!window.confirm(
-            `Reset the ${KIND_LABEL[selectedKind]} template to defaults? Your customisations for this kind will be lost.`,
-        )) return;
+        const ok = await confirmAction({
+            title: `Reset the ${KIND_LABEL[selectedKind]} template to defaults?`,
+            body: "Your customisations for this kind will be lost.",
+            confirmLabel: "Reset template",
+        });
+        if (!ok) return;
         setResetting(true);
         try {
             const { data } = await axios.post<VoucherTemplateDefaults>(

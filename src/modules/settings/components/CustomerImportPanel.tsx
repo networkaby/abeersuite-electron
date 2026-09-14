@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { parseCsv } from "@/shared/lib/import/csvParse";
 import { type CustomerImportField } from "@/shared/lib/import/customerImportFields";
 import { toCsv } from "@/shared/lib/import/csvSerialize";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 const FIELD_LABELS: Record<CustomerImportField, string> = {
     name: "Name *",
@@ -238,7 +239,7 @@ export function CustomerImportPanel() {
             toast.error("Nothing to commit — preview shows 0 create/update rows");
             return;
         }
-        if (!window.confirm(`Commit ${total} rows? This writes to the customers table and ledger.`)) return;
+        if (!(await confirmAction({ title: `Commit ${total} rows?`, body: `This writes to the customers table and ledger.`, confirmLabel: "Commit", destructive: false }))) return;
         setCommitting(true);
         try {
             const res = await fetch("/api/settings/customer-import/commit", {

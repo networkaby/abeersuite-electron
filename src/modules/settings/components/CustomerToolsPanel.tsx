@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/shared/lib/format/utils";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type Direction = "personToCompany" | "companyToPerson";
 
@@ -633,7 +634,7 @@ function TrashSection() {
 
     async function hardDelete(row: Tombstone) {
         const key = `${row.type}:${row.id}`;
-        if (!confirm(`Permanently delete ${row.type} #${row.id} (${row.name})? This cannot be undone.`)) return;
+        if (!(await confirmAction({ title: `Permanently delete ${row.type} #${row.id} (${row.name})?`, body: `This cannot be undone.`, confirmLabel: "Delete" }))) return;
         setDeletingId(key);
         try {
             await axios.delete(`/api/customer-tools/trash/${row.type}/${row.id}`);

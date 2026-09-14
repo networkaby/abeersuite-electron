@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { extractApiError } from "@/shared/lib/api";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -106,7 +107,7 @@ export function PosServicesManager() {
     };
 
     const removeService = async (row: ServiceRow) => {
-        if (!confirm(`Delete service "${row.name}"? Posted sales are not affected.`)) return;
+        if (!(await confirmAction({ title: `Delete service "${row.name}"?`, body: `Posted sales are not affected.`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/settings/pos-services/${row.id}`);
             setRows((p) => p.filter((r) => r.id !== row.id));
