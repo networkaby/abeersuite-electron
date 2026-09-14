@@ -157,7 +157,10 @@ async function buildPlan(c: PoolClient, s: { id: number; partyAccountId: number 
         .filter((l) => l.type === "DEBIT" && !known.has(l.accountId))
         .map((l) => ({ accountId: l.accountId, amount: r2(l.amount), method: null as null, reference: null as null }));
     const totalAmount = r2(tenders.reduce((t, x) => t + x.amount, 0));
-    if (totalAmount <= 0) throw new Error("no tender / outstanding leg — nothing was received or owed");
+    // A bill discounted to nothing has no tender or outstanding leg at all —
+    // two such sales exist (100% Discount Allowed against the sale value).
+    if (totalAmount <= 0 && discount + loyalty <= 0) throw new Error("no tender / outstanding leg — nothing was received or owed");
+    if (totalAmount <= 0) notes.push("zero-total bill (fully discounted)");
     const stray = legs.filter((l) => l.type === "CREDIT" && !known.has(l.accountId) && l.accountId !== partyAcct);
     if (stray.length) notes.push(`unexpected credit leg(s) on account ${stray.map((l) => l.accountId).join(",")}`);
 
