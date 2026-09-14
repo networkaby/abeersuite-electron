@@ -17,6 +17,10 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
+import { after } from "next/server";
+import * as Sentry from "@sentry/nextjs";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { GlPostFailedError, postVoucherInTx } from "@/modules/inventory/lib/postVoucherInTx";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
 //
@@ -296,6 +300,7 @@ export async function POST(req: NextRequest) {
         showPrices,
         deliveryMode,
         placeOfSupply,
+        post: postNow = false,
         lines = [],
         charges = [],
         tenders = [],
@@ -336,6 +341,12 @@ export async function POST(req: NextRequest) {
         /// the server resolves it from the party + branch via
         /// resolveBuyerStateCode(party, branchState, deliveryMode).
         placeOfSupply?:  string;
+        /// Save AND post in one request. The client used to save a draft, get its
+        /// id back, then call /[id]/post — two HTTP round trips and two
+        /// transactions for what is one action at the counter. With this the whole
+        /// thing happens in a single transaction, which also means a failure to
+        /// post leaves no orphan draft behind.
+        post?:           boolean;
         lines: {
             productId:   number;
             description?: string;
@@ -384,6 +395,11 @@ export async function POST(req: NextRequest) {
     // matrix, so they pass through to their own flow's gating, unchanged.
     if (!userCanVoucherKind(user, type, "create")) {
         return NextResponse.json({ error: "You do not have permission to create this voucher kind." }, { status: 403 });
+    }
+    // Posting in the same request still needs the POST key, exactly as the separate
+    // /[id]/post call did — saving in one step must not be a way around the gate.
+    if (postNow && !userCanVoucherKind(user, type, "post")) {
+        return NextResponse.json({ error: "You do not have permission to post this voucher kind." }, { status: 403 });
     }
 
     const isPhysicalStock = type === "PHYSICAL_STOCK";
@@ -548,7 +564,9 @@ export async function POST(req: NextRequest) {
     const isCompany  = partyType === "company"  && !!partyId;
     const productIds = [...new Set(lines.map((l) => l.productId))];
     const [branch, partyPerson, partyCompany, partyAccount, productsForResponse] = await Promise.all([
-        resolvedPlaceOfSupply ? null : prisma.branch.findUnique({ where: { id: branchId }, select: { gstStateCode: true } }),
+        // Always loaded now: posting in the same request needs the branch's state
+        // for the CGST/SGST-vs-IGST split, not only place-of-supply resolution.
+        prisma.branch.findUnique({ where: { id: branchId }, select: { gstStateCode: true } }),
         !resolvedPlaceOfSupply && isCustomer
             ? prisma.person.findUnique({ where: { id: partyId }, select: { gstin: true, gstStateCode: true, shippingStateCode: true } })
             : null,
@@ -561,10 +579,14 @@ export async function POST(req: NextRequest) {
         isCustomer ? prisma.account.findUnique({ where: { personId: partyId }, select: { id: true } })
             : isCompany ? prisma.account.findUnique({ where: { companyId: partyId }, select: { id: true } })
                 : null,
-        // Only to dress the response's `lines[].product`; fetched here so the
-        // transaction does not have to read back the rows it just wrote.
+        // Dresses the response's `lines[].product`, and — when this request also
+        // posts — feeds the stock arm, which reads `stock` and `mrpPaise`. Fetched
+        // here so the transaction never has to read back rows it just wrote.
         productIds.length > 0
-            ? prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, sku: true, name: true } })
+            ? prisma.invProduct.findMany({
+                where:  { id: { in: productIds } },
+                select: { id: true, sku: true, name: true, stock: true, mrpPaise: true },
+            })
             : [],
     ]);
 
@@ -573,6 +595,13 @@ export async function POST(req: NextRequest) {
         const sellerState = (branch?.gstStateCode || org.gstStateCode || "").trim();
         resolvedPlaceOfSupply = resolveBuyerStateCode(partyPerson ?? partyCompany, sellerState, resolvedDeliveryMode);
     }
+
+    // The CGST/SGST-vs-IGST split inputs, for the post arm below. Place of supply
+    // IS the buyer's state and was just resolved above (party lookup included), so
+    // nothing is looked up twice. Blank buyer falls back to the seller — intra-state
+    // — which is the same default the post route applies.
+    const sellerStateCode = (branch?.gstStateCode || getOrganisation().gstStateCode || "").trim();
+    const buyerStateCode  = resolvedPlaceOfSupply || sellerStateCode;
 
     const userId = user!.id;
     const resolvedAccountId: number | null = partyAccount?.id ?? null;
@@ -674,14 +703,57 @@ export async function POST(req: NextRequest) {
             // `fresh` — the spine was created just above, so a null link is nothing
             // to clear (see syncVoucherLinks).
             await syncVoucherLinks(tx, spineId, { orderPipelineId, orderStatusId }, { fresh: true });
-            return { ...created, lines, createdBy: creator };
-        });
+
+            // ── Post it, here, in this same transaction ──────────────────────
+            // Saving and posting is ONE action at the counter, and it is now one
+            // request: the client used to save a draft, wait for its id, then call
+            // /[id]/post — two HTTP round trips, two transactions, and the second
+            // one re-reading the voucher the first had just written. Doing it here
+            // also means a voucher that cannot post leaves no orphan draft behind,
+            // because the whole thing rolls back together.
+            if (!postNow) return { ...created, lines, createdBy: creator, posted: false };
+
+            const { result, notes } = await postVoucherInTx(tx, {
+                voucher: {
+                    ...created,
+                    type,
+                    branchId,
+                    lines: lines.map((l) => ({ ...l, product: l.product ?? { id: l.productId, stock: null } })),
+                    universalVoucher: {
+                        date:        new Date(date),
+                        voucherNo:   null,   // a draft takes its number as it posts
+                        description: description.trim(),
+                        branch:      { gstStateCode: branch?.gstStateCode ?? null },
+                    },
+                },
+                userId,
+                sellerStateCode,
+                buyerStateCode,
+            });
+            return { ...result, createdBy: creator, posted: true, _postNotes: notes };
+        // This transaction now carries the posting too, so it takes the same
+        // headroom the /[id]/post route has always had. It does far less work than
+        // the two transactions it replaces, but a 200-line stock-take is still long.
+        }, { timeout: 30_000, maxWait: 10_000 });
+
+        // Pricing recompute runs AFTER the response has gone — it is explicitly
+        // non-critical and the cashier was waiting through a cost-ledger walk and a
+        // second transaction for a number that is not on the bill they just printed.
+        if (postNow && productIds.length > 0) {
+            after(async () => {
+                await recomputePricesForProducts(productIds).catch((err: unknown) => {
+                    Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
+                    console.error("[price-recompute] failed for voucher", voucher.id, err);
+                });
+            });
+        }
 
         return NextResponse.json(voucher, { status: 201 });
     } catch (e) {
         // A voucher whose ledger entry cannot be built is the user's to fix (the
         // payment rows do not add up), not a server fault — show it as it is.
         if (e instanceof GlBuildError) return NextResponse.json({ error: e.message }, { status: 422 });
+        if (e instanceof GlPostFailedError) return NextResponse.json({ error: e.message, notes: e.notes }, { status: 422 });
         return handleApiError(e, "Failed to save voucher");
     }
 }

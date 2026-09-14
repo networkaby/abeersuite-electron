@@ -8,15 +8,21 @@
 //
 // Run: pnpm exec cross-env NODE_PATH=<stub> tsx src/scripts/count-save-stmts.ts
 
+import type { Prisma } from "@/generated/prisma/client";
 import { engineGlArm } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { buildInvVoucherGlLines } from "@/modules/accountancy/lib/postInvVoucher";
+import { postVoucherInTx } from "@/modules/inventory/lib/postVoucherInTx";
 
 type Call = { key: string };
 let calls: Call[] = [];
 
-function makeTx(): never extends never ? any : never {
-    const spine = { id: 9001, date: new Date(), type: "SALE", voucherNo: null, sourceCounterId: null, status: "DRAFT" };
+function makeTx(): Prisma.TransactionClient {
+    const spine: { id: number; date: Date; type: string; voucherNo: string | null; sourceCounterId: number | null; status: string } =
+        { id: 9001, date: new Date(), type: "SALE", voucherNo: null, sourceCounterId: null, status: "DRAFT" };
+    // A Proxy standing in for every model delegate. It is not a TransactionClient
+    // in the type system's eyes, but it answers every call the code under test
+    // makes, which is the whole point.
     return new Proxy({}, {
         get(_t, model: string) {
             if (typeof model !== "string") return undefined;
@@ -47,14 +53,31 @@ function makeTx(): never extends never ? any : never {
                         if (model === "account" && op === "findFirst") {
                             return Promise.resolve({ id: 1, name: "Stub Ledger", normalBalance: "CREDIT", group: { type: "INCOME" } });
                         }
-                        if (model === "universalVoucher" && op === "findUnique") return Promise.resolve(spine);
+                        // Stateful on purpose: engineGlArm flips the spine to POSTED and
+                        // stamps its number, and the tail block afterwards only numbers a
+                        // spine that is still DRAFT and still unnumbered. A stub that
+                        // always answered "DRAFT, no number" would hide whether that guard
+                        // holds — and a voucher numbered twice is two numbers burnt per
+                        // sale and a hole in the register.
+                        if (model === "universalVoucher" && op === "update") {
+                            spine.status = "POSTED";
+                            spine.voucherNo = spine.voucherNo ?? "01-SV-26-27-0010";
+                            return Promise.resolve({ id: spine.id });
+                        }
+                        if (model === "universalVoucher" && op === "findUnique") return Promise.resolve({ ...spine });
                         if (model === "universalVoucher" && op === "create") return Promise.resolve({ id: spine.id });
                         if (model === "booksConfig") return Promise.resolve({ id: 1, restartMonth: 4, restartDay: 1 });
                         if (model === "voucherSeries" && op === "findUnique") {
-                            return Promise.resolve({ kind: "SALE", nextSeq: 10, fyStartYear: 2026, resetGen: 0, prefix: "SV", padding: 4, separator: "-", format: "PREFIX_FY_SEQ" });
+                            // Shaped like a real VoucherSeries row so assembleReference
+                            // can actually build a number (partOrder is a CSV it splits).
+                            return Promise.resolve({
+                                kind: "SALE", nextSeq: 10, startFrom: 1, fyStartYear: 2026, resetGen: 0,
+                                partOrder: "counter,type,year,number", typeEnabled: true, typeValue: "SV",
+                                yearEnabled: true, yearFormat: "FY_SHORT", padding: 4, separator: "-",
+                            });
                         }
                         if (model === "voucherSeriesCounter") {
-                            return Promise.resolve({ kind: "SALE", counterNumber: 1, nextSeq: 11, fyStartYear: 2026, resetGen: 0 });
+                            return Promise.resolve({ kind: "SALE", counterNumber: 1, nextSeq: 11, startFrom: 1, fyStartYear: 2026, resetGen: 0 });
                         }
                         if (op === "findMany") return Promise.resolve([]);
                         if (op === "findUnique" || op === "findFirst") return Promise.resolve(null);
@@ -63,7 +86,7 @@ function makeTx(): never extends never ? any : never {
                 },
             });
         },
-    });
+    }) as unknown as Prisma.TransactionClient;
 }
 
 function report(label: string) {
@@ -79,7 +102,10 @@ function report(label: string) {
 
 async function main() {
     const LINES = 5;
-    const tx = makeTx();
+    // A FRESH stub per section. The spine stub is stateful (it remembers that it
+    // has been numbered), so sharing one would let an earlier section's posting
+    // make a later one look as though it skipped numbering.
+    let tx = makeTx();
 
     // ── GL builder: how many statements just to find the ledgers by name.
     // NB the stub answers the FIRST candidate name every time, so this is the
@@ -91,6 +117,7 @@ async function main() {
         tenders: [{ accountId: 14, amount: 1180 }], charges: [],
     });
     report("buildInvVoucherGlLines — ledger lookups by name");
+    tx = makeTx();
 
     // ── GL arm: a 5-line cash sale posts Sales + CGST + SGST + one Cash tender.
     const glLines = [
@@ -104,6 +131,31 @@ async function main() {
         branchId: "BR-HQ", postedAt: new Date(), type: "SALE", existingSpineId: 9001,
     });
     report(`engineGlArm — ${glLines.length} GL lines (incl. numbering)`);
+    tx = makeTx();
+
+    // ── The whole post arm, as the create route now runs it in ONE transaction.
+    //    This really executes postVoucherInTx against the recording stub, so a
+    //    missing field or a wrong branch shows up here rather than at a till.
+    await postVoucherInTx(tx, {
+        voucher: {
+            id: 501, universalVoucherId: 9001, type: "SALE", branchId: "BR-HQ",
+            destinationBranchId: null, placeOfSupply: "19", deliveryMode: "COUNTER",
+            partyType: null, partyId: null,
+            settlementJson: { tenders: [{ accountId: 14, amount: 1180 }], charges: [] },
+            partyJson: null,
+            // subtotal is the sum of line amounts and is tax-INCLUSIVE here, so it
+            // equals the bill total on a voucher with no shipping / discount / round-off.
+            subtotal: 1180, taxAmount: 180, shippingAmt: 0, roundOff: 0, totalAmount: 1180,
+            universalVoucher: { date: new Date(), voucherNo: null, description: "probe", branch: { gstStateCode: "19" } },
+            lines: Array.from({ length: LINES }, (_, i) => ({
+                productId: 100 + i, quantity: 2, rate: 100, amount: 200,
+                product: { id: 100 + i, stock: 50 },
+            })),
+        },
+        userId: 1, sellerStateCode: "19", buyerStateCode: "19",
+    });
+    report(`postVoucherInTx — whole post arm, ${LINES} lines (create+post path)`);
+    tx = makeTx();
 
     // ── Stock arm: one move per item line.
     await recordStockMovementsBatch(tx, Array.from({ length: LINES }, (_, i) => ({

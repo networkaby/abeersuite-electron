@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
@@ -116,9 +117,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // default 5s interactive-tx ceiling over the Supabase pooler (P2028).
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
-            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
-            console.error("[price-recompute] failed for voucher", voucher.id, err);
+        // Pricing-cache refresh is not part of this answer - defer it past the
+        // response with after() (reliable on serverless, unlike a bare
+        // fire-and-forget) so nobody waits on a cost-ledger walk.
+        after(async () => {
+            await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
+                console.error("[price-recompute] failed for voucher", voucher.id, err);
+            });
         });
 
         await writeRestoreAudit({

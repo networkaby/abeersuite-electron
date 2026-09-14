@@ -1313,20 +1313,24 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             if (isEditing && editVoucherId != null) {
                 await axios.patch(`/api/inventory/vouchers/${editVoucherId}`, payload);
                 savedId = editVoucherId;
+                // A DRAFT being edited still needs the explicit post step; a voucher
+                // that arrived POSTED was already re-posted atomically by the PATCH.
+                if (andPost && !skipExplicitPost) {
+                    await axios.post(`/api/inventory/vouchers/${savedId}/post`);
+                }
             } else {
-                const res = await axios.post<{ id: number }>("/api/inventory/vouchers", payload);
+                // Save AND post in ONE request. This used to be two — create the
+                // draft, wait for its id, then call /[id]/post — which on a counter
+                // that relays writes to the office meant paying the round trip to
+                // the office twice for what the cashier sees as one button.
+                const res = await axios.post<{ id: number }>(
+                    "/api/inventory/vouchers",
+                    { ...payload, post: andPost && !skipExplicitPost },
+                );
                 savedId = res.data.id;
             }
 
-            if (andPost && !skipExplicitPost) {
-                await axios.post(`/api/inventory/vouchers/${savedId}/post`);
-                toast.success(copy.successPostedMsg);
-            } else if (andPost) {
-                // PATCH already re-posted — surface the same success copy.
-                toast.success(copy.successPostedMsg);
-            } else {
-                toast.success(copy.successDraftMsg);
-            }
+            toast.success(andPost ? copy.successPostedMsg : copy.successDraftMsg);
             if (andPrint) {
                 // Thermal auto-fire (like POS) or the browser print page, per the
                 // Thermal toggle. The generic /receipt/voucher route resolves the

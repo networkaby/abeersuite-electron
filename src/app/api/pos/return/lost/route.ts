@@ -19,6 +19,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
@@ -240,9 +241,14 @@ export async function POST(req: Request) {
         });
 
         const touchedProductIds = data.lines.map((l) => l.productId);
-        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
-            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.returnVoucherId) } });
-            console.error("[price-recompute] failed for voucher", result.returnVoucherId, err);
+        // Pricing-cache refresh is not part of this answer - defer it past the
+        // response with after() (reliable on serverless, unlike a bare
+        // fire-and-forget) so nobody waits on a cost-ledger walk.
+        after(async () => {
+            await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.returnVoucherId) } });
+                console.error("[price-recompute] failed for voucher", result.returnVoucherId, err);
+            });
         });
 
         return NextResponse.json(result, { status: 201 });

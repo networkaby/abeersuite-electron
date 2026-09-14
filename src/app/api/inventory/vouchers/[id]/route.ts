@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
@@ -522,9 +523,14 @@ export async function PATCH(req: Request, { params }: Params) {
         const touchedProductIds = new Set<number>();
         for (const pid of existingLineProductIds) touchedProductIds.add(pid);
         for (const l of computedLines ?? []) touchedProductIds.add(l.productId);
-        await recomputePricesForProducts([...touchedProductIds]).catch((err: unknown) => {
-            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(id) } });
-            console.error("[price-recompute] failed for voucher", id, err);
+        // Pricing-cache refresh is not part of this answer - defer it past the
+        // response with after() (reliable on serverless, unlike a bare
+        // fire-and-forget) so nobody waits on a cost-ledger walk.
+        after(async () => {
+            await recomputePricesForProducts([...touchedProductIds]).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(id) } });
+                console.error("[price-recompute] failed for voucher", id, err);
+            });
         });
 
         return NextResponse.json(updated);
