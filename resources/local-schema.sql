@@ -3996,9 +3996,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_counterNumber_key" ON "pos_count
 CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_tillAccountId_key" ON "pos_counters"("tillAccountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "pos_counters_epbxExtension_key" ON "pos_counters"("epbxExtension");
-
--- CreateIndex
 CREATE INDEX IF NOT EXISTS "pos_counters_branchId_idx" ON "pos_counters"("branchId");
 
 -- CreateIndex

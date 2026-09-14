@@ -23,6 +23,7 @@ import { fmt } from "@/utils/constants";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
 import type { PosPayChannel } from "@/generated/prisma/client";
+import { splitExtensions } from "@/shared/lib/counter/idRange";
 
 type Branch = { id: string; number: number; name: string; isActive: boolean };
 
@@ -465,15 +466,18 @@ export default function CountersAdminPage() {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs font-medium text-muted-foreground">EPBX extension (unique number)</label>
+                                                        <label className="text-xs font-medium text-muted-foreground">EPBX extension(s)</label>
                                                         <Input
-                                                            type="number"
-                                                            min={1}
+                                                            type="text"
+                                                            inputMode="numeric"
                                                             value={editForm.epbxExtension}
                                                             onChange={(e) => setEditForm((f) => ({ ...f, epbxExtension: e.target.value }))}
-                                                            placeholder="e.g. 21"
+                                                            placeholder="e.g. 21 or 21,22"
                                                             className="mt-1"
                                                         />
+                                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                                            Several phones on one counter — separate with commas. An extension cannot sit on two counters.
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground">
@@ -628,7 +632,7 @@ export default function CountersAdminPage() {
                                                         <span>{c.totalShifts} shift{c.totalShifts === 1 ? "" : "s"}</span>
                                                         {c.epbxExtension && (
                                                             <span className="flex items-center gap-1">
-                                                                <Phone size={11} /> Ext {c.epbxExtension}
+                                                                <Phone size={11} /> Ext {splitExtensions(c.epbxExtension).join(", ")}
                                                             </span>
                                                         )}
                                                         {c.activeShift && (
