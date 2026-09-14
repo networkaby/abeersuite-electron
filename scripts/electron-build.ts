@@ -68,5 +68,9 @@ step("prepare-bridge-deps", "pnpm", ["exec", "tsx", "scripts/prepare-bridge-deps
 // The window a counter shows while an update installs and the app itself is gone.
 // Built here rather than by hand so the splash in a package always matches its source.
 step("build-update-splash", "pnpm", ["exec", "tsx", "scripts/build-update-splash.ts"]);
+// The 7-Zip the app uses to unpack an update BEFORE the restart rather than during it
+// (electron/stagedUpdate.ts). Fetched here, not by hand: a package built without it
+// still updates, just the slow way, and that difference is too quiet to leave to memory.
+step("fetch-7za", "pnpm", ["exec", "tsx", "scripts/fetch-7za.ts"]);
 
 console.log(`[electron-build] Done — APP_MODE=${mode} build ready.`);

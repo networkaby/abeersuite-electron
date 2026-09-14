@@ -214,3 +214,4 @@ hardware-bridge/config.json
 
 # Built by scripts/build-update-splash.ts on every electron build.
 resources/AbeerSuiteUpdateSplash.exe
+resources/7za.exe
