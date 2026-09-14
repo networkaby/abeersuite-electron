@@ -1,26 +1,29 @@
-# v1.3.4
+# v1.3.5
 
-A quiet update — no urgent restart needed. It will install itself at the next safe moment (empty POS cart, or when the counter is sitting on the login screen). Worth taking on every counter, because this one stops a failed load from looking like an empty shop.
+A quiet update — installs itself safely when the counter is idle, on the login screen, or with an empty POS cart. Every counter and office terminal should take this release for the new unified shift closure print formats, instant shift closing, accurate cash drawer reconciliation, and voucher posting safeguards.
 
-## Screens tell the truth when something goes wrong
+## Counter & POS Shift Closing
 
-- **A page that fails to load no longer looks empty.** Earlier, when a list could not be fetched, a small message flashed for four seconds and then the screen simply read "No orders yet" — so staff believed there was no work. Now the page says plainly that the load failed and offers a retry.
-- **Refreshing no longer wipes the screen while it works.** Pressing Refresh, changing a date, or editing one cell used to blank the whole report and throw away your scroll position and half-typed entries. The old figures now stay on screen while the fresh ones arrive. This covers all 20 business reports.
-- **If a refresh fails over figures already on screen**, a strip appears above them saying the numbers are stale — instead of the old data quietly disappearing.
-- **Failed saves were invisible on the voucher screens.** On the inventory voucher pages — challans, GRN, purchase orders, physical stock, branch transfers, rejections, manufacturing journals — the "could not save" message had nowhere to appear, so a failed save looked exactly like a saved one. Those messages now show.
+- **Shift close summary print is now fully customizable.** Shift close reports (both 80mm/58mm thermal receipts and A4 sheets) now run through the central Voucher Print Template designer. You can customize header details, show/hide sections, configure barcodes, notes, and styling from Settings.
+- **Immediate closing with background print.** Closing a shift no longer blocks the cashier waiting for printer feedback. When you click Close Shift, the dialog closes immediately and triggers thermal printing in the background.
+- **Convenient print toggles.** Added "Print After Save" and "Thermal" quick toggles right next to the shift close action buttons so cashiers can choose their print output on the spot.
+- **Shift detail view reports.** Dedicated print buttons and formatted print previews are now available directly on the Shift Detail page in the back-office.
+- **Reopen & Re-close safeguards.** Closed shifts can now be reopened safely for corrections without corrupting voucher links, while protecting against re-closing from offline counters.
 
-## Big changes ask before they happen
+## Billing & Cash Drawer Accuracy
 
-- **Bulk price freeze now asks first**, and tells you how many products it is about to touch. One stray click on the header tick used to be able to re-freeze thousands of prices across the shop with no question.
-- The same question now guards offline policy defaults, spend-tier deletes, and removing a courier service.
+- **Accurate till cash calculations.** Fixed cash-handling calculations during shift close to properly capture all receipts, cash movements, and cash refunds, accurately reconstructing the exact till balance at close time.
+- **Clearer terminology.** Shift summary labels now plainly read "Counter opening cash" and "Counter cash flow" to eliminate confusion with bank accounts.
+- **Compact 3-column layout.** The shift close dialog now organizes physical denomination counts, cash flow breakdown, and contra previews neatly on one screen without excessive scrolling.
 
-## Pricing Strategy
+## Accountancy & Vouchers
 
-- **A manager who can open a Pricing Strategy page can now do the work on it.** Earlier, a Branch Manager could open Update prices, edit rows, tick them, and only find out at the Save click that the save was refused. Setting strategy points, costing draws, and saving barcode prices now go with the page itself.
-- **Clearing every strategy point is still protected**, and now properly so. It needs the "Can reset all points" permission, and the server enforces it — earlier only the Reset button was hidden, so the values could be emptied by hand and saved anyway.
-- **Rows you have changed but not saved are all marked now.** The count on the Save button and the amber mark on the row finally agree. Each marked row also has a small reset circle that puts the price and the selling choice back to the last saved values.
-- Note for the person who manages roles: the Role screen for Pricing Strategy is simpler now — each page has its tick, plus one "Can reset all points" under Strategies. The three old per-page edit ticks are gone.
+- **Save & Post in one step.** Added "Save & Post" action for vouchers to speed up daily bookkeeping workflows.
+- **Cleaner series numbering.** Draft vouchers no longer take up series numbers prematurely; numbers advance only when the voucher is officially posted.
+- **Restore cancelled vouchers.** Cancelled vouchers can now be restored (un-cancelled) directly if marked in error.
+- **Strict balances.** Strengthened double-entry balance calculations to avoid sign flips across account ledgers.
 
-## Sync
+## Sync & Data Integrity
 
-- **A deletion made at the office now reaches the counters at once.** Earlier, deleting something on the web left it sitting on the counter until the hourly catch-up pass ran — a deleted coupon, for example, stayed usable at the till. Deletions now travel immediately, along with anything attached to them.
+- **Reconcile protection.** Counter reconciliation will never delete data that the cloud server has not yet received.
+- **Posted voucher safety.** Offline counters are prevented from accidentally demoting cloud-posted vouchers back to draft state.
