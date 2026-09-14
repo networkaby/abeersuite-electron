@@ -9,17 +9,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
-
-/** Position the ticket is assigned to + its current live holders. */
-const ASSIGNED_POSITION_SELECT = {
-    select: {
-        id: true,
-        title: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
-        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
-    },
-} as const;
+import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
 
 // A help ticket is a Ticket (flavour "help") + a TicketHelp detail. We query the
 // Ticket and flatten the detail back onto it at the boundary so the Help UI has a

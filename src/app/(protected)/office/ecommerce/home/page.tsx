@@ -34,6 +34,7 @@ import SectionPreview, { type PreviewData } from "@/modules/ecommerce/components
 import BannerSlidesEditor from "@/modules/ecommerce/components/homeEditor/BannerSlidesEditor";
 import TrustItemsEditor from "@/modules/ecommerce/components/homeEditor/TrustItemsEditor";
 import HeadingEditor from "@/modules/ecommerce/components/homeEditor/HeadingEditor";
+import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 
 // Per-type placeholder text for "heading" kind instances — the text a blank
 // field falls back to, i.e. what the component's own hardcoded default says.
@@ -53,19 +54,6 @@ const HEADING_PLACEHOLDERS: Partial<Record<HomeSectionType, { eyebrow?: string; 
     brandStrip: { eyebrow: "Trusted brands", title: "Original products from leading manufacturers" },
     fullCatalog: { title: "Catalog" },
 };
-
-async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T> {
-    let lastErr: unknown;
-    for (let i = 0; i < tries; i++) {
-        try {
-            return (await axios.get<T>(url)).data;
-        } catch (e) {
-            lastErr = e;
-            await new Promise((r) => setTimeout(r, delayMs));
-        }
-    }
-    throw lastErr;
-}
 
 function sortForDisplay(rows: HomeSectionInstance[]): HomeSectionInstance[] {
     return [...rows].sort((a, b) => a.sectionNo - b.sectionNo || b.priority - a.priority);

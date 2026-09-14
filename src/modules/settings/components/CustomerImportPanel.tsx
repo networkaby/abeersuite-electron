@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseCsv } from "@/shared/lib/import/csvParse";
 import { type CustomerImportField } from "@/shared/lib/import/customerImportFields";
+import { toCsv } from "@/shared/lib/import/csvSerialize";
 
 const FIELD_LABELS: Record<CustomerImportField, string> = {
     name: "Name *",
@@ -70,16 +71,6 @@ interface PreviewResult {
     willSkip: number;
     errorCount: number;
     results: RowResult[];
-}
-
-function toCsv(rows: string[][]): string {
-    const escape = (cell: string) => {
-        if (cell == null) return "";
-        const needsQuote = /[",\r\n]/.test(cell);
-        const escaped = cell.replace(/"/g, '""');
-        return needsQuote ? `"${escaped}"` : escaped;
-    };
-    return rows.map((r) => r.map(escape).join(",")).join("\r\n");
 }
 
 function autoSuggestField(header: string): CustomerImportField | typeof IGNORE {

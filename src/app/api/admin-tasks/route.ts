@@ -9,18 +9,7 @@ import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurren
 import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
-
-/** Position the task is assigned to + its current live holders (resolved via
- *  UserPosition), so the board can show who'll actually do the work. */
-const ASSIGNED_POSITION_SELECT = {
-    select: {
-        id: true,
-        title: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
-        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
-    },
-} as const;
+import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
 
 // A task is a bare Ticket (flavour "task", no detail). We flatten the core Ticket back
 // to the old flat Task shape (description ← notes, dueDate ← dueAt, completedAt ←

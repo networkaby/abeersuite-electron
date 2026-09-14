@@ -8,17 +8,13 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
+import { parseNumericId } from "@/shared/lib/api/parseNumericId";
 
 // Convert a help ticket into a real downstream ticket — the "Converted" rung of the
 // help ladder. `deal` drops it into the CRM pipeline as a lead (nurture / push the
 // sale); `service` opens a repair ticket for a broken device. The downstream ticket
 // is fully INDEPENDENT (no parent/child link); the help ticket simply closes with a
 // CONVERTED_* outcome — the closed enquiry + its outcome is the whole record.
-
-function parseId(raw: string): number | null {
-    const n = Number(raw);
-    return Number.isInteger(n) && n > 0 ? n : null;
-}
 
 /** The Help Desk pipeline's terminal (Closed) stage. */
 async function helpClosedStatusId(pipelineId: string): Promise<string | null> {
@@ -33,7 +29,7 @@ async function helpClosedStatusId(pipelineId: string): Promise<string | null> {
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();
     if (response) return response;
-    const id = parseId((await params).id);
+    const id = parseNumericId((await params).id);
     if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
         const { data, error } = await validateRequest(req, convertHelpSchema);

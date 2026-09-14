@@ -43,6 +43,7 @@ import {
 import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
 import { separatingField } from "@/shared/lib/parties/partySearch";
 import { invalidateParties } from "@/shared/lib/parties";
+import { FieldError } from "@/shared/components/FieldError";
 
 export type PickedParty = {
     kind: "customer" | "company";
@@ -146,11 +147,6 @@ export function isPhoneLike(q: string): boolean {
     const digits = trimmed.replace(/\D/g, "").length;
     const letters = trimmed.replace(/[^a-zA-Z]/g, "").length;
     return digits >= 4 && letters === 0;
-}
-
-function FieldError({ msg }: { msg: string | null }) {
-    if (!msg) return null;
-    return <p className="text-[11px] text-destructive">{msg}</p>;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -773,7 +769,7 @@ export const PartySearchAndCreate = forwardRef<
                                             inputMode="tel"
                                             aria-invalid={!!phoneError(newParty.phone)}
                                         />
-                                        <FieldError msg={phoneError(newParty.phone)} />
+                                        <FieldError message={phoneError(newParty.phone)} />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
@@ -786,7 +782,7 @@ export const PartySearchAndCreate = forwardRef<
                                             tabIndex={-1}
                                             aria-invalid={!!emailError(newParty.email)}
                                         />
-                                        <FieldError msg={emailError(newParty.email)} />
+                                        <FieldError message={emailError(newParty.email)} />
                                     </div>
                                 </div>
                             )}
@@ -815,7 +811,7 @@ export const PartySearchAndCreate = forwardRef<
                                             inputMode="tel"
                                             aria-invalid={!!phoneError(newParty.phone)}
                                         />
-                                        <FieldError msg={phoneError(newParty.phone)} />
+                                        <FieldError message={phoneError(newParty.phone)} />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
@@ -828,7 +824,7 @@ export const PartySearchAndCreate = forwardRef<
                                             tabIndex={-1}
                                             aria-invalid={!!emailError(newParty.email)}
                                         />
-                                        <FieldError msg={emailError(newParty.email)} />
+                                        <FieldError message={emailError(newParty.email)} />
                                     </div>
                                 </div>
                             )}
@@ -879,7 +875,7 @@ export const PartySearchAndCreate = forwardRef<
                                             inputMode="tel"
                                             aria-invalid={!!phoneError(newParty.companyPhone)}
                                         />
-                                        <FieldError msg={phoneError(newParty.companyPhone)} />
+                                        <FieldError message={phoneError(newParty.companyPhone)} />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>Company email</Label>
@@ -892,7 +888,7 @@ export const PartySearchAndCreate = forwardRef<
                                             tabIndex={-1}
                                             aria-invalid={!!emailError(newParty.companyEmail)}
                                         />
-                                        <FieldError msg={emailError(newParty.companyEmail)} />
+                                        <FieldError message={emailError(newParty.companyEmail)} />
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
@@ -929,7 +925,7 @@ export const PartySearchAndCreate = forwardRef<
                                             inputMode="numeric"
                                             aria-invalid={!!pinError(newParty.companyPinCode)}
                                         />
-                                        <FieldError msg={pinError(newParty.companyPinCode)} />
+                                        <FieldError message={pinError(newParty.companyPinCode)} />
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
