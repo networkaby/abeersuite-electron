@@ -10,6 +10,7 @@ import { InvProductDialog } from "@/modules/inventory/components/InvProductDialo
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { SlidersHorizontal } from "lucide-react";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export default function EcommerceProductEditPage() {
     const params = useParams();
@@ -82,7 +83,7 @@ export default function EcommerceProductEditPage() {
                     type="button"
                     variant="destructive"
                     onClick={async () => {
-                        if (!confirm("Deactivate this product on the storefront?")) return;
+                        if (!(await confirmAction({ title: "Deactivate this product on the storefront?", confirmLabel: "Deactivate" }))) return;
                         try {
                             await axios.delete(`/api/ecommerce/products/${id}`);
                             toast.success("Product deactivated");

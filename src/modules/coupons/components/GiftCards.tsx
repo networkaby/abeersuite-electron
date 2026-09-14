@@ -18,6 +18,7 @@ import { giftCardWhatsappUrl, giftCardWhatsappWebUrl, giftCardEmailUrl, giftCard
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, formatInr } from "@/shared/lib/format";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface GiftCard {
     id: number;
@@ -118,7 +119,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
     }
 
     async function issue(c: GiftCard) {
-        if (!confirm(`Sell gift card ${c.code} for ${formatInr(Number(c.initialValue))}?\nThis takes payment and posts Dr Cash / Cr Gift Card Liability.`)) return;
+        if (!(await confirmAction({ title: `Sell gift card ${c.code} for ${formatInr(Number(c.initialValue))}?`, body: `This takes payment and posts Dr Cash / Cr Gift Card Liability.`, confirmLabel: "Sell", destructive: false }))) return;
         setBusyId(c.id);
         try {
             await axios.post(`/api/gift-cards/${c.id}/issue`, {});
@@ -132,7 +133,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
     }
 
     async function remove(c: GiftCard) {
-        if (!confirm(`Delete draft gift card ${c.code}? This can't be undone.`)) return;
+        if (!(await confirmAction({ title: `Delete draft gift card ${c.code}?`, body: `This can't be undone.`, confirmLabel: "Delete" }))) return;
         setBusyId(c.id);
         try {
             await axios.delete(`/api/gift-cards/${c.id}`);
@@ -157,7 +158,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
     }
 
     async function runBreakage() {
-        if (!confirm(`Recognise breakage on ${breakageCount} expired gift card(s)? This posts income for the unredeemed balances.`)) return;
+        if (!(await confirmAction({ title: `Recognise breakage on ${breakageCount} expired gift card(s)?`, body: `This posts income for the unredeemed balances.`, confirmLabel: "Recognise", destructive: false }))) return;
         setSweeping(true);
         try {
             const r = await axios.post<{ expired: number; total: number }>("/api/gift-cards/expire-breakage", {});

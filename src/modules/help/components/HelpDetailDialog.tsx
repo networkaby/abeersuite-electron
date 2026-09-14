@@ -23,6 +23,7 @@ import {
     CLOSE_OUTCOMES, INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle,
     type HelpDetailDto, type HelpStage,
 } from "../lib/types";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export default function HelpDetailDialog({
     ticketId,
@@ -106,7 +107,7 @@ export default function HelpDetailDialog({
     };
 
     const remove = async () => {
-        if (ticketId == null || !confirm("Delete this help ticket?")) return;
+        if (ticketId == null || !(await confirmAction({ title: "Delete this help ticket?", confirmLabel: "Delete" }))) return;
         setBusy(true);
         try {
             await axios.delete(`/api/help/${ticketId}`);

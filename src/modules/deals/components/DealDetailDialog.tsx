@@ -20,6 +20,7 @@ import { PRIORITY_META } from "@/utils/constants";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { DealDetailDto, DealStage, DealActivityKind } from "../lib/types";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string; icon: typeof StickyNote }[] = [
     { kind: "NOTE", label: "Note", icon: StickyNote },
@@ -119,7 +120,7 @@ export default function DealDetailDialog({
 
     const handleDelete = async () => {
         if (!deal) return;
-        if (!window.confirm("Delete this deal? This cannot be undone.")) return;
+        if (!(await confirmAction({ title: "Delete this deal?", body: "This cannot be undone.", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/deals/${deal.id}`);
             toast.success("Deal deleted");
