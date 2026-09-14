@@ -298,21 +298,21 @@ export default function ShiftDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                 {shift.openingContraVoucher && (
                     <Card label="Opening Contra (vault top-up)">
-                        <Link href={`/office/accountancy/vouchers/${shift.openingContraVoucher.id}`} className="text-primary font-mono hover:underline flex items-center gap-1">
+                        <Link href={`/vouchers/contras/${shift.openingContraVoucher.id}`} className="text-primary font-mono hover:underline flex items-center gap-1">
                             {shift.openingContraVoucher.reference} <ExternalLink size={11} />
                         </Link>
                     </Card>
                 )}
                 {shift.closingContraVoucher && (
                     <Card label="Closing Contra (vault sweep)">
-                        <Link href={`/office/accountancy/vouchers/${shift.closingContraVoucher.id}`} className="text-primary font-mono hover:underline flex items-center gap-1">
+                        <Link href={`/vouchers/contras/${shift.closingContraVoucher.id}`} className="text-primary font-mono hover:underline flex items-center gap-1">
                             {shift.closingContraVoucher.reference} <ExternalLink size={11} />
                         </Link>
                     </Card>
                 )}
                 {shift.varianceJournalEntry && (
                     <Card label="Variance JE">
-                        <Link href={`/office/accountancy/journal-entries/${shift.varianceJournalEntry.id}`} className="text-primary font-mono hover:underline flex items-center gap-1">
+                        <Link href={`/vouchers/journal-entries/${shift.varianceJournalEntry.id}`} className="text-primary font-mono hover:underline flex items-center gap-1">
                             {shift.varianceJournalEntry.reference} <ExternalLink size={11} />
                         </Link>
                     </Card>

@@ -35,7 +35,7 @@ export function DrillRow({ target, period, children, className = "", onClick }: 
         switch (target.kind) {
             case "group":   return `/office/accountancy/masters/groups/${target.id}${tail}`;
             case "ledger":  return accountLedgerUrl(target.id, period);
-            case "journal": return `/office/accountancy/journal-entries/${target.id}`;
+            case "journal": return `/vouchers/journal-entries/${target.id}`;
             case "voucher": return target.url;
             case "none":    return null;
         }

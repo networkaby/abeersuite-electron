@@ -184,7 +184,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                 </Card>
                 {voucher.journalEntryId && (
                     <Card label="GL Journal Entry">
-                        <Link href={`/office/accountancy/journal-entries/${voucher.journalEntryId}`} className="font-medium text-primary flex items-center gap-1 hover:underline">
+                        <Link href={`/vouchers/journal-entries/${voucher.journalEntryId}`} className="font-medium text-primary flex items-center gap-1 hover:underline">
                             View JE <ExternalLink size={12} />
                         </Link>
                     </Card>
