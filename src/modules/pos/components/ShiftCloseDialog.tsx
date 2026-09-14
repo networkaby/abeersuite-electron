@@ -374,8 +374,8 @@ export function ShiftCloseDialog({
                                 )}
 
                                 <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
-                                    {/* ── Column 1: Denomination counter ── */}
-                                    <div>
+                                    {/* ── Column 1: Denomination counter + Notes ── */}
+                                    <div className="space-y-3">
                                         <DenominationCounter
                                             denoms={denoms}
                                             onChange={setDenom}
@@ -384,6 +384,17 @@ export function ShiftCloseDialog({
                                             total={countedTotal}
                                             list={denomList}
                                         />
+
+                                        <div className="space-y-1">
+                                            <Label htmlFor="close-notes">Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                                            <Input
+                                                id="close-notes"
+                                                value={notes}
+                                                onChange={(e) => setNotes(e.target.value)}
+                                                placeholder="e.g. Safe drop already done"
+                                                className="h-9"
+                                            />
+                                        </div>
                                     </div>
 
                                     {/* ── Column 2: Reconciliation Summary & Inputs ── */}
@@ -459,32 +470,7 @@ export function ShiftCloseDialog({
                                                 </div>
                                             )}
 
-                                            <div className="space-y-1">
-                                                <Label htmlFor="close-notes">Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                                                <Input
-                                                    id="close-notes"
-                                                    value={notes}
-                                                    onChange={(e) => setNotes(e.target.value)}
-                                                    placeholder="e.g. Safe drop already done"
-                                                    className="h-9"
-                                                />
-                                            </div>
-
-                                            {/* Vault mode Contra alert */}
-                                            {mode === "vault" && declared && (
-                                                <div className="rounded-md bg-primary/5 border border-primary/30 px-3 py-2 text-xs text-muted-foreground space-y-1">
-                                                    <div>
-                                                        Posts Contra: <span className="font-medium text-foreground">{detail.counter.tillAccount.name}</span> → <span className="font-medium text-foreground">Vault</span> for{" "}
-                                                        <span className="font-mono font-semibold text-foreground">₹{fmt(toVault)}</span>
-                                                        {dropsNum > 0 && <> (incl. <span className="font-mono font-semibold text-foreground">₹{fmt(dropsNum)}</span> dropped to safe)</>}.
-                                                    </div>
-                                                    <div>
-                                                        Counter keeps <span className="font-mono font-semibold text-foreground">₹{fmt(carryOverNum)}</span> overnight.
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Handover mode */}
+                                            {/* Handover mode cashier selector */}
                                             {mode === "handover" && (
                                                 <div className="space-y-2">
                                                     <Label>Hand over to</Label>
@@ -514,18 +500,12 @@ export function ShiftCloseDialog({
                                                             </SelectContent>
                                                         </Select>
                                                     )}
-                                                    {selectedUserId && (
-                                                        <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-                                                            ⚠ Handover to {candidates.find((c) => c.id === selectedUserId)?.name ?? "cashier"}.
-                                                            Declared ₹{fmt(declaredNum)} · Carry-over ₹{fmt(carryOverNum)} · GL posts on acceptance.
-                                                        </div>
-                                                    )}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
 
-                                    {/* ── Column 3: Breakdowns (Till Movement & Payments Collected) ── */}
+                                    {/* ── Column 3: Breakdowns & Contra Action Preview ── */}
                                     <div className="space-y-3">
                                         {/* Dedicated Till Movement Breakdown Card */}
                                         <div className="rounded-md border border-border bg-muted/40 p-3 text-xs sm:text-sm space-y-1.5">
@@ -642,6 +622,28 @@ export function ShiftCloseDialog({
                                                     <span>Net total collected</span>
                                                     <span className="font-mono">₹{fmt(tenderTotal)}</span>
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {/* Vault mode Contra alert */}
+                                        {mode === "vault" && declared && (
+                                            <div className="rounded-md bg-primary/5 border border-primary/30 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                                                <div>
+                                                    Posts Contra: <span className="font-medium text-foreground">{detail.counter.tillAccount.name}</span> → <span className="font-medium text-foreground">Vault</span> for{" "}
+                                                    <span className="font-mono font-semibold text-foreground">₹{fmt(toVault)}</span>
+                                                    {dropsNum > 0 && <> (incl. <span className="font-mono font-semibold text-foreground">₹{fmt(dropsNum)}</span> dropped to safe)</>}.
+                                                </div>
+                                                <div>
+                                                    Counter keeps <span className="font-mono font-semibold text-foreground">₹{fmt(carryOverNum)}</span> overnight.
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Handover mode acceptance notice */}
+                                        {mode === "handover" && selectedUserId && (
+                                            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                                                ⚠ Handover to {candidates.find((c) => c.id === selectedUserId)?.name ?? "cashier"}.
+                                                Declared ₹{fmt(declaredNum)} · Carry-over ₹{fmt(carryOverNum)} · GL posts on acceptance.
                                             </div>
                                         )}
                                     </div>
