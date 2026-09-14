@@ -440,7 +440,7 @@ export function ShiftCloseDialog({
                                         </div>
 
                                         {/* Reconciliation & Closing Inputs Card */}
-                                        <div className="rounded-md border border-border bg-muted/40 p-3 text-xs sm:text-sm space-y-3">
+                                        <div className="rounded-md border border-border bg-card p-3 text-xs sm:text-sm space-y-3">
                                             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
                                                 Physical Count & Reconciliation
                                             </p>
