@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
@@ -25,9 +26,7 @@ export async function POST(req: NextRequest) {
     try {
         branchId = resolveActiveBranchId(req, session);
     } catch (e) {
-        if (e instanceof BranchAccessError) {
-            return NextResponse.json({ error: e.message }, { status: e.code === "forbidden_branch" ? 403 : 400 });
-        }
+        if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;
     }
 

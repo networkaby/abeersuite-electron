@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
         } else {
             try { branchFilter = { branchId: resolveActiveBranchId(req, session) }; }
             catch (e) {
-                if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
+                if (e instanceof BranchAccessError) return branchAccessResponse(e);
                 throw e;
             }
         }
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
     let branchId: string;
     try { branchId = resolveActiveBranchId(req, session); }
     catch (e) {
-        if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
+        if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;
     }
 

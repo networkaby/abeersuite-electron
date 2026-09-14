@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { OFFLINE_READ_ONLY, isOfflineWriteBlocked } from "@/shared/lib/prisma/offlineError";
 import { isVoucherDateError } from "@/shared/lib/accountancy/booksPeriodServer";
+import { BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "./branchAccessResponse";
 
 /**
  * Generic API error envelope. Logs server-side, returns a 500 NextResponse with
@@ -32,6 +34,11 @@ export function handleApiError(e: unknown, fallback = "Internal server error"): 
     // the offline case above — it covers every voucher route at once.
     if (isVoucherDateError(e)) {
         return NextResponse.json({ error: e.message }, { status: 422 });
+    }
+    // A branch refusal that reached the outer catch — same answer as the routes
+    // that resolve their branch up front and call branchAccessResponse() directly.
+    if (e instanceof BranchAccessError) {
+        return branchAccessResponse(e);
     }
     console.error("[api]", e);
     return NextResponse.json({ error: fallback }, { status: 500 });

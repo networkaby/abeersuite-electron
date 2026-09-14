@@ -13,6 +13,7 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { auth } from "@/auth";
@@ -140,7 +141,7 @@ export async function GET(req: NextRequest) {
                     if (!firstBranch) return NextResponse.json([], { status: 200 });
                     branchId = firstBranch.id;
                 } else {
-                    return NextResponse.json({ error: e.message }, { status: 400 });
+                    return branchAccessResponse(e);
                 }
             } else {
                 throw e;

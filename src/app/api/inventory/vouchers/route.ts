@@ -10,6 +10,7 @@ import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
 import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib/postInvVoucher";
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
         // No branch filter — org-wide. Reports land here by omitting the param.
     } else {
         try { requireBranchAccess(session, branchParam); } catch (e) {
-            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
+            if (e instanceof BranchAccessError) return branchAccessResponse(e);
             throw e;
         }
         branchScopeId = branchParam;
@@ -431,9 +432,7 @@ export async function POST(req: NextRequest) {
             ? (requireBranchAccess(session, bodyBranchId), bodyBranchId)
             : resolveActiveBranchId(req, session);
     } catch (e) {
-        if (e instanceof BranchAccessError) {
-            return NextResponse.json({ error: e.message }, { status: e.code === "forbidden_branch" ? 403 : 400 });
-        }
+        if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;
     }
     if (isBranchTransfer && destinationBranchId === branchId) {
