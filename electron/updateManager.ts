@@ -49,7 +49,8 @@ import * as path from "node:path";
 import { app, BrowserWindow, powerMonitor } from "electron";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
-import type { UpdateInfo } from "electron-updater";
+import type { UpdateDownloadedEvent, UpdateInfo } from "electron-updater";
+import { beginSwap, isStaging, stageUpdate } from "./stagedUpdate";
 
 export type UpdateTier = "quiet" | "urgent" | "schema";
 export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "installing" | "error";
@@ -210,6 +211,11 @@ function startSafePoll(): void {
         if (state.phase !== "ready") return stopSafePoll();
         const overdue = state.deadlineAt !== null && Date.now() >= state.deadlineAt;
         if (overdue) return install("countdown ended");
+        // Holding a safe moment while the background unpack finishes trades a minute of
+        // waiting for minutes of downtime: installing now would mean the installer
+        // unpacking 627 MB with the till dead, when the same work is nearly done with it
+        // alive. A deadline above has already overruled this.
+        if (isStaging()) return;
         if (safeToInstall()) return install("safe moment");
     }, SAFE_POLL_MS);
 }
@@ -299,6 +305,19 @@ export function install(reason: string): void {
         return;
     }
     showUpdateSplash(state.version);
+
+    // ── The fast path ────────────────────────────────────────────────────────
+    // If stagedUpdate.ts has already unpacked this version beside the program folder,
+    // the restart costs two renames instead of a 627 MB unpack. The helper it starts
+    // waits for this process to exit, swaps the folders and starts the new build, so
+    // there is nothing left for electron-updater to do — and autoInstallOnAppQuit must
+    // be turned off before quitting, or the installer would run over the swap.
+    if (state.version && beginSwap(state.version)) {
+        autoUpdater.autoInstallOnAppQuit = false;
+        app.quit();
+        return;
+    }
+
     try {
         autoUpdater.quitAndInstall(true, true);
     } catch (err) {
@@ -415,12 +434,18 @@ export function setupAutoUpdater(opts: { isDev: boolean; landingPage: string }):
         autoUpdater.on("download-progress", (p: { percent: number }) => {
             patch({ percent: Math.round(p.percent) });
         });
-        autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+        autoUpdater.on("update-downloaded", (info: UpdateDownloadedEvent) => {
             releaseNotes = notesText(info) || releaseNotes;
             patch({ phase: "ready", version: info.version, percent: 100, deadlineAt: null });
             applyTier();
             console.log(`[Updater] ${info.version} downloaded (${state.tier}) — waiting for a safe moment.`);
             startSafePoll();
+            // Unpack it NOW, with the counter still selling, so the restart has nothing
+            // expensive left to do. Never awaited and never fatal: if this cannot run,
+            // install() falls back to the installer and the update is merely slower.
+            void stageUpdate(info.downloadedFile, info.version).catch((err) => {
+                console.warn("[Updater] Could not stage the update — it will install the ordinary way:", err);
+            });
         });
         autoUpdater.on("error", (err: Error) => {
             console.warn("[Updater] Error:", err?.message ?? err);

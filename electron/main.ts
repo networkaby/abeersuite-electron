@@ -930,6 +930,7 @@ import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isB
 import { applyIdRanges } from "./applyIdRanges";
 import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
 import { setupAutoUpdater, stopAutoUpdater, getUpdateState, install, checkNow, setCartBusy, clearUpdateSplash } from "./updateManager";
+import { repairAfterSwap } from "./stagedUpdate";
 import { attachZoom, fitToScreen, stepZoom, readDisplayPreference, writeDisplayPreference, applyPreferenceToAllWindows, resolveZoomFactor, ZOOM_STEPS } from "./displayPreference";
 
 // ── Route warming ─────────────────────────────────────────────────────────────
@@ -1553,6 +1554,12 @@ app.whenReady().then(async () => {
     // including the boot-error page, which the cashier needs to be able to read.
     // A no-op on every ordinary start.
     clearUpdateSplash();
+
+    // Same story for a staged update: the swap helper removes the folder it moved aside,
+    // but it is a detached script and the PC may have been switched off under it. This
+    // process is running, so whatever is left beside the program folder is spare — and
+    // on a counter each leftover is ~600 MB.
+    repairAfterSwap();
 
     // Counter PCs in tray/background mode can go a long time between a clean quit
     // (which is when persistVisitedRoutes() normally runs) — an abrupt power-off or
