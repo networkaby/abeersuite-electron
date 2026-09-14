@@ -37,7 +37,6 @@
 import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
@@ -45,7 +44,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { repostParkedVoucherInTx, discardParkedDraftInTx } from "@/modules/accountancy/lib/parkVoucherInTx";
-import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, tillBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
@@ -139,12 +138,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Expected = the till's book balance now − drops. Read AUTHORITATIVE, as
         // shift open does: this figure posts the variance JE, and a counter's
         // replica can lag the last posting by a sync cycle.
-        const tillNow = await prismaAuthoritative.account.findUnique({
-            where:  { id: shift.counter.tillAccountId },
-            select: EFFECTIVE_BALANCE_SELECT_FIELDS,
-        });
-        if (!tillNow) return NextResponse.json({ error: "Counter till account not found" }, { status: 500 });
-        const tillBookBalancePaise = effectiveBalancePaise(tillNow);
+        const tillBookBalancePaise = await tillBalancePaise(prismaAuthoritative, shift.counter.tillAccountId);
         const tillMovementPaise    = tillBookBalancePaise - shift.openingFloatPaise;
         const expectedPaise = computeExpectedCash(tillBookBalancePaise, dropsPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);

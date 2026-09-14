@@ -18,14 +18,13 @@
 // A is accountable for any gap between books and B's count (shown on A's shift).
 
 import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, effectiveBalancePaise } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
@@ -80,13 +79,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         // Expected on A's shift = the till's book balance now − A's drops. Read
         // AUTHORITATIVE (as shift open/close do) — this figure posts the variance JE.
-        const tillNow = await prismaAuthoritative.account.findUnique({
-            where:  { id: tillAccountId },
-            select: EFFECTIVE_BALANCE_SELECT_FIELDS,
-        });
-        if (!tillNow) return NextResponse.json({ error: "Counter till account not found" }, { status: 500 });
         const dropsPaise    = sumPaise(fromShift.drops);
-        const expectedPaise = computeExpectedCash(effectiveBalancePaise(tillNow), dropsPaise);
+        const expectedPaise = computeExpectedCash(
+            await tillBalancePaise(prismaAuthoritative, tillAccountId), dropsPaise);
 
         // Variance = A's declared − expected (A's count vs book expectation).
         // The total impact on the counter till = expected − B's counted

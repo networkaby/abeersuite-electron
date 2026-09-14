@@ -32,8 +32,7 @@ import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyT
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
 import { sumLinked, assertLinkable, createLink } from "@/modules/accountancy/lib/billLink";
-import { effectiveBalancePaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { tillBalancePaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 
@@ -701,7 +700,7 @@ async function runShiftCashMath(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             const openedAt = new Date(Date.now() - 60_000);
-            const tillBefore = effectiveBalancePaise((await tx.account.findUniqueOrThrow({ where: { id: cash.id }, select: EFFECTIVE_BALANCE_SELECT_FIELDS })));
+            const tillBefore = await tillBalancePaise(tx, cash.id);
             // A temporary shift so the sale and the receipt can carry it (the
             // "collected" tally reads `sourceShiftId`, never a time window).
             const shift = counter
@@ -731,7 +730,7 @@ async function runShiftCashMath(): Promise<boolean> {
             if (debtor && shift) {
                 await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id, shiftId: shift.id });
             }
-            const tillAfter = effectiveBalancePaise((await tx.account.findUniqueOrThrow({ where: { id: cash.id }, select: EFFECTIVE_BALANCE_SELECT_FIELDS })));
+            const tillAfter = await tillBalancePaise(tx, cash.id);
             const expected = BigInt(expectReceipt ? 16800 : 11800);   // POS 11800 + receipt 5000
             const bookMoved = tillAfter - tillBefore === expected;
             const collected = shift

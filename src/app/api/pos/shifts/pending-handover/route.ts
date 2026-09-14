@@ -9,7 +9,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 
 export async function GET() {
     const { user, response } = await requireAuth();
@@ -26,7 +26,7 @@ export async function GET() {
                 fromShift: {
                     include: {
                         user:    { select: { id: true, name: true } },
-                        counter: { include: { tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } } },
+                        counter: { include: { tillAccount: { select: { id: true, name: true } } } },
                         branch:  { select: { id: true, name: true } },
                     },
                 },
@@ -51,7 +51,7 @@ export async function GET() {
                     tillAccount: {
                         id:      handover.fromShift.counter.tillAccount.id,
                         name:    handover.fromShift.counter.tillAccount.name,
-                        balance: String(effectiveAccountBalance(handover.fromShift.counter.tillAccount)),
+                        balance: String(Number(await tillBalancePaise(prisma, handover.fromShift.counter.tillAccount.id)) / 100),
                     },
                 },
                 branch: handover.fromShift.branch,

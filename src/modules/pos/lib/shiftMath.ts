@@ -1,5 +1,7 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
-import { effectiveAccountBalance, type AccountForEffectiveBalance } from "@/modules/accountancy/lib/balance";
+import { balanceDelta } from "@/modules/accountancy/lib/balance";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/ledgerStatus";
+import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -23,10 +25,73 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 // Positive = drawer over (income via Cash Over); negative = short
 // (expense via Cash Short).
 
-/** The till's current book balance in paise — the same read shift OPEN uses for
- *  the carry-over, so open and close see the ledger identically. */
-export function effectiveBalancePaise(account: AccountForEffectiveBalance): bigint {
-    return BigInt(Math.round(effectiveAccountBalance(account) * 100));
+/**
+ * The till's current book balance in paise — read from the GL TRUTH, never from
+ * the cached `Account.balance`.
+ *
+ * Why not the cache: `Account.balance` is maintained incrementally, so any path
+ * that ever posted or reversed without its mirror leaves the till carrying money
+ * the ledger does not have — and on a counter PC that stale figure becomes the
+ * cashier's carry-over and the close's "expected in drawer". The drawer is real
+ * cash; it must agree with the ledger, not with a counter.
+ *
+ * The cost is one indexed groupBy over this counter's own lines. The counter
+ * reads its LOCAL replica, so this is not an egress read — correctness here is
+ * worth far more than the query.
+ *
+ * The master `openingBalance` is folded in exactly as `aggregateClosingAsOf`
+ * does, so a till opened from the account master (not by a GL voucher) still
+ * shows its opening cash.
+ */
+export async function tillBalancesPaise(tx: Tx, accountIds: number[]): Promise<Map<number, bigint>> {
+    const ids = [...new Set(accountIds)];
+    const out = new Map<number, bigint>();
+    if (ids.length === 0) return out;
+
+    const [accounts, sums] = await Promise.all([
+        tx.account.findMany({
+            where:  { id: { in: ids } },
+            select: {
+                id: true, normalBalance: true, group: { select: { type: true } },
+                openingBalance: true, openingBalanceType: true, openingBalanceDate: true,
+            },
+        }),
+        tx.voucherGlLine.groupBy({
+            by:    ["accountId", "type"],
+            where: { accountId: { in: ids }, universalVoucher: { ...ledgerStatusFilterUv() } },
+            _sum:  { amount: true },
+        }),
+    ]);
+
+    const now = new Date();
+    const rupees = new Map<number, number>();
+    const nbById = new Map<number, "DEBIT" | "CREDIT">();
+    for (const a of accounts) {
+        const nb = a.normalBalance
+            ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
+        nbById.set(a.id, nb);
+        // Master opening — skipped when it is dated in the future.
+        let opening = 0;
+        if (a.openingBalance != null && a.openingBalanceType
+            && (!a.openingBalanceDate || a.openingBalanceDate <= now)) {
+            opening = balanceDelta(nb, a.openingBalanceType, Number(a.openingBalance));
+        }
+        rupees.set(a.id, opening);
+    }
+    for (const r of sums) {
+        const nb = nbById.get(r.accountId);
+        if (!nb) continue;
+        rupees.set(r.accountId, (rupees.get(r.accountId) ?? 0) + balanceDelta(nb, r.type, Number(r._sum.amount ?? 0)));
+    }
+
+    for (const id of ids) out.set(id, BigInt(Math.round((rupees.get(id) ?? 0) * 100)));
+    return out;
+}
+
+/** Single-account form of `tillBalancesPaise` — the read shift OPEN, the close
+ *  and the counter board all share, so they can never disagree. */
+export async function tillBalancePaise(tx: Tx, accountId: number): Promise<bigint> {
+    return (await tillBalancesPaise(tx, [accountId])).get(accountId) ?? BigInt(0);
 }
 
 export function computeExpectedCash(

@@ -12,8 +12,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, computeExpectedCash, effectiveBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { sumPaise, computeExpectedCash, tillBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any signed-in staff may ASK; access is decided per-shift below. The shift's
@@ -34,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 branch:  { select: { id: true, name: true, vaultAccountId: true } },
                 counter: {
                     include: {
-                        tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                        tillAccount: { select: { id: true, name: true } },
                         paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } },
                     },
                 },
@@ -92,7 +91,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // For an open / in-progress shift, read the live drawer figure straight off the till account.
         const tillBookBalancePaise = (shift.status === "CLOSED" && shift.expectedCashPaise != null)
             ? shift.expectedCashPaise + dropsPaise
-            : effectiveBalancePaise(shift.counter.tillAccount);
+            : await tillBalancePaise(prisma, shift.counter.tillAccountId);
 
         // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
         // Resolve them by id to keep the old response shape the UI consumes.

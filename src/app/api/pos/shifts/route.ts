@@ -18,8 +18,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
-import { effectiveBalancePaise } from "@/modules/pos/lib/shiftMath";
+import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { blockStartFor } from "@/shared/lib/counter/idRange";
 
 const openSchema = z.object({
@@ -139,7 +138,7 @@ export async function POST(req: NextRequest) {
     // old lock, so the open is refused and the device swap fails.
     const counter = await prismaAuthoritative.posCounter.findUnique({
         where:   { id: body.counterId },
-        include: { tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } },
+        include: { tillAccount: { select: { id: true, name: true } } },
     });
     if (!counter) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
     if (counter.branchId !== branchId) {
@@ -225,11 +224,12 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // The existing till balance is the carry-over from the last close. Folds
-    // in the till's master opening balance (effectiveAccountBalance) — some
-    // tills are funded via an opening-balance entry rather than a GL voucher,
-    // and the raw `Account.balance` cache alone would miss that.
-    const carryOverPaise  = effectiveBalancePaise(counter.tillAccount);
+    // The existing till balance is the carry-over from the last close — summed
+    // from the till's own POSTED GL lines plus its master opening, never from the
+    // cached `Account.balance` (see `tillBalancesPaise`). Authoritative, like the
+    // counter row above: the opening float is what the whole shift reconciles
+    // against, so a replica lagging by a sync cycle must not set it.
+    const carryOverPaise  = await tillBalancePaise(prismaAuthoritative, counter.tillAccountId);
     const totalFloatPaise = carryOverPaise + BigInt(body.vaultTopUpPaise);
 
     try {

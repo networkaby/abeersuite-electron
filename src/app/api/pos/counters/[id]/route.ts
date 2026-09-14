@@ -7,7 +7,7 @@ import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { normalizeExtension } from "@/shared/lib/counter/idRange";
 import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
@@ -61,7 +61,7 @@ const updateSchema = z.object({
 });
 
 const counterInclude = {
-    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+    tillAccount: { select: { id: true, name: true } },
     branch: { select: { id: true, name: true } },
     paymentAccounts: {
         orderBy: { sortOrder: "asc" as const },
@@ -279,7 +279,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             tillAccount: {
                 id: updated.tillAccount.id,
                 name: updated.tillAccount.name,
-                balance: String(effectiveAccountBalance(updated.tillAccount)),
+                balance: String(Number(await tillBalancePaise(prisma, updated.tillAccountId)) / 100),
             },
             paymentAccounts: updated.paymentAccounts,
             allowedExpenseAccountIds: updated.allowedExpenseAccountIds,
@@ -307,7 +307,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
         const counter = await prisma.posCounter.findUnique({
             where: { id },
-            include: { _count: { select: { shifts: true } }, tillAccount: { select: { id: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } } },
+            include: { _count: { select: { shifts: true } } },
         });
         if (!counter) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
 
@@ -317,7 +317,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
                 { status: 400 },
             );
         }
-        if (Math.abs(effectiveAccountBalance(counter.tillAccount)) > 0.005) {
+        // Ledger truth — a stale cache must not let a funded till be deleted.
+        if ((await tillBalancePaise(prisma, counter.tillAccountId)) !== BigInt(0)) {
             return NextResponse.json(
                 { error: "Cannot delete: till account has a non-zero balance. Sweep to vault first." },
                 { status: 400 },

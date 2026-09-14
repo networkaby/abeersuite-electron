@@ -18,8 +18,7 @@ import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/acti
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, computeExpectedCash, effectiveBalancePaise } from "@/modules/pos/lib/shiftMath";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { sumPaise, computeExpectedCash, tillBalancesPaise } from "@/modules/pos/lib/shiftMath";
 
 type Person = { id: number; name: string };
 
@@ -74,7 +73,7 @@ export async function GET(req: NextRequest) {
             orderBy: [{ branchId: "asc" }, { name: "asc" }],
             include: {
                 branch:      { select: { id: true, name: true } },
-                tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                tillAccount: { select: { id: true, name: true } },
                 // Latest shift only — enough to classify occupied vs free.
                 shifts: {
                     orderBy: { openedAt: "desc" },
@@ -89,8 +88,12 @@ export async function GET(req: NextRequest) {
             },
         });
 
+        // Ledger truth for every till on the board, in one groupBy — the cached
+        // `Account.balance` is never the drawer's answer (see `tillBalancesPaise`).
+        const tillPaise = await tillBalancesPaise(prisma, counters.map((c) => c.tillAccountId));
+
         const cards = await Promise.all(counters.map(async (c) => {
-            const tillBalancePaise = effectiveBalancePaise(c.tillAccount);
+            const tillBalancePaise = tillPaise.get(c.tillAccountId) ?? BigInt(0);
             const shift = c.shifts[0] ?? null;
             const live  = !!shift && (shift.status === "OPEN" || shift.status === "AWAITING_HANDOVER");
 

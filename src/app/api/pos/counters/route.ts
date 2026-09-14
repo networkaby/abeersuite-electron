@@ -17,7 +17,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { auth } from "@/auth";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { tillBalancesPaise, tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { z } from "zod";
 
 export async function GET(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
             const counters = await prisma.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { counterNumber: "asc" }, { name: "asc" }],
                 include: {
-                    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                    tillAccount: { select: { id: true, name: true } },
                     branch: { select: { id: true, name: true } },
                     paymentAccounts: {
                         orderBy: { sortOrder: "asc" },
@@ -91,6 +91,11 @@ export async function GET(req: NextRequest) {
                 }
             }
 
+            // Till balances from the GL truth, not the cached `Account.balance` —
+            // this figure becomes the cashier's carry-over, so it has to be the
+            // ledger's own answer. One groupBy for every counter in the list.
+            const tillPaise = await tillBalancesPaise(prisma, counters.map((c) => c.tillAccountId));
+
             const list = counters.map((c) => ({
                 id: c.id,
                 counterNumber: c.counterNumber,
@@ -102,7 +107,7 @@ export async function GET(req: NextRequest) {
                 tillAccount: {
                     id: c.tillAccount.id,
                     name: c.tillAccount.name,
-                    balance: String(effectiveAccountBalance(c.tillAccount)),
+                    balance: String(Number(tillPaise.get(c.tillAccountId) ?? BigInt(0)) / 100),
                 },
                 paymentAccounts: c.paymentAccounts,
                 allowedExpenseAccountIds: c.allowedExpenseAccountIds,
@@ -148,7 +153,7 @@ export async function GET(req: NextRequest) {
             where: { branchId, isActive: true },
             orderBy: [{ counterNumber: "asc" }, { name: "asc" }],
             include: {
-                tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                tillAccount: { select: { id: true, name: true } },
                 shifts: {
                     where: { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
                     select: { id: true, status: true, userId: true, user: { select: { name: true } }, openedAt: true },
@@ -157,6 +162,8 @@ export async function GET(req: NextRequest) {
                 },
             },
         });
+
+        const tillPaiseByAccount = await tillBalancesPaise(prisma, counters.map((c) => c.tillAccountId));
 
         return NextResponse.json(counters.map((c) => ({
             id: c.id,
@@ -171,7 +178,7 @@ export async function GET(req: NextRequest) {
             tillAccount: {
                 id: c.tillAccount.id,
                 name: c.tillAccount.name,
-                balance: String(effectiveAccountBalance(c.tillAccount)),
+                balance: String(Number(tillPaiseByAccount.get(c.tillAccountId) ?? BigInt(0)) / 100),
             },
             activeShift: c.shifts[0] ?? null,
             // Device lock — ShiftOpenDialog compares this to the PC's bridge deviceId.
@@ -260,7 +267,7 @@ export async function POST(req: NextRequest) {
                     isActive: true,
                 },
                 include: {
-                    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                    tillAccount: { select: { id: true, name: true } },
                     branch: { select: { id: true, name: true } },
                 },
             });
@@ -276,7 +283,7 @@ export async function POST(req: NextRequest) {
             tillAccount: {
                 id: counter.tillAccount.id,
                 name: counter.tillAccount.name,
-                balance: String(effectiveAccountBalance(counter.tillAccount)),
+                balance: String(Number(await tillBalancePaise(prisma, counter.tillAccountId)) / 100),
             },
         }, { status: 201 });
     } catch (e) {

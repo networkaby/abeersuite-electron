@@ -9,10 +9,9 @@ import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/vouch
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { ShiftCloseBody, type ShiftCloseBodyData } from "@/shared/components/print/ShiftCloseBody";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
-import { EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import {
     sumPaise,
-    effectiveBalancePaise,
+    tillBalancePaise,
     computeExpectedCash,
     buildShiftMovementBreakdown,
     buildShiftTenderBreakdown,
@@ -47,7 +46,7 @@ export default async function ShiftReceiptPage({
             branch:  { select: { id: true, name: true, addressLine1: true, addressLine2: true, city: true, state: true, pinCode: true } },
             counter: {
                 include: {
-                    tillAccount: { select: { id: true, name: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS } },
+                    tillAccount: { select: { id: true, name: true } },
                     paymentAccounts: { where: { isActive: true }, select: { channel: true, label: true, accountId: true } },
                 },
             },
@@ -71,7 +70,7 @@ export default async function ShiftReceiptPage({
 
     const tillBookBalancePaise = (shift.status === "CLOSED" && shift.expectedCashPaise != null)
         ? shift.expectedCashPaise + dropsPaise
-        : effectiveBalancePaise(shift.counter.tillAccount);
+        : await tillBalancePaise(prisma, shift.counter.tillAccount.id);
 
     const movementBreakdown = await buildShiftMovementBreakdown(prisma, {
         shiftId: shift.id,
