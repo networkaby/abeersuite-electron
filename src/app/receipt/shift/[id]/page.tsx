@@ -82,7 +82,6 @@ export default async function ShiftReceiptPage({
     const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
         shiftId: shift.id,
         counter: shift.counter,
-        paymentAccounts: shift.counter.paymentAccounts,
     });
     const collectionsBreakdown = await buildShiftCollectionsBreakdown(prisma, {
         shiftId: shift.id,
