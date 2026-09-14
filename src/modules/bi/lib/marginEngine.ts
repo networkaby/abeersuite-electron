@@ -27,7 +27,10 @@ export interface MarginLine {
     brandName: string | null;
     /** Party ledger (Account) id — null = walk-in / cash sale. */
     accountId: number | null;
+    /** Spine (UniversalVoucher) id — what adjustments and the drill-down key on. */
     voucherId: number;
+    /** VoucherDetail id — what the edit form opens by. Null only for a spine with no detail row. */
+    detailId: number | null;
     voucherType: string;
     /** Voucher's branch — null on branch-less (org-level) vouchers. */
     branchId: string | null;
@@ -91,7 +94,7 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
             taxAmount: true,
             amount: true,
             universalVoucher: {
-                select: { id: true, type: true, date: true, partyAccountId: true, branchId: true },
+                select: { id: true, type: true, date: true, partyAccountId: true, branchId: true, voucherDetail: { select: { id: true } } },
             },
             product: {
                 select: {
@@ -125,6 +128,7 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
             brandName: l.product.brand?.name ?? null,
             accountId: l.universalVoucher.partyAccountId,
             voucherId: l.universalVoucher.id,
+            detailId: l.universalVoucher.voucherDetail?.id ?? null,
             voucherType: l.universalVoucher.type,
             branchId: l.universalVoucher.branchId,
             date: l.universalVoucher.date,

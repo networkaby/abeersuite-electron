@@ -18,7 +18,7 @@ interface BillAdjustment {
     discount: number; charge: number; roundOff: number; shippingNet: number; net: number;
 }
 interface BillRow {
-    voucherId: number; voucherNo: string; type: string; date: string; accountId: number;
+    voucherId: number; detailId: number | null; voucherNo: string; type: string; date: string; accountId: number;
     party: string; items: number; qty: number; revenue: number; cogs: number; profit: number; marginPct: number;
     billAdjustment: BillAdjustment; netProfit: number; netMarginPct: number;
 }
@@ -180,9 +180,9 @@ export default function BillProfitPage() {
                                         onClick={() => toggle(r.voucherId)}
                                     >
                                         <td className="px-3 py-2.5 font-medium text-foreground">
-                                            {editFormUrl(r.type, r.voucherId) ? (
+                                            {r.detailId != null && editFormUrl(r.type, r.detailId) ? (
                                                 <a
-                                                    href={editFormUrl(r.type, r.voucherId)!}
+                                                    href={editFormUrl(r.type, r.detailId)!}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     onClick={(e) => e.stopPropagation()}

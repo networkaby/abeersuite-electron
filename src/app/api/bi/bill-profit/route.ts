@@ -81,12 +81,12 @@ export async function GET(req: Request) {
     }
 
     const byBill = new Map<number, {
-        voucherId: number; type: string; date: Date; accountId: number;
+        voucherId: number; detailId: number | null; type: string; date: Date; accountId: number;
         items: Set<number>; qty: number; revenue: number; cogs: number; profit: number;
     }>();
     for (const l of lines) {
         const row = byBill.get(l.voucherId) ?? {
-            voucherId: l.voucherId, type: l.voucherType, date: l.date, accountId: l.accountId ?? 0,
+            voucherId: l.voucherId, detailId: l.detailId, type: l.voucherType, date: l.date, accountId: l.accountId ?? 0,
             items: new Set<number>(), qty: 0, revenue: 0, cogs: 0, profit: 0,
         };
         row.items.add(l.productId);
@@ -118,6 +118,7 @@ export async function GET(req: Request) {
             const netProfit = r2(profit + adj.net);
             return {
                 voucherId: b.voucherId,
+                detailId: b.detailId,
                 voucherNo: voucherNoById.get(b.voucherId) ?? `#${b.voucherId}`,
                 type: b.type,
                 date: b.date,

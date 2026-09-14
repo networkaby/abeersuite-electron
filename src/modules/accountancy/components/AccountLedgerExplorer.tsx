@@ -635,7 +635,9 @@ export function AccountLedgerExplorer({
                                                     </td>
                                                     <td className="px-4 py-2.5 text-right">
                                                         <DayBookActionsMenu
-                                                            rawId={row.journalEntryId}
+                                                            // An inventory row edits / cancels / prints by its DETAIL id
+                                                            // (row.source, resolved server-side); GL and journal rows by the spine id.
+                                                            rawId={voucherSourceForType(row.voucherType) === "inv" && row.source ? row.source.id : row.journalEntryId}
                                                             source={voucherSourceForType(row.voucherType)}
                                                             kind={row.voucherType}
                                                             reference={row.reference}

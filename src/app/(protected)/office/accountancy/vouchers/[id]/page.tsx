@@ -11,12 +11,15 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
     const voucher = await prisma.universalVoucher.findUnique({
         where: { id: voucherId },
-        select: { type: true },
+        // An inventory kind (SALE / PURCHASE / …) is edited by its VoucherDetail
+        // id — a different id space from the spine — so carry that id along.
+        select: { type: true, voucherDetail: { select: { id: true } } },
     });
 
     if (voucher) {
         const source = voucherSourceForType(voucher.type);
-        const url = referenceHref(source, voucherId, voucher.type);
+        const rawId = source === "inv" ? voucher.voucherDetail?.id ?? null : voucherId;
+        const url = rawId != null ? referenceHref(source, rawId, voucher.type) : null;
         if (url) {
             redirect(url);
         }
