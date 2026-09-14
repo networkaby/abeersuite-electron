@@ -1,3 +1,4 @@
+import { isValidVpa } from "@/shared/lib/parties";
 // Pure registry of payment-gateway providers (Razorpay, Cashfree, manual UPI, …).
 // No DB, no React, no process.env — safe to import from both server routes and
 // client components (mirrors counterTenders.ts / paymentLink.ts). Deliberately
@@ -241,12 +242,6 @@ export function settlementAccountIdOf(configJson: unknown): number | null {
 /// The env var names a provider needs for the given environment (TEST/LIVE).
 export function envVarsFor(provider: PaymentGatewayProvider, env: GatewayEnvironment): string[] {
     return env === "LIVE" ? provider.envVars.live : provider.envVars.test;
-}
-
-/// Validate a `name@bank` UPI id (VPA). Mirrors the lightweight check used at the
-/// counter — exact bank handles aren't enumerable, so this stays permissive.
-export function isValidVpa(value: string): boolean {
-    return /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.]{1,64}$/.test(value.trim());
 }
 
 /// Validate the non-secret configJson against a provider's declared config fields.

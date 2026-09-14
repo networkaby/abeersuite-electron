@@ -72,9 +72,16 @@ export const PARTY_BANK_FIELDS: {
 export const isValidIfsc = (v: string): boolean =>
     v === "" || /^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.toUpperCase());
 
-/** A UPI id is `handle@psp`; both halves non-empty, no spaces. Blank passes. */
+/**
+ * A UPI id is `handle@psp`. Blank passes (optional field, like `isValidIfsc`).
+ * The one rule for party bank details AND the counter's gateway config: the
+ * PSP half may carry digits and dots after its first letter (`pay.tm1`), which
+ * a real VPA can, and rejecting a valid one at the till blocks a payment while
+ * accepting a junk one merely fails at the PSP. Trims, so a pasted trailing
+ * space does not fail it.
+ */
 export const isValidVpa = (v: string): boolean =>
-    v === "" || /^[\w.\-]{2,}@[A-Za-z]{2,}$/.test(v);
+    v === "" || /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.]{1,64}$/.test(v.trim());
 
 /**
  * `upi://pay` deep link for the party's scan-to-pay QR, or "" when there is no
