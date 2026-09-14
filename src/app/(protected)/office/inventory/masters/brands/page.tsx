@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { Plus, Pencil, Trash2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,30 +18,20 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useApiResource, useDeleteWithConfirm } from "@/shared/hooks";
 
 type Row = { id: number; name: string; isActive: boolean };
 const empty = { name: "", isActive: true };
 
 export default function InventoryBrandsPage() {
-    const [rows, setRows] = useState<Row[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Spike for the masters template: the list, its first-load spinner and the
+    // post-save refetch come from the shared hook. `reload()` keeps the rows on
+    // screen while it re-fetches, so a save no longer flashes the table blank.
+    const { data: rows = [], loading, error, reload } = useApiResource<Row[]>("/api/inventory/brands");
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
     const [form, setForm] = useState(empty);
     const [saving, setSaving] = useState(false);
-
-    const load = () => {
-        axios
-            .get<Row[]>("/api/inventory/brands")
-            .then((r) => setRows(r.data))
-            .catch(() => toast.error("Failed to load brands"))
-            .finally(() => setLoading(false));
-    };
-
-    useEffect(() => {
-        load();
-    }, []);
 
     const cancel = () => {
         setAdding(false);
@@ -63,9 +54,9 @@ export default function InventoryBrandsPage() {
                 toast.success("Brand updated");
             }
             cancel();
-            load();
+            reload();
         } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Save failed");
+            toast.error(extractApiError(e, "Save failed"));
         } finally {
             setSaving(false);
         }
@@ -75,7 +66,7 @@ export default function InventoryBrandsPage() {
         url: (id) => `/api/inventory/brands/${id}`,
         message: () => "Delete this brand?",
         errorMessage: "Delete failed",
-        onSuccess: () => load(),
+        onSuccess: reload,
     });
 
     return (
@@ -127,7 +118,7 @@ export default function InventoryBrandsPage() {
                         {loading ? (
                             <TableLoadingRow colSpan={2} />
                         ) : rows.length === 0 ? (
-                            <TableEmptyRow colSpan={2} message="No brands yet." />
+                            <TableEmptyRow colSpan={2} message={error ? `Failed to load brands: ${error}` : "No brands yet."} />
                         ) : (
                             rows.map((r) => (
                                 <TableRow key={r.id}>
