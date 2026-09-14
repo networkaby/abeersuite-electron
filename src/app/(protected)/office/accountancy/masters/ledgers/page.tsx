@@ -14,6 +14,7 @@ import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedge
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { flattenGroups } from "@/modules/accountancy/lib/groupOptions";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -157,7 +158,7 @@ export default function LedgersPage() {
     const ledgerCount = countLedgers(tree);
 
     const deleteLedger = async (l: LedgerRow) => {
-        if (!confirm(`Delete ledger "${l.name}"?`)) return;
+        if (!(await confirmAction({ title: `Delete ledger "${l.name}"?`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/accountancy/ledgers/${l.id}`);
             toast.success("Ledger deleted");

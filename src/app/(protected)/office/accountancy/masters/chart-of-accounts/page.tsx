@@ -12,6 +12,7 @@ import { fmt, GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/utils/
 import { CreateGlAccountDialog } from "@/modules/accountancy/components/CreateGlAccountDialog";
 import type { GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type NormalBalance = "DEBIT" | "CREDIT";
 
@@ -115,7 +116,7 @@ export default function ChartOfAccountsPage() {
     // when the account has no posted entries, no sub-accounts, and isn't a
     // customer/company identity ledger (enforced server-side).
     const deleteAccount = async (a: GlAccount) => {
-        if (!confirm(`Delete account "${a.name}"? This cannot be undone.`)) return;
+        if (!(await confirmAction({ title: `Delete account "${a.name}"?`, body: `This cannot be undone.`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/accountancy/ledgers/${a.id}`);
             toast.success("Account deleted");

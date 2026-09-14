@@ -20,6 +20,7 @@ import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableSta
 import { AllocateVoucherDialog } from "@/modules/pricing-strategy/components/AllocateVoucherDialog";
 import { AllocationDetailDialog, type AllocationDoc } from "@/modules/pricing-strategy/components/AllocationDetailDialog";
 import { parseRupeesToPaise } from "@/shared/lib/format";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 // Sticky-header scroll frame: a plain overflow-auto div (NOT Radix ScrollArea —
 // the shadcn Table's own [data-slot=table-container] overflow breaks `sticky`
@@ -290,7 +291,7 @@ export default function CostingPage() {
 
     // Reverse a dismissal — delete its draw(s) so the amount returns to waiting.
     async function undismiss(g: Doc) {
-        if (!confirm(`Un-dismiss — return ${rupee(g.totalPaise)} to the waiting pool?`)) return;
+        if (!(await confirmAction({ title: `Un-dismiss — return ${rupee(g.totalPaise)} to the waiting pool?`, confirmLabel: "Un-dismiss", destructive: false }))) return;
         try {
             for (const d of g.draws) {
                 await axios.delete(`/api/pricing-strategy/costing/draws/${d.id}`);

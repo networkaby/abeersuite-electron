@@ -14,6 +14,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { parseRupeesToPaise } from "@/shared/lib/format";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export interface DetailDraw {
     id: number;
@@ -70,7 +71,7 @@ export function AllocationDetailDialog({
     const totalPaise = lines.reduce((s, d) => s + (parseRupeesToPaise(edits[d.id]?.amount ?? "") ?? 0), 0);
 
     async function deleteLine(id: number) {
-        if (!confirm("Delete this line? The amount returns to the entry's waiting pool.")) return;
+        if (!(await confirmAction({ title: "Delete this line?", body: "The amount returns to the entry's waiting pool.", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/pricing-strategy/costing/draws/${id}`);
             const next = lines.filter((l) => l.id !== id);
