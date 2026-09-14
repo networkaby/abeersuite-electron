@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, deltaSlice, deltaResponse, pageResponse } from "@/shared/lib/api";
 import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurrences";
@@ -86,20 +86,13 @@ export async function GET(req: Request) {
             const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
 
             if (since) {
-                const MAX_DELTA_ROWS = 500;
-                const changed = await prisma.ticket.findMany({
+                const { changed, overflow } = await deltaSlice((take) => prisma.ticket.findMany({
                     where: { pipelineId, updatedAt: { gt: since } },
                     orderBy,
-                    take: MAX_DELTA_ROWS + 1,
+                    take,
                     select: TASK_TICKET_SELECT,
-                });
-                const overflow = changed.length > MAX_DELTA_ROWS;
-                return NextResponse.json({
-                    mode: "delta",
-                    rows: overflow ? [] : changed.map(flattenTask),
-                    overflow,
-                    computedAt: computedAt.toISOString(),
-                });
+                }));
+                return deltaResponse(changed.map(flattenTask), overflow, computedAt);
             }
 
             const all = await prisma.ticket.findMany({
@@ -107,12 +100,7 @@ export async function GET(req: Request) {
                 orderBy,
                 select: TASK_TICKET_SELECT,
             });
-            return NextResponse.json({
-                mode: "page",
-                rows: all.map(flattenTask),
-                nextCursor: null,
-                computedAt: computedAt.toISOString(),
-            });
+            return pageResponse(all.map(flattenTask), null, computedAt);
         }
 
         const tasks = await prisma.ticket.findMany({

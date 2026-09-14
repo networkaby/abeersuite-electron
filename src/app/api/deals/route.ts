@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, deltaSlice, deltaResponse, pageResponse } from "@/shared/lib/api";
 import { createDealSchema } from "@/shared/lib/schemas/dealSchema";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -87,20 +87,13 @@ export async function GET(req: Request) {
             const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
 
             if (since) {
-                const MAX_DELTA_ROWS = 500;
-                const changed = await prisma.ticket.findMany({
+                const { changed, overflow } = await deltaSlice((take) => prisma.ticket.findMany({
                     where: { pipelineId: pipeline.id, updatedAt: { gt: since } },
                     orderBy,
-                    take: MAX_DELTA_ROWS + 1,
+                    take,
                     select: DEAL_TICKET_SELECT,
-                });
-                const overflow = changed.length > MAX_DELTA_ROWS;
-                return NextResponse.json({
-                    mode: "delta",
-                    rows: overflow ? [] : changed.map(flattenDeal),
-                    overflow,
-                    computedAt: computedAt.toISOString(),
-                });
+                }));
+                return deltaResponse(changed.map(flattenDeal), overflow, computedAt);
             }
 
             const all = await prisma.ticket.findMany({
@@ -108,12 +101,7 @@ export async function GET(req: Request) {
                 orderBy,
                 select: DEAL_TICKET_SELECT,
             });
-            return NextResponse.json({
-                mode: "page",
-                rows: all.map(flattenDeal),
-                nextCursor: null,
-                computedAt: computedAt.toISOString(),
-            });
+            return pageResponse(all.map(flattenDeal), null, computedAt);
         }
 
         // ── List mode — bare array, for existing callers (CallFollowUpPopup, etc.) ──
