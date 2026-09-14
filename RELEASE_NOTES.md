@@ -1,29 +1,20 @@
-# v1.3.5
+# v1.3.6
 
-A quiet update — installs itself safely when the counter is idle, on the login screen, or with an empty POS cart. Every counter and office terminal should take this release for the new unified shift closure print formats, instant shift closing, accurate cash drawer reconciliation, and voucher posting safeguards.
+Fixes for voucher links and the till balance, plus two counter setup improvements. Everyone should install this one — the till balance fix affects every counter's shift open/close numbers.
 
-## Counter & POS Shift Closing
+## Schema change — update the counter after deploying
 
-- **Shift close summary print is now fully customizable.** Shift close reports (both 80mm/58mm thermal receipts and A4 sheets) now run through the central Voucher Print Template designer. You can customize header details, show/hide sections, configure barcodes, notes, and styling from Settings.
-- **Immediate closing with background print.** Closing a shift no longer blocks the cashier waiting for printer feedback. When you click Close Shift, the dialog closes immediately and triggers thermal printing in the background.
-- **Convenient print toggles.** Added "Print After Save" and "Thermal" quick toggles right next to the shift close action buttons so cashiers can choose their print output on the spot.
-- **Shift detail view reports.** Dedicated print buttons and formatted print previews are now available directly on the Shift Detail page in the back-office.
-- **Reopen & Re-close safeguards.** Closed shifts can now be reopened safely for corrections without corrupting voucher links, while protecting against re-closing from offline counters.
+This release drops a database index (a counter's EPBX extension is no longer required to be unique, since a counter can now have more than one). **Deploy this build to Supabase/Vercel first, then update each counter within a few minutes** — until a counter updates, its sync pauses and it will show `SCHEMA DRIFT — refusing to sync` for every table, not just this one.
 
-## Billing & Cash Drawer Accuracy
+## Billing and vouchers
 
-- **Accurate till cash calculations.** Fixed cash-handling calculations during shift close to properly capture all receipts, cash movements, and cash refunds, accurately reconstructing the exact till balance at close time.
-- **Clearer terminology.** Shift summary labels now plainly read "Counter opening cash" and "Counter cash flow" to eliminate confusion with bank accounts.
-- **Compact 3-column layout.** The shift close dialog now organizes physical denomination counts, cash flow breakdown, and contra previews neatly on one screen without excessive scrolling.
+- Three places in the app (the Accountancy voucher link, Bill Profit, and the Account Ledger row menu) could open the wrong inventory voucher, or fail to open one at all with "Failed to load voucher for editing." All three now open the correct voucher, and Cancel/Delete/Print in the Account Ledger menu are fixed along with it.
 
-## Accountancy & Vouchers
+## Till and shift accounting
 
-- **Save & Post in one step.** Added "Save & Post" action for vouchers to speed up daily bookkeeping workflows.
-- **Cleaner series numbering.** Draft vouchers no longer take up series numbers prematurely; numbers advance only when the voucher is officially posted.
-- **Restore cancelled vouchers.** Cancelled vouchers can now be restored (un-cancelled) directly if marked in error.
-- **Strict balances.** Strengthened double-entry balance calculations to avoid sign flips across account ledgers.
+- The cash shown at shift open (carry-over), shift close (expected in drawer), handover, and on the counter board could disagree with what the ledger actually shows, because these all read a cached balance that could drift out of sync. They now read straight from the posted ledger, so the numbers always tie out.
 
-## Sync & Data Integrity
+## Counter setup
 
-- **Reconcile protection.** Counter reconciliation will never delete data that the cloud server has not yet received.
-- **Posted voucher safety.** Offline counters are prevented from accidentally demoting cloud-posted vouchers back to draft state.
+- A counter can now be given more than one EPBX extension (phone number), separated by commas — useful when a counter answers calls on two lines.
+- Right-click on any sidebar link now offers the same "open in new window" quick-action menu.
