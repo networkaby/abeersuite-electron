@@ -149,7 +149,7 @@ export default async function ShiftReceiptPage({
         },
         closingContraVoucher: closingContra,
         varianceJournalEntry: varianceJE,
-        showSignature:        isThermal ? template.showSignatureThermal : template.showSignatureA4,
+        showSignature:        isThermal ? template.showSignatureThermal : template.showSignature,
         cashierSignatureLabel: template.signatureLabel || "Cashier Signature",
         managerSignatureLabel: "Manager Signature",
     };
@@ -177,7 +177,7 @@ export default async function ShiftReceiptPage({
         <ShiftCloseBody
             data={bodyData}
             thermal={isThermal}
-            showSignature={isThermal ? template.showSignatureThermal : template.showSignatureA4}
+            showSignature={isThermal ? template.showSignatureThermal : template.showSignature}
         />
     );
 

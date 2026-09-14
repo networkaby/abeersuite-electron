@@ -136,7 +136,7 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                                         cashierSignatureLabel: template.signatureLabel || "Cashier Signature",
                                     }}
                                     thermal={false}
-                                    showSignature={template.showSignatureA4}
+                                    showSignature={template.showSignature}
                                 />
                             ) : undefined}
                         />
