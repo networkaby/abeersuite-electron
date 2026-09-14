@@ -440,7 +440,7 @@ export function ShiftCloseDialog({
                                             </div>
                                             <Row label="Counter opening cash" value={fmt(Number(detail.openingFloatPaise) / 100)} />
                                             <Row
-                                                label="Till movement this shift"
+                                                label="Counter cash flow"
                                                 value={signed(Number(detail.tillMovementPaise) / 100)}
                                             />
                                             <Row label="Dropped to safe" value={`− ₹${fmt(Number(detail.dropsPaise) / 100)}`} />
@@ -553,7 +553,7 @@ export function ShiftCloseDialog({
                                         <div className="rounded-md border border-violet-300/60 bg-violet-50/30 dark:border-violet-500/30 dark:bg-violet-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
                                             <div className="flex items-center justify-between mb-0.5">
                                                 <p className="text-[11px] font-semibold text-violet-800 dark:text-violet-300 uppercase tracking-wide flex items-center gap-1.5">
-                                                    <TrendingUp size={13} className="text-violet-600 dark:text-violet-400" /> Till Movement Breakdown
+                                                    <TrendingUp size={13} className="text-violet-600 dark:text-violet-400" /> Counter Cash Flow Breakdown
                                                 </p>
                                                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
                                                     Cash Flows
@@ -594,7 +594,7 @@ export function ShiftCloseDialog({
                                                 )}
                                             </div>
                                             <div className="border-t border-violet-200/70 dark:border-violet-800/50 pt-1 mt-0.5 flex justify-between items-center bg-violet-100/50 dark:bg-violet-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
-                                                <span className="text-violet-950 dark:text-violet-200">Net till movement</span>
+                                                <span className="text-violet-950 dark:text-violet-200">Net counter cash flow</span>
                                                 <span className="font-mono text-sm text-violet-900 dark:text-violet-100 font-bold">{signed(Number(detail.tillMovementPaise) / 100)}</span>
                                             </div>
                                         </div>
@@ -756,7 +756,7 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cash reconciliation</p>
                     <ReportRow label="Counter opening cash"     value={`₹${fmt(opening)}`} />
                     <ReportRow
-                        label="Till movement this shift"
+                        label="Counter cash flow"
                         value={signed(movement)}
                     />
                     {report.movementBreakdown && (

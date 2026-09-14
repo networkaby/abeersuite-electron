@@ -430,7 +430,7 @@ export default function ShiftDetailPage() {
                     </div>
 
                     <div className="rounded-md border border-border bg-card p-2.5 space-y-0.5">
-                        <span className="text-[11px] text-muted-foreground">Till movement</span>
+                        <span className="text-[11px] text-muted-foreground">Counter cash flow</span>
                         <div className="font-mono font-semibold text-base">
                             {signed(Number(shift.tillMovementPaise) / 100)}
                         </div>
@@ -509,7 +509,7 @@ export default function ShiftDetailPage() {
                     <div>
                         <div className="flex items-center justify-between pb-2 border-b border-violet-200/70 dark:border-violet-800/50">
                             <p className="text-xs font-bold text-violet-900 dark:text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
-                                <TrendingUp size={14} className="text-violet-600 dark:text-violet-400" /> Till Movement
+                                <TrendingUp size={14} className="text-violet-600 dark:text-violet-400" /> Counter Cash Flow
                             </p>
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300">
                                 Cash Flows
@@ -547,7 +547,7 @@ export default function ShiftDetailPage() {
                     </div>
 
                     <div className="border-t border-violet-200/80 dark:border-violet-800/60 pt-2 mt-2 flex justify-between items-center bg-violet-100/60 dark:bg-violet-950/60 -mx-1.5 px-2.5 py-1.5 rounded-md font-semibold text-xs sm:text-sm">
-                        <span className="text-violet-950 dark:text-violet-200">Net till movement</span>
+                        <span className="text-violet-950 dark:text-violet-200">Net counter cash flow</span>
                         <span className="font-mono text-sm text-violet-900 dark:text-violet-100 font-bold">
                             {signed(Number(shift.tillMovementPaise) / 100)}
                         </span>
