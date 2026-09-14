@@ -338,14 +338,21 @@ export function ShiftCloseDialog({
                     /* ── Close form ── */
                     <>
                         <DialogHeader className="pb-1">
-                            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-                                <ArrowRightLeft size={16} className="text-primary" /> {allowHandover ? "Close shift" : "Force close shift"}
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground">
-                                {forCashierName
-                                    ? `Count the physical cash and close ${forCashierName}'s shift on their behalf.`
-                                    : "Count the physical cash in the drawer and choose how to close."}
-                            </DialogDescription>
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-sm border border-emerald-300/40">
+                                    <Vault size={18} />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+                                        {allowHandover ? "Close shift" : "Force close shift"}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                        {forCashierName
+                                            ? `Count the physical cash and close ${forCashierName}'s shift on their behalf.`
+                                            : "Count the physical cash in the drawer and choose how to close."}
+                                    </DialogDescription>
+                                </div>
+                            </div>
                         </DialogHeader>
 
                         {loading || !detail ? (
@@ -353,10 +360,10 @@ export function ShiftCloseDialog({
                                 <Loader2 className="animate-spin text-muted-foreground" size={24} />
                             </div>
                         ) : (
-                            <div className="flex-1 overflow-y-auto space-y-2.5 py-1 pr-1">
+                            <div className="flex-1 overflow-y-auto space-y-3 py-1 pr-1">
                                 {/* Mode tabs — hidden on admin force-close (no cashier to hand to). */}
                                 {allowHandover && (
-                                    <div className="flex rounded-md border border-border overflow-hidden text-xs">
+                                    <div className="flex rounded-lg border border-border overflow-hidden text-sm shadow-sm">
                                         <button
                                             type="button"
                                             onClick={() => setMode("vault")}
@@ -386,67 +393,74 @@ export function ShiftCloseDialog({
                                             list={denomList}
                                         />
 
-                                        <div className="rounded-md border border-border bg-card p-2.5 space-y-1">
-                                            <Label htmlFor="close-notes" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                                                <FileText size={12} /> Notes <span className="text-muted-foreground/70 lowercase font-normal">(optional)</span>
-                                            </Label>
-                                            <Textarea
-                                                id="close-notes"
-                                                value={notes}
-                                                onChange={(e) => setNotes(e.target.value)}
-                                                placeholder="e.g. Safe drop already done or handover notes"
-                                                rows={2}
-                                                className="resize-none overflow-y-auto text-xs bg-background border-input placeholder:text-muted-foreground/70"
-                                            />
-                                        </div>
+                                        <Textarea
+                                            id="close-notes"
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            placeholder="Notes (optional): e.g. Safe drop or handover notes…"
+                                            rows={1}
+                                            className="resize-none overflow-y-auto text-xs min-h-[34px] max-h-20 bg-white dark:bg-zinc-900 border border-border focus-visible:ring-emerald-500 shadow-sm"
+                                        />
                                     </div>
 
                                     {/* ── Column 2: Reconciliation Summary & Inputs ── */}
                                     <div className="space-y-2">
                                         {/* Vault mode Contra alert */}
                                         {mode === "vault" && declared && (
-                                            <div className="rounded-md bg-muted/50 border border-border px-2.5 py-1.5 text-xs text-muted-foreground space-y-0.5">
-                                                <div className="flex items-center gap-1.5 text-foreground font-medium">
-                                                    <ArrowRightLeft size={12} className="text-muted-foreground shrink-0" />
-                                                    <span>Posts Contra: <strong>{detail.counter.tillAccount.name}</strong> → <strong>Vault</strong> for <span className="font-mono font-semibold">₹{fmt(toVault)}</span></span>
+                                            <div className="rounded-md bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 px-3 py-1.5 text-xs text-indigo-950 dark:text-indigo-200 space-y-0.5 shadow-sm">
+                                                <div className="flex items-center gap-1.5 font-medium text-indigo-900 dark:text-indigo-300">
+                                                    <ArrowRightLeft size={13} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                                    <span>Posts Contra: <strong className="text-indigo-950 dark:text-indigo-100">{detail.counter.tillAccount.name}</strong> → <strong className="text-indigo-950 dark:text-indigo-100">Vault</strong></span>
                                                 </div>
-                                                <div className="text-[11px] text-muted-foreground pl-4">
-                                                    {dropsNum > 0 && <>Incl. ₹{fmt(dropsNum)} dropped to safe. </>}Counter keeps <span className="font-mono font-medium text-foreground">₹{fmt(carryOverNum)}</span> overnight.
+                                                <div className="text-[11px] text-indigo-800 dark:text-indigo-300 pl-4">
+                                                    Transfer amount: <span className="font-mono font-bold text-indigo-950 dark:text-indigo-100">₹{fmt(toVault)}</span>
+                                                    {dropsNum > 0 && <> (incl. <span className="font-mono font-semibold">₹{fmt(dropsNum)}</span> dropped to safe)</>}.
+                                                    Counter keeps <span className="font-mono font-semibold">₹{fmt(carryOverNum)}</span> overnight.
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Handover mode acceptance notice */}
                                         {mode === "handover" && selectedUserId && (
-                                            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+                                            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
                                                 ⚠ Handover to {candidates.find((c) => c.id === selectedUserId)?.name ?? "cashier"}.
                                                 Declared ₹{fmt(declaredNum)} · Carry-over ₹{fmt(carryOverNum)} · GL posts on acceptance.
                                             </div>
                                         )}
 
                                         {/* Cash Drawer Position */}
-                                        <div className="rounded-md border border-border bg-muted/40 p-2.5 text-xs space-y-1">
-                                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                                <Calculator size={12} /> Cash Drawer Position
-                                            </p>
+                                        <div className="rounded-md border border-sky-300/60 bg-sky-50/30 dark:border-sky-500/30 dark:bg-sky-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <p className="text-[11px] font-semibold text-sky-800 dark:text-sky-300 uppercase tracking-wide flex items-center gap-1.5">
+                                                    <Calculator size={13} className="text-sky-600 dark:text-sky-400" /> Cash Drawer Position
+                                                </p>
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">
+                                                    System Ledger
+                                                </span>
+                                            </div>
                                             <Row label="Opening float" value={fmt(Number(detail.openingFloatPaise) / 100)} />
                                             <Row
                                                 label="Till movement this shift"
                                                 value={signed(Number(detail.tillMovementPaise) / 100)}
                                             />
                                             <Row label="Dropped to safe" value={`− ₹${fmt(Number(detail.dropsPaise) / 100)}`} />
-                                            <div className="border-t border-border pt-1 mt-0.5 flex justify-between font-semibold">
-                                                <span>Expected in drawer</span>
-                                                <span className="font-mono">₹{fmt(expected)}</span>
+                                            <div className="border-t border-sky-200/70 dark:border-sky-800/50 pt-1 mt-0.5 flex justify-between items-center bg-sky-100/50 dark:bg-sky-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
+                                                <span className="text-sky-950 dark:text-sky-200">Expected in drawer</span>
+                                                <span className="font-mono text-sm text-sky-900 dark:text-sky-100 font-bold">₹{fmt(expected)}</span>
                                             </div>
                                         </div>
 
                                         {/* Reconciliation & Closing Inputs Card */}
-                                        <div className="rounded-md border border-border bg-card p-2.5 text-xs space-y-2">
-                                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                                                <ShieldCheck size={12} /> Physical Count & Reconciliation
-                                            </p>
-                                            <div className="space-y-1">
+                                        <div className="rounded-md border border-amber-300/60 bg-amber-50/20 dark:border-amber-500/30 dark:bg-amber-950/20 p-2.5 text-xs sm:text-sm space-y-2 shadow-sm">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+                                                    <ShieldCheck size={13} className="text-amber-600 dark:text-amber-400" /> Physical Count & Reconciliation
+                                                </p>
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+                                                    Reconciliation
+                                                </span>
+                                            </div>
+                                            <div className="space-y-0.5">
                                                 <div className="flex justify-between items-baseline">
                                                     <Label htmlFor="declared-amt" className="text-xs font-medium text-foreground">Physical count (₹)</Label>
                                                     {declared && <VarianceChip variance={variance} />}
@@ -456,7 +470,7 @@ export function ShiftCloseDialog({
                                                     value={declared || "0.00"}
                                                     readOnly
                                                     tabIndex={-1}
-                                                    className="h-8 font-mono font-semibold bg-muted/50 text-foreground cursor-not-allowed select-none border-input text-sm"
+                                                    className="h-8 font-mono font-bold bg-muted/60 text-foreground cursor-not-allowed select-none border border-border text-sm"
                                                 />
                                                 <p className="text-[10px] text-muted-foreground">
                                                     Locked to denomination count on the left.
@@ -464,7 +478,7 @@ export function ShiftCloseDialog({
                                             </div>
 
                                             {mode === "vault" ? (
-                                                <div className="space-y-1">
+                                                <div className="space-y-0.5">
                                                     <Label htmlFor="carry-over" className="text-xs font-medium text-foreground">Keep in counter overnight (₹)</Label>
                                                     <Input
                                                         id="carry-over"
@@ -473,11 +487,11 @@ export function ShiftCloseDialog({
                                                         onFocus={(e) => e.target.select()}
                                                         onClick={(e) => e.currentTarget.select()}
                                                         placeholder="0 (sweeps all to vault)"
-                                                        className="h-8 font-mono text-xs bg-background border-input placeholder:text-muted-foreground/70"
+                                                        className="h-8 font-mono bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500"
                                                     />
                                                 </div>
                                             ) : (
-                                                <div className="space-y-1">
+                                                <div className="space-y-0.5">
                                                     <Label htmlFor="carry-over-ho" className="text-xs font-medium text-foreground">Carry-over float (₹)</Label>
                                                     <Input
                                                         id="carry-over-ho"
@@ -486,13 +500,13 @@ export function ShiftCloseDialog({
                                                         onFocus={(e) => e.target.select()}
                                                         onClick={(e) => e.currentTarget.select()}
                                                         placeholder="0"
-                                                        className="h-8 font-mono text-xs bg-background border-input placeholder:text-muted-foreground/70"
+                                                        className="h-8 font-mono bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500"
                                                     />
                                                 </div>
                                             )}
 
                                             {mode === "vault" && initialClosedAt !== undefined && (
-                                                <div className="space-y-1">
+                                                <div className="space-y-0.5">
                                                     <Label className="text-xs font-medium text-foreground">Closed on</Label>
                                                     <TallyDateTimeInput value={closedAt} onValueChange={setClosedAt} />
                                                 </div>
@@ -500,7 +514,7 @@ export function ShiftCloseDialog({
 
                                             {/* Handover mode cashier selector */}
                                             {mode === "handover" && (
-                                                <div className="space-y-1.5">
+                                                <div className="space-y-1">
                                                     <Label className="text-xs font-medium text-foreground">Hand over to</Label>
                                                     {loadingCandidates ? (
                                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -515,7 +529,7 @@ export function ShiftCloseDialog({
                                                             value={selectedUserId?.toString() ?? ""}
                                                             onValueChange={(v) => setSelectedUserId(Number(v))}
                                                         >
-                                                            <SelectTrigger className="h-8 bg-background border-input text-xs">
+                                                            <SelectTrigger className="h-8 bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500">
                                                                 <SelectValue placeholder="Select cashier…" />
                                                             </SelectTrigger>
                                                             <SelectContent>
@@ -533,40 +547,45 @@ export function ShiftCloseDialog({
                                         </div>
                                     </div>
 
-                                    {/* ── Column 3: Breakdowns ── */}
+                                    {/* ── Column 3: Breakdowns & Contra Action Preview ── */}
                                     <div className="space-y-2">
                                         {/* Dedicated Till Movement Breakdown Card */}
-                                        <div className="rounded-md border border-border bg-muted/40 p-2.5 text-xs space-y-1">
-                                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                                <TrendingUp size={12} /> Till Movement Breakdown
-                                            </p>
+                                        <div className="rounded-md border border-violet-300/60 bg-violet-50/30 dark:border-violet-500/30 dark:bg-violet-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <p className="text-[11px] font-semibold text-violet-800 dark:text-violet-300 uppercase tracking-wide flex items-center gap-1.5">
+                                                    <TrendingUp size={13} className="text-violet-600 dark:text-violet-400" /> Till Movement Breakdown
+                                                </p>
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
+                                                    Cash Flows
+                                                </span>
+                                            </div>
                                             <div className="space-y-0.5">
-                                                <div className="flex justify-between text-muted-foreground">
+                                                <div className="flex justify-between text-muted-foreground text-xs">
                                                     <span>Cash sales</span>
-                                                    <span className="font-mono text-foreground font-medium">
+                                                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
                                                         {Number(detail.movementBreakdown?.cashSalesPaise || 0) > 0 ? `+ ₹${fmt(Number(detail.movementBreakdown?.cashSalesPaise || 0) / 100)}` : "₹0.00"}
                                                     </span>
                                                 </div>
-                                                <div className="flex justify-between text-muted-foreground">
+                                                <div className="flex justify-between text-muted-foreground text-xs">
                                                     <span>Customer receipts (Rcv)</span>
-                                                    <span className="font-mono text-foreground font-medium">
+                                                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
                                                         {Number(detail.movementBreakdown?.receiptsPaise || 0) > 0 ? `+ ₹${fmt(Number(detail.movementBreakdown?.receiptsPaise || 0) / 100)}` : "₹0.00"}
                                                     </span>
                                                 </div>
-                                                <div className="flex justify-between text-muted-foreground">
+                                                <div className="flex justify-between text-muted-foreground text-xs">
                                                     <span>Counter expenses (Exp)</span>
-                                                    <span className={`font-mono ${Number(detail.movementBreakdown?.expendituresPaise || 0) > 0 ? "text-amber-700 dark:text-amber-400 font-medium" : "text-foreground"}`}>
+                                                    <span className={`font-mono ${Number(detail.movementBreakdown?.expendituresPaise || 0) > 0 ? "text-rose-700 dark:text-rose-400 font-medium" : "text-foreground"}`}>
                                                         {Number(detail.movementBreakdown?.expendituresPaise || 0) > 0 ? `− ₹${fmt(Number(detail.movementBreakdown?.expendituresPaise || 0) / 100)}` : "₹0.00"}
                                                     </span>
                                                 </div>
-                                                <div className="flex justify-between text-muted-foreground">
+                                                <div className="flex justify-between text-muted-foreground text-xs">
                                                     <span>Cash refunds / returns</span>
-                                                    <span className={`font-mono ${Number(detail.movementBreakdown?.refundsPaise || 0) > 0 ? "text-amber-700 dark:text-amber-400 font-medium" : "text-foreground"}`}>
+                                                    <span className={`font-mono ${Number(detail.movementBreakdown?.refundsPaise || 0) > 0 ? "text-rose-700 dark:text-rose-400 font-medium" : "text-foreground"}`}>
                                                         {Number(detail.movementBreakdown?.refundsPaise || 0) > 0 ? `− ₹${fmt(Number(detail.movementBreakdown?.refundsPaise || 0) / 100)}` : "₹0.00"}
                                                     </span>
                                                 </div>
                                                 {detail.movementBreakdown?.otherPaise !== undefined && Number(detail.movementBreakdown.otherPaise) !== 0 && (
-                                                    <div className="flex justify-between text-muted-foreground">
+                                                    <div className="flex justify-between text-muted-foreground text-xs">
                                                         <span>Other adjustments</span>
                                                         <span className="font-mono text-foreground font-medium">
                                                             {signed(Number(detail.movementBreakdown.otherPaise) / 100)}
@@ -574,83 +593,93 @@ export function ShiftCloseDialog({
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="border-t border-border pt-1 mt-0.5 flex justify-between font-semibold">
-                                                <span>Net till movement</span>
-                                                <span className="font-mono">{signed(Number(detail.tillMovementPaise) / 100)}</span>
+                                            <div className="border-t border-violet-200/70 dark:border-violet-800/50 pt-1 mt-0.5 flex justify-between items-center bg-violet-100/50 dark:bg-violet-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
+                                                <span className="text-violet-950 dark:text-violet-200">Net till movement</span>
+                                                <span className="font-mono text-sm text-violet-900 dark:text-violet-100 font-bold">{signed(Number(detail.tillMovementPaise) / 100)}</span>
                                             </div>
                                         </div>
 
                                         {/* All payment methods collected this shift (cash + digital).
                                             Informational — only cash is physically reconciled below. */}
                                         {detail.tenderBreakdown && detail.tenderBreakdown.length > 0 && (
-                                            <div className="rounded-md border border-border bg-muted/40 p-2.5 text-xs space-y-1">
-                                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                                    <CreditCard size={12} /> Payments collected this shift
-                                                </p>
+                                            <div className="rounded-md border border-indigo-300/60 bg-indigo-50/30 dark:border-indigo-500/30 dark:bg-indigo-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <p className="text-[11px] font-semibold text-indigo-800 dark:text-indigo-300 uppercase tracking-wide flex items-center gap-1.5">
+                                                        <CreditCard size={13} className="text-indigo-600 dark:text-indigo-400" /> Payments collected this shift
+                                                    </p>
+                                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                                                        All Modes
+                                                    </span>
+                                                </div>
                                                 <div className="space-y-0.5">
                                                     {detail.tenderBreakdown.map((t) => (
                                                         <Row key={t.method} label={t.label} value={fmt(Number(t.amountPaise) / 100)} />
                                                     ))}
                                                 </div>
-                                                <div className="border-t border-border pt-1 mt-0.5 flex justify-between font-semibold">
-                                                    <span>Total collected</span>
-                                                    <span className="font-mono">₹{fmt(tenderTotal)}</span>
+                                                <div className="border-t border-indigo-200/70 dark:border-indigo-800/50 pt-1 mt-0.5 flex justify-between items-center bg-indigo-100/50 dark:bg-indigo-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
+                                                    <span className="text-indigo-950 dark:text-indigo-200">Total collected</span>
+                                                    <span className="font-mono text-sm text-indigo-900 dark:text-indigo-100 font-bold">₹{fmt(tenderTotal)}</span>
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Total Collected Breakdown — justifies total collections across all tender modes */}
                                         {detail.collectionsBreakdown && (
-                                            <div className="rounded-md border border-border bg-muted/40 p-2.5 text-xs space-y-1">
-                                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                                    <Receipt size={12} /> Total Collected Breakdown
-                                                </p>
+                                            <div className="rounded-md border border-teal-300/60 bg-teal-50/30 dark:border-teal-500/30 dark:bg-teal-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <p className="text-[11px] font-semibold text-teal-800 dark:text-teal-300 uppercase tracking-wide flex items-center gap-1.5">
+                                                        <Receipt size={13} className="text-teal-600 dark:text-teal-400" /> Total Collected Breakdown
+                                                    </p>
+                                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300">
+                                                        By Type
+                                                    </span>
+                                                </div>
                                                 <div className="space-y-0.5">
-                                                    <div className="flex justify-between text-muted-foreground">
+                                                    <div className="flex justify-between text-muted-foreground text-xs">
                                                         <span>
                                                             POS Sales
                                                             {detail.collectionsBreakdown.salesCount > 0 && (
-                                                                <span className="text-[10px] ml-1 opacity-70">
-                                                                    ({detail.collectionsBreakdown.salesCount} {detail.collectionsBreakdown.salesCount === 1 ? "bill" : "bills"})
+                                                                <span className="text-[10px] font-medium ml-1.5 px-1.5 py-0.2 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
+                                                                    {detail.collectionsBreakdown.salesCount} {detail.collectionsBreakdown.salesCount === 1 ? "bill" : "bills"}
                                                                 </span>
                                                             )}
                                                         </span>
-                                                        <span className="font-mono text-foreground font-medium">
+                                                        <span className="font-mono text-teal-700 dark:text-teal-300 font-medium">
                                                             + ₹{fmt(Number(detail.collectionsBreakdown.salesPaise) / 100)}
                                                         </span>
                                                     </div>
-                                                    <div className="flex justify-between text-muted-foreground">
+                                                    <div className="flex justify-between text-muted-foreground text-xs">
                                                         <span>
                                                             Customer receipts (Rcv)
                                                             {detail.collectionsBreakdown.receiptsCount > 0 && (
-                                                                <span className="text-[10px] ml-1 opacity-70">
-                                                                    ({detail.collectionsBreakdown.receiptsCount} {detail.collectionsBreakdown.receiptsCount === 1 ? "rcv" : "rcvs"})
+                                                                <span className="text-[10px] font-medium ml-1.5 px-1.5 py-0.2 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
+                                                                    {detail.collectionsBreakdown.receiptsCount} {detail.collectionsBreakdown.receiptsCount === 1 ? "rcv" : "rcvs"}
                                                                 </span>
                                                             )}
                                                         </span>
-                                                        <span className="font-mono text-foreground font-medium">
+                                                        <span className="font-mono text-teal-700 dark:text-teal-300 font-medium">
                                                             + ₹{fmt(Number(detail.collectionsBreakdown.receiptsPaise) / 100)}
                                                         </span>
                                                     </div>
                                                     {Number(detail.collectionsBreakdown.refundsPaise) > 0 && (
-                                                        <div className="flex justify-between text-muted-foreground">
+                                                        <div className="flex justify-between text-muted-foreground text-xs">
                                                             <span>
                                                                 Sales returns / refunds
                                                                 {detail.collectionsBreakdown.refundsCount > 0 && (
-                                                                    <span className="text-[10px] ml-1 opacity-70">
-                                                                        ({detail.collectionsBreakdown.refundsCount})
+                                                                    <span className="text-[10px] font-medium ml-1.5 px-1.5 py-0.2 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
+                                                                        {detail.collectionsBreakdown.refundsCount}
                                                                     </span>
                                                                 )}
                                                             </span>
-                                                            <span className="font-mono text-amber-700 dark:text-amber-400 font-medium">
+                                                            <span className="font-mono text-rose-700 dark:text-rose-400 font-medium">
                                                                 − ₹{fmt(Number(detail.collectionsBreakdown.refundsPaise) / 100)}
                                                             </span>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="border-t border-border pt-1 mt-0.5 flex justify-between font-semibold">
-                                                    <span>Net total collected</span>
-                                                    <span className="font-mono">₹{fmt(tenderTotal)}</span>
+                                                <div className="border-t border-teal-200/70 dark:border-teal-800/50 pt-1 mt-0.5 flex justify-between items-center bg-teal-100/50 dark:bg-teal-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
+                                                    <span className="text-teal-950 dark:text-teal-200">Net total collected</span>
+                                                    <span className="font-mono text-sm text-teal-900 dark:text-teal-100 font-bold">₹{fmt(tenderTotal)}</span>
                                                 </div>
                                             </div>
                                         )}
@@ -888,11 +917,16 @@ function DenominationCounter({
     list: number[];
 }) {
     return (
-        <div className="rounded-md border border-border bg-card p-2.5 self-start">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                <Banknote size={13} /> Count by denomination
-            </p>
-            <div className="grid grid-cols-[1fr_4.5rem_5.5rem] gap-x-2 items-center text-[10px] uppercase tracking-wide text-muted-foreground font-medium px-1 mb-1">
+        <div className="rounded-md border border-emerald-300/60 bg-emerald-50/20 dark:border-emerald-500/30 dark:bg-emerald-950/20 p-2.5 self-start shadow-sm">
+            <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide flex items-center gap-1.5">
+                    <Banknote size={14} className="text-emerald-600 dark:text-emerald-400" /> Count by denomination
+                </p>
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                    Cash Drawer
+                </span>
+            </div>
+            <div className="grid grid-cols-[1fr_5rem_6rem] gap-x-2 gap-y-1 items-center text-[11px] font-medium text-emerald-800/80 dark:text-emerald-300/80 bg-emerald-100/40 dark:bg-emerald-950/40 rounded px-1.5 py-0.5 mb-1">
                 <span>Denomination</span>
                 <span className="text-right">Count</span>
                 <span className="text-right">Amount</span>
@@ -901,25 +935,25 @@ function DenominationCounter({
                 {list.map((d) => {
                     const count = parseInt(denoms[d] || "0", 10) || 0;
                     return (
-                        <div key={d} className="grid grid-cols-[1fr_4.5rem_5.5rem] gap-x-2 items-center">
-                            <span className="font-mono text-xs text-foreground">₹{d.toLocaleString("en-IN")}</span>
+                        <div key={d} className="grid grid-cols-[1fr_5rem_6rem] gap-x-2 items-center">
+                            <span className="font-mono text-xs font-medium text-foreground">₹{d.toLocaleString("en-IN")}</span>
                             <Input
                                 value={denoms[d] ?? ""}
                                 onChange={(e) => onChange(d, e.target.value)}
                                 onFocus={(e) => e.target.select()}
                                 onClick={(e) => e.currentTarget.select()}
                                 placeholder="0"
-                                className="h-6.5 py-0 px-2 text-right font-mono text-xs bg-background border-input placeholder:text-muted-foreground/70"
+                                className="h-7 text-right font-mono text-xs bg-white dark:bg-zinc-900 border border-input focus-visible:ring-emerald-500"
                             />
-                            <span className={`text-right font-mono text-xs ${count > 0 ? "font-medium text-foreground" : "text-muted-foreground/50"}`}>
+                            <span className={`text-right font-mono text-xs ${count > 0 ? "font-semibold text-emerald-700 dark:text-emerald-400" : "text-muted-foreground/60"}`}>
                                 {count > 0 ? `₹${fmt(d * count)}` : "—"}
                             </span>
                         </div>
                     );
                 })}
                 {/* Other row below ₹1 for mixed bundles / already counted cash */}
-                <div className="grid grid-cols-[1fr_4.5rem_5.5rem] gap-x-2 items-center pt-1 border-t border-border/40">
-                    <span className="font-mono text-xs text-foreground">Other</span>
+                <div className="grid grid-cols-[1fr_5rem_6rem] gap-x-2 items-center pt-1 border-t border-emerald-200/50 dark:border-emerald-800/40">
+                    <span className="font-mono text-xs font-medium text-foreground">Other</span>
                     <div className="col-span-2 flex items-center gap-1">
                         <span className="text-xs font-mono text-muted-foreground ml-auto">₹</span>
                         <Input
@@ -928,14 +962,14 @@ function DenominationCounter({
                             onFocus={(e) => e.target.select()}
                             onClick={(e) => e.currentTarget.select()}
                             placeholder="0.00"
-                            className="h-6.5 py-0 px-2 text-right font-mono text-xs w-full bg-background border-input placeholder:text-muted-foreground/70"
+                            className="h-7 text-right font-mono text-xs w-full bg-white dark:bg-zinc-900 border border-input focus-visible:ring-emerald-500"
                         />
                     </div>
                 </div>
             </div>
-            <div className="border-t border-border mt-1.5 pt-1.5 flex justify-between items-center font-semibold text-xs">
-                <span>Counted total</span>
-                <span className="font-mono text-sm">₹{fmt(total)}</span>
+            <div className="border-t border-emerald-200/60 dark:border-emerald-800/40 mt-1.5 pt-1.5 flex justify-between items-center bg-emerald-100/50 dark:bg-emerald-950/50 -mx-1 px-2.5 py-1 rounded font-semibold text-xs">
+                <span className="text-emerald-900 dark:text-emerald-200">Counted total</span>
+                <span className="font-mono text-sm font-bold text-emerald-700 dark:text-emerald-300">₹{fmt(total)}</span>
             </div>
         </div>
     );
