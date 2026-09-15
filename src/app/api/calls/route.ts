@@ -360,18 +360,27 @@ export async function GET(req: Request) {
             }
         }
 
+        /** The customer a call actually resolves to — null for a junk or absent key. */
+        const ownerOf = (c: { phone: string | null }) => (c.phone ? (ownerByKey.get(c.phone) ?? null) : null);
+
         // ── Part-number near-match (Call Log display only) ───────────────────
         // The EPBX sends an incoming CLI digit by digit; answering early cuts it
-        // short, so no match key exists and the caller is Unknown. We can still
-        // offer a lead: look for stored phones that START with the digits that
-        // did arrive. Only when ONE customer matches, and only from
-        // PARTIAL_CLI_MIN_DIGITS digits up — a shorter prefix matches half the
-        // phone book. This NEVER touches `Call.phone`: it is a guess for staff
-        // to confirm by ringing back, so the Call Log marks it as one and the
-        // call popup does not show these calls at all.
+        // short. We can still offer a lead: look for stored phones that START
+        // with the digits that did arrive. Only when ONE customer matches, and
+        // only from PARTIAL_CLI_MIN_DIGITS digits up — a shorter prefix matches
+        // half the phone book. This NEVER touches `Call.phone`: it is a guess
+        // for staff to confirm by ringing back, so the Call Log marks it as one
+        // and the call popup does not show these calls at all.
+        //
+        // Judged on the SHAPE of what the PBX sent, never on whether `phone` is
+        // null. Rows ingested before the shape rule existed still carry the junk
+        // key the old last-10 slice produced (`91600204286` → `1600204286`), and
+        // keying off `!c.phone` skipped every one of them — which is exactly the
+        // history a counter is looking at. A junk key matches no customer, so
+        // those rows are unmatched in fact whatever the column says.
         const partialPrefixes = Array.from(new Set(
             calls
-                .filter((c) => c.direction === "INCOMING" && !c.phone)
+                .filter((c) => c.direction === "INCOMING" && !ownerOf(c))
                 .map((c) => partialCliPrefix(c.rawNumber))
                 .filter((p): p is string => !!p),
         ));
@@ -467,14 +476,14 @@ export async function GET(req: Request) {
                 ? (c.alsoPushedBy as unknown[]).filter((h): h is string => typeof h === "string")
                 : [],
             occurredAt: c.occurredAt.toISOString(),
-            customer: c.phone ? (ownerByKey.get(c.phone) ?? null) : null,
+            customer: ownerOf(c),
             // A CLI the handset cut off mid-arrival: real call, unusable number.
             partialNumber: readCallerNumber(
                 c.direction === "OUTGOING" ? normalizeDialedNumber(c.rawNumber) : c.rawNumber,
             ).shape === "partial",
             // The one customer whose number starts with those digits, if exactly
             // one does. A lead for staff to verify — never a match.
-            guessedCustomer: c.phone || c.direction !== "INCOMING"
+            guessedCustomer: ownerOf(c) || c.direction !== "INCOMING"
                 ? null
                 : (guessByPrefix.get(partialCliPrefix(c.rawNumber) ?? "") ?? null),
         }));
