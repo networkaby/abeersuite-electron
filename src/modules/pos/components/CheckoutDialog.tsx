@@ -8,8 +8,9 @@
 // + the confirm/share actions are passed in by the parent.
 //
 // `mode` adapts the same body to three sites:
-//   "sale"   (default) — collecting AGAINST a bill: credit-limit guard, Confirm
-//                        blocked on under-payment, overpayment → Receipt panel.
+//   "sale"   (default) — collecting AGAINST a bill: an under-payment goes on the
+//                        customer's account (Confirm blocked only when it would
+//                        breach their credit limit), overpayment → Receipt panel.
 //   "order"  — collecting an OPTIONAL advance on a POS order: no credit-limit
 //              block, partial/zero advance is fine, "Save Order" CTAs. The sale
 //              path renders byte-identically to before when mode is omitted.
@@ -85,12 +86,13 @@ export function CheckoutDialog({
 }) {
     const isOrder = mode === "order";
     const isReceipt = mode === "receipt";
-    // Sale blocks Confirm on under-payment (a credit sale must go through /sale)
-    // and on a credit-limit breach. An order advance / a receipt are optional in
-    // amount, so only `submitting` (+ a parent-supplied guard) gates them.
-    const confirmBlocked = submitting || confirmDisabled || (!isOrder && !isReceipt && (creditLimitBreached || onCredit > 0.01));
+    // Sale allows an under-payment: whatever is not collected goes on the
+    // customer's account, up to their credit limit. Only a BREACH of that limit
+    // blocks Confirm. An order advance / a receipt are optional in amount, so
+    // only `submitting` (+ a parent-supplied guard) gates them.
+    const confirmBlocked = submitting || confirmDisabled || (!isOrder && !isReceipt && creditLimitBreached);
     const underpayTitle = !isOrder && !isReceipt && onCredit > 0.01
-        ? "Collect the full bill amount to confirm (under-payment → use /sale for credit)"
+        ? `${formatInr(onCredit)} goes on the customer's account — they owe it after this bill`
         : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined;
 
     // Enter on any amount field → confirm. Ctrl/Cmd+Enter → confirm + print.
@@ -144,9 +146,9 @@ export function CheckoutDialog({
                         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                             <AlertCircle size={16} className="mt-0.5 shrink-0" />
                             <span>
-                                {creditLimit === 0
-                                    ? "No credit facility — this account must be paid in full."
-                                    : `Credit limit ₹${(creditLimit ?? 0).toLocaleString("en-IN")} exceeded. ` +
+                                {creditLimit == null || creditLimit === 0
+                                    ? "No credit facility on this account — collect the full amount."
+                                    : `Credit limit ₹${creditLimit.toLocaleString("en-IN")} exceeded. ` +
                                     (ledgerBalance < 0
                                         ? `In credit ₹${Math.abs(ledgerBalance).toLocaleString("en-IN")}, `
                                         : `Outstanding ₹${ledgerBalance.toLocaleString("en-IN")}, `) +

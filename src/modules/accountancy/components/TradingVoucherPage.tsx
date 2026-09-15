@@ -69,7 +69,7 @@ import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVouche
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
-import { extractApiError } from "@/shared/lib/api";
+import { extractApiError, creditLimitDetailOf } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/format";
 import { useActiveRow } from "@/shared/hooks/useActiveRow";
 import { fmt } from "@/utils/constants";
@@ -82,6 +82,9 @@ import { printVoucherAfterSave } from "@/shared/lib/print/silentThermalPrint";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import CreditLimitDialog from "@/modules/customer/components/CreditLimitDialog";
+import type { CreditLimitDetail } from "@/shared/lib/accountancy/checkCreditLimit";
 
 // Per-kind config + pure line math — extracted to lib/tradingVoucherKinds.ts.
 import {
@@ -262,6 +265,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // still loading, permissions is a false empty [] — don't let that flash Save
     // hidden; only narrow down once we actually know.
     const canPost = sessionStatus === "loading" || holds(requiredVoucherPermission(kind, "post"));
+    // Raising a customer's credit limit from the refusal dialog — the same
+    // permission the Contacts profile card asks for, and the same one the PATCH
+    // route enforces. A user without it sees the figures and no input.
+    const canEditCreditLimit = hasPermissionWithScope(permissions, PERMISSIONS.CUSTOMERS_EDIT);
+    // Set when a save is refused for want of credit: the server's figures plus
+    // the save to run again once the limit is raised.
+    const [creditBlock, setCreditBlock] = useState<{ detail: CreditLimitDetail; retry: () => void } | null>(null);
     // Voucher's saved paymentAccountId — paired with cashBankAccounts via a
     // dedicated effect so the picker resolves once both have loaded.
     const [pendingPaymentAccountId, setPendingPaymentAccountId] = useState<number | null>(null);
@@ -1357,7 +1367,17 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 .catch(() => { /* keep last value */ });
             router.refresh();
         } catch (err: unknown) {
-            toast.error(extractApiError(err, "Save failed"));
+            // Refused for want of credit — the server sends the figures it
+            // refused on. Offer to raise the limit here and run the save again,
+            // rather than making the salesman leave a filled-in bill to go and
+            // edit the customer. A walk-in refusal carries no figures (no limit
+            // can fix it), so it falls through to the plain message.
+            const detail = creditLimitDetailOf(err);
+            if (detail) {
+                setCreditBlock({ detail, retry: () => { void submit(andPost, andPrint); } });
+            } else {
+                toast.error(extractApiError(err, "Save failed"));
+            }
         } finally {
             setSaving(false);
         }
@@ -2440,6 +2460,19 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     partyName={party.name}
                     voucherId={spineId}
                     onSaved={() => toast.success("Bill-wise link saved.")}
+                />
+            )}
+
+            {/* Credit refused. Raise the customer's limit here and the save that
+                was refused runs again by itself — the filled-in bill is not lost. */}
+            {creditBlock && (
+                <CreditLimitDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setCreditBlock(null); }}
+                    detail={creditBlock.detail}
+                    partyName={party?.name ?? "this customer"}
+                    canEdit={canEditCreditLimit}
+                    onSaved={() => { const again = creditBlock.retry; setCreditBlock(null); again(); }}
                 />
             )}
         </div>

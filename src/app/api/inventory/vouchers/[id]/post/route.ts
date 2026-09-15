@@ -12,6 +12,7 @@ import {
     resolvePostGstStates,
     type PostableVoucher,
 } from "@/modules/inventory/lib/postVoucherInTx";
+import { CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 
 // POST /api/inventory/vouchers/[id]/post
 //   1. Write InvStockLedger entries + update cached InvProduct.stock
@@ -41,7 +42,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             universalVoucher: {
                 select: {
                     description: true, voucherNo: true, status: true, date: true, type: true,
-                    branchId: true, createdById: true,
+                    // 5D-4: the party's ledger lives on the spine — the credit-limit
+                    // check inside postVoucherInTx needs it to know whose credit is
+                    // being used.
+                    branchId: true, createdById: true, partyAccountId: true,
                     branch: { select: { id: true, gstStateCode: true } },
                     inventoryLines: {
                         orderBy: { id: "asc" },
@@ -61,6 +65,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             type:     voucherRow.universalVoucher?.type ?? "",
             branchId: voucherRow.universalVoucher?.branchId ?? "",
             status:   voucherRow.universalVoucher?.status ?? "DRAFT",
+            partyAccountId: voucherRow.universalVoucher?.partyAccountId ?? null,
         }
         : null;
 
@@ -137,6 +142,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 { error: e.message, notes: e.notes },
                 { status: 422 },
             );
+        }
+        // The draft asks the customer for more credit than they have left. The
+        // draft stays a draft — collect something, or raise the limit.
+        if (e instanceof CreditLimitError) {
+            return NextResponse.json({ error: e.message, code: e.code, creditLimit: e.detail }, { status: 422 });
         }
         return handleApiError(e, "Failed to post voucher");
     }

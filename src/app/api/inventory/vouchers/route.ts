@@ -22,6 +22,7 @@ import { after } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { GlPostFailedError, postVoucherInTx } from "@/modules/inventory/lib/postVoucherInTx";
+import { CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
 //
@@ -797,6 +798,12 @@ export async function POST(req: NextRequest) {
         // payment rows do not add up), not a server fault — show it as it is.
         if (e instanceof GlBuildError) return NextResponse.json({ error: e.message }, { status: 422 });
         if (e instanceof GlPostFailedError) return NextResponse.json({ error: e.message, notes: e.notes }, { status: 422 });
+        // The customer has no credit left (or none at all) — the salesman's to
+        // settle with them, not a server fault. `creditLimit` carries the figures
+        // the form's raise-the-limit dialog shows, so it needs no second call.
+        if (e instanceof CreditLimitError) {
+            return NextResponse.json({ error: e.message, code: e.code, creditLimit: e.detail }, { status: 422 });
+        }
         return handleApiError(e, "Failed to save voucher");
     }
 }

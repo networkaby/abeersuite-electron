@@ -1409,12 +1409,16 @@ export function usePosBilling(opts: {
     });
 
     // Credit-limit guard — true when the on-credit portion of this sale would
-    // push the customer's outstanding balance past their credit limit.
+    // push the customer's outstanding balance past their credit limit. This is
+    // the ONLY thing blocking a part-paid or fully-unpaid counter bill, so it is
+    // deny-by-default: anything we cannot vouch for (no customer loaded, no
+    // limit) gets no credit. The server's checkCreditLimit decides for real —
+    // it also refuses an anonymous walk-in ledger, limit or no limit.
     const creditLimitBreached: boolean = (() => {
-        if (onCredit <= 0) return false; // fully paid, no AR impact
+        if (onCredit <= 0) return false;   // fully paid, no AR impact
         const limit = snapshot?.creditLimit ?? null;
-        if (limit === null) return false; // unlimited account
-        if (limit === 0) return true;  // zero-credit account
+        if (limit === null) return true;   // no customer / no limit → no credit
+        if (limit === 0) return true;      // zero-credit account
         return (ledgerBalance + onCredit) > limit;
     })();
 

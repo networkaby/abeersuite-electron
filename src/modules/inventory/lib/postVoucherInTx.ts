@@ -24,6 +24,7 @@ import { allocateSpineNumber, engineCreateSpine, enginePost } from "@/modules/ac
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
+import { checkSaleCreditLimit } from "@/shared/lib/accountancy/checkCreditLimit";
 
 /** Tagged error: the GL bridge returned without creating a ledger entry for a
  *  trading voucher (SALE/PURCHASE/SALE_RETURN/PURCHASE_RETURN). Callers turn this
@@ -173,6 +174,17 @@ export async function postVoucherInTx(
         isPurchase, isSale, isCommitment, isPhysicalStock,
         isManufacturingJournal, isBranchTransfer, isFixedDirection, isTradingVoucher,
     } = classifyVoucherPost(voucher.type);
+
+    // G4b: tender/charge input from settlementJson (replaced the tables). Read
+    // once here — the credit check below and the GL arm further down are asking
+    // about the same rows.
+    const settlement = readSettlement(voucher.settlementJson);
+
+    // Credit limit — refused BEFORE anything is written, so a sale the customer
+    // has no room for leaves no trace. Both office callers come through here
+    // (creating a posted sale, and posting a draft saved earlier), so neither
+    // can slip past. The rule itself lives with the counter's.
+    await checkSaleCreditLimit(tx, { ...voucher, tenders: settlement.tenders });
 
     // ── Which spine are we posting? ──────────────────────────────────────────
     // ATTACH  — the voucher already has one, because someone saved it as a draft
@@ -368,8 +380,6 @@ export async function postVoucherInTx(
     // Purchase Order) intentionally don't touch GL on POST.
     let journalEntryId: number | null = null;
     const postNotes: string[] = [];
-    // G4b: tender/charge input from settlementJson (replaced the tables).
-    const settlement = readSettlement(voucher.settlementJson);
     if (isFixedDirection) {
         // Stock + GL through the Transaction Engine in ONE call (one tx).
         // `saleToSpec` builds the GL lines (shared with the legacy bridge

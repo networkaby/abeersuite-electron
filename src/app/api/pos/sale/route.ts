@@ -127,7 +127,10 @@ const createSchema = z.object({
     // below enforces "at least one line OR one service".
     lines: z.array(lineSchema).default([]),
     services: z.array(serviceLineSchema).default([]),
-    payments: z.array(paymentSchema).min(1, "At least one payment line required"),
+    // May be empty: a fully-on-credit bill collects nothing at the counter.
+    // What the customer may take on credit is decided by checkCreditLimit,
+    // not by the shape of this array.
+    payments: z.array(paymentSchema).default([]),
     shippingAmt: z.number().min(0).default(0),
     roundOff: z.number().default(0),  // signed
     charges: z.array(chargeSchema).default([]),
@@ -769,20 +772,18 @@ export async function POST(req: Request) {
     }
 
     // Cash/UPI/etc. payments + the gift-card tender vs the bill. Three arms:
-    //   • exact (|surplus| ≤ 1p) → today's exact-pay sale, unchanged.
-    //   • under (surplus < 0)    → rejected; an on-credit sale goes through /sale.
+    //   • exact (|surplus| ≤ 1p) → the plain paid-in-full counter sale.
+    //   • under (surplus < 0)    → an on-credit sale. The shortfall rides the
+    //     customer's own ledger as an AR tender; how much they may take is
+    //     checkCreditLimit's call (inside the tx, below) — max(manual, auto)
+    //     against their effective balance. Nothing collected at all is a
+    //     fully-on-credit bill, and is fine by the same rule.
     //   • over  (surplus > 0)    → allowed ONLY with collectSurplus: the extra
     //     settles the customer's oldest open bills (FIFO) + leftover advance, via
     //     a separate Receipt voucher (so the bank/UPI statement matches 1:1).
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0) + giftCardRedeem;
     const surplus = round2(paymentTotal - totalAmount);
     const collectingSurplus = surplus > 0.01;
-    if (surplus < -0.01) {
-        return NextResponse.json(
-            { error: `Payment total (₹${paymentTotal.toFixed(2)}) is less than invoice total (₹${totalAmount.toFixed(2)}). Use /sale for a credit sale.` },
-            { status: 422 },
-        );
-    }
     if (collectingSurplus) {
         if (!body.collectSurplus) {
             return NextResponse.json(
@@ -829,9 +830,8 @@ export async function POST(req: Request) {
         resolvedPayments.push({ method: channelToPaymentMethod(acct.channel), accountId: acct.accountId, amount: p.amount, reference: p.reference });
     }
 
-    // Amount that will increase the customer's AR balance (onCredit portion).
-    // Currently the route enforces paymentTotal === totalAmount so this is
-    // always 0 — the check is a forward-compatibility guard for partial payments.
+    // Amount that will increase the customer's AR balance (onCredit portion) —
+    // what checkCreditLimit weighs against the customer's effective limit.
     // Round to paise: the inclusive-price + roundOff float math can leave a
     // sub-paise residue (e.g. totalAmount = 960.0000000000004 vs a ₹960 payment).
     // That crumb is not a real credit balance, but left unrounded it slips past
@@ -841,9 +841,10 @@ export async function POST(req: Request) {
     //
     // round2 alone is NOT enough: a residue of ~0.005 (common once a GST-bearing
     // charge is on the bill) rounds UP to 0.01, which is still > 0 and still
-    // trips the guard. The underpay guard above already tolerates a 1-paise
-    // shortfall as "paid in full", so anything within that same ±0.01 tolerance
-    // is a rounding crumb — not an on-credit sale. Zero it to stay consistent.
+    // trips the guard. A shortfall within ±0.01 is a rounding crumb — not a
+    // customer taking credit — so it is zeroed and the limit is left alone.
+    // (The crumb still rides the AR tender below, which is what keeps the
+    // tender rows adding up to the bill.)
     const rawOnCredit = round2(totalAmount - paymentTotal);
     const onCredit = rawOnCredit > 0.01 ? rawOnCredit : 0;
 
@@ -872,9 +873,9 @@ export async function POST(req: Request) {
             // sale a v_live till relayed there — in the common series. Owner decision
             // (2026-09-07): one series for every voucher that reaches the office.
             const voucherRef = await invNextRef(tx, "POS");
-            // POS today enforces paymentTotal == totalAmount, so onCredit
-            // is always 0 and no AR tender is needed. Kept as a future-
-            // facing branch in case partial POS sales get enabled.
+            // Whatever the counter did not collect goes on the customer's own
+            // ledger as an AR tender, so the tender rows always add up to the
+            // bill and the GL balances (Dr Customer instead of Dr Till).
             const arRemainder = totalAmount - paymentTotal;
             // Under surplus the sale is settled FROM the customer ledger: a single
             // AR tender for the exact bill (Dr Customer / Cr Sales+GST). The actual
@@ -894,8 +895,9 @@ export async function POST(req: Request) {
                     ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
                         ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
                         : []),
-                    // AR leg for the unpaid portion (on-credit). POS enforces exact pay,
-                    // so this is 0 today — kept as a forward-facing branch for partials.
+                    // AR leg for the unpaid portion (on-credit) — the bill then
+                    // shows up in the customer's outstandings and ages like any
+                    // other open bill.
                     ...(arRemainder > 0.005
                         ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
                         : []),

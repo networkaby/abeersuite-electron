@@ -219,9 +219,12 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             summaryParts.push(`${label} ${formatInr(s.amount)}${s.reference ? ` (${s.reference})` : ""}`);
         }
         if (b.onCredit > 0) summaryParts.push(`On credit ${formatInr(b.onCredit)}`);
+        // Nothing tendered AND nothing on credit means a gift card covered the
+        // whole bill (payableTotal is 0). Not an error — this string is only the
+        // note the cashier reads back; the voucher's tender rows carry the truth.
+        // It used to be refused here, because the server demanded one payment row.
         if (summaryParts.length === 0) {
-            toast.error("Enter Cash or UPI — or it'll all go on credit (which is fine, just say so)");
-            return;
+            summaryParts.push(b.giftCardApplied > 0.005 ? `Gift card ${formatInr(b.giftCardApplied)}` : "No payment");
         }
         if (!b.activeShift) {
             toast.error("Open a shift before billing");
@@ -252,22 +255,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 if (s.amount <= 0) continue;
                 paymentsList.push({ paymentAccountId: s.paymentAccountId, amount: s.amount, reference: s.reference || undefined });
             }
-            // Fully-on-credit isn't a POS sale — surface a clear error.
-            if (paymentsList.length === 0 && b.payableTotal > 0.005) {
-                toast.error("POS sale needs at least one paid line (cash, UPI, or other). Use 'Save as credit invoice' for fully-on-credit sales.");
-                b.setSubmitting(false);
-                return;
-            }
-            // Under-pay would be a credit sale — not allowed at POS (use /sale).
+            // Under-pay (including collecting nothing at all) IS allowed: the
+            // shortfall goes on the customer's account. The credit limit is the
+            // only gate, and it is checked twice — `b.creditLimitBreached` above
+            // for the cashier, and checkCreditLimit on the server for the truth.
             // Over-pay IS allowed when collecting surplus: the server books the
             // extra as a separate Receipt voucher (clears oldest dues FIFO, any
             // leftover = customer advance) so the bank/UPI statement matches 1:1.
-            const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
-            if (collectedFromPayments + 0.01 < b.payableTotal) {
-                toast.error("POS sale must be paid in full. Use 'Save & Print' on /sale for a credit sale.");
-                b.setSubmitting(false);
-                return;
-            }
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
             const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: PaymentRelayPayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
