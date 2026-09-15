@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
+import { phoneMatchKey, phoneKeyVariants, partialCliPrefixes } from "@/shared/lib/format";
 
 // PATCH /api/calls/[id] — Call Log triage actions. Open to any staff (matches
 // /api/help, /api/deals — the write itself only needs an authenticated staff
@@ -14,6 +15,12 @@ import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api"
 //     phone, so past + future calls from it are (un)flagged together.
 //   • ticketId: link the help ticket / deal raised from this call — see the
 //     `ticketId` doc comment on the Call model.
+//   • confirmPhone: staff answering "who called?" on a PART NUMBER — a CLI the
+//     EPBX cut off mid-arrival. Writes the full number they picked into the
+//     match key, so the row becomes a normal matched call everywhere. Pass null
+//     to undo a wrong pick. `rawNumber` is NEVER touched: it is the audit of
+//     what the PBX actually sent, and the pair (partial rawNumber + a phone
+//     key) is exactly what records that a human completed this one.
 //   • alsoIds: the OTHER pending calls this same note/ticket answers. A caller
 //     who rang five times has one thing to say, and the counter follow-up popup
 //     shows those five as one entry — so its single save has to land on all five
@@ -25,9 +32,10 @@ const patchSchema = z
         note: z.string().trim().max(2000).nullable().optional(),
         spam: z.boolean().optional(),
         ticketId: z.number().int().positive().nullable().optional(),
+        confirmPhone: z.string().trim().max(20).nullable().optional(),
         alsoIds: z.array(z.number().int().positive()).max(50).optional(),
     })
-    .refine((v) => v.note !== undefined || v.spam !== undefined || v.ticketId !== undefined, {
+    .refine((v) => v.note !== undefined || v.spam !== undefined || v.ticketId !== undefined || v.confirmPhone !== undefined, {
         message: "Nothing to update",
     });
 
@@ -42,8 +50,45 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error) return error;
 
     try {
-        const call = await prisma.call.findUnique({ where: { id }, select: { id: true, phone: true } });
+        const call = await prisma.call.findUnique({
+            where: { id },
+            select: { id: true, phone: true, rawNumber: true },
+        });
         if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
+
+        // Completing a part number decides WHO a call belonged to, so it is
+        // guarded four ways. Only a part number can be completed; the answer
+        // must be a real ten-digit number; it must START with the digits the PBX
+        // did deliver (or staff could file a call under anyone at all); and it
+        // must belong to an existing customer — we confirm an identity, we never
+        // invent a number. Clearing (null) is allowed on a part number only, so
+        // a genuinely matched call can never be unmatched by accident.
+        if (data.confirmPhone !== undefined) {
+            const prefixes = partialCliPrefixes(call.rawNumber);
+            if (!prefixes.length) {
+                return NextResponse.json({ error: "This call's number is not a part number" }, { status: 422 });
+            }
+            if (data.confirmPhone === null) {
+                await prisma.call.update({ where: { id }, data: { phone: null } });
+                return NextResponse.json({ success: true });
+            }
+            const key = phoneMatchKey(data.confirmPhone);
+            if (!key || !prefixes.some((p) => key.startsWith(p))) {
+                return NextResponse.json(
+                    { error: "That number does not start with the digits the PBX delivered" },
+                    { status: 422 },
+                );
+            }
+            const owned = await prisma.phone.findFirst({
+                where: { phone: { in: phoneKeyVariants(key) } },
+                select: { id: true },
+            });
+            if (!owned) {
+                return NextResponse.json({ error: "No customer holds that number" }, { status: 422 });
+            }
+            await prisma.call.update({ where: { id }, data: { phone: key } });
+            return NextResponse.json({ success: true });
+        }
 
         // One id or several — `updateMany` covers both, so the grouped save and
         // the single Call Log edit run the exact same write.

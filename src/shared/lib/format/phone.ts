@@ -90,31 +90,32 @@ export function isCallableNumber(raw: string | null | undefined, direction?: str
 }
 
 /**
- * How many subscriber digits a part number must carry before we are willing to
- * guess whose it is. Below this a prefix matches half the phone book, so the
- * guess would be noise dressed as help.
+ * We guess only when the capture is ONE digit short of a whole number.
+ *
+ * Owner's rule: at nine digits the tenth is missing, so there are ten possible
+ * numbers and more than one customer can fit — a real shortlist. Shorter than
+ * that happens rarely and the shortlist becomes the phone book, so we don't.
  */
-export const PARTIAL_CLI_MIN_DIGITS = 7;
+export const PARTIAL_CLI_GUESS_DIGITS = 9;
 
 /**
  * The leading digits to run a "whose number starts like this?" lookup on —
- * empty when the capture is a whole number, or too short to guess on.
+ * empty unless the capture is exactly one digit short (PARTIAL_CLI_GUESS_DIGITS).
  *
- * Usually one candidate. A short capture starting `91` gives TWO, because the
- * truncation is genuinely ambiguous: `916345678` is either the country code
+ * Usually one candidate. A short capture starting `91` can give TWO, because
+ * the truncation is genuinely ambiguous: `916345678` is either the country code
  * plus seven digits, or the whole mobile `9163456789` one digit short. Both
- * readings are searched and the caller demands a single owner ACROSS them, so
- * an ambiguous capture can never name the wrong customer.
+ * readings that are nine digits long are searched.
  *
- * Display and triage only: a prefix hit is never written to `Call.phone`.
+ * Triage only: a prefix hit is never written to `Call.phone` by itself — staff
+ * pick from the shortlist and confirm (PATCH /api/calls/[id] `confirmPhone`).
  */
 export function partialCliPrefixes(raw: string | null | undefined): string[] {
     const { shape, digits, local } = readCallerNumber(raw);
     if (shape !== "partial") return [];
-    const out: string[] = [];
-    if (local.length >= PARTIAL_CLI_MIN_DIGITS) out.push(local);
-    if (digits !== local && digits.length >= PARTIAL_CLI_MIN_DIGITS) out.push(digits);
-    return out;
+    return [local, digits].filter(
+        (p, i, all) => p.length === PARTIAL_CLI_GUESS_DIGITS && all.indexOf(p) === i,
+    );
 }
 
 /**

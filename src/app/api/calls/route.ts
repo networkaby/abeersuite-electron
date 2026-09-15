@@ -7,6 +7,7 @@ import {
     phoneMatchKey, phoneKeyVariants, normalizeDialedNumber, readCallerNumber, partialCliPrefixes,
 } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
+
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
 import type { CallDirection } from "@/generated/prisma/client";
@@ -227,6 +228,11 @@ export async function POST(req: Request) {
 
 const DIRECTIONS = ["INCOMING", "OUTGOING", "INTERNAL", "UNKNOWN"] as const;
 
+/** A candidate caller for a part number — one customer, one of their numbers. */
+type CallGuess = { kind: "person" | "company"; id: number; name: string; phone: string };
+/** Nine digits leaves ten possible numbers; a longer list is not a shortlist. */
+const MAX_CALL_GUESSES = 10;
+
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -363,14 +369,18 @@ export async function GET(req: Request) {
         /** The customer a call actually resolves to — null for a junk or absent key. */
         const ownerOf = (c: { phone: string | null }) => (c.phone ? (ownerByKey.get(c.phone) ?? null) : null);
 
-        // ── Part-number near-match (Call Log display only) ───────────────────
+        // ── Part-number shortlist (Call Log triage) ──────────────────────────
         // The EPBX sends an incoming CLI digit by digit; answering early cuts it
-        // short. We can still offer a lead: look for stored phones that START
-        // with the digits that did arrive. Only when ONE customer matches, and
-        // only from PARTIAL_CLI_MIN_DIGITS digits up — a shorter prefix matches
-        // half the phone book. This NEVER touches `Call.phone`: it is a guess
-        // for staff to confirm by ringing back, so the Call Log marks it as one
-        // and the call popup does not show these calls at all.
+        // short. The call is real but the number is not, so we offer a lead
+        // instead of a match: the customers whose stored number BEGINS with the
+        // digits that did arrive. Only when exactly one digit is missing
+        // (PARTIAL_CLI_GUESS_DIGITS) — then there are ten possible numbers and
+        // the shortlist is short enough to choose from; shorter captures are
+        // rare and would list half the phone book.
+        //
+        // A shortlist is a QUESTION, never an answer: nothing is attached here.
+        // Staff pick one and confirm it (PATCH /api/calls/[id] `confirmPhone`),
+        // which writes `Call.phone` and makes the row normal like any other.
         //
         // Judged on the SHAPE of what the PBX sent, never on whether `phone` is
         // null. Rows ingested before the shape rule existed still carry the junk
@@ -379,16 +389,15 @@ export async function GET(req: Request) {
         // history a counter is looking at. A junk key matches no customer, so
         // those rows are unmatched in fact whatever the column says.
         const unmatchedPartials = calls.filter((c) => c.direction === "INCOMING" && !ownerOf(c));
-        const partialPrefixes = Array.from(new Set(
+        const prefixes = Array.from(new Set(
             unmatchedPartials.flatMap((c) => partialCliPrefixes(c.rawNumber)),
         ));
-        const guessByCallId = new Map<number, { kind: "person" | "company"; id: number; name: string }>();
-        if (partialPrefixes.length) {
-            // One index-backed query for the whole page. `take` caps a runaway
-            // prefix; a prefix that wide is ambiguous and dropped below anyway.
+        const guessesByCallId = new Map<number, CallGuess[]>();
+        if (prefixes.length) {
+            // One index-backed query for the whole page.
             const prefixRows = await prisma.phone.findMany({
                 where: {
-                    OR: partialPrefixes.flatMap((p) =>
+                    OR: prefixes.flatMap((p) =>
                         phoneKeyVariants(p).map((v) => ({ phone: { startsWith: v } })),
                     ),
                 },
@@ -402,22 +411,23 @@ export async function GET(req: Request) {
             for (const call of unmatchedPartials) {
                 const candidates = partialCliPrefixes(call.rawNumber);
                 if (!candidates.length) continue;
-                // One owner ACROSS every reading of the capture, or no guess —
-                // so an ambiguous truncation can never name the wrong customer.
-                const owners = new Map<string, { kind: "person" | "company"; id: number; name: string }>();
+                // Keyed by the NUMBER, not the customer: one person may hold two
+                // numbers that both fit, and staff are choosing which number the
+                // call came from.
+                const byNumber = new Map<string, CallGuess>();
                 for (const row of prefixRows) {
                     const key = phoneMatchKey(row.phone);
-                    if (!key || !candidates.some((p) => key.startsWith(p))) continue;
-                    const owner = row.person
-                        ? { kind: "person" as const, id: row.person.id, name: row.person.name }
-                        : row.company
-                            ? { kind: "company" as const, id: row.company.id, name: row.company.name }
-                            : null;
-                    if (!owner) continue;
-                    owners.set(`${owner.kind}:${owner.id}`, owner);
-                    if (owners.size > 1) break; // ambiguous — no guess
+                    if (!key || byNumber.has(key)) continue;
+                    if (!candidates.some((p) => key.startsWith(p))) continue;
+                    if (row.person) byNumber.set(key, { kind: "person", id: row.person.id, name: row.person.name, phone: key });
+                    else if (row.company) byNumber.set(key, { kind: "company", id: row.company.id, name: row.company.name, phone: key });
                 }
-                if (owners.size === 1) guessByCallId.set(call.id, [...owners.values()][0]);
+                if (byNumber.size) {
+                    guessesByCallId.set(
+                        call.id,
+                        [...byNumber.values()].sort((a, b) => a.name.localeCompare(b.name)).slice(0, MAX_CALL_GUESSES),
+                    );
+                }
             }
         }
 
@@ -485,7 +495,10 @@ export async function GET(req: Request) {
             ).shape === "partial",
             // The one customer whose number starts with those digits, if exactly
             // one does. A lead for staff to verify — never a match.
-            guessedCustomer: guessByCallId.get(c.id) ?? null,
+            // The shortlist for a part number — customers whose stored number
+            // begins with the digits that did arrive. A question for staff to
+            // answer, never a match: see the block above.
+            guesses: guessesByCallId.get(c.id) ?? [],
         }));
 
         // `total` counted before the cutoff ran, so take the dropped rows off it —

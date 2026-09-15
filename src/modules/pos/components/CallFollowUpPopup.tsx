@@ -286,10 +286,13 @@ export default function CallFollowUpPopup() {
             // cannot identify anyone. Such calls stay on the CRM Call Log for
             // the audit, marked "part number" with a near-match to verify; here
             // they just stop nagging.
+            // A part number staff have COMPLETED on the Call Log resolves to a
+            // customer and can be rung back, so it belongs here again; a stale
+            // junk key from before the shape rule resolves to nobody and stays out.
             const fresh = data.items.filter(
                 (c) =>
                     c.phone !== null
-                    && isCallableNumber(c.rawNumber, c.direction)
+                    && (isCallableNumber(c.rawNumber, c.direction) || c.customer !== null)
                     && new Date(c.occurredAt).getTime() >= cutoff,
             );
 

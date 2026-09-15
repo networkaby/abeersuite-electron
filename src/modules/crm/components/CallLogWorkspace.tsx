@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
     PhoneIncoming, PhoneOutgoing, PhoneMissed, ArrowLeftRight, HelpCircle,
     User, Building2, UserPlus, ShieldAlert, ShieldCheck, StickyNote, RefreshCw, Search, CalendarDays,
+    Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +18,12 @@ import {
 import { formatDateTime, formatCallerNumber } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
+import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 
 // ── Wire type (mirrors GET /api/calls) ──────────────────────────────────────────
 type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
+interface CallGuess { kind: "person" | "company"; id: number; name: string; phone: string }
 interface CallItem {
     id: number;
     direction: Direction;
@@ -47,9 +50,10 @@ interface CallItem {
     // The EPBX sends an incoming CLI digit by digit; answering before the last
     // digit lands leaves a part number — a real call nobody can ring back.
     partialNumber: boolean;
-    // For a part number: the single customer whose number starts with the
-    // digits we did get. A lead to verify, never a match — see GET /api/calls.
-    guessedCustomer: { kind: "person" | "company"; id: number; name: string } | null;
+    // For a part number: the customers whose stored number BEGINS with the
+    // digits that did arrive. A shortlist to choose from, never a match — staff
+    // pick one and confirm it. See GET /api/calls.
+    guesses: CallGuess[];
 }
 interface CallsResponse { items: CallItem[]; pagination: { page: number; pageSize: number; total: number } }
 
@@ -113,6 +117,10 @@ export default function CallLogWorkspace() {
     const [leadPhone, setLeadPhone] = useState<string | null>(null);
     const [noteFor, setNoteFor] = useState<CallItem | null>(null);
     const [noteDraft, setNoteDraft] = useState("");
+    // The part-number row whose "who called?" shortlist is open, and the pick.
+    const [guessFor, setGuessFor] = useState<CallItem | null>(null);
+    const [guessPick, setGuessPick] = useState<string>("");
+    const [guessSaving, setGuessSaving] = useState(false);
     const [noteSaving, setNoteSaving] = useState(false);
 
     const buildParams = (targetPage: number) => {
@@ -192,6 +200,33 @@ export default function CallLogWorkspace() {
             void load(1);
         } catch {
             toast.error("Failed to update spam flag");
+        }
+    };
+
+    /** Answer "who called?" on a part number — writes the full number staff picked. */
+    const confirmGuess = async () => {
+        if (!guessFor || !guessPick) return;
+        setGuessSaving(true);
+        try {
+            await axios.patch(`/api/calls/${guessFor.id}`, { confirmPhone: guessPick });
+            toast.success("Number completed");
+            setGuessFor(null);
+            void load(1);
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to confirm the number"));
+        } finally {
+            setGuessSaving(false);
+        }
+    };
+
+    /** Undo a wrong pick — back to Unknown, with the part capture untouched. */
+    const clearConfirmed = async (c: CallItem) => {
+        try {
+            await axios.patch(`/api/calls/${c.id}`, { confirmPhone: null });
+            toast.success("Confirmation cleared");
+            void load(1);
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to clear the confirmation"));
         }
     };
 
@@ -321,15 +356,35 @@ export default function CallLogWorkspace() {
                                 <tr className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
                                     <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
                                     <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
-                                    <td className="whitespace-nowrap px-3 py-2 font-medium" title={c.rawNumber ?? undefined}>
-                                        {formatCallerNumber(c.rawNumber, c.direction)}
+                                    <td
+                                        className="whitespace-nowrap px-3 py-2 font-medium"
+                                        title={
+                                            c.partialNumber && c.phone
+                                                ? `The PBX sent only ${c.rawNumber} — completed by staff`
+                                                : (c.rawNumber ?? undefined)
+                                        }
+                                    >
+                                        {/* A completed part number shows the number staff confirmed;
+                                            the short capture stays in the tooltip, and in rawNumber. */}
+                                        {c.partialNumber && c.phone
+                                            ? formatCallerNumber(c.phone)
+                                            : formatCallerNumber(c.rawNumber, c.direction)}
                                         {c.partialNumber && (
-                                            <span
-                                                className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
-                                                title="The number arrived incomplete — the call was answered before the EPBX finished sending it."
-                                            >
-                                                part number
-                                            </span>
+                                            c.phone ? (
+                                                <span
+                                                    className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                                                    title="Arrived incomplete; a staff member confirmed the full number."
+                                                >
+                                                    completed
+                                                </span>
+                                            ) : (
+                                                <span
+                                                    className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                                                    title="The number arrived incomplete — the call was answered before the EPBX finished sending it."
+                                                >
+                                                    part number
+                                                </span>
+                                            )
                                         )}
                                     </td>
                                     <td className="px-3 py-2">
@@ -338,14 +393,17 @@ export default function CallLogWorkspace() {
                                                 {c.customer.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
                                                 {c.customer.name}
                                             </span>
-                                        ) : c.guessedCustomer ? (
-                                            <span
-                                                className="inline-flex items-center gap-1.5 text-amber-700"
-                                                title="Part number — the digits we got match only this customer. Ring back to confirm."
+                                        ) : c.guesses.length ? (
+                                            <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1.5 rounded px-1 text-amber-700 underline decoration-dotted underline-offset-2 hover:bg-amber-50"
+                                                title="The number arrived one digit short. These customers' numbers begin with the digits we got — pick the right one."
+                                                onClick={() => { setGuessFor(c); setGuessPick(c.guesses[0].phone); }}
                                             >
-                                                {c.guessedCustomer.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
-                                                {c.guessedCustomer.name}?
-                                            </span>
+                                                {c.guesses.length === 1
+                                                    ? `${c.guesses[0].name}?`
+                                                    : `${c.guesses.length} possible`}
+                                            </button>
                                         ) : (
                                             <span className="text-muted-foreground">Unknown</span>
                                         )}
@@ -373,6 +431,15 @@ export default function CallLogWorkspace() {
                                             <Button variant="ghost" size="icon" className="h-8 w-8" title="Add / edit note" onClick={() => openNote(c)}>
                                                 <StickyNote size={15} />
                                             </Button>
+                                            {c.partialNumber && c.phone && (
+                                                <Button
+                                                    variant="ghost" size="icon" className="h-8 w-8"
+                                                    title="Clear this confirmation — back to Unknown"
+                                                    onClick={() => void clearConfirmed(c)}
+                                                >
+                                                    <Eraser size={15} />
+                                                </Button>
+                                            )}
                                             {/* No lead from a part number — it would save a phone nobody can ring. */}
                                             {!c.customer && c.rawNumber && !c.partialNumber && (
                                                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber, c.direction))}>
@@ -405,6 +472,52 @@ export default function CallLogWorkspace() {
                     </Button>
                 )}
             </div>
+
+            {/* "Who called?" — the shortlist for a part number. A part capture one
+                digit short has ten possible numbers, so more than one customer can
+                fit; staff pick the right one and the row becomes a normal call. */}
+            <Dialog open={guessFor !== null} onOpenChange={(o) => { if (!o) setGuessFor(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader><DialogTitle>Who called?</DialogTitle></DialogHeader>
+                    {guessFor && (
+                        <div className="space-y-3">
+                            <p className="text-sm text-muted-foreground">
+                                The number arrived incomplete — the EPBX sent only{" "}
+                                <span className="font-medium text-foreground">{guessFor.rawNumber}</span>{" "}
+                                before the call was answered. These customers&apos; numbers begin with
+                                those digits. Pick the one who rang, or ring back to check first.
+                            </p>
+                            <div className="space-y-1">
+                                {guessFor.guesses.map((g) => (
+                                    <label
+                                        key={g.phone}
+                                        className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${
+                                            guessPick === g.phone ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                                        }`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="call-guess"
+                                            value={g.phone}
+                                            checked={guessPick === g.phone}
+                                            onChange={() => setGuessPick(g.phone)}
+                                        />
+                                        {g.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
+                                        <span className="font-medium">{g.name}</span>
+                                        <span className="ml-auto text-muted-foreground">{g.phone}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setGuessFor(null)}>Cancel</Button>
+                        <Button disabled={!guessPick || guessSaving} onClick={() => void confirmGuess()}>
+                            {guessSaving ? "Saving…" : "Confirm"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Create-lead dialog (person), phone prefilled */}
             <CreatePersonDialog
