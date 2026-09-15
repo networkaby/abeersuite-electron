@@ -38,7 +38,7 @@ export async function GET(
             to,
         );
 
-        return NextResponse.json({ invVouchers });
+        return NextResponse.json({ invVouchers, accountId: account?.id ?? null });
     } catch (e) {
         return handleApiError(e, "Failed to load transactions");
     }

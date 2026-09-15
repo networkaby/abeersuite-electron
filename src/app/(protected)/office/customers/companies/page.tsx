@@ -591,7 +591,7 @@ export default function CompaniesPage() {
                                             ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                                 <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                             ) : (
-                                                <TransactionsTable invVouchers={transactions.invVouchers} onChanged={() => loadTransactions(from, to)} />
+                                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => loadTransactions(from, to)} />
                                             )}
                                         </div>
                                     </>

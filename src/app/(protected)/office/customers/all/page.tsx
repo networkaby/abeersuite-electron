@@ -624,7 +624,7 @@ export default function AllCustomersPage() {
                                     ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                     ) : (
-                                        <TransactionsTable invVouchers={transactions.invVouchers} onChanged={reloadTransactions} />
+                                        <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={reloadTransactions} />
                                     )
                                 )}
                             </div>
@@ -770,7 +770,7 @@ export default function AllCustomersPage() {
                                     ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                     ) : (
-                                        <TransactionsTable invVouchers={transactions.invVouchers} onChanged={reloadTransactions} />
+                                        <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={reloadTransactions} />
                                     )
                                 )}
                             </div>

@@ -3,8 +3,11 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/ledgerStatus";
 import { voucherSourceForType, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
+import { sumLinked } from "@/modules/accountancy/lib/billLink";
+import { EPS } from "@/modules/accountancy/lib/billLinkPlan";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
-import type { TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
+import { round2 } from "@/shared/lib/format/moneyInr";
+import type { SettlementState, TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
 
 // The party's Transactions tab — their bills AND the money that came in
 // against them, as one running ledger.
@@ -25,6 +28,17 @@ import type { TxInvVoucher } from "@/modules/customer/components/TransactionsTab
 // Receipts, payments and credit notes have no VoucherDetail row, so they can
 // only be found through their GL legs — which is why they were missing from
 // this tab altogether before.
+//
+// `settlement` answers a DIFFERENT question from `movement`, and deliberately
+// so. Movement is what the party's ledger says they owe. Settlement is what
+// VoucherAllocation says the money was pointed AT — whether this bill has been
+// matched off against a receipt, bill by bill. A party can be square on the
+// ledger and still have every bill sitting unmatched, which is exactly the
+// state this tab now shows instead of hiding.
+//
+// Only POSTED vouchers are listed at all: a draft or cancelled voucher is not
+// part of a money statement, so there is no status left worth a column of its
+// own — the Status column carries the settlement instead.
 
 const VOUCHER_SELECT = {
     id: true,
@@ -35,7 +49,6 @@ const VOUCHER_SELECT = {
             createdById: true,
             partyAccountId: true,
             voucherNo: true,
-            status: true,
             date: true,
             type: true,
             branch: { select: { name: true } },
@@ -54,7 +67,6 @@ const LEG_SELECT = {
             type: true,
             voucherNo: true,
             date: true,
-            status: true,
             createdById: true,
             branch: { select: { name: true } },
         },
@@ -69,7 +81,6 @@ type RawVoucher = {
         createdById: number | null;
         partyAccountId: number | null;
         voucherNo: string | null;
-        status: string;
         date: Date;
         type: string;
         branch: { name: string } | null;
@@ -81,7 +92,6 @@ type SpineHeader = {
     type: string;
     voucherNo: string | null;
     date: Date;
-    status: string;
     createdById: number | null;
     branch: { name: string } | null;
 };
@@ -103,6 +113,18 @@ export const CUSTOMER_ACCOUNT_OPENING_SELECT = {
     normalBalance: true,
     group: { select: { type: true } },
 } as const;
+
+/** How much of a voucher's own ledger movement is still unmatched, and what
+ *  that reads as. A voucher that never touched the party's account — a bill
+ *  settled at the counter — has nothing to match and is done by definition. */
+function settlementOf(movement: number, linked: number): { state: SettlementState; open: number } {
+    const onAccount = Math.abs(movement);
+    if (onAccount <= EPS) return { state: "SETTLED", open: 0 };
+    const open = round2(onAccount - Math.min(linked, onAccount));
+    if (open <= EPS) return { state: "SETTLED", open: 0 };
+    if (open >= onAccount - EPS) return { state: "DUE", open };
+    return { state: "PARTIAL", open };
+}
 
 /** The account's normal side, resolved the way the posting engine does. */
 function normalSideOf(account: AccountForOpening): "DEBIT" | "CREDIT" {
@@ -134,14 +156,18 @@ export function buildOpeningVoucherRow(
     return {
         rowKey: `opening:${accountId}`,
         id: -accountId,
+        universalVoucherId: null,
         source: "inv",
         reference: "Opening balance",
         type: "OPENING",
-        status: "N/A",
         date: periodFrom.toISOString(),
         totalAmount: total.toFixed(2),
         amountPaid: paid.toFixed(2),
         movement: signedOpening.toFixed(2),
+        // Not a voucher — it is a figure on the master page, and it has to be
+        // turned into a real opening bill before anything can be matched to it.
+        settlement: null,
+        settlementOpen: "0.00",
         branch: { name: "" },
         createdBy: { name: "" },
     };
@@ -170,9 +196,10 @@ export async function loadCustomerTransactionVouchers(
     const [billRows, periodLegs, priorAgg] = await Promise.all([
         // The party's own documents — cash bills included, so the tab still
         // lists everything they bought even when it never touched their ledger.
+        // Posted only: a draft or cancelled bill is not part of a money statement.
         prisma.voucherDetail.findMany({
             where: {
-                universalVoucher: { deletedAt: null, date: { gte: from, lte: to } },
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
                 OR: [...partyOr],
             },
             select: VOUCHER_SELECT,
@@ -212,29 +239,37 @@ export async function loadCustomerTransactionVouchers(
         0,
     );
 
-    // ── Bill rows ────────────────────────────────────────────────────────────
+    // How much of each voucher has been matched off bill-wise. Counted from
+    // either side and only while the settling voucher is still alive, so a
+    // cancelled receipt stops clearing its bill here too.
     const billedUvIds = new Set<number>();
+    for (const v of billRows as RawVoucher[]) {
+        if (v.universalVoucherId !== null) billedUvIds.add(v.universalVoucherId);
+    }
+    const linkedBySpine = await sumLinked(prisma, [...billedUvIds, ...movementByUv.keys()]);
+
+    // ── Bill rows ────────────────────────────────────────────────────────────
     const billRowsOut = (billRows as RawVoucher[]).map((v) => {
         const uv = v.universalVoucher;
         const uvId = v.universalVoucherId;
-        if (uvId !== null) billedUvIds.add(uvId);
         const total = toNumber(v.totalAmount);
-        // What this bill left ON the party's account; the rest was settled at
-        // the counter, and that is what "Paid" means here. A draft or cancelled
-        // bill has no posted leg, so it shows its total and moves nothing.
+        // What this bill left ON the party's account; the rest was taken at the
+        // counter, and that is what "Paid" means here.
         const movement = uvId !== null ? (movementByUv.get(uvId) ?? 0) : 0;
-        const posted = uv?.status === "POSTED";
+        const settled = settlementOf(movement, uvId !== null ? (linkedBySpine[uvId] ?? 0) : 0);
         return {
             rowKey: `inv:${v.id}`,
             id: v.id,
+            universalVoucherId: uvId,
             source: "inv" as VoucherSource,
             reference: uv?.voucherNo ?? "",
             type: uv?.type ?? "",
-            status: uv?.status ?? "DRAFT",
             date: uv?.date.toISOString() ?? new Date(0).toISOString(),
             totalAmount: total.toFixed(2),
-            amountPaid: (posted ? total - movement : 0).toFixed(2),
+            amountPaid: (total - movement).toFixed(2),
             movement: movement.toFixed(2),
+            settlement: settled.state,
+            settlementOpen: settled.open.toFixed(2),
             branch: uv?.branch ?? { name: "" },
             createdById: uv?.createdById ?? null,
         };
@@ -247,17 +282,20 @@ export async function loadCustomerTransactionVouchers(
         .filter(([uvId]) => !billedUvIds.has(uvId))
         .map(([uvId, movement]) => {
             const uv = headerByUv.get(uvId)!;
+            const settled = settlementOf(movement, linkedBySpine[uvId] ?? 0);
             return {
                 rowKey: `gl:${uvId}`,
                 id: uvId,
+                universalVoucherId: uvId,
                 source: voucherSourceForType(uv.type),
                 reference: uv.voucherNo ?? formatUvNo(uvId),
                 type: uv.type,
-                status: uv.status,
                 date: uv.date.toISOString(),
                 totalAmount: (movement > 0 ? movement : 0).toFixed(2),
                 amountPaid: (movement < 0 ? -movement : 0).toFixed(2),
                 movement: movement.toFixed(2),
+                settlement: settled.state,
+                settlementOpen: settled.open.toFixed(2),
                 branch: uv.branch ?? { name: "" },
                 createdById: uv.createdById,
             };
