@@ -516,6 +516,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 payableTotal={b.payableTotal}
                 overpaid={b.overpaid}
                 balanceDue={b.balanceDue}
+                ledgerBalance={b.ledgerBalance}
                 arrearPaid={b.arrearPaid}
                 advanceTaken={b.advanceTaken}
                 giftCardApplied={b.giftCardApplied}

@@ -275,6 +275,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 payableTotal={b.payableTotal}
                 overpaid={b.overpaid}
                 balanceDue={b.balanceDue}
+                ledgerBalance={b.ledgerBalance}
                 arrearPaid={b.arrearPaid}
                 advanceTaken={b.advanceTaken}
                 giftCardApplied={b.giftCardApplied}

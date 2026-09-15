@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { resolveEffectiveCreditLimit } from "./creditLimit";
+import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 
 // ── CreditLimitError ─────────────────────────────────────────────────────────
 // Thrown by checkCreditLimit when a sale would breach the account's credit
@@ -45,7 +46,7 @@ export async function checkCreditLimit(
 
     const account = await tx.account.findUnique({
         where:  { id: accountId },
-        select: { creditLimit: true, balance: true },
+        select: { creditLimit: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS },
     });
 
     // Unknown account — let the FK constraint handle it.
@@ -55,7 +56,10 @@ export async function checkCreditLimit(
     // config switches it on. Both 0 → no credit (deny-by-default).
     const manual  = account.creditLimit === null ? 0 : Number(account.creditLimit);
     const { effective: limit } = await resolveEffectiveCreditLimit(tx, accountId, manual);
-    const current = Number(account.balance);    // positive = customer owes us
+    // Effective balance — cached GL movements PLUS the master opening balance,
+    // the same figure the Persons list / ledger report / trial balance show. A
+    // bare `Account.balance` misses an opening-balance-only customer entirely.
+    const current = effectiveAccountBalance(account);    // positive = customer owes us
 
     if (limit === 0) {
         throw new CreditLimitError(

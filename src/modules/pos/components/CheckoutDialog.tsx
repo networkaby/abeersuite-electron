@@ -36,7 +36,7 @@ export function CheckoutDialog({
     open, onOpenChange,
     mode = "sale",
     total, collected = 0, onCredit = 0, payableTotal = 0,
-    overpaid = 0, balanceDue = 0, arrearPaid = 0, advanceTaken = 0,
+    overpaid = 0, balanceDue = 0, ledgerBalance = 0, arrearPaid = 0, advanceTaken = 0,
     giftCardApplied = 0, giftCardCode,
     creditLimitBreached = false, creditLimit = null,
     pay, setPay, cashTenderedRef,
@@ -54,6 +54,10 @@ export function CheckoutDialog({
     payableTotal?: number;
     overpaid?: number;
     balanceDue?: number;
+    /** Signed ledger balance — negative means the customer is in credit. `balanceDue`
+     *  clamps that to 0, which would otherwise print "Outstanding ₹0" for a customer
+     *  who is actually holding an advance. */
+    ledgerBalance?: number;
     arrearPaid?: number;
     advanceTaken?: number;
     // Gift card applied as a tender
@@ -143,7 +147,9 @@ export function CheckoutDialog({
                                 {creditLimit === 0
                                     ? "No credit facility — this account must be paid in full."
                                     : `Credit limit ₹${(creditLimit ?? 0).toLocaleString("en-IN")} exceeded. ` +
-                                    `Outstanding ₹${balanceDue.toLocaleString("en-IN")}, ` +
+                                    (ledgerBalance < 0
+                                        ? `In credit ₹${Math.abs(ledgerBalance).toLocaleString("en-IN")}, `
+                                        : `Outstanding ₹${ledgerBalance.toLocaleString("en-IN")}, `) +
                                     `this sale adds ₹${onCredit.toLocaleString("en-IN")} on credit.`
                                 }
                             </span>

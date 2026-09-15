@@ -1389,6 +1389,11 @@ export function usePosBilling(opts: {
     const onCredit = Math.max(0, payableTotal - collected);
     const overpaid = Math.max(0, collected - payableTotal);
     const balanceDue = snapshot?.balanceDue ?? 0;
+    // Signed ledger balance (negative = the customer is in credit). `balanceDue`
+    // is the clamped "how much is due" figure; the credit-limit guard and the
+    // checkout wording both need the real sign, exactly as the server's
+    // checkCreditLimit does.
+    const ledgerBalance = snapshot?.account?.balance ?? balanceDue;
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
 
@@ -1410,7 +1415,7 @@ export function usePosBilling(opts: {
         const limit = snapshot?.creditLimit ?? null;
         if (limit === null) return false; // unlimited account
         if (limit === 0) return true;  // zero-credit account
-        return (balanceDue + onCredit) > limit;
+        return (ledgerBalance + onCredit) > limit;
     })();
 
     // True when any cart line flagged requireSaleNote still has a blank note.
@@ -1466,7 +1471,7 @@ export function usePosBilling(opts: {
         couponDroppedTier, couponBlockedLoyalty, onTopRupees,
         total, giftCardApplied, payableTotal, posExtraCharges, posTierLabel,
         // tender math
-        cashNet, splitsSum, upiEntered, collected, onCredit, overpaid, balanceDue,
+        cashNet, splitsSum, upiEntered, collected, onCredit, overpaid, balanceDue, ledgerBalance,
         arrearPaid, advanceTaken, creditLimitBreached,
         // customer display
         displayHold, setDisplayHold,

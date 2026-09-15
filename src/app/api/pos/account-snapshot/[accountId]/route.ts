@@ -8,6 +8,7 @@ import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 import { resolveTierForAccount, TIER_SPEND_VOUCHER_TYPES } from "@/shared/lib/pricing";
 import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimit";
+import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
 import { latestRating, parseQualityLog } from "@/modules/customer/lib/customerQuality";
 
 // GET /api/pos/account-snapshot/[accountId]
@@ -52,9 +53,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             where: { id: accountId },
             select: {
                 id: true,
-                balance: true,
-                openingBalance: true,
                 creditLimit: true,
+                ...EFFECTIVE_BALANCE_SELECT_FIELDS,
                 person: {
                     select: {
                         id: true,
@@ -192,12 +192,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         //   > 0  = hard cap; enforced at sale APIs and the POS checkout dialog
         const manualLimit = account.creditLimit !== null ? Number(account.creditLimit) : 0;
         const { effective: creditLimit } = await resolveEffectiveCreditLimit(prisma, accountId, manualLimit);
-        const balance    = Number(account.balance);    // ledger balance (positive = customer owes)
+        // Ledger balance (positive = customer owes) — cached GL movements PLUS the
+        // master opening balance, so the panel agrees with the Persons list, the
+        // ledger report and the trial balance instead of showing a phantom advance.
+        const balance    = effectiveAccountBalance(account);
         const balanceDue = Math.max(0, balance);
         const overdueDue = ledgerOutstanding?.bills
             .filter((b) => b.daysOverdue > 0)
             .reduce((s, b) => s + b.outstanding, 0) ?? 0;
-        const availableCredit: number = Math.max(0, creditLimit - balanceDue);
+        // Signed balance, not `balanceDue` — a customer sitting on an advance really
+        // does have that much extra headroom, and `checkCreditLimit` grants it
+        // (`balance + additionalDebit > limit`). Clamping here would show less
+        // credit than the server will actually allow.
+        const availableCredit: number = Math.max(0, creditLimit - balance);
 
         const lastVisitAt = (() => {
             const a = latestVoucher?.universalVoucher?.date ?? null;
@@ -212,7 +219,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             account: {
                 id: account.id,
                 balance,
-                openingBalance: account.openingBalance ? Number(account.openingBalance) : null,
+                openingBalance: account.openingBalance != null ? Number(account.openingBalance) : null,
             },
             turnover: { lifetime: lifetimeTotal, last12Months: ytdTotal, invoiceCount },
             discountPct: noDiscount ? 0 : discountPct,
