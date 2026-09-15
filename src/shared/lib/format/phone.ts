@@ -55,15 +55,21 @@ export function readCallerNumber(raw: string | null | undefined): CallerNumberFa
     // Drop the trunk/STD access zero(s) the PBX prefixes before interpreting.
     const digits = all.replace(/^0+/, "");
     if (!digits) return { shape: "none", digits: "", local: "" };
+    // Exactly ten is a whole number, whatever it starts with — `9163456789` is
+    // a real mobile, and reading its first two digits as a country code would
+    // chop it in half. So the leading 91 is the COUNTRY CODE at every OTHER
+    // length, and what follows is the subscriber number.
     if (digits.length === 10) return { shape: "india", digits, local: digits };
-    if (digits.length === 12 && digits.startsWith("91")) {
-        return { shape: "india", digits, local: digits.slice(2) };
-    }
-    // 91 plus fewer than ten digits is India one or more digits short — a CLI
-    // cut off mid-arrival, never a foreign number. Its subscriber digits are
-    // what came after the country code.
-    if (digits.length < 12 && digits.startsWith("91")) {
-        return { shape: "partial", digits, local: digits.slice(2) };
+    if (digits.startsWith("91")) {
+        const sub = digits.slice(2);
+        if (sub.length === 10) return { shape: "india", digits, local: sub };
+        // More than ten after the country code is a stray keypress — owner's
+        // rule, and junk lands at the END of what was keyed, so keep the FIRST
+        // ten. (`normalizeDialedNumber` applies the same rule to a dial string
+        // that carries no country code.)
+        if (sub.length > 10) return { shape: "india", digits, local: sub.slice(0, 10) };
+        // Fewer than ten: a CLI the handset cut off mid-arrival.
+        return { shape: "partial", digits, local: sub };
     }
     if (digits.length > 10 && digits.length <= MAX_NUMBER_DIGITS) {
         return { shape: "international", digits, local: digits };
@@ -91,14 +97,24 @@ export function isCallableNumber(raw: string | null | undefined, direction?: str
 export const PARTIAL_CLI_MIN_DIGITS = 7;
 
 /**
- * The leading digits of a part number, for a "whose number starts like this?"
- * lookup — or null when the capture is a real number, or too short to guess on.
+ * The leading digits to run a "whose number starts like this?" lookup on —
+ * empty when the capture is a whole number, or too short to guess on.
+ *
+ * Usually one candidate. A short capture starting `91` gives TWO, because the
+ * truncation is genuinely ambiguous: `916345678` is either the country code
+ * plus seven digits, or the whole mobile `9163456789` one digit short. Both
+ * readings are searched and the caller demands a single owner ACROSS them, so
+ * an ambiguous capture can never name the wrong customer.
+ *
  * Display and triage only: a prefix hit is never written to `Call.phone`.
  */
-export function partialCliPrefix(raw: string | null | undefined): string | null {
-    const { shape, local } = readCallerNumber(raw);
-    if (shape !== "partial") return null;
-    return local.length >= PARTIAL_CLI_MIN_DIGITS ? local : null;
+export function partialCliPrefixes(raw: string | null | undefined): string[] {
+    const { shape, digits, local } = readCallerNumber(raw);
+    if (shape !== "partial") return [];
+    const out: string[] = [];
+    if (local.length >= PARTIAL_CLI_MIN_DIGITS) out.push(local);
+    if (digits !== local && digits.length >= PARTIAL_CLI_MIN_DIGITS) out.push(digits);
+    return out;
 }
 
 /**

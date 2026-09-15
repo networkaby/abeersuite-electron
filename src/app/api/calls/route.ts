@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parsePagination } from "@/shared/lib/api";
 import {
-    phoneMatchKey, phoneKeyVariants, normalizeDialedNumber, readCallerNumber, partialCliPrefix,
+    phoneMatchKey, phoneKeyVariants, normalizeDialedNumber, readCallerNumber, partialCliPrefixes,
 } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
@@ -378,16 +378,14 @@ export async function GET(req: Request) {
         // keying off `!c.phone` skipped every one of them — which is exactly the
         // history a counter is looking at. A junk key matches no customer, so
         // those rows are unmatched in fact whatever the column says.
+        const unmatchedPartials = calls.filter((c) => c.direction === "INCOMING" && !ownerOf(c));
         const partialPrefixes = Array.from(new Set(
-            calls
-                .filter((c) => c.direction === "INCOMING" && !ownerOf(c))
-                .map((c) => partialCliPrefix(c.rawNumber))
-                .filter((p): p is string => !!p),
+            unmatchedPartials.flatMap((c) => partialCliPrefixes(c.rawNumber)),
         ));
-        const guessByPrefix = new Map<string, { kind: "person" | "company"; id: number; name: string }>();
+        const guessByCallId = new Map<number, { kind: "person" | "company"; id: number; name: string }>();
         if (partialPrefixes.length) {
-            // `take` caps a runaway prefix; a prefix that wide is ambiguous and
-            // would be dropped below anyway.
+            // One index-backed query for the whole page. `take` caps a runaway
+            // prefix; a prefix that wide is ambiguous and dropped below anyway.
             const prefixRows = await prisma.phone.findMany({
                 where: {
                     OR: partialPrefixes.flatMap((p) =>
@@ -401,11 +399,15 @@ export async function GET(req: Request) {
                 },
                 take: 200,
             });
-            for (const prefix of partialPrefixes) {
+            for (const call of unmatchedPartials) {
+                const candidates = partialCliPrefixes(call.rawNumber);
+                if (!candidates.length) continue;
+                // One owner ACROSS every reading of the capture, or no guess —
+                // so an ambiguous truncation can never name the wrong customer.
                 const owners = new Map<string, { kind: "person" | "company"; id: number; name: string }>();
                 for (const row of prefixRows) {
                     const key = phoneMatchKey(row.phone);
-                    if (!key?.startsWith(prefix)) continue;
+                    if (!key || !candidates.some((p) => key.startsWith(p))) continue;
                     const owner = row.person
                         ? { kind: "person" as const, id: row.person.id, name: row.person.name }
                         : row.company
@@ -415,7 +417,7 @@ export async function GET(req: Request) {
                     owners.set(`${owner.kind}:${owner.id}`, owner);
                     if (owners.size > 1) break; // ambiguous — no guess
                 }
-                if (owners.size === 1) guessByPrefix.set(prefix, [...owners.values()][0]);
+                if (owners.size === 1) guessByCallId.set(call.id, [...owners.values()][0]);
             }
         }
 
@@ -483,9 +485,7 @@ export async function GET(req: Request) {
             ).shape === "partial",
             // The one customer whose number starts with those digits, if exactly
             // one does. A lead for staff to verify — never a match.
-            guessedCustomer: ownerOf(c) || c.direction !== "INCOMING"
-                ? null
-                : (guessByPrefix.get(partialCliPrefix(c.rawNumber) ?? "") ?? null),
+            guessedCustomer: guessByCallId.get(c.id) ?? null,
         }));
 
         // `total` counted before the cutoff ran, so take the dropped rows off it —
