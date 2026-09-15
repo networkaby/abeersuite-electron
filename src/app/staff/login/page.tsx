@@ -4,6 +4,8 @@ import { signIn, signOut, getSession } from "next-auth/react";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
+import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     LOGIN_BACKGROUNDS,
@@ -141,6 +143,13 @@ function StaffLoginForm() {
             setLoading(false);
         } else {
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
+
+            // Wake the two status stores. Both back off to a day-long tick while nobody
+            // is signed in (their endpoints 401), and login navigates with router.push —
+            // the React tree survives, so nothing would otherwise tell them the answer
+            // has changed and a counter's badge would stay dark until the next tab focus.
+            refreshCounterStatus();
+            refreshSyncStatus();
 
             // ── Is this machine a counter? ──────────────────────────────────────
             // Desktop app: the local file plus the counter row (one DB read when
