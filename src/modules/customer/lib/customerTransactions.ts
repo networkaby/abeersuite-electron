@@ -1,9 +1,30 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
-import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
-import { sumLinked } from "@/modules/accountancy/lib/billLink";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/ledgerStatus";
+import { voucherSourceForType, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
+import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import type { TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
+
+// The party's Transactions tab — their bills AND the money that came in
+// against them, as one running ledger.
+//
+// `movement` is what a row does to the balance, and it is read off the party's
+// OWN GL legs, never off the bill's tender rows. That distinction is the whole
+// fix: an imported voucher carries no tender rows at all, so the older reading
+// (total − role=TENDER legs) called every imported cash sale unpaid and the
+// balance could only ever climb. A leg is a leg whoever wrote it, so this
+// reading closes on the same figure as the ledger report, the party list badge
+// and the trial balance.
+//
+//   cash bill       no leg on the party  → movement 0, Paid = the full total
+//   credit bill     Dr for the whole    → movement +total, Paid 0
+//   part-paid bill  Dr for the balance  → movement +that, Paid = the rest
+//   receipt         Cr                  → movement −amount
+//
+// Receipts, payments and credit notes have no VoucherDetail row, so they can
+// only be found through their GL legs — which is why they were missing from
+// this tab altogether before.
 
 const VOUCHER_SELECT = {
     id: true,
@@ -17,6 +38,24 @@ const VOUCHER_SELECT = {
             status: true,
             date: true,
             type: true,
+            branch: { select: { name: true } },
+        },
+    },
+} as const;
+
+/** One leg on the party's ledger, carrying the spine header the money rows need. */
+const LEG_SELECT = {
+    type: true,
+    amount: true,
+    universalVoucherId: true,
+    universalVoucher: {
+        select: {
+            id: true,
+            type: true,
+            voucherNo: true,
+            date: true,
+            status: true,
+            createdById: true,
             branch: { select: { name: true } },
         },
     },
@@ -37,6 +76,16 @@ type RawVoucher = {
     } | null;
 };
 
+type SpineHeader = {
+    id: number;
+    type: string;
+    voucherNo: string | null;
+    date: Date;
+    status: string;
+    createdById: number | null;
+    branch: { name: string } | null;
+};
+
 type AccountForOpening = {
     id: number;
     openingBalance: { toString(): string } | number | null;
@@ -55,18 +104,22 @@ export const CUSTOMER_ACCOUNT_OPENING_SELECT = {
     group: { select: { type: true } },
 } as const;
 
-/** Master-page opening balance, signed for customer outstanding (total − paid).
+/** The account's normal side, resolved the way the posting engine does. */
+function normalSideOf(account: AccountForOpening): "DEBIT" | "CREDIT" {
+    return account.normalBalance
+        ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type as GroupTypeStr) : "DEBIT");
+}
+
+/** Master-page opening balance, signed onto the account's normal side.
  *  Folded in whenever `openingBalanceDate` is on/before `to` — mirrors
  *  aggregateRange's rule in aggregateLedger.ts (folded into the opening
  *  bucket whenever dated <= `to`, regardless of whether that falls before or
  *  inside the period) so the customer Transactions view and the accountancy
  *  reports never disagree about which period an opening balance belongs to. */
 export function signedMasterOpening(account: AccountForOpening, to: Date): number {
-    const nb = account.normalBalance
-        ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type as GroupTypeStr) : "DEBIT");
     if (account.openingBalance == null || !account.openingBalanceType) return 0;
     if (account.openingBalanceDate && account.openingBalanceDate > to) return 0;
-    return balanceDelta(nb, account.openingBalanceType, toNumber(account.openingBalance));
+    return balanceDelta(normalSideOf(account), account.openingBalanceType, toNumber(account.openingBalance));
 }
 
 /** Synthetic first row — mirrors product OPENING row pattern. */
@@ -79,62 +132,19 @@ export function buildOpeningVoucherRow(
     const total = signedOpening > 0 ? signedOpening : 0;
     const paid = signedOpening < 0 ? -signedOpening : 0;
     return {
+        rowKey: `opening:${accountId}`,
         id: -accountId,
+        source: "inv",
         reference: "Opening balance",
         type: "OPENING",
         status: "N/A",
         date: periodFrom.toISOString(),
         totalAmount: total.toFixed(2),
         amountPaid: paid.toFixed(2),
+        movement: signedOpening.toFixed(2),
         branch: { name: "" },
         createdBy: { name: "" },
     };
-}
-
-async function enrichVouchers(
-    prisma: PrismaClient,
-    rawVouchers: RawVoucher[],
-    arAccountId: number | null,
-): Promise<TxInvVoucher[]> {
-    const uvIds = rawVouchers
-        .map((v) => v.universalVoucherId)
-        .filter((x): x is number => x !== null);
-    const [paidBySpine, tendersBySpine] = await Promise.all([
-        // Links counted from either side, and only while the settling voucher is
-        // still alive — so a cancelled receipt stops showing as paid here too.
-        sumLinked(prisma, uvIds),
-        loadTenderLines(prisma, uvIds),
-    ]);
-    const creatorIds = [...new Set(rawVouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
-    const creatorById = new Map(
-        (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
-            .map((u) => [u.id, u.name]),
-    );
-
-    return rawVouchers.map((v) => {
-        const partyAccountId = v.universalVoucher?.partyAccountId ?? arAccountId;
-        const nonArTenderSum = (v.universalVoucherId !== null ? (tendersBySpine.get(v.universalVoucherId) ?? []) : [])
-            .reduce((s, t) => s + (t.accountId === partyAccountId ? 0 : t.amount), 0);
-        const jePaid = v.universalVoucherId !== null ? (paidBySpine[v.universalVoucherId] ?? 0) : 0;
-        const amountPaid = nonArTenderSum + jePaid;
-        return {
-            id: v.id,
-            reference: v.universalVoucher?.voucherNo ?? "",
-            type: v.universalVoucher?.type ?? "",
-            status: v.universalVoucher?.status ?? "DRAFT",
-            date: v.universalVoucher?.date.toISOString() ?? new Date(0).toISOString(),
-            totalAmount: toNumber(v.totalAmount).toFixed(2),
-            amountPaid: amountPaid.toFixed(2),
-            branch: v.universalVoucher?.branch ?? { name: "" },
-            createdBy: v.universalVoucher?.createdById != null
-                ? { name: creatorById.get(v.universalVoucher.createdById) ?? "" }
-                : { name: "" },
-        };
-    });
-}
-
-function voucherOutstanding(v: TxInvVoucher): number {
-    return toNumber(v.totalAmount) - toNumber(v.amountPaid);
 }
 
 type PartyFilter = {
@@ -151,12 +161,15 @@ export async function loadCustomerTransactionVouchers(
 ): Promise<TxInvVoucher[]> {
     if (!account) return [];
 
+    const nb = normalSideOf(account);
     const partyOr = [
         { universalVoucher: { partyAccountId: account.id } },
         { partyType: party.partyType, partyId: party.partyId },
     ] as const;
 
-    const [periodRaw, priorRaw] = await Promise.all([
+    const [billRows, periodLegs, priorAgg] = await Promise.all([
+        // The party's own documents — cash bills included, so the tab still
+        // lists everything they bought even when it never touched their ledger.
         prisma.voucherDetail.findMany({
             where: {
                 universalVoucher: { deletedAt: null, date: { gte: from, lte: to } },
@@ -165,23 +178,106 @@ export async function loadCustomerTransactionVouchers(
             select: VOUCHER_SELECT,
             orderBy: { universalVoucher: { date: "desc" } },
         }),
-        prisma.voucherDetail.findMany({
+        // Every posted leg on this party's ledger inside the period.
+        prisma.voucherGlLine.findMany({
             where: {
-                universalVoucher: { deletedAt: null, date: { lt: from } },
-                OR: [...partyOr],
+                accountId: account.id,
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
             },
-            select: VOUCHER_SELECT,
+            select: LEG_SELECT,
+        }),
+        // Everything before it, as two sums rather than every historical row.
+        prisma.voucherGlLine.groupBy({
+            by: ["type"],
+            where: {
+                accountId: account.id,
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: from } },
+            },
+            _sum: { amount: true },
         }),
     ]);
 
-    const [periodVouchers, priorVouchers] = await Promise.all([
-        enrichVouchers(prisma, periodRaw, account.id),
-        enrichVouchers(prisma, priorRaw, account.id),
-    ]);
+    // Movement per voucher, signed onto the account's normal side.
+    const movementByUv = new Map<number, number>();
+    const headerByUv = new Map<number, SpineHeader>();
+    for (const leg of periodLegs) {
+        const uv = leg.universalVoucher;
+        if (!uv) continue;
+        movementByUv.set(uv.id, (movementByUv.get(uv.id) ?? 0) + balanceDelta(nb, leg.type, toNumber(leg.amount)));
+        headerByUv.set(uv.id, uv);
+    }
 
-    const priorOutstanding = priorVouchers.reduce((sum, v) => sum + voucherOutstanding(v), 0);
-    const periodOpening = signedMasterOpening(account, to) + priorOutstanding;
-    const openingRow = buildOpeningVoucherRow(account.id, periodOpening, from);
+    const priorMovement = priorAgg.reduce(
+        (sum, r) => sum + balanceDelta(nb, r.type, toNumber(r._sum.amount ?? 0)),
+        0,
+    );
 
-    return openingRow ? [openingRow, ...periodVouchers] : periodVouchers;
+    // ── Bill rows ────────────────────────────────────────────────────────────
+    const billedUvIds = new Set<number>();
+    const billRowsOut = (billRows as RawVoucher[]).map((v) => {
+        const uv = v.universalVoucher;
+        const uvId = v.universalVoucherId;
+        if (uvId !== null) billedUvIds.add(uvId);
+        const total = toNumber(v.totalAmount);
+        // What this bill left ON the party's account; the rest was settled at
+        // the counter, and that is what "Paid" means here. A draft or cancelled
+        // bill has no posted leg, so it shows its total and moves nothing.
+        const movement = uvId !== null ? (movementByUv.get(uvId) ?? 0) : 0;
+        const posted = uv?.status === "POSTED";
+        return {
+            rowKey: `inv:${v.id}`,
+            id: v.id,
+            source: "inv" as VoucherSource,
+            reference: uv?.voucherNo ?? "",
+            type: uv?.type ?? "",
+            status: uv?.status ?? "DRAFT",
+            date: uv?.date.toISOString() ?? new Date(0).toISOString(),
+            totalAmount: total.toFixed(2),
+            amountPaid: (posted ? total - movement : 0).toFixed(2),
+            movement: movement.toFixed(2),
+            branch: uv?.branch ?? { name: "" },
+            createdById: uv?.createdById ?? null,
+        };
+    });
+
+    // ── Money rows ───────────────────────────────────────────────────────────
+    // Receipts, payments, credit / debit notes, journals — every movement on
+    // this ledger that is not one of the party's own bills.
+    const moneyRowsOut = [...movementByUv.entries()]
+        .filter(([uvId]) => !billedUvIds.has(uvId))
+        .map(([uvId, movement]) => {
+            const uv = headerByUv.get(uvId)!;
+            return {
+                rowKey: `gl:${uvId}`,
+                id: uvId,
+                source: voucherSourceForType(uv.type),
+                reference: uv.voucherNo ?? formatUvNo(uvId),
+                type: uv.type,
+                status: uv.status,
+                date: uv.date.toISOString(),
+                totalAmount: (movement > 0 ? movement : 0).toFixed(2),
+                amountPaid: (movement < 0 ? -movement : 0).toFixed(2),
+                movement: movement.toFixed(2),
+                branch: uv.branch ?? { name: "" },
+                createdById: uv.createdById,
+            };
+        });
+
+    // Creator names for both sets in one lookup.
+    const merged = [...billRowsOut, ...moneyRowsOut];
+    const creatorIds = [...new Set(merged.map((r) => r.createdById).filter((x): x is number => x != null))];
+    const creatorById = new Map(
+        (creatorIds.length === 0 ? [] : await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }))
+            .map((u) => [u.id, u.name]),
+    );
+
+    const rows: TxInvVoucher[] = merged
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+        .map(({ createdById, ...r }) => ({
+            ...r,
+            createdBy: { name: createdById != null ? (creatorById.get(createdById) ?? "") : "" },
+        }));
+
+    const openingRow = buildOpeningVoucherRow(account.id, signedMasterOpening(account, to) + priorMovement, from);
+    return openingRow ? [openingRow, ...rows] : rows;
 }
