@@ -67,7 +67,7 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 1. `git checkout main && git merge --ff-only dev` — not fast-forwardable → stop and report, never force.
 2. Bump `version` in `package.json`.
 3. **Write** `RELEASE_NOTES.md` **yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. `[urgent]` in the first line only when every counter must restart today. Never leave last version's notes.
-4. Commit the bump + notes on `main`.
+4. Commit the bump + notes on `main`. Message it `chore(release): attempt v<version> - <one line>` — the build has not run yet, so the commit must not claim the version shipped. The tag from step 6 is the proof; never reword the commit afterwards.
 5. `git push origin main && git push production main` — push before building.
 6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push tag to `origin`, publish. **A** `-` **in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
 7. `git push production main --tags`.

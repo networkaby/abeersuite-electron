@@ -96,10 +96,14 @@ The short version of the part that costs the most if it is wrong: `[urgent]` in 
 ## Step 3 — Commit the notes
 
 ```bash
-git add RELEASE_NOTES.md && git commit -m "docs(release): <one line on what this version is>"
+git add RELEASE_NOTES.md && git commit -m "docs(release): attempt v<version> - <one line on what this version is>"
 ```
 
 Add `package.json` too if the owner's bump is still uncommitted. **Stage only those files** — never `git add -A`; the owner keeps local edits and the pack script renames files.
+
+**Write `attempt v<version>`, not a bare `v<version>`** — the same rule as `release` step 4. The installer already exists and the owner has tested it, but this commit still lands *before* the tag and the upload (step 5), and a publish can die halfway or reach one release repo and not the other. Until the tag is on the commit, the version has not gone out, and the message must not say it did.
+
+The tag is the proof, not the commit. `attempt v1.3.8` **with** `v1.3.8` on it is a published version; the same line with no tag is a run that stopped short. Do not reword the commit afterwards — that would need a force push to two remotes for no gain.
 
 On a detached HEAD a commit moves HEAD but belongs to no branch. Say so, and confirm the owner wants the notes committed there rather than on a branch.
 

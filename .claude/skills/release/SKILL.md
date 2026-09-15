@@ -82,10 +82,16 @@ Read the actual diffs behind those commits — subject lines are not enough to k
 ### 4. Commit the bump and the notes on `main`
 
 ```bash
-git add package.json RELEASE_NOTES.md && git commit -m "chore(release): <one line on what this version is>"
+git add package.json RELEASE_NOTES.md && git commit -m "chore(release): attempt v<version> - <one line on what this version is>"
 ```
 
 Stage only these two files — never `git add -A`. The owner keeps local edits and the pack script renames files.
+
+**Write `attempt v<version>`, not a bare `v<version>`.** This commit is made *before* the build runs (step 6), so at this moment nothing is proven — the pack can fail, `verify:package` can refuse, a publish can die halfway. A message that reads like a finished release makes the history lie: `git log` would show `v1.3.8` shipped when no installer ever reached a counter. `attempt v1.3.8` says exactly what happened: the bump and the notes were committed and the build was about to start.
+
+The tag is the proof, not the commit. If the build succeeds, `v<version>` lands on this same commit in step 6 and the history is unambiguous — an `attempt` line carrying a tag is a released version. If it fails, the `attempt` commit stands alone with no tag and the next run tells the truth about it.
+
+Do **not** go back and reword the commit after a successful build. Rewriting it would need a force push to two remotes for no gain.
 
 ### 5. Push `main` to both remotes — before building
 
