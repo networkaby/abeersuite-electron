@@ -6,6 +6,7 @@ import { Link2 } from "lucide-react";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
+import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
@@ -118,10 +119,10 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
         isOpening:  boolean;
     };
 
+    // "OPENING" is this table's own synthetic row, not a real voucher type, so the
+    // shared map has no entry for it and would pass the raw word through.
     const formatType = (type: string) =>
-        type === "OPENING"
-            ? "Opening"
-            : type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" ");
+        type === "OPENING" ? "Opening" : voucherTypeLabel(type) ?? type;
 
     // Build raw rows (balance will be filled below)
     const rawRows: Omit<Row, "balance">[] = invVouchers.map((v) => ({
