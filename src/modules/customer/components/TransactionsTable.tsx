@@ -195,7 +195,11 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                     {(() => {
                                         if (!row.settlement) return <span className="opacity-40 text-xs">—</span>;
                                         const style = SETTLEMENT_STYLES[row.settlement];
-                                        const label = row.open > 0.005
+                                        // Only a partly matched row needs its figure spelled
+                                        // out. On a fully due row the open amount IS the
+                                        // total already sitting in the same line, and on a
+                                        // settled one there is nothing left to say.
+                                        const label = row.settlement === "PARTIAL"
                                             ? `${style.label} ${money(row.open)}`
                                             : style.label;
                                         // Only a voucher that actually put something on the
