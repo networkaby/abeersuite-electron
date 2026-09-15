@@ -40,8 +40,14 @@ export function moduleColor(key?: string | null): string {
 
 /// A soft wash of the module hue over the page background — opaque, so it can
 /// sit under sticky/frozen chrome without ghosting.
-export function moduleTint(key: string | null | undefined, pct = 12): string {
-    return `color-mix(in oklab, ${moduleColor(key)} ${pct}%, var(--background))`;
+///
+/// `base` is the surface the wash is mixed into, and it must be the surface the
+/// tinted element actually sits on — the same rule moduleActiveStyle and
+/// moduleSelectedStyle already follow. Default is the page canvas; a breadcrumb
+/// or card strip passes `var(--surface-raised)`, otherwise the tint comes out
+/// darker than the strip it is painting and reads as a smudge.
+export function moduleTint(key: string | null | undefined, pct = 12, base = "var(--background)"): string {
+    return `color-mix(in oklab, ${moduleColor(key)} ${pct}%, ${base})`;
 }
 
 /// Coloured glyph on a neutral row — rich but calm. Used for the sidebar icon
@@ -91,5 +97,22 @@ export function moduleSelectedStyle(key?: string | null): CSSProperties {
         backgroundColor: `color-mix(in oklab, ${moduleColor(key)} 24%, var(--surface-raised))`,
         boxShadow: `inset 3px 0 0 ${moduleColor(key)}`,
         fontWeight: 600,
+    };
+}
+
+/// The open tab of a detail pane. A tinted pill in the module hue with a hue
+/// underline, rather than the solid dark block a `default` Button gives: the
+/// tab still reads as selected, but stops being the heaviest thing on a screen
+/// whose real content is the table underneath it.
+///
+/// Returns undefined for an inactive tab so the caller can spread it straight
+/// onto every tab without a conditional.
+export function moduleTabStyle(key: string | null | undefined, active: boolean): CSSProperties | undefined {
+    if (!active) return undefined;
+    return {
+        backgroundColor: moduleTint(key, 22),
+        color: moduleColor(key),
+        fontWeight: 600,
+        boxShadow: `inset 0 -2px 0 ${moduleColor(key)}`,
     };
 }

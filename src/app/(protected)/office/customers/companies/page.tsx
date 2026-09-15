@@ -6,14 +6,12 @@ import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-    ArrowLeft, Building2, Phone, MapPin,
-    User, Smartphone, ExternalLink, Loader2, RefreshCw, Printer,
+    ArrowLeft, Building2,
+    User, Smartphone, Loader2, RefreshCw, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDate } from "@/shared/lib/format/formatDate";
-import { moduleSelectedStyle } from "@/shared/lib/format/moduleTheme";
+import { moduleSelectedStyle, moduleTint } from "@/shared/lib/format/moduleTheme";
 import { badgeColor } from "@/shared/lib/format/entityColor";
-import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
@@ -22,7 +20,6 @@ import { useDebouncedValue, usePartyBrowseList, type BrowseListRow } from "@/sha
 import type { Party } from "@/shared/lib/parties";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-import { initials } from "@/modules/customer/lib/initials";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import type { CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
@@ -59,6 +56,11 @@ import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab
 import { PartyOutstandingsPanel } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import PartyBankTab from "@/modules/customer/components/PartyBankTab";
 import { useActivePartyStore } from "@/store/activePartyStore";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { ModuleTabs } from "@/shared/components/ModuleTabs";
+import { PartyAvatar } from "@/modules/customer/components/PartyAvatar";
+import { PartyBalanceChip } from "@/modules/customer/components/PartyBalanceChip";
+import { PartyDetailHeader } from "@/modules/customer/components/PartyDetailHeader";
 
 interface CompanyListItem extends BrowseListRow {
     phone: string | null;
@@ -302,7 +304,7 @@ export default function CompaniesPage() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
-            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+            <BreadcrumbBar className="flex items-center gap-2 py-2">
                 <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
                     <ArrowLeft size={15} />
                 </Button>
@@ -311,7 +313,7 @@ export default function CompaniesPage() {
                     <span>/</span>
                     <span className="font-medium text-foreground">Companies</span>
                 </nav>
-            </header>
+            </BreadcrumbBar>
 
             <div className="flex flex-1 overflow-hidden">
                 <EntityListPanel
@@ -345,33 +347,16 @@ export default function CompaniesPage() {
                             onClick={() => setSelectedId(company.id)}
                         >
                             <div className="flex w-full items-center gap-3 text-left">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                    {initials(company.name)}
-                                </div>
+                                <PartyAvatar name={company.name} />
                                 <div className="min-w-0 flex-1">
                                     <p className="truncate text-sm font-medium">{company.name}</p>
                                     <div className="mt-0.5 flex items-center justify-between gap-2">
                                         <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
                                         {company.account && (
-                                            company.account.balance === null || company.account.normalBalance === null ? (
-                                                // Held from the cache; the real figure is on its way.
-                                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
-                                                    ···
-                                                </span>
-                                            ) : (
-                                                <span
-                                                    className={cn(
-                                                        "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
-                                                        company.account.balance === 0
-                                                            ? "bg-muted text-muted-foreground"
-                                                            : company.account.balance < 0
-                                                                ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                                : "bg-muted text-foreground",
-                                                    )}
-                                                >
-                                                    {formatDrCr(company.account.balance, company.account.normalBalance)}
-                                                </span>
-                                            )
+                                            <PartyBalanceChip
+                                                balance={company.account.balance}
+                                                normalBalance={company.account.normalBalance}
+                                            />
                                         )}
                                     </div>
                                 </div>
@@ -386,7 +371,10 @@ export default function CompaniesPage() {
                     )}
                 </EntityListPanel>
 
-                <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
+                <section
+                    className="flex flex-1 flex-col overflow-hidden"
+                    style={{ backgroundColor: moduleTint("customers", 6) }}
+                >
                     {!selectedId && (
                         <CustomerEmptyState icon={<Building2 size={40} strokeWidth={1} />} message="Select a company to view details" />
                     )}
@@ -400,53 +388,28 @@ export default function CompaniesPage() {
                     {selectedId && !detailLoading && detail && (
                         <>
                             {/* ── Header ── */}
-                            <div className="border-b bg-card px-6 py-4">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
-                                            {initials(detail.name)}
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold">{detail.name}</h2>
-                                            <div className="mt-1 flex flex-wrap items-center gap-3">
-                                                {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
-                                                {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
-                                                {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
-                                                {detail.companyReg && <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span>}
-                                                <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <Button asChild type="button" variant="outline" size="icon-sm">
-                                        <Link href={`/office/social/users/${detail.id}`} title="Social profile">
-                                            <ExternalLink size={14} />
-                                        </Link>
-                                    </Button>
-                                </div>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <Badge variant="outline"><User size={11} /> {detail.customers.length} contact{detail.customers.length !== 1 ? "s" : ""}</Badge>
-                                    <Badge variant="outline"><Smartphone size={11} /> {detail.devices.length} device{detail.devices.length !== 1 ? "s" : ""}</Badge>
-                                    <Badge variant="outline">{detail.devices.flatMap((d) => d.tickets).length} ticket{detail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
-                                </div>
-                            </div>
+                            <PartyDetailHeader
+                                name={detail.name}
+                                phone={detail.phone}
+                                address={detail.address}
+                                email={detail.email}
+                                extra={detail.companyReg ? <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span> : null}
+                                createdAt={detail.createdAt}
+                                socialHref={`/office/social/users/${detail.id}`}
+                                chips={[
+                                    { key: "contacts", icon: <User size={11} />, text: `${detail.customers.length} contact${detail.customers.length !== 1 ? "s" : ""}` },
+                                    { key: "devices", icon: <Smartphone size={11} />, text: `${detail.devices.length} device${detail.devices.length !== 1 ? "s" : ""}` },
+                                    { key: "tickets", text: `${detail.devices.flatMap((d) => d.tickets).length} ticket${detail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}` },
+                                ]}
+                            />
 
                             {/* ── Tabs ── */}
-                            <div className="border-b bg-card px-6">
-                                <div className="flex gap-2 py-2">
-                                    {(["transactions", "outstanding", "profile", "bank", "contacts", "devices", "loyalty", "quality"] as Tab[]).map((item) => (
-                                        <Button
-                                            key={item}
-                                            type="button"
-                                            size="sm"
-                                            variant={tab === item ? "default" : "ghost"}
-                                            onClick={() => handleTabChange(item)}
-                                        >
-                                            {item}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
+                            <ModuleTabs
+                                module="customers"
+                                tabs={["transactions", "outstanding", "profile", "bank", "contacts", "devices", "loyalty", "quality"] as const satisfies readonly Tab[]}
+                                active={tab}
+                                onChange={handleTabChange}
+                            />
 
                             {/* ── Tab content ── */}
                             <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>

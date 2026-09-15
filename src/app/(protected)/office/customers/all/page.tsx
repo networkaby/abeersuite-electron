@@ -7,17 +7,14 @@ import axios from "axios";
 import {
     ArrowLeft,
     Building2,
-    ExternalLink,
     Loader2,
-    MapPin,
-    Phone,
     Smartphone,
     User,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { badgeColor } from "@/shared/lib/format/entityColor";
-import { moduleSelectedStyle } from "@/shared/lib/format/moduleTheme";
+import { moduleSelectedStyle, moduleTint } from "@/shared/lib/format/moduleTheme";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,12 +23,10 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { useDebouncedValue } from "@/shared/hooks";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
-import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PRIORITY_META } from "@/utils/constants";
-import { initials } from "@/modules/customer/lib/initials";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
@@ -45,6 +40,11 @@ import { PartyOutstandingsPanel } from "@/modules/accountancy/components/PartyOu
 import PartyBankTab from "@/modules/customer/components/PartyBankTab";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { ModuleTabs } from "@/shared/components/ModuleTabs";
+import { PartyAvatar } from "@/modules/customer/components/PartyAvatar";
+import { PartyBalanceChip } from "@/modules/customer/components/PartyBalanceChip";
+import { PartyDetailHeader } from "@/modules/customer/components/PartyDetailHeader";
 
 type AccountRef = { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
 
@@ -354,7 +354,7 @@ export default function AllCustomersPage() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
-            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+            <BreadcrumbBar className="flex items-center gap-2 py-2">
                 <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
                     <ArrowLeft size={15} />
                 </Button>
@@ -369,7 +369,7 @@ export default function AllCustomersPage() {
                     <span>/</span>
                     <span className="font-medium text-foreground">All</span>
                 </nav>
-            </header>
+            </BreadcrumbBar>
             <div className="flex flex-1 overflow-hidden">
                 <EntityListPanel
                     title="All Customers"
@@ -410,26 +410,16 @@ export default function AllCustomersPage() {
                                     }}
                                 >
                                     <div className="flex w-full items-center gap-3 text-left">
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                            {initials(item.name)}
-                                        </div>
+                                        <PartyAvatar name={item.name} />
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-medium">{item.name}</p>
                                             <div className="mt-0.5 flex items-center justify-between gap-2">
                                                 <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
                                                 {item.account && (
-                                                    <span
-                                                        className={cn(
-                                                            "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
-                                                            item.account.balance === 0
-                                                                ? "bg-muted text-muted-foreground"
-                                                                : item.account.balance < 0
-                                                                    ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                                    : "bg-muted text-foreground",
-                                                        )}
-                                                    >
-                                                        {formatDrCr(item.account.balance, item.account.normalBalance)}
-                                                    </span>
+                                                    <PartyBalanceChip
+                                                        balance={item.account.balance}
+                                                        normalBalance={item.account.normalBalance}
+                                                    />
                                                 )}
                                             </div>
                                         </div>
@@ -449,7 +439,10 @@ export default function AllCustomersPage() {
                     })}
                 </EntityListPanel>
 
-                <section className="flex flex-1 bg-muted/30">
+                <section
+                    className="flex flex-1"
+                    style={{ backgroundColor: moduleTint("customers", 6) }}
+                >
                     {!selected && (
                         <CustomerEmptyState message="Select a person or company from the list to open details." />
                     )}
@@ -462,44 +455,26 @@ export default function AllCustomersPage() {
 
                     {selected && !detailLoading && personDetail && (
                         <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
-                            <div className="border-b bg-card px-6 py-4">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
-                                            {initials(personDetail.name)}
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold">{personDetail.name}</h2>
-                                            <div className="mt-1 flex flex-wrap items-center gap-3">
-                                                {personDetail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{personDetail.phone}</span>}
-                                                {personDetail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{personDetail.address}</span>}
-                                                {personDetail.email && <span className="text-xs text-muted-foreground">{personDetail.email}</span>}
-                                                <span className="text-xs text-muted-foreground">Since {formatDate(personDetail.createdAt)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <Button asChild type="button" variant="outline" size="icon-sm">
-                                        <Link href={`/office/social/users/${personDetail.id}`} title="Social profile">
-                                            <ExternalLink size={14} />
-                                        </Link>
-                                    </Button>
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <Badge variant="outline"><Smartphone size={11} /> {personDetail.devices.length} device{personDetail.devices.length !== 1 ? "s" : ""}</Badge>
-                                    <Badge variant="outline"><Building2 size={11} /> {personDetail.companies.length} compan{personDetail.companies.length !== 1 ? "ies" : "y"}</Badge>
-                                    <Badge variant="outline">{personTickets.length} ticket{personTickets.length !== 1 ? "s" : ""}</Badge>
-                                </div>
-                            </div>
+                            <PartyDetailHeader
+                                name={personDetail.name}
+                                phone={personDetail.phone}
+                                address={personDetail.address}
+                                email={personDetail.email}
+                                createdAt={personDetail.createdAt}
+                                socialHref={`/office/social/users/${personDetail.id}`}
+                                chips={[
+                                    { key: "devices", icon: <Smartphone size={11} />, text: `${personDetail.devices.length} device${personDetail.devices.length !== 1 ? "s" : ""}` },
+                                    { key: "companies", icon: <Building2 size={11} />, text: `${personDetail.companies.length} compan${personDetail.companies.length !== 1 ? "ies" : "y"}` },
+                                    { key: "tickets", text: `${personTickets.length} ticket${personTickets.length !== 1 ? "s" : ""}` },
+                                ]}
+                            />
 
-                            <div className="border-b bg-card px-6">
-                                <div className="flex gap-2 py-2">
-                                    {(["transactions", "outstanding", "profile", "bank", "tickets", "devices", "companies", "loyalty", "quality"] as PersonTab[]).map((item) => (
-                                        <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
-                                            {item}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
+                            <ModuleTabs
+                                module="customers"
+                                tabs={["transactions", "outstanding", "profile", "bank", "tickets", "devices", "companies", "loyalty", "quality"] as const satisfies readonly PersonTab[]}
+                                active={personTab}
+                                onChange={handlePersonTabChange}
+                            />
 
                             <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
                                 {personTab === "profile" && (
@@ -633,45 +608,27 @@ export default function AllCustomersPage() {
 
                     {selected && !detailLoading && companyDetail && (
                         <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
-                            <div className="border-b bg-card px-6 py-4">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
-                                            {initials(companyDetail.name)}
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold">{companyDetail.name}</h2>
-                                            <div className="mt-1 flex flex-wrap items-center gap-3">
-                                                {companyDetail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{companyDetail.phone}</span>}
-                                                {companyDetail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{companyDetail.address}</span>}
-                                                {companyDetail.email && <span className="text-xs text-muted-foreground">{companyDetail.email}</span>}
-                                                {companyDetail.companyReg && <span className="text-xs text-muted-foreground">Reg: {companyDetail.companyReg}</span>}
-                                                <span className="text-xs text-muted-foreground">Since {formatDate(companyDetail.createdAt)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <Button asChild type="button" variant="outline" size="icon-sm">
-                                        <Link href={`/office/social/users/${companyDetail.id}`} title="Social profile">
-                                            <ExternalLink size={14} />
-                                        </Link>
-                                    </Button>
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <Badge variant="outline"><User size={11} /> {companyDetail.customers.length} contact{companyDetail.customers.length !== 1 ? "s" : ""}</Badge>
-                                    <Badge variant="outline"><Smartphone size={11} /> {companyDetail.devices.length} device{companyDetail.devices.length !== 1 ? "s" : ""}</Badge>
-                                    <Badge variant="outline">{companyDetail.devices.flatMap((d) => d.tickets).length} ticket{companyDetail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
-                                </div>
-                            </div>
+                            <PartyDetailHeader
+                                name={companyDetail.name}
+                                phone={companyDetail.phone}
+                                address={companyDetail.address}
+                                email={companyDetail.email}
+                                extra={companyDetail.companyReg ? <span className="text-xs text-muted-foreground">Reg: {companyDetail.companyReg}</span> : null}
+                                createdAt={companyDetail.createdAt}
+                                socialHref={`/office/social/users/${companyDetail.id}`}
+                                chips={[
+                                    { key: "contacts", icon: <User size={11} />, text: `${companyDetail.customers.length} contact${companyDetail.customers.length !== 1 ? "s" : ""}` },
+                                    { key: "devices", icon: <Smartphone size={11} />, text: `${companyDetail.devices.length} device${companyDetail.devices.length !== 1 ? "s" : ""}` },
+                                    { key: "tickets", text: `${companyDetail.devices.flatMap((d) => d.tickets).length} ticket${companyDetail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}` },
+                                ]}
+                            />
 
-                            <div className="border-b bg-card px-6">
-                                <div className="flex gap-2 py-2">
-                                    {(["transactions", "outstanding", "profile", "bank", "contacts", "devices", "loyalty", "quality"] as CompanyTab[]).map((item) => (
-                                        <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
-                                            {item}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
+                            <ModuleTabs
+                                module="customers"
+                                tabs={["transactions", "outstanding", "profile", "bank", "contacts", "devices", "loyalty", "quality"] as const satisfies readonly CompanyTab[]}
+                                active={companyTab}
+                                onChange={handleCompanyTabChange}
+                            />
 
                             <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
                                 {companyTab === "profile" && (
