@@ -40,6 +40,7 @@ import {
     SidebarVisibilitySection,
     GlobalPermissionsSection,
 } from "@/modules/admin/components/RolePageSections";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export default function RolePage() {
     const [roles, setRoles] = useState<Role[]>([]);
@@ -201,8 +202,8 @@ export default function RolePage() {
     const lensPermIds = allPerms.filter((p) => poolIds === null ? p.id !== "admin:bypass" : poolIds.has(p.id)).map((p) => p.id);
     const hasBypass = selected.has("admin:bypass");
 
-    const handleTabChange = (roleId: string) => {
-        if (hasPermissionChanges && !confirm("Discard unsaved permission changes?")) return;
+    const handleTabChange = async (roleId: string) => {
+        if (hasPermissionChanges && !(await confirmAction({ title: "Discard unsaved permission changes?", confirmLabel: "Discard" }))) return;
         setActiveRoleId(roleId);
     };
 
@@ -261,7 +262,7 @@ export default function RolePage() {
     };
 
     const handleDelete = async (role: Role) => {
-        if (!confirm(`Delete ${role.label}? Users assigned this role will lose it.`)) return;
+        if (!(await confirmAction({ title: `Delete ${role.label}?`, body: `Users assigned this role will lose it.`, confirmLabel: "Delete" }))) return;
 
         try {
             await axios.delete(`/api/roles/${role.id}`);

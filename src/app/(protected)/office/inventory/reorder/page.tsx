@@ -65,6 +65,7 @@ import { gridRowClass } from "@/shared/lib/format";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { fmt } from "@/utils/constants";
 import { productMatchesSearch } from "@/shared/lib/inventory";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
 type Signal = "buy" | "review" | "ok" | "untouched" | "skipped";
@@ -340,7 +341,7 @@ export default function ReorderPage() {
                 moq !== undefined ? `MOQ ${moq}` : null,
             ].filter(Boolean).join(" + ");
         const scope = selected.size > 0 ? "selected" : "shown";
-        if (!window.confirm(`Apply ${what} to ${ids.length} ${scope} item(s)?`)) return;
+        if (!(await confirmAction({ title: `Apply ${what} to ${ids.length} ${scope} item(s)?`, confirmLabel: "Apply", destructive: false }))) return;
         setBulkApplying(true);
         try {
             const res = await axios.post<{ updated: number }>("/api/inventory/products/bulk-reorder", {

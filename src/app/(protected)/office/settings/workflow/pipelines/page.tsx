@@ -17,6 +17,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { COLOR_OPTIONS } from "@/utils/constants";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Pipeline {
     id: string;
@@ -119,7 +120,7 @@ export default function PipelinesPage() {
     const handleDelete = async (p: Pipeline) => {
         if (p.isDefault) { toast.error("Cannot delete the default pipeline"); return; }
         if (p._count.tickets > 0) { toast.error(`Cannot delete: ${p._count.tickets} ticket(s) use this pipeline`); return; }
-        if (!confirm(`Delete pipeline "${p.label}"? This cannot be undone.`)) return;
+        if (!(await confirmAction({ title: `Delete pipeline "${p.label}"?`, body: `This cannot be undone.`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/pipelines/${p.id}`);
             toast.success("Pipeline deleted");

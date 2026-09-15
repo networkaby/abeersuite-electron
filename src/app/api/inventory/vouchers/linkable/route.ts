@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, VoucherStatus } from "@/generated/prisma/client";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
@@ -37,8 +38,7 @@ export async function GET(req: NextRequest) {
     try {
         activeBranchId = resolveActiveBranchId(req, session);
     } catch (e) {
-        if (e instanceof BranchAccessError)
-            return NextResponse.json({ error: e.message }, { status: 400 });
+        if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;
     }
 

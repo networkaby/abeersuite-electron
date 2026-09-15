@@ -18,6 +18,7 @@ import { usePolling } from "@/shared/hooks/usePolling";
 import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
 import CounterStatusBadge from "@/shared/components/CounterStatusBadge";
 import SyncStatusBadge from "@/shared/components/SyncStatusBadge";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export type ActiveShift = {
     id: number;
@@ -93,7 +94,7 @@ export function ActiveShiftBar({
     usePolling(refresh, POS_LIVE_POLL_MS);
 
     const cancelHandover = async () => {
-        if (!confirm("Cancel the pending handover? This returns the shift to OPEN.")) return;
+        if (!(await confirmAction({ title: "Cancel the pending handover?", body: "This returns the shift to OPEN.", confirmLabel: "Cancel handover" }))) return;
         setCancelling(true);
         try {
             await axios.delete(`/api/pos/shifts/${shift.id}/handover`);

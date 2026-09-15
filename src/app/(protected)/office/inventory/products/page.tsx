@@ -51,6 +51,7 @@ import { useEscape, useActiveRow } from "@/shared/hooks";
 import { gridRowClass, GRID_FROZEN_CELL, GRID_FROZEN_HEAD, GRID_FROZEN_EDGE } from "@/shared/lib/format";
 import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
@@ -515,22 +516,22 @@ export default function InventoryProductsPage() {
         await loadProducts();
     }
 
-    function discard() {
+    async function discard() {
         if (dirty.size === 0) return;
-        if (!confirm(`Discard ${dirty.size} pending change${dirty.size === 1 ? "" : "s"}?`)) return;
+        if (!(await confirmAction({ title: `Discard ${dirty.size} pending change${dirty.size === 1 ? "" : "s"}?`, confirmLabel: "Discard" }))) return;
         setDirty(new Map());
     }
 
-    function flipMode(next: Mode) {
+    async function flipMode(next: Mode) {
         if (next === "view" && dirty.size > 0) {
-            if (!confirm(`Switch to view mode and discard ${dirty.size} pending change${dirty.size === 1 ? "" : "s"}?`)) return;
+            if (!(await confirmAction({ title: `Switch to view mode and discard ${dirty.size} pending change${dirty.size === 1 ? "" : "s"}?`, confirmLabel: "Switch", destructive: false }))) return;
             setDirty(new Map());
         }
         setMode(next);
     }
 
     async function del(id: number) {
-        if (!confirm("Delete this product master?")) return;
+        if (!(await confirmAction({ title: "Delete this product master?", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/inventory/products/${id}`);
             toast.success("Deleted");

@@ -38,6 +38,7 @@ import {
 } from "@/modules/inventory/lib/productName";
 import type { ProductCode, Masters } from "@/shared/lib/inventory";
 import { syncMasters, invalidateMasters } from "@/shared/lib/inventory";
+import { parseRupeesToPaise } from "@/shared/lib/format";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -77,14 +78,6 @@ export type InvProductRow = {
 
 const paiseToRupees = (p: number | null): string =>
     p == null ? "" : (p / 100).toFixed(2);
-
-const rupeesToPaise = (r: string): number | null => {
-    const t = r.trim();
-    if (t === "") return null;
-    const n = parseFloat(t);
-    if (!Number.isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-};
 
 function optionalId(s: string): number | null {
     if (s === "" || s === "__none__") return null;
@@ -310,8 +303,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             // The "Sale price" field is the human SAVED sale price (barcode source,
             // shown on Update & Print Labels). It writes savedSalePricePaise — NOT
             // the engine-materialized effectiveSalePricePaise.
-            savedSalePricePaise: rupeesToPaise(form.priceRupees),
-            mrpPaise:   rupeesToPaise(form.mrpRupees),
+            savedSalePricePaise: parseRupeesToPaise(form.priceRupees),
+            mrpPaise:   parseRupeesToPaise(form.mrpRupees),
             openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
             openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
             attrsJson: form.attrs.filter((a) => a.key.trim()).length > 0

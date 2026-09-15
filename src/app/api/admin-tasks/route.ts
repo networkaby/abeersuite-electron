@@ -2,25 +2,14 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, deltaSlice, deltaResponse, pageResponse } from "@/shared/lib/api";
 import { createTaskSchema } from "@/shared/lib/schemas/taskSchema";
 import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences } from "@/modules/administration/lib/runTaskRecurrences";
 import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
-
-/** Position the task is assigned to + its current live holders (resolved via
- *  UserPosition), so the board can show who'll actually do the work. */
-const ASSIGNED_POSITION_SELECT = {
-    select: {
-        id: true,
-        title: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
-        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
-    },
-} as const;
+import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
 
 // A task is a bare Ticket (flavour "task", no detail). We flatten the core Ticket back
 // to the old flat Task shape (description ← notes, dueDate ← dueAt, completedAt ←
@@ -97,20 +86,13 @@ export async function GET(req: Request) {
             const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
 
             if (since) {
-                const MAX_DELTA_ROWS = 500;
-                const changed = await prisma.ticket.findMany({
+                const { changed, overflow } = await deltaSlice((take) => prisma.ticket.findMany({
                     where: { pipelineId, updatedAt: { gt: since } },
                     orderBy,
-                    take: MAX_DELTA_ROWS + 1,
+                    take,
                     select: TASK_TICKET_SELECT,
-                });
-                const overflow = changed.length > MAX_DELTA_ROWS;
-                return NextResponse.json({
-                    mode: "delta",
-                    rows: overflow ? [] : changed.map(flattenTask),
-                    overflow,
-                    computedAt: computedAt.toISOString(),
-                });
+                }));
+                return deltaResponse(changed.map(flattenTask), overflow, computedAt);
             }
 
             const all = await prisma.ticket.findMany({
@@ -118,12 +100,7 @@ export async function GET(req: Request) {
                 orderBy,
                 select: TASK_TICKET_SELECT,
             });
-            return NextResponse.json({
-                mode: "page",
-                rows: all.map(flattenTask),
-                nextCursor: null,
-                computedAt: computedAt.toISOString(),
-            });
+            return pageResponse(all.map(flattenTask), null, computedAt);
         }
 
         const tasks = await prisma.ticket.findMany({

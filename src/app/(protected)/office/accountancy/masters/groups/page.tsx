@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { CreateGroupDialog } from "@/modules/accountancy/components/CreateGroupDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -137,7 +138,7 @@ export default function AccountGroupsPage() {
     };
 
     const deleteGroup = async (id: number, name: string) => {
-        if (!confirm(`Delete group "${name}"?`)) return;
+        if (!(await confirmAction({ title: `Delete group "${name}"?`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/accountancy/account-groups/${id}`);
             toast.success("Deleted");

@@ -6,6 +6,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { updateHelpSchema } from "@/shared/lib/schemas/helpSchema";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { HELP_TICKET_SELECT, flattenHelp } from "../route";
+import { parseNumericId } from "@/shared/lib/api/parseNumericId";
 
 // Help ticket + its timeline (TicketLog rows — advise notes, stage moves, close).
 const HELP_DETAIL_SELECT = {
@@ -25,15 +26,10 @@ function flattenHelpDetail(t: { logs: LogRow[] } & Parameters<typeof flattenHelp
     };
 }
 
-function parseId(raw: string): number | null {
-    const n = Number(raw);
-    return Number.isInteger(n) && n > 0 ? n : null;
-}
-
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;
-    const id = parseId((await params).id);
+    const id = parseNumericId((await params).id);
     if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
         const t = await prisma.ticket.findUnique({ where: { id }, select: HELP_DETAIL_SELECT });
@@ -49,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // who sees the controls (help:edit); the write needs only an auth session.
     const { user, response } = await requireAuth();
     if (response) return response;
-    const id = parseId((await params).id);
+    const id = parseNumericId((await params).id);
     if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
         const { data, error } = await validateRequest(req, updateHelpSchema);
@@ -174,7 +170,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     // Delete needs the delete rung, not just the module's sidebar link.
     const { response } = await requirePermission(PERMISSIONS.HELP_DELETE);
     if (response) return response;
-    const id = parseId((await params).id);
+    const id = parseNumericId((await params).id);
     if (id === null) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
         const existing = await prisma.ticket.findUnique({ where: { id }, select: { id: true, help: { select: { ticketId: true } } } });

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Branch { id: string; name: string; }
 interface Department {
@@ -150,8 +151,8 @@ export default function DepartmentsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId]);
 
-    const selectDept = (id: string) => {
-        if (poolDirty && !confirm("Discard unsaved permission changes?")) return;
+    const selectDept = async (id: string) => {
+        if (poolDirty && !(await confirmAction({ title: "Discard unsaved permission changes?", confirmLabel: "Discard" }))) return;
         setAddingNew(false);
         setEditId(null);
         setSelectedId(id);
@@ -220,7 +221,7 @@ export default function DepartmentsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Delete this department?")) return;
+        if (!(await confirmAction({ title: "Delete this department?", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/departments/${id}`);
             toast.success("Department deleted");

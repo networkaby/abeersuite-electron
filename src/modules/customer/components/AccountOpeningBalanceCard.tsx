@@ -14,6 +14,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { OpeningBillsDialog } from "@/modules/accountancy/components/OpeningBillsDialog";
+import { parseDecimalInput } from "@/shared/lib/format";
 
 interface Props {
     accountId: number;
@@ -35,13 +36,6 @@ function toInput(amount: string | number | null): string {
 }
 
 // Per repo rule: no <input type="number">. Keep digits and a single dot.
-function sanitize(raw: string): string {
-    const cleaned = raw.replace(/[^\d.]/g, "");
-    const firstDot = cleaned.indexOf(".");
-    if (firstDot === -1) return cleaned;
-    return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
-}
-
 export default function AccountOpeningBalanceCard({
     accountId, initialAmount, initialType, canEdit, onSaved,
 }: Props) {
@@ -99,7 +93,7 @@ export default function AccountOpeningBalanceCard({
                                     id="opening-balance-amount"
                                     inputMode="decimal"
                                     value={amount}
-                                    onChange={e => setAmount(sanitize(e.target.value))}
+                                    onChange={e => setAmount(parseDecimalInput(e.target.value))}
                                     placeholder="0 to clear"
                                 />
                             </div>

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 type GroupRow = {
     id: number;
@@ -61,8 +62,12 @@ export function CustomerGroupsManager() {
 
     const removeGroup = async (row: GroupRow) => {
         const members = row._count.persons + row._count.companies;
-        const warn = members > 0 ? ` ${members} customer(s) will be detached from it.` : "";
-        if (!confirm(`Delete group "${row.name}"?${warn}`)) return;
+        const ok = await confirmAction({
+            title: `Delete group "${row.name}"?`,
+            body: members > 0 ? `${members} customer(s) will be detached from it.` : "This cannot be undone.",
+            confirmLabel: "Delete",
+        });
+        if (!ok) return;
         try {
             await axios.delete(`/api/settings/customer-groups/${row.id}`);
             setRows((p) => p.filter((r) => r.id !== row.id));

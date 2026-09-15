@@ -23,6 +23,20 @@ export function rupeesToPaise(rupees: number): number {
     return Math.round(rupees * 100);
 }
 
+/**
+ * A typed ₹ field → integer paise. Blank, non-numeric or negative → null, so an
+ * optional field stays unset; a typed 0 is a real 0 (a free item, a zero cost).
+ * The one parser behind every rupee text input — the dialogs used to carry
+ * their own copies, and they disagreed on whether 0 counted.
+ */
+export function parseRupeesToPaise(s: string): number | null {
+    const t = s.trim();
+    if (t === "") return null;
+    const n = parseFloat(t);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return rupeesToPaise(n);
+}
+
 /** Format integer paise as ₹ string with two decimals (e.g. 19900 → ₹199.00). */
 export function formatRupeesFromPaise(paise: number): string {
     const rupees = paise / 100;

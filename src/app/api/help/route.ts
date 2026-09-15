@@ -2,24 +2,14 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError, deltaSlice, deltaResponse, pageResponse } from "@/shared/lib/api";
 import { createHelpSchema } from "@/shared/lib/schemas/helpSchema";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
-
-/** Position the ticket is assigned to + its current live holders. */
-const ASSIGNED_POSITION_SELECT = {
-    select: {
-        id: true,
-        title: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
-        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
-    },
-} as const;
+import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
 
 // A help ticket is a Ticket (flavour "help") + a TicketHelp detail. We query the
 // Ticket and flatten the detail back onto it at the boundary so the Help UI has a
@@ -100,20 +90,13 @@ export async function GET(req: Request) {
             const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "desc" }];
 
             if (since) {
-                const MAX_DELTA_ROWS = 500;
-                const changed = await prisma.ticket.findMany({
+                const { changed, overflow } = await deltaSlice((take) => prisma.ticket.findMany({
                     where: { pipelineId: pipeline.id, updatedAt: { gt: since } },
                     orderBy,
-                    take: MAX_DELTA_ROWS + 1,
+                    take,
                     select: HELP_TICKET_SELECT,
-                });
-                const overflow = changed.length > MAX_DELTA_ROWS;
-                return NextResponse.json({
-                    mode: "delta",
-                    rows: overflow ? [] : changed.map(flattenHelp),
-                    overflow,
-                    computedAt: computedAt.toISOString(),
-                });
+                }));
+                return deltaResponse(changed.map(flattenHelp), overflow, computedAt);
             }
 
             const all = await prisma.ticket.findMany({
@@ -121,12 +104,7 @@ export async function GET(req: Request) {
                 orderBy,
                 select: HELP_TICKET_SELECT,
             });
-            return NextResponse.json({
-                mode: "page",
-                rows: all.map(flattenHelp),
-                nextCursor: null,
-                computedAt: computedAt.toISOString(),
-            });
+            return pageResponse(all.map(flattenHelp), null, computedAt);
         }
 
         // ── List mode — bare array, for existing callers (CallFollowUpPopup, etc.) ──

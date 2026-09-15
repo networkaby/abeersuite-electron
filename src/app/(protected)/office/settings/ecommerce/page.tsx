@@ -26,23 +26,11 @@ import {
     OUT_OF_STOCK_POLICY_LABELS,
     type ShopOutOfStockPolicy,
 } from "@/modules/ecommerce/lib/shopStock";
+import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 
 // Retry transient GET failures (dev-compile hiccups) a couple of times so the
 // page reflects the real saved state instead of silently falling back to a
 // default — which could otherwise be saved over the owner's real config.
-async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T> {
-    let lastErr: unknown;
-    for (let i = 0; i < tries; i++) {
-        try {
-            return (await axios.get<T>(url)).data;
-        } catch (e) {
-            lastErr = e;
-            await new Promise((r) => setTimeout(r, delayMs));
-        }
-    }
-    throw lastErr;
-}
-
 export default function EcommerceSettingsPage() {
     const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
     const [rulesLoaded, setRulesLoaded] = useState(false);

@@ -1,43 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Building2, Layers, Globe2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
+import UserAvatar from "@/shared/components/UserAvatar";
 
 // ── Avatar helpers ────────────────────────────────────────────────────────────
 
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
-
-const AVATAR_COLOR: Record<string, string> = {
-    R1: "bg-purple-100 text-purple-700",
-    R2: "bg-blue-100 text-blue-700",
-    R3: "bg-green-100 text-green-700",
-    R4: "bg-orange-100 text-orange-700",
-};
-
 function HolderRow({ user }: { user: PositionNode["holders"][number]["user"] }) {
-    const [imgErr, setImgErr] = useState(false);
     return (
         <Link
             href={`/office/social/users/${user.id}`}
             className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
         >
-            {user.avatarUrl && !imgErr ? (
-                <Image
-                    src={user.avatarUrl} alt={user.name} width={22} height={22}
-                    className="rounded-full object-cover w-5 h-5 border border-card shrink-0"
-                    onError={() => setImgErr(true)}
-                />
-            ) : (
-                <div className={`flex shrink-0 items-center justify-center rounded-full w-5 h-5 text-[10px] font-bold border border-card ${user.role ? (AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600") : "bg-gray-100 text-gray-600"}`}>
-                    {initials(user.name)}
-                </div>
-            )}
+            <UserAvatar avatarUrl={user.avatarUrl} name={user.name} role={user.role} sizePx={20} className="border border-card" />
             <div className="text-left min-w-0">
                 <p className="text-[11px] font-medium truncate leading-none">{user.name}</p>
                 {user.userRole && (

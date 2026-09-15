@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { parseRupeesToPaise } from "@/shared/lib/format";
 
 // The pool entry being allocated (subset of the Costing page's PoolEntry).
 export interface AllocEntry {
@@ -42,13 +43,6 @@ interface VoucherLine {
 }
 
 const rupee = (paise: number): string => `₹${(paise / 100).toFixed(2)}`;
-function rupeesToPaise(s: string): number | null {
-    const t = s.trim();
-    if (t === "") return null;
-    const n = parseFloat(t);
-    if (!isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-}
 const paiseToStr = (paise: number): string => (paise / 100).toFixed(2);
 
 export function AllocateVoucherDialog({
@@ -160,18 +154,18 @@ export function AllocateVoucherDialog({
     // Edit per-unit → derive line draw (amount = per-unit × qty).
     function editPerUnit(l: VoucherLine, val: string) {
         setPerUnit((p) => ({ ...p, [l.productId]: val }));
-        const pu = rupeesToPaise(val);
+        const pu = parseRupeesToPaise(val);
         setLineAmt((a) => ({ ...a, [l.productId]: pu != null ? paiseToStr(Math.round(pu * l.quantity)) : "" }));
     }
     // Edit line draw → derive per-unit (per-unit = amount / qty).
     function editLineAmt(l: VoucherLine, val: string) {
         setLineAmt((a) => ({ ...a, [l.productId]: val }));
-        const amt = rupeesToPaise(val);
+        const amt = parseRupeesToPaise(val);
         setPerUnit((p) => ({ ...p, [l.productId]: amt != null && l.quantity > 0 ? paiseToStr(Math.round(amt / l.quantity)) : "" }));
     }
 
     const drawPaise = useCallback(
-        (l: VoucherLine): number => rupeesToPaise(lineAmt[l.productId] ?? "") ?? 0,
+        (l: VoucherLine): number => parseRupeesToPaise(lineAmt[l.productId] ?? "") ?? 0,
         [lineAmt],
     );
     const totalPaise = useMemo(
@@ -182,7 +176,7 @@ export function AllocateVoucherDialog({
 
     // Auto-distribute a target amount across the lines, by value or by qty.
     function distribute(mode: "value" | "qty") {
-        const target = rupeesToPaise(distAmount);
+        const target = parseRupeesToPaise(distAmount);
         if (target == null || target <= 0) return toast.error("Enter an amount to distribute.");
         if (lines.length === 0) return;
         const nextPu: Record<number, string> = {};
@@ -213,8 +207,8 @@ export function AllocateVoucherDialog({
         if (!entry) return;
         const payloadLines = lines
             .map((l) => {
-                const pu = rupeesToPaise(perUnit[l.productId] ?? "");
-                const amt = rupeesToPaise(lineAmt[l.productId] ?? "");
+                const pu = parseRupeesToPaise(perUnit[l.productId] ?? "");
+                const amt = parseRupeesToPaise(lineAmt[l.productId] ?? "");
                 return pu != null && amt != null && amt > 0
                     ? { productId: l.productId, perUnitPaise: pu, quantity: l.quantity, amountPaise: amt }
                     : null;

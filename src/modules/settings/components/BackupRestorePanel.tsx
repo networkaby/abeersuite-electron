@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface DropboxBackup {
     name: string;
@@ -173,13 +174,12 @@ export function BackupRestorePanel() {
 
     async function handleRestore() {
         if (!canRestore || !selectedPath || !isTargetDbValid || confirmText !== "RESTORE") return;
-        if (
-            !window.confirm(
-                "Last chance: this will REPLACE the entire target database with the selected Dropbox backup. Continue?",
-            )
-        ) {
-            return;
-        }
+        const ok = await confirmAction({
+            title: "Replace the entire target database with this Dropbox backup?",
+            body: "Last chance — everything in the target database is overwritten by the selected backup.",
+            confirmLabel: "Restore backup",
+        });
+        if (!ok) return;
         setRestoring(true);
         const progress = toast.loading("Starting restore…");
         try {

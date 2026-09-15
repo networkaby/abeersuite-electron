@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { validateRequest, parseCursor } from "@/shared/lib/api";
+import { validateRequest, parseCursor, deltaSlice, deltaResponse, pageResponse, pageSlice } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -166,20 +166,13 @@ export async function GET(req: Request) {
         const orderBy: Prisma.TicketOrderByWithRelationInput[] = [{ createdAt: "desc" }, { id: "desc" }];
 
         if (since) {
-            const MAX_DELTA_ROWS = 500;
-            const changed = await prisma.ticket.findMany({
+            const { changed, overflow } = await deltaSlice((take) => prisma.ticket.findMany({
                 where: { ...where, updatedAt: { gt: since } },
                 orderBy,
-                take: MAX_DELTA_ROWS + 1,
+                take,
                 include: TICKET_INCLUDE,
-            });
-            const overflow = changed.length > MAX_DELTA_ROWS;
-            return NextResponse.json({
-                mode: "delta",
-                rows: overflow ? [] : changed.map(flattenRepair),
-                overflow,
-                computedAt: computedAt.toISOString(),
-            });
+            }));
+            return deltaResponse(changed.map(flattenRepair), overflow, computedAt);
         }
 
         const { cursor, take } = parseCursor(searchParams, { defaultLimit: 25, maxLimit: 25 });
@@ -190,16 +183,9 @@ export async function GET(req: Request) {
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: TICKET_INCLUDE,
         });
-        const hasMore = rowsPlusOne.length > take;
-        const found = hasMore ? rowsPlusOne.slice(0, take) : rowsPlusOne;
-        const nextCursor = hasMore && found.length > 0 ? found[found.length - 1].id : null;
+        const { rows: found, nextCursor } = pageSlice(rowsPlusOne, take);
 
-        return NextResponse.json({
-            mode: "page",
-            rows: found.map(flattenRepair),
-            nextCursor,
-            computedAt: computedAt.toISOString(),
-        });
+        return pageResponse(found.map(flattenRepair), nextCursor, computedAt);
     } catch (e) {
         return handleApiError(e, "Failed to fetch tickets");
     }

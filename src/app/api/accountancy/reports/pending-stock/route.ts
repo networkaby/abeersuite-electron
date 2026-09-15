@@ -2,43 +2,18 @@
 // Aggregates line items from all unsettled pending vouchers (CHALLAN, GRN,
 // REJECTION_IN, REJECTION_OUT) grouped by product, so the caller can see
 // which inventory is in transit / not yet settled.
-// Same settlement rules as /pending-vouchers.
+// Settlement rules live in shared/lib/accountancy/settlementMatrix.ts (shared with /pending-vouchers).
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
-import { InvVoucherType, VoucherStatus, type Prisma } from "@/generated/prisma/client";
+import { VoucherStatus, type Prisma } from "@/generated/prisma/client";
+import { PENDING_TYPES, OUT_TYPES, unsettledClause, type PendingType } from "@/shared/lib/accountancy/settlementMatrix";
 import { businessToday } from "@/shared/lib/format/formatDate";
-
-type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
-
-const SETTLES_BY: Record<PendingType, InvVoucherType[]> = {
-    CHALLAN:       [InvVoucherType.SALE,     InvVoucherType.REJECTION_IN],
-    GRN:           [InvVoucherType.PURCHASE, InvVoucherType.REJECTION_OUT],
-    REJECTION_IN:  [InvVoucherType.CHALLAN,  InvVoucherType.SALE_RETURN],
-    REJECTION_OUT: [InvVoucherType.GRN,      InvVoucherType.PURCHASE_RETURN],
-};
-
-const PENDING_TYPES = Object.keys(SETTLES_BY) as PendingType[];
-
-// Voucher types that move stock OUT of the warehouse
-const OUT_TYPES = new Set<PendingType>(["CHALLAN", "REJECTION_OUT"]);
-
-function unsettledClause(type: PendingType): Prisma.VoucherDetailWhereInput {
-    return {
-        // 5D-11: type lives on the spine (both for this voucher and its returns).
-        universalVoucher: { type: InvVoucherType[type] },
-        refReturns: {
-            none: {
-                // 5D-8 status + 5D-11 type of the settling voucher live on its spine.
-                universalVoucher: { status: { not: VoucherStatus.CANCELLED }, type: { in: SETTLES_BY[type] } },
-            },
-        },
-    };
-}
 
 export async function GET(req: NextRequest) {
     const { response } = await requireAuth();
@@ -54,7 +29,7 @@ export async function GET(req: NextRequest) {
     let branchScopeId: string | undefined;
     if (branchParam && branchParam !== "all") {
         try { requireBranchAccess(session, branchParam); } catch (e) {
-            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
+            if (e instanceof BranchAccessError) return branchAccessResponse(e);
             throw e;
         }
         branchScopeId = branchParam;

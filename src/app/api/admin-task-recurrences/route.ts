@@ -7,16 +7,7 @@ import { buildTaskActor } from "@/modules/administration/lib/taskActor";
 import { runTaskRecurrences, nextDueAt } from "@/modules/administration/lib/runTaskRecurrences";
 /** Recurring tasks ride the same Administration pipeline as one-off tasks. */
 import { ADMIN_TASKS_PIPELINE_ID as ADMIN_PIPELINE_ID } from "@/modules/administration/lib/adminPipeline";
-
-const ASSIGNED_POSITION_SELECT = {
-    select: {
-        id: true,
-        title: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
-        holders: { select: { user: { select: { id: true, name: true, avatarUrl: true, role: true } } } },
-    },
-} as const;
+import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
 
 export const RECURRENCE_SELECT = {
     id: true,

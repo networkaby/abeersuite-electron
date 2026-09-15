@@ -43,6 +43,7 @@ import { sanitizePodArea, type PodAreaMode } from "@/shared/lib/payments/payOnDe
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { isOdGroupName } from "@/modules/accountancy/lib/bankParticulars";
 import { Landmark } from "lucide-react";
+import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 
 // ── Types mirroring the API ───────────────────────────────────────────────────
 
@@ -100,19 +101,6 @@ const EMPTY_FORM: FormState = {
     podStates: [],
     podPincodes: "",
 };
-
-async function getWithRetry<T>(url: string, tries = 3, delayMs = 400): Promise<T> {
-    let lastErr: unknown;
-    for (let i = 0; i < tries; i++) {
-        try {
-            return (await axios.get<T>(url)).data;
-        } catch (e) {
-            lastErr = e;
-            await new Promise((r) => setTimeout(r, delayMs));
-        }
-    }
-    throw lastErr;
-}
 
 /** One-line summary of the POD rail's area rule, for its card badge. */
 function podAreaSummary(g: Gateway): string {

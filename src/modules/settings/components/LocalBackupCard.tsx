@@ -19,6 +19,7 @@ import { AlertTriangle, Download, HardDrive, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 /**
  * Mirrors `RestoreReadiness` from electron/backupManager.ts, declared here so this
@@ -103,20 +104,23 @@ export function LocalBackupCard() {
         // flusher would push pre-restore data straight back over the restore — but it is
         // still real work, so it is spelt out with a number rather than a warning.
         const unsynced = availability?.pendingWrites ?? 0;
-        if (
-            !window.confirm(
-                "Last chance: this REPLACES the whole live database with the backup file you pick next. " +
-                    "Every counter sees the change.\n\n" +
-                    (unsynced > 0
-                        ? `This till has ${unsynced} write${unsynced === 1 ? "" : "s"} that Supabase has not accepted yet. ` +
-                          "They will be DISCARDED.\n\n"
-                        : "") +
-                    "This PC restarts by itself when it finishes, and re-downloads everything.\n\n" +
-                    "Continue?",
-            )
-        ) {
-            return;
-        }
+        const ok = await confirmAction({
+            title: "Replace the whole live database with the backup file you pick next?",
+            body: (
+                <>
+                    <p>Last chance — every counter sees the change.</p>
+                    {unsynced > 0 && (
+                        <p>
+                            This till has {unsynced} write{unsynced === 1 ? "" : "s"} that Supabase has not
+                            accepted yet. They will be <strong>discarded</strong>.
+                        </p>
+                    )}
+                    <p>This PC restarts by itself when it finishes, and re-downloads everything.</p>
+                </>
+            ),
+            confirmLabel: "Restore backup",
+        });
+        if (!ok) return;
 
         setBusy("restore");
         setProgress("Opening…");

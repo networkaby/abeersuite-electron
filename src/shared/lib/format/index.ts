@@ -4,6 +4,7 @@ export * from "./groupColor";
 export * from "./gridRow";
 export * from "./moduleTheme";
 export * from "./formatDate";
+export * from "./initials";
 export * from "./timeAgo";
 export * from "./moneyInr";
 export * from "./numberWords";

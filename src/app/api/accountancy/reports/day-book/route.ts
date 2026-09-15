@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { handleApiError, parseCursor } from "@/shared/lib/api";
+import { handleApiError, parseCursor, deltaSlice, pageSlice } from "@/shared/lib/api";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
@@ -45,12 +45,6 @@ import { parseSince } from "@/shared/lib/prisma/counterMode";
 const MAX_CHANGED_ACCOUNTS = 200;
 /** Party-name search is a pre-resolve against Account; keep it bounded. */
 const MAX_SEARCH_ACCOUNTS = 500;
-/**
- * Past this a delta has stopped being cheaper than starting over, so we say so
- * and let the client drop its copy and re-page from the top.
- */
-const MAX_DELTA_ROWS = 500;
-
 const VALID_STATUSES = ["DRAFT", "POSTED", "CANCELLED"] as const;
 type VoucherStatusFilter = (typeof VALID_STATUSES)[number];
 
@@ -195,14 +189,14 @@ export async function GET(req: Request) {
             // than the client's own cursor may come back too — it drops those
             // itself, which is cheaper than teaching the server the client's exact
             // scroll position.
-            const changed = await prisma.universalVoucher.findMany({
+            const delta = await deltaSlice((take) => prisma.universalVoucher.findMany({
                 where: { ...where, updatedAt: { gt: since } },
                 orderBy,
-                take: MAX_DELTA_ROWS + 1,
+                take,
                 select,
-            });
-            overflow = changed.length > MAX_DELTA_ROWS;
-            found = overflow ? [] : changed;
+            }));
+            overflow = delta.overflow;
+            found = delta.changed;
 
             // Deletion is physical here, so a changed-row query can never report
             // it. The recycle-bin audit row is the only surviving trace, and it is
@@ -225,9 +219,7 @@ export async function GET(req: Request) {
                 ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
                 select,
             });
-            const hasMore = rowsPlusOne.length > take;
-            found = hasMore ? rowsPlusOne.slice(0, take) : rowsPlusOne;
-            nextCursor = hasMore && found.length > 0 ? found[found.length - 1].id : null;
+            ({ rows: found, nextCursor } = pageSlice(rowsPlusOne, take));
         }
 
         // "Converted" is not a stored flag — it is true while some OTHER voucher

@@ -72,7 +72,10 @@ http.interceptors.response.use(
     (res) => res,
     (err: unknown) => {
         if (axios.isAxiosError(err)) {
-            const code = (err.response?.data as { error?: string } | undefined)?.error;
+            // Branch refusals carry their machine reason in `code` (see
+            // branchAccessResponse); `error` is the human sentence the screen shows.
+            const data = err.response?.data as { error?: string; code?: string } | undefined;
+            const code = data?.code ?? data?.error;
             if (code === "no_active_branch") {
                 toast.error("Select a working branch to continue.");
             } else if (code === "select_working_branch") {

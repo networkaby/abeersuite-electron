@@ -15,6 +15,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface PositionHit {
     id: string;
@@ -69,7 +70,7 @@ export default function OrgTransferDialog({
 
     async function transfer(target: PositionHit) {
         if (!sourcePositionId || !holderUserId) return;
-        if (!window.confirm(`Transfer ${holderName} from "${sourceTitle}" to "${target.title}"?`)) return;
+        if (!(await confirmAction({ title: `Transfer ${holderName} from "${sourceTitle}" to "${target.title}"?`, confirmLabel: "Transfer", destructive: false }))) return;
         setBusyId(target.id);
         try {
             // 1) Remove from source

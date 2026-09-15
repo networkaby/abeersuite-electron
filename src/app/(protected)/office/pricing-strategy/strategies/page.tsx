@@ -60,6 +60,7 @@ import { sumGroupPointsWithAncestors } from "@/modules/pricing-strategy/lib/grou
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 // Default rows-per-page for the preview table (full list is paginated, not capped).
 const DEFAULT_PAGE_SIZE = 50;
@@ -540,15 +541,20 @@ export default function PricingStrategiesPage() {
     // who hold it. The server enforces the same rule on the Save that carries the
     // empty set (api/pricing-strategy/points), so hiding this button is not the guard.
     const canReset = hasPermissionWithScope(permissions, PERMISSIONS.PRICING_STRATEGY_RESET);
-    const reset = () => {
+    const reset = async () => {
         if (!canReset) return;
         const filled =
             (baseN !== 0 ? 1 : 0) +
             [brandPts, catPts, groupPts, productPts]
                 .reduce((a, m) => a + Object.values(m).filter((v) => num(v) !== 0).length, 0);
-        if (filled > 0 && !window.confirm(
-            `Clear all ${filled} strategy point value${filled === 1 ? "" : "s"}? Every product falls back to base only.`,
-        )) return;
+        if (filled > 0) {
+            const ok = await confirmAction({
+                title: `Clear all ${filled} strategy point value${filled === 1 ? "" : "s"}?`,
+                body: "Every product falls back to base only.",
+                confirmLabel: "Clear points",
+            });
+            if (!ok) return;
+        }
         setBase("");
         setBrandPts({});
         setCatPts({});

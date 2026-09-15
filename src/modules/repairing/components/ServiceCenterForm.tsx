@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldError } from "@/shared/components/FieldError";
 
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -37,11 +38,6 @@ interface Props {
         address?: string;
     };
     onClose: () => void;
-}
-
-function FieldError({ message }: { message?: string }) {
-    if (!message) return null;
-    return <p className="text-xs text-destructive">{message}</p>;
 }
 
 export default function ServiceCenterForm({ serviceCenter, onClose }: Props) {

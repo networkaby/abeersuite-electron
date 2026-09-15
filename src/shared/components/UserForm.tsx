@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useEffect } from "react";
+import { FieldError } from "@/shared/components/FieldError";
 
 // Identity-only user creation.
 //
@@ -37,11 +38,6 @@ interface Props {
         email: string;
     };
     onClose: () => void;
-}
-
-function FieldError({ message }: { message?: string }) {
-    if (!message) return null;
-    return <p className="text-xs text-destructive">{message}</p>;
 }
 
 export default function UserForm({ user, onClose }: Props) {

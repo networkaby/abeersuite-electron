@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseCsv } from "@/shared/lib/import/csvParse";
 import { type ProductImportField } from "@/shared/lib/import/productImportFields";
+import { toCsv } from "@/shared/lib/import/csvSerialize";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 const FIELD_LABELS: Record<ProductImportField, string> = {
     name: "Name (required)",
@@ -95,16 +97,6 @@ interface PreviewResult {
         warrantyTerms: string[];
     };
     results: RowResult[];
-}
-
-function toCsv(rows: string[][]): string {
-    const escape = (cell: string) => {
-        if (cell == null) return "";
-        const needsQuote = /[",\r\n]/.test(cell);
-        const escaped = cell.replace(/"/g, '""');
-        return needsQuote ? `"${escaped}"` : escaped;
-    };
-    return rows.map((r) => r.map(escape).join(",")).join("\r\n");
 }
 
 /// Header → field auto-suggest. Patterns are tested case-insensitive after
@@ -339,7 +331,7 @@ export function ItemImportPanel() {
             toast.error("Nothing to commit — preview shows 0 create/update rows");
             return;
         }
-        if (!window.confirm(`Commit ${total} rows? This writes to the products table.`)) return;
+        if (!(await confirmAction({ title: `Commit ${total} rows?`, body: `This writes to the products table.`, confirmLabel: "Commit", destructive: false }))) return;
         setCommitting(true);
         try {
             const res = await fetch("/api/settings/item-import/commit", {

@@ -11,6 +11,7 @@ import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleA
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 
 // POST /api/accountancy/journal-vouchers
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     let activeBranchId: string;
     try { activeBranchId = resolveActiveBranchId(req, session); }
     catch (e) {
-        if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
+        if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;
     }
 

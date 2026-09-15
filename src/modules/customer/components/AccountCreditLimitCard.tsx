@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { parseDecimalInput } from "@/shared/lib/format";
 
 interface Props {
     accountId: number;
@@ -30,13 +31,6 @@ function toInput(limit: string | number | null): string {
 }
 
 // Per repo rule: no <input type="number">. Keep digits and a single dot.
-function sanitize(raw: string): string {
-    const cleaned = raw.replace(/[^\d.]/g, "");
-    const firstDot = cleaned.indexOf(".");
-    if (firstDot === -1) return cleaned;
-    return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
-}
-
 export default function AccountCreditLimitCard({ accountId, initialLimit, canEdit, onSaved }: Props) {
     const [value, setValue] = useState(() => toInput(initialLimit));
     const [saving, setSaving] = useState(false);
@@ -87,7 +81,7 @@ export default function AccountCreditLimitCard({ accountId, initialLimit, canEdi
                                 id="credit-limit"
                                 inputMode="decimal"
                                 value={value}
-                                onChange={e => setValue(sanitize(e.target.value))}
+                                onChange={e => setValue(parseDecimalInput(e.target.value))}
                                 placeholder="0 (cash-only)"
                                 className="max-w-xs"
                             />

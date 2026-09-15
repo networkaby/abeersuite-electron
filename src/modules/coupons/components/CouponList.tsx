@@ -23,6 +23,7 @@ import {
     couponHeadline, couponValueText, couponWhatsappUrl, couponWhatsappWebUrl, couponEmailUrl, type CouponShareInfo,
 } from "@/modules/coupons/lib/couponShare";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 const channelTone: Record<Coupon["channels"], string> = {
     BOTH: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
@@ -121,7 +122,7 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
         catch { toast.error("Failed to update coupon"); }
     }
     async function remove(c: Coupon) {
-        if (!confirm(`Delete coupon ${c.code ?? c.name}?`)) return;
+        if (!(await confirmAction({ title: `Delete coupon ${c.code ?? c.name}?`, confirmLabel: "Delete" }))) return;
         try {
             const r = await axios.delete<{ softDisabled?: boolean }>(`/api/coupons/${c.id}`);
             toast.success(r.data.softDisabled ? "Coupon disabled (it has redemptions)" : "Coupon deleted");

@@ -35,6 +35,7 @@ import {
     PartySearchAndCreate,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
+import { FieldError } from "@/shared/components/FieldError";
 
 type Priority = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
@@ -59,12 +60,6 @@ const ticketSchema = z.object({
 });
 
 type TicketFormData = z.infer<typeof ticketSchema>;
-
-function FieldError({ message }: { message?: string }) {
-    if (!message) return null;
-
-    return <p className="text-xs text-destructive">{message}</p>;
-}
 
 function FieldLabel({ children, required = false }: { children: string; required?: boolean }) {
     return (

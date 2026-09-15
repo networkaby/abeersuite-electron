@@ -42,10 +42,10 @@ function buildTree(users: FlatUser[]): OrgNode[] {
         map.set(u.id, { ...u, children: [] });
     }
     const roots: OrgNode[] = [];
-    for (const node of map.values()) {
-        const flat = users.find(u => u.id === node.id)!;
-        if (flat.managerId && map.has(flat.managerId)) {
-            map.get(flat.managerId)!.children.push(node);
+    for (const u of users) {
+        const node = map.get(u.id)!;
+        if (u.managerId && map.has(u.managerId)) {
+            map.get(u.managerId)!.children.push(node);
         } else {
             roots.push(node);
         }

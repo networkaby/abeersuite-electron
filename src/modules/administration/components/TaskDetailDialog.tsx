@@ -17,6 +17,7 @@ import UserAvatar from "@/shared/components/UserAvatar";
 import { PRIORITY_META } from "@/utils/constants";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { TaskDetailDto, TaskDto, TaskStage } from "../lib/types";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export default function TaskDetailDialog({
     taskId,
@@ -91,7 +92,7 @@ export default function TaskDetailDialog({
 
     const handleDelete = async () => {
         if (!task) return;
-        if (!window.confirm("Delete this task? This cannot be undone.")) return;
+        if (!(await confirmAction({ title: "Delete this task?", body: "This cannot be undone.", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/admin-tasks/${task.id}`);
             toast.success("Task deleted");
