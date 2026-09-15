@@ -156,7 +156,13 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                 </div>
             </div>
 
-            {/* Money — credit / due / overdue (risk-at-a-glance) */}
+            {/* Money — credit / due / unsettled (risk-at-a-glance). `bal` is the
+                signed ledger balance (negative = in credit); both the Due tile and
+                the Unsettled tile read it, so it is derived once here. */}
+            {(() => {
+                const bal = snapshot.account ? snapshot.account.balance : snapshot.balanceDue;
+                const credit = bal < 0;
+                return (
             <div className="grid grid-cols-3 gap-1">
                 <Stat
                     icon={<CreditCard size={14} />}
@@ -167,28 +173,33 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                 />
                 {/* Due — sign-aware: flips to "Advance" (green) when the ledger is
                     in credit, so it absorbs the old separate ledger-balance row. */}
-                {(() => {
-                    const bal = snapshot.account ? snapshot.account.balance : snapshot.balanceDue;
-                    const credit = bal < 0;
-                    return (
-                        <Stat
-                            icon={credit ? <Wallet size={14} /> : <TrendingDown size={14} />}
-                            label={credit ? "Advance" : "Due"}
-                            value={formatInr(credit ? Math.abs(bal) : snapshot.balanceDue)}
-                            sub={credit ? "in their favour" : snapshot.balanceDue > 0 ? "outstanding" : "clean"}
-                            valueClass={credit ? "text-emerald-600 dark:text-emerald-400" : undefined}
-                            tint={credit ? "emerald" : "rose"}
-                        />
-                    );
-                })()}
+                <Stat
+                    icon={credit ? <Wallet size={14} /> : <TrendingDown size={14} />}
+                    label={credit ? "Advance" : "Due"}
+                    value={formatInr(credit ? Math.abs(bal) : snapshot.balanceDue)}
+                    sub={credit ? "in their favour" : snapshot.balanceDue > 0 ? "outstanding" : "clean"}
+                    valueClass={credit ? "text-emerald-600 dark:text-emerald-400" : undefined}
+                    tint={credit ? "emerald" : "rose"}
+                />
+                {/* Unsettled — what is still open BILL-WISE, i.e. not linked to a
+                    receipt through VoucherAllocation. Deliberately NOT called
+                    "overdue": the figure behind it counts every bill older than
+                    today, not bills past their own due date, so calling it past-due
+                    was simply untrue. It sits apart from the ledger balance on
+                    purpose — a customer can be in credit overall and still have
+                    unlinked bills, which is normal until someone settles them.
+                    Tinted by which way the ledger leans so it never shouts red at a
+                    customer who is actually in credit. */}
                 <Stat
                     icon={<AlertCircle size={14} />}
-                    label="Overdue"
+                    label="Unsettled"
                     value={formatInr(snapshot.balanceOverdue)}
-                    sub={snapshot.balanceOverdue > 0 ? "past due" : "—"}
-                    tint="rose"
+                    sub={snapshot.balanceOverdue > 0 ? (credit ? "payable" : "receivable") : "—"}
+                    tint={credit ? "sky" : "amber"}
                 />
             </div>
+                );
+            })()}
 
             {/* Upsell & cross-sell — the whole box opens the drawer (slides left
                 over the cart). The snapshot's personalized offers stay as a teaser;
