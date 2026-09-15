@@ -53,6 +53,11 @@ function isUniqueViolation(err: unknown, target: string): boolean {
     return typeof tgt === "string" && tgt.includes(target);
 }
 
+/** Which party a contact row belongs to — the XOR, read back off a row. */
+function ownerOf(row: { personId: number | null; companyId: number | null }): ContactOwner {
+    return row.personId != null ? { personId: row.personId } : { companyId: row.companyId! };
+}
+
 /** Owner filter shared by all per-owner queries. */
 function ownerWhere(owner: ContactOwner) {
     return owner.personId !== undefined
@@ -61,6 +66,27 @@ function ownerWhere(owner: ContactOwner) {
 }
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Move the owning party's `updatedAt`, in the same transaction as the change.
+ *
+ * A phone is not a detail hanging off a customer — it is how the customer is
+ * FOUND. Every party picker in the app searches the whole party list held in the
+ * browser, and that list refreshes by asking "what changed since?", which is a
+ * question about `Person.updatedAt` / `Company.updatedAt`. So a phone written
+ * without touching its owner is a correction that reaches nobody: the till goes
+ * on finding the old number and can never find the new one.
+ *
+ * `data: {}` is deliberate — Prisma stamps `@updatedAt` on any update, and there
+ * is nothing else here worth changing on the parent.
+ */
+async function touchOwner(tx: Tx, owner: ContactOwner): Promise<void> {
+    if (owner.personId !== undefined) {
+        await tx.person.update({ where: { id: owner.personId }, data: {} });
+    } else {
+        await tx.company.update({ where: { id: owner.companyId }, data: {} });
+    }
+}
 
 /** Within a Prisma transaction, clear any existing primaries for this owner
  *  then mark the chosen id primary. Pass `newPrimaryId = null` to just clear. */
@@ -145,7 +171,7 @@ export async function createPhone(owner: ContactOwner, input: ContactValueInput)
                 });
             }
 
-            return await tx.phone.create({
+            const created = await tx.phone.create({
                 data: {
                     phone: input.value,
                     personId: owner.personId ?? null,
@@ -155,6 +181,8 @@ export async function createPhone(owner: ContactOwner, input: ContactValueInput)
                     verifiedAt: input.verified === false ? null : new Date(),
                 },
             });
+            await touchOwner(tx, owner);
+            return created;
         });
     } catch (err) {
         if (isUniqueViolation(err, "phone")) {
@@ -178,7 +206,7 @@ export async function createEmail(owner: ContactOwner, input: ContactValueInput)
                 });
             }
 
-            return await tx.email.create({
+            const created = await tx.email.create({
                 data: {
                     email: input.value,
                     personId: owner.personId ?? null,
@@ -188,6 +216,8 @@ export async function createEmail(owner: ContactOwner, input: ContactValueInput)
                     verifiedAt: input.verified === false ? null : new Date(),
                 },
             });
+            await touchOwner(tx, owner);
+            return created;
         });
     } catch (err) {
         if (isUniqueViolation(err, "email")) {
@@ -199,35 +229,29 @@ export async function createEmail(owner: ContactOwner, input: ContactValueInput)
 
 export async function updatePhone(id: number, patch: Partial<ContactValueInput>) {
     try {
-        if (patch.isPrimary !== true) {
-            // Simple non-promotion patch.
-            return await prisma.phone.update({
-                where: { id },
-                data: {
-                    ...(patch.value !== undefined && { phone: patch.value }),
-                    ...(patch.label !== undefined && { label: patch.label ?? null }),
-                    ...(patch.isPrimary !== undefined && { isPrimary: patch.isPrimary }),
-                },
-            });
-        }
-        // Promotion: clear existing primary on the owner then mark this one.
+        // The owner is read up front for BOTH branches, not only the promotion:
+        // every edit here has to touch the parent, or the correction never
+        // reaches the party lists that search by this number. See `touchOwner`.
         const target = await prisma.phone.findUnique({
             where: { id }, select: { id: true, personId: true, companyId: true },
         });
         if (!target) throw new Error("Phone not found");
-        const owner: ContactOwner = target.personId != null
-            ? { personId: target.personId }
-            : { companyId: target.companyId! };
+        const owner = ownerOf(target);
 
         return await prisma.$transaction(async (tx) => {
-            await makePrimaryTx(tx, "phone", owner, id);
-            return await tx.phone.update({
+            // Promotion clears any existing primary on the owner first.
+            if (patch.isPrimary === true) await makePrimaryTx(tx, "phone", owner, id);
+            const updated = await tx.phone.update({
                 where: { id },
                 data: {
                     ...(patch.value !== undefined && { phone: patch.value }),
                     ...(patch.label !== undefined && { label: patch.label ?? null }),
+                    ...(patch.isPrimary !== undefined && patch.isPrimary !== true
+                        && { isPrimary: patch.isPrimary }),
                 },
             });
+            await touchOwner(tx, owner);
+            return updated;
         });
     } catch (err) {
         if (isUniqueViolation(err, "phone")) {
@@ -239,33 +263,25 @@ export async function updatePhone(id: number, patch: Partial<ContactValueInput>)
 
 export async function updateEmail(id: number, patch: Partial<ContactValueInput>) {
     try {
-        if (patch.isPrimary !== true) {
-            return await prisma.email.update({
-                where: { id },
-                data: {
-                    ...(patch.value !== undefined && { email: patch.value }),
-                    ...(patch.label !== undefined && { label: patch.label ?? null }),
-                    ...(patch.isPrimary !== undefined && { isPrimary: patch.isPrimary }),
-                },
-            });
-        }
         const target = await prisma.email.findUnique({
             where: { id }, select: { id: true, personId: true, companyId: true },
         });
         if (!target) throw new Error("Email not found");
-        const owner: ContactOwner = target.personId != null
-            ? { personId: target.personId }
-            : { companyId: target.companyId! };
+        const owner = ownerOf(target);
 
         return await prisma.$transaction(async (tx) => {
-            await makePrimaryTx(tx, "email", owner, id);
-            return await tx.email.update({
+            if (patch.isPrimary === true) await makePrimaryTx(tx, "email", owner, id);
+            const updated = await tx.email.update({
                 where: { id },
                 data: {
                     ...(patch.value !== undefined && { email: patch.value }),
                     ...(patch.label !== undefined && { label: patch.label ?? null }),
+                    ...(patch.isPrimary !== undefined && patch.isPrimary !== true
+                        && { isPrimary: patch.isPrimary }),
                 },
             });
+            await touchOwner(tx, owner);
+            return updated;
         });
     } catch (err) {
         if (isUniqueViolation(err, "email")) {
@@ -293,6 +309,7 @@ export async function deletePhone(id: number) {
         if (wasPrimary) {
             await maybePromoteNextAfterDelete(tx, "phone", owner);
         }
+        await touchOwner(tx, owner);
     });
 }
 
@@ -313,6 +330,7 @@ export async function deleteEmail(id: number) {
         if (wasPrimary) {
             await maybePromoteNextAfterDelete(tx, "email", owner);
         }
+        await touchOwner(tx, owner);
     });
 }
 
@@ -326,11 +344,21 @@ export async function setPrimaryEmail(id: number) {
     return await updateEmail(id, { isPrimary: true });
 }
 
-/** Stamp ownership proof on a contact (portal OTP, or staff confirming in person). */
+/** Stamp ownership proof on a contact (portal OTP, or staff confirming in person).
+ *  Verification decides whether a row may be primary, so it changes which number
+ *  a party row DISPLAYS — the owner moves with it. */
 export async function markPhoneVerified(id: number) {
-    return await prisma.phone.update({ where: { id }, data: { verifiedAt: new Date() } });
+    return await prisma.$transaction(async (tx) => {
+        const updated = await tx.phone.update({ where: { id }, data: { verifiedAt: new Date() } });
+        await touchOwner(tx, ownerOf(updated));
+        return updated;
+    });
 }
 
 export async function markEmailVerified(id: number) {
-    return await prisma.email.update({ where: { id }, data: { verifiedAt: new Date() } });
+    return await prisma.$transaction(async (tx) => {
+        const updated = await tx.email.update({ where: { id }, data: { verifiedAt: new Date() } });
+        await touchOwner(tx, ownerOf(updated));
+        return updated;
+    });
 }

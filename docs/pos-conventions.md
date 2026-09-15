@@ -98,8 +98,10 @@ by name. With several rows left, the second line leads with whatever actually
 separates them, so the next question to ask is obvious: locality when they live
 in different places, mobile when they don't.
 
-On the counter app the whole customer list is held in memory, so all of this
-answers without a round trip. The web keeps the narrower server search.
+The whole customer list is held in memory on every machine — the counter app and
+the web alike — so all of this answers without a round trip. That is also what
+makes it honest: ranking, and the typo/closeness tiers behind it, only mean
+something over the complete list. See `src/shared/lib/parties/partyCatalog.ts`.
 
 ### `Ctrl + Enter` — Checkout / save
 

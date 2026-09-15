@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { browseParties, cacheParties, type Party } from "@/shared/lib/parties";
-import type { PartyType } from "@/shared/lib/browser/localDb";
+import { browseParties, type Party, type PartyType } from "@/shared/lib/parties";
+import { usePartyList } from "@/shared/hooks/usePartySearch";
 import { BROWSE_PAGE_SIZE, type BrowseCursor } from "@/shared/lib/parties/browsePage";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import type { PartySort } from "@/modules/customer/lib/partySort";
@@ -14,25 +14,18 @@ import type { PartySort } from "@/modules/customer/lib/partySort";
  * browse pages — the same feature over two tables, so one hook drives both
  * rather than each page reinventing pagination and cache feed-back on its own.
  *
- * Every page this fetches — scrolled to or searched into — also tops up the
- * SAME cache the till and every voucher party picker read (`partyCatalog.ts`).
- * A customer found once while browsing here is then free to search for at the
- * till; that reuse is the point, not a side effect bolted on.
- *
  * Server-side pagination covers Name-ascending only (see `browsePage.ts` for
  * why). Any other sort — Name descending, Amount either way — asks for one
  * unbounded page and stops there, exactly like the pages did before this hook
  * existed; `loadMore` is simply inert in that case.
  *
- * It also paints from the cache while the first page is in flight, when the
- * caller supplies `cachePlaceholder` — see that option for the two deliberate
- * limits on when that happens, both of which come down to never showing a
- * partial list as if it were the whole one.
+ * It also paints from the party list held in memory (`partyCatalog.ts`) while
+ * the first page is in flight, when the caller supplies `cachePlaceholder` — see
+ * that option for the two deliberate limits on when that happens.
  */
 
 /** The subset of a browse row this hook needs — both `CustomerListItem` and
- *  `CompanyListItem` already carry it (the extra fields added purely to feed
- *  the cache — see /api/person and /api/companies). */
+ *  `CompanyListItem` already carry it (see /api/person and /api/companies). */
 export interface BrowseListRow {
     id: number;
     name: string;
@@ -51,26 +44,6 @@ export interface BrowseListRow {
     fromCache?: boolean;
 }
 
-function toParty(type: PartyType, r: BrowseListRow): Party {
-    return {
-        type,
-        id: r.id,
-        name: r.name,
-        address: r.address ?? null,
-        phones: r.phones?.map((p) => p.phone) ?? [],
-        emails: r.emails?.map((e) => e.email) ?? [],
-        accountId: r.account?.id ?? null,
-        accountGroup: r.accountGroup ?? null,
-        accountGroupType: r.accountGroupType ?? null,
-        aliases: r.aliases ?? [],
-        // Neither browse page fetches the linked-company LIST (only a count) —
-        // a party cached from here shows none until the till's own lookup fills
-        // it in, which only matters to a "bill this person's employer" picker,
-        // not to being found at all.
-        linkedCompanies: [],
-        cachedAt: 0,
-    };
-}
 
 interface BrowseResponse<T> {
     items: T[];
@@ -121,6 +94,7 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
     const genRef = useRef(0);
 
     const paginated = sort.key === "name" && sort.dir === "asc";
+    const { parties } = usePartyList();
 
     const fetchPage = useCallback((cursor: BrowseCursor | null) => {
         const gen = ++genRef.current;
@@ -140,12 +114,9 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
                 const data = Array.isArray(res.data) ? { items: res.data, nextCursor: null } : res.data;
                 cursorRef.current = data.nextCursor;
                 setItems((prev) => (cursor ? [...prev, ...data.items] : data.items));
-
-                const active = data.items.filter((r) => r.isActive);
-                if (active.length > 0) void cacheParties(active.map((r) => toParty(type, r)));
             })
             .catch(() => { if (genRef.current === gen) toast.error(errorMessage); });
-    }, [apiPath, search, hideCreditors, includeInactive, paginated, type, errorMessage]);
+    }, [apiPath, search, hideCreditors, includeInactive, paginated, errorMessage]);
 
     // Any filter, sort, or search change starts the list over from page one.
     useEffect(() => {
@@ -153,26 +124,22 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
         void fetchPage(null);
     }, [fetchPage]);
 
-    // Paint the regulars from the cache while that first page is in flight, so
-    // opening the panel is never a blank wait. Deliberately does NOT clear on
-    // cleanup: these rows are replaced wholesale the moment the live page lands,
-    // and blanking them first would put back the flicker this removes.
-    useEffect(() => {
-        if (!cachePlaceholder || search) return;
-        let cancelled = false;
-        void browseParties({
+    // Rows from the held party list, to show while the first page is in flight so
+    // opening the panel is never a blank wait. Derived, not state: what the server
+    // sent always wins, and there is nothing to keep in sync.
+    const placeholders = useMemo<T[]>(() => {
+        if (!cachePlaceholder || search) return [];
+        return browseParties(parties, {
             type,
             excludeAccountGroup: hideCreditors ? ACCOUNT_GROUPS.SUNDRY_CREDITORS : undefined,
             limit: BROWSE_PAGE_SIZE,
-        }).then((cached) => {
-            if (cancelled || cached.length === 0) return;
-            // Never over-paint rows already on screen — if the live page won the
-            // race, or this is a re-filter with the previous list still showing,
-            // the real data stands.
-            setItems((prev) => (prev.length > 0 ? prev : cached.map(cachePlaceholder)));
-        });
-        return () => { cancelled = true; };
-    }, [cachePlaceholder, search, type, hideCreditors]);
+        }).map(cachePlaceholder);
+    }, [cachePlaceholder, search, type, hideCreditors, parties]);
+
+    // Never over-paint rows already on screen — if the live page won the race, or
+    // this is a re-filter with the previous list still showing, the real data
+    // stands and the placeholders are simply not consulted.
+    const shown = items.length > 0 ? items : placeholders;
 
     const loadMore = useCallback(() => {
         if (!paginated || loadingMore || !cursorRef.current) return;
@@ -189,5 +156,5 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
         setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
     }, []);
 
-    return { items, loadingMore, loadMore, refresh, updateItem };
+    return { items: shown, loadingMore, loadMore, refresh, updateItem };
 }

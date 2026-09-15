@@ -116,6 +116,19 @@ export function normalisePartyQuery(query: string): string {
 /** Person and Company ids collide — the matcher needs one key per row. */
 const rowKey = (p: { type: string; id: number }) => `${p.type}:${p.id}`;
 
+/**
+ * How many rows a party search shows.
+ *
+ * A display cap, nothing more. It used to double as a completeness signal — a
+ * search that found this many stopped asking anywhere else, on the theory that a
+ * full page could only be repeated. It could not: the pool that produced those
+ * rows was smaller than the customer list, so a full page proved nothing except
+ * that the pool was too small. The search now ranks the whole list
+ * (`parties/partyCatalog`), which is the only thing that ever made a page of
+ * eight worth trusting.
+ */
+export const MAX_HITS = 8;
+
 export type PartyRow = PartySearchCandidate & {
     id: number;
     type: "customer" | "company";
@@ -139,7 +152,7 @@ export function searchPartyRows<T extends PartyRow>(
         ? parties.filter((p) => p.accountGroup === opts.group)
         : parties;
     return searchProducts(pool, normalisePartyQuery(query), {
-        rows: opts.rows ?? 8,
+        rows: opts.rows ?? MAX_HITS,
         fallback: opts.fallback ?? true,
         text: partySearchText,
         id: rowKey,

@@ -16,11 +16,6 @@
  *                       lifecycle (tiny, rarely edited, synced together in one
  *                       request) — four stores would be four of everything for
  *                       no gain.
- *   • `parties`       — customers and companies, keyed by [type+id]. One store
- *                       rather than two because every consumer searches them
- *                       together and shows one merged result list. NOT a full
- *                       replica, unlike `products`: only parties someone has
- *                       actually looked up are here (see `partyCatalog.ts`).
  *   • `tickets`       — every Ticket-flavoured row (repair, deal, help, admin
  *                       task — all the same `Ticket` model, one Dexie table),
  *                       real rows keyed by id and shared across every board's
@@ -40,6 +35,12 @@
  * Bump `version()` when a table's indexes change. Everything in here is
  * rebuildable from the server, so an upgrade may simply clear a table rather
  * than migrate it.
+ *
+ * Parties are NOT here. They live in their own database (`parties/partyCatalog`)
+ * because they are the one cache held on every machine, replica-served counter
+ * included — the search needs the whole list to be honest about what it found,
+ * which is a different bargain from everything below. Keeping them apart is what
+ * lets that rule and the one in the next paragraph both be true.
  *
  * OFF ENTIRELY ON A REPLICA-SERVED COUNTER. Every module here is a DELTA cache:
  * it keeps rows and next asks the server only for what changed since a
@@ -95,43 +96,6 @@ export type LocalMasterMeta = {
     counts: Record<MasterType, number>;
 };
 
-/** Person / Company discriminator, as every existing consumer already spells it. */
-export type PartyType = "customer" | "company";
-
-/** A party as `/api/person?lookup=…&full=1` shapes it — carries every field the
- *  live lookup can MATCH on, not just the ones it displays, so searching the
- *  cache finds the same rows the server would. */
-export type LocalPartyRow = {
-    type: PartyType;
-    id: number;
-    name: string;
-    address: string | null;
-    /** ALL phones, primary first — the live query matches any of them. */
-    phones: string[];
-    emails: string[];
-    accountId: number | null;
-    /** Ledger group name, e.g. "Sundry Debtors" — what party pickers narrow by. */
-    accountGroup: string | null;
-    /** The group's broader nature — ASSET / LIABILITY / INCOME / EXPENSE.
-     *  `accountGroup` narrows to one exact ledger group; this narrows to
-     *  everything of that NATURE, for a restriction not tied to one group name
-     *  (e.g. "no liability-side parties here", vs "no Sundry Creditors here"). */
-    accountGroupType: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null;
-    aliases: string[];
-    linkedCompanies: { id: number; name: string; accountId: number | null }[];
-    /** When this row was last taken from the server. The backstop that retires a
-     *  row no change signal ever reached us about — a hard delete leaves nothing
-     *  behind for a timestamp query to report. */
-    cachedAt: number;
-};
-
-/** Party cache state — a single row, `key: "parties"`. `checkedAt` is the server
- *  clock the next "what changed?" call asks from. */
-export type LocalPartyMeta = {
-    key: string;
-    checkedAt: string;
-};
-
 /** A ticket row exactly as `/api/tickets` shapes it (repair detail flattened). */
 export type LocalTicketRow = {
     id: number;
@@ -172,8 +136,6 @@ type LocalDb = Dexie & {
     /** Compound-keyed on [type+id], so it has no single `id` property key. */
     masters:      Dexie.Table<LocalMasterRow, [MasterType, number]>;
     masterMeta:   EntityTable<LocalMasterMeta, "key">;
-    parties:      Dexie.Table<LocalPartyRow, [PartyType, number]>;
-    partyMeta:    EntityTable<LocalPartyMeta, "key">;
     tickets:      EntityTable<LocalTicketRow, "id">;
     ticketViews:  EntityTable<LocalView<number>, "key">;
     dayBookViews: EntityTable<LocalDayBookView, "key">;
@@ -339,6 +301,13 @@ export function localDb(): LocalDb | null {
             await tx.table("parties").clear();
             await tx.table("partyMeta").clear();
         });
+
+    // v5 moved parties out of this database entirely, into their own
+    // (`parties/partyCatalog`): they are now a FULL list held on every machine —
+    // this one included — rather than a grow-on-search cache switched off on a
+    // till. Dropping the stores here is what stops the old partial rows being
+    // mistaken for the list.
+    db.version(5).stores({ parties: null, partyMeta: null });
 
     // The pre-Dexie database is dead weight the moment this one opens. Deleting
     // it is best-effort: it holds only rebuildable caches, so a failure here

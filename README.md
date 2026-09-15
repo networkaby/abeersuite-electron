@@ -55,7 +55,7 @@ The finance module under `(protected)/office/(tally)/tally/` (URLs **`/office/ac
 
 Vouchers under `/office/accountancy/`: sales, purchases, estimates, journal, inventory (receipt/issue/transfer/adjust). Reports: cash-book, bank-book, bank-reconciliation, cash-flow, fund-flow, ratio-analysis, statistics, receivables, payables (each with party-wise / bill-wise tabs, ageing-period toggles and a party search), GST hub (HSN summary, inward/outward supplies, liability).
 
-GST: `Customer` and `Company` carry `gstin`, `gstStateCode`, `gstRegType` (REGULAR/COMPOSITION/SEZ/UNREGISTERED), `financialYearFrom`, `booksBeginningFrom`. `InvProduct` carries `hsnCode`, `gstRate`, `taxability`. Vouchers use `PartyCombobox` (`src/modules/tally/components/PartyCombobox.tsx`) for searchable party selection with GST autofill.
+GST: `Customer` and `Company` carry `gstin`, `gstStateCode`, `gstRegType` (REGULAR/COMPOSITION/SEZ/UNREGISTERED), `financialYearFrom`, `booksBeginningFrom`. `InvProduct` carries `hsnCode`, `gstRate`, `taxability`. Vouchers use `PartySearchAndCreate` ([src/shared/components/PartySearchAndCreate.tsx](src/shared/components/PartySearchAndCreate.tsx)) for searchable party selection with GST autofill.
 
 Design intent: keep Tally familiarity (groups + ledgers) while preserving a clean relational model for reporting and automation.
 

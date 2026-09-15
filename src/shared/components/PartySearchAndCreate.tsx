@@ -3,7 +3,7 @@
 /**
  * Shared "search a party or create one" surface used by POS and the
  * QuickTicket dialog. Owns:
- *  - debounced /api/person?lookup= search with arrow-key / enter navigation
+ *  - in-memory search of the whole party list, with arrow-key / enter navigation
  *  - a hit dropdown with a "New customer: {q}" CTA
  *  - the create dialog (Person + optional Company with state / PIN / GSTIN,
  *    smart focus, address mirroring, Indian + intl phone / email / PIN validation)
@@ -40,9 +40,9 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
-import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
+import { usePartySearch, usePartyList, toPartyHit, type PartyHit } from "@/shared/hooks/usePartySearch";
 import { separatingField } from "@/shared/lib/parties/partySearch";
-import { invalidateParties } from "@/shared/lib/parties";
+import { browseParties, invalidateParties, MAX_HITS } from "@/shared/lib/parties";
 import { FieldError } from "@/shared/components/FieldError";
 
 export type PickedParty = {
@@ -182,13 +182,13 @@ export const PartySearchAndCreate = forwardRef<
     const [highlightedHit, setHighlightedHit] = useState(0);
     const [includeOther, setIncludeOther] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
-    const [browseHits, setBrowseHits] = useState<PartyHit[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Effective group filter — strict to `partyGroup` unless the user opted to
     // widen the search via the "Include Sundry <other> too" checkbox.
     const effectiveGroup = partyGroup && !includeOther ? partyGroup : undefined;
     const { hits, loading, guessIds } = usePartySearch(query, { enabled: !locked, group: effectiveGroup });
+    const { parties } = usePartyList();
     // Auto-create lands in the picker's `partyGroup` (or default Sundry Debtors).
     const createUnderGroup = partyGroup ?? undefined;
     const otherGroup: "Sundry Debtors" | "Sundry Creditors" | null =
@@ -196,23 +196,17 @@ export const PartySearchAndCreate = forwardRef<
         : partyGroup === "Sundry Creditors" ? "Sundry Debtors"
         : null;
 
-    // Browse-on-focus: fetch the full group list whenever the input is active
-    // and empty (initial focus, or after backspace/delete clears the field).
-    useEffect(() => {
-        if (!isFocused || query.trim() || locked || !partyGroup) {
-            setBrowseHits([]);
-            return;
-        }
-        let cancelled = false;
-        axios
-            .get<PartyHit[]>(`/api/person?lookup=&group=${encodeURIComponent(partyGroup)}`)
-            .then((r) => { if (!cancelled) setBrowseHits(r.data); })
-            .catch(() => {});
-        return () => { cancelled = true; };
-    }, [isFocused, query, locked, partyGroup]);
+    // Browse-on-focus: show the group's own list whenever the input is active and
+    // empty (initial focus, or after backspace/delete clears the field). Read
+    // straight from the held list — this used to ask `/api/person?lookup=` with
+    // an empty query, which ranked nothing and therefore answered `[]` every
+    // single time, so the feature never once worked.
+    const browseHits = useMemo<PartyHit[]>(() => {
+        if (!isFocused || query.trim() || locked || !partyGroup) return [];
+        return browseParties(parties, { group: partyGroup, limit: MAX_HITS }).map(toPartyHit);
+    }, [isFocused, query, locked, partyGroup, parties]);
 
-    // activeHits: use browse list when query is empty, search results otherwise.
-    // browseHits is cleared in the blur handler (with delay) so clicks complete first.
+    // activeHits: use the browse list when the query is empty, search hits otherwise.
     const activeHits = query.trim() ? hits : browseHits;
 
     // Flatten hits into the navigable list, expanding each person's linked
@@ -359,28 +353,29 @@ export const PartySearchAndCreate = forwardRef<
         });
     };
 
-    const openNewParty = async () => { await doOpenNewParty(); };
+    const openNewParty = () => { doOpenNewParty(); };
     // Keep ref in sync each render so the imperative handle's closure isn't stale.
-    openNewPartyRef.current = () => { void doOpenNewParty(); };
+    openNewPartyRef.current = () => { doOpenNewParty(); };
 
-    async function doOpenNewParty() {
+    function doOpenNewParty() {
         const q = query.trim();
         // Defensive re-check before opening: only auto-pick on an EXACT name
         // match. Prefix matches (e.g. "datamat" → "datamation465") must fall
         // through so the user can still create a similarly-named party.
+        //
+        // Read over the whole held list rather than the ranked hits: the dropdown
+        // shows eight rows, and the party whose name this exactly is may be the
+        // ninth. Missing it is how a duplicate party gets created.
         if (q.length >= 2) {
-            try {
-                const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
-                const { data } = await axios.get<PartyHit[]>(
-                    `/api/person?lookup=${encodeURIComponent(q)}${groupSuffix}`,
-                );
-                const qLower = q.toLowerCase();
-                const exact = data.find((d) => d.name.trim().toLowerCase() === qLower);
-                if (exact) {
-                    pickHit(exact);
-                    return;
-                }
-            } catch { /* fall through */ }
+            const qLower = q.toLowerCase();
+            const exact = parties.find((p) =>
+                p.name.trim().toLowerCase() === qLower
+                && (!effectiveGroup || p.accountGroup === effectiveGroup),
+            );
+            if (exact) {
+                pickHit(toPartyHit(exact));
+                return;
+            }
         }
         const phoneLike = isPhoneLike(q);
         setOpenedAsPhoneQuery(phoneLike);
@@ -623,7 +618,7 @@ export const PartySearchAndCreate = forwardRef<
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={onSearchKeyDown}
                     onFocus={() => setIsFocused(true)}
-                    onBlur={() => setTimeout(() => { setIsFocused(false); setBrowseHits([]); }, 150)}
+                    onBlur={() => setTimeout(() => setIsFocused(false), 150)}
                     placeholder={placeholder ?? "Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"}
                     className={`pl-9 ${locked ? "bg-muted/50 cursor-default" : ""}`}
                     readOnly={locked}

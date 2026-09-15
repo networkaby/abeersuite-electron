@@ -7,20 +7,19 @@ import { parseSince } from "@/shared/lib/prisma/counterMode";
 /**
  * GET /api/parties/catalog?sync=1[&since=<iso>&count=<n>]
  *
- * The whole customer list, for a counter to hold and search in memory.
+ * The whole customer list, for every machine to hold and search in memory.
  *
- * This is deliberately NOT what /api/person?lookup= does. That endpoint answers
- * one query at a time and is what the web and any unbridged machine keep using.
- * This one hands over the list so the till can run the full tiered match —
- * run-together splits, typos, letter-pair closeness — none of which can be
- * expressed as a SQL `contains`, and all of which the cashier needs while a
- * customer is standing there.
+ * This replaced a per-keystroke lookup endpoint, and the reason is the tiered
+ * match: run-together splits, typos, letter-pair closeness — none of which can
+ * be expressed as a SQL `contains`, and all of which the cashier needs while a
+ * customer is standing there. It also replaced the guessing that came with a
+ * partial pool: a search can only honestly say "nothing matched" over the whole
+ * list. See shared/lib/parties/partyCatalog for the client half.
  *
- * Only worth serving where reading it is free: on a counter every table below
- * is in the local replica (see prisma/sync-tables.json), so this is a local
- * Postgres read, not a bill from Supabase. The client gates itself on
- * `servedByReplica()`; this route stays honest either way by sending a delta
- * whenever it can.
+ * Cheap to serve on both sides of the wire. On a counter every table below is in
+ * the local replica (see prisma/sync-tables.json), so this is a local Postgres
+ * read and not a bill from Supabase; on the web it is one full read per browser,
+ * then deltas.
  *
  * Response, mirroring the product catalogue contract in
  * /api/inventory/products/lookup:
@@ -35,7 +34,17 @@ import { parseSince } from "@/shared/lib/prisma/counterMode";
 /** Beyond this a delta is not worth trusting — the client refetches in full. */
 const MAX_DELTA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
-const contacts = { orderBy: [{ isPrimary: "desc" as const }, { id: "asc" as const }] };
+// Primary first — every consumer shows `[0]` as the party's number. Only the
+// value is selected: this ships ~3,500 parties on a first load, so a column
+// nothing reads is a column not worth sending.
+const phoneSelect = {
+    select: { phone: true },
+    orderBy: [{ isPrimary: "desc" as const }, { id: "asc" as const }],
+};
+const emailSelect = {
+    select: { email: true },
+    orderBy: [{ isPrimary: "desc" as const }, { id: "asc" as const }],
+};
 const accountInclude = {
     account: {
         select: {
@@ -46,16 +55,27 @@ const accountInclude = {
     },
 };
 
-type PersonWhere = { updatedAt?: { gt: Date } };
+/**
+ * A delta asks one question: which parties moved since `since`?
+ *
+ * It is a question about `Person.updatedAt` / `Company.updatedAt` ONLY, which is
+ * why `contactWrite.touchOwner` bumps the owning party on every phone and email
+ * write. That is not a nicety: a phone is how a customer is FOUND, so a number
+ * corrected without moving its owner is a correction that reaches no search box
+ * anywhere. It also covers what nothing else can — a DELETED phone leaves no row
+ * behind for any timestamp to report, so the parent moving is the only signal
+ * there will ever be.
+ */
+type PartyWhere = { isActive?: boolean; updatedAt?: { gt: Date } };
 
-async function loadParties(where: PersonWhere & { isActive?: boolean }) {
+async function loadParties(where: PartyWhere) {
     const [persons, companies] = await Promise.all([
         prisma.person.findMany({
             where,
             include: {
                 ...accountInclude,
-                phones: contacts,
-                emails: contacts,
+                phones: phoneSelect,
+                emails: emailSelect,
                 companies: {
                     where: { unlinkedAt: null },
                     include: { company: { select: { id: true, name: true, account: { select: { id: true } } } } },
@@ -64,7 +84,7 @@ async function loadParties(where: PersonWhere & { isActive?: boolean }) {
         }),
         prisma.company.findMany({
             where,
-            include: { ...accountInclude, phones: contacts, emails: contacts },
+            include: { ...accountInclude, phones: phoneSelect, emails: emailSelect },
         }),
     ]);
 

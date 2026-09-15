@@ -1,303 +1,276 @@
 "use client";
 
 /**
- * Customers and companies this counter has actually dealt with, kept to hand.
+ * The whole party list — held in memory, searched there, kept current by delta.
  *
- * A sale searches for products ten times and for the customer once, so the two
- * caches are built to different shapes. The product catalogue is a full replica
- * — every product, synced whole, because any of them can be scanned next. Parties
- * are the opposite: a shop has thousands of customers and bills the same tenth of
- * them over and over. Holding all of them to serve the regulars means paying for
- * the whole customer table, repeatedly, to answer questions about a fraction of
- * it.
+ * WHY THE WHOLE LIST. A cashier does not run a query. They half-remember
+ * something — a piece of the name, the locality — and they ask for the mobile.
+ * Answering that needs the tiered match: splitting "medhidura" into a name and a
+ * locality, forgiving a typo, ranking a word-start above a mid-word. None of it
+ * can be expressed as a SQL `contains`, so none of it survives a per-keystroke
+ * endpoint. Holding the list is what buys it.
  *
- * NOTE, since the file below argues the opposite: this is the WEB and unbridged
- * story. On a replica-served counter the whole list is held instead — see
- * `partyFullCatalog.ts`. The premise here is that paying for the customer table
- * is expensive, and on a counter it simply isn't: Person, Company, Phone, Email,
- * Account, AccountAlias and PersonCompany are all in the local replica, so
- * reading every one of them is a local Postgres query. Holding them there buys
- * the tiered match — splitting "medhidura" into a name and a locality, forgiving
- * a typo — which no per-query SQL endpoint can offer at all. Everything below
- * still governs every machine that is NOT a counter.
+ * It is also the only shape that cannot lie. Ranking is honest only over a
+ * COMPLETE pool: there "nothing matched" is a fact about the whole list and a
+ * guess is a real suggestion, where over a partial pool both are artefacts. The
+ * two ways this was done before each ranked something smaller than the list, and
+ * each hid real customers — a browser cache grown only from past searches, which
+ * padded a miss with letter-pair guesses and then treated its own eight rows as a
+ * full page and never asked the server; and a server lookup that cut to the eight
+ * NEWEST matches before it ranked, so an older customer could never be ranked
+ * back in. Both are gone.
  *
- * So this cache is GROWN, NOT SYNCED. It starts empty. Every party in it got
- * there because someone typed a name and the live lookup went and found them —
- * a request that had to happen anyway. From then on that customer is answered
- * from memory: no request, no database read, an answer before the next keystroke.
- * The regulars settle in by themselves, and a customer who came once and never
- * returned simply ages out.
+ * ONE PATH, BOTH MACHINES. The list comes from `/api/parties/catalog?sync=1`,
+ * which on the web reads the live database and on a counter reads that machine's
+ * own PostgreSQL replica — same code, same request, and on a counter no Supabase
+ * bill at all, since every table it touches is in prisma/sync-tables.json.
+ * ~3,500 parties: about a megabyte once, then deltas.
  *
- * Staying current is the same trade. A change signal says only "parties moved";
- * `refreshFromChanges` asks which ids, and DROPS the ones it is holding rather
- * than re-fetching them. A dropped regular costs one ordinary lookup the next
- * time they walk in — which is what it would have cost with no cache at all —
- * and ids for customers we have never seen are ignored, so a busy branch across
- * town cannot fill this machine's cache with people it will never bill.
+ * ITS OWN DEXIE DATABASE, on purpose. `browser/localDb` deliberately throws its
+ * cache away on a replica-served till — right for a delta cache whose remembered
+ * stamps fight the replica's clock, and four other caches depend on it. This list
+ * wants the opposite: it is held EVERYWHERE, because holding it is what makes the
+ * search work rather than what makes it faster. A separate database is what lets
+ * both rules be true at once without either module knowing about the other.
  *
- * All trusted machines (any that can log in) cache parties locally. The login
- * gate (auth:login:outside-counter) ensures only authorised machines reach this
- * code.
- *
- * Matching is not done here any more: `searchPartyRows` does it, and /api/person
- * now runs the very same function over its own rows, so a regular answered from
- * this cache ranks identically to the way that customer ranks anywhere else.
- * Keeping two hand-written matchers in step was the old contract and it was
- * always one edit away from breaking.
- *
- * Cached rows are still fetched with `full=1`, and that part IS a contract: the
- * live lookup DISPLAYS a primary phone but MATCHES on every phone, plus aliases
- * and account group, and a row cached without those would quietly stop finding
- * customers the server finds.
+ * STAYING CURRENT. `since` asks only for what moved. A party that was deactivated
+ * or hard-deleted comes back in `removedKeys`, and `count` is the backstop for a
+ * delete no timestamp could report — when the merged total disagrees, the whole
+ * list is refetched rather than trusted. All of which rests on Person/Company
+ * `updatedAt` moving whenever anything the row is FOUND BY changes, phone numbers
+ * included: see `contactWrite.ts`, which bumps the parent for exactly this reason.
  */
 
+import Dexie, { type EntityTable } from "dexie";
 import axios from "axios";
-import { localDb, type LocalPartyRow, type PartyType } from "@/shared/lib/browser/localDb";
-import { searchPartyRows } from "@/shared/lib/parties/partySearch";
+import { create } from "zustand";
 
-const CHANGED_API = "/api/parties/changed";
+/** Person / Company discriminator, as every consumer already spells it. */
+export type PartyType = "customer" | "company";
+
+/**
+ * A party as the catalogue ships it — every field the search can MATCH on, not
+ * only the ones a row displays. A list carrying just the primary phone would
+ * quietly stop finding customers who answer on their second one.
+ */
+export type Party = {
+    type: PartyType;
+    id: number;
+    name: string;
+    address: string | null;
+    /** ALL phones, primary first. */
+    phones: string[];
+    emails: string[];
+    accountId: number | null;
+    /** Ledger group name, e.g. "Sundry Debtors" — what party pickers narrow by. */
+    accountGroup: string | null;
+    /** The group's broader nature — for a restriction not tied to one group name
+     *  ("no liability-side parties here", vs "no Sundry Creditors here"). */
+    accountGroupType: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null;
+    aliases: string[];
+    linkedCompanies: { id: number; name: string; accountId: number | null }[];
+};
+
+type PartyMeta = { key: string; checkedAt: string };
+
+type PartyDb = Dexie & {
+    parties: Dexie.Table<Party, [PartyType, number]>;
+    partyMeta: EntityTable<PartyMeta, "key">;
+};
+
+const DB_NAME = "abeer-parties";
 const META_KEY = "parties";
 
-/**
- * How long a cached party is trusted without being seen again.
- *
- * The backstop for what a change signal cannot report: a hard-deleted party
- * leaves no row for a timestamp query to find, and a machine that was off misses
- * signals entirely. Expiry costs one ordinary lookup for a regular once a week —
- * and it is why the cache tracks the customers still coming in rather than every
- * customer who ever came. Paired with `MAX_GAP_MS` in /api/parties/changed.
- */
-const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Past this the held list is not trusted at all, whatever a delta would say —
+ *  the backstop for a machine that was off while the shop carried on. */
+const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** The live endpoint's cap; kept identical so result lists match. Exported so
- *  the search hook can tell a FULL local page from a partial one — a page this
- *  size cannot be topped up by asking live, since the server caps there too. */
-export const MAX_HITS = 8;
+const URL = "/api/parties/catalog?sync=1";
 
-export type Party = LocalPartyRow;
+type SyncResponse =
+    | { mode: "full"; parties: Party[]; computedAt: string; count: number }
+    | { mode: "delta"; changed: Party[]; removedKeys: string[]; computedAt: string; count: number };
 
-/** `[type+id]`, the compound key, as one string — a Map needs a scalar. */
 const keyOf = (type: PartyType, id: number) => `${type}:${id}`;
 
-/**
- * The searchable copy. IndexedDB survives the tab; this survives the keystroke.
- *
- * Reading the store per search was a transaction and a full deserialise on every
- * debounce tick, which is most of what the cache was meant to avoid — the rows
- * are already few (the regulars, not the customer list), so they are held whole
- * and filtered in place.
- */
-let mem: Map<string, Party> | null = null;
+let db: PartyDb | null = null;
 
-/** Empty the stored copy. Says nothing about `mem` — every caller decides for
- *  itself whether it is starting over or shutting down. */
-async function wipe(): Promise<void> {
-    const db = localDb();
-    if (!db) return;
-    await db.transaction("rw", db.parties, db.partyMeta, async () => {
-        await db.parties.clear();
-        await db.partyMeta.delete(META_KEY);
+/** Lazily opened — never at module load, so SSR and a browser with IndexedDB
+ *  switched off never touch it. Null there, and the list simply lives in memory
+ *  for the life of the tab and is fetched again on the next load. */
+function partyDb(): PartyDb | null {
+    if (typeof indexedDB === "undefined") return null;
+    if (db) return db;
+    db = new Dexie(DB_NAME) as PartyDb;
+    db.version(1).stores({
+        // `name` and `accountId` indexed for resolving a picked ledger back to
+        // its party; phones and aliases are arrays, scanned in memory.
+        parties: "[type+id], type, name, accountId",
+        partyMeta: "key",
     });
+    return db;
 }
 
-/**
- * Load what is on disk into memory, dropping anything past its life.
- *
- * Returns false when IndexedDB is unavailable — the caller then stays on live
- * search and caches nothing.
- */
-async function open(): Promise<boolean> {
-    const db = localDb();
-    if (!db) return false;
+// ── The shared store ──────────────────────────────────────────────────────────
+//
+// One list per tab, however many pickers are mounted. `ready` is false only while
+// the very first load is still in flight; after that the list is always
+// answerable, even offline, from what is held.
 
-    const cutoff = Date.now() - CACHE_MAX_AGE_MS;
-    const rows = await db.parties.toArray();
-    const stale = rows.filter((p) => p.cachedAt < cutoff);
-    const live = rows.filter((p) => p.cachedAt >= cutoff);
+type Store = { parties: Party[]; ready: boolean; set: (parties: Party[]) => void };
 
-    if (stale.length > 0) {
-        await db.parties.bulkDelete(stale.map((p) => [p.type, p.id] as [PartyType, number]));
+const useStore = create<Store>((set) => ({
+    parties: [],
+    ready: false,
+    set: (parties) => set({ parties, ready: true }),
+}));
+
+/** Subscribe a component to the list. Used by the hooks that bind to it. */
+export const usePartyStore = useStore;
+
+/** The list right now, without subscribing — for callers outside React. */
+export function partyList(): Party[] {
+    return useStore.getState().parties;
+}
+
+function publish(parties: Party[]): Party[] {
+    useStore.getState().set(parties);
+    return parties;
+}
+
+async function readMeta(): Promise<string | null> {
+    const database = partyDb();
+    if (!database) return null;
+    const meta = await database.partyMeta.get(META_KEY);
+    if (!meta?.checkedAt) return null;
+    if (Date.now() - new Date(meta.checkedAt).getTime() > MAX_AGE_MS) return null;
+    return meta.checkedAt;
+}
+
+async function replaceAll(parties: Party[], computedAt: string): Promise<Party[]> {
+    const database = partyDb();
+    if (database) {
+        await database.transaction("rw", database.parties, database.partyMeta, async () => {
+            await database.parties.clear();
+            await database.parties.bulkPut(parties);
+            await database.partyMeta.put({ key: META_KEY, checkedAt: computedAt });
+        });
     }
-
-    mem = new Map(live.map((p) => [keyOf(p.type, p.id), p]));
-    return true;
+    return publish(parties);
 }
 
 /**
- * Open once per page load, however many pickers ask.
+ * Bring the list up to date and publish it.
  *
- * Every party picker, the till and Quick Ticket all want the cache warm, and
- * they mount independently — without this, opening a voucher form with three
- * pickers on it would read the store three times. The promise is memoised for
- * the life of the page so the store is opened once.
- */
-let ready: Promise<boolean> | null = null;
-
-export function ensurePartiesReady(): Promise<boolean> {
-    ready ??= open();
-    return ready;
-}
-
-/**
- * Take parties the live lookup just returned into the cache.
+ * Held rows are painted FIRST, before the request — so a reload shows a working
+ * search box immediately and the delta lands under it a moment later. A delta
+ * merges BY KEY and drops what was removed: a replace, never arithmetic on a
+ * previous value, so a row cannot drift out of step with the database.
  *
- * Called with whatever the server answered, hits the caller is showing anyway —
- * so the row is free, and the NEXT search for that customer costs nothing. Rows
- * must come from `full=1`, or they will lack the fields local matching needs.
+ * Never throws. Offline, what is held stands — a slightly stale list still bills,
+ * and a blank search box does not.
  */
-export async function cacheParties(rows: Party[]): Promise<void> {
-    if (!(await ensurePartiesReady()) || rows.length === 0) return;
-    const db = localDb();
-    if (!db || !mem) return;
+async function sync(): Promise<Party[]> {
+    const database = partyDb();
+    const held = database ? await database.parties.toArray() : [];
+    const since = held.length > 0 ? await readMeta() : null;
+    if (held.length > 0) publish(held);
 
-    const cachedAt = Date.now();
-    const stamped = rows.map((p) => ({ ...p, cachedAt }));
-    for (const p of stamped) mem.set(keyOf(p.type, p.id), p);
-    await db.parties.bulkPut(stamped);
-}
-
-/**
- * Forget the parties named by a change signal, keep the rest.
- *
- * Ids for parties this machine never cached are ignored — that is the whole
- * point: the cache tracks who bills here, not what changed everywhere.
- */
-export async function forgetParties(
-    changed: { customers: number[]; companies: number[] },
-): Promise<void> {
-    if (!mem) return;
-    const db = localDb();
-    if (!db) return;
-
-    const held: [PartyType, number][] = [];
-    const drop = (type: PartyType, ids: number[]) => {
-        for (const id of ids) {
-            const key = keyOf(type, id);
-            if (!mem!.has(key)) continue;
-            mem!.delete(key);
-            held.push([type, id]);
-        }
-    };
-    drop("customer", changed.customers);
-    drop("company", changed.companies);
-
-    if (held.length > 0) await db.parties.bulkDelete(held);
-}
-
-type ChangedResponse =
-    | { mode: "reset"; checkedAt: string }
-    | { mode: "ids"; checkedAt: string; customers: number[]; companies: number[] };
-
-/**
- * Act on a "parties moved" signal: ask which ones, drop the ones we hold.
- *
- * Deduped, because every mounted picker hears the same signal and there is one
- * cache between them. A failure leaves `checkedAt` alone, so the next call asks
- * from the same point and nothing is missed.
- */
-let checking: Promise<void> | null = null;
-
-export function refreshFromChanges(): Promise<void> {
-    checking ??= check().finally(() => { checking = null; });
-    return checking;
-}
-
-async function check(): Promise<void> {
-    if (!(await ensurePartiesReady())) return;
-    const db = localDb();
-    if (!db || !mem) return;
-
-    // Nothing held yet: there is nothing a change could invalidate, and the next
-    // lookup will fetch fresh rows anyway. Still move the clock forward, or the
-    // first real check would ask about a window we already know we ignored.
-    const meta = await db.partyMeta.get(META_KEY);
-    const since = meta?.checkedAt;
-
-    let res: ChangedResponse | null;
+    let res: SyncResponse;
     try {
-        res = (await axios.get<ChangedResponse>(CHANGED_API, { params: since ? { since } : {} })).data;
+        res = (await axios.get<SyncResponse>(URL + (since ? `&since=${encodeURIComponent(since)}` : ""))).data;
     } catch {
-        // Offline. A slightly stale regular still bills, and the same question
-        // gets asked again on the next signal.
-        return;
+        // `ready` flips either way: an empty list with no server is still a
+        // settled answer, not a spinner that never ends.
+        return publish(held);
     }
 
-    if (res.mode === "reset") {
-        // Start collecting again from nothing, but keep the clock — otherwise the
-        // next call would ask about a window we have already thrown away.
-        await wipe();
-        mem = new Map();
-        await db.partyMeta.put({ key: META_KEY, checkedAt: res.checkedAt });
-        return;
+    if (res.mode === "full") return await replaceAll(res.parties, res.computedAt);
+
+    const byKey = new Map(held.map((p) => [keyOf(p.type, p.id), p]));
+    for (const k of res.removedKeys) byKey.delete(k);
+    for (const row of res.changed) byKey.set(keyOf(row.type, row.id), row);
+    const merged = [...byKey.values()];
+
+    // The count is the only thing that can report a hard delete, which leaves no
+    // row behind for a timestamp query to find. Disagreement means something moved
+    // that no delta could describe, so start over rather than trust it.
+    if (merged.length !== res.count) {
+        const full = (await axios.get<SyncResponse>(URL)).data;
+        return full.mode === "full" ? await replaceAll(full.parties, full.computedAt) : publish(merged);
     }
 
-    await forgetParties(res);
-    await db.partyMeta.put({ key: META_KEY, checkedAt: res.checkedAt });
+    if (database) {
+        await database.transaction("rw", database.parties, database.partyMeta, async () => {
+            if (res.removedKeys.length > 0) {
+                await database.parties.bulkDelete(
+                    res.removedKeys.map((k) => {
+                        const [type, id] = k.split(":");
+                        return [type, Number(id)] as [PartyType, number];
+                    }),
+                );
+            }
+            await database.parties.bulkPut(res.changed);
+            await database.partyMeta.put({ key: META_KEY, checkedAt: res.computedAt });
+        });
+    }
+    return publish(merged);
+}
+
+let inFlight: Promise<Party[]> | null = null;
+
+/**
+ * Load or refresh the list, shared between every caller.
+ *
+ * Deduped: every mounted picker asks on mount, and a voucher form with three of
+ * them on it must not make three requests.
+ */
+export function loadPartyList(): Promise<Party[]> {
+    inFlight ??= sync()
+        // Never rejects. Every caller fires this and walks away (`void`), so a
+        // rejection would be an unhandled one — and worse, `ready` would stay
+        // false and the box would spin for the rest of the shift. Whatever is
+        // held is published instead, which settles the list and is the honest
+        // answer: this is what we know.
+        .catch(() => publish(partyList()))
+        .finally(() => { inFlight = null; });
+    return inFlight;
+}
+
+/** Startup warm-up: fill the list before anyone types. Never throws. */
+export function warmPartyList(): void {
+    void loadPartyList();
 }
 
 /**
- * Search the cache.
+ * Re-read the list now — after creating or editing a party, so the next search
+ * cannot be answered with the row as it was.
  *
- * Returns null when this machine holds no cache at all — the caller must treat
- * that as "go to the live endpoint", NOT as "no matches".
- *
- * An EMPTY ARRAY is also not an answer. Unlike a replica, this cache is partial
- * by design: finding nothing means "not one of our regulars", which is exactly
- * when the server has to be asked. Only a non-empty result stands on its own —
- * and even then it may be short a customer the server would have found, which is
- * the accepted price of not holding the whole table. A partial first list that
- * arrives instantly, completed by the live answer, beats a blank box that waits.
+ * A refresh, not a wipe. The delta is one small request and the box keeps working
+ * throughout; emptying it first would blank the search for a round trip, on the
+ * one screen where someone has just proved they are mid-task.
  */
-export async function searchParties(
-    term: string,
-    opts: { group?: string; wide?: boolean } = {},
-): Promise<Party[] | null> {
-    if (!(await ensurePartiesReady()) || !mem) return null;
-
-    if (!term.trim()) return [];
-
-    // The same matcher the counter runs over the whole list and the server now
-    // runs over its own rows, so a regular answered from here ranks exactly the
-    // way that customer would rank anywhere else. It replaced a strict
-    // every-token-must-match filter ordered by newest id, which put whoever
-    // registered most recently on top rather than whoever matched best.
-    return searchPartyRows([...mem.values()], term, { group: opts.group, rows: MAX_HITS }).rows;
+export function invalidateParties(): Promise<Party[]> {
+    return loadPartyList();
 }
 
 /**
- * The cache's answer to "what's on the list", not "who matches this text" —
- * what a directory panel (Contacts, Companies) paints BEFORE its own live page
- * arrives, so opening the list is never a blank wait.
+ * The list's answer to "what is on the list", not "who matches this text" — what
+ * a directory panel paints before its own live page arrives, and what a party box
+ * shows on focus before anything is typed.
  *
- * Name-sorted only: it is the one order the cache and the server agree on
- * without disagreement risk (both alphabetise plainly), and it is this list's
- * default view. A caller sorting by ledger balance has nothing to gain here —
- * the cache carries no balance, on purpose (never guess a number that funds a
- * decision) — and should skip straight to its live fetch instead.
- *
- * Always an array, never null: unlike `searchParties`, an empty result is a
- * genuine, resolvable answer here ("nothing cached yet") rather than a signal
- * to fall back to anything — the live page is coming either way.
+ * Name-sorted: the one order this and the server agree on without disagreement
+ * risk, and the default view of every list that asks.
  */
-export async function browseParties(
-    opts: { type: PartyType; excludeAccountGroup?: string; limit: number },
-): Promise<Party[]> {
-    if (!(await ensurePartiesReady()) || !mem) return [];
-
-    const hits = [...mem.values()].filter((p) =>
-        p.type === opts.type
+export function browseParties(
+    parties: readonly Party[],
+    opts: { type?: PartyType; group?: string; excludeAccountGroup?: string; limit: number },
+): Party[] {
+    const hits = parties.filter((p) =>
+        (!opts.type || p.type === opts.type)
+        && (!opts.group || p.accountGroup === opts.group)
         && (!opts.excludeAccountGroup || p.accountGroup !== opts.excludeAccountGroup),
     );
     hits.sort((a, b) => a.name.localeCompare(b.name));
     return hits.slice(0, opts.limit);
-}
-
-/** Drop the whole cache — call after creating or editing a party, so the next
- *  search cannot be answered with the row as it was. */
-export async function invalidateParties(): Promise<void> {
-    // Nothing kept here means nothing to drop, and `mem` must stay null so
-    // searches keep going live rather than reading an empty cache as an answer.
-    if (!(await ensurePartiesReady())) return;
-    await wipe();
-    mem = new Map();
 }

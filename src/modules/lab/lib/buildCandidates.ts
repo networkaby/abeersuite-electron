@@ -1,7 +1,7 @@
 /**
  * buildCandidates — Progressive customer identification scoring.
  *
- * Takes a list of people matches (from /api/person?lookup=), a list of
+ * Takes a list of people matches (from the held party list), a list of
  * pre-loaded tickets (from /api/tickets), and the user's space-separated
  * query terms. Returns a deduplicated, scored list of customer candidates
  * where each candidate carries an *evidence trail* of what made them

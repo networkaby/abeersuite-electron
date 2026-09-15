@@ -20,10 +20,10 @@ import type { MissedMode } from "@/shared/lib/calls";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
+import { usePartySearch } from "@/shared/hooks/usePartySearch";
 
 // ── Wire type (mirrors GET /api/calls) ──────────────────────────────────────────
 type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
-interface PartyHit { id: number; name: string; phone: string | null; type: "customer" | "company" }
 interface CallGuess { kind: "person" | "company"; id: number; name: string; phone: string }
 interface CallItem {
     id: number;
@@ -129,7 +129,6 @@ export default function CallLogWorkspace() {
     // "Not in the list" — find any customer by name or number. A wrong CLI
     // shares nothing with the real number, so no shortlist can reach it.
     const [guessSearch, setGuessSearch] = useState("");
-    const [guessHits, setGuessHits] = useState<PartyHit[]>([]);
     const [noteSaving, setNoteSaving] = useState(false);
 
     const buildParams = (targetPage: number) => {
@@ -212,18 +211,14 @@ export default function CallLogWorkspace() {
         }
     };
 
-    // Customer lookup inside the "Who called?" dialog. Debounced, and the same
-    // endpoint the party pickers use, so staff search the way they always do.
-    useEffect(() => {
-        const q = guessSearch.trim();
-        if (guessFor === null || q.length < 2) { setGuessHits([]); return; }
-        const t = setTimeout(() => {
-            axios.get<PartyHit[]>(`/api/person?lookup=${encodeURIComponent(q)}&wide=1`)
-                .then(({ data }) => setGuessHits(data.filter((r) => phoneMatchKey(r.phone))))
-                .catch(() => setGuessHits([]));
-        }, 300);
-        return () => clearTimeout(t);
-    }, [guessSearch, guessFor]);
+    // Customer lookup inside the "Who called?" dialog — the same held party list
+    // and the same matcher every party picker uses, so staff search the way they
+    // always do. Only parties with a usable number can answer "who called?".
+    const { hits: guessMatches } = usePartySearch(
+        guessSearch,
+        { enabled: guessFor !== null && guessSearch.trim().length >= 2 },
+    );
+    const guessHits = guessMatches.filter((r) => phoneMatchKey(r.phone));
 
     /** Answer "who called?" on a broken capture — writes the full number staff gave. */
     const confirmGuess = async () => {

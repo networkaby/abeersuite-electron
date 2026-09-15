@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { partyCatalogEnabled, syncPartyList } from "@/shared/lib/parties/partyFullCatalog";
+import { warmPartyList } from "@/shared/lib/parties/partyCatalog";
 
 /**
- * Loads the customer list into memory at app start on a replica-served counter,
- * so the first `F2` of the day answers from memory instead of waiting on a
- * round trip while a customer stands at the till.
+ * Loads the customer list at app start, so the first F2 of the day answers from
+ * memory instead of waiting on a round trip while a customer stands at the till.
  *
- * A no-op everywhere else — see partyFullCatalog for why holding the whole list
- * is the right trade on a counter and the wrong one in a browser.
+ * Runs everywhere. On a counter the list comes from that machine's own replica;
+ * on the web it is one request, then deltas. Either way the search box needs the
+ * whole list to be honest about what it found — see `parties/partyCatalog`.
  */
 export default function PartiesWarmup() {
-    useEffect(() => {
-        if (partyCatalogEnabled()) void syncPartyList();
-    }, []);
+    useEffect(() => { warmPartyList(); }, []);
     return null;
 }

@@ -150,7 +150,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
  * Universal helper search — persistent Google-style list, not a dropdown.
  *
  * Three parallel result streams:
- *   1. Customer name / phone  (debounced /api/person?lookup=)
+ *   1. Customer name / phone  (the held party list, matched in memory)
  *   2. Device & repairs        (client-side filter on /api/tickets loaded once)
  *   3. Products                (client-side filter on /api/inventory/products/lookup)
  *
@@ -167,10 +167,12 @@ export default function UniversalHelperSearch() {
     const inputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState("");
 
-    // ── Data: customers (debounced) ───────────────────────────────────────
-    // `wide` so a query like "rosy delhi" can pair a name token (rosy) with an
-    // address token (delhi) — see buildCandidates for the per-term scoring.
-    const { hits: peopleHits, loading: peopleLoading } = usePartySearch(query, { wide: true });
+    // ── Data: customers ───────────────────────────────────────────────────
+    // Every field is searched, so a query like "rosy delhi" pairs a name token
+    // (rosy) with an address token (delhi) — see buildCandidates for the
+    // per-term scoring. This used to need an opt-in `wide` flag; the matcher
+    // reads the whole row now, so there is nothing left to opt into.
+    const { hits: peopleHits, loading: peopleLoading } = usePartySearch(query);
 
     // ── Data: products — shared IndexedDB-backed catalogue, filtered in memory ─
     const { products, loading: productsLoading } = useProductCatalog<Product>();
