@@ -18,7 +18,7 @@ Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) an
   - Repo 1 is what the tills update from (`GITHUB_DOWNLOAD_UPDATE_REPO` → `electron/updateManager.ts`). Publishing there reaches real counters.
   - Repo 2 is the test channel. Counters never poll it, and `allowPrerelease` is off, so a test build cannot reach a till by accident.
   - A test build still comes off `main` like any other — the `main`-only rule above is not relaxed for it.
-- **Never** tag by hand, push a tag on its own, draft a release or upload a binary in the GitHub web UI, run `scripts/release-electron.ts` directly (it bypasses the `verify:package` gate), publish to one release repo and leave another behind **when the version has no `-`**, or reuse last version's notes.
+- **Never** tag by hand, push a tag on its own, draft a release or upload a binary in the GitHub web UI, run `scripts/release-electron.ts` directly (it bypasses the `verify:package` gate — the `publish` skill is the one exception, and only because the owner's own `pnpm electron:dist` already ran that gate), publish to one release repo and leave another behind **when the version has no `-`**, or reuse last version's notes.
 
 ## Preflight
 
@@ -170,6 +170,7 @@ Handing a step back is **not** stopping the release: do everything either side o
 
 ## Related files
 
+- `.claude/skills/publish/SKILL.md` — the sibling runbook for a build the owner already made and tested: no merge, no bump, no build, any commit. The notes rules in step 3 are shared, and it points here for them.
 - `AGENTS.md` §8 — the release clause the owner holds you to.
 - `docs/commands.md` §0 — the full convention; §9 — the update tiers.
 - `scripts/release-electron.ts` — tagging, notes assembly, multi-repo publish, `RELEASE_ONLY_REPO`.

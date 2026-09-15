@@ -52,6 +52,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import { readPackagedVersion } from "./packagedVersion";
 import {
     counterEnvAllowedFor,
     COUNTER_ENV_FILE,
@@ -571,6 +572,37 @@ function checkReplicaPayload(packageDir: string, failures: string[]): void {
     }
 }
 
+/**
+ * Check A6: the version inside the pack is the version we think we are shipping.
+ *
+ * `app.getVersion()` reads the generated package.json inside `app.asar`, stamped at pack time.
+ * Bumping the repo's version AFTER packing renames the installer and rewrites `latest.yml`, but
+ * leaves that stamp alone — so `latest.yml` offers 1.3.8, the counter installs it, the app still
+ * reports 1.3.7, and the updater offers 1.3.8 again. An update loop on every till, and one that
+ * only shows up after the release is public.
+ *
+ * Re-stamping is cheap: `pnpm exec electron-builder && pnpm verify:package` rebuilds the asar and
+ * the installer from the same inputs, so a tested build stays tested — only the number changes.
+ */
+function checkPackagedVersion(packageDir: string, expected: string, failures: string[]): void {
+    const packed = readPackagedVersion(packageDir);
+    if (packed === null) {
+        failures.push(
+            "could not read the version out of resources/app.asar — the archive is missing or its " +
+            "header could not be parsed, so there is no way to tell what this package calls itself"
+        );
+        return;
+    }
+    if (packed !== expected) {
+        failures.push(
+            `packaged version is ${packed} but package.json says ${expected} — the pack predates the ` +
+            "bump. Publishing it would make every counter install a version that still reports the old " +
+            "number, and be offered the same update forever. Re-stamp with " +
+            "`pnpm exec electron-builder && pnpm verify:package` (no rebuild, same tested code)"
+        );
+    }
+}
+
 function main(): void {
     const rootDir = process.cwd();
     const packageDir = path.resolve(rootDir, process.argv[2] || path.join("dist-app", "win-unpacked"));
@@ -618,6 +650,9 @@ function main(): void {
 
     // ── Check A5: the local replica actually shipped ─────────────────────────
     checkReplicaPayload(packageDir, failures);
+
+    // ── Check A6: the pack carries the version we are about to publish ──────
+    checkPackagedVersion(packageDir, JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf-8")).version, failures);
 
     // ── Check B1: no .env files on disk ──────────────────────────────────────
     for (const file of allFiles) {

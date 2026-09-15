@@ -198,8 +198,26 @@ try {
         console.log(`[release-electron] Git tag ${tagName} already exists locally.`);
     }
 
-    console.log(`[release-electron] Pushing HEAD and tag ${tagName} to origin...`);
-    execSync(`git push origin HEAD --tags`, { stdio: "inherit" });
+    // `git push origin HEAD` needs a branch: with a detached HEAD git cannot work out which
+    // remote branch is meant and refuses ("You are not currently on a branch"). That threw from
+    // inside this try, so the catch below exited 1 and NOTHING was ever published — a local tag
+    // and no GitHub release. `publish` releases whatever commit is checked out, tag or detached
+    // included, so the branch push is skipped rather than fatal when there is no branch.
+    const branch = (() => {
+        const r = spawnSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { encoding: "utf-8" });
+        return r.status === 0 ? (r.stdout || "").trim() : "";
+    })();
+
+    if (branch) {
+        console.log(`[release-electron] Pushing ${branch} and tag ${tagName} to origin...`);
+        execSync(`git push origin HEAD --tags`, { stdio: "inherit" });
+    } else {
+        console.log(
+            `[release-electron] Detached HEAD — pushing tag ${tagName} to origin only. ` +
+            "No branch is checked out, so no branch is pushed."
+        );
+        execSync(`git push origin ${tagName}`, { stdio: "inherit" });
+    }
 } catch (err: unknown) {
     console.error(`[release-electron] Git tag/push failed:`, (err as Error)?.message || err);
     console.error("[release-electron] Please resolve git status or push permissions before releasing.");
