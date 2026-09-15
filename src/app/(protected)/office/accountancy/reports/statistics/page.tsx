@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { voucherTypeLabel } from "@/shared/lib/format";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -23,21 +24,6 @@ type StatsData = {
         stockItems: number; stockGroups: number; categories: number;
         brands: number; units: number;
     };
-};
-
-const VOUCHER_LABEL: Record<string, string> = {
-    CONTRA: "Contra", PAYMENT: "Payment", RECEIPT: "Receipt",
-    CREDIT_NOTE: "Credit Note", DEBIT_NOTE: "Debit Note",
-};
-
-const INV_VOUCHER_LABEL: Record<string, string> = {
-    PURCHASE: "Purchase", SALE: "Sale", POS: "POS Sale", ESTIMATE: "Estimate",
-    SALE_RETURN: "Sale Return", PURCHASE_RETURN: "Purchase Return",
-    MANUFACTURING_JOURNAL: "Manufacturing Journal", PHYSICAL_STOCK: "Physical Stock",
-    BRANCH_TRANSFER: "Branch Transfer",
-    GRN: "GRN", CHALLAN: "Delivery Challan",
-    REJECTION_IN: "Rejection In", REJECTION_OUT: "Rejection Out",
-    SALES_ORDER: "Sales Order", PURCHASE_ORDER: "Purchase Order",
 };
 
 export default function StatisticsPage() {
@@ -98,7 +84,6 @@ export default function StatisticsPage() {
                         title="Accounting Vouchers"
                         empty="No accounting vouchers in this period."
                         rows={data.voucherTypes}
-                        labels={VOUCHER_LABEL}
                         extras={[
                             { label: "Journal Entries", value: data.other.journalEntries },
                             // Sales / POS counts moved to the Inventory Vouchers
@@ -110,7 +95,6 @@ export default function StatisticsPage() {
                         title="Inventory Vouchers"
                         empty="No inventory vouchers in this period."
                         rows={data.invVoucherTypes}
-                        labels={INV_VOUCHER_LABEL}
                     />
 
                     <MasterCard masters={data.masters} />
@@ -122,12 +106,11 @@ export default function StatisticsPage() {
 }
 
 function VoucherTypeCard({
-    title, rows, labels, empty, extras,
+    title, rows, empty, extras,
 }: {
     title:  string;
     empty:  string;
     rows:   Bucket[];
-    labels: Record<string, string>;
     extras?: { label: string; value: number; dim?: string }[];
 }) {
     const total = rows.reduce((s, r) => s + r.total, 0);
@@ -156,7 +139,7 @@ function VoucherTypeCard({
                         <>
                             {rows.map((r) => (
                                 <tr key={r.type} className="border-b last:border-0 hover:bg-muted/40">
-                                    <td className="px-3 py-2 text-foreground">{labels[r.type] ?? r.type}</td>
+                                    <td className="px-3 py-2 text-foreground">{voucherTypeLabel(r.type) ?? r.type}</td>
                                     <td className="px-3 py-2 text-right font-mono">{r.posted || <span className="text-muted-foreground/65">—</span>}</td>
                                     <td className="px-3 py-2 text-right font-mono">{r.draft || <span className="text-muted-foreground/65">—</span>}</td>
                                     <td className="px-3 py-2 text-right font-mono">{r.cancelled || <span className="text-muted-foreground/65">—</span>}</td>

@@ -1,6 +1,13 @@
 // Canonical human label for a voucher `type` (both GL `Voucher` and trading
-// `InvVoucher` kinds). Single source of truth — registers, the recycle bin, and
-// reports should import this instead of inlining their own map (we had ~3 copies).
+// `InvVoucher` kinds). Intended as the single source of truth — but it is not yet
+// the only one. Several screens still build the word themselves and disagree with
+// this map: `POS` reads "POS Sale" here, "POS" in the day-book register and "pos"
+// in the outstandings panel. New code should import this; before assuming an
+// existing screen already agrees with it, go and look.
+//
+// Separate on purpose: `PER_KIND[].title` in modules/accountancy/lib/
+// tradingVoucherKinds.ts is the longer vocabulary for form headings, where GRN is
+// "Goods Received Note". Print templates keep their own labels too.
 
 export const VOUCHER_TYPE_LABELS: Record<string, string> = {
     // GL vouchers (Voucher.type)
