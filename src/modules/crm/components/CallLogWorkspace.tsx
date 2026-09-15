@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { formatDateTime, formatCallerNumber } from "@/shared/lib/format";
+import { formatDateTime, formatCallerNumber, phoneMatchKey } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { extractApiError } from "@/shared/lib/api";
@@ -23,6 +23,7 @@ import { useRealtimeTopics } from "@/shared/hooks";
 
 // ── Wire type (mirrors GET /api/calls) ──────────────────────────────────────────
 type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
+interface PartyHit { id: number; name: string; phone: string | null; type: "customer" | "company" }
 interface CallGuess { kind: "person" | "company"; id: number; name: string; phone: string }
 interface CallItem {
     id: number;
@@ -50,6 +51,10 @@ interface CallItem {
     // The EPBX sends an incoming CLI digit by digit; answering before the last
     // digit lands leaves a part number — a real call nobody can ring back.
     partialNumber: boolean;
+    // For a part number a staff member has answered: the full number they
+    // confirmed. Null while it is still an open question — a stale junk key
+    // from before the shape rule is NOT a confirmation. See GET /api/calls.
+    completedNumber: string | null;
     // For a part number: the customers whose stored number BEGINS with the
     // digits that did arrive. A shortlist to choose from, never a match — staff
     // pick one and confirm it. See GET /api/calls.
@@ -121,6 +126,10 @@ export default function CallLogWorkspace() {
     const [guessFor, setGuessFor] = useState<CallItem | null>(null);
     const [guessPick, setGuessPick] = useState<string>("");
     const [guessSaving, setGuessSaving] = useState(false);
+    // "Not in the list" — find any customer by name or number. A wrong CLI
+    // shares nothing with the real number, so no shortlist can reach it.
+    const [guessSearch, setGuessSearch] = useState("");
+    const [guessHits, setGuessHits] = useState<PartyHit[]>([]);
     const [noteSaving, setNoteSaving] = useState(false);
 
     const buildParams = (targetPage: number) => {
@@ -203,13 +212,26 @@ export default function CallLogWorkspace() {
         }
     };
 
-    /** Answer "who called?" on a part number — writes the full number staff picked. */
+    // Customer lookup inside the "Who called?" dialog. Debounced, and the same
+    // endpoint the party pickers use, so staff search the way they always do.
+    useEffect(() => {
+        const q = guessSearch.trim();
+        if (guessFor === null || q.length < 2) { setGuessHits([]); return; }
+        const t = setTimeout(() => {
+            axios.get<PartyHit[]>(`/api/person?lookup=${encodeURIComponent(q)}&wide=1`)
+                .then(({ data }) => setGuessHits(data.filter((r) => phoneMatchKey(r.phone))))
+                .catch(() => setGuessHits([]));
+        }, 300);
+        return () => clearTimeout(t);
+    }, [guessSearch, guessFor]);
+
+    /** Answer "who called?" on a broken capture — writes the full number staff gave. */
     const confirmGuess = async () => {
         if (!guessFor || !guessPick) return;
         setGuessSaving(true);
         try {
             await axios.patch(`/api/calls/${guessFor.id}`, { confirmPhone: guessPick });
-            toast.success("Number completed");
+            toast.success("Number set");
             setGuessFor(null);
             void load(1);
         } catch (e) {
@@ -359,18 +381,18 @@ export default function CallLogWorkspace() {
                                     <td
                                         className="whitespace-nowrap px-3 py-2 font-medium"
                                         title={
-                                            c.partialNumber && c.phone
+                                            c.completedNumber
                                                 ? `The PBX sent only ${c.rawNumber} — completed by staff`
                                                 : (c.rawNumber ?? undefined)
                                         }
                                     >
                                         {/* A completed part number shows the number staff confirmed;
                                             the short capture stays in the tooltip, and in rawNumber. */}
-                                        {c.partialNumber && c.phone
-                                            ? formatCallerNumber(c.phone)
+                                        {c.completedNumber
+                                            ? formatCallerNumber(c.completedNumber)
                                             : formatCallerNumber(c.rawNumber, c.direction)}
                                         {c.partialNumber && (
-                                            c.phone ? (
+                                            c.completedNumber ? (
                                                 <span
                                                     className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
                                                     title="Arrived incomplete; a staff member confirmed the full number."
@@ -398,11 +420,23 @@ export default function CallLogWorkspace() {
                                                 type="button"
                                                 className="inline-flex items-center gap-1.5 rounded px-1 text-amber-700 underline decoration-dotted underline-offset-2 hover:bg-amber-50"
                                                 title="The number arrived one digit short. These customers' numbers begin with the digits we got — pick the right one."
-                                                onClick={() => { setGuessFor(c); setGuessPick(c.guesses[0].phone); }}
+                                                onClick={() => { setGuessFor(c); setGuessPick(c.guesses[0].phone); setGuessSearch(""); }}
                                             >
                                                 {c.guesses.length === 1
                                                     ? `${c.guesses[0].name}?`
                                                     : `${c.guesses.length} possible`}
+                                            </button>
+                                        ) : c.partialNumber ? (
+                                            // Nothing to predict from — a wrong CLI shares no digits
+                                            // with the real number — but the call was real, so staff
+                                            // can still say who rang.
+                                            <button
+                                                type="button"
+                                                className="rounded px-1 text-muted-foreground underline decoration-dotted underline-offset-2 hover:bg-muted/50"
+                                                title="The number did not arrive properly. Set the customer who called."
+                                                onClick={() => { setGuessFor(c); setGuessPick(""); setGuessSearch(""); }}
+                                            >
+                                                Set caller
                                             </button>
                                         ) : (
                                             <span className="text-muted-foreground">Unknown</span>
@@ -431,7 +465,7 @@ export default function CallLogWorkspace() {
                                             <Button variant="ghost" size="icon" className="h-8 w-8" title="Add / edit note" onClick={() => openNote(c)}>
                                                 <StickyNote size={15} />
                                             </Button>
-                                            {c.partialNumber && c.phone && (
+                                            {c.completedNumber && (
                                                 <Button
                                                     variant="ghost" size="icon" className="h-8 w-8"
                                                     title="Clear this confirmation — back to Unknown"
@@ -482,10 +516,21 @@ export default function CallLogWorkspace() {
                     {guessFor && (
                         <div className="space-y-3">
                             <p className="text-sm text-muted-foreground">
-                                The number arrived incomplete — the EPBX sent only{" "}
-                                <span className="font-medium text-foreground">{guessFor.rawNumber}</span>{" "}
-                                before the call was answered. These customers&apos; numbers begin with
-                                those digits. Pick the one who rang, or ring back to check first.
+                                {guessFor.guesses.length ? (
+                                    <>
+                                        The number arrived incomplete — the EPBX sent only{" "}
+                                        <span className="font-medium text-foreground">{guessFor.rawNumber}</span>{" "}
+                                        before the call was answered. These customers&apos; numbers begin
+                                        with those digits. Pick the one who rang, or ring back to check first.
+                                    </>
+                                ) : (
+                                    <>
+                                        The number did not arrive properly — the PBX sent only{" "}
+                                        <span className="font-medium text-foreground">{guessFor.rawNumber}</span>,
+                                        which shares nothing with a real number. The call was real, so search
+                                        for the customer who rang and set their number.
+                                    </>
+                                )}
                             </p>
                             <div className="space-y-1">
                                 {guessFor.guesses.map((g) => (
@@ -507,6 +552,37 @@ export default function CallLogWorkspace() {
                                         <span className="ml-auto text-muted-foreground">{g.phone}</span>
                                     </label>
                                 ))}
+                            </div>
+                            {/* No shortlist can reach a wrong CLI, and a shortlist can
+                                be wrong — so any customer is reachable from here. */}
+                            <div className="space-y-1 border-t pt-3">
+                                <Input
+                                    placeholder={guessFor.guesses.length ? "Not in the list? Search name or number…" : "Search name or number…"}
+                                    value={guessSearch}
+                                    onChange={(e) => setGuessSearch(e.target.value)}
+                                />
+                                {guessHits.map((h) => {
+                                    const key = phoneMatchKey(h.phone) ?? "";
+                                    return (
+                                        <button
+                                            key={`${h.type}-${h.id}`}
+                                            type="button"
+                                            className={`flex w-full items-center gap-2 rounded border px-3 py-2 text-left text-sm ${
+                                                guessPick === key ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                                            }`}
+                                            onClick={() => setGuessPick(key)}
+                                        >
+                                            {h.type === "customer" ? <User size={14} /> : <Building2 size={14} />}
+                                            <span className="font-medium">{h.name}</span>
+                                            <span className="ml-auto text-muted-foreground">{key}</span>
+                                        </button>
+                                    );
+                                })}
+                                {guessSearch.trim().length >= 2 && guessHits.length === 0 && (
+                                    <p className="px-1 py-2 text-sm text-muted-foreground">
+                                        No customer found with a complete number.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     )}

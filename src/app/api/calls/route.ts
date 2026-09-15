@@ -467,6 +467,11 @@ export async function GET(req: Request) {
             return cutoff !== undefined && occurredAt.getTime() <= cutoff;
         };
 
+        /** A CLI the handset cut off mid-arrival: real call, unusable number. */
+        const isPartial = (c: (typeof calls)[number]) => readCallerNumber(
+            c.direction === "OUTGOING" ? normalizeDialedNumber(c.rawNumber) : c.rawNumber,
+        ).shape === "partial";
+
         const items = calls.filter((c) => !answeredAlready(c.phone, c.occurredAt)).map((c) => ({
             id: c.id,
             direction: c.direction,
@@ -489,10 +494,14 @@ export async function GET(req: Request) {
                 : [],
             occurredAt: c.occurredAt.toISOString(),
             customer: ownerOf(c),
-            // A CLI the handset cut off mid-arrival: real call, unusable number.
-            partialNumber: readCallerNumber(
-                c.direction === "OUTGOING" ? normalizeDialedNumber(c.rawNumber) : c.rawNumber,
-            ).shape === "partial",
+            partialNumber: isPartial(c),
+            // The full number a STAFF MEMBER confirmed for a part number, or null.
+            // A key alone does not mean confirmed: rows from before the shape rule
+            // carry the junk key the old last-10 slice wrote (`91600204286` →
+            // `1600204286`), which would otherwise claim "completed" and then show
+            // the junk. A confirmed number resolves to a customer; junk resolves to
+            // nobody, which is exactly the difference.
+            completedNumber: isPartial(c) && ownerOf(c) ? c.phone : null,
             // The one customer whose number starts with those digits, if exactly
             // one does. A lead for staff to verify — never a match.
             // The shortlist for a part number — customers whose stored number

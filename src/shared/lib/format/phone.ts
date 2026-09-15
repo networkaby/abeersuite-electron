@@ -189,7 +189,8 @@ export function phoneKeyVariants(key: string): string[] {
  * A PART NUMBER — a CLI the handset cut off mid-arrival — gets NO "+" and a
  * trailing ellipsis instead. `91600204286` is nine of India's ten digits, and
  * printing it as "+91600204286" dressed a broken capture up as a valid foreign
- * caller. It now reads "91600204286…", which is the truth.
+ * caller. It now reads "600204286…" — the nine subscriber digits, which are
+ * exactly the digits any prediction is made on.
  *
  * Pass the call's `direction` so an OUTGOING dial string has its overflow
  * keypresses trimmed first (see normalizeDialedNumber) — staff want to see who
@@ -202,7 +203,15 @@ export function formatCallerNumber(raw: string | null | undefined, direction?: s
     switch (shape) {
         case "india": return local;
         case "international": return `+${digits}`;
-        case "partial": return `${digits}…`;
+        // Show the digits a prediction is made ON, so the shortlist can be
+        // judged against what is on screen. Normally that is the subscriber
+        // number, country code stripped like every other shape. But where
+        // stripping 91 would leave too few digits to predict on, the capture is
+        // more likely a whole number one digit short, and the untouched digits
+        // are what we search — so those are what we show. The full capture
+        // stays in `rawNumber` either way.
+        case "partial":
+            return `${local.length >= PARTIAL_CLI_GUESS_DIGITS ? local : digits}…`;
         default: return "—";
     }
 }
