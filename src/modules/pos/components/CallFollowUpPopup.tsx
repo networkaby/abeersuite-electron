@@ -22,6 +22,27 @@
  * that a slow, unscoped reminder beats calls going unlogged just because
  * today's PC has no bridge.
  *
+ * ONE CALLER, ONE ENTRY. A customer who rings five times has one thing to say,
+ * not five, so pending calls fold together by their normalised number: one chip,
+ * one panel, and the single save writes the note or ticket onto every call in
+ * that group (`alsoIds` on PATCH /api/calls/[id]). The floating icon counts
+ * CALLERS for the same reason — it is the number of people still waiting, which
+ * is what the counter can actually act on.
+ *
+ * A CALL THE COUNTER CANNOT ACT ON IS NOT A REMINDER. `phoneMatchKey` needs ten
+ * digits; a short CLI (a trunk delivering `38446`, seen live) yields no key, so
+ * it can never be matched to a contact and never rung back. Those calls are real
+ * — one ran 38 seconds of speech — and they keep their row on the CRM Call Log,
+ * but there is nothing the counter can do with the reminder, so it drops off.
+ *
+ * AND ONE ANSWER CLOSES WHAT CAME BEFORE IT. The server (`sinceLastLogged=1`)
+ * drops a number's calls that are older than that number's most recent logged
+ * call: staff answered then, so those rings were part of it. Only a logged CALL
+ * moves that line — an open help ticket does NOT silence the customer's future
+ * calls, because they ring again precisely when something is still wrong. The
+ * comparison is against the calls' own times, never when the note was typed, so
+ * a note written late in the day cannot swallow the calls that came in between.
+ *
  * ONE PANEL, ONE MANDATORY NOTE. Earlier versions opened a separate dialog
  * per action and let an empty note through as "Done" — both cut against the
  * point. Now everything happens inline: tick an existing open ticket to link
@@ -64,7 +85,7 @@
  * the other, and a plain in-memory value would forget the moment that happens.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { PhoneIncoming, PhoneOutgoing, Ticket, HandCoins, Link2, ChevronDown, Check } from "lucide-react";
@@ -143,10 +164,34 @@ type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
 type PendingCall = {
     id: number;
     direction: Direction;
+    /** Normalised match key — the grouping key, and what resolves the customer. */
+    phone: string | null;
     rawNumber: string | null;
     occurredAt: string;
     customer: { kind: "person" | "company"; id: number; name: string } | null;
 };
+
+/** One caller's pending calls. `latest` is what the panel shows and saves from. */
+type Group = { key: string; calls: PendingCall[]; latest: PendingCall };
+
+/**
+ * Pending calls folded into one entry per caller.
+ *
+ * `queue` arrives newest-first, so each group's first element is its latest call
+ * — the one the panel puts in the header and the one the save writes from.
+ * Calls with no normalised key never reach here — `refresh` drops them, because
+ * a number too short to key can never be matched to a contact or rung back.
+ */
+function groupByCaller(calls: PendingCall[]): Group[] {
+    const byKey = new Map<string, PendingCall[]>();
+    for (const c of calls) {
+        const key = c.phone ?? `call:${c.id}`; // defensive — refresh already filtered these out
+        const list = byKey.get(key);
+        if (list) list.push(c);
+        else byKey.set(key, [c]);
+    }
+    return [...byKey].map(([key, list]) => ({ key, calls: list, latest: list[0] }));
+}
 
 type LinkCandidate = { id: number; kind: "help" | "deal"; label: string; statusLabel: string | null };
 type TicketLite = { id: number; subject?: string | null; title?: string | null; ticketStatus: { label: string } | null };
@@ -191,7 +236,7 @@ export default function CallFollowUpPopup() {
     // Ids the guard has held longer than it should: staff logged them, the server
     // still disagrees. These are NOT hidden — they come back with a warning line.
     const [staleHandled, setStaleHandled] = useState<Set<number>>(new Set());
-    /** More unhandled calls than one page — the icon says "50+" rather than lying. */
+    /** More pending than one page — the icon says "50+" rather than lying. */
     const [morePending, setMorePending] = useState(false);
     // Refresh responses can come back out of order (poll tick vs realtime tick).
     // Only the newest one is allowed to set the queue.
@@ -202,12 +247,15 @@ export default function CallFollowUpPopup() {
 
     const noteRef = useRef<HTMLTextAreaElement>(null);
 
-    // Several calls can queue up (staff was away, or several came in back to
+    // Several CALLERS can queue up (staff was away, or a few rang back to
     // back) — which one is on screen is a pick, not just "oldest first".
     // Defaults to the most recent (queue is newest-first from the API); falls
     // back to that default the moment the picked one is resolved or expires.
-    const [selectedId, setSelectedId] = useState<number | null>(null);
-    const current = queue.find((c) => c.id === selectedId) ?? queue[0] ?? null;
+    const [selectedKey, setSelectedKey] = useState<string | null>(null);
+    const groups = useMemo(() => groupByCaller(queue), [queue]);
+    const current = groups.find((g) => g.key === selectedKey) ?? groups[0] ?? null;
+    /** The call the panel shows and saves from — its caller's most recent. */
+    const call = current?.latest ?? null;
 
     const refresh = useCallback(async () => {
         if (extension === "unknown") return; // still resolving which counter this PC is
@@ -216,13 +264,25 @@ export default function CallFollowUpPopup() {
             // every counter's unhandled calls (see the module doc's WHICH CALLS).
             // The window is days now, not minutes, so ask for more than a
             // screenful — the icon's count has to be the honest total.
-            const params: Record<string, string> = { unhandled: "1", limit: "50" };
+            // `sinceLastLogged` drops calls from a number that came BEFORE that
+            // number's most recent logged call — staff already answered those.
+            // The CRM Call Log never sends it; nothing may be hidden there.
+            const params: Record<string, string> = { unhandled: "1", sinceLastLogged: "1", limit: "50" };
             if (extension) params.ext = extension;
             const seq = ++refreshSeqRef.current;
             const { data } = await axios.get<{ items: PendingCall[]; pagination?: { total: number } }>("/api/calls", { params });
             if (seq !== refreshSeqRef.current) return; // a newer refresh already answered
             const cutoff = Date.now() - CALL_POPUP_MAX_AGE_MS;
-            const fresh = data.items.filter((c) => new Date(c.occurredAt).getTime() >= cutoff);
+            // Two display rules, both of them about whether a reminder can lead
+            // anywhere. Old calls drop off (CALL_POPUP_MAX_AGE_MS). So do calls
+            // whose number never produced a match key — `phoneMatchKey` needs ten
+            // digits, so a short CLI like the five-digit one trunk C001 delivered
+            // can never be tied to a contact and can never be rung back. The call
+            // was real and the row stays on the CRM Call Log for the audit; it
+            // just isn't something the counter can act on, so it stops nagging.
+            const fresh = data.items.filter(
+                (c) => c.phone !== null && new Date(c.occurredAt).getTime() >= cutoff,
+            );
 
             // The server has stopped calling it unhandled — the data is now
             // correct, so release the guard for that call.
@@ -288,16 +348,16 @@ export default function CallFollowUpPopup() {
     // Fresh call, fresh form state.
     useEffect(() => {
         setNoteDraft(""); setLinkCandidates([]); setSelectedTicketId(null); setCreateAs(null);
-    }, [current?.id]);
+    }, [call?.id]);
 
     // Open tickets that could plausibly BE this caller — fetched eagerly so
     // the list can simply be empty instead of the staff opening onto a dead
     // end. Matches on the linked person/company AND on the ticket's own
     // phone field — see the module doc.
     useEffect(() => {
-        if (!current) { setLinkCandidates([]); return; }
-        const customer = current.customer;
-        const phone = current.rawNumber;
+        if (!call) { setLinkCandidates([]); return; }
+        const customer = call.customer;
+        const phone = call.rawNumber;
         if (!customer && !phone) { setLinkCandidates([]); return; }
         let cancelled = false;
         setLinkLoading(true);
@@ -322,14 +382,20 @@ export default function CallFollowUpPopup() {
             }
         })();
         return () => { cancelled = true; };
-    }, [current]);
+    }, [call]);
 
-    /** Remove the acted-on call from the queue — defaults back to the (new) most recent. */
-    const advance = (id: number) => {
-        handledIdsRef.current.set(id, Date.now());
+    /**
+     * Take the whole caller off the queue — one save answers every call they made,
+     * so every one of their ids goes into the just-logged guard, not only the
+     * newest. Defaults back to the (new) most recent caller.
+     */
+    const advance = (group: Group) => {
+        const now = Date.now();
+        const ids = new Set(group.calls.map((c) => c.id));
+        for (const id of ids) handledIdsRef.current.set(id, now);
         saveHandled(handledIdsRef.current);
-        setQueue((q) => q.filter((c) => c.id !== id));
-        setSelectedId((cur) => (cur === id ? null : cur));
+        setQueue((q) => q.filter((c) => !ids.has(c.id)));
+        setSelectedKey((cur) => (cur === group.key ? null : cur));
     };
 
     const focusNote = () => requestAnimationFrame(() => noteRef.current?.focus());
@@ -391,50 +457,52 @@ export default function CallFollowUpPopup() {
         }
     };
 
-    const phoneDisplay = current ? formatCallerNumber(current.rawNumber, current.direction) : "";
+    const phoneDisplay = call ? formatCallerNumber(call.rawNumber, call.direction) : "";
     /** When staff saved this call — only read for ids the TTL has flagged stale. */
     const handledAt = (id: number) => handledIdsRef.current.get(id) ?? Date.now();
 
     const save = async () => {
-        if (!current) return;
+        if (!current || !call) return;
+        // Every call this caller made, answered by this one note — see `advance`.
+        const alsoIds = current.calls.map((c) => c.id).filter((cid) => cid !== call.id);
         const note = noteDraft.trim();
         if (!note) return;
         setBusy(true);
         try {
             if (selectedTicketId != null) {
                 await axios.post(`/api/tickets/${selectedTicketId}/notes`, { note });
-                await axios.patch(`/api/calls/${current.id}`, { ticketId: selectedTicketId });
+                await axios.patch(`/api/calls/${call.id}`, { ticketId: selectedTicketId, alsoIds });
                 toast.success("Linked to ticket");
             } else if (createAs === "help") {
-                const contactName = current.customer?.name ?? phoneDisplay;
+                const contactName = call.customer?.name ?? phoneDisplay;
                 const { data } = await axios.post<{ id: number }>("/api/help", {
                     contactName,
-                    phone: current.rawNumber || undefined,
-                    personId: current.customer?.kind === "person" ? current.customer.id : undefined,
-                    companyId: current.customer?.kind === "company" ? current.customer.id : undefined,
+                    phone: call.rawNumber || undefined,
+                    personId: call.customer?.kind === "person" ? call.customer.id : undefined,
+                    companyId: call.customer?.kind === "company" ? call.customer.id : undefined,
                     subject: note.slice(0, 300),
                     notes: note,
                 });
-                await axios.patch(`/api/calls/${current.id}`, { ticketId: data.id });
+                await axios.patch(`/api/calls/${call.id}`, { ticketId: data.id, alsoIds });
                 toast.success("Help ticket created");
             } else if (createAs === "deal") {
-                const contactName = current.customer?.name ?? phoneDisplay;
+                const contactName = call.customer?.name ?? phoneDisplay;
                 const { data } = await axios.post<{ id: number }>("/api/deals", {
                     contactName,
-                    phone: current.rawNumber || undefined,
-                    personId: current.customer?.kind === "person" ? current.customer.id : undefined,
-                    companyId: current.customer?.kind === "company" ? current.customer.id : undefined,
+                    phone: call.rawNumber || undefined,
+                    personId: call.customer?.kind === "person" ? call.customer.id : undefined,
+                    companyId: call.customer?.kind === "company" ? call.customer.id : undefined,
                     title: note.slice(0, 300),
                     source: "Phone",
                     notes: note,
                 });
-                await axios.patch(`/api/calls/${current.id}`, { ticketId: data.id });
+                await axios.patch(`/api/calls/${call.id}`, { ticketId: data.id, alsoIds });
                 toast.success("Deal created");
             } else {
-                await axios.patch(`/api/calls/${current.id}`, { note });
+                await axios.patch(`/api/calls/${call.id}`, { note, alsoIds });
                 toast.success("Note saved");
             }
-            advance(current.id);
+            advance(current);
         } catch (err) {
             toast.error(extractApiError(err, "Failed to save"));
         } finally {
@@ -456,7 +524,7 @@ export default function CallFollowUpPopup() {
 
     return (
         <>
-            {queue.length > 0 && !panelOpen && (
+            {groups.length > 0 && !panelOpen && (
                 <button
                     type="button"
                     onPointerDown={onDragStart}
@@ -466,19 +534,19 @@ export default function CallFollowUpPopup() {
                     className="fixed bottom-4 right-4 z-50 flex touch-none items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90"
                 >
                     <PhoneIncoming size={15} />
-                    {queue.length}{morePending ? "+" : ""} call{queue.length > 1 ? "s" : ""} to log
+                    {groups.length}{morePending ? "+" : ""} call{groups.length > 1 ? "s" : ""} to log
                 </button>
             )}
 
             {/* Escape / outside-click minimize instead of closing — see the module doc. */}
             <Dialog open={panelOpen} onOpenChange={(open) => { if (!open) hide(); }}>
                 <DialogContent className="sm:max-w-sm" showCloseButton={false}>
-                    {current && (
+                    {current && call && (
                         <>
                             <DialogHeader>
                                 <div className="flex items-start justify-between gap-2">
                                     <DialogTitle className="flex items-center gap-2">
-                                        {current.direction === "OUTGOING"
+                                        {call.direction === "OUTGOING"
                                             ? <PhoneOutgoing size={16} className="text-sky-600" />
                                             : <PhoneIncoming size={16} className="text-emerald-600" />}
                                         Log this call
@@ -489,8 +557,8 @@ export default function CallFollowUpPopup() {
                                 </div>
                                 <DialogDescription>
                                     {phoneDisplay}
-                                    {current.customer ? ` — ${current.customer.name}` : ""}
-                                    {" · "}{formatDateTime(current.occurredAt)}
+                                    {call.customer ? ` — ${call.customer.name}` : ""}
+                                    {" · "}{formatDateTime(call.occurredAt)}
                                 </DialogDescription>
                             </DialogHeader>
 
@@ -499,26 +567,40 @@ export default function CallFollowUpPopup() {
                                 for ever would bury a save that never landed, and
                                 showing it plainly invites a second ticket for the same
                                 call. See the module doc's HOW A SAVE STAYS SAVED. */}
-                            {staleHandled.has(current.id) && (
+                            {current.calls.some((c) => staleHandled.has(c.id)) && (
                                 <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
-                                    You logged this {relativeLabel(new Date(handledAt(current.id)).toISOString())} and this counter
+                                    You logged this {relativeLabel(new Date(handledAt(call.id)).toISOString())} and this counter
                                     has not received it yet. Check the Call Log before raising another ticket.
                                 </p>
                             )}
 
-                            {/* Which pending call is on screen — several can queue up
+                            {/* This caller rang more than once and nobody has logged
+                                any of it. Those calls are one thing to answer, not
+                                several — the save below covers every one of them —
+                                but the times still matter: four rings in ten minutes
+                                reads very differently from four over two days. */}
+                            {current.calls.length > 1 && (
+                                <p className="text-xs text-muted-foreground">
+                                    Rang {current.calls.length} times — also{" "}
+                                    {current.calls.slice(1).map((c) => relativeLabel(c.occurredAt)).join(", ")}.
+                                    One note covers them all.
+                                </p>
+                            )}
+
+                            {/* Which pending caller is on screen — several can queue up
                                 (staff was away, or a few came in back to back). Picking
                                 one doesn't drop the others; it just changes what's shown. */}
-                            {queue.length > 1 && (
+                            {groups.length > 1 && (
                                 <div className="-mt-1 flex flex-wrap gap-1.5">
-                                    {queue.map((c) => (
+                                    {groups.map((g) => (
                                         <button
-                                            key={c.id}
+                                            key={g.key}
                                             type="button"
-                                            onClick={() => setSelectedId(c.id)}
-                                            className={`rounded-full border px-2.5 py-1 text-xs transition ${c.id === current.id ? "border-primary bg-primary/10 font-medium" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted"}`}
+                                            onClick={() => setSelectedKey(g.key)}
+                                            className={`rounded-full border px-2.5 py-1 text-xs transition ${g.key === current.key ? "border-primary bg-primary/10 font-medium" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted"}`}
                                         >
-                                            {c.customer ? c.customer.name : formatCallerNumber(c.rawNumber, c.direction)} · {relativeLabel(c.occurredAt)}
+                                            {g.latest.customer ? g.latest.customer.name : formatCallerNumber(g.latest.rawNumber, g.latest.direction)}
+                                            {g.calls.length > 1 ? ` ×${g.calls.length}` : ""} · {relativeLabel(g.latest.occurredAt)}
                                         </button>
                                     ))}
                                 </div>

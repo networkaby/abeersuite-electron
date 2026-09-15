@@ -246,6 +246,10 @@ export async function GET(req: Request) {
         const phoneKey = sp.get("phone")?.trim();
         // Never triaged: no note (not even a dismissal) and no linked ticket/deal.
         const unhandled = sp.get("unhandled") === "1";
+        // Drop calls a number has already been answered about. See applyLoggedCutoff
+        // below — the counter follow-up popup asks for this; the CRM Call Log does
+        // not, because there nothing may ever be hidden from view.
+        const sinceLastLogged = sp.get("sinceLastLogged") === "1";
 
         const and: Prisma.CallWhereInput[] = [];
         if (phoneKey) and.push({ phone: phoneKey });
@@ -354,7 +358,43 @@ export async function GET(req: Request) {
             }
         }
 
-        const items = calls.map((c) => ({
+        // ── The already-answered cutoff ──────────────────────────────────────
+        // A caller who rang five times has ONE thing to say, not five, so the
+        // counter should be reminded once and one note should cover the lot.
+        // The dividing line is the number's most recent call that already
+        // carries a note or a ticket: everything from BEFORE it was part of
+        // whatever staff already answered, everything after it is genuinely new.
+        //
+        // We compare against the calls' own `occurredAt`, never against when the
+        // note was typed. A note written late in the day about a morning call
+        // must not swallow the calls that came in between.
+        //
+        // This is deliberately narrow: only a logged CALL moves the line. An open
+        // help ticket does NOT silence a customer's future calls — they ring
+        // again precisely because something is still not right.
+        //
+        // The rows themselves are untouched and still on the CRM Call Log; like
+        // the popup's three-day window, this only decides who gets reminded.
+        let cutoffByPhone = new Map<string, number>();
+        if (sinceLastLogged && keys.length) {
+            const logged = await prisma.call.groupBy({
+                by: ["phone"],
+                where: { phone: { in: keys }, OR: [{ note: { not: null } }, { ticketId: { not: null } }] },
+                _max: { occurredAt: true },
+            });
+            cutoffByPhone = new Map(
+                logged
+                    .filter((g): g is typeof g & { phone: string } => !!g.phone && !!g._max.occurredAt)
+                    .map((g) => [g.phone, g._max.occurredAt!.getTime()]),
+            );
+        }
+        const answeredAlready = (phone: string | null, occurredAt: Date) => {
+            if (!phone) return false;
+            const cutoff = cutoffByPhone.get(phone);
+            return cutoff !== undefined && occurredAt.getTime() <= cutoff;
+        };
+
+        const items = calls.filter((c) => !answeredAlready(c.phone, c.occurredAt)).map((c) => ({
             id: c.id,
             direction: c.direction,
             phone: c.phone,
@@ -378,7 +418,11 @@ export async function GET(req: Request) {
             customer: c.phone ? (ownerByKey.get(c.phone) ?? null) : null,
         }));
 
-        return NextResponse.json({ items, pagination: { page, pageSize: take, total } });
+        // `total` counted before the cutoff ran, so take the dropped rows off it —
+        // otherwise the popup's "50+" badge would count calls it has decided are
+        // already answered.
+        const dropped = calls.length - items.length;
+        return NextResponse.json({ items, pagination: { page, pageSize: take, total: Math.max(0, total - dropped) } });
     } catch (e) {
         return handleApiError(e, "Failed to list calls");
     }

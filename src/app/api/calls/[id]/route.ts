@@ -14,12 +14,18 @@ import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api"
 //     phone, so past + future calls from it are (un)flagged together.
 //   • ticketId: link the help ticket / deal raised from this call — see the
 //     `ticketId` doc comment on the Call model.
+//   • alsoIds: the OTHER pending calls this same note/ticket answers. A caller
+//     who rang five times has one thing to say, and the counter follow-up popup
+//     shows those five as one entry — so its single save has to land on all five
+//     rows, in one request rather than five round-trips from a till. Ignored by
+//     `spam`, which already applies to the whole number by itself.
 
 const patchSchema = z
     .object({
         note: z.string().trim().max(2000).nullable().optional(),
         spam: z.boolean().optional(),
         ticketId: z.number().int().positive().nullable().optional(),
+        alsoIds: z.array(z.number().int().positive()).max(50).optional(),
     })
     .refine((v) => v.note !== undefined || v.spam !== undefined || v.ticketId !== undefined, {
         message: "Nothing to update",
@@ -39,12 +45,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const call = await prisma.call.findUnique({ where: { id }, select: { id: true, phone: true } });
         if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
 
+        // One id or several — `updateMany` covers both, so the grouped save and
+        // the single Call Log edit run the exact same write.
+        const targetIds = Array.from(new Set([id, ...(data.alsoIds ?? [])]));
+
         if (data.note !== undefined) {
-            await prisma.call.update({ where: { id }, data: { note: data.note } });
+            await prisma.call.updateMany({ where: { id: { in: targetIds } }, data: { note: data.note } });
         }
 
         if (data.ticketId !== undefined) {
-            await prisma.call.update({ where: { id }, data: { ticketId: data.ticketId } });
+            await prisma.call.updateMany({ where: { id: { in: targetIds } }, data: { ticketId: data.ticketId } });
         }
 
         // Spam toggles by number. If the call has no phone key (internal/unknown),
