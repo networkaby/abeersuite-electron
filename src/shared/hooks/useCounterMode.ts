@@ -1,9 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * Where this machine is reading from — ONE poll for the whole app.
+ *
+ * Every surface that shows this (the shell badge, the replica gate, the Electron
+ * window title, the offline-policies form) reads from a single module-level store fed
+ * by a single request to /api/counter/status. Each of them used to run its own
+ * `setInterval`, so an open POS screen asked the same question three times every ten
+ * seconds and applied the same four side effects three times over.
+ *
+ * The poll:
+ *   • starts when the first consumer mounts, stops when the last one unmounts,
+ *   • ticks only while the tab is VISIBLE, and re-reads immediately on becoming
+ *     visible again, so returning to the tab never shows a stale light,
+ *   • SETTLES to a day-long fallback once the answer cannot change — see
+ *     `COUNTER_STATUS_IDLE_POLL_MS` — which is every machine that is not a counter,
+ *     and every visitor who is not signed in,
+ *   • can be forced at any moment via refreshCounterStatus(), which is how signing in
+ *     un-settles a tab that has been sitting on the login screen.
+ *
+ * Returns `null` until the first answer arrives, and keeps returning a non-counter
+ * status on ordinary machines so callers can render nothing. Never throws and never
+ * toasts on failure: if this endpoint is unreachable the user already has bigger
+ * problems, and a status widget that raises its own errors is pure noise.
+ */
+
+import { useSyncExternalStore } from "react";
 import axios from "axios";
 import { setWritesGoLocal, setReadsGoLocal, setWritesHeldUntilApplied } from "@/shared/lib/realtime/appChannel";
 import { setServedByReplica } from "@/shared/lib/browser/localDb";
+import { COUNTER_STATUS_POLL_MS, COUNTER_STATUS_IDLE_POLL_MS } from "@/shared/lib/constants/polling";
 
 /** Mirror of `counterStatus()` in shared/lib/prisma/counterMode.ts. */
 export type CounterStatus = {
@@ -30,84 +56,149 @@ export type CounterStatus = {
     lastFlushAt: string | null;
 };
 
+// ── the store ────────────────────────────────────────────────────────────────
+let state: CounterStatus | null = null;
+const listeners = new Set<() => void>();
+let inFlight: Promise<void> | null = null;
+let timer: ReturnType<typeof setInterval> | null = null;
+/** Current tick length. Starts eager and settles down once the answer is final. */
+let intervalMs: number = COUNTER_STATUS_POLL_MS;
 /**
- * How often to ask.
+ * Settled because nobody is signed in, rather than because this is not a counter.
  *
- * This was 30s, justified on the grounds that "a cashier learns the shop is offline from
- * the failed Save either way". That justification no longer holds, twice over: offline
- * writes now mean some saves SUCCEED while offline, so a failed save is no longer the
- * reliable teacher it was; and the badge is now a permanent green/red light rather than
- * a warning that only appears when something is wrong. A permanent light that can be
- * half a minute stale is worse than no light, because people believe it.
- *
- * 10s is still not a heartbeat. The endpoint answers from process memory plus, at most,
- * one small query against the LOCAL database per 30s TTL (`refreshReplicaReadiness`) —
- * it never touches Supabase, so a faster poll costs no egress, which is the thing this
- * whole project exists to protect.
+ * The two look the same from here — both mean "stop asking" — but only this one can
+ * be undone from inside the app, and it MUST be: login navigates with `router.push`,
+ * so the React tree survives and a poller left idle would never wake up. See
+ * `refreshCounterStatus`, called from the login screen's success path.
  */
-const POLL_MS = 10_000;
+let settledUnauthenticated = false;
+
+function emit() {
+    for (const l of listeners) l();
+}
 
 /**
- * Where this machine is reading from, for the shell badge.
+ * How often to ask, given the answer we just got.
  *
- * Returns `null` until the first answer arrives, and keeps returning a non-counter
- * status on ordinary machines so callers can render nothing. Never throws and never
- * toasts on failure: if this endpoint is unreachable the user already has bigger
- * problems, and a status widget that raises its own errors is pure noise.
+ * `isCounter` comes from `IS_COUNTER_PC`, a `const` read once from env, so `false` is
+ * final for the life of the server process. Every field a consumer acts on off a
+ * counter is likewise env-derived (`preference`, `writePreference`); `mode` and
+ * `replicaReady` do change, but every consumer gates on `isCounter` before reading
+ * them.
  */
-export function useCounterMode(): CounterStatus | null {
-    const [status, setStatus] = useState<CounterStatus | null>(null);
+function intervalFor(status: CounterStatus): number {
+    return status.isCounter ? COUNTER_STATUS_POLL_MS : COUNTER_STATUS_IDLE_POLL_MS;
+}
 
-    useEffect(() => {
-        let cancelled = false;
+function startTimer() {
+    if (timer || (typeof document !== "undefined" && document.hidden)) return;
+    timer = setInterval(() => { void refresh(); }, intervalMs);
+}
+function stopTimer() {
+    if (!timer) return;
+    clearInterval(timer);
+    timer = null;
+}
 
-        const read = async () => {
-            try {
-                const { data } = await axios.get<CounterStatus>("/api/counter/status");
-                // Where writes land decides who announces them. Under WRITE_MODE=local
-                // the browser must stay quiet: its response means "in this counter's
-                // _outbox", not "in Supabase", and the flusher announces once the push
-                // lands instead. See setWritesGoLocal.
-                setWritesGoLocal(data.writePreference === "local");
-                // Where reads come from decides which signal a screen waits for: the
-                // replica's "rows applied" line rather than the early Supabase nudge.
-                setReadsGoLocal(data.isCounter && data.preference !== "live");
-                // Whether a screen may re-read right after its own save, or must wait for
-                // the replica to say the rows have landed. See setWritesHeldUntilApplied.
-                setWritesHeldUntilApplied(data.writePreference === "v_live");
-                // Whether the browser's Dexie cache is worth keeping at all. The
-                // exact mirror of `shouldReadLocal()` in prisma/counterMode.ts —
-                // stricter than setReadsGoLocal above, which deliberately leaves
-                // `replicaReady` out, because a counter still reading Supabase
-                // WANTS the cache. Takes effect on the next page load, never this
-                // one (see setServedByReplica). This endpoint needs a login, so a
-                // counter writes nothing before someone signs in — which just
-                // leaves the cache behaving as it always has until then.
-                setServedByReplica(
-                    data.isCounter
-                    && (data.mode === "LOCAL" || (data.replicaReady && data.preference !== "live")),
-                );
-                if (!cancelled) setStatus(data);
-            } catch {
-                // Leave the last known status in place rather than flashing "unknown".
+/** Change the tick length, restarting the timer only when it actually differs. */
+function retune(ms: number) {
+    if (ms === intervalMs) return;
+    intervalMs = ms;
+    if (timer) { stopTimer(); startTimer(); }
+}
+
+/** Concurrent callers share one request — several consumers mounting together is one fetch. */
+function refresh(): Promise<void> {
+    if (inFlight) return inFlight;
+    inFlight = axios
+        .get<CounterStatus>("/api/counter/status")
+        .then(({ data }) => {
+            settledUnauthenticated = false;
+            // Where writes land decides who announces them. Under WRITE_MODE=local
+            // the browser must stay quiet: its response means "in this counter's
+            // _outbox", not "in Supabase", and the flusher announces once the push
+            // lands instead. See setWritesGoLocal.
+            setWritesGoLocal(data.writePreference === "local");
+            // Where reads come from decides which signal a screen waits for: the
+            // replica's "rows applied" line rather than the early Supabase nudge.
+            setReadsGoLocal(data.isCounter && data.preference !== "live");
+            // Whether a screen may re-read right after its own save, or must wait for
+            // the replica to say the rows have landed. See setWritesHeldUntilApplied.
+            setWritesHeldUntilApplied(data.writePreference === "v_live");
+            // Whether the browser's Dexie cache is worth keeping at all. The
+            // exact mirror of `shouldReadLocal()` in prisma/counterMode.ts —
+            // stricter than setReadsGoLocal above, which deliberately leaves
+            // `replicaReady` out, because a counter still reading Supabase
+            // WANTS the cache. Takes effect on the next page load, never this
+            // one (see setServedByReplica). This endpoint needs a login, so a
+            // counter writes nothing before someone signs in — which just
+            // leaves the cache behaving as it always has until then.
+            setServedByReplica(
+                data.isCounter
+                && (data.mode === "LOCAL" || (data.replicaReady && data.preference !== "live")),
+            );
+            state = data;
+            retune(intervalFor(data));
+            emit();
+        })
+        .catch((e) => {
+            // Not signed in: there is no badge to feed and no counter to describe, so
+            // stop asking until someone logs in. Every OTHER failure leaves both the
+            // last known status and the current tick alone rather than flashing
+            // "unknown" or backing off a counter that is merely mid-restart.
+            if (axios.isAxiosError(e) && e.response?.status === 401) {
+                settledUnauthenticated = true;
+                retune(COUNTER_STATUS_IDLE_POLL_MS);
             }
-        };
+        })
+        .finally(() => { inFlight = null; });
+    return inFlight;
+}
 
-        void read();
-        const timer = setInterval(() => void read(), POLL_MS);
+function onVisibility() {
+    if (document.hidden) {
+        stopTimer();
+    } else {
         // Coming back to the tab is the moment the answer matters most, and the
         // moment it is most likely to be stale.
-        const onVisible = () => {
-            if (document.visibilityState === "visible") void read();
-        };
-        document.addEventListener("visibilitychange", onVisible);
+        void refresh();
+        startTimer();
+    }
+}
 
-        return () => {
-            cancelled = true;
-            clearInterval(timer);
-            document.removeEventListener("visibilitychange", onVisible);
-        };
-    }, []);
+/** First mounted consumer wires everything up; the last one to leave tears it down. */
+function subscribe(listener: () => void) {
+    listeners.add(listener);
+    if (listeners.size === 1) {
+        document.addEventListener("visibilitychange", onVisibility);
+        void refresh();
+        startTimer();
+    }
+    return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+            document.removeEventListener("visibilitychange", onVisibility);
+            stopTimer();
+        }
+    };
+}
 
-    return status;
+const getSnapshot = () => state;
+const getServerSnapshot = (): CounterStatus | null => null;
+
+export function useCounterMode(): CounterStatus | null {
+    return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+/**
+ * Ask now — for the login screen's success path, and any manual refresh control.
+ *
+ * Exported as a plain function (not a hook) so any code anywhere can call it; every
+ * mounted consumer updates together. Un-settles a tab that backed off because nobody
+ * was signed in: `router.push` keeps the React tree alive across login, so without
+ * this the badge would stay dark on a counter until the next tab focus.
+ */
+export function refreshCounterStatus() {
+    if (settledUnauthenticated) retune(COUNTER_STATUS_POLL_MS);
+    void refresh();
 }

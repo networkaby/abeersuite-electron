@@ -117,3 +117,41 @@ export const CALL_POPUP_HANDLED_TTL_MS = 15 * 60 * 1000;   // 15 minutes
  * five-minute nag. **Edit this one line to change how often it asks.**
  */
 export const CALL_POPUP_REMIND_MS = 30 * 60 * 1000;   // 30 minutes
+
+/**
+ * The shell's two status surfaces — /api/counter/status and /api/sync/status,
+ * feeding the counter badge, the sync badge and the Electron window title.
+ *
+ * ── Why 10s on a counter ────────────────────────────────────────────────────
+ * This was 30s, justified on the grounds that "a cashier learns the shop is offline
+ * from the failed Save either way". That justification no longer holds, twice over:
+ * offline writes now mean some saves SUCCEED while offline, so a failed save is no
+ * longer the reliable teacher it was; and the badge is now a permanent green/red
+ * light rather than a warning that only appears when something is wrong. A permanent
+ * light that can be half a minute stale is worse than no light, because people
+ * believe it.
+ *
+ * 10s is still not a heartbeat. Both endpoints answer from process memory plus, at
+ * most, one small query against the LOCAL database — neither touches Supabase, so a
+ * faster tick costs no egress, which is the thing this whole project exists to
+ * protect. And it is now ONE tick per endpoint for the whole app rather than one per
+ * mounted badge; see the shared store in `useCounterMode.ts`.
+ */
+export const COUNTER_STATUS_POLL_MS = 10_000;   // 10 seconds
+
+/**
+ * The same two surfaces once the answer has SETTLED — off a counter, or before
+ * anyone has signed in.
+ *
+ * `IS_COUNTER_PC` is a `const` read once from env (`prisma/counterMode.ts`), so on an
+ * office PC, on Vercel and on the public storefront `isCounter: false` is the answer
+ * for the life of the server process. Re-asking it every 10s bought nothing and still
+ * cost a `requireAuth()` session lookup per ask, on every page of the app including
+ * the shop, where the caller is not even logged in.
+ *
+ * A distant fallback rather than a full stop, same reasoning as `NAV_COUNTS_POLL_MS`:
+ * the shared store also re-reads on becoming visible, and `refreshCounterStatus()` /
+ * `refreshSyncStatus()` force a read the moment someone signs in. A day is cheap
+ * insurance against all three of those somehow failing to fire.
+ */
+export const COUNTER_STATUS_IDLE_POLL_MS = 86_400_000;   // 24 hours
