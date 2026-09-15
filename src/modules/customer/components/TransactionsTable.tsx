@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Link2 } from "lucide-react";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { cn } from "@/shared/lib/format/utils";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
@@ -61,6 +62,24 @@ export type CustomerTransactions = { invVouchers: TxInvVoucher[]; accountId: num
 // Settled — nothing of this voucher is left sitting on the party's account.
 // Due — none of it has been matched to the other side yet.
 // Partial — some has.
+// A colour per voucher family, shown as a small dot beside the type. Families,
+// not individual types: bills out, money in, money out, goods in, anything that
+// reverses an earlier voucher. The dot lets the eye group a long ledger by kind
+// without reading nine rows of text, and adds no colour to the figures — those
+// keep their own meaning (see the balance column below).
+//
+// Deliberately the only place this table names a voucher type: everything else
+// reads `formatType`, and an unmapped type simply falls back to a neutral dot.
+const TYPE_DOT: Record<string, string> = {
+    SALE: "bg-sky-500", POS: "bg-sky-500", ONLINE_INVOICE: "bg-sky-500",
+    RECEIPT: "bg-emerald-500",
+    PAYMENT: "bg-orange-500",
+    PURCHASE: "bg-violet-500", GRN: "bg-violet-500",
+    SALE_RETURN: "bg-amber-500", PURCHASE_RETURN: "bg-amber-500",
+    CREDIT_NOTE: "bg-amber-500", DEBIT_NOTE: "bg-amber-500",
+    OPENING: "bg-muted-foreground/40",
+};
+
 const SETTLEMENT_STYLES: Record<SettlementState, { label: string; className: string }> = {
     SETTLED: { label: "Settled", className: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
     PARTIAL: { label: "Partial", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
@@ -151,7 +170,9 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
             <CardContent className="p-0">
                 <Table>
                     <TableHeader>
-                        <TableRow>
+                        {/* Tinted, and its hover suppressed — a header is not a row you
+                            can land on, so it should not light up like one. */}
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
                             <TableHead>Type</TableHead>
                             <TableHead>Reference</TableHead>
                             <TableHead>Date</TableHead>
@@ -166,8 +187,24 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                     </TableHeader>
                     <TableBody>
                         {rows.map((row) => (
-                            <TableRow key={row.rowKey} className={row.isOpening ? "bg-muted/30" : undefined}>
-                                <TableCell className="text-xs text-muted-foreground">{row.type}</TableCell>
+                            <TableRow
+                                key={row.rowKey}
+                                // Faint striping so the eye can carry one voucher across ten
+                                // columns. Kept as an `odd:` variant rather than a plain bg so
+                                // the base row's `hover:` still wins — Tailwind orders hover
+                                // after odd — and the opening row overrides both sides of the
+                                // stripe rather than fighting it.
+                                className={cn(
+                                    "odd:bg-muted/25",
+                                    row.isOpening && "odd:bg-muted/50 even:bg-muted/50",
+                                )}
+                            >
+                                <TableCell className="text-xs text-muted-foreground">
+                                    <span className="flex items-center gap-2">
+                                        <span className={cn("size-1.5 shrink-0 rounded-full", TYPE_DOT[row.kind] ?? "bg-muted-foreground/40")} />
+                                        {row.type}
+                                    </span>
+                                </TableCell>
                                 <TableCell>
                                     {row.url ? (
                                         <Link href={row.url} className="font-mono text-xs text-primary hover:underline">{row.ref}</Link>
@@ -188,7 +225,19 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                         ? <span className="opacity-40">—</span>
                                         : money(row.paid)}
                                 </TableCell>
-                                <TableCell className="text-right font-mono text-xs font-medium tabular-nums">
+                                {/* The running balance is the one figure worth colouring: a
+                                    minus is money sitting the wrong way round, a zero is
+                                    nothing to chase, everything else reads plain. */}
+                                <TableCell
+                                    className={cn(
+                                        "text-right font-mono text-xs font-medium tabular-nums",
+                                        row.balance < -0.005
+                                            ? "text-rose-600 dark:text-rose-400"
+                                            : row.balance < 0.005
+                                                ? "text-muted-foreground"
+                                                : "text-foreground",
+                                    )}
+                                >
                                     {money(row.balance)}
                                 </TableCell>
                                 <TableCell>

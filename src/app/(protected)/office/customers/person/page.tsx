@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
-import { moduleSelectedStyle } from "@/shared/lib/format/moduleTheme";
+import { moduleColor, moduleSelectedStyle, moduleTint } from "@/shared/lib/format/moduleTheme";
 import { badgeColor } from "@/shared/lib/format/entityColor";
+import { groupColor } from "@/shared/lib/format/groupColor";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
@@ -60,6 +61,12 @@ import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab
 import { PartyOutstandingsPanel } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import PartyBankTab from "@/modules/customer/components/PartyBankTab";
 import { useActivePartyStore } from "@/store/activePartyStore";
+
+// The Customers module hue (see moduleTheme.ts). Used for the page's own chrome
+// — breadcrumb, party header, active tab, canvas — so the page carries the same
+// colour identity as the sidebar entry you arrived from. Data keeps its own
+// vocabulary and is never painted with it.
+const HUE = moduleColor("customers");
 
 interface CustomerListItem extends BrowseListRow {
     phone: string | null;
@@ -303,14 +310,17 @@ export default function CustomersPage() {
 
     return (
         <div className="flex h-full flex-col">
-            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+            <header
+                className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
+                style={{ backgroundColor: moduleTint("customers", 10), boxShadow: `inset 0 -2px 0 ${HUE}` }}
+            >
                 <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
                     <ArrowLeft size={15} />
                 </Button>
                 <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Link href="/office/customers" className="transition-colors hover:text-foreground">Customers</Link>
                     <span>/</span>
-                    <span className="font-medium text-foreground">Persons</span>
+                    <span className="font-medium" style={{ color: HUE }}>Persons</span>
                 </nav>
             </header>
             <div className="flex flex-1 overflow-hidden">
@@ -352,7 +362,16 @@ export default function CustomersPage() {
                                 }}
                             >
                                 <div className="flex w-full items-center gap-3 text-left">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                    {/* Soft, stable colour per name — the same customer always gets the
+                                        same tile, so a long list can be scanned by colour before the
+                                        eye reaches the text. Reuses the Trial-Balance group palette. */}
+                                    <div
+                                        className={cn(
+                                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-none text-xs font-bold",
+                                            groupColor(customer.name).bg,
+                                            groupColor(customer.name).text,
+                                        )}
+                                    >
                                         {initials(customer.name)}
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -369,11 +388,14 @@ export default function CustomersPage() {
                                                     <span
                                                         className={cn(
                                                             "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
+                                                            // Nothing outstanding stays quiet; an amount still on
+                                                            // the party's account carries a warm tint so the rows
+                                                            // that need chasing stand out of a mostly-zero list.
                                                             customer.account.balance === 0
                                                                 ? "bg-muted text-muted-foreground"
                                                                 : customer.account.balance < 0
                                                                     ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-                                                                    : "bg-muted text-foreground",
+                                                                    : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
                                                         )}
                                                     >
                                                         {formatDrCr(customer.account.balance, customer.account.normalBalance)}
@@ -399,7 +421,10 @@ export default function CustomersPage() {
                     )}
                 </EntityListPanel>
 
-                <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
+                <section
+                    className="flex flex-1 flex-col overflow-hidden"
+                    style={{ backgroundColor: moduleTint("customers", 6) }}
+                >
                     {!selectedId && (
                         <CustomerEmptyState icon={<User size={40} strokeWidth={1} />} message="Select a customer to view activity" />
                     )}
@@ -413,17 +438,25 @@ export default function CustomersPage() {
                     {selectedId && !detailLoading && detail && (
                         <>
                             {/* ── Header ── */}
-                            <div className="border-b bg-card px-6 py-4">
+                            {/* The module wash fades out within the strip itself, so the
+                                colour introduces the party and is gone before the tabs. */}
+                            <div
+                                className="border-b px-6 py-4"
+                                style={{ backgroundImage: `linear-gradient(to bottom, ${moduleTint("customers", 16)}, var(--card))` }}
+                            >
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
+                                        <div
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none text-sm font-bold text-primary-foreground"
+                                            style={{ backgroundColor: HUE }}
+                                        >
                                             {initials(detail.name)}
                                         </div>
                                         <div>
                                             <h2 className="text-xl font-bold">{detail.name}</h2>
                                             <div className="mt-1 flex flex-wrap items-center gap-3">
-                                                {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
-                                                {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
+                                                {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} style={{ color: HUE }} />{detail.phone}</span>}
+                                                {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} style={{ color: HUE }} />{detail.address}</span>}
                                                 {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
                                                 <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
                                             </div>
@@ -437,9 +470,20 @@ export default function CustomersPage() {
                                 </div>
 
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    <Badge variant="outline"><Smartphone size={11} /> {detail.devices.length} device{detail.devices.length !== 1 ? "s" : ""}</Badge>
-                                    <Badge variant="outline"><Building2 size={11} /> {detail.companies.length} compan{detail.companies.length !== 1 ? "ies" : "y"}</Badge>
-                                    <Badge variant="outline">{allTickets.length} ticket{allTickets.length !== 1 ? "s" : ""}</Badge>
+                                    {[
+                                        { key: "devices", icon: <Smartphone size={11} />, text: `${detail.devices.length} device${detail.devices.length !== 1 ? "s" : ""}` },
+                                        { key: "companies", icon: <Building2 size={11} />, text: `${detail.companies.length} compan${detail.companies.length !== 1 ? "ies" : "y"}` },
+                                        { key: "tickets", icon: null, text: `${allTickets.length} ticket${allTickets.length !== 1 ? "s" : ""}` },
+                                    ].map((chip) => (
+                                        <Badge
+                                            key={chip.key}
+                                            variant="outline"
+                                            className="bg-card/70"
+                                            style={{ borderColor: `color-mix(in oklab, ${HUE} 38%, transparent)`, color: HUE }}
+                                        >
+                                            {chip.icon} {chip.text}
+                                        </Badge>
+                                    ))}
                                 </div>
                             </div>
 
@@ -451,7 +495,17 @@ export default function CustomersPage() {
                                             key={item}
                                             type="button"
                                             size="sm"
-                                            variant={tab === item ? "default" : "ghost"}
+                                            variant="ghost"
+                                            className="capitalize"
+                                            // The open tab is a tinted pill with a hue underline rather
+                                            // than a solid dark block — it still reads as selected, but
+                                            // stops being the heaviest thing on the screen.
+                                            style={tab === item ? {
+                                                backgroundColor: moduleTint("customers", 22),
+                                                color: HUE,
+                                                fontWeight: 600,
+                                                boxShadow: `inset 0 -2px 0 ${HUE}`,
+                                            } : undefined}
                                             onClick={() => handleTabChange(item)}
                                         >
                                             {item}
