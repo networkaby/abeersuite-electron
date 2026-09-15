@@ -1,38 +1,28 @@
-# AbeerSuite 1.3.7
+# AbeerSuite 1.3.8
 
-Faster bill saving at the counter, and the groundwork that makes every future update
-almost instant.
+A few real fixes this time — install whenever convenient, nothing urgent.
 
-## Saving a bill is quicker
+## Fixes you may have hit
 
-Saving a voucher used to make about 45 separate trips to the database. It now makes
-about 23, and the screen comes back without waiting for the balance recalculation to
-finish.
+- **Quick-create was silently dropping the sale price you typed.** Creating a
+  product from the quick-create box (instead of the full New Product form)
+  saved the product but never the price you entered — the pricing engine
+  quietly filled in something else instead. Fixed: the price you type is now
+  the price that gets saved, including a genuinely free item priced at ₹0.
+- **A valid UPI ID could get rejected at the till.** Some real UPI handles
+  (like `name@pay.tm1`, with a digit or dot after the PSP name) were accepted
+  in party bank details but refused at the counter's payment screen. Both
+  places now use the same rule, and a pasted ID with a trailing space is no
+  longer rejected either.
+- **"You don't have access to that branch" now actually shows up.** When a
+  branch-access refusal happened, the screen was supposed to show that exact
+  message but silently showed nothing useful instead. It now displays
+  correctly everywhere this check applies.
 
-- **Save and post is one request.** Choosing "Save & Post" used to save the bill, come
-  back, and then post it in a second request. It is now one.
-- **A bill meant to be posted is posted from the start.** It used to be written as a
-  draft and changed to posted a moment later — two versions of the same document. On a
-  counter that also meant the same bill was sent up to the office twice. A draft is now
-  only what somebody deliberately chooses to save as a draft.
+## Behind the scenes
 
-## Updates will stop interrupting the counter
-
-Until now, installing an update meant the counter shut down, unpacked around 670 MB of
-program files with nothing on screen but a splash, and only then came back. On a busy
-till that is several minutes of not being able to bill, and it happened on every single
-release.
-
-From this version on, the counter unpacks an update **quietly in the background while
-you are still billing**, running gently enough that it does not slow the till down. When
-the moment comes to restart, there is nothing heavy left to do — it simply swaps the old
-program folder for the new one, which takes seconds however large the update is.
-
-**Please note:** this version is the one that *brings* the new method. The update from
-1.3.6 to 1.3.7 is still carried out the old, slower way, because a counter updates using
-the mechanism it already has. The very next update after this one will be the first
-quick one.
-
-If anything is not right — not enough free disk space, or the program folder cannot be
-written to — the counter quietly falls back to the old way of updating. It never gets
-stuck, and a counter that cannot take the fast path still updates normally.
+A batch of internal cleanup landed alongside these fixes — shared helpers for
+confirm dialogs, avatars, date formatting, rupee-to-paise parsing, and the
+sync delta format used by a few admin/office boards. None of this changes how
+anything looks or behaves; it just means less duplicated code to go wrong
+next time.
