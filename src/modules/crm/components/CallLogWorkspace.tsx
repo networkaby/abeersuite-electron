@@ -44,6 +44,12 @@ interface CallItem {
     alsoPushedBy: string[];
     occurredAt: string;
     customer: { kind: "person" | "company"; id: number; name: string } | null;
+    // The EPBX sends an incoming CLI digit by digit; answering before the last
+    // digit lands leaves a part number — a real call nobody can ring back.
+    partialNumber: boolean;
+    // For a part number: the single customer whose number starts with the
+    // digits we did get. A lead to verify, never a match — see GET /api/calls.
+    guessedCustomer: { kind: "person" | "company"; id: number; name: string } | null;
 }
 interface CallsResponse { items: CallItem[]; pagination: { page: number; pageSize: number; total: number } }
 
@@ -315,12 +321,30 @@ export default function CallLogWorkspace() {
                                 <tr className={`border-t ${c.spam ? "bg-red-50/60" : ""}`}>
                                     <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatDateTime(c.occurredAt)}</td>
                                     <td className="whitespace-nowrap px-3 py-2"><DirectionCell c={c} /></td>
-                                    <td className="whitespace-nowrap px-3 py-2 font-medium" title={c.rawNumber ?? undefined}>{formatCallerNumber(c.rawNumber, c.direction)}</td>
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium" title={c.rawNumber ?? undefined}>
+                                        {formatCallerNumber(c.rawNumber, c.direction)}
+                                        {c.partialNumber && (
+                                            <span
+                                                className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                                                title="The number arrived incomplete — the call was answered before the EPBX finished sending it."
+                                            >
+                                                part number
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="px-3 py-2">
                                         {c.customer ? (
                                             <span className="inline-flex items-center gap-1.5">
                                                 {c.customer.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
                                                 {c.customer.name}
+                                            </span>
+                                        ) : c.guessedCustomer ? (
+                                            <span
+                                                className="inline-flex items-center gap-1.5 text-amber-700"
+                                                title="Part number — the digits we got match only this customer. Ring back to confirm."
+                                            >
+                                                {c.guessedCustomer.kind === "person" ? <User size={14} /> : <Building2 size={14} />}
+                                                {c.guessedCustomer.name}?
                                             </span>
                                         ) : (
                                             <span className="text-muted-foreground">Unknown</span>
@@ -349,7 +373,8 @@ export default function CallLogWorkspace() {
                                             <Button variant="ghost" size="icon" className="h-8 w-8" title="Add / edit note" onClick={() => openNote(c)}>
                                                 <StickyNote size={15} />
                                             </Button>
-                                            {!c.customer && c.rawNumber && (
+                                            {/* No lead from a part number — it would save a phone nobody can ring. */}
+                                            {!c.customer && c.rawNumber && !c.partialNumber && (
                                                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Create lead from this number" onClick={() => setLeadPhone(formatCallerNumber(c.rawNumber, c.direction))}>
                                                     <UserPlus size={15} />
                                                 </Button>

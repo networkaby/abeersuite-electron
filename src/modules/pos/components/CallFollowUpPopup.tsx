@@ -29,11 +29,15 @@
  * CALLERS for the same reason — it is the number of people still waiting, which
  * is what the counter can actually act on.
  *
- * A CALL THE COUNTER CANNOT ACT ON IS NOT A REMINDER. `phoneMatchKey` needs ten
- * digits; a short CLI (a trunk delivering `38446`, seen live) yields no key, so
- * it can never be matched to a contact and never rung back. Those calls are real
- * — one ran 38 seconds of speech — and they keep their row on the CRM Call Log,
- * but there is nothing the counter can do with the reminder, so it drops off.
+ * A CALL THE COUNTER CANNOT ACT ON IS NOT A REMINDER. Only a COMPLETE Indian or
+ * international number appears here (`isCallableNumber`). Two captures fail that
+ * test: a short trunk CLI (`38446`, seen live) and a part number — the EPBX
+ * sends an incoming CLI digit by digit, so answering before the last digit lands
+ * records only what had arrived (`91600204286`, nine of India's ten digits).
+ * Neither can be rung back or matched to a contact. Those calls are real — one
+ * ran 38 seconds of speech — and they keep their row on the CRM Call Log, where
+ * a part number is marked as one and carries a near-match to verify; but there
+ * is nothing the counter can do with the reminder, so it drops off.
  *
  * AND ONE ANSWER CLOSES WHAT CAME BEFORE IT. The server (`sinceLastLogged=1`)
  * drops a number's calls that are older than that number's most recent logged
@@ -98,7 +102,7 @@ import { usePolling } from "@/shared/hooks/usePolling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useMyCounterExtension } from "@/modules/pos/hooks/useMyCounterExtension";
 import { CALL_POPUP_POLL_MS, CALL_POPUP_MAX_AGE_MS, CALL_POPUP_REMIND_MS, CALL_POPUP_HANDLED_TTL_MS } from "@/shared/lib/constants/polling";
-import { formatCallerNumber, formatDateTime } from "@/shared/lib/format";
+import { formatCallerNumber, formatDateTime, isCallableNumber } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 
 const STORAGE_KEY = "call-followup-popup:v1";
@@ -274,14 +278,19 @@ export default function CallFollowUpPopup() {
             if (seq !== refreshSeqRef.current) return; // a newer refresh already answered
             const cutoff = Date.now() - CALL_POPUP_MAX_AGE_MS;
             // Two display rules, both of them about whether a reminder can lead
-            // anywhere. Old calls drop off (CALL_POPUP_MAX_AGE_MS). So do calls
-            // whose number never produced a match key — `phoneMatchKey` needs ten
-            // digits, so a short CLI like the five-digit one trunk C001 delivered
-            // can never be tied to a contact and can never be rung back. The call
-            // was real and the row stays on the CRM Call Log for the audit; it
-            // just isn't something the counter can act on, so it stops nagging.
+            // anywhere. Old calls drop off (CALL_POPUP_MAX_AGE_MS). So does any
+            // call whose number is not a COMPLETE Indian or international
+            // number — that is this popup's law, not a side effect of a helper.
+            // A five-digit trunk CLI, or a CLI the handset cut off mid-arrival
+            // (the EPBX sends the digits one by one), cannot be rung back and
+            // cannot identify anyone. Such calls stay on the CRM Call Log for
+            // the audit, marked "part number" with a near-match to verify; here
+            // they just stop nagging.
             const fresh = data.items.filter(
-                (c) => c.phone !== null && new Date(c.occurredAt).getTime() >= cutoff,
+                (c) =>
+                    c.phone !== null
+                    && isCallableNumber(c.rawNumber, c.direction)
+                    && new Date(c.occurredAt).getTime() >= cutoff,
             );
 
             // The server has stopped calling it unhandled — the data is now

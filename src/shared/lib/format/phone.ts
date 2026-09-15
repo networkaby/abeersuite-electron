@@ -2,22 +2,116 @@
 //
 // Stored phones are free-form (bare 10-digit, +91-prefixed, leading-0 landlines,
 // sometimes with spaces/dashes), so we reduce any number to its stable identity:
-// the LAST 10 digits (an Indian mobile/STD subscriber number). Used on both sides
-// of the match — writing Call.phone and normalizing a customer's stored phones
-// for the timeline lookup — so both collapse to the same key.
+// the 10-digit Indian subscriber number. Used on both sides of the match —
+// writing Call.phone and normalizing a customer's stored phones for the timeline
+// lookup — so both collapse to the same key.
+//
+// The reduction is SHAPE-CHECKED first (readCallerNumber). A capture that is not
+// a whole number yields no key at all, rather than ten digits sliced off the end
+// of something broken.
 //
 // Distinct from normalizePortalPhone (auth/portalIdentifier), which keeps the
 // country prefix (10–15 digits) for portal-login uniqueness. Don't conflate them.
 
 /**
+ * What a captured number actually IS, before anything downstream trusts it.
+ *
+ * The EPBX delivers an incoming CLI as an analogue signal, digit by digit, and
+ * that takes a moment. If staff lift the handset before the last digit lands,
+ * the record carries only the digits that had arrived — a PART NUMBER. Seen
+ * live: `91600204286` (the 91 country code plus nine of the ten digits) and a
+ * five-digit CLI from trunk C001.
+ *
+ * A part number is NOT a number. It cannot be rung back and it cannot identify
+ * anyone, so it must never become a match key: the old last-10 rule turned
+ * `91600204286` into the key `1600204286`, a number that does not exist, which
+ * then looked real enough to nag the counter in the call popup.
+ *
+ *   india         — reduces to a full 10-digit subscriber number, however the
+ *                   PBX dressed it (bare, behind a trunk 0, behind 91 / +91).
+ *   international — 11 to 15 digits that are not the broken India case.
+ *   partial       — digits arrived, but too few to be any number.
+ *   none          — nothing usable at all.
+ */
+export type CallerNumberShape = "india" | "international" | "partial" | "none";
+
+export interface CallerNumberFacts {
+    shape: CallerNumberShape;
+    /** Every digit captured, trunk/STD access zeros stripped. */
+    digits: string;
+    /** The subscriber number: 10 digits for india, the digits we have for partial. */
+    local: string;
+}
+
+/** Longest length a real number reaches (E.164). */
+const MAX_NUMBER_DIGITS = 15;
+
+/**
+ * The single reading of a captured number. Every other helper here, and every
+ * screen that has to decide whether a call is actionable, goes through this.
+ */
+export function readCallerNumber(raw: string | null | undefined): CallerNumberFacts {
+    const all = (raw ?? "").replace(/\D/g, "");
+    // Drop the trunk/STD access zero(s) the PBX prefixes before interpreting.
+    const digits = all.replace(/^0+/, "");
+    if (!digits) return { shape: "none", digits: "", local: "" };
+    if (digits.length === 10) return { shape: "india", digits, local: digits };
+    if (digits.length === 12 && digits.startsWith("91")) {
+        return { shape: "india", digits, local: digits.slice(2) };
+    }
+    // 91 plus fewer than ten digits is India one or more digits short — a CLI
+    // cut off mid-arrival, never a foreign number. Its subscriber digits are
+    // what came after the country code.
+    if (digits.length < 12 && digits.startsWith("91")) {
+        return { shape: "partial", digits, local: digits.slice(2) };
+    }
+    if (digits.length > 10 && digits.length <= MAX_NUMBER_DIGITS) {
+        return { shape: "international", digits, local: digits };
+    }
+    // Under ten digits, or longer than any number on earth.
+    return { shape: "partial", digits, local: digits };
+}
+
+/**
+ * True when the number is complete enough to ring back and to identify someone.
+ * Pass the call's `direction` so an OUTGOING dial string is cleaned of its
+ * overflow keypresses first, exactly as formatCallerNumber does.
+ */
+export function isCallableNumber(raw: string | null | undefined, direction?: string): boolean {
+    const src = direction === "OUTGOING" ? normalizeDialedNumber(raw) : raw;
+    const shape = readCallerNumber(src).shape;
+    return shape === "india" || shape === "international";
+}
+
+/**
+ * How many subscriber digits a part number must carry before we are willing to
+ * guess whose it is. Below this a prefix matches half the phone book, so the
+ * guess would be noise dressed as help.
+ */
+export const PARTIAL_CLI_MIN_DIGITS = 7;
+
+/**
+ * The leading digits of a part number, for a "whose number starts like this?"
+ * lookup — or null when the capture is a real number, or too short to guess on.
+ * Display and triage only: a prefix hit is never written to `Call.phone`.
+ */
+export function partialCliPrefix(raw: string | null | undefined): string | null {
+    const { shape, local } = readCallerNumber(raw);
+    if (shape !== "partial") return null;
+    return local.length >= PARTIAL_CLI_MIN_DIGITS ? local : null;
+}
+
+/**
  * Reduce a raw phone string to its 10-digit match key, or null if it can't yield
- * one (empty, or fewer than 10 digits — e.g. an internal extension).
+ * one — an internal extension, or a part number the PBX cut short.
  */
 export function phoneMatchKey(raw: string | null | undefined): string | null {
-    if (!raw) return null;
-    const digits = raw.replace(/\D/g, "");
-    if (digits.length < 10) return null;
-    return digits.slice(-10);
+    const { shape, local } = readCallerNumber(raw);
+    if (shape === "india") return local;
+    // A foreign number reduces the same way a stored one does, so both sides of
+    // the match collapse to the same key.
+    if (shape === "international") return local.slice(-10);
+    return null;
 }
 
 /**
@@ -71,12 +165,14 @@ export function phoneKeyVariants(key: string): string[] {
  * bare 10-digit subscriber number, whether the PBX delivered them plain, behind
  * the 91 country code, or behind a trunk/STD access zero.
  *
- * Anything else keeps every digit we captured, prefixed with "+" once it's long
- * enough to be international. We deliberately do NOT split an unrecognised
- * number into "+<code> <rest>": the PBX sometimes delivers a short or malformed
- * CLI (e.g. a 12-digit "091863809999"), and guessing a split there invents a
- * country code that doesn't exist — dressing up bad data as a valid foreign
- * number. Better that a malformed capture stays visibly odd.
+ * A foreign number keeps every digit we captured, prefixed with "+". We
+ * deliberately do NOT split it into "+<code> <rest>": guessing a split invents
+ * a country code that may not exist.
+ *
+ * A PART NUMBER — a CLI the handset cut off mid-arrival — gets NO "+" and a
+ * trailing ellipsis instead. `91600204286` is nine of India's ten digits, and
+ * printing it as "+91600204286" dressed a broken capture up as a valid foreign
+ * caller. It now reads "91600204286…", which is the truth.
  *
  * Pass the call's `direction` so an OUTGOING dial string has its overflow
  * keypresses trimmed first (see normalizeDialedNumber) — staff want to see who
@@ -85,12 +181,11 @@ export function phoneKeyVariants(key: string): string[] {
 export function formatCallerNumber(raw: string | null | undefined, direction?: string): string {
     if (!raw) return "—";
     const src = direction === "OUTGOING" ? normalizeDialedNumber(raw) : raw;
-    const digits = (src ?? "").replace(/\D/g, "");
-    if (!digits) return "—";
-    // Drop the trunk/STD access zero(s) the PBX prefixes before interpreting.
-    const n = digits.replace(/^0+/, "");
-    if (!n) return "—";
-    if (n.length === 10) return n;
-    if (n.length === 12 && n.startsWith("91")) return n.slice(2);
-    return n.length > 10 ? `+${n}` : n;
+    const { shape, digits, local } = readCallerNumber(src);
+    switch (shape) {
+        case "india": return local;
+        case "international": return `+${digits}`;
+        case "partial": return `${digits}…`;
+        default: return "—";
+    }
 }

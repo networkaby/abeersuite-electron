@@ -3,7 +3,9 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parsePagination } from "@/shared/lib/api";
-import { phoneMatchKey, phoneKeyVariants, normalizeDialedNumber } from "@/shared/lib/format";
+import {
+    phoneMatchKey, phoneKeyVariants, normalizeDialedNumber, readCallerNumber, partialCliPrefix,
+} from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
@@ -358,6 +360,56 @@ export async function GET(req: Request) {
             }
         }
 
+        // ── Part-number near-match (Call Log display only) ───────────────────
+        // The EPBX sends an incoming CLI digit by digit; answering early cuts it
+        // short, so no match key exists and the caller is Unknown. We can still
+        // offer a lead: look for stored phones that START with the digits that
+        // did arrive. Only when ONE customer matches, and only from
+        // PARTIAL_CLI_MIN_DIGITS digits up — a shorter prefix matches half the
+        // phone book. This NEVER touches `Call.phone`: it is a guess for staff
+        // to confirm by ringing back, so the Call Log marks it as one and the
+        // call popup does not show these calls at all.
+        const partialPrefixes = Array.from(new Set(
+            calls
+                .filter((c) => c.direction === "INCOMING" && !c.phone)
+                .map((c) => partialCliPrefix(c.rawNumber))
+                .filter((p): p is string => !!p),
+        ));
+        const guessByPrefix = new Map<string, { kind: "person" | "company"; id: number; name: string }>();
+        if (partialPrefixes.length) {
+            // `take` caps a runaway prefix; a prefix that wide is ambiguous and
+            // would be dropped below anyway.
+            const prefixRows = await prisma.phone.findMany({
+                where: {
+                    OR: partialPrefixes.flatMap((p) =>
+                        phoneKeyVariants(p).map((v) => ({ phone: { startsWith: v } })),
+                    ),
+                },
+                select: {
+                    phone: true,
+                    person: { select: { id: true, name: true } },
+                    company: { select: { id: true, name: true } },
+                },
+                take: 200,
+            });
+            for (const prefix of partialPrefixes) {
+                const owners = new Map<string, { kind: "person" | "company"; id: number; name: string }>();
+                for (const row of prefixRows) {
+                    const key = phoneMatchKey(row.phone);
+                    if (!key?.startsWith(prefix)) continue;
+                    const owner = row.person
+                        ? { kind: "person" as const, id: row.person.id, name: row.person.name }
+                        : row.company
+                            ? { kind: "company" as const, id: row.company.id, name: row.company.name }
+                            : null;
+                    if (!owner) continue;
+                    owners.set(`${owner.kind}:${owner.id}`, owner);
+                    if (owners.size > 1) break; // ambiguous — no guess
+                }
+                if (owners.size === 1) guessByPrefix.set(prefix, [...owners.values()][0]);
+            }
+        }
+
         // ── The already-answered cutoff ──────────────────────────────────────
         // A caller who rang five times has ONE thing to say, not five, so the
         // counter should be reminded once and one note should cover the lot.
@@ -416,6 +468,15 @@ export async function GET(req: Request) {
                 : [],
             occurredAt: c.occurredAt.toISOString(),
             customer: c.phone ? (ownerByKey.get(c.phone) ?? null) : null,
+            // A CLI the handset cut off mid-arrival: real call, unusable number.
+            partialNumber: readCallerNumber(
+                c.direction === "OUTGOING" ? normalizeDialedNumber(c.rawNumber) : c.rawNumber,
+            ).shape === "partial",
+            // The one customer whose number starts with those digits, if exactly
+            // one does. A lead for staff to verify — never a match.
+            guessedCustomer: c.phone || c.direction !== "INCOMING"
+                ? null
+                : (guessByPrefix.get(partialCliPrefix(c.rawNumber) ?? "") ?? null),
         }));
 
         // `total` counted before the cutoff ran, so take the dropped rows off it —
