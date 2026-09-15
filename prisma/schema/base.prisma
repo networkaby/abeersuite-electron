@@ -236,6 +236,13 @@ model Phone {
   label     String?
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
+  /// Load-bearing for the counters, not bookkeeping. Without it the sync
+  /// registry files this table as `append` on `createdAt` (see
+  /// scripts/gen-sync-registry.ts), so a replica receives NEW phones but never
+  /// an edited or deleted one — and the hourly reconcile compares an append
+  /// table on keys alone, so a corrected number stays wrong at the till forever.
+  /// `@default(now())` backfills existing rows on push. See Person.updatedAt.
+  updatedAt DateTime @default(now()) @updatedAt
   /// When ownership was proved. Staff-entered contacts are verified on entry
   /// (they met the customer); a portal OTP sets it too. Null only for a contact
   /// the customer typed into the portal without an OTP — POS search still finds
@@ -247,6 +254,9 @@ model Phone {
 
   @@index([personId])
   @@index([companyId])
+  /// Backs the watermark pull: "anything since <ts>?" must not scan the table
+  /// to answer no.
+  @@index([updatedAt])
 }
 
 model Email {
@@ -257,6 +267,8 @@ model Email {
   label     String?
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
+  /// See Phone.updatedAt — same reason, same backfill.
+  updatedAt DateTime @default(now()) @updatedAt
   /// When ownership was proved. Staff-entered contacts are verified on entry
   /// (they met the customer); a portal OTP sets it too. Null only for a contact
   /// the customer typed into the portal without an OTP — POS search still finds
@@ -268,4 +280,7 @@ model Email {
 
   @@index([personId])
   @@index([companyId])
+  /// Backs the watermark pull: "anything since <ts>?" must not scan the table
+  /// to answer no.
+  @@index([updatedAt])
 }
