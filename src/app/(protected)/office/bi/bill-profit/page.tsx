@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
@@ -173,9 +173,8 @@ export default function BillProfitPage() {
                                 {rows.length === 0 ? (
                                     <tr><td colSpan={colCount} className="py-12 text-center text-muted-foreground text-sm">No sale bills in this period.</td></tr>
                                 ) : rows.map((r) => (
-                                    <>
+                                    <Fragment key={r.voucherId}>
                                     <tr
-                                        key={r.voucherId}
                                         className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                         onClick={() => toggle(r.voucherId)}
                                     >
@@ -219,7 +218,7 @@ export default function BillProfitPage() {
                                         </td>
                                     </tr>
                                     {expanded === r.voucherId && (
-                                        <tr key={`${r.voucherId}-detail`} className="border-b bg-muted/20">
+                                        <tr className="border-b bg-muted/20">
                                             <td colSpan={colCount} className="px-6 py-3">
                                                 {detailLoading && !detail[r.voucherId] ? (
                                                     <Loader2 className="animate-spin text-muted-foreground" size={18} />
@@ -267,7 +266,7 @@ export default function BillProfitPage() {
                                             </td>
                                         </tr>
                                     )}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </tbody>
                             {rows.length > 0 && (

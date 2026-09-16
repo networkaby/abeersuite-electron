@@ -23,5 +23,6 @@ On the **Inventory** home page, five of the six cards led to a "page not found":
 ## Easier to move around
 
 - All **21 Business Intelligence** pages now show a breadcrumb at the top, and **Esc** takes you back — they had neither before.
+- On the **Bill Profit** report, opening a bill to see its detail could put the detail against the wrong row. The rows are now kept straight.
 - The app's own shell pages — the home dashboard, the Workspace inboxes, a colleague's profile, the serial lookup — now carry their own light colour instead of none, so it is clear at a glance that you are outside a business module. **Esc** goes back on those too.
 - The app and tray icon now sit on a white square, so it stays readable on a dark taskbar.
