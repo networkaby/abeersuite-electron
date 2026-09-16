@@ -117,8 +117,25 @@ function bucketFor(days: number): AgeingBucket {
  * the universal-voucher spine, keyed by the LEGACY JE id — a drop-in for the old
  * `InvVoucherTender.findMany` grouped by InvVoucher. Callers apply the non-AR
  * filter themselves (each knows its bill's AR-party account). Accepts the global
- * client or a tx. Historical spine lines are role-tagged by `backfillTenderRoles`
- * in the backfill script; new posts are tagged at write time by the GL builder.
+ * client or a tx.
+ *
+ * TRUST THIS TAG ONLY WHERE THERE IS NOTHING BETTER. New posts are tagged at
+ * write time by the GL builder, but a tag is not the ledger and three kinds of
+ * voucher have none:
+ *
+ *   • imported vouchers, which never had tender rows to tag in the first place;
+ *   • anything posted before role-tagging existed. (This comment used to promise
+ *     a `backfillTenderRoles` helper would have fixed those. No such helper
+ *     exists anywhere in the repo — only this sentence survived it.)
+ *   • until 2026-09-16, ANY voucher that had ever been edited: the edit path
+ *     rebuilt its GL lines and silently dropped `role`, so a single edit untagged
+ *     a bill for good. That is fixed at source (`glLineRow` is now the one
+ *     mapper), but it cannot be undone for vouchers already edited.
+ *
+ * Nothing can rebuild a lost tag, because a tag has no ledger leg behind it. So
+ * where the party's OWN leg can answer the question instead, read that — it
+ * cannot be forgotten the way a tag can. `loadOpenBills` below does exactly that
+ * and keeps this reading only as a fallback for pre-Phase-5 rows with no spine.
  */
 export async function loadTenderLines(
     db: Prisma.TransactionClient,
@@ -419,10 +436,27 @@ async function loadOpenBills(
 // FIFO accessor for POS collect-on-the-go. Returns this customer's OPEN
 // sale-side bills (SALE / POS), oldest-first, each with the journalEntryId a
 // Receipt voucher allocates against. Self-contained and `tx`-aware so it can run
-// inside the sale transaction; mirrors `loadOpenBills`'s paid math exactly but
-// scoped to a single ledger and the SALE side only (no regression to the shared
-// report path). The shared `OutstandingBill` shape drops journalEntryId, which is
-// why FIFO needs its own accessor.
+// inside the sale transaction. The shared `OutstandingBill` shape drops
+// journalEntryId, which is why FIFO needs its own accessor.
+//
+// IT NO LONGER MATCHES `loadOpenBills`, whatever this comment used to claim.
+// Since 30fa4e4f the report reads each bill's PARTY LEG; this still reads
+// `total − role=TENDER lines − links`. Two consequences worth knowing before
+// trusting it:
+//
+//   • A bill whose tender tags were lost — imported, pre-tagging, or edited
+//     before `glLineRow` became the one GL mapper — reads as FULLY OPEN here
+//     even when it was paid in cash. The report, reading the leg, gets it right.
+//   • `type: { in: ["SALE", "POS"] }` below means bill-wise OPENING vouchers are
+//     invisible to it, so counter surplus can never clear a carried-forward
+//     balance. Every party on live was converted to bill-wise openings on
+//     2026-09-16, so that is not a corner case any more.
+//
+// `planAutoLink` (autoLinkPlan.ts) is the newer reading — party-leg based, both
+// sides, openings included — and is what the counter receipt panel and the
+// office form now use. Moving this path onto it would fix both points above, but
+// it changes how a live till allocates money, so it is a deliberate decision and
+// not a drive-by edit.
 export async function getOpenSaleBillsForFifo(
     tx: Prisma.TransactionClient,
     accountId: number,

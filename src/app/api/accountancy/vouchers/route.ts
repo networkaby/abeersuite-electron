@@ -7,6 +7,7 @@ import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
+import { autoLinkSettlement } from "@/modules/accountancy/lib/autoLinkSettlement";
 import { validateRequest } from "@/shared/lib/api";
 import { PAYMENT_INSTRUMENT_VALUES } from "@/shared/lib/constants/accounting";
 import { handleApiError } from "@/shared/lib/api";
@@ -175,7 +176,35 @@ export async function POST(req: Request) {
             }
             return v;
         });
-        return NextResponse.json(voucher, { status: 201 });
+
+        // Settle a posted Receipt / Payment against the party's open bills — the
+        // office form has no bill picker either, and until now every voucher it
+        // saved sat on the party's ledger settling nothing. Deliberately AFTER
+        // the create transaction: a refusal here must cost only the link, and the
+        // create runs on Prisma's 5s default while linking wants its own 30s and
+        // the party lock. Never throws; the bill-link popup and
+        // `pnpm reconcile:bill-links` both remain able to place it by hand.
+        //
+        // Only POSTED and only with a named party: a draft has no GL legs to read
+        // and `assertLinkPlan` refuses one outright, and a link is measured on a
+        // party ledger, which `partyAccountId` is the only thing that names.
+        let settled: Awaited<ReturnType<typeof autoLinkSettlement>> | null = null;
+        if ((body.post ?? false) && body.partyAccountId != null
+            && (body.type === "RECEIPT" || body.type === "PAYMENT")) {
+            settled = await autoLinkSettlement({
+                voucherId: voucher.id,
+                accountId: body.partyAccountId,
+                userId:    user!.id,
+                reference: voucher.reference ?? null,
+            });
+        }
+
+        return NextResponse.json(
+            settled
+                ? { ...voucher, settled: settled.links, settledTotal: settled.linkedTotal, leftAsAdvance: settled.leftAsAdvance }
+                : voucher,
+            { status: 201 },
+        );
     } catch (e) {
         return handleApiError(e, "Failed to create voucher");
     }

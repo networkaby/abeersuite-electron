@@ -17,6 +17,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
+import { autoLinkSettlement } from "@/modules/accountancy/lib/autoLinkSettlement";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { touchPosShift } from "@/modules/pos/lib/touchShift";
 
@@ -102,8 +103,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return r;
         });
 
+        // Settle this money against the party's open bills — AFTER the receipt is
+        // committed, never inside its transaction. The counter panel has no bill
+        // picker, so the choice has to be made here; but a link refusal must cost
+        // only the link, not the receipt, with the cash already in the drawer.
+        // Never throws: an unlinked receipt is simply what every one of them used
+        // to be, and `pnpm reconcile:bill-links` can place it later.
+        const auto = await autoLinkSettlement({
+            voucherId: result.voucherId,
+            accountId: party.id,
+            userId:    user!.id,
+            reference: result.voucherRef,
+        });
+
         return NextResponse.json(
-            { voucherId: result.voucherId, voucherRef: result.voucherRef, amountPaise: String(totalPaise) },
+            {
+                voucherId: result.voucherId,
+                voucherRef: result.voucherRef,
+                amountPaise: String(totalPaise),
+                // What it cleared, so the panel can tell the customer which bills
+                // are now settled instead of leaving them to wonder.
+                settled:       auto.links,
+                settledTotal:  auto.linkedTotal,
+                leftAsAdvance: auto.leftAsAdvance,
+            },
             { status: 201 },
         );
     } catch (e) {

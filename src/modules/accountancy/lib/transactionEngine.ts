@@ -52,6 +52,37 @@ export interface EngineGlLine {
     reference?:   string | null;
 }
 
+/**
+ * One `EngineGlLine` as the `VoucherGlLine` row it becomes — the ONE place a GL
+ * line is turned into stored columns.
+ *
+ * It is a shared function and not an inline `.map` because it was inlined twice
+ * and the two copies drifted: the edit path (`reapplyTradingVoucherInPlace`)
+ * copied five fields and silently dropped `role`, `method`, `reference` and
+ * `branchId`. Nothing complained — the lines came back looking right with the
+ * tags blank — so every voucher that had ever been edited lost its `role=TENDER`
+ * marks for good, and with them the reading that tells the POS counter a cash
+ * bill was already paid (`getOpenSaleBillsForFifo`) and the reprint what was
+ * received against it (`voucherReceiptSample`). A tag has no ledger leg to fall
+ * back on, so nothing could ever rebuild it.
+ *
+ * Keeping one mapper is what stops that happening again: a field added here
+ * reaches every writer, and no writer can quietly omit one.
+ */
+export function glLineRow(l: EngineGlLine, idx: number, branchId: string | null) {
+    return {
+        accountId:   l.accountId,
+        type:        l.type,
+        amount:      round2(toNumber(l.amount)),
+        description: l.description ?? null,
+        branchId,
+        role:        l.role ?? null,        // form-section tag
+        seq:         l.seq ?? idx,          // ordinal (form order)
+        method:      l.method ?? null,      // tender channel
+        reference:   l.reference ?? null,   // tender ref
+    };
+}
+
 /** A stock movement for the engine's stock arm (re-export of the stock helper's shape). */
 export type EngineStockMove = RecordStockMovementArgs;
 /** Phase 5 5C: a stock move as the MAPPER builds it — without `universalVoucherId`.
@@ -213,17 +244,7 @@ export async function engineGlArm(
 
     // ── The single GL writer (Phase 4 G5 — legacy JournalEntry/JournalLine dropped) ─
     // The universal-voucher spine + VoucherGlLine children ARE the GL now.
-    const glLineBase = lines.map((l, idx) => ({
-        accountId:   l.accountId,
-        type:        l.type,
-        amount:      round2(toNumber(l.amount)),
-        description: l.description ?? null,
-        branchId,
-        role:        l.role ?? null,        // form-section tag
-        seq:         l.seq ?? idx,          // ordinal (form order)
-        method:      l.method ?? null,      // tender channel
-        reference:   l.reference ?? null,   // tender ref
-    }));
+    const glLineBase = lines.map((l, idx) => glLineRow(l, idx, branchId));
 
     // Phase 5 5.0 — ATTACH mode: the draft spine already exists (created at
     // voucher-save by engineCreateSpine). Fill its GL lines + flip DRAFT→POSTED.

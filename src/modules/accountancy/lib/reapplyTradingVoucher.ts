@@ -16,6 +16,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { saleToSpec, type TradingStockLine } from "./voucherMappers";
 import { GlBuildError, type PostVoucherInput } from "./postInvVoucher";
 import { recomputeAccountBalances } from "./aggregateLedger";
+import { glLineRow } from "./transactionEngine";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 export async function reapplyTradingVoucherInPlace(
@@ -64,14 +65,17 @@ export async function reapplyTradingVoucherInPlace(
         })).map((l) => l.accountId);
 
         await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: journalEntryId } });
+        // `glLineRow` — the SAME mapper the posting engine writes through. This
+        // used to be a hand-written copy of five fields, which meant an edit threw
+        // away `role`, `method`, `reference` and `branchId` every single time. A
+        // dropped `role=TENDER` cannot be rebuilt from anything (a tag has no
+        // ledger leg behind it), so one edit permanently convinced the counter
+        // that a paid-in-cash bill was still owed. Rebuild through the mapper and
+        // an edited voucher comes out byte-for-byte like a freshly posted one.
         await tx.voucherGlLine.createMany({
             data: spec.glLines.map((l, idx) => ({
                 universalVoucherId: journalEntryId,
-                accountId:   l.accountId,
-                type:        l.type,
-                amount:      l.amount,
-                description: l.description ?? null,
-                seq:         idx,
+                ...glLineRow(l, idx, branchId),
             })),
         });
 
