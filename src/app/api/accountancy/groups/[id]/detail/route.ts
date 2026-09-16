@@ -5,6 +5,7 @@ import { handleApiError } from "@/shared/lib/api";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap,
 } from "@/modules/accountancy/lib/aggregateLedger";
+import { groupSign } from "@/modules/accountancy/lib/groupNature";
 
 // GET /api/accountancy/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
@@ -33,8 +34,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // Rolled-up balance per sub-group (recursive)
         // Approach: collect all descendant ids per sub-group, sum Account.balance.
         const allGroups = await prisma.accountGroup.findMany({
-            select: { id: true, parentId: true },
+            select: { id: true, parentId: true, type: true },
         });
+        // A roll-up needs each group's nature to re-sign contra ledgers — see
+        // `groupSign`. Without it this page printed Sales and Purchases higher
+        // than the Trial Balance by twice their returns.
+        const typeOfGroup = new Map(allGroups.map((g) => [g.id, g.type]));
         const childMap = new Map<number, number[]>();
         for (const g of allGroups) {
             if (g.parentId === null) continue;
@@ -61,22 +66,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         // Index accounts by groupId for descendant rollups (one query, used twice below).
         const allAccounts = await prisma.account.findMany({
-            select: { id: true, groupId: true, isActive: true },
+            select: { id: true, groupId: true, isActive: true, normalBalance: true },
         });
-        const byGroup = new Map<number, number[]>();
+        const byGroup = new Map<number, typeof allAccounts>();
         for (const a of allAccounts) {
             if (a.groupId == null) continue;
             const arr = byGroup.get(a.groupId) ?? [];
-            arr.push(a.id);
+            arr.push(a);
             byGroup.set(a.groupId, arr);
         }
 
         const subGroups = subGroupsRaw.map((sg) => {
             let rolledUpBalance = 0;
             for (const id of descendantIds(sg.id)) {
-                const accIds = byGroup.get(id);
-                if (!accIds) continue;
-                for (const accId of accIds) rolledUpBalance += closingMap.get(accId) ?? 0;
+                const accs = byGroup.get(id);
+                if (!accs) continue;
+                const gt = typeOfGroup.get(id);
+                for (const a of accs) {
+                    const sign = gt ? groupSign(gt, a.normalBalance) : 1;
+                    rolledUpBalance += sign * (closingMap.get(a.id) ?? 0);
+                }
             }
             return {
                 id: sg.id,
@@ -100,7 +109,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         });
         const ledgersWithEffective = ledgers.map((l) => ({
             ...l,
-            balance: closingMap.get(l.id) ?? 0,
+            // Signed against the GROUP, so these add up to `totalBalance` and
+            // agree with the same group's row on the Trial Balance.
+            balance: groupSign(group.type, l.normalBalance) * (closingMap.get(l.id) ?? 0),
         }));
 
         // Total = own ledgers + sub-group rolled-up balances

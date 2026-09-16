@@ -19,6 +19,7 @@ import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { fmtPeriodDate } from "@/modules/accountancy/lib/period";
+import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
@@ -75,19 +76,37 @@ interface BalanceSheetData {
 // the hierarchy visible at a glance.
 type AmountWeight = "group" | "subGroup" | "ledger";
 
-function AmountCells({ value, weight }: {
+function AmountCells({ value, weight, side }: {
     value: number;
     weight: AmountWeight;
+    /** The column's own nature — Assets read Dr, Liabilities read Cr. */
+    side: "DEBIT" | "CREDIT";
 }) {
     const isLedger = weight === "ledger";
     const weightCls =
         weight === "group" ? "font-semibold text-foreground" :
             weight === "subGroup" ? "font-medium text-foreground" :
                 "font-normal text-muted-foreground text-sm";
-    const cell = (n: number) =>
-        n !== 0
-            ? <span className={n < 0 ? "text-destructive" : weightCls}>{fmt(Math.abs(n))}</span>
-            : <span className={isLedger ? "text-muted-foreground/65" : "text-muted-foreground/65"}>—</span>;
+    // Balances are signed against their group, so a negative means the figure
+    // sits on the OPPOSITE side — a contra ledger like Cash Over, or a customer
+    // carrying an advance under Sundry Debtors. Colour alone said that before,
+    // which disappears on a black-and-white printout and never said WHICH side.
+    // The Dr/Cr suffix is the Trial Balance's own idiom (see its SidedCell).
+    const cell = (n: number) => {
+        if (Math.abs(n) < 0.005) {
+            return <span className={isLedger ? "text-muted-foreground/65" : "text-muted-foreground/65"}>—</span>;
+        }
+        const onNormal = n > 0;
+        const shown = onNormal ? side : (side === "DEBIT" ? "CREDIT" : "DEBIT");
+        return (
+            <span className={onNormal ? weightCls : "text-destructive"}>
+                {fmt(Math.abs(n))}{" "}
+                <span className="text-muted-foreground font-normal text-[11px]">
+                    {shown === "DEBIT" ? "Dr" : "Cr"}
+                </span>
+            </span>
+        );
+    };
     return (
         <>
             <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[90px]">
@@ -120,6 +139,9 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
     const hasContent = node.children.length > 0 || visibleLedgers.length > 0;
     const balance = node.rolledUpClosing;
     const weight: AmountWeight = depth === 0 ? "group" : "subGroup";
+    // From the node itself, so a Suspense A/c relocated to Liabilities (which
+    // rewrites `type` and flips every sign beneath it) reads correctly too.
+    const side = defaultNormalBalanceForGroupType(node.type);
 
     return (
         <Fragment>
@@ -143,7 +165,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
                         </span>
                     </button>
                 </td>
-                <AmountCells value={balance} weight={weight} />
+                <AmountCells value={balance} weight={weight} side={side} />
             </tr>
             {isOpen && (
                 <>
@@ -166,7 +188,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
                             >
                                 <span className="hover:underline hover:text-primary">{l.name}</span>
                             </td>
-                            <AmountCells value={l.closing} weight="ledger" />
+                            <AmountCells value={l.closing} weight="ledger" side={side} />
                         </tr>
                     ))}
                 </>
@@ -330,7 +352,7 @@ export default function BalanceSheetPage() {
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c</span>
                                         </td>
-                                        <AmountCells value={profitOnLiab} weight="group" />
+                                        <AmountCells value={profitOnLiab} weight="group" side="CREDIT" />
                                     </tr>
                                 )}
                                 {/* Auto-computed plug — appears here when Σ Dr opening > Σ Cr opening.
@@ -343,7 +365,7 @@ export default function BalanceSheetPage() {
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm">Difference in opening balances</span>
                                         </td>
-                                        <AmountCells value={synthOnLiability} weight="group" />
+                                        <AmountCells value={synthOnLiability} weight="group" side="CREDIT" />
                                     </tr>
                                 )}
                             </tbody>
@@ -382,7 +404,7 @@ export default function BalanceSheetPage() {
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c (loss)</span>
                                         </td>
-                                        <AmountCells value={lossOnAsset} weight="group" />
+                                        <AmountCells value={lossOnAsset} weight="group" side="DEBIT" />
                                     </tr>
                                 )}
                                 {/* Auto-computed plug — rare; appears here when Σ Cr opening > Σ Dr opening.
@@ -395,7 +417,7 @@ export default function BalanceSheetPage() {
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm">Difference in opening balances</span>
                                         </td>
-                                        <AmountCells value={synthOnAsset} weight="group" />
+                                        <AmountCells value={synthOnAsset} weight="group" side="DEBIT" />
                                     </tr>
                                 )}
                             </tbody>

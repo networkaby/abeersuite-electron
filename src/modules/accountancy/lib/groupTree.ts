@@ -3,7 +3,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { AccountAggregate } from "./aggregateLedger";
-import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
+import { groupSign, type GroupTypeStr } from "./groupNature";
 
 export type LedgerNode = {
     id: number;
@@ -102,8 +102,7 @@ export async function buildGroupTree(
         // `debits` / `credits` are raw movement, never signed — they are what
         // `toPeriodOnlyTree` rebuilds the P&L from, which is why the P&L was
         // already correct and is untouched by this.
-        const groupSide = defaultNormalBalanceForGroupType(parent.type);
-        const sign = (a.normalBalance ?? groupSide) === groupSide ? 1 : -1;
+        const sign = groupSign(parent.type, a.normalBalance);
 
         parent.ledgers.push({
             id: a.id,

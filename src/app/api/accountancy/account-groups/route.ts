@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { groupSign } from "@/modules/accountancy/lib/groupNature";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -137,6 +138,7 @@ export async function GET(req: Request) {
         const flatGroups = (flat as Omit<FlatGroup, "totalBalance">[]).map(
             (g) => ({ ...g, totalBalance: 0 }),
         );
+        const typeOfGroup = new Map(flatGroups.map((g) => [g.id, g.type]));
 
         if (!withLedgers) {
             return NextResponse.json(buildTree(flatGroups, new Map()));
@@ -174,7 +176,12 @@ export async function GET(req: Request) {
                 openingBalanceDate: a.openingBalanceDate
                     ? a.openingBalanceDate.toISOString().slice(0, 10)
                     : null,
-                balance: closingMap.get(a.id) ?? 0,
+                // Signed against the GROUP, not the account, so a contra ledger
+                // REDUCES its group in the rollup below — same rule the reports
+                // use (`groupSign`). Before this, the masters tree showed Sales
+                // and Purchases higher than the Trial Balance by twice returns.
+                balance: groupSign(typeOfGroup.get(a.groupId!) ?? "ASSET", a.normalBalance)
+                    * (closingMap.get(a.id) ?? 0),
             });
             ledgersByGroup.set(a.groupId, arr);
         }
