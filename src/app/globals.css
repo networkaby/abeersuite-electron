@@ -45,6 +45,7 @@
   /* Module hues lifted to L .885. The glyph must separate from the rail, and
      the rail is now light: at the old L .845 the blue-family hues (bi 260,
      customers 230) dropped toward the rail's own colour. */
+  --m-workspace: oklch(0.885 0.05 258);
   --m-repair: oklch(0.885 0.125 20);
   --m-pos: oklch(0.885 0.115 50);
   --m-help: oklch(0.89 0.11 80);
@@ -180,6 +181,10 @@
      and breaks the other (measured 6.6:1 / 2.1:1 either way round). */
   --m-ink-mix: black;
 
+  /* The shell, not a module — see MODULE_VAR in moduleTheme.ts. Kept at a
+     fraction of the module chroma (.06 against their .13-.19) so it reads as
+     the app's own furniture and can never be mistaken for a module hue. */
+  --m-workspace: oklch(0.55 0.06 258);
   --m-repair: oklch(0.55 0.17 20);
   --m-pos: oklch(0.56 0.16 50);
   --m-help: oklch(0.54 0.13 80);
@@ -251,6 +256,7 @@
   /* Module hues — lifted and de-saturated for a dark background (L .76 / C .14). */
   --m-ink-mix: white;
 
+  --m-workspace: oklch(0.76 0.05 258);
   --m-repair: oklch(0.76 0.15 20);
   --m-pos: oklch(0.78 0.14 50);
   --m-help: oklch(0.79 0.13 80);

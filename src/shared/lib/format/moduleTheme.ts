@@ -43,6 +43,11 @@ import type { CSSProperties } from "react";
 /// customers (230) because it IS customer loyalty, and pricing-strategy (125)
 /// between e-commerce (110) and inventory (140) because it prices that stock.
 const MODULE_VAR: Record<string, string> = {
+    // Not a module — the office shell. Home, Welcome, the Workspace inboxes, a
+    // colleague's profile and the serial lookup are the furniture the modules
+    // sit inside, so they share one low-chroma slate rather than borrowing a
+    // module's hue and claiming to be it.
+    workspace: "--m-workspace",
     repair: "--m-repair",
     pos: "--m-pos",
     help: "--m-help",
