@@ -9,6 +9,8 @@
 
 **Workflow:** Understand → Repeat back → Explain plan → Wait for approval → Edit → Check impact → Update seeds/docs → Validate.
 
+eye on bug during any work.
+
 ## 2. Product
 
 Every printable document must be customizable through the print template.
@@ -21,7 +23,7 @@ Project is nearly complete. Prefer **simple, maintainable, DRY code**; remove du
 
 - **demo** = local PostgreSQL demo data, reset allowed. **live** = production data, **never full-reset**.
 - Schema changes ship as **committed migrations**, and **Vercel applies them**: the `vercel-build` script runs `prisma migrate deploy` before the build, so a deploy brings the live DB's tables, columns and carried data with it. `pnpm db:migrate` by hand is now only for demo, counters and recovery. Vercel must have `DIRECT_URL` set — `prisma.config.ts` prefers it, and the pooled `DATABASE_URL` (port 6543, pgbouncer) cannot run migrations.
-- **One migration per release, not one per change.** While a migration file has not been applied to *any* database, keep folding further schema edits into that same file and re-run it locally. Start a new file only once it has been deployed, or when Postgres forces it — an enum `ADD VALUE` cannot be used in the transaction that adds it (see the `ADVANCE_FOR` pair).
+- **One migration per release, not one per change.** While a migration file has not been applied to _any_ database, keep folding further schema edits into that same file and re-run it locally. Start a new file only once it has been deployed, or when Postgres forces it — an enum `ADD VALUE` cannot be used in the transaction that adds it (see the `ADVANCE_FOR` pair).
 - **An applied migration is frozen.** Its checksum is recorded in `_prisma_migrations`; editing it makes `migrate deploy` refuse to run at all. Never edit `0_init`. Every pre-2026-09-13 database needs `pnpm db:migrate:baseline` once.
 - **Counter release goes out before the Vercel deploy** that carries the migration. The server getting ahead of a replica halts every table on that till (`schemaGuard.js`, exit 4), not just the changed one.
 - How, in full: `docs/migrations.md`.
@@ -51,7 +53,7 @@ Commands: `pnpm seed:check-docs` · `pnpm seed:fix-docs` · `pnpm precommit` · 
 Priority: **UX → DB → Server**.
 
 - **UX:** optimistic updates with rollback, prefetch, no blank flicker, show cached data while refreshing.
-- **DB:** DB pagination, select needed columns only, avoid `SELECT `\* and query-per-item.
+- **DB:** DB pagination, select needed columns only, avoid `SELECT` and query-per-item.
 - **Server:** browser cache, batch mutations, defer non-critical work, ISR for store pages, short TTL for office.
 
 ## 8. Branches
