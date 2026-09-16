@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { reorderThreshold, suggestedOrderQty, clusterCostBands } from "@/modules/inventory/lib/reorder";
 import { classifyProducts } from "@/modules/inventory/lib/movementClass";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
+import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 
 export const maxDuration = 60;
@@ -53,7 +54,7 @@ export async function GET(req: Request) {
             orderBy: { name: "asc" },
             select: {
                 id: true, sku: true, name: true, createdAt: true,
-                stock: true, reserved: true,
+                reserved: true,
                 lowStockThreshold: true, leadTimeDays: true,
                 orderPackQty: true, minOrderQty: true,
                 openingStock: true,
@@ -66,7 +67,6 @@ export async function GET(req: Request) {
                 group: { select: { name: true } },
                 brand: { select: { name: true } },
                 category: { select: { name: true } },
-                ...(branchId ? { branchStocks: { where: { branchId }, select: { stock: true } } } : {}),
             },
         }),
         prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { defaultLeadTimeDays: true } }),
@@ -85,6 +85,10 @@ export async function GET(req: Request) {
     ]);
     const transactedIds = new Set(ledgerProductIds.map((l) => l.productId));
 
+    // On-hand from the formula, not the caches — branch scope narrows the ledger
+    // half only, so an opening balance is never dropped (see liveStock.ts).
+    const liveStock = await loadLiveStockMap(products, branchId);
+
     const movement = await classifyProducts(
         products.map((p) => ({ id: p.id, groupId: p.groupId, categoryId: p.categoryId, createdAt: p.createdAt })),
         { branchId },
@@ -93,16 +97,14 @@ export async function GET(req: Request) {
     // Last-inward cost — only walked in grouped mode (per-product valuation
     // pass; the item-wise tab stays cheap).
     const costMap = grouped
-        ? await loadLastInwardCostMap(products.map((p) => ({ id: p.id, stock: p.stock })))
+        ? await loadLastInwardCostMap(products.map((p) => ({ id: p.id, stock: liveStock.get(p.id) ?? 0 })))
         : new Map<number, number | null>();
 
     const defaultLeadTimeDays = orgDefaults?.defaultLeadTimeDays ?? 7;
     const r2 = (n: number) => Math.round(n * 100) / 100;
 
     const rows = products.map((p) => {
-        const stock = branchId
-            ? ((p as { branchStocks?: { stock: number }[] }).branchStocks?.[0]?.stock ?? 0)
-            : (p.stock ?? 0);
+        const stock = liveStock.get(p.id) ?? 0;
         // Reservations are org-wide (see StockReservation) — only the global
         // view can meaningfully subtract them.
         const available = branchId ? stock : stock - p.reserved;

@@ -5,6 +5,7 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
 import { loadUnitCostMap } from "@/modules/inventory/lib/costBasis";
+import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 
 export const maxDuration = 60;
 
@@ -34,10 +35,9 @@ export async function GET(req: Request) {
         prisma.invProduct.findMany({
             where: { isActive: true },
             select: {
-                id: true, sku: true, name: true, stock: true,
+                id: true, sku: true, name: true, openingStock: true,
                 category: { select: { name: true } },
                 unit: { select: { code: true } },
-                ...(branchId ? { branchStocks: { where: { branchId }, select: { stock: true } } } : {}),
             },
         }),
         prisma.invStockLedger.groupBy({
@@ -54,11 +54,11 @@ export async function GET(req: Request) {
     }
     const sumByProduct = new Map(periodSums.map((s) => [s.productId, s]));
 
-    const effectiveStock = (p: typeof products[number]): number => {
-        if (!branchId) return p.stock ?? 0;
-        const bs = (p as { branchStocks?: { stock: number }[] }).branchStocks;
-        return bs && bs.length > 0 ? bs[0].stock : 0;
-    };
+    // On-hand from the formula, not the caches — the per-branch cache holds
+    // voucher movement only, so branch scope used to drop every opening balance
+    // to zero (see liveStock.ts).
+    const liveStock = await loadLiveStockMap(products, branchId);
+    const effectiveStock = (p: typeof products[number]): number => liveStock.get(p.id) ?? 0;
 
     const costMap = await loadUnitCostMap(products.map((p) => p.id), to, costMethod);
 

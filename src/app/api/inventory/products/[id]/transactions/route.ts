@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
+import { loadLiveStockByBranch } from "@/modules/inventory/lib/liveStock";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
 
@@ -48,7 +49,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         });
         if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-        const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
+        // On-hand comes from the formula, never from the caches. The per-branch
+        // cache holds voucher movement only, so reading it raw showed a product
+        // whose stock is an opening balance as 0 — see liveStock.ts.
+        const live = await loadLiveStockByBranch(
+            product,
+            product.branchStocks.map((b) => b.branch.id),
+        );
+        const branchNames = new Map(product.branchStocks.map((b) => [b.branch.id, b.branch.name]));
+        const unnamed = [...live.byBranch.keys()].filter((id) => !branchNames.has(id));
+        if (unnamed.length > 0) {
+            const rows = await prisma.branch.findMany({ where: { id: { in: unnamed } }, select: { id: true, name: true } });
+            for (const b of rows) branchNames.set(b.id, b.name);
+        }
+        const branchStocks = [...live.byBranch.entries()]
+            .map(([id, stock]) => ({ stock, branch: { id, name: branchNames.get(id) ?? id } }))
+            .sort((a, b) => b.stock - a.stock);
+
+        const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: live.total }]);
         const lastPurchasePaise = lastInward.get(product.id) ?? null;
 
         // Phase 5 5C: goods lines hang off the spine — the InvVoucher is reached
@@ -156,7 +174,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         }
 
         return NextResponse.json({
-            product: { ...product, lastPurchasePaise },
+            product: { ...product, stock: live.total, branchStocks, lastPurchasePaise },
             transactions,
         });
     } catch (e) {

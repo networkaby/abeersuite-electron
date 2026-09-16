@@ -13,7 +13,7 @@ import {
 } from "@/modules/inventory/lib/stockValue";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
 import { classifyProducts } from "@/modules/inventory/lib/movementClass";
-import { toNumber } from "@/modules/accountancy/lib/balance";
+import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
@@ -78,31 +78,16 @@ export async function GET(req: NextRequest) {
             catch { activeBranchId = null; }
         }
 
-        const [rows, ledgerSums] = await Promise.all([
-            prisma.invProduct.findMany({
-                orderBy: { sku: "asc" },
-                include: productInclude,
-            }),
-            // Live stock from the source of truth — NOT the InvProduct.stock /
-            // InvProductBranch caches (they drift; e.g. imported opening stock
-            // never reached the branch cache and every row showed 0). Same
-            // formula as recomputeProductStock (stockMovement.ts):
-            //   stock = openingStock (master column, folded in like a GL
-            //           opening balance — it is NOT a ledger row)
-            //         + Σ(inQty − outQty) from InvStockLedger
-            // Branch scope filters the ledger movements; openingStock is
-            // org-level and folds into every scope.
-            prisma.invStockLedger.groupBy({
-                by: ["productId"],
-                ...(activeBranchId ? { where: { branchId: activeBranchId } } : {}),
-                _sum: { inQty: true, outQty: true },
-            }),
-        ]);
+        const rows = await prisma.invProduct.findMany({
+            orderBy: { sku: "asc" },
+            include: productInclude,
+        });
 
-        const movedByProduct = new Map<number, number>();
-        for (const r of ledgerSums) {
-            movedByProduct.set(r.productId, toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0));
-        }
+        // Live stock from the source of truth — NOT the InvProduct.stock /
+        // InvProductBranch caches (they drift; e.g. imported opening stock never
+        // reached the branch cache and every row showed 0). liveStock.ts owns the
+        // formula and every stock-reading route now shares it.
+        const liveStock = await loadLiveStockMap(rows, activeBranchId);
 
         // Movement class badge (Regular/New/Slow/Non-moving/Dead) — decision
         // support on the list; same engine as the Reorder page.
@@ -112,10 +97,8 @@ export async function GET(req: NextRequest) {
         );
 
         const enriched = rows.map((r) => {
-            const moved = movedByProduct.get(r.id);
-            const opening = r.openingStock != null ? toNumber(r.openingStock) : null;
-            // No opening AND no movements → null ("stock not tracked", shown as —).
-            const stock = moved == null && opening == null ? null : (opening ?? 0) + (moved ?? 0);
+            // null = "stock not tracked" (no opening AND no movements), shown as —.
+            const stock = liveStock.get(r.id) ?? null;
             const m = movement.get(r.id);
             // Derived primary barcode for list display/search/sort (the full set
             // is `codes`, included above).

@@ -6,6 +6,7 @@ import {
     VALUATION_METHODS,
     type ValuationMethod,
 } from "@/modules/inventory/lib/valuation";
+import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 
 // Heavy aggregation: all active products + a per-product inward-lot valuation
 // walk. Give Vercel headroom past the default 10s function limit so large
@@ -18,7 +19,9 @@ export const maxDuration = 60;
 //   - master fields (sku, name, stock, effectiveSalePricePaise, low-stock flag)
 //   - grouping (group / category / brand) so the UI can pivot views client-side
 //   - valuation block computed via `valueStockBatch` for the requested method
-//   - stock is per-branch when branchId is supplied, otherwise global InvProduct.stock
+//   - stock comes from loadLiveStockMap (openingStock + ledger movement); the
+//     ledger half is branch-scoped when branchId is supplied, and the opening
+//     balance folds into every scope because it carries no branch
 // Also returns `branches` (id+name list) for the UI branch picker.
 //
 // Default method = OrgDefaults.valuationMethod. PR 3 removed the costPaise
@@ -47,7 +50,7 @@ export async function GET(req: Request) {
                 id:                true,
                 sku:               true,
                 name:              true,
-                stock:             true,
+                openingStock:      true,
                 lowStockThreshold: true,
                 effectiveSalePricePaise: true,
                 codes: { select: { kind: true, value: true } },
@@ -55,18 +58,16 @@ export async function GET(req: Request) {
                 group:    { select: { id: true, name: true } },
                 brand:    { select: { id: true, name: true } },
                 category: { select: { id: true, name: true } },
-                ...(branchId ? { branchStocks: { where: { branchId }, select: { stock: true } } } : {}),
             },
         }),
         prisma.branch.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     ]);
 
-    // Resolve effective stock per product for the requested scope
-    const effectiveStock = (p: typeof products[number]): number => {
-        if (!branchId) return p.stock ?? 0;
-        const bs = (p as { branchStocks?: { stock: number }[] }).branchStocks;
-        return bs && bs.length > 0 ? bs[0].stock : 0;
-    };
+    // On-hand for the requested scope, from the formula rather than the caches —
+    // the per-branch cache carries voucher movement only, so branch scope used to
+    // drop every opening balance to zero (see liveStock.ts).
+    const liveStock = await loadLiveStockMap(products, branchId);
+    const effectiveStock = (p: typeof products[number]): number => liveStock.get(p.id) ?? 0;
 
     const valuations = await valueStockBatch(
         products.map((p) => ({ id: p.id, stock: effectiveStock(p) })),

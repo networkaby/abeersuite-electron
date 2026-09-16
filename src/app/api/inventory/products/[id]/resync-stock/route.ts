@@ -1,19 +1,27 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { toNumber } from "@/modules/accountancy/lib/balance";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 // POST /api/inventory/products/[id]/resync-stock
 //
-// Maintenance utility — recomputes `InvProduct.stock` and every
-// `InvProductBranch.stock` row from the `InvStockLedger` rows for this
-// product. Use when an older voucher path left the caches drifted away
-// from the ledger truth (the ledger is append-only and authoritative).
+// Maintenance utility — rebuilds `InvProduct.stock` and every
+// `InvProductBranch.stock` row for this product from truth. Use when an older
+// voucher path left the caches drifted (the ledger is append-only and
+// authoritative).
 //
-// Returns the before/after values per branch so the caller can verify
-// the drift was real.
+// The rebuild is `recomputeProductStock` (stockMovement.ts) — the SAME routine
+// the in-place voucher edit and the cancel/restore paths call. This route used
+// to carry its own copy of the arithmetic, and the copy was wrong: it set
+// `InvProduct.stock` to the bare ledger sum, leaving out `openingStock`. Running
+// it on a product whose stock came from an opening balance silently knocked the
+// opening quantity off the company figure, and nothing but re-entering the
+// opening would bring it back — on live that was 644 of 1467 products. One
+// routine, one formula, no second copy to drift.
+//
+// Returns before/after so the caller can see whether the drift was real.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.PRODUCTS_EDIT);
     if (response) return response;
@@ -21,56 +29,28 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         const { id, error } = await parseIdParam(params);
         if (error) return error;
 
-        const before = await prisma.invProduct.findUnique({
-            where: { id },
-            select: { id: true, stock: true, branchStocks: { select: { branchId: true, stock: true } } },
-        });
+        const snapshot = {
+            id: true,
+            stock: true,
+            openingStock: true,
+            branchStocks: { select: { branchId: true, stock: true } },
+        } as const;
+
+        const before = await prisma.invProduct.findUnique({ where: { id }, select: snapshot });
         if (!before) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-        const ledger = await prisma.invStockLedger.findMany({
-            where:  { productId: id },
-            select: { branchId: true, inQty: true, outQty: true },
-        });
-        const byBranch = new Map<string, number>();
-        for (const r of ledger) {
-            const delta = toNumber(r.inQty) - toNumber(r.outQty);
-            byBranch.set(r.branchId, (byBranch.get(r.branchId) ?? 0) + delta);
-        }
-        const orgTotal = Array.from(byBranch.values()).reduce((s, v) => s + v, 0);
-
-        const result = await prisma.$transaction(async (tx) => {
-            // Upsert / patch every branch row to match the ledger sum.
-            for (const [branchId, stock] of byBranch.entries()) {
-                await tx.invProductBranch.upsert({
-                    where:  { productId_branchId: { productId: id, branchId } },
-                    create: { productId: id, branchId, stock: Math.round(stock) },
-                    update: { stock: Math.round(stock) },
-                });
-            }
-            // Wipe any per-branch row not present in the ledger (e.g., a
-            // branch row that had a +N from a path now gone with no ledger
-            // trace whatsoever).
-            const ledgerBranchIds = Array.from(byBranch.keys());
-            if (ledgerBranchIds.length > 0) {
-                await tx.invProductBranch.deleteMany({
-                    where: { productId: id, branchId: { notIn: ledgerBranchIds } },
-                });
-            } else {
-                await tx.invProductBranch.deleteMany({ where: { productId: id } });
-            }
-            // Patch the org-wide cache to match the sum.
-            const updated = await tx.invProduct.update({
-                where: { id },
-                data:  { stock: Math.round(orgTotal) },
-                select: { id: true, stock: true, branchStocks: { select: { branchId: true, stock: true } } },
-            });
-            return updated;
+        const after = await prisma.$transaction(async (tx) => {
+            await recomputeProductStock(tx, [id]);
+            return tx.invProduct.findUniqueOrThrow({ where: { id }, select: snapshot });
         });
 
         return NextResponse.json({
             before: { stock: before.stock, branchStocks: before.branchStocks },
-            after:  { stock: result.stock,  branchStocks: result.branchStocks  },
-            ledgerSumByBranch: Object.fromEntries(byBranch.entries()),
+            after: { stock: after.stock, branchStocks: after.branchStocks },
+            // The opening quantity is org-level and is NOT a ledger row, so it is
+            // folded into `stock` but never into a branch row. Reported here so a
+            // branch row that looks short can be read against it.
+            openingStock: after.openingStock,
         });
     } catch (e) {
         return handleApiError(e, "Failed to resync stock");

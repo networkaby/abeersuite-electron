@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { classifyProducts, type MovementClass } from "@/modules/inventory/lib/movementClass";
 import { valueStockBatch, VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
+import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 
 export const maxDuration = 60;
 
@@ -28,14 +29,13 @@ export async function GET(req: Request) {
             orderBy: { name: "asc" },
             select: {
                 id: true, sku: true, name: true, createdAt: true,
-                stock: true, groupId: true, categoryId: true,
+                openingStock: true, groupId: true, categoryId: true,
                 codes: { select: { kind: true, value: true } },
                 bomOutputs: { select: { id: true }, take: 1 },
                 unit: { select: { code: true } },
                 group: { select: { name: true } },
                 brand: { select: { name: true } },
                 category: { select: { name: true } },
-                ...(branchId ? { branchStocks: { where: { branchId }, select: { stock: true } } } : {}),
             },
         }),
         prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
@@ -47,11 +47,11 @@ export async function GET(req: Request) {
         { branchId },
     );
 
-    const effectiveStock = (p: typeof products[number]): number => {
-        if (!branchId) return p.stock ?? 0;
-        const bs = (p as { branchStocks?: { stock: number }[] }).branchStocks;
-        return bs && bs.length > 0 ? bs[0].stock : 0;
-    };
+    // On-hand from the formula, not the caches — the per-branch cache holds
+    // voucher movement only, so branch scope used to drop every opening balance
+    // to zero (see liveStock.ts).
+    const liveStock = await loadLiveStockMap(products, branchId);
+    const effectiveStock = (p: typeof products[number]): number => liveStock.get(p.id) ?? 0;
 
     const method: ValuationMethod = VALUATION_METHODS.includes(orgDefaults?.valuationMethod as ValuationMethod)
         ? (orgDefaults?.valuationMethod as ValuationMethod)
