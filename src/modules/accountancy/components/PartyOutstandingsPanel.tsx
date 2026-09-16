@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { HandCoins, Loader2 } from "lucide-react";
+import { CheckCircle2, HandCoins, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
@@ -26,6 +26,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS } from "@/modules/accountancy/lib/ageing";
 import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
 import { BillLinkStatus } from "@/modules/accountancy/components/BillLinkStatus";
+import { ToLinkChip } from "@/modules/accountancy/components/ToLinkChip";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -102,6 +103,7 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
 
     const bills = useMemo(() => data?.bills ?? [], [data]);
     const { receivable, payable } = useMemo(() => summariseBySide(bills), [bills]);
+    const toLink = data?.toLink ?? 0;
     // A party with money on one side only — nearly all of them — shows one row
     // of cards. Show the receivable row when there is nothing at all, so the tab
     // opens with its shape rather than a bare table.
@@ -121,6 +123,21 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
 
     return (
         <div className="space-y-3">
+            {/* One line, before any figure: is there linking work on this party at
+                all. Without it the only way to find out is to open each bill's
+                Status in turn and read "nothing open on the other side". */}
+            {toLink > 0.005 ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <ToLinkChip toLink={toLink} />
+                    <span>received or paid against no bill — open a Status below to place it.</span>
+                </div>
+            ) : bills.length > 0 && (
+                <div className="flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 size={14} />
+                    <span>Fully linked — nothing pending to settle bill-wise.</span>
+                </div>
+            )}
+
             {sides.map(({ label, summary }) => (
                 <div key={label} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                     {BUCKET_KEYS.map((k) => (
@@ -178,7 +195,7 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                                     </td>
                                     <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
                                     <td className="px-3 py-1.5 text-right">
-                                        <BillLinkStatus bill={b} onLink={setLinkBillId} />
+                                        <BillLinkStatus bill={b} toLink={toLink} onLink={setLinkBillId} />
                                     </td>
                                     <td className="px-3 py-1.5 text-right">
                                         {b.universalVoucherId != null && (

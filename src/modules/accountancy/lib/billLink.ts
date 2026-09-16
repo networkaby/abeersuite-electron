@@ -155,6 +155,75 @@ export async function sumLinked(
     return out;
 }
 
+/** What a party still has sitting on no bill, split by side. `toLink` is the
+ *  part that can actually be matched — money on one side meeting a bill on the
+ *  other. `dr - cr` is the party's ledger balance, which is why a party whose
+ *  `toLink` is 0 has an outstanding list that already agrees with its ledger. */
+export type PartyUnallocated = { dr: number; cr: number; toLink: number };
+
+/**
+ * `loadLinkableDocs` read for MANY parties at once — the same open-amount rule
+ * (party leg, minus what is linked against it), rolled up per account instead of
+ * listed per voucher.
+ *
+ * It exists so a list can answer "is there anything to link here?" without
+ * opening the popup for every row. Calling `loadLinkableDocs` per party would be
+ * four queries each; this is two for the whole page, which is what lets the
+ * Receivables report carry the mark at all.
+ *
+ * `toLink = min(dr, cr)` is the honest measure of pending work: a sale of 4,000
+ * with an unlinked receipt of 3,000 gives dr 4,000 / cr 3,000 → 3,000 to link,
+ * and once linked the sale stands at 1,000 open against a 1,000 Dr ledger. A
+ * party with money on ONE side only has nothing to match, however overdue it is.
+ */
+export async function loadPartyUnallocated(
+    db: Prisma.TransactionClient,
+    accountIds: number[],
+    opts: { asOf?: Date } = {},
+): Promise<Map<number, PartyUnallocated>> {
+    const out = new Map<number, PartyUnallocated>();
+    const ids = [...new Set(accountIds)];
+    if (ids.length === 0) return out;
+
+    const lines = await db.voucherGlLine.findMany({
+        where: {
+            accountId:        { in: ids },
+            universalVoucher: {
+                ...ledgerStatusFilterUv(),
+                ...(opts.asOf ? { date: { lte: opts.asOf } } : {}),
+            },
+        },
+        select: { accountId: true, universalVoucherId: true, type: true, amount: true },
+    });
+    if (lines.length === 0) return out;
+
+    // One voucher can touch two party ledgers (a journal between two parties),
+    // so the leg is keyed by the PAIR, never by the spine alone.
+    const legs = new Map<string, number>();
+    for (const l of lines) {
+        const key = `${l.accountId}:${l.universalVoucherId}`;
+        const delta = l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+        legs.set(key, round2((legs.get(key) ?? 0) + delta));
+    }
+
+    const linked = await sumLinked(db, lines.map((l) => l.universalVoucherId));
+
+    for (const [key, signed] of legs) {
+        if (Math.abs(signed) <= EPS) continue;
+        const sep      = key.indexOf(":");
+        const accountId = Number(key.slice(0, sep));
+        const spineId   = Number(key.slice(sep + 1));
+        const open = round2(Math.abs(signed) - (linked[spineId] ?? 0));
+        if (open <= EPS) continue;
+        const cur = out.get(accountId) ?? { dr: 0, cr: 0, toLink: 0 };
+        if (signed > 0) cur.dr = round2(cur.dr + open);
+        else            cur.cr = round2(cur.cr + open);
+        out.set(accountId, cur);
+    }
+    for (const v of out.values()) v.toLink = round2(Math.min(v.dr, v.cr));
+    return out;
+}
+
 /**
  * Every voucher of this party that still has something open — bills, receipts,
  * payments, credit/debit notes, journals alike — oldest first, so the list is

@@ -19,6 +19,7 @@ import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS } from "@/modules/accountancy/lib/ageing";
 import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
 import { BillLinkStatus } from "@/modules/accountancy/components/BillLinkStatus";
+import { ToLinkChip } from "@/modules/accountancy/components/ToLinkChip";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -106,6 +107,14 @@ export function OutstandingsReportScreen({
         if (period) rows = rows.filter((p) => p.buckets[period] > 0.005);
         return rows;
     }, [data, q, period]);
+
+    // A bill row is drawn per bill, but "is there anything to link" is a question
+    // about the PARTY. Read off the party rows already in hand — the bill-wise
+    // tab must not ask the server a second time for what the same report carries.
+    const toLinkByParty = useMemo(
+        () => new Map((data?.parties ?? []).map((p) => [p.accountId, p.toLink])),
+        [data],
+    );
 
     const bills = useMemo(() => {
         if (!data) return [];
@@ -273,7 +282,12 @@ export function OutstandingsReportScreen({
                                         title="Show this party's bills"
                                         onClick={() => { setFocus({ accountId: p.accountId, name: p.accountName }); setView("bill"); }}
                                     >
-                                        <td className="px-3 py-1.5 font-medium text-foreground">{p.accountName}</td>
+                                        <td className="px-3 py-1.5 font-medium text-foreground">
+                                            <span className="inline-flex items-center gap-2">
+                                                {p.accountName}
+                                                <ToLinkChip toLink={p.toLink} />
+                                            </span>
+                                        </td>
                                         <td className="px-3 py-1.5 text-right text-muted-foreground">{p.billCount}</td>
                                         <td className="px-3 py-1.5 text-right font-mono">{p.buckets.b0_30 > 0 ? fmt(p.buckets.b0_30) : <span className="text-muted-foreground/65">—</span>}</td>
                                         <td className="px-3 py-1.5 text-right font-mono text-amber-600">{p.buckets.b30_60 > 0 ? fmt(p.buckets.b30_60) : <span className="text-muted-foreground/65">—</span>}</td>
@@ -352,6 +366,7 @@ export function OutstandingsReportScreen({
                                             <td className="px-3 py-1.5 text-right">
                                                 <BillLinkStatus
                                                     bill={b}
+                                                    toLink={toLinkByParty.get(b.accountId) ?? 0}
                                                     onLink={(voucherId) => setLink({ accountId: b.accountId, name: b.accountName, voucherId })}
                                                 />
                                             </td>

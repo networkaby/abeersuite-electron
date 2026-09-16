@@ -14,7 +14,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { sumLinked } from "./billLink";
+import { sumLinked, loadPartyUnallocated } from "./billLink";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { autoLinkOrder, dueDateOf } from "./billLinkPlan";
 import { OPENING_TYPE } from "./openingBills";
@@ -68,6 +68,10 @@ export type PartyOutstanding = {
     totalOutstanding: number;
     buckets:          Buckets;
     billCount:        number;
+    /** Money on this party that a bill on the OTHER side could settle right now.
+     *  0 means there is nothing to match, however overdue the bills are — so a
+     *  list can stay quiet instead of inviting a click that finds nothing. */
+    toLink:           number;
 };
 
 export type OutstandingBillFlat = OutstandingBill & {
@@ -92,6 +96,8 @@ export type LedgerOutstanding = {
     bills:            OutstandingBill[];
     totalOutstanding: number;
     buckets:          Buckets;
+    /** See `PartyOutstanding.toLink`. */
+    toLink:           number;
 };
 
 const EMPTY_BUCKETS: Buckets = { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 };
@@ -625,13 +631,16 @@ export async function getOutstandings(
     }
 
     const invType = groupName === ACCOUNT_GROUPS.SUNDRY_DEBTORS ? "SALE" : "PURCHASE";
-    const [accounts, bills] = await Promise.all([
+    // Two more queries for the WHOLE report — the per-party alternative is
+    // `loadLinkableDocs` four times over per row, which this report cannot afford.
+    const [accounts, bills, unallocated] = await Promise.all([
         prisma.account.findMany({
             where: { id: { in: accountIds } },
             select: { id: true, name: true, code: true, personId: true, companyId: true },
             orderBy: [{ name: "asc" }],
         }),
         loadOpenBills(accountIds, asOf, invType),
+        loadPartyUnallocated(prisma, accountIds, { asOf }),
     ]);
 
     // Only the parties that actually have an open bill need search identifiers —
@@ -651,6 +660,7 @@ export async function getOutstandings(
             totalOutstanding: 0,
             buckets:          emptyBuckets(),
             billCount:        0,
+            toLink:           unallocated.get(a.id)?.toLink ?? 0,
         });
         accountNameMap.set(a.id, a.name);
     }
@@ -711,7 +721,10 @@ export async function getLedgerOutstanding(
     });
     if (!account) return null;
 
-    const bills = await loadOpenBills([accountId], asOf, "BOTH");
+    const [bills, unallocated] = await Promise.all([
+        loadOpenBills([accountId], asOf, "BOTH"),
+        loadPartyUnallocated(prisma, [accountId], { asOf }),
+    ]);
     const buckets = emptyBuckets();
     let totalOutstanding = 0;
     const out: OutstandingBill[] = [];
@@ -733,5 +746,6 @@ export async function getLedgerOutstanding(
         bills:       out,
         totalOutstanding,
         buckets,
+        toLink:      unallocated.get(accountId)?.toLink ?? 0,
     };
 }

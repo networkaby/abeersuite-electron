@@ -17,13 +17,20 @@ import { Link2 } from "lucide-react";
 import { ageingStatusClass, ageingStatusLabel } from "@/modules/accountancy/lib/ageing";
 import type { OutstandingBill } from "@/modules/accountancy/lib/outstandings";
 
-export function BillLinkStatus({ bill, onLink }: {
+export function BillLinkStatus({ bill, onLink, toLink = 0 }: {
     bill:   Pick<OutstandingBill, "bucket" | "daysOverdue" | "side" | "universalVoucherId">;
     /** Open the bill-wise popup for this bill's spine id. */
     onLink: (universalVoucherId: number) => void;
+    /** The PARTY's `toLink` — money waiting on the other side of this party's
+     *  book. The chain icon appears only when there is some, so a row that can
+     *  only ever answer "nothing open on the other side" stops inviting a click.
+     *  The cell stays clickable either way: the popup is also the way to Receive
+     *  now, and that is worth opening on a party with nothing to match. */
+    toLink?: number;
 }) {
-    const label = ageingStatusLabel(bill.daysOverdue);
-    const tone  = `text-xs font-medium ${ageingStatusClass(bill.bucket)}`;
+    const label     = ageingStatusLabel(bill.daysOverdue);
+    const tone      = `text-xs font-medium ${ageingStatusClass(bill.bucket)}`;
+    const linkable  = toLink > 0.005;
 
     // Pre-spine rows carry no id a link can point at, so they stay plain words
     // rather than offering a click that could only fail.
@@ -32,14 +39,16 @@ export function BillLinkStatus({ bill, onLink }: {
     return (
         <button
             type="button"
-            title={bill.side === 1
-                ? "Link this bill to money already received — tick, part-amount or Auto"
-                : "Link this bill to money already paid — tick, part-amount or Auto"}
+            title={linkable
+                ? (bill.side === 1
+                    ? "Link this bill to money already received — tick, part-amount or Auto"
+                    : "Link this bill to money already paid — tick, part-amount or Auto")
+                : "Nothing to link on this party — opens the popup to receive or pay against this bill"}
             onClick={() => onLink(bill.universalVoucherId!)}
             className={`${tone} inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-muted`}
         >
             {label}
-            <Link2 size={11} className="opacity-70" />
+            {linkable && <Link2 size={11} className="opacity-70" />}
         </button>
     );
 }
