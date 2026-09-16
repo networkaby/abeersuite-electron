@@ -5,7 +5,10 @@ import { handleApiError } from "@/shared/lib/api";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,
 } from "@/modules/accountancy/lib/aggregateLedger";
-import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
+import {
+    buildGroupTree, injectLedger, sumGroupLedgers,
+    STOCK_GROUP, SYNTHETIC_STOCK_ID, type GroupNode,
+} from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
@@ -73,54 +76,29 @@ export async function GET(req: Request) {
         // date, not today's — otherwise it can't tie to the P&L for the same
         // period, whose Closing Stock is also as-at.
         const stockResult = await getClosingStockValue(overrideMethod, asOf);
-        const stockGlBalance = (() => {
-            // Sum of GL balance for accounts under "Stock-in-Hand" group
-            let s = 0;
-            const walk = (nodes: GroupNode[]): void => {
-                for (const n of nodes) {
-                    if (n.name === "Stock-in-Hand") {
-                        for (const l of n.ledgers) s += l.closing;
-                    }
-                    walk(n.children);
-                }
-            };
-            walk(tree);
-            return s;
-        })();
 
         // Tally convention: closing stock isn't posted per voucher to a GL
         // ledger. We surface it as a synthetic ledger inside Stock-in-Hand so
         // the reader sees the value where they expect (under Current Assets),
         // and the existing tree-renderer rolls it up into Stock-in-Hand and
-        // Current Assets totals naturally.
+        // Current Assets totals naturally. The Trial Balance does the same with
+        // the same helpers — when these two drifted apart, the reports stopped
+        // agreeing on Current Assets.
+        const stockGlBalance = sumGroupLedgers(assets, STOCK_GROUP).closing;
         const liveStockDelta = stockResult.computed - stockGlBalance;
         if (liveStockDelta !== 0) {
-            const inject = (nodes: GroupNode[]): boolean => {
-                for (const n of nodes) {
-                    if (n.name === "Stock-in-Hand") {
-                        n.ledgers.push({
-                            id: -1,                          // sentinel — no real Account row
-                            name: "Closing Stock (live)",
-                            code: null,
-                            normalBalance: "DEBIT",
-                            personId: null,
-                            companyId: null,
-                            opening: 0,
-                            debits:  0,
-                            credits: 0,
-                            closing: liveStockDelta,
-                        });
-                        n.rolledUpClosing += liveStockDelta;
-                        return true;
-                    }
-                    if (inject(n.children)) {
-                        n.rolledUpClosing += liveStockDelta;  // bubble up Current Assets etc.
-                        return true;
-                    }
-                }
-                return false;
-            };
-            inject(assets);
+            injectLedger(assets, STOCK_GROUP, {
+                id: SYNTHETIC_STOCK_ID,          // sentinel — no real Account row
+                name: "Closing Stock (live)",
+                code: null,
+                normalBalance: "DEBIT",
+                personId: null,
+                companyId: null,
+                opening: 0,
+                debits:  0,
+                credits: 0,
+                closing: liveStockDelta,
+            });
         }
 
         // ── Net P&L for current FY → surface under Capital Account ──────

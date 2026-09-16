@@ -150,3 +150,78 @@ export function pruneEmpty(nodes: GroupNode[]): GroupNode[] {
     }
     return result;
 }
+
+// ── Synthetic "Closing Stock" ledger ────────────────────────────────────
+// Stock is never posted per voucher to a GL account (Tally convention — see
+// postInvVoucher.ts); it is valued live at report time. So the Stock-in-Hand
+// group is real but empty, and any report that renders the asset side has to
+// put the valuation in itself or it is short by the whole value of the godown.
+//
+// That is exactly what went wrong: the Balance Sheet injected it and the Trial
+// Balance did not, so the TB buried the entire stock value in its
+// "Difference in opening balances" plug. Both reports now share these helpers.
+
+/** The group every stock valuation is surfaced under. */
+export const STOCK_GROUP = "Stock-in-Hand";
+
+/** Ledger id of the synthetic stock row — no Account row exists behind it. */
+export const SYNTHETIC_STOCK_ID = -1;
+
+/** Depth-first search for a group by name. */
+function findGroup(nodes: GroupNode[], name: string): GroupNode | null {
+    for (const n of nodes) {
+        if (n.name === name) return n;
+        const hit = findGroup(n.children, name);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+/**
+ * Sum the REAL GL balances already sitting directly in a named group.
+ *
+ * Callers net their computed valuation against this so that the day someone
+ * does post a stock journal to a real ledger, the synthetic row shrinks by the
+ * same amount instead of double-counting it.
+ */
+export function sumGroupLedgers(
+    roots: GroupNode[],
+    groupName: string,
+): { opening: number; debits: number; credits: number; closing: number } {
+    const g = findGroup(roots, groupName);
+    const out = { opening: 0, debits: 0, credits: 0, closing: 0 };
+    if (!g) return out;
+    for (const l of g.ledgers) {
+        out.opening += l.opening; out.debits  += l.debits;
+        out.credits += l.credits; out.closing += l.closing;
+    }
+    return out;
+}
+
+/**
+ * Push a synthetic ledger into a named group and bubble its amounts up every
+ * ancestor's rolled-up totals, so the existing tree renderer shows it under the
+ * group the reader expects with no special-casing.
+ *
+ * Returns false when the group is absent (e.g. a tree filtered to LIABILITY
+ * only), so the caller can tell "injected" from "nowhere to put it".
+ */
+export function injectLedger(
+    roots: GroupNode[],
+    groupName: string,
+    ledger: LedgerNode,
+): boolean {
+    const walk = (nodes: GroupNode[]): boolean => {
+        for (const n of nodes) {
+            const hit = n.name === groupName ? (n.ledgers.push(ledger), true) : walk(n.children);
+            if (!hit) continue;
+            n.rolledUpOpening += ledger.opening;
+            n.rolledUpDebits  += ledger.debits;
+            n.rolledUpCredits += ledger.credits;
+            n.rolledUpClosing += ledger.closing;
+            return true;
+        }
+        return false;
+    };
+    return walk(roots);
+}

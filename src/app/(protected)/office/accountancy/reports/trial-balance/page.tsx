@@ -34,6 +34,8 @@ interface TBData {
     from: string; to: string;
     tree: GroupNode[];
     totals: { opening: number; debits: number; credits: number; closing: number };
+    /** Stock valued at both ends of the period — drives the trading row below. */
+    closingStock?: { atFyStart: number; opening: number; computed: number; postedToGl: number };
 }
 
 /**
@@ -169,9 +171,15 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
  *
  * `openingDiff = openDr − openCr` is the one-sided slack left by master-page
  * opening balances (since they have no balanced JE counterpart). The Trial
- * Balance reconciles it with a synthetic "Difference in opening balances"
- * row applied to BOTH Opening and Closing columns — every JE balances, so
- * the slack carries forward unchanged into Closing.
+ * Balance reconciles it with a synthetic "Difference in opening balances" row.
+ *
+ * Each balance column carries its OWN slack. These were once a single number,
+ * on the reasoning that every JE balances so the opening slack must carry
+ * forward into Closing untouched. Closing Stock breaks that: it is a valuation,
+ * not a journal entry, so the two columns can legitimately differ. The caller
+ * closes that gap with the trading row (Opening less Closing Stock) and then
+ * re-derives `closingDiff`, so anything still left over is a genuine problem
+ * with the books rather than an artefact of how stock is carried.
  */
 function deriveSummary(tree: GroupNode[]) {
     let openDr = 0, openCr = 0, closeDr = 0, closeCr = 0, debits = 0, credits = 0;
@@ -189,8 +197,11 @@ function deriveSummary(tree: GroupNode[]) {
         n.children.forEach(visit);
     };
     tree.forEach(visit);
-    const openingDiff = openDr - openCr;
-    return { openDr, openCr, closeDr, closeCr, debits, credits, openingDiff };
+    return {
+        openDr, openCr, closeDr, closeCr, debits, credits,
+        openingDiff: openDr  - openCr,
+        closingDiff: closeDr - closeCr,
+    };
 }
 
 export default function TrialBalancePage() {
@@ -230,25 +241,68 @@ export default function TrialBalancePage() {
         return showEmpty ? data.tree : pruneEmpty(data.tree);
     }, [data, showEmpty]);
 
-    const summary = useMemo(() => data ? deriveSummary(data.tree) : null, [data]);
+    // Trading-account stock movement. Stock is a valuation, not a journal entry,
+    // so when it moves during the period no ledger records the cost — the Trial
+    // Balance would be short by exactly that much. Tally puts the pair in the
+    // Trading account (Opening Stock Dr, Closing Stock Cr); we carry the same
+    // thing netted into one row, which is the figure the P&L already computes.
+    // Positive ⇒ stock fell, a cost (Dr). Negative ⇒ stock rose (Cr).
+    //
+    // Both columns get their own figure, measured from the financial-year start,
+    // because that is where the income and expense ledgers accumulate from. For
+    // the usual "1 April to date" period the Opening one is nil; for a mid-year
+    // period it is the stock already consumed before the period opened.
+    const cs = data?.closingStock;
+    const stockAdjOpen  = cs ? cs.atFyStart - cs.opening  : 0;
+    const stockAdjClose = cs ? cs.atFyStart - cs.computed : 0;
+
+    const summary = useMemo(() => {
+        if (!data) return null;
+        const s = deriveSummary(data.tree);
+        // Land each on whichever side it belongs to, so the printed column
+        // totals add up to the rows the reader can actually see.
+        const openDr  = s.openDr  + (stockAdjOpen  > 0 ?  stockAdjOpen  : 0);
+        const openCr  = s.openCr  + (stockAdjOpen  < 0 ? -stockAdjOpen  : 0);
+        const closeDr = s.closeDr + (stockAdjClose > 0 ?  stockAdjClose : 0);
+        const closeCr = s.closeCr + (stockAdjClose < 0 ? -stockAdjClose : 0);
+        return {
+            ...s, openDr, openCr, closeDr, closeCr,
+            openingDiff: openDr  - openCr,
+            closingDiff: closeDr - closeCr,
+        };
+    }, [data, stockAdjOpen, stockAdjClose]);
 
     const toggle = (id: number) => setExpanded((prev) => {
         const next = new Set(prev);
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
         return next;
     });
-    const goLedger = (id: number) => router.push(accountLedgerUrl(id, { from, to }));
+    const goLedger = (id: number) => {
+        // id -1 is the synthetic "Closing Stock (live)" row injected by the API
+        // — no Account row sits behind it, so send the reader to the stock
+        // summary that produced the figure (same as the Balance Sheet does).
+        if (id === -1) {
+            router.push(`/office/inventory/stock-summary?ref=trial-balance&asOf=${to}`);
+            return;
+        }
+        if (id <= 0) return;
+        router.push(accountLedgerUrl(id, { from, to }));
+    };
     const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
 
     // Grand-total columns — balanced after folding the opening-difference plug
     // into both Opening and Closing on the deficient side.
     const totalsDisplay = summary ? (() => {
-        const plug = summary.openingDiff;            // > 0 ⇒ Dr excess (plug goes on Cr); < 0 ⇒ Cr excess
-        const openDr  = summary.openDr  + (plug < 0 ? -plug : 0);
-        const openCr  = summary.openCr  + (plug > 0 ?  plug : 0);
-        const closeDr = summary.closeDr + (plug < 0 ? -plug : 0);
-        const closeCr = summary.closeCr + (plug > 0 ?  plug : 0);
-        return { openDr, openCr, closeDr, closeCr, debits: summary.debits, credits: summary.credits };
+        const op = summary.openingDiff;   // > 0 ⇒ Dr excess (plug goes on Cr); < 0 ⇒ Cr excess
+        const cl = summary.closingDiff;
+        return {
+            openDr:  summary.openDr  + (op < 0 ? -op : 0),
+            openCr:  summary.openCr  + (op > 0 ?  op : 0),
+            closeDr: summary.closeDr + (cl < 0 ? -cl : 0),
+            closeCr: summary.closeCr + (cl > 0 ?  cl : 0),
+            debits:  summary.debits,
+            credits: summary.credits,
+        };
     })() : null;
 
     return (
@@ -305,17 +359,37 @@ export default function TrialBalancePage() {
                                 Dr against Cr in both the Opening and Closing columns (mirrors
                                 Tally's behaviour). Every JE balances, so the same plug carries
                                 forward into Closing unchanged. */}
-                            {Math.abs(summary.openingDiff) >= 0.005 && (
+                            {/* Trading-account stock movement — the entry that keeps the
+                                Closing column balanced. Stock never reaches a ledger, so
+                                without this its movement falls straight into the plug
+                                below and the Trial Balance reads as out of balance every
+                                time stock moves. Sits above the plug because it is a real
+                                accounting figure, not a leftover. */}
+                            {(Math.abs(stockAdjOpen) >= 0.005 || Math.abs(stockAdjClose) >= 0.005) && (
+                                <tr
+                                    className="border-t"
+                                    title="Opening Stock less Closing Stock — the same trading-account figure the Profit & Loss shows, measured from the financial-year start. Stock is valued, never journalised, so no ledger carries it."
+                                >
+                                    <td className="px-3 py-1.5 italic text-muted-foreground">Opening less Closing Stock</td>
+                                    <SidedCell value={stockAdjOpen} normalSide="DEBIT" italic />
+                                    <PlainCell value={0} italic />
+                                    <PlainCell value={0} italic />
+                                    <SidedCell value={stockAdjClose} normalSide="DEBIT" italic />
+                                </tr>
+                            )}
+
+                            {(Math.abs(summary.openingDiff) >= 0.005 || Math.abs(summary.closingDiff) >= 0.005) && (
                                 <tr
                                     className="text-amber-700 dark:text-amber-400 border-t"
-                                    title="Master-page opening balances are one-sided — this is the plug that balances Σ opening Dr against Σ opening Cr."
+                                    title="Master-page opening balances are one-sided — this is the plug that balances Σ Dr against Σ Cr in each balance column."
                                 >
                                     <td className="px-3 py-1.5 italic">Difference in opening balances</td>
-                                    {/* If openings Dr > Cr (openingDiff > 0), plug sits on the Cr side, and vice-versa. */}
+                                    {/* If Dr > Cr (diff > 0), the plug sits on the Cr side, and vice-versa.
+                                        Each column is plugged from its own slack — see deriveSummary. */}
                                     <SidedCell value={-summary.openingDiff} normalSide="DEBIT" italic />
                                     <PlainCell value={0} italic />
                                     <PlainCell value={0} italic />
-                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" italic />
+                                    <SidedCell value={-summary.closingDiff} normalSide="DEBIT" italic />
                                 </tr>
                             )}
                         </tbody>
