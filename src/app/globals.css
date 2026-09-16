@@ -50,9 +50,11 @@
   --m-help: oklch(0.89 0.11 80);
   --m-ecommerce: oklch(0.885 0.115 110);
   --m-inventory: oklch(0.885 0.11 140);
+  --m-pricing-strategy: oklch(0.885 0.115 125);
   --m-accountancy: oklch(0.885 0.1 170);
   --m-orders: oklch(0.885 0.1 200);
   --m-customers: oklch(0.885 0.115 230);
+  --m-retention: oklch(0.885 0.115 245);
   --m-bi: oklch(0.88 0.12 260);
   --m-crm: oklch(0.88 0.12 290);
   --m-administration: oklch(0.88 0.12 320);
@@ -171,14 +173,23 @@
      Tuned for readability on a light background (L .55 / C .16).
      Deliberately NOT reused for data state — inside a grid, amber/sky/primary
      already mean unsaved/selected/active (see shared/lib/format/gridRow). */
+  /* What a module hue is mixed with to become safe as TEXT. The raw hue as a
+     label measures 3.0-3.6:1 on its own tinted pill — under the 4.5:1 AA floor
+     for body text — so moduleInk() deepens it toward this value. Black on a
+     light canvas, white on a dark one: a single fixed direction fixes one theme
+     and breaks the other (measured 6.6:1 / 2.1:1 either way round). */
+  --m-ink-mix: black;
+
   --m-repair: oklch(0.55 0.17 20);
   --m-pos: oklch(0.56 0.16 50);
   --m-help: oklch(0.54 0.13 80);
   --m-ecommerce: oklch(0.54 0.15 110);
   --m-inventory: oklch(0.53 0.14 140);
+  --m-pricing-strategy: oklch(0.54 0.15 125);
   --m-accountancy: oklch(0.54 0.13 170);
   --m-orders: oklch(0.55 0.13 200);
   --m-customers: oklch(0.55 0.16 230);
+  --m-retention: oklch(0.55 0.17 245);
   --m-bi: oklch(0.55 0.19 260);
   --m-crm: oklch(0.55 0.19 290);
   --m-administration: oklch(0.55 0.18 320);
@@ -238,14 +249,18 @@
   --chart-5: oklch(0.4 0.07 214);
 
   /* Module hues — lifted and de-saturated for a dark background (L .76 / C .14). */
+  --m-ink-mix: white;
+
   --m-repair: oklch(0.76 0.15 20);
   --m-pos: oklch(0.78 0.14 50);
   --m-help: oklch(0.79 0.13 80);
   --m-ecommerce: oklch(0.78 0.14 110);
   --m-inventory: oklch(0.77 0.13 140);
+  --m-pricing-strategy: oklch(0.78 0.14 125);
   --m-accountancy: oklch(0.78 0.12 170);
   --m-orders: oklch(0.78 0.12 200);
   --m-customers: oklch(0.76 0.14 230);
+  --m-retention: oklch(0.76 0.15 245);
   --m-bi: oklch(0.75 0.15 260);
   --m-crm: oklch(0.75 0.15 290);
   --m-administration: oklch(0.75 0.15 320);

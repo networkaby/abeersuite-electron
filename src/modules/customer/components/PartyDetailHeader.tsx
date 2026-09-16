@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ExternalLink, MapPin, Phone } from "lucide-react";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { initials } from "@/shared/lib/format/initials";
-import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
+import { moduleColor, moduleInk, moduleTint } from "@/shared/lib/format/moduleTheme";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -84,7 +84,9 @@ export function PartyDetailHeader({
                         key={chip.key}
                         variant="outline"
                         className="bg-card/70"
-                        style={{ borderColor: `color-mix(in oklab, ${hue} 38%, transparent)`, color: hue }}
+                        // Border carries the raw hue; the label has to be the deepened
+                        // ink, or 12px text on this chip lands under the AA floor.
+                        style={{ borderColor: `color-mix(in oklab, ${hue} 38%, transparent)`, color: moduleInk(module) }}
                     >
                         {chip.icon} {chip.text}
                     </Badge>
