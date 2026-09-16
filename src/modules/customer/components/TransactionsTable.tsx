@@ -10,6 +10,7 @@ import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import { Card, CardContent } from "@/components/ui/card";
 import {
     Table,
@@ -300,7 +301,15 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                     accountId={accountId}
                     partyName={partyName}
                     voucherId={linkVoucherId}
-                    onSaved={() => { clearBillLinkCache(); setLinkVoucherId(null); onChanged?.(); }}
+                    // The Outstanding tab next door holds this party's open bills
+                    // in a module cache and is unmounted right now, so it would
+                    // come back showing a bill this link has just settled.
+                    onSaved={() => {
+                        clearBillLinkCache();
+                        clearPartyCache(accountId);
+                        setLinkVoucherId(null);
+                        onChanged?.();
+                    }}
                 />
             )}
         </Card>

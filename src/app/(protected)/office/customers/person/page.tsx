@@ -62,6 +62,7 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { ModuleTabs } from "@/shared/components/ModuleTabs";
 import { PartyAvatar } from "@/modules/customer/components/PartyAvatar";
 import { PartyBalanceChip } from "@/modules/customer/components/PartyBalanceChip";
+import { ToLinkChip } from "@/modules/accountancy/components/ToLinkChip";
 import { PartyDetailHeader } from "@/modules/customer/components/PartyDetailHeader";
 
 interface CustomerListItem extends BrowseListRow {
@@ -71,7 +72,7 @@ interface CustomerListItem extends BrowseListRow {
     /** `balance`/`normalBalance` are null ONLY on a `fromCache` placeholder row —
      *  the cache carries identity, never money — and the row renders them as
      *  pending rather than as a number. A live row always has both. */
-    account: { id: number; balance: number | null; normalBalance: "DEBIT" | "CREDIT" | null } | null;
+    account: { id: number; balance: number | null; normalBalance: "DEBIT" | "CREDIT" | null; toLink?: number } | null;
 }
 
 interface CustomerDetail {
@@ -142,6 +143,8 @@ export default function CustomersPage() {
         return () => setActiveParty(null);
     }, [detail, setActiveParty]);
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    // The books moved while the statement was off screen — re-read on the way in.
+    const [txStale, setTxStale] = useState(false);
     const [txLoading, setTxLoading] = useState(false);
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
@@ -184,10 +187,12 @@ export default function CustomersPage() {
         if (!selectedId) {
             setDetail(null);
             setTransactions(null);
+            setTxStale(false);
             return;
         }
         setDetailLoading(true);
         setTransactions(null);
+        setTxStale(false);
         axios.get<CustomerDetail>(`/api/person/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
@@ -264,18 +269,30 @@ export default function CustomersPage() {
             .finally(() => { if (!quiet) setTxLoading(false); });
     }, [selectedId]);
 
-    // Auto-load transactions when the tab is active and not yet loaded.
+    // Auto-load transactions when the tab is active and not yet loaded — and
+    // re-read quietly when it is loaded but went stale while we were elsewhere.
+    // Quietly matters: the rows are already right there, so they stay up and are
+    // swapped, rather than blinking through a spinner (AGENTS.md §7).
     useEffect(() => {
-        if (!selectedId || tab !== "transactions" || transactions) return;
-        loadTransactions(from, to);
-    }, [selectedId, tab, transactions, from, to, loadTransactions]);
+        if (!selectedId || tab !== "transactions") return;
+        if (!transactions) { loadTransactions(from, to); return; }
+        if (txStale) { setTxStale(false); loadTransactions(from, to, true); }
+    }, [selectedId, tab, transactions, txStale, from, to, loadTransactions]);
 
     // A receipt made at Head Office reaches this till's replica a moment later, and
     // until now the statement went on showing the old chips — "Due" against money
     // that was already linked — until someone pressed Refresh. On a counter this
     // fires only after the sync worker has committed the rows; on the web it is the
     // Supabase channel as before. Either way the party's books follow the books.
-    useRealtimeTopics(["ledger"], () => loadTransactions(from, to, true), tab === "transactions");
+    // On screen → refresh in place. Off screen → do NOT fetch for a tab nobody is
+    // looking at (AGENTS.md §7), just remember that it went stale, and the effect
+    // below re-reads the moment the tab is opened. Before this the signal was
+    // dropped outright, so linking a bill on the Outstanding tab left the
+    // statement's Settled / Partial / Due chips wrong until a full reload.
+    useRealtimeTopics(["ledger"], () => {
+        if (tab === "transactions") loadTransactions(from, to, true);
+        else setTxStale(true);
+    });
 
     // The same for the party list itself — a customer added or renamed on another
     // machine appears here without F5.
@@ -379,10 +396,13 @@ export default function CustomersPage() {
                                         <div className="mt-0.5 flex items-center justify-between gap-2">
                                             <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
                                             {customer.account && (
-                                                <PartyBalanceChip
-                                                    balance={customer.account.balance}
-                                                    normalBalance={customer.account.normalBalance}
-                                                />
+                                                <span className="flex shrink-0 items-center gap-1">
+                                                    <ToLinkChip toLink={customer.account.toLink ?? 0} compact />
+                                                    <PartyBalanceChip
+                                                        balance={customer.account.balance}
+                                                        normalBalance={customer.account.normalBalance}
+                                                    />
+                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -568,6 +588,7 @@ export default function CustomersPage() {
                                         key={`po-${detail.accountId}`}
                                         accountId={detail.accountId}
                                         partyName={detail.name}
+                                        onChanged={() => setTxStale(true)}
                                     />
                                 )}
 

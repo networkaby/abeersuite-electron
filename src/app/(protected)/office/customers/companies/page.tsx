@@ -60,6 +60,7 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { ModuleTabs } from "@/shared/components/ModuleTabs";
 import { PartyAvatar } from "@/modules/customer/components/PartyAvatar";
 import { PartyBalanceChip } from "@/modules/customer/components/PartyBalanceChip";
+import { ToLinkChip } from "@/modules/accountancy/components/ToLinkChip";
 import { PartyDetailHeader } from "@/modules/customer/components/PartyDetailHeader";
 
 interface CompanyListItem extends BrowseListRow {
@@ -69,7 +70,7 @@ interface CompanyListItem extends BrowseListRow {
     /** `balance`/`normalBalance` are null ONLY on a `fromCache` placeholder row —
      *  the cache carries identity, never money — and the row renders them as
      *  pending rather than as a number. A live row always has both. */
-    account: { id: number; balance: number | null; normalBalance: "DEBIT" | "CREDIT" | null } | null;
+    account: { id: number; balance: number | null; normalBalance: "DEBIT" | "CREDIT" | null; toLink?: number } | null;
 }
 
 /** A cached party as a list row, for the instant paint before the first live
@@ -154,6 +155,8 @@ export default function CompaniesPage() {
         return () => setActiveParty(null);
     }, [detail, setActiveParty]);
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    // The books moved while the statement was off screen — re-read on the way in.
+    const [txStale, setTxStale] = useState(false);
     const [txLoading, setTxLoading] = useState(false);
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
@@ -185,10 +188,12 @@ export default function CompaniesPage() {
         if (!selectedId) {
             setDetail(null);
             setTransactions(null);
+            setTxStale(false);
             return;
         }
         setDetailLoading(true);
         setTransactions(null);
+        setTxStale(false);
         axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
@@ -215,14 +220,26 @@ export default function CompaniesPage() {
     // The party's books follow the books: on a counter this fires once the sync
     // worker has committed pulled rows into the replica, on the web it is the
     // Supabase channel as before.
-    useRealtimeTopics(["ledger"], () => loadTransactions(from, to, true), tab === "transactions");
+    // On screen → refresh in place. Off screen → do NOT fetch for a tab nobody is
+    // looking at (AGENTS.md §7), just remember that it went stale, and the effect
+    // below re-reads the moment the tab is opened. Before this the signal was
+    // dropped outright, so linking a bill on the Outstanding tab left the
+    // statement's Settled / Partial / Due chips wrong until a full reload.
+    useRealtimeTopics(["ledger"], () => {
+        if (tab === "transactions") loadTransactions(from, to, true);
+        else setTxStale(true);
+    });
     useRealtimeTopics(["parties"], refresh);
 
-    // Auto-load transactions when the tab is active and not yet loaded.
+    // Auto-load transactions when the tab is active and not yet loaded — and
+    // re-read quietly when it is loaded but went stale while we were elsewhere.
+    // Quietly matters: the rows are already right there, so they stay up and are
+    // swapped, rather than blinking through a spinner (AGENTS.md §7).
     useEffect(() => {
-        if (!selectedId || tab !== "transactions" || transactions) return;
-        loadTransactions(from, to);
-    }, [selectedId, tab, transactions, from, to, loadTransactions]);
+        if (!selectedId || tab !== "transactions") return;
+        if (!transactions) { loadTransactions(from, to); return; }
+        if (txStale) { setTxStale(false); loadTransactions(from, to, true); }
+    }, [selectedId, tab, transactions, txStale, from, to, loadTransactions]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -363,10 +380,13 @@ export default function CompaniesPage() {
                                     <div className="mt-0.5 flex items-center justify-between gap-2">
                                         <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
                                         {company.account && (
-                                            <PartyBalanceChip
-                                                balance={company.account.balance}
-                                                normalBalance={company.account.normalBalance}
-                                            />
+                                            <span className="flex shrink-0 items-center gap-1">
+                                                <ToLinkChip toLink={company.account.toLink ?? 0} compact />
+                                                <PartyBalanceChip
+                                                    balance={company.account.balance}
+                                                    normalBalance={company.account.normalBalance}
+                                                />
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -526,6 +546,7 @@ export default function CompaniesPage() {
                                         key={`co-${detail.accountId}`}
                                         accountId={detail.accountId}
                                         partyName={detail.name}
+                                        onChanged={() => setTxStale(true)}
                                     />
                                 )}
 

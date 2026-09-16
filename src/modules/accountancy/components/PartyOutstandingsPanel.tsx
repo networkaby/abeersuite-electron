@@ -59,15 +59,32 @@ function summariseBySide(bills: OutstandingBill[]): { receivable: SideSummary; p
 const TTL_MS = 60_000;
 const cache = new Map<number, { at: number; data: LedgerOutstanding }>();
 
-/** Drop a party's cached bills — after anything that settles one of them. */
-function clearPartyCache(accountId: number): void {
+/** Drop a party's cached bills — after anything that settles one of them.
+ *
+ *  Exported because the settling does not always happen on this panel: the
+ *  Transactions tab beside it links from its own chip, and this panel is not even
+ *  mounted then. Without this it would remount straight onto a cache entry that
+ *  predates the link and show the bill still open, for up to the TTL above. */
+export function clearPartyCache(accountId: number): void {
     cache.delete(accountId);
 }
 
-export function PartyOutstandingsPanel({ accountId, partyName }: {
+export function PartyOutstandingsPanel({ accountId, partyName, onChanged }: {
     /** The party ledger whose bills these are. */
     accountId: number;
     partyName: string;
+    /** Called after anything here changes the party's books — a link saved, a
+     *  receipt or payment made.
+     *
+     *  The realtime channel cannot carry this one: a broadcast never echoes to
+     *  the window that sent it (`appChannel.ts` — "the acting tab is untouched,
+     *  it already knows, and updates through its own save path"). This IS that
+     *  save path. Every OTHER window hears the write through the axios publisher,
+     *  which maps `/api/accountancy/` to `ledger`; only the one doing the saving
+     *  has to be told in process, and without this its sibling tabs — the party's
+     *  Transactions statement above all — keep showing settlement chips from
+     *  before the link. */
+    onChanged?: () => void;
 }) {
     const [data, setData] = useState<LedgerOutstanding | null>(() => cache.get(accountId)?.data ?? null);
     const [loading, setLoading] = useState(false);
@@ -242,6 +259,7 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                     clearBillLinkCache();
                     clearPartyCache(accountId);
                     load(true);
+                    onChanged?.();
                 }}
             />
 
@@ -260,6 +278,7 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                         clearPartyCache(accountId);
                         setLinkBillId(null);
                         load(true);
+                        onChanged?.();
                     }}
                 />
             )}

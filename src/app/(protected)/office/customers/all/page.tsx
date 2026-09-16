@@ -44,9 +44,10 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { ModuleTabs } from "@/shared/components/ModuleTabs";
 import { PartyAvatar } from "@/modules/customer/components/PartyAvatar";
 import { PartyBalanceChip } from "@/modules/customer/components/PartyBalanceChip";
+import { ToLinkChip } from "@/modules/accountancy/components/ToLinkChip";
 import { PartyDetailHeader } from "@/modules/customer/components/PartyDetailHeader";
 
-type AccountRef = { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT" } | null;
+type AccountRef = { id: number; balance: number; normalBalance: "DEBIT" | "CREDIT"; toLink?: number } | null;
 
 type PersonRow = {
     id: number;
@@ -143,6 +144,8 @@ export default function AllCustomersPage() {
     const [personTab, setPersonTab] = useState<PersonTab>("transactions");
     const [companyTab, setCompanyTab] = useState<CompanyTab>("transactions");
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    // The books moved while the statement was off screen — re-read on the way in.
+    const [txStale, setTxStale] = useState(false);
     const [txLoading, setTxLoading] = useState(false);
     const [personLinkKey, setPersonLinkKey] = useState(0);
     const [companyLinkKey, setCompanyLinkKey] = useState(0);
@@ -166,6 +169,9 @@ export default function AllCustomersPage() {
             ...(debouncedSearch.trim() ? { q: debouncedSearch.trim() } : {}),
             ...(canSeeCreditors ? {} : { hideCreditors: 1 }),
             ...(showInactive ? { includeInactive: 1 } : {}),
+            // The broken-chain mark on the row — see /api/person for why it is
+            // asked for rather than always sent.
+            withLinkHint: 1,
         };
         axios.get<PersonRow[]>("/api/person", { params }).then((res) => setPeople(res.data)).catch(() => setPeople([]));
         axios.get<CompanyRow[]>("/api/companies", { params }).then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
@@ -195,6 +201,7 @@ export default function AllCustomersPage() {
                 setPersonDetail(null);
                 setCompanyDetail(null);
                 setTransactions(null);
+                setTxStale(false);
                 setDetailLoading(false);
             }, 0);
             return () => window.clearTimeout(id);
@@ -205,6 +212,7 @@ export default function AllCustomersPage() {
             if (cancelled) return;
             setDetailLoading(true);
             setTransactions(null);
+            setTxStale(false);
             const finishLoading = () => { if (!cancelled) setDetailLoading(false); };
 
             if (selected.kind === "person") {
@@ -267,18 +275,35 @@ export default function AllCustomersPage() {
     // ledger signal costs the other tabs nothing.
     const showingTransactions = selected !== null
         && (selected.kind === "person" ? personTab === "transactions" : companyTab === "transactions");
-    useRealtimeTopics(["ledger"], () => reloadTransactions(true), showingTransactions);
+    // On screen → refresh in place. Off screen → do NOT fetch for a tab nobody is
+    // looking at (AGENTS.md §7), just remember it went stale; the effect below
+    // re-reads on the way in. Before this the signal was dropped outright, so
+    // linking a bill on the Outstanding tab left the statement's Settled /
+    // Partial / Due chips wrong until a full reload.
+    useRealtimeTopics(["ledger"], () => {
+        if (showingTransactions) reloadTransactions(true);
+        else setTxStale(true);
+    });
 
     useEffect(() => {
         if (!selected) return;
         const wantsTransactions =
             (selected.kind === "person" && personTab === "transactions")
             || (selected.kind === "company" && companyTab === "transactions");
-        if (!wantsTransactions || transactions) return;
+        if (!wantsTransactions) return;
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        reloadTransactions();
-    }, [selected, personTab, companyTab, transactions, reloadTransactions]);
+        if (!transactions) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            reloadTransactions();
+            return;
+        }
+        // Loaded, but the books moved while we were on another tab. Re-read
+        // quietly so the rows on screen are swapped rather than blanked.
+        if (txStale) {
+            setTxStale(false);
+            reloadTransactions(true);
+        }
+    }, [selected, personTab, companyTab, transactions, txStale, reloadTransactions]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -423,10 +448,13 @@ export default function AllCustomersPage() {
                                             <div className="mt-0.5 flex items-center justify-between gap-2">
                                                 <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
                                                 {item.account && (
-                                                    <PartyBalanceChip
-                                                        balance={item.account.balance}
-                                                        normalBalance={item.account.normalBalance}
-                                                    />
+                                                    <span className="flex shrink-0 items-center gap-1">
+                                                        <ToLinkChip toLink={item.account.toLink ?? 0} compact />
+                                                        <PartyBalanceChip
+                                                            balance={item.account.balance}
+                                                            normalBalance={item.account.normalBalance}
+                                                        />
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
@@ -597,6 +625,7 @@ export default function AllCustomersPage() {
                                         key={`po-${personDetail.accountId}`}
                                         accountId={personDetail.accountId}
                                         partyName={personDetail.name}
+                                        onChanged={() => setTxStale(true)}
                                     />
                                 )}
 
@@ -737,6 +766,7 @@ export default function AllCustomersPage() {
                                         key={`co-${companyDetail.accountId}`}
                                         accountId={companyDetail.accountId}
                                         partyName={companyDetail.name}
+                                        onChanged={() => setTxStale(true)}
                                     />
                                 )}
 
