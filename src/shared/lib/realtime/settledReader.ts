@@ -33,8 +33,19 @@ export function createSettledReader(fn: () => void, settleMs: number = SETTLE_MS
 
     let timer: ReturnType<typeof setTimeout> | null = null;
 
+    // Cancels a pending read before doing this one, because `run` has two callers
+    // and one of them jumps the queue. A signal arriving while the window is visible
+    // starts a 600 ms timer; if the user then looks away and back inside that window,
+    // the visibility handler reads AT ONCE and the timer still fires afterwards — two
+    // reads for one change, on every subscribed screen. Clearing a handle that has
+    // already fired is a harmless no-op, so the timer's own call is unaffected, and
+    // `timer` now always reflects reality so `dispose` can really cancel it. Without
+    // that, a read could land after the screen was closed.
     const run = () => {
-        timer = null;
+        if (timer !== null) {
+            clearTimeout(timer);
+            timer = null;
+        }
         fn();
     };
 

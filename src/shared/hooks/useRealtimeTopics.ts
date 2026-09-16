@@ -96,20 +96,32 @@ export function subscribeRealtimeTopics(
     };
 }
 
+/**
+ * `models` narrows the LOCAL half only — see `subscribeRealtimeTopics`. Worth it on
+ * a surface whose re-read is genuinely expensive (a BI report that recomputes for
+ * seconds); not worth it anywhere else, because a surface that names too few tables
+ * goes quietly stale and that is the fault this path exists to cure.
+ */
 export function useRealtimeTopics(
     topics: readonly Topic[],
     fn: () => void,
     enabled = true,
+    models?: readonly string[],
 ) {
     const fnRef = useRef(fn);
     useEffect(() => { fnRef.current = fn; });
 
-    // Identity-stable key so re-rendering with a fresh array literal — which
+    // Identity-stable keys so re-rendering with a fresh array literal — which
     // every caller does — does not tear the subscription down and build it again.
     const key = [...topics].sort().join(",");
+    const modelKey = models === undefined ? "" : [...models].sort().join(",");
 
     useEffect(() => {
         if (!enabled || key === "") return;
-        return subscribeRealtimeTopics(key.split(",") as Topic[], () => fnRef.current());
-    }, [key, enabled]);
+        return subscribeRealtimeTopics(
+            key.split(",") as Topic[],
+            () => fnRef.current(),
+            modelKey === "" ? undefined : modelKey.split(","),
+        );
+    }, [key, modelKey, enabled]);
 }
