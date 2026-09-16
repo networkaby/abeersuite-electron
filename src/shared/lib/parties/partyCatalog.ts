@@ -218,22 +218,41 @@ async function sync(): Promise<Party[]> {
 }
 
 let inFlight: Promise<Party[]> | null = null;
+let lastSyncedAt = 0;
+
+/**
+ * How long a freshly synced list is taken on trust before a MOUNT asks again.
+ *
+ * Every party picker asks on mount, and the app has a lot of them — a voucher
+ * form carries three, and moving between screens would otherwise be a delta plus
+ * two COUNTs per navigation, for a list that a realtime signal already keeps
+ * current. This only ever throttles the speculative mount-time read: a change
+ * signal and a write both pass `force` and are never delayed.
+ */
+const MIN_RESYNC_MS = 30_000;
 
 /**
  * Load or refresh the list, shared between every caller.
  *
- * Deduped: every mounted picker asks on mount, and a voucher form with three of
- * them on it must not make three requests.
+ * Deduped two ways: concurrent callers share one request, and a mount that
+ * arrives just after a sync is answered from memory (see `MIN_RESYNC_MS`).
+ * `force` skips the second — use it whenever something is known to have changed.
  */
-export function loadPartyList(): Promise<Party[]> {
-    inFlight ??= sync()
+export function loadPartyList(opts: { force?: boolean } = {}): Promise<Party[]> {
+    if (inFlight) return inFlight;
+    if (!opts.force && lastSyncedAt > 0 && Date.now() - lastSyncedAt < MIN_RESYNC_MS) {
+        return Promise.resolve(partyList());
+    }
+    inFlight = sync()
         // Never rejects. Every caller fires this and walks away (`void`), so a
         // rejection would be an unhandled one — and worse, `ready` would stay
         // false and the box would spin for the rest of the shift. Whatever is
         // held is published instead, which settles the list and is the honest
         // answer: this is what we know.
         .catch(() => publish(partyList()))
-        .finally(() => { inFlight = null; });
+        // Stamped even on failure, deliberately: offline, this is what stops
+        // every mount retrying a request that cannot succeed.
+        .finally(() => { lastSyncedAt = Date.now(); inFlight = null; });
     return inFlight;
 }
 
@@ -250,8 +269,13 @@ export function warmPartyList(): void {
  * throughout; emptying it first would blank the search for a round trip, on the
  * one screen where someone has just proved they are mid-task.
  */
-export function invalidateParties(): Promise<Party[]> {
-    return loadPartyList();
+export async function invalidateParties(): Promise<Party[]> {
+    // Wait out a sync that is ALREADY running before starting one. It may have
+    // read the database before the party we have just written existed, so
+    // joining it would answer with a list that cannot contain them — and the
+    // one moment someone is guaranteed to search for that party is now.
+    if (inFlight) await inFlight.catch(() => { /* its own catch already published */ });
+    return loadPartyList({ force: true });
 }
 
 /**

@@ -96,6 +96,12 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
     const paginated = sort.key === "name" && sort.dir === "asc";
     const { parties } = usePartyList();
 
+    // Which question the list is currently asking. Compared against the question
+    // the newest ANSWER belongs to, so "still loading" can be told apart from
+    // "loaded, and the answer is none" — see `shown` below.
+    const filterKey = `${apiPath}|${search}|${hideCreditors}|${includeInactive}|${paginated}`;
+    const [landedKey, setLandedKey] = useState<string | null>(null);
+
     const fetchPage = useCallback((cursor: BrowseCursor | null) => {
         const gen = ++genRef.current;
         const params: Record<string, string> = {
@@ -113,10 +119,11 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
                 if (genRef.current !== gen) return; // superseded by a newer request
                 const data = Array.isArray(res.data) ? { items: res.data, nextCursor: null } : res.data;
                 cursorRef.current = data.nextCursor;
+                setLandedKey(filterKey);
                 setItems((prev) => (cursor ? [...prev, ...data.items] : data.items));
             })
             .catch(() => { if (genRef.current === gen) toast.error(errorMessage); });
-    }, [apiPath, search, hideCreditors, includeInactive, paginated, errorMessage]);
+    }, [apiPath, search, hideCreditors, includeInactive, paginated, errorMessage, filterKey]);
 
     // Any filter, sort, or search change starts the list over from page one.
     useEffect(() => {
@@ -139,7 +146,12 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
     // Never over-paint rows already on screen — if the live page won the race, or
     // this is a re-filter with the previous list still showing, the real data
     // stands and the placeholders are simply not consulted.
-    const shown = items.length > 0 ? items : placeholders;
+    //
+    // "No rows" from the server is an ANSWER, not an absence: a filter that
+    // genuinely matches nobody must show an empty list, never fall back to the
+    // held parties as though they were results. So the placeholders stand only
+    // until the page for THESE filters has actually landed.
+    const shown = items.length > 0 || landedKey === filterKey ? items : placeholders;
 
     const loadMore = useCallback(() => {
         if (!paginated || loadingMore || !cursorRef.current) return;

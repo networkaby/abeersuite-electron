@@ -61,7 +61,9 @@ export function usePartyList(): { parties: Party[]; loading: boolean } {
     useEffect(() => {
         void loadPartyList();
         if (subscribers++ === 0) {
-            unsubscribe = subscribeRealtimeTopics(["parties"], () => { void loadPartyList(); });
+            // `force`: a change signal is the one moment we KNOW the held list is
+            // behind, so it must never be answered from the mount-time throttle.
+            unsubscribe = subscribeRealtimeTopics(["parties"], () => { void loadPartyList({ force: true }); });
         }
         return () => {
             if (--subscribers === 0) { unsubscribe?.(); unsubscribe = null; }
