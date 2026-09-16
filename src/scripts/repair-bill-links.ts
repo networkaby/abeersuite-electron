@@ -32,6 +32,10 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+// The shared walk, read through THIS script's own connection. It used to be
+// copied into this file because the shared one could only ever use the app's
+// global client; it now takes the client it should read with.
+import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
 
 const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
@@ -41,36 +45,10 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const FIX = process.argv.includes("--fix");
 
-/** Every active ledger under a group, following the group tree down. */
-async function accountIdsUnderGroup(groupName: string): Promise<number[]> {
-    const groups = await prisma.accountGroup.findMany({
-        where:  { isActive: true },
-        select: { id: true, name: true, parentId: true },
-    });
-    const root = groups.find((g) => g.name === groupName);
-    if (!root) return [];
-    const included = new Set<number>([root.id]);
-    let grew = true;
-    while (grew) {
-        grew = false;
-        for (const g of groups) {
-            if (g.parentId !== null && included.has(g.parentId) && !included.has(g.id)) {
-                included.add(g.id);
-                grew = true;
-            }
-        }
-    }
-    const accounts = await prisma.account.findMany({
-        where:  { isActive: true, groupId: { in: [...included] } },
-        select: { id: true },
-    });
-    return accounts.map((a) => a.id);
-}
-
 async function stampParties(): Promise<{ fixed: number; ambiguous: string[]; none: number }> {
     const [debtors, creditors] = await Promise.all([
-        accountIdsUnderGroup(ACCOUNT_GROUPS.SUNDRY_DEBTORS),
-        accountIdsUnderGroup(ACCOUNT_GROUPS.SUNDRY_CREDITORS),
+        accountIdsUnderGroup(ACCOUNT_GROUPS.SUNDRY_DEBTORS, prisma),
+        accountIdsUnderGroup(ACCOUNT_GROUPS.SUNDRY_CREDITORS, prisma),
     ]);
     const partyIds = new Set([...debtors, ...creditors]);
 

@@ -338,7 +338,7 @@ export async function assertLinkable(
     if (amount <= EPS) throw new BillLinkError("Link amount must be more than zero.");
     if (args.aId === args.bId) throw new BillLinkError("A voucher cannot settle itself.");
 
-    const parties = await partyLedgerIds();
+    const parties = await partyLedgerIds(tx);
     if (!parties.has(args.accountId)) {
         throw new BillLinkError(
             "Bills can only be linked on a party ledger (under Sundry Debtors or Sundry Creditors).",
@@ -466,7 +466,7 @@ export async function assertLinkPlan(
         mode:  "increment" | "set";
     },
 ): Promise<PlannedLink[]> {
-    const parties = await partyLedgerIds();
+    const parties = await partyLedgerIds(tx);
     if (!parties.has(args.accountId)) {
         throw new BillLinkError(
             "Bills can only be linked on a party ledger (under Sundry Debtors or Sundry Creditors).",
