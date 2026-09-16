@@ -3,7 +3,7 @@
 // Reusable Journal Entries register — used by /vouchers/journal-entries.
 // Renders via the canonical <VoucherRegisterTable> for uniform behaviour.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import {
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useRegisterReads } from "@/shared/hooks/useRegisterReads";
 
 interface RawEntry {
     id:           number | string;
@@ -40,14 +41,11 @@ interface RawEntry {
 
 export function JournalEntriesRegister() {
     const [allRows, setAllRows] = useState<VoucherRegisterRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [tick, setTick]       = useState(0);
 
-    /** A person pressing Reload should see it happen; a live signal must not blank
-     *  a register someone is reading. Only the spinner differs — both re-read. */
-    const silentRef             = useRef(false);
-    const reload                = useCallback(() => { silentRef.current = false; setTick((t) => t + 1); }, []);
-    const refreshSilently       = useCallback(() => { silentRef.current = true;  setTick((t) => t + 1); }, []);
+    // This register is only ever journals, so there is no second identity its
+    // rows could be mistaken for - unlike GlVoucherList, which is one component
+    // serving five.
+    const { tick, loading, reload, refreshSilently, beginRead, endRead } = useRegisterReads();
 
     // A journal posted at another counter appears here on its own.
     useRealtimeTopics(["ledger"], refreshSilently);
@@ -55,7 +53,7 @@ export function JournalEntriesRegister() {
     const filters = useRegisterFilters("reg:JOURNAL");
 
     useEffect(() => {
-        if (!silentRef.current) setLoading(true);
+        beginRead();
         const params = new URLSearchParams();
 
         axios.get<RawEntry[] | { rows: RawEntry[] }>(`/api/accountancy/journal-entries?${params}`)
@@ -91,14 +89,8 @@ export function JournalEntriesRegister() {
                 setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load journal entries"))
-            .finally(() => {
-                setLoading(false);
-                // Back to loud: the next read is a type switch or a person
-                // pressing Reload, and both should show the spinner.
-                silentRef.current = false;
-            });
-     
-    }, [tick]);
+            .finally(endRead);
+    }, [tick, beginRead, endRead]);
 
     const filtered = useMemo(
         () => applyRegisterFilters(allRows, filters),
@@ -132,9 +124,14 @@ export function JournalEntriesRegister() {
                 postedTotal={postedTotal}
                 onReload={reload}
                 onClearFilters={filters.clearFilters}
+                refreshing={loading}
             />
 
-            {loading ? (
+            {/* Only while there is nothing to show. A voucher posted at another
+                counter refreshes these rows in place, and Refresh spins its own
+                icon in the bar above - neither has to empty the register to prove
+                it happened (AGENTS.md §7). */}
+            {loading && allRows.length === 0 ? (
                 <div className="flex justify-center py-12">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>

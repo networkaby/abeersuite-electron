@@ -6,7 +6,7 @@
 // button (see ConvertVoucherButton) that raises the next document in the chain
 // — accountancy only, no pipeline. Modelled on <InvVoucherList>, but multi-type.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -23,6 +23,7 @@ import {
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { ConvertVoucherButton } from "@/modules/accountancy/components/ConvertVoucherButton";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useRegisterReads } from "@/shared/hooks/useRegisterReads";
 
 // The convertible commercial documents this register lists.
 const TYPES = "ESTIMATE,POS_ESTIMATE,SALES_ORDER,POS_ORDER,ONLINE_ORDER,PURCHASE_ORDER";
@@ -50,16 +51,17 @@ type ListRow = {
 
 export default function OrdersEstimatesPage() {
     const [allRows, setAllRows] = useState<VoucherRegisterRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [tick, setTick]       = useState(0);
-    const reload                = useCallback(() => setTick((t) => t + 1), []);
+
+    // This register is a fixed set of types, so its rows have only one identity.
+    const { tick, loading, reload, refreshSilently, beginRead, endRead } = useRegisterReads();
 
     const filters = useRegisterFilters("reg:orders-estimates");
-    // A new estimate, order or conversion anywhere re-reads the register.
-    useRealtimeTopics(["ledger", "stock"], reload);
+    // A new estimate, order or conversion anywhere re-reads the register - and
+    // silently, because nobody here asked for it.
+    useRealtimeTopics(["ledger", "stock"], refreshSilently);
 
     useEffect(() => {
-        setLoading(true);
+        beginRead();
         const params = new URLSearchParams({ types: TYPES });
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
@@ -92,8 +94,8 @@ export default function OrdersEstimatesPage() {
                 setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load orders & estimates"))
-            .finally(() => setLoading(false));
-    }, [tick]);
+            .finally(endRead);
+    }, [tick, beginRead, endRead]);
 
     const availableBranches = useMemo(() => {
         const seen = new Map<string, string>();
@@ -133,9 +135,14 @@ export default function OrdersEstimatesPage() {
                     postedTotal={postedTotal}
                     onReload={reload}
                     onClearFilters={filters.clearFilters}
+                    refreshing={loading}
                 />
 
-                {loading ? (
+                {/* Only while there is nothing to show. A voucher posted at another
+                    counter refreshes these rows in place, and Refresh spins its own
+                    icon in the bar above - neither has to empty the register to prove
+                    it happened (AGENTS.md §7). */}
+                {loading && allRows.length === 0 ? (
                     <div className="flex justify-center py-12">
                         <Loader2 className="animate-spin text-muted-foreground" size={28} />
                     </div>

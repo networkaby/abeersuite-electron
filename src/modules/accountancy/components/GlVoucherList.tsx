@@ -6,7 +6,7 @@
 // the same row markup, click-to-edit Reference link, 3-dot ⋮ action menu,
 // and deleted-row Restore + Hard-Delete UX.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import {
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useRegisterReads } from "@/shared/hooks/useRegisterReads";
 
 export type GlVoucherKind = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
@@ -44,6 +45,10 @@ type RawRow = {
     partyAccount: { id: number; code: string; name: string; personId: number | null; companyId: number | null } | null;
 };
 
+/** Stable empty list, so a register with no rows of its own does not hand a
+ *  fresh array to the filter memo on every render. */
+const NO_ROWS: VoucherRegisterRow[] = [];
+
 export function GlVoucherList({
     type, title, subtitle, basePath, newPath, newTab = false,
 }: {
@@ -55,15 +60,14 @@ export function GlVoucherList({
     newTab?:  boolean;
 }) {
     void basePath;
-    const [allRows, setAllRows]   = useState<VoucherRegisterRow[]>([]);
-    const [loading, setLoading]   = useState(true);
-    const [tick, setTick]         = useState(0);
+    // Rows belong to the register they were read for. Holding the two together
+    // means a different `type` empties them in the same render, so one register's
+    // vouchers can never sit under another's heading while the fresh read is
+    // still in flight - which is what makes it safe to stop hiding them below.
+    const [loaded, setLoaded] = useState<{ type: GlVoucherKind; rows: VoucherRegisterRow[] } | null>(null);
+    const allRows = loaded?.type === type ? loaded.rows : NO_ROWS;
 
-    /** A person pressing Reload should see it happen; a live signal must not blank
-     *  a register someone is reading. Only the spinner differs — both re-read. */
-    const silentRef               = useRef(false);
-    const reload                  = useCallback(() => { silentRef.current = false; setTick((t) => t + 1); }, []);
-    const refreshSilently         = useCallback(() => { silentRef.current = true;  setTick((t) => t + 1); }, []);
+    const { tick, loading, reload, refreshSilently, beginRead, endRead } = useRegisterReads();
 
     // A receipt or payment entered at another counter appears here on its own.
     useRealtimeTopics(["ledger"], refreshSilently);
@@ -71,7 +75,7 @@ export function GlVoucherList({
     const filters = useRegisterFilters(`reg:${type}`);
 
     useEffect(() => {
-        if (!silentRef.current) setLoading(true);
+        beginRead();
         const params = new URLSearchParams({ type });
 
         axios.get<RawRow[]>(`/api/accountancy/vouchers?${params}`)
@@ -101,17 +105,11 @@ export function GlVoucherList({
                     createdBy:      v.createdBy?.name ?? null,
                     converted:      false,
                 }));
-                setAllRows(mapped);
+                setLoaded({ type, rows: mapped });
             })
             .catch(() => toast.error("Failed to load"))
-            .finally(() => {
-                setLoading(false);
-                // Back to loud: the next read is a type switch or a person
-                // pressing Reload, and both should show the spinner.
-                silentRef.current = false;
-            });
-     
-    }, [type, tick]);
+            .finally(endRead);
+    }, [type, tick, beginRead, endRead]);
 
     const filtered = useMemo(
         () => applyRegisterFilters(allRows, filters),
@@ -143,9 +141,14 @@ export function GlVoucherList({
                 postedTotal={postedTotal}
                 onReload={reload}
                 onClearFilters={filters.clearFilters}
+                refreshing={loading}
             />
 
-            {loading ? (
+            {/* Only while there is nothing to show. A voucher posted at another
+                counter refreshes these rows in place, and Refresh spins its own
+                icon in the bar above - neither has to empty the register to prove
+                it happened (AGENTS.md §7). */}
+            {loading && allRows.length === 0 ? (
                 <div className="flex justify-center py-12">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>

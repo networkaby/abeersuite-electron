@@ -6,7 +6,7 @@
 // Renders via the shared <VoucherRegisterTable> so every register inherits
 // the same row markup, click-to-edit Reference link, and ⋮ action menu.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useRegisterReads } from "@/shared/hooks/useRegisterReads";
 import type { InvVoucherKind } from "./InvVoucherForm";
 
 export type InvVoucherListKind =
@@ -65,6 +66,10 @@ export interface InvVoucherListRow extends VoucherRegisterRow {
     amountReceived: number;
 }
 
+/** Stable empty list, so a register with no rows of its own does not hand a
+ *  fresh array to the filter memo on every render. */
+const NO_ROWS: InvVoucherListRow[] = [];
+
 export function InvVoucherList({
     type, title, subtitle, basePath, newPath, newLabel, emptyLabel, extraColumns,
 }: {
@@ -87,15 +92,14 @@ export function InvVoucherList({
     extraColumns?: VoucherRegisterExtraColumn[];
 }) {
     void basePath;
-    const [allRows, setAllRows] = useState<InvVoucherListRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [tick, setTick]       = useState(0);
+    // Rows belong to the register they were read for. Holding the two together
+    // means a different `type` empties them in the same render, so one register's
+    // vouchers can never sit under another's heading while the fresh read is
+    // still in flight - which is what makes it safe to stop hiding them below.
+    const [loaded, setLoaded] = useState<{ type: InvVoucherListKind; rows: InvVoucherListRow[] } | null>(null);
+    const allRows = loaded?.type === type ? loaded.rows : NO_ROWS;
 
-    /** A person pressing Reload should see it happen; a live signal must not blank
-     *  a register someone is reading. Only the spinner differs — both re-read. */
-    const silentRef             = useRef(false);
-    const reload                = useCallback(() => { silentRef.current = false; setTick((t) => t + 1); }, []);
-    const refreshSilently       = useCallback(() => { silentRef.current = true;  setTick((t) => t + 1); }, []);
+    const { tick, loading, reload, refreshSilently, beginRead, endRead } = useRegisterReads();
 
     // A voucher posted at another counter lands in this register on its own —
     // every inventory voucher route announces both topics (see topics.ts).
@@ -104,7 +108,7 @@ export function InvVoucherList({
     const filters = useRegisterFilters(`reg:${type}`);
 
     useEffect(() => {
-        if (!silentRef.current) setLoading(true);
+        beginRead();
         const params = new URLSearchParams({ type });
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
@@ -137,17 +141,11 @@ export function InvVoucherList({
                     createdBy:      v.createdBy?.name ?? null,
                     converted:      v.converted ?? false,
                 }));
-                setAllRows(mapped);
+                setLoaded({ type, rows: mapped });
             })
             .catch(() => toast.error("Failed to load"))
-            .finally(() => {
-                setLoading(false);
-                // Back to loud: the next read is a type switch or a person
-                // pressing Reload, and both should show the spinner.
-                silentRef.current = false;
-            });
-     
-    }, [type, tick]);
+            .finally(endRead);
+    }, [type, tick, beginRead, endRead]);
 
     const availableBranches = useMemo(() => {
         const seen = new Map<string, string>();
@@ -190,9 +188,14 @@ export function InvVoucherList({
                 postedTotal={postedTotal}
                 onReload={reload}
                 onClearFilters={filters.clearFilters}
+                refreshing={loading}
             />
 
-            {loading ? (
+            {/* Only while there is nothing to show. A voucher posted at another
+                counter refreshes these rows in place, and Refresh spins its own
+                icon in the bar above - neither has to empty the register to prove
+                it happened (AGENTS.md §7). */}
+            {loading && allRows.length === 0 ? (
                 <div className="flex justify-center py-12">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
