@@ -548,8 +548,10 @@ export default function CompaniesPage() {
                                                     monthMode="end"
                                                     className="h-7 w-36 text-xs"
                                                 />
-                                                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => loadTransactions(from, to)}>
-                                                    <RefreshCw size={12} className="mr-1" />
+                                                {/* Where a deliberate re-read says so, now that it no longer
+                                                    announces itself by blanking the table. */}
+                                                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => loadTransactions(from, to)} disabled={txLoading}>
+                                                    <RefreshCw size={12} className={cn("mr-1", txLoading && "animate-spin")} />
                                                     Refresh
                                                 </Button>
                                                 <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => window.print()}>
@@ -559,7 +561,16 @@ export default function CompaniesPage() {
                                         </div>
 
                                         <div className="p-2">
-                                            {txLoading ? (
+                                            {/* The spinner is for having NOTHING to show, never for a re-read over a
+                                                statement already on screen (AGENTS.md §7). Saving a bill-wise link from
+                                                a row's Status chip used to throw the whole table out, collapse the page
+                                                to a 64px spinner and lose the scroll position — and for nothing: on a
+                                                counter that immediate read cannot see the new link yet, it is the
+                                                replica's own quiet re-read a moment later that settles the row. The
+                                                statement is cleared whenever the selected party changes, so a different
+                                                party still gets the spinner rather than the last party's rows. Same rule
+                                                as the Outstanding tab beside it (PartyOutstandingsPanel) and RecycleBin. */}
+                                            {txLoading && !transactions ? (
                                                 <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                             ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                                 <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />

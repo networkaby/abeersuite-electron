@@ -244,9 +244,13 @@ export default function AllCustomersPage() {
         setCompanyTab(next);
     };
 
-    const reloadTransactions = useCallback(() => {
+    // `silent` is a re-read underneath someone who is already reading the
+    // statement — the books moved on another machine, or a bill-wise link was just
+    // saved from a row's Status chip. It must not blank the table (AGENTS.md §7).
+    // The loud path is the first open of the tab, where there is nothing to keep.
+    const reloadTransactions = useCallback((silent = false) => {
         if (!selected) return;
-        setTxLoading(true);
+        if (!silent) setTxLoading(true);
         const url =
             selected.kind === "person"
                 ? `/api/person/${selected.id}/transactions`
@@ -256,11 +260,14 @@ export default function AllCustomersPage() {
             .get<CustomerTransactions>(url)
             .then((r) => setTransactions(r.data))
             .catch(() => { })
-            .finally(() => setTxLoading(false));
+            .finally(() => { if (!silent) setTxLoading(false); });
     }, [selected]);
-    // The open party's statement follows the books; `reloadTransactions` is a
-    // no-op with nothing selected.
-    useRealtimeTopics(["ledger"], reloadTransactions);
+    // The open party's statement follows the books — silently, because nobody
+    // asked for this read, and only while a statement is actually on screen, so a
+    // ledger signal costs the other tabs nothing.
+    const showingTransactions = selected !== null
+        && (selected.kind === "person" ? personTab === "transactions" : companyTab === "transactions");
+    useRealtimeTopics(["ledger"], () => reloadTransactions(true), showingTransactions);
 
     useEffect(() => {
         if (!selected) return;
@@ -594,7 +601,19 @@ export default function AllCustomersPage() {
                                 )}
 
                                 {personTab === "transactions" && (
-                                    txLoading ? (
+                                    /* The spinner is for having NOTHING to show, never for a
+                                       re-read over a statement already on screen (AGENTS.md §7).
+                                       Saving a bill-wise link from a row's Status chip used to
+                                       throw the whole table out, collapse the page to a 64px
+                                       spinner and lose the scroll position — and for nothing: on
+                                       a counter that immediate read cannot see the new link yet,
+                                       it is the replica's own quiet re-read a moment later that
+                                       settles the row. The statement is cleared whenever the
+                                       selected party changes, so a different party still gets the
+                                       spinner rather than the last party's rows. Same rule as the
+                                       Outstanding tab beside it (PartyOutstandingsPanel) and
+                                       RecycleBin. */
+                                    txLoading && !transactions ? (
                                         <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                     ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
@@ -722,7 +741,19 @@ export default function AllCustomersPage() {
                                 )}
 
                                 {companyTab === "transactions" && (
-                                    txLoading ? (
+                                    /* The spinner is for having NOTHING to show, never for a
+                                       re-read over a statement already on screen (AGENTS.md §7).
+                                       Saving a bill-wise link from a row's Status chip used to
+                                       throw the whole table out, collapse the page to a 64px
+                                       spinner and lose the scroll position — and for nothing: on
+                                       a counter that immediate read cannot see the new link yet,
+                                       it is the replica's own quiet re-read a moment later that
+                                       settles the row. The statement is cleared whenever the
+                                       selected party changes, so a different party still gets the
+                                       spinner rather than the last party's rows. Same rule as the
+                                       Outstanding tab beside it (PartyOutstandingsPanel) and
+                                       RecycleBin. */
+                                    txLoading && !transactions ? (
                                         <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                     ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
