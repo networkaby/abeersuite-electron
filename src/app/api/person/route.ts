@@ -6,6 +6,7 @@ import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
+import { loadPartyUnallocated } from "@/modules/accountancy/lib/billLink";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { afterCursor, BROWSE_PAGE_SIZE, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
@@ -50,6 +51,12 @@ export async function GET(req: Request) {
     // code path for a rarer view).
     const paginate = searchParams.get("paginate") === "1";
     const cursor = paginate ? parseBrowseCursor(searchParams) : null;
+    // Opt-in, and deliberately so. `toLink` costs two more queries over every GL
+    // line these parties have ever had — worth it for the three customer list
+    // pages that show the broken-chain mark, wasted on the till's party cache,
+    // referenceStore and every voucher picker, which call this route and never
+    // draw it. Same reasoning as `paginate` above.
+    const withLinkHint = searchParams.get("withLinkHint") === "1";
 
     try {
         const persons = await prisma.person.findMany({
@@ -104,6 +111,13 @@ export async function GET(req: Request) {
             },
         });
 
+        const unallocated = withLinkHint
+            ? await loadPartyUnallocated(
+                prisma,
+                persons.map(p => p.account?.id).filter((id): id is number => id != null),
+            )
+            : null;
+
         const normalised = persons.map(p => ({
             ...p,
             phone: p.phones[0]?.phone ?? null,
@@ -117,6 +131,7 @@ export async function GET(req: Request) {
                 balance: effectiveAccountBalance(p.account),
                 normalBalance: p.account.normalBalance
                     ?? (p.account.group?.type ? defaultNormalBalanceForGroupType(p.account.group.type) : "DEBIT"),
+                ...(unallocated ? { toLink: unallocated.get(p.account.id)?.toLink ?? 0 } : {}),
             } : null,
             // Not part of what this page displays — the Contacts row carries them
             // so a caller reading this list has the same fields the party

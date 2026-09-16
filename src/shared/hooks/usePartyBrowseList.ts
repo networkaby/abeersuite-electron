@@ -107,6 +107,10 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
         const params: Record<string, string> = {
             ...(search ? { q: search } : {}),
             ...(hideCreditors ? { hideCreditors: "1" } : {}),
+            // Both party browse lists draw the broken-chain mark, so both ask for
+            // `toLink`. It is opt-in on the route because the till's cache and the
+            // voucher pickers read the same endpoint and never draw it.
+            withLinkHint: "1",
             ...(includeInactive ? { includeInactive: "1" } : {}),
             ...(paginated ? { paginate: "1" } : {}),
             ...(paginated && cursor ? { cursorName: cursor.name, cursorId: String(cursor.id) } : {}),

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
+import { loadPartyUnallocated } from "@/modules/accountancy/lib/billLink";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
@@ -33,6 +34,8 @@ export async function GET(req: Request) {
     const includeInactive = searchParams.get("includeInactive") === "1";
     // See /api/person for why only Name-ascending paginates, opt-in.
     const paginate = searchParams.get("paginate") === "1";
+    // Opt-in — see /api/person for why this is not on by default.
+    const withLinkHint = searchParams.get("withLinkHint") === "1";
     const cursor = paginate ? parseBrowseCursor(searchParams) : null;
 
     try {
@@ -86,6 +89,13 @@ export async function GET(req: Request) {
             },
         });
 
+        const unallocated = withLinkHint
+            ? await loadPartyUnallocated(
+                prisma,
+                companies.map(c => c.account?.id).filter((id): id is number => id != null),
+            )
+            : null;
+
         const normalised = companies.map(c => ({
             ...c,
             phone: c.phones[0]?.phone ?? null,
@@ -99,6 +109,7 @@ export async function GET(req: Request) {
                 balance: effectiveAccountBalance(c.account),
                 normalBalance: c.account.normalBalance
                     ?? (c.account.group?.type ? defaultNormalBalanceForGroupType(c.account.group.type) : "DEBIT"),
+                ...(unallocated ? { toLink: unallocated.get(c.account.id)?.toLink ?? 0 } : {}),
             } : null,
             // Cache-fill fields — not shown by this page, only what a search hit
             // here can hand the till's cache for free.
