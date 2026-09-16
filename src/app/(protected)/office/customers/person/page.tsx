@@ -17,7 +17,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
-import { useDebouncedValue, usePartyBrowseList, type BrowseListRow } from "@/shared/hooks";
+import { useDebouncedValue, usePartyBrowseList, useRealtimeTopics, type BrowseListRow } from "@/shared/hooks";
 import type { Party } from "@/shared/lib/parties";
 import { PRIORITY_META } from "@/utils/constants";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -248,13 +248,20 @@ export default function CustomersPage() {
     }, [refetchDetail, refresh]);
 
     // Load (or reload) transactions for the current customer + period.
-    const loadTransactions = useCallback((f: string, t: string) => {
+    //
+    // `quiet` is a re-read underneath someone who is already reading the statement
+    // — the replica caught up, nothing was asked for. It must not blank the table
+    // behind a spinner (AGENTS.md §7: show cached data while refreshing, no blank
+    // flicker), and it must not raise a toast either: a background read that fails
+    // is not something the user did, and the next cycle will try again anyway.
+    // The loud path is unchanged — first open, a date change, the Refresh button.
+    const loadTransactions = useCallback((f: string, t: string, quiet = false) => {
         if (!selectedId) return;
-        setTxLoading(true);
+        if (!quiet) setTxLoading(true);
         axios.get<CustomerTransactions>(`/api/person/${selectedId}/transactions?from=${f}&to=${t}`)
             .then((r) => setTransactions(r.data))
-            .catch(() => toast.error("Failed to load transactions"))
-            .finally(() => setTxLoading(false));
+            .catch(() => { if (!quiet) toast.error("Failed to load transactions"); })
+            .finally(() => { if (!quiet) setTxLoading(false); });
     }, [selectedId]);
 
     // Auto-load transactions when the tab is active and not yet loaded.
@@ -262,6 +269,17 @@ export default function CustomersPage() {
         if (!selectedId || tab !== "transactions" || transactions) return;
         loadTransactions(from, to);
     }, [selectedId, tab, transactions, from, to, loadTransactions]);
+
+    // A receipt made at Head Office reaches this till's replica a moment later, and
+    // until now the statement went on showing the old chips — "Due" against money
+    // that was already linked — until someone pressed Refresh. On a counter this
+    // fires only after the sync worker has committed the rows; on the web it is the
+    // Supabase channel as before. Either way the party's books follow the books.
+    useRealtimeTopics(["ledger"], () => loadTransactions(from, to, true), tab === "transactions");
+
+    // The same for the party list itself — a customer added or renamed on another
+    // machine appears here without F5.
+    useRealtimeTopics(["parties"], refresh);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();

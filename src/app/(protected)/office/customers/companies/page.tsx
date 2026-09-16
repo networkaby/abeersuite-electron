@@ -16,7 +16,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
-import { useDebouncedValue, usePartyBrowseList, type BrowseListRow } from "@/shared/hooks";
+import { useDebouncedValue, usePartyBrowseList, useRealtimeTopics, type BrowseListRow } from "@/shared/hooks";
 import type { Party } from "@/shared/lib/parties";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -199,14 +199,24 @@ export default function CompaniesPage() {
     }, [selectedId]);
 
     // Load (or reload) transactions for the current company + period.
-    const loadTransactions = useCallback((f: string, t: string) => {
+    // `quiet` is a re-read underneath someone already reading the statement — the
+    // replica caught up, nothing was asked for. No spinner over data that is on
+    // screen (AGENTS.md §7) and no toast: a background read that fails is not
+    // something the user did, and the next cycle tries again. See the person page.
+    const loadTransactions = useCallback((f: string, t: string, quiet = false) => {
         if (!selectedId) return;
-        setTxLoading(true);
+        if (!quiet) setTxLoading(true);
         axios.get<CustomerTransactions>(`/api/companies/${selectedId}/transactions?from=${f}&to=${t}`)
             .then((r) => setTransactions(r.data))
-            .catch(() => toast.error("Failed to load transactions"))
-            .finally(() => setTxLoading(false));
+            .catch(() => { if (!quiet) toast.error("Failed to load transactions"); })
+            .finally(() => { if (!quiet) setTxLoading(false); });
     }, [selectedId]);
+
+    // The party's books follow the books: on a counter this fires once the sync
+    // worker has committed pulled rows into the replica, on the web it is the
+    // Supabase channel as before.
+    useRealtimeTopics(["ledger"], () => loadTransactions(from, to, true), tab === "transactions");
+    useRealtimeTopics(["parties"], refresh);
 
     // Auto-load transactions when the tab is active and not yet loaded.
     useEffect(() => {

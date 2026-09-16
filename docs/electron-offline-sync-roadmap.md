@@ -218,6 +218,23 @@ and reconcile run regardless), it only makes things happen sooner.
    [`LiveRefresh`](../src/shared/components/LiveRefresh.tsx), which calls `router.refresh()`
    on the same hook.
 
+   **Two sources, and they are for two different machines.** The local half is
+   [`onReplicaUpdate`](../src/shared/lib/realtime/syncApplied.ts) — the replica's own
+   "the rows are in", and nothing else. The Supabase half is for the web and for
+   `READ_MODE=live`, where there is no replica to be behind and no worker to report, so
+   the nudge IS the news; it is unchanged. Both feed one
+   [`createSettledReader`](../src/shared/lib/realtime/settledReader.ts), so a window that
+   has both still does one read per burst and one read on coming back, not two.
+
+   A surface that is only ever shown on a replica-reading window can take the local half
+   on its own with [`useReplicaUpdate(fn, models?)`](../src/shared/hooks/useReplicaUpdate.ts)
+   and skip the Supabase side entirely. `models` narrows the wake-up to the tables that
+   surface reads — the worker already names them (`changedModels` in `sync-once.js`, the
+   Prisma model names from `syncRegistry.generated.ts`). It is **optional and off by
+   default on purpose**: a surface that lists too few models goes quietly stale, which is
+   the exact fault this path exists to cure, so narrow only where the extra reads are
+   shown to cost something.
+
    **Where it is subscribed matters.** Prefer the shared component or hook that owns the
    read over the pages that render it: one line in `InvVoucherList` makes 14 voucher
    registers live, `GlVoucherList` 5, `BookPage` the cash/bank/loan books, and the line in

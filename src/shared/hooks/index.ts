@@ -15,6 +15,7 @@ export { useTableSort } from "./useTableSort";
 export { usePositionPicker, invalidatePositionPicker, type PositionPickerData } from "./usePositionPicker";
 export { useTicketsDelta, type TicketRow, type TicketsQuery, type UseTicketsDeltaOptions } from "./useTicketsDelta";
 export { useRealtimeTopics } from "./useRealtimeTopics";
+export { useReplicaUpdate, subscribeReplicaUpdate } from "./useReplicaUpdate";
 export { useProductCatalog, loadProductCatalog } from "./useProductCatalog";
 export { useGlAccounts, loadGlAccounts, warmGlAccounts } from "./useGlAccounts";
 export { usePartyBrowseList, type BrowseListRow } from "./usePartyBrowseList";

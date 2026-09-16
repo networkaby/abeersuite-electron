@@ -44,3 +44,48 @@ export function ensureSyncAppliedBridge(): boolean {
     });
     return true;
 }
+
+/**
+ * Subscribe to the replica's own "the rows are in" event, and to NOTHING else.
+ *
+ * This is the purely local source. It never touches the Supabase channel, because
+ * that message does not mean "the data is here" — it means "sync engine, come and
+ * pull", and it arrives while the replica is still behind. Acting on it is what
+ * made a screen read the OLD rows and then sit there. What arrives here is the
+ * worker reporting AFTER its commit, so a read that follows it can only see the
+ * new rows.
+ *
+ * `models` narrows the wake-up to the tables a screen actually reads — the worker
+ * already names them (`sync-once.js`, `changedModels`, and they are the Prisma
+ * model names in `syncRegistry.generated.ts`). Leave it out to wake on every cycle
+ * that moved anything, which is the SAFE default: a screen that lists too few
+ * models goes quietly stale, and that silent staleness is the exact fault this
+ * whole path exists to cure. Narrow only where the extra reads are shown to hurt.
+ *
+ * Raw and unscheduled on purpose. Debouncing and the hidden-window rules live in
+ * `createSettledReader`, so a caller that wants both this and the Supabase channel
+ * shares one timer and one visibility listener rather than running two of each.
+ *
+ * Off Electron this is a no-op: a browser reads the source directly, so there is
+ * no replica to be behind and nothing to wait for.
+ */
+export function onReplicaUpdate(
+    fn: (info: SyncAppliedInfo | undefined) => void,
+    models?: readonly string[],
+): () => void {
+    if (!ensureSyncAppliedBridge()) return () => {};
+
+    const wanted = models && models.length > 0 ? new Set(models) : null;
+
+    const handler = (e: Event) => {
+        const info = (e as CustomEvent<SyncAppliedInfo>).detail;
+        // No filter asked for, or an older shell that sent no model list: treat it
+        // as "something changed". Dropping a wake-up we cannot classify would put
+        // the screen back to being stale with no way to tell.
+        if (wanted && Array.isArray(info?.models) && !info.models.some((m) => wanted.has(m))) return;
+        fn(info);
+    };
+
+    window.addEventListener(SYNC_APPLIED_EVENT, handler);
+    return () => window.removeEventListener(SYNC_APPLIED_EVENT, handler);
+}

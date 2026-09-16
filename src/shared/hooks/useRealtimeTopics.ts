@@ -26,77 +26,73 @@
  * `fn` may change identity between renders — the latest one is always used and
  * the subscription is not rebuilt for it, so callers need not memoise.
  *
- * TWO SOURCES, NOT ONE. On a counter the change signal fires while the sync worker is
- * still writing the replica these screens read from, so acting on it alone means reading
- * too early and showing the old rows. `syncApplied.ts` supplies the second source — the
- * worker reporting that rows are committed and queryable — and that one is filtered only
- * by "did anything change on this machine", not by topic. Off Electron it never fires.
+ * TWO SOURCES, NOT ONE, and they are for two different machines.
+ *
+ *   LOCAL (a counter, or any window reading its own replica) — `onReplicaUpdate` in
+ *   syncApplied.ts. The Supabase message is only a nudge telling the sync engine to
+ *   come and pull; it fires while the worker is still writing the very replica this
+ *   screen reads, so acting on it means reading the old rows. The worker's own
+ *   "committed and queryable" is the only honest signal here, and it is what this
+ *   hook uses. A screen that is ONLY ever shown on such a window can subscribe to it
+ *   directly with `useReplicaUpdate` and skip the Supabase half entirely.
+ *
+ *   WEB AND LIVE (a browser, Vercel, or READ_MODE=live) — the Supabase channel,
+ *   filtered by topic, exactly as before. There is no replica to be behind and no
+ *   worker to report, so the nudge IS the news. Unchanged on purpose.
+ *
+ * Both share one settle timer and one visibility listener (`createSettledReader`),
+ * so a window that has both sources still does one read per burst, not two.
  */
 
 import { useEffect, useRef } from "react";
 import { onChangeSignal, getReadsGoLocal } from "@/shared/lib/realtime/appChannel";
-import { ensureSyncAppliedBridge, SYNC_APPLIED_EVENT } from "@/shared/lib/realtime/syncApplied";
+import { ensureSyncAppliedBridge, onReplicaUpdate } from "@/shared/lib/realtime/syncApplied";
+import { createSettledReader } from "@/shared/lib/realtime/settledReader";
 import type { Topic } from "@/shared/lib/realtime/topics";
-
-/** Long enough to swallow a multi-request save, short enough to feel instant. */
-const SETTLE_MS = 600;
 
 /**
  * The subscription underneath `useRealtimeTopics`, for callers that are not a
  * component (a module-level store such as `useNavCounts`). Same three rules: nothing
  * runs hidden, one read per burst, and on a replica-reading counter the Supabase signal
  * is ignored in favour of the worker's own `sync:applied`. Returns an unsubscribe.
+ *
+ * `models` optionally narrows the LOCAL half to the tables this caller reads. It does
+ * not touch the Supabase half, which stays filtered by topic. Left out, any replica
+ * cycle that moved anything wakes the caller — see `onReplicaUpdate` for why that is
+ * the safe default.
  */
-export function subscribeRealtimeTopics(topics: readonly Topic[], fn: () => void): () => void {
+export function subscribeRealtimeTopics(
+    topics: readonly Topic[],
+    fn: () => void,
+    models?: readonly string[],
+): () => void {
     const wanted = new Set(topics);
     if (wanted.size === 0) return () => {};
 
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    const reader = createSettledReader(fn);
 
-    const run = () => {
-        timer = null;
-        fn();
-    };
-
-    const schedule = () => {
-        if (document.hidden || timer) return;
-        timer = setTimeout(run, SETTLE_MS);
-    };
-
-    // On a counter the worker says when pulled rows are really queryable — see
-    // syncApplied.ts. Not filtered by topic: the worker reports models, and mapping
-    // models back to topics would mean hand-maintaining a second map that silently
-    // narrows what refreshes as the schema grows, which is exactly how the worker's
-    // own topic map rotted. A cycle that pulled nothing stays silent, so this only
-    // fires when something really did change on this machine.
+    // Whether this window can hear the worker at all. Checked here because the
+    // Supabase handler below has to know: with no bridge there is nothing better
+    // coming, so the nudge is all there is and must not be dropped.
     const bridged = ensureSyncAppliedBridge();
 
     const offApp = onChangeSignal((sig) => {
         if (!sig.topics.some((t) => wanted.has(t))) return;
         // Screens served from the replica would read the OLD rows here: the signal
-        // arrives while the worker is still pulling. Wait for `sync:applied` instead
-        // (one fresh read rather than a stale one followed by a fresh one). Only when
-        // that bridge exists and the status endpoint has said reads are local —
-        // a browser, Vercel, or READ_MODE=live keeps refetching on this signal.
+        // arrives while the worker is still pulling. Wait for the replica's own
+        // update instead (one fresh read rather than a stale one followed by a fresh
+        // one). Only when that bridge exists and the status endpoint has said reads
+        // are local — a browser, Vercel, or READ_MODE=live keeps refetching here.
         if (bridged && getReadsGoLocal()) return;
-        schedule();
+        reader.schedule();
     });
 
-    const onApplied = () => schedule();
-    window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
-
-    // A gap this tab sat hidden through is exactly what a remembered
-    // "owed" flag would try to cover — and get wrong the moment the gap
-    // held no signal at all. Reading unconditionally on return is both
-    // simpler and actually safe.
-    const onVisibility = () => { if (!document.hidden) run(); };
-    document.addEventListener("visibilitychange", onVisibility);
+    const offReplica = onReplicaUpdate(reader.schedule, models);
 
     return () => {
         offApp();
-        window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
-        if (timer) clearTimeout(timer);
-        document.removeEventListener("visibilitychange", onVisibility);
+        offReplica();
+        reader.dispose();
     };
 }
 
