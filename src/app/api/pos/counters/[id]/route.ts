@@ -8,7 +8,7 @@ import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
-import { normalizeExtensions, splitExtensions } from "@/shared/lib/counter/idRange";
+import { normalizeExtensions } from "@/shared/lib/counter/idRange";
 import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
@@ -138,27 +138,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        // Extensions are no longer unique in the DB — a comma-separated list cannot be
-        // indexed per entry — so the overlap check lives here: no single extension may
-        // sit on two counters, or an incoming call would pop up at both.
-        if (data.epbxExtension !== undefined && data.epbxExtension !== existing.epbxExtension) {
-            const wanted = splitExtensions(data.epbxExtension);
-            if (wanted.length > 0) {
-                const others = await prismaAuthoritative.posCounter.findMany({
-                    where: { NOT: { id }, epbxExtension: { not: null } },
-                    select: { name: true, epbxExtension: true },
-                });
-                for (const other of others) {
-                    const clash = splitExtensions(other.epbxExtension).find((e) => wanted.includes(e));
-                    if (clash) {
-                        return NextResponse.json(
-                            { error: `Extension ${clash} is already used by "${other.name}"` },
-                            { status: 409 },
-                        );
-                    }
-                }
-            }
-        }
+        // An extension is NOT unique across counters, on purpose. One EPBX extension
+        // line is often wired to several phones in parallel, so the same extension
+        // genuinely sits at more than one counter — a call on it rings at each of them,
+        // and the follow-up popup is expected to appear at each of them too. Nothing is
+        // keyed on this field (voucher prefix and offline id-range come from
+        // counterNumber/branch), so a shared value costs nothing elsewhere.
 
         // If renaming, ensure no other counter in the same branch has that name.
         if (data.name && data.name !== existing.name) {

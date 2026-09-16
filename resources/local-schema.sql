@@ -5632,6 +5632,10 @@ EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
+-- ── Retired indexes (RETIRED_INDEXES in scripts/gen-local-schema.ts) ─────────
+DROP INDEX IF EXISTS "pos_counters_epbxExtension_key"; -- an EPBX extension may now sit on several counters (parallel phone line)
+
+
 -- ── Counter-local: outbox of local writes awaiting push ─────────────────────
 CREATE TABLE IF NOT EXISTS "_outbox" (
     id               SERIAL PRIMARY KEY,

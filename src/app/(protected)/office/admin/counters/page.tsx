@@ -477,7 +477,7 @@ export default function CountersAdminPage() {
                                                             className="mt-1"
                                                         />
                                                         <p className="mt-1 text-[11px] text-muted-foreground">
-                                                            Several phones on one counter — separate with commas. An extension cannot sit on two counters.
+                                                            Several phones on one counter — separate with commas. The same extension may be given to more than one counter when the phones are on a parallel line; a call on it then pops up at each of them.
                                                         </p>
                                                     </div>
                                                 </div>

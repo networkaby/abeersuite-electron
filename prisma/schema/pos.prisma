@@ -51,9 +51,10 @@ model PosCounter {
   // EPBX/intercom extension(s) of the phone(s) at this counter. A counter may sit
   // at several, stored as one comma-separated list of whole numbers ("201,202").
   // Phone only — the voucher prefix and the offline id-range come from
-  // counterNumber/branch, never from this. No DB unique index (a list cannot be
-  // indexed per entry); PATCH /api/pos/counters/[id] rejects an extension already
-  // claimed by another counter. Null = unset.
+  // counterNumber/branch, never from this. NOT unique, in the DB or anywhere else:
+  // one extension line is often wired to several phones in parallel, so the same
+  // extension may sit on more than one counter and a call on it pops up at each of
+  // them. Null = unset.
   epbxExtension            String?
   // First id in this counter's reserved autoincrement block, computed from
   // counterNumber at first shift-open (bind time). NULL = not yet provisioned

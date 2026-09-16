@@ -151,7 +151,39 @@ function generate(): string {
     if (!cleaned.includes("CREATE TABLE")) {
         throw new Error("Generated SQL contains no CREATE TABLE — refusing to write it.");
     }
-    return `${HEADER}\n${makeIdempotent(cleaned)}\n${COUNTER_LOCAL_DDL}`;
+    return `${HEADER}\n${makeIdempotent(cleaned)}\n${retiredIndexes()}\n${COUNTER_LOCAL_DDL}`;
+}
+
+/**
+ * Indexes and constraints a replica may still carry from an OLDER version of this
+ * file, and which the current schema no longer creates.
+ *
+ * This file is a from-empty snapshot, so on its own it can only ever ADD. When a
+ * rule leaves the schema, a replica provisioned before that keeps enforcing it for
+ * the life of the replica — a re-apply never removes it, and the counter's own
+ * `schema_hash` check sees nothing wrong. That is harmless while no real row can
+ * trip the old rule, and a halted till the moment one can. So an entry is listed the
+ * release the removal starts to MATTER, not the release the rule was dropped.
+ *
+ * Only ever list an object this schema no longer creates — a name still emitted
+ * above would be dropped and rebuilt on every counter start.
+ */
+const RETIRED_INDEXES: { name: string; why: string }[] = [
+    {
+        // Left the cloud DB in migration 20260914090000, when a counter was allowed
+        // several extensions. It only ever indexed the WHOLE string, so two counters
+        // had to hold identical lists to collide, and none did. Letting one extension
+        // be shared across counters (parallel phone line, 2026-09-16) makes identical
+        // the ordinary case, so on an old replica `pos_counters` would start failing.
+        name: "pos_counters_epbxExtension_key",
+        why: "an EPBX extension may now sit on several counters (parallel phone line)",
+    },
+];
+
+function retiredIndexes(): string {
+    if (!RETIRED_INDEXES.length) return "";
+    const drops = RETIRED_INDEXES.map((e) => `DROP INDEX IF EXISTS "${e.name}"; -- ${e.why}`).join("\n");
+    return `\n-- ── Retired indexes (RETIRED_INDEXES in scripts/gen-local-schema.ts) ─────────\n${drops}\n`;
 }
 
 /**
