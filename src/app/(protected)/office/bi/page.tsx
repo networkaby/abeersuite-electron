@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, Users, ChartArea, Box, ArrowLeftRight, ClipboardList, Network, Layers, PackageCheck, Building2, Percent, ShoppingCart, Truck, Tag, Clock, Receipt, Grid2x2 } from "lucide-react";
+import { Users, ChartArea, Box, ArrowLeftRight, ClipboardList, Network, Layers, PackageCheck, Building2, Percent, ShoppingCart, Truck, Tag, Clock, Receipt, Grid2x2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -50,7 +50,7 @@ export default function BiDashboardPage() {
     const [to, setTo] = useState(toIsoDate(new Date()));
     const [branchId, setBranchId] = useState("");
 
-    const { data, loading, reload } = useBiQuery<Overview>(
+    const { data, status, reload } = useBiQuery<Overview>(
         `/api/bi/overview?from=${from}&to=${to}${branchId ? `&branchId=${branchId}` : ""}`,
     );
 
@@ -71,13 +71,14 @@ export default function BiDashboardPage() {
                 />
             </div>
 
-            {loading && (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
-                </div>
-            )}
+            {/* The spinner, the retry and the "these figures are stale" banner all
+                live in one place for the whole BI section - and the body is gated on
+                the data alone, so changing a date updates the report under the reader
+                instead of throwing it away. The other nineteen BI pages already do
+                this; the landing page was the holdout. */}
+            {status}
 
-            {!loading && data && (
+            {data && (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         <KpiCard label="Revenue (pre-tax)" value={fmt(data.kpis.revenue)} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/shared/lib/format/utils";
 import { fmt } from "@/utils/constants";
 import type { DatePreset } from "@/modules/accountancy/hooks/useRegisterFilters";
 
@@ -37,13 +39,16 @@ type Props = {
     postedTotal: number;
     onReload: () => void;
     onClearFilters: () => void;
+    /** A read is in flight. The button says so itself now that pressing it no
+     *  longer announces the read by blanking the table underneath. */
+    refreshing?: boolean;
 };
 
 export function RegisterFilterBar({
     preset, setPreset, from, handleFrom, to, handleTo,
     search, setSearch, statuses, toggleStatus, clearStatuses,
     branchFilter, setBranchFilter, availableBranches,
-    rowCount, totalRows, postedTotal, onReload, onClearFilters,
+    rowCount, totalRows, postedTotal, onReload, onClearFilters, refreshing,
 }: Props) {
     const hiddenCount = totalRows - rowCount;
     const hasBranches = availableBranches && availableBranches.length > 0;
@@ -143,7 +148,10 @@ export function RegisterFilterBar({
                         <div className="text-xs text-muted-foreground">{rowCount} of {totalRows} rows</div>
                         <div className="text-sm font-mono font-medium">Posted ₹ {fmt(postedTotal)}</div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={onReload}>Refresh</Button>
+                    <Button variant="outline" size="sm" onClick={onReload} disabled={refreshing}>
+                        <RefreshCw size={14} className={cn("mr-1.5", refreshing && "animate-spin")} />
+                        Refresh
+                    </Button>
                 </div>
             </div>
 

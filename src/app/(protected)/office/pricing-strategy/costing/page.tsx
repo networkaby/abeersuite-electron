@@ -405,7 +405,10 @@ export default function CostingPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading ? (
+                            {/* Only while there is nothing to show. Reload already
+                                spins its own icon above, so a re-read need not empty
+                                the table to prove it happened. */}
+                            {loading && !pool ? (
                                 <TableLoadingRow colSpan={8} />
                             ) : !pool?.configured ? (
                                 <TableEmptyRow colSpan={8} message="Feature not configured." />
@@ -502,7 +505,7 @@ export default function CostingPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {loading ? (
+                            {loading && documents.length === 0 ? (
                                 <TableLoadingRow colSpan={8} />
                             ) : filteredDocuments.length === 0 ? (
                                 <TableEmptyRow colSpan={8} message={documents.length === 0 ? "No allocations or dismissals yet." : "No rows match the filter."} />
