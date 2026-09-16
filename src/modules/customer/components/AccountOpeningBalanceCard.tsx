@@ -21,7 +21,14 @@ interface Props {
     /** Current amount from the API. Prisma Decimal arrives as a string; null = none set. */
     initialAmount: string | number | null;
     initialType: "DEBIT" | "CREDIT" | null;
-    /** Whether the current user may change the opening balance. */
+    /**
+     * Whether the current user may change the opening balance — the DELETE-level
+     * grant (customers:delete), not plain customers:edit. Rewriting what a party
+     * owed before the books started moves real money the same way removing the
+     * party does, so it sits with Delete rather than with "fix a phone number".
+     * False only greys the controls (the parent's fieldset does the disabling);
+     * the figure itself stays readable to anyone who can open the profile.
+     */
     canEdit: boolean;
     /** Called after a successful save so the parent can re-fetch. */
     onSaved: () => void;
@@ -82,58 +89,51 @@ export default function AccountOpeningBalanceCard({
                     {hasOpening
                         ? <>Carried-forward opening balance of <span className="font-medium text-foreground">{formatRupees(parsed)}</span> ({type === "DEBIT" ? "Dr" : "Cr"}), from before this ledger started in the app.</>
                         : "No opening balance on the master — set one when migrating a customer's existing outstanding from another system, or check Bill-wise details, where it lives once it has been broken into bills."}
+                    {!canEdit && " Only someone who can delete a customer may change this."}
                 </p>
 
-                {canEdit ? (
-                    <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="opening-balance-amount">Amount (₹)</Label>
-                                <Input
-                                    id="opening-balance-amount"
-                                    inputMode="decimal"
-                                    value={amount}
-                                    onChange={e => setAmount(parseDecimalInput(e.target.value))}
-                                    placeholder="0 to clear"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Dr / Cr</Label>
-                                <Select value={type} onValueChange={v => setType(v as "DEBIT" | "CREDIT")}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="DEBIT">Debit</SelectItem>
-                                        <SelectItem value="CREDIT">Credit</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {dirty && (
-                                <Button size="sm" onClick={() => void save()} disabled={saving}>
-                                    {saving ? "Saving…" : "Save opening balance"}
-                                </Button>
-                            )}
-                            {/* One number rarely tells the whole story. Break it into the
-                                bills it really was and each one ages, shows in Receivables
-                                and can have a receipt settled against it.
-                                Shown whether or not the amount above is set: once a breakup
-                                exists the master figure is cleared (or the same money would
-                                count twice), and this is the only way back in to edit it.
-                                Hidden only while there are unsaved edits, which are not in
-                                the breakup yet. */}
-                            {!dirty && (
-                                <Button size="sm" variant="outline" onClick={() => setBillsOpen(true)}>
-                                    <ListTree size={14} className="mr-1" /> Bill-wise details
-                                </Button>
-                            )}
-                        </div>
-                    </>
-                ) : (
-                    <p className="text-xs text-muted-foreground/70">
-                        You don&apos;t have permission to change the opening balance.
-                    </p>
-                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="opening-balance-amount">Amount (₹)</Label>
+                        <Input
+                            id="opening-balance-amount"
+                            inputMode="decimal"
+                            value={amount}
+                            onChange={e => setAmount(parseDecimalInput(e.target.value))}
+                            placeholder="0 to clear"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Dr / Cr</Label>
+                        <Select value={type} onValueChange={v => setType(v as "DEBIT" | "CREDIT")}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="DEBIT">Debit</SelectItem>
+                                <SelectItem value="CREDIT">Credit</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    {dirty && (
+                        <Button size="sm" onClick={() => void save()} disabled={saving}>
+                            {saving ? "Saving…" : "Save opening balance"}
+                        </Button>
+                    )}
+                    {/* One number rarely tells the whole story. Break it into the
+                        bills it really was and each one ages, shows in Receivables
+                        and can have a receipt settled against it.
+                        Shown whether or not the amount above is set: once a breakup
+                        exists the master figure is cleared (or the same money would
+                        count twice), and this is the only way back in to edit it.
+                        Hidden only while there are unsaved edits, which are not in
+                        the breakup yet. */}
+                    {!dirty && (
+                        <Button size="sm" variant="outline" onClick={() => setBillsOpen(true)}>
+                            <ListTree size={14} className="mr-1" /> Bill-wise details
+                        </Button>
+                    )}
+                </div>
             </CardContent>
             {billsOpen && (
                 <OpeningBillsDialog

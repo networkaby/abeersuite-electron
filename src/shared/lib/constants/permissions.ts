@@ -29,6 +29,9 @@ export const PERMISSIONS = {
     // by holding the write id).
     CUSTOMERS_CREATE: "customers:create",
     CUSTOMERS_EDIT: "customers:edit",
+    // DELETE also carries the party's opening balance (the Contacts profile card and
+    // PATCH /api/accounts/[id]): rewriting what a party owed before the books started
+    // moves real money the same way removing the party does, so both ride this tick.
     CUSTOMERS_DELETE: "customers:delete",
     // Show suppliers (Sundry Creditors) in Contacts lists AND voucher party dropdowns.
     // Absent → browses customers (Sundry Debtors) only; suppliers are filtered from

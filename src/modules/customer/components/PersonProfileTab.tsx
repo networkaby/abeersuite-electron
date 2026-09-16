@@ -50,6 +50,14 @@ interface Props {
 export default function PersonProfileTab({
     detail, canEditCustomer, canManageUsers, canDeleteCustomer, onSaved, onConverted, onDeleted, onReactivated,
 }: Props) {
+    // The edit-class cards are split across two <fieldset>s (opening balance sits
+    // between them on its own gate), so the grey-out props live here rather than
+    // being written twice.
+    const editGate = {
+        disabled: !canEditCustomer,
+        className: `min-w-0 space-y-6 border-0 p-0 ${canEditCustomer ? "" : "opacity-60"}`,
+    };
+
     return (
         <div className="space-y-6">
             <PersonProfileEdit
@@ -66,13 +74,10 @@ export default function PersonProfileTab({
                 onSaved={onSaved}
             />
             {/* Credit limit + account group + convert are edit-class actions.
-                Keep both cards visible to everyone, but disable them (grey,
+                Keep the cards visible to everyone, but disable them (grey,
                 non-interactive) for anyone without Contacts edit rights —
                 better than hiding so the classification stays readable. */}
-            <fieldset
-                disabled={!canEditCustomer}
-                className={`min-w-0 space-y-6 border-0 p-0 ${canEditCustomer ? "" : "opacity-60"}`}
-            >
+            <fieldset {...editGate}>
                 <AccountCreditLimitCard
                     key={`cl-${detail.id}`}
                     accountId={detail.accountId}
@@ -80,14 +85,26 @@ export default function PersonProfileTab({
                     canEdit
                     onSaved={onSaved}
                 />
+            </fieldset>
+            {/* Opening balance sits a rung HIGHER — with Delete, not Edit. Rewriting
+                what a party owed before the books started moves real money the same
+                way removing the party does, so whoever may delete a person may set it
+                and nobody else. Same treatment as above: greyed, never hidden, so the
+                figure stays readable to anyone who can open the profile. */}
+            <fieldset
+                disabled={!canDeleteCustomer}
+                className={`min-w-0 space-y-6 border-0 p-0 ${canDeleteCustomer ? "" : "opacity-60"}`}
+            >
                 <AccountOpeningBalanceCard
                     key={`ob-${detail.id}`}
                     accountId={detail.accountId}
                     initialAmount={detail.openingBalance ?? null}
                     initialType={detail.openingBalanceType ?? null}
-                    canEdit
+                    canEdit={canDeleteCustomer}
                     onSaved={onSaved}
                 />
+            </fieldset>
+            <fieldset {...editGate}>
                 <AccountClassificationCard
                     key={`grp-${detail.id}`}
                     accountId={detail.accountId}

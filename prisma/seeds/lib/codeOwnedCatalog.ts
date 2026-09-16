@@ -51,7 +51,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // customers:manage umbrella are retired.
     { id: "customers:create", label: "Create customers", module: "customers", description: "Create Person / Company records." },
     { id: "customers:edit", label: "Edit customers", module: "customers", description: "Edit any Person / Company record (no branch limit)." },
-    { id: "customers:delete", label: "Delete customers", module: "customers", description: "Delete any Person / Company record (no branch limit)." },
+    { id: "customers:delete", label: "Delete customers", module: "customers", description: "Delete any Person / Company record (no branch limit). Also carries the party's OPENING BALANCE on the Contacts profile — rewriting what a party owed before the books started moves real money the same way removing the party does, so the two ride one tick." },
     { id: "customers:view:creditors", label: "Show suppliers (creditors)", module: "customers", description: "Show suppliers (Sundry Creditors) in Contacts lists and voucher party dropdowns. Absent → browses customers (Sundry Debtors) only; suppliers filtered from both surfaces." },
 
     // admin

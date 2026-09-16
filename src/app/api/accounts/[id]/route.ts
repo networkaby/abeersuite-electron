@@ -106,6 +106,18 @@ export async function PATCH(req: Request, { params }: Params) {
     const { data, error } = await validateRequest(req, updateSchema);
     if (error) return error;
 
+    // Opening balance rides ONE RUNG HIGHER than the rest of this route. Rewriting
+    // what a party owed before the books started moves real money the same way
+    // removing the party does, so it takes customers:delete — not the plain
+    // customers:edit that fixes a phone number. The Contacts profile greys the card
+    // out for the same reason; this is the half a direct API call cannot skip.
+    if (data.openingBalance !== undefined && !hasPermission(user, PERMISSIONS.CUSTOMERS_DELETE)) {
+        return NextResponse.json(
+            { error: "Only someone who can delete a customer may change the opening balance." },
+            { status: 403 },
+        );
+    }
+
     // Resolve the group name → id when the caller is reclassifying the party.
     let groupId: number | undefined;
     if (data.accountGroup !== undefined) {
