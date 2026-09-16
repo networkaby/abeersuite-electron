@@ -139,7 +139,11 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                                   onLedger={onLedger} onGroup={onGroup} />
                     ))}
                     {node.ledgers.map((l) => {
-                        const ledgerSide: Side = l.normalBalance ?? groupNormalSide;
+                        // Balances arrive signed against the GROUP's nature (groupTree
+                        // re-signs contra ledgers), so the group's side is what reads
+                        // them correctly. A contra comes through negative and SidedCell
+                        // flips the label itself — Sales Returns still prints "Dr".
+                        const ledgerSide: Side = groupNormalSide;
                         return (
                             <tr
                                 key={`l-${l.id}`}
@@ -186,9 +190,12 @@ function deriveSummary(tree: GroupNode[]) {
     const visit = (n: GroupNode): void => {
         const groupSide = defaultNormalBalanceForGroupType(n.type);
         for (const l of n.ledgers) {
-            // Use the ledger's own normalBalance when present (handles
-            // contra accounts like Drawings sitting inside a CR-side group).
-            const ledgerOnDr = (l.normalBalance ?? groupSide) === "DEBIT";
+            // Side by the GROUP, because that is what the balances are signed
+            // against now. A contra ledger arrives negative, so it SUBTRACTS
+            // from its own group's side instead of adding to the other one —
+            // same Dr−Cr difference either way, so the balance check is
+            // unchanged, but the group subtotal above it is finally right.
+            const ledgerOnDr = groupSide === "DEBIT";
             if (ledgerOnDr) { openDr += l.opening; closeDr += l.closing; }
             else            { openCr += l.opening; closeCr += l.closing; }
             debits  += l.debits;

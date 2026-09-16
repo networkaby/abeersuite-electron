@@ -3,7 +3,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { AccountAggregate } from "./aggregateLedger";
-import type { GroupTypeStr } from "./groupNature";
+import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
 
 export type LedgerNode = {
     id: number;
@@ -84,6 +84,27 @@ export async function buildGroupTree(
         const parent = nodeMap.get(a.groupId);
         if (!parent) continue; // group filtered out
         const agg = aggregates.get(a.id);
+
+        // `aggregates` signs every balance against the ACCOUNT's own nature. A
+        // contra ledger carries the OPPOSITE nature to the group it sits in —
+        // Sales Returns (DEBIT) inside Sales Accounts (CREDIT), Purchase
+        // Returns inside Purchase Accounts, Drawings inside Capital Account,
+        // Cash Over inside Suspense A/c. Rolling those up raw adds a number
+        // that means "credit" to a running total that means "debit", so a
+        // return ADDED to sales and a ₹17 till overage put ₹34 on the asset
+        // side — the Balance Sheet's mystery "Difference in opening balances".
+        //
+        // Re-sign against the GROUP's nature once, here, and every roll-up
+        // below is a plain sum of numbers that mean the same thing. The row
+        // still PRINTS the same: a contra comes through negative and SidedCell
+        // flips it back to the opposite label on its own.
+        //
+        // `debits` / `credits` are raw movement, never signed — they are what
+        // `toPeriodOnlyTree` rebuilds the P&L from, which is why the P&L was
+        // already correct and is untouched by this.
+        const groupSide = defaultNormalBalanceForGroupType(parent.type);
+        const sign = (a.normalBalance ?? groupSide) === groupSide ? 1 : -1;
+
         parent.ledgers.push({
             id: a.id,
             name: a.name,
@@ -91,10 +112,10 @@ export async function buildGroupTree(
             normalBalance: a.normalBalance,
             personId: a.personId,
             companyId:  a.companyId,
-            opening: agg?.opening ?? 0,
+            opening: sign * (agg?.opening ?? 0),
             debits:  agg?.debits  ?? 0,
             credits: agg?.credits ?? 0,
-            closing: agg?.closing ?? 0,
+            closing: sign * (agg?.closing ?? 0),
         });
     }
 
