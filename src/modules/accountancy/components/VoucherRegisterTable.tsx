@@ -26,6 +26,7 @@ import { StatusBadge } from "@/shared/components/StatusBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import type { CombinedRow } from "@/modules/accountancy/hooks/useDayBook";
+import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
 // ── Line shapes ───────────────────────────────────────────────────────────
 
@@ -181,10 +182,17 @@ export function VoucherRegisterTable({
     return (
         <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
             <table className="w-full text-sm">
-                <thead className={[
-                    "border-b border-border bg-muted text-xs text-muted-foreground",
-                    stickyHead ? "sticky top-0 z-10" : "",
-                ].join(" ")}>
+                {/* Tinted head only. Every row below keeps its own colours —
+                    accentBySource says which register a row came from, and that
+                    is data meaning, not decoration. The tint is opaque because a
+                    sticky head scrolls its own rows underneath itself. */}
+                <thead
+                    className={[
+                        "border-b border-border text-xs text-muted-foreground",
+                        stickyHead ? "sticky top-0 z-10" : "",
+                    ].join(" ")}
+                    style={moduleTableHeadStyle("accountancy")}
+                >
                     <tr>
                         {accentBySource && <th className="w-1 p-0" />}
                         <th className="px-3 py-3 text-left font-medium">Date</th>

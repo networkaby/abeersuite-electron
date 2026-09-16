@@ -22,6 +22,7 @@ import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
 type LedgerNode = {
     id:      number;
@@ -282,7 +283,7 @@ export function BookPage({
                                 )}
                                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                                     <table className="w-full text-sm">
-                                        <thead className="bg-muted text-xs text-muted-foreground">
+                                        <thead className="text-xs text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                             <tr>
                                                 <th className="px-3 py-2 text-left font-medium">Ledger</th>
                                                 <th className="px-3 py-2 text-right font-medium">Opening</th>

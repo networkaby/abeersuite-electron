@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight, ArrowDownRight, FileText, Hash, Construction, Tags } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
 
 const SECTIONS = [
     {
@@ -10,35 +11,30 @@ const SECTIONS = [
         href: "/office/accountancy/reports/gst/outward-supplies",
         description: "GST collected on sales — broken down by tax rate (0 / 5 / 12 / 18 / 28%).",
         icon: ArrowUpRight,
-        color: "from-emerald-500/10 to-emerald-500/0 text-emerald-700",
     },
     {
         title: "Inward Supplies (Purchases)",
         href: "/office/accountancy/reports/gst/inward-supplies",
         description: "GST paid on purchases — input tax credit available, by tax rate.",
         icon: ArrowDownRight,
-        color: "from-blue-500/10 to-blue-500/0 text-blue-700",
     },
     {
         title: "Net GST Liability",
         href: "/office/accountancy/reports/gst/liability",
         description: "Output tax (sales) minus input tax (purchases) — what you owe to the GST portal.",
         icon: FileText,
-        color: "from-violet-500/10 to-violet-500/0 text-violet-700",
     },
     {
         title: "HSN / SAC Summary",
         href: "/office/accountancy/reports/gst/hsn-summary",
         description: "HSN-wise rollup of taxable value + tax — the table you copy into GSTR-1 § 12.",
         icon: Hash,
-        color: "from-amber-500/10 to-amber-500/0 text-amber-700",
     },
     {
         title: "Tax Classification",
         href: "/office/accountancy/reports/gst/classification",
         description: "Master view — rate-wise / HSN-wise / group hierarchy / item-wise with cascade source, plus inline edit.",
         icon: Tags,
-        color: "from-cyan-500/10 to-cyan-500/0 text-cyan-700",
     },
 ];
 
@@ -61,10 +57,14 @@ export default function GstHubPage() {
                         <Link
                             key={s.title}
                             href={s.href}
-                            className={`group rounded-lg border border-border bg-gradient-to-br ${s.color} p-5 hover:shadow-md transition-shadow`}
+                            className="group rounded-lg border border-border p-5 hover:shadow-md transition-shadow"
+                            // One module family instead of five unrelated hues — the icon and
+                            // the title already say which return this is. Matches the reports
+                            // hub one level up.
+                            style={{ backgroundImage: `linear-gradient(to bottom right, ${moduleTint("accountancy", 12, "var(--card)")}, var(--card))` }}
                         >
                             <div className="flex items-start gap-3">
-                                <div className="rounded-md bg-background border border-border p-2.5">
+                                <div className="rounded-md bg-background border border-border p-2.5" style={{ color: moduleColor("accountancy") }}>
                                     <Icon size={20} />
                                 </div>
                                 <div className="flex-1 min-w-0">

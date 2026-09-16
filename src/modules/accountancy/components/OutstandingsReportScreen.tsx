@@ -26,6 +26,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
+import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
 // The period labels and colours live in `lib/ageing.ts` — this report and the
 // party's own Outstanding tab in the customer profile share them.
@@ -243,7 +244,7 @@ export function OutstandingsReportScreen({
                     {view === "party" && (
                     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">
-                            <thead className="border-b bg-muted text-xs text-muted-foreground">
+                            <thead className="border-b text-xs text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Party</th>
                                     <th className="px-3 py-2 text-right font-medium">Bills</th>
@@ -301,7 +302,7 @@ export function OutstandingsReportScreen({
                     {view === "bill" && (
                     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">
-                            <thead className="border-b bg-muted text-xs text-muted-foreground">
+                            <thead className="border-b text-xs text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Bill date</th>
                                     <th className="px-3 py-2 text-left font-medium">Ref</th>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { moduleTabStyle } from "@/shared/lib/format/moduleTheme";
 import { cn } from "@/shared/lib/format/utils";
 import { filterMastersNav, MASTERS_NAV_LINKS } from "./masters-nav";
 
@@ -29,9 +30,12 @@ export function MastersNav({ permissions }: Props) {
                         <Button
                             key={href}
                             asChild
-                            variant={active ? "secondary" : "ghost"}
+                            // The hue pill carries "selected" now, so every tab stays ghost —
+                            // a secondary grey block underneath would fight the tint.
+                            variant="ghost"
                             size="xs"
                             className={cn("shrink-0 px-2 font-normal", active && "font-medium")}
+                            style={moduleTabStyle("accountancy", active)}
                         >
                             <Link href={href}>
                                 <Icon className="size-3" aria-hidden />

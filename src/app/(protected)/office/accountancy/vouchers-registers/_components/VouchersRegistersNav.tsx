@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { moduleTabStyle } from "@/shared/lib/format/moduleTheme";
 import { cn } from "@/shared/lib/format/utils";
 import {
     filterVouchersRegisterNav,
@@ -43,12 +44,17 @@ export function VouchersRegistersNav({ permissions }: Props) {
                                 <Button
                                     key={href}
                                     asChild
-                                    variant={active ? "secondary" : "ghost"}
+                                    // The hue pill carries "selected" now, so every tab stays
+                                    // ghost — a secondary grey block would fight the tint. This
+                                    // strip is 23 tabs wide, so the open one has to be findable
+                                    // by colour, not by a slightly darker grey.
+                                    variant="ghost"
                                     size="xs"
                                     className={cn(
                                         "shrink-0 px-2 font-normal",
                                         active && "font-medium",
                                     )}
+                                    style={moduleTabStyle("accountancy", active)}
                                 >
                                     <Link href={href}>
                                         <Icon className="size-3" aria-hidden />

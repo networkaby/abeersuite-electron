@@ -13,6 +13,7 @@ import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
 export type GstBucket = {
     rate:         number;
@@ -86,7 +87,7 @@ export function GstSummaryView({
             {!loading && data && (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
-                        <thead className="border-b bg-muted text-xs text-muted-foreground">
+                        <thead className="border-b text-xs text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                             <tr>
                                 <th className="px-3 py-2 text-left font-medium">Tax Rate</th>
                                 <th className="px-3 py-2 text-right font-medium">Invoices</th>
