@@ -23,8 +23,9 @@ import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS, ageingStatusClass, ageingStatusLabel } from "@/modules/accountancy/lib/ageing";
-import { clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS } from "@/modules/accountancy/lib/ageing";
+import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import { BillLinkStatus } from "@/modules/accountancy/components/BillLinkStatus";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -72,6 +73,9 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
     // The receipt / payment being made, hosted here so the customer stays open
     // behind it — settling must not throw the user off the party they opened.
     const [settle, setSettle] = useState<SettleRequest | null>(null);
+    // The bill whose bill-wise links are being edited — its spine id alone is
+    // enough here, the party is this panel's own.
+    const [linkBillId, setLinkBillId] = useState<number | null>(null);
 
     const load = useCallback((silent = false) => {
         if (!silent) setLoading(true);
@@ -157,7 +161,6 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                             </tr>
                         ) : bills.map((b) => {
                             const href = referenceHref(voucherSourceForType(b.voucherType), b.id, b.voucherType);
-                            const statusClass = ageingStatusClass(b.bucket);
                             // Which way this bill's money runs is the bill's to
                             // say — both sides sit in one list here.
                             const owedToUs = b.side === 1;
@@ -174,8 +177,8 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                                         {b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}
                                     </td>
                                     <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
-                                    <td className={`px-3 py-1.5 text-right text-xs font-medium ${statusClass}`}>
-                                        {ageingStatusLabel(b.daysOverdue)}
+                                    <td className="px-3 py-1.5 text-right">
+                                        <BillLinkStatus bill={b} onLink={setLinkBillId} />
                                     </td>
                                     <td className="px-3 py-1.5 text-right">
                                         {b.universalVoucherId != null && (
@@ -224,6 +227,25 @@ export function PartyOutstandingsPanel({ accountId, partyName }: {
                     load(true);
                 }}
             />
+
+            {/* Clicking a bill's Status opens the bill-wise popup for that bill —
+                the same one the Transactions tab opens from its chip. Saved, the
+                bills are read again: this one may now be settled. */}
+            {linkBillId !== null && (
+                <BillLinkDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setLinkBillId(null); }}
+                    accountId={accountId}
+                    partyName={partyName}
+                    voucherId={linkBillId}
+                    onSaved={() => {
+                        clearBillLinkCache();
+                        clearPartyCache(accountId);
+                        setLinkBillId(null);
+                        load(true);
+                    }}
+                />
+            )}
         </div>
     );
 }

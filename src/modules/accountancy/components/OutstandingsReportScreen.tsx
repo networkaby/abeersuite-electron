@@ -16,10 +16,9 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
-import {
-    BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS, ageingStatusClass, ageingStatusLabel,
-} from "@/modules/accountancy/lib/ageing";
-import { clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS } from "@/modules/accountancy/lib/ageing";
+import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";
+import { BillLinkStatus } from "@/modules/accountancy/components/BillLinkStatus";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -58,6 +57,10 @@ export function OutstandingsReportScreen({
     // The receipt / payment being made against a bill, hosted right here so the
     // report stays on screen behind it.
     const [settle, setSettle] = useState<SettleRequest | null>(null);
+    // The bill whose bill-wise links are being edited, if any. Carries its own
+    // party with it — this report lists every party at once, so the popup cannot
+    // read the party off the screen the way a profile tab can.
+    const [link, setLink] = useState<{ accountId: number; name: string; voucherId: number } | null>(null);
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<ViewMode>("party");
@@ -324,8 +327,6 @@ export function OutstandingsReportScreen({
                                         </td>
                                     </tr>
                                 ) : bills.map((b) => {
-                                    const statusClass = ageingStatusClass(b.bucket);
-                                    const statusLabel = ageingStatusLabel(b.daysOverdue);
                                     return (
                                         <tr
                                             key={`${b.kind}-${b.id}`}
@@ -348,7 +349,12 @@ export function OutstandingsReportScreen({
                                             <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>
                                             <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/65">—</span>}</td>
                                             <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
-                                            <td className={`px-3 py-1.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
+                                            <td className="px-3 py-1.5 text-right">
+                                                <BillLinkStatus
+                                                    bill={b}
+                                                    onLink={(voucherId) => setLink({ accountId: b.accountId, name: b.accountName, voucherId })}
+                                                />
+                                            </td>
                                             <td className="px-3 py-1.5 text-right">
                                                 {b.universalVoucherId != null && (
                                                     <button
@@ -400,6 +406,21 @@ export function OutstandingsReportScreen({
             settleBill={settle}
             onClose={() => { setSettle(null); clearBillLinkCache(); load(true); }}
         />
+
+        {/* Clicking a bill's Status opens the same bill-wise popup the customer's
+            Transactions tab opens from its Settled / Partial / Due chip — ticks,
+            part amounts, Auto and all. Saved, the report is read again: the bill
+            may now be settled and must not still be sitting in the list. */}
+        {link && (
+            <BillLinkDialog
+                open
+                onOpenChange={(v) => { if (!v) setLink(null); }}
+                accountId={link.accountId}
+                partyName={link.name}
+                voucherId={link.voucherId}
+                onSaved={() => { clearBillLinkCache(); setLink(null); load(true); }}
+            />
+        )}
         </ScrollArea>
     );
 }
