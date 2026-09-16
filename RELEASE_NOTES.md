@@ -1,72 +1,27 @@
-# v1.3.8 [urgent]
+# v1.3.9
 
-Every counter must take this update **before** the office site is deployed. It carries a
-database change on the Phone and Email tables, and a counter that is still on the old
-version will stop syncing all its tables the moment the office side changes. Install it
-today, on every till.
+A quiet update, worth taking on every counter. The main thing: a party's statement at the till now keeps itself up to date, so the Status you see is the Status the books say. Also, unpaid bills can now be linked to money that is already sitting unlinked, straight from the Receivables and Payables reports. Nothing in the database changes, so counters and the office can be updated in any order.
 
-The version fixes a long-standing fault where a phone number corrected in the office
-never reached the counter, brings credit limits to the till, and finishes the caller-ID
-work on the EPBX line.
+## Customer statement updates by itself
 
-## A corrected phone number now reaches the counter
+Until now, a receipt made at Head Office reached the counter's own copy of the data within seconds — but the screen went on showing the old figures until somebody pressed **Refresh**. A bill could read **Due** when the money against it was already linked.
 
-Until now only **new** phone numbers and email ids travelled down to a till. If somebody
-fixed a wrong number in the office, or deleted one, the counter kept showing the old
-value — forever. The hourly check could not catch it either.
+The party's **Transactions** tab now follows the books on its own, on both the Person and the Company screens. It updates only after the counter's copy has really received the rows, so it can never show a half-finished picture, and it refreshes quietly — the table you are reading is never replaced by a loading circle.
 
-- Phone and Email now carry a "last changed" stamp, which is what the sync uses to spot
-  an edit. From this version a correction reaches every counter on the next cycle.
-- On the first sync after the upgrade each counter pulls both lists once in full, so the
-  corrections they have been missing all this time come down straight away.
+Every screen in the app that already updated on its own now does so more cheaply too: looking away from the window and back again used to cost two readings instead of one.
 
-## Credit at the counter
+## Link a bill to money already received — from the reports
 
-- **A credit bill is allowed up to the customer's credit limit.** The counter checks the
-  limit at checkout instead of refusing credit outright, and the same rule is now
-  enforced on office sales too.
-- The customer's **master opening balance** is counted in the panel figure and in the
-  credit check. Earlier it was left out, so a party with an opening due looked clearer
-  than they were.
-- A credit limit can be set from the customer screen through a proper dialog.
-- The customer panel's **"Overdue" tile is now called "Unsettled"** — it always showed
-  everything not yet settled, not only what is past due.
+On **Receivables**, **Payables**, and a party's **Outstanding** tab, the Status of a bill (`Within 12d`, `Overdue 138d`) was only text. The only button on the row made a **new** receipt or payment — no use when the customer has already paid and that receipt is sitting unlinked as an advance.
 
-## Caller ID on the EPBX line
+That Status is now clickable, with a small chain mark. It opens the same bill-wise link window the customer's Transactions tab has always used — tick the bills, put a part amount, or press Auto to clear the oldest first. A bill that gets settled leaves the list at once instead of sitting there stale.
 
-- **A half-arrived number is read as a part number**, not as an unknown outsider. Staff
-  get a shortlist of who it could be and pick the right person; the call is then counted
-  as completed.
-- Staff can also **set the caller by hand** when the line gives the wrong number.
-- A number arriving with a leading **91** is read as the country code and the ten digits
-  kept.
-- Follow-up reminders in the popup are **folded by caller**, so one person with five
-  missed calls is one row, not five.
-- **One EPBX extension may now sit on several counters.**
+## Inventory hub — five dead cards fixed
 
-## Customers and parties
+On the **Inventory** home page, five of the six cards led to a "page not found": Units, Categories, Groups, Brands and Warranty terms. Only Products worked. All of them open correctly now, and three masters the hub never showed at all — Attribute masters, GST Rates and BOMs — have been added. The page now reads the same list the sidebar uses, so the two can never disagree again.
 
-- The **Status column shows settlement** and opens the bill-wise popup.
-- **Receipts appear on the Transactions tab**, and "Paid" is read from the ledger.
-- Deleting an opening balance now needs the delete right, not the edit right.
-- The party search box **searches the whole list**. Customers were being hidden from it.
+## Easier to move around
 
-## Accountancy
-
-- **A receipt settles the bills it actually paid**, and editing a receipt keeps its
-  tender tags.
-- Both pending reports now read from one settlement calculation, so they agree.
-- Group-tree totals are read correctly inside a transaction.
-
-## Look and speed
-
-- The module colour now carries across roughly ninety more pages — accountancy, the
-  customer explorers, tabs and breadcrumbs — so you can tell at a glance which part of
-  the suite you are in.
-- The counter's sync-status and counter-status checks are **shared instead of repeated**,
-  which cuts a steady stream of background requests.
-- Signing in wakes the status panels straight away instead of after the next check.
-- The tray menu shows the app version and what the update check is doing.
-- Carried over from the last round: quick-create saves the sale price it was given, one
-  UPI id rule at the counter and in party settings, clearer branch-access refusals, and
-  the last native pop-ups replaced with the app's own styled dialog.
+- All **21 Business Intelligence** pages now show a breadcrumb at the top, and **Esc** takes you back — they had neither before.
+- The app's own shell pages — the home dashboard, the Workspace inboxes, a colleague's profile, the serial lookup — now carry their own light colour instead of none, so it is clear at a glance that you are outside a business module. **Esc** goes back on those too.
+- The app and tray icon now sit on a white square, so it stays readable on a dark taskbar.
