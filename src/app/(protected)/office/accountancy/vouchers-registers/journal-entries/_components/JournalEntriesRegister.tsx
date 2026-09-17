@@ -41,6 +41,7 @@ interface RawEntry {
     partyAccountId?:  number | null;
     settlement?:      SettlementState | null;
     settlementOpen?:  number;
+    canLink?:         boolean;
 }
 
 export function JournalEntriesRegister() {
@@ -95,6 +96,7 @@ export function JournalEntriesRegister() {
                     universalVoucherId: Number(e.id),
                     settlement:     e.settlement ?? null,
                     settlementOpen: e.settlementOpen ?? 0,
+                    canLink:        e.canLink ?? false,
                 }));
                 setAllRows(mapped);
             })

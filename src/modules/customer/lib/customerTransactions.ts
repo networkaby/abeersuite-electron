@@ -3,7 +3,7 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/ledgerStatus";
 import { voucherSourceForType, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
-import { settlementOf, sumLinked } from "@/modules/accountancy/lib/billLink";
+import { settlementOf, sumLinked, loadPartyUnallocated, EPS } from "@/modules/accountancy/lib/billLink";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import type { TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
 
@@ -154,6 +154,7 @@ export function buildOpeningVoucherRow(
         // turned into a real opening bill before anything can be matched to it.
         settlement: null,
         settlementOpen: "0.00",
+        canLink: false,
         branch: { name: "" },
         createdBy: { name: "" },
     };
@@ -234,6 +235,19 @@ export async function loadCustomerTransactionVouchers(
     }
     const linkedBySpine = await sumLinked(prisma, [...billedUvIds, ...movementByUv.keys()]);
 
+    // What this party has standing unmatched on each side, across ALL history —
+    // not just the period on screen, because the bill-wise popup offers the whole
+    // ledger. A row can only be linked if the OTHER side holds something; without
+    // that the popup opens empty, so the chip drops its chain icon.
+    const unallocated = (await loadPartyUnallocated(prisma, [account.id])).get(account.id)
+        ?? { dr: 0, cr: 0, toLink: 0 };
+    // `movement` here is signed onto the account's NORMAL side, so it has to be
+    // read back through that side to know which of dr / cr it stands on.
+    const otherSideOpen = (movement: number) =>
+        (nb === "DEBIT" ? movement > 0 : movement < 0) ? unallocated.cr : unallocated.dr;
+    const canLinkOf = (state: string, movement: number) =>
+        state !== "SETTLED" && otherSideOpen(movement) > EPS;
+
     // ── Bill rows ────────────────────────────────────────────────────────────
     const billRowsOut = (billRows as RawVoucher[]).map((v) => {
         const uv = v.universalVoucher;
@@ -256,6 +270,7 @@ export async function loadCustomerTransactionVouchers(
             movement: movement.toFixed(2),
             settlement: settled.state,
             settlementOpen: settled.open.toFixed(2),
+            canLink: canLinkOf(settled.state, movement),
             branch: uv?.branch ?? { name: "" },
             createdById: uv?.createdById ?? null,
         };
@@ -282,6 +297,7 @@ export async function loadCustomerTransactionVouchers(
                 movement: movement.toFixed(2),
                 settlement: settled.state,
                 settlementOpen: settled.open.toFixed(2),
+                canLink: canLinkOf(settled.state, movement),
                 branch: uv.branch ?? { name: "" },
                 createdById: uv.createdById,
             };

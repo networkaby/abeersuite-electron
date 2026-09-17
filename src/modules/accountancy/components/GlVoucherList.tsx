@@ -46,6 +46,7 @@ type RawRow = {
     partyAccount: { id: number; name: string; personId: number | null; companyId: number | null } | null;
     settlement?:     SettlementState | null;
     settlementOpen?: number;
+    canLink?:        boolean;
 };
 
 /** Stable empty list, so a register with no rows of its own does not hand a
@@ -111,6 +112,7 @@ export function GlVoucherList({
                     universalVoucherId: v.id,
                     settlement:     v.settlement ?? null,
                     settlementOpen: v.settlementOpen ?? 0,
+                    canLink:        v.canLink ?? false,
                 }));
                 setLoaded({ type, rows: mapped });
             })

@@ -95,6 +95,7 @@ export default function OrdersEstimatesPage() {
                     universalVoucherId: null,
                     settlement:     null,
                     settlementOpen: 0,
+                    canLink:        false,
                 }));
                 setAllRows(mapped);
             })

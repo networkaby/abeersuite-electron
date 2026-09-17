@@ -53,6 +53,9 @@ export type TxInvVoucher = {
     settlement: SettlementState | null;
     /** What is still unmatched on this voucher — "0.00" once settled. */
     settlementOpen: string;
+    /** Is there anything on this party's OTHER side to match the row against?
+     *  False means the popup would open empty — the chip shows no chain. */
+    canLink: boolean;
     branch:    { name: string };
     createdBy: { name: string };
 };
@@ -110,6 +113,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
         movement:   number;
         settlement: SettlementState | null;
         open:       number;
+        canLink:    boolean;
         url:        string | null;
         branchName: string | null;
         createdBy:  string | null;
@@ -137,6 +141,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
         movement:   Number(v.movement),
         settlement: v.settlement,
         open:       Number(v.settlementOpen),
+        canLink:    v.canLink,
         url:        v.type === "OPENING" ? null : referenceHref(v.source, v.id, v.type),
         branchName: v.branch.name || null,
         createdBy:  v.createdBy.name || null,
@@ -246,7 +251,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                     <SettlementChip
                                         state={row.settlement}
                                         open={row.open}
-                                        onLink={row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
+                                        onLink={row.canLink && row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
                                             ? () => setLinkVoucherId(row.uvId)
                                             : undefined}
                                     />

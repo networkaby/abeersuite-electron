@@ -370,7 +370,7 @@ export function VoucherRegisterTable({
                                             <SettlementChip
                                                 state={r.settlement}
                                                 open={r.settlementOpen}
-                                                onLink={r.settlement && r.settlement !== "SETTLED"
+                                                onLink={r.canLink && r.settlement && r.settlement !== "SETTLED"
                                                     && r.universalVoucherId != null && r.partyAccountId != null
                                                     ? () => setLinkRow({
                                                         uvId:      r.universalVoucherId!,

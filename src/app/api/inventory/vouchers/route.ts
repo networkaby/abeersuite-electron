@@ -285,6 +285,7 @@ export async function GET(req: NextRequest) {
         ...v,
         settlement:     (v.universalVoucherId != null ? settlements[v.universalVoucherId]?.state : null) ?? null,
         settlementOpen: (v.universalVoucherId != null ? settlements[v.universalVoucherId]?.open  : 0) ?? 0,
+        canLink:        (v.universalVoucherId != null ? settlements[v.universalVoucherId]?.canLink : false) ?? false,
     }));
 
     return NextResponse.json(withSettlement);

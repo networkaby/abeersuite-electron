@@ -95,6 +95,7 @@ export async function GET(req: Request) {
                 totalDebit,
                 settlement:     settlements[e.id]?.state ?? null,
                 settlementOpen: settlements[e.id]?.open  ?? 0,
+                canLink:        settlements[e.id]?.canLink ?? false,
             };
         });
 

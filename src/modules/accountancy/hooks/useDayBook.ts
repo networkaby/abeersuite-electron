@@ -75,6 +75,9 @@ type RawRow = {
     settlement:     SettlementState | null;
     /** What is still unmatched on this voucher, in rupees. */
     settlementOpen: number;
+    /** Is there anything on the party's OTHER side to match this against? False
+     *  means the bill-wise popup would open empty, so the chip shows no chain. */
+    canLink:        boolean;
 };
 
 type RefBranch  = { id: string; name: string };
@@ -167,7 +170,7 @@ type CachedView = Store & { savedAt: number };
  * means an older cache simply no longer matches and is re-paged from scratch,
  * and the existing `MAX_CACHED_VIEWS` trim sweeps the orphan away.
  */
-const ROW_SHAPE = "v2-settlement";
+const ROW_SHAPE = "v3-canlink";
 
 /**
  * Identifies a filter view. `search` is deliberately excluded — a searched view is

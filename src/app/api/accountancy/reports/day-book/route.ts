@@ -6,7 +6,7 @@ import { handleApiError, parseCursor, deltaSlice, pageSlice } from "@/shared/lib
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
-import { loadSettlements, type SettlementState } from "@/modules/accountancy/lib/billLink";
+import { loadSettlements, type Settlement, type SettlementState } from "@/modules/accountancy/lib/billLink";
 import { kindsForFilter, kindsForCategory, NON_REGULAR_KINDS } from "@/modules/accountancy/lib/voucherKinds";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 
@@ -82,6 +82,7 @@ function intersectKinds(a: string[] | null, b: string[] | null): string[] | null
  */
 async function settlementsFor(
     batch: { id: number; type: string; status: string; partyAccountId: number | null; lines: { type: string; amount: unknown; accountId: number }[] }[],
+    opts: { linkability?: boolean } = {},
 ) {
     const partyMovement = new Map<number, number>();
     for (const v of batch) {
@@ -102,6 +103,7 @@ async function settlementsFor(
             status:             v.status,
         })),
         partyMovement,
+        opts,
     );
 }
 
@@ -245,7 +247,7 @@ export async function GET(req: Request) {
         let deleted: string[] = [];
         // Settlements worked out while scanning are kept, so the row mapper below
         // never re-reads what this request already measured.
-        const settlements: Record<number, { state: string; open: number }> = {};
+        const settlements: Record<number, Settlement> = {};
 
         if (since) {
             // Delta: everything touched since the client last looked. Rows older
@@ -291,7 +293,10 @@ export async function GET(req: Request) {
                 });
                 if (batch.length === 0) { exhausted = true; break; }
                 scanCursor = batch[batch.length - 1].id;
-                Object.assign(settlements, await settlementsFor(batch));
+                // While sifting, the state is all that matters — whether a row
+                // has anything to link against is asked once, below, about the
+                // page we actually settle on.
+                Object.assign(settlements, await settlementsFor(batch, { linkability: false }));
                 for (const v of batch) {
                     if (OPEN_STATES.has(settlements[v.id]?.state ?? "")) kept.push(v);
                 }
@@ -342,7 +347,11 @@ export async function GET(req: Request) {
         // leaves no leg at all, and that reads as Settled.
         // The unpaid scan above already measured its rows; anything not measured
         // yet (the ordinary page, or a delta) is worked out here in one go.
-        const unmeasured = found.filter((v) => settlements[v.id] === undefined);
+        // The unpaid scan measured state only, so the rows it settled on are
+        // re-measured here in full; every other path is measured from scratch.
+        const unmeasured = unpaidOnly
+            ? found
+            : found.filter((v) => settlements[v.id] === undefined);
         if (unmeasured.length > 0) Object.assign(settlements, await settlementsFor(unmeasured));
 
         let rows = found.map((v) => {
@@ -392,6 +401,10 @@ export async function GET(req: Request) {
                 // party, not posted, or a documentary voucher that posts no money.
                 settlement:     (settlements[v.id]?.state ?? null) as SettlementState | null,
                 settlementOpen: settlements[v.id]?.open  ?? 0,
+                // Is there anything on the party's other side to match this
+                // against? False hides the chip's chain icon — the popup
+                // would open empty.
+                canLink:        settlements[v.id]?.canLink ?? false,
             };
         });
 

@@ -142,6 +142,7 @@ export async function GET(req: Request) {
             /** Bill-wise state — null where there is no bill to settle. */
             settlement:     settlements[v.id]?.state ?? null,
             settlementOpen: settlements[v.id]?.open  ?? 0,
+            canLink:        settlements[v.id]?.canLink ?? false,
         }));
 
         return NextResponse.json(vouchers);

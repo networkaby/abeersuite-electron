@@ -186,42 +186,75 @@ export async function loadPartyUnallocated(
     const ids = [...new Set(accountIds)];
     if (ids.length === 0) return out;
 
-    const lines = await db.voucherGlLine.findMany({
-        where: {
-            accountId:        { in: ids },
-            universalVoucher: {
-                ...ledgerStatusFilterUv(),
-                ...(opts.asOf ? { date: { lte: opts.asOf } } : {}),
-            },
-        },
-        select: { accountId: true, universalVoucherId: true, type: true, amount: true },
-    });
-    if (lines.length === 0) return out;
+    // One aggregate, not a page of rows read back into JS. The old shape pulled
+    // EVERY GL line of every named party — a customer with years of history
+    // shipped his whole ledger across the wire so we could add it up here. The
+    // rule below is exactly the same one `loadLinkableDocs` applies per voucher:
+    //   leg  = Σ debits − Σ credits on the party's own account for that voucher
+    //   open = |leg| − what is linked against it, links counted from BOTH ends
+    //          and only while the voucher on the OTHER end is still alive
+    // A voucher can touch two party ledgers, so the leg is grouped by the PAIR.
+    const asOf = opts.asOf ?? null;
+    const rows = await db.$queryRaw<{ accountId: number; dr: string; cr: string }[]>`
+        WITH legs AS (
+            SELECT l."accountId"                AS account_id,
+                   l."universalVoucherId"       AS uv_id,
+                   SUM(CASE WHEN l."type" = 'DEBIT' THEN l."amount" ELSE -l."amount" END) AS signed
+            FROM "VoucherGlLine" l
+            JOIN "UniversalVoucher" v ON v."id" = l."universalVoucherId"
+            WHERE l."accountId" = ANY(${ids})
+              AND v."status" = 'POSTED'
+              AND v."deletedAt" IS NULL
+              AND (${asOf}::timestamp IS NULL OR v."date" <= ${asOf}::timestamp)
+            GROUP BY 1, 2
+        ), linked AS (
+            -- Only the vouchers the legs CTE actually named. Without that bound
+            -- this aggregates the whole allocation table on every call, which is
+            -- what made the first cut of this query slower than the loop it
+            -- replaced.
+            SELECT uv_id, SUM(amount) AS amount FROM (
+                SELECT a."targetId" AS uv_id, a."amount" AS amount
+                FROM "VoucherAllocation" a
+                JOIN "UniversalVoucher" s
+                  ON s."id" = a."sourceId" AND s."status" = 'POSTED' AND s."deletedAt" IS NULL
+                WHERE a."targetType" = 'UNIVERSAL_VOUCHER'
+                  AND a."sourceType" IN ('VOUCHER', 'PAYMENT')
+                  AND a."targetId" <> a."sourceId"
+                  AND a."targetId" IN (SELECT uv_id FROM legs)
+                UNION ALL
+                SELECT a."sourceId" AS uv_id, a."amount" AS amount
+                FROM "VoucherAllocation" a
+                JOIN "UniversalVoucher" t
+                  ON t."id" = a."targetId" AND t."status" = 'POSTED' AND t."deletedAt" IS NULL
+                WHERE a."targetType" = 'UNIVERSAL_VOUCHER'
+                  AND a."sourceType" IN ('VOUCHER', 'PAYMENT')
+                  AND a."targetId" <> a."sourceId"
+                  AND a."sourceId" IN (SELECT uv_id FROM legs)
+            ) both_ends
+            GROUP BY uv_id
+        ), open_legs AS (
+            -- A leg, or a remainder, smaller than a paisa-rounding wobble is not
+            -- open — the same EPS gate the per-voucher rule applies.
+            SELECT legs.account_id,
+                   legs.signed,
+                   ABS(legs.signed) - COALESCE(linked.amount, 0) AS open
+            FROM legs
+            LEFT JOIN linked ON linked.uv_id = legs.uv_id
+            WHERE ABS(legs.signed) > ${EPS}
+        )
+        SELECT account_id AS "accountId",
+               COALESCE(SUM(CASE WHEN signed > 0 AND open > ${EPS} THEN open ELSE 0 END), 0) AS dr,
+               COALESCE(SUM(CASE WHEN signed < 0 AND open > ${EPS} THEN open ELSE 0 END), 0) AS cr
+        FROM open_legs
+        GROUP BY account_id
+    `;
 
-    // One voucher can touch two party ledgers (a journal between two parties),
-    // so the leg is keyed by the PAIR, never by the spine alone.
-    const legs = new Map<string, number>();
-    for (const l of lines) {
-        const key = `${l.accountId}:${l.universalVoucherId}`;
-        const delta = l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
-        legs.set(key, round2((legs.get(key) ?? 0) + delta));
+    for (const r of rows) {
+        const dr = round2(Number(r.dr));
+        const cr = round2(Number(r.cr));
+        if (dr <= EPS && cr <= EPS) continue;
+        out.set(r.accountId, { dr, cr, toLink: round2(Math.min(dr, cr)) });
     }
-
-    const linked = await sumLinked(db, lines.map((l) => l.universalVoucherId));
-
-    for (const [key, signed] of legs) {
-        if (Math.abs(signed) <= EPS) continue;
-        const sep      = key.indexOf(":");
-        const accountId = Number(key.slice(0, sep));
-        const spineId   = Number(key.slice(sep + 1));
-        const open = round2(Math.abs(signed) - (linked[spineId] ?? 0));
-        if (open <= EPS) continue;
-        const cur = out.get(accountId) ?? { dr: 0, cr: 0, toLink: 0 };
-        if (signed > 0) cur.dr = round2(cur.dr + open);
-        else            cur.cr = round2(cur.cr + open);
-        out.set(accountId, cur);
-    }
-    for (const v of out.values()) v.toLink = round2(Math.min(v.dr, v.cr));
     return out;
 }
 
@@ -744,6 +777,11 @@ export type Settlement = {
     state: SettlementState;
     /** What is still unmatched on this voucher — 0 once settled. */
     open:  number;
+    /** Is there anything on the OTHER side of this party to match it against?
+     *  False on an unsettled bill whose party has no unlinked money waiting —
+     *  the popup would open empty, so the chip drops its chain icon and the
+     *  click with it. Always false on a settled row: there is nothing to do. */
+    canLink: boolean;
 };
 
 /**
@@ -753,11 +791,13 @@ export type Settlement = {
  */
 export function settlementOf(movement: number, linked: number): Settlement {
     const onAccount = Math.abs(movement);
-    if (onAccount <= EPS) return { state: "SETTLED", open: 0 };
+    // `canLink` is decided by the caller that knows the party's other side; on
+    // its own this function can only say there is nothing to do.
+    if (onAccount <= EPS) return { state: "SETTLED", open: 0, canLink: false };
     const open = round2(onAccount - Math.min(linked, onAccount));
-    if (open <= EPS) return { state: "SETTLED", open: 0 };
-    if (open >= onAccount - EPS) return { state: "DUE", open };
-    return { state: "PARTIAL", open };
+    if (open <= EPS) return { state: "SETTLED", open: 0, canLink: false };
+    if (open >= onAccount - EPS) return { state: "DUE", open, canLink: false };
+    return { state: "PARTIAL", open, canLink: false };
 }
 
 /** One register row, reduced to what settlement needs to know about it. */
@@ -788,6 +828,7 @@ export async function loadSettlements(
     db: Prisma.TransactionClient,
     rows: SettlementInput[],
     partyMovement?: Map<number, number>,
+    opts: { linkability?: boolean } = {},
 ): Promise<Record<number, Settlement>> {
     // Pair each spine id with the party ledger its settlement is measured on.
     const partyByUv = new Map<number, number>();
@@ -829,5 +870,32 @@ export async function loadSettlements(
     for (const uvId of uvIds) {
         out[uvId] = settlementOf(legs.get(uvId) ?? 0, linked[uvId] ?? 0);
     }
+
+    // ── Is there anything to link against? ──────────────────────────────────
+    // An unsettled bill can only be matched if its party holds unlinked money on
+    // the OPPOSITE side; otherwise the popup opens empty. Asked for the whole
+    // page in one batched read, and only for the parties that still have an open
+    // row — a page of fully settled rows pays nothing for this.
+    // A caller that is only sifting rows — the Day Book's unpaid scan — asks for
+    // the state alone and measures linkability once, on the page it settles on.
+    if (opts.linkability === false) return out;
+
+    const openAccounts = new Set<number>();
+    for (const uvId of uvIds) {
+        if (out[uvId].state !== "SETTLED") openAccounts.add(partyByUv.get(uvId)!);
+    }
+    if (openAccounts.size > 0) {
+        const unallocated = await loadPartyUnallocated(db, [...openAccounts]);
+        for (const uvId of uvIds) {
+            if (out[uvId].state === "SETTLED") continue;
+            const party = unallocated.get(partyByUv.get(uvId)!);
+            if (!party) continue;
+            // The row's own side sits in its own total, so no self-exclusion is
+            // needed: what matters is money standing on the other one.
+            const otherSide = (legs.get(uvId) ?? 0) > 0 ? party.cr : party.dr;
+            out[uvId].canLink = otherSide > EPS;
+        }
+    }
+
     return out;
 }

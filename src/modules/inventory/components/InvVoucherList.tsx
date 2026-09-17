@@ -62,6 +62,7 @@ type ListRow = {
     converted?:      boolean;
     settlement?:     SettlementState | null;
     settlementOpen?: number;
+    canLink?:        boolean;
 };
 
 /** Row shape extended with optional fields injected for caller-supplied
@@ -149,6 +150,7 @@ export function InvVoucherList({
                     universalVoucherId: v.universalVoucherId ?? null,
                     settlement:     v.settlement ?? null,
                     settlementOpen: v.settlementOpen ?? 0,
+                    canLink:        v.canLink ?? false,
                 }));
                 setLoaded({ type, rows: mapped });
             })
