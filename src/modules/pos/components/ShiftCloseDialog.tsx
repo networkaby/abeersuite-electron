@@ -168,8 +168,13 @@ export function ShiftCloseDialog({
         setDeclared(total.toFixed(2));
     };
 
-    // Vault mode — carry-over
+    // Vault mode — the counted cash splits in two: what goes to the vault now
+    // and what stays in the till overnight. The cashier counts out ONE pile and
+    // types it; whichever box is typed becomes the anchor and the other one is
+    // derived, so the two always add up to the physical count.
     const [carryOver, setCarryOver] = useState("");
+    const [toVaultInput, setToVaultInput] = useState("");
+    const [anchor, setAnchor] = useState<"keep" | "sweep">("keep");
     // Back-dated close (re-close flow only) — `yyyy-MM-ddTHH:mm` local.
     const [closedAt, setClosedAt]   = useState("");
 
@@ -227,7 +232,9 @@ export function ShiftCloseDialog({
             .then((r) => {
                 setDetail(r.data);
                 setDeclared("0.00");
-                setCarryOver("0");
+                setCarryOver("0.00");
+                setToVaultInput("0.00");
+                setAnchor("keep");
             })
             .catch(() => toast.error("Failed to load shift summary"))
             .finally(() => setLoading(false));
@@ -253,7 +260,36 @@ export function ShiftCloseDialog({
     // counter for the vault, so the till closes at the carry-over. Mirrors the
     // server (close route): toVault = declared + drops − carryOver.
     const toVault      = Math.max(0, declaredNum + dropsNum - carryOverNum);
+    // Cash physically carried to the vault right now. The day's safe drops left
+    // the drawer earlier, so they can't be counted out again — they only ride
+    // along in the Contra figure.
+    const sweepNum     = parseFloat(toVaultInput) || 0;
+    const handOverNow  = Math.max(0, declaredNum - carryOverNum);
+    const overCounted  = (anchor === "keep" ? carryOverNum : sweepNum) > declaredNum + 0.001;
     const variance     = +(declaredNum - expected).toFixed(2);
+
+    const splitFmt = (n: number) => Math.max(0, +n.toFixed(2)).toFixed(2);
+    const editKeep = (raw: string) => {
+        const v = parseDecimalInput(raw);
+        setAnchor("keep");
+        setCarryOver(v);
+        setToVaultInput(splitFmt(declaredNum - (parseFloat(v) || 0)));
+    };
+    const editSweep = (raw: string) => {
+        const v = parseDecimalInput(raw);
+        setAnchor("sweep");
+        setToVaultInput(v);
+        setCarryOver(splitFmt(declaredNum - (parseFloat(v) || 0)));
+    };
+
+    // Counting more notes moves the physical total: the box the cashier last
+    // typed holds its figure, the other one follows.
+    useEffect(() => {
+        if (mode !== "vault") return;
+        if (anchor === "keep") setToVaultInput(splitFmt(declaredNum - carryOverNum));
+        else                   setCarryOver(splitFmt(declaredNum - sweepNum));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [declaredNum, mode]);
 
     const submitVault = async () => {
         if (!detail) return;
@@ -391,11 +427,6 @@ export function ShiftCloseDialog({
                                                     <ArrowRightLeft size={13} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
                                                     <span>Posts Contra: <strong className="text-indigo-950 dark:text-indigo-100">{detail.counter.tillAccount.name}</strong> → <strong className="text-indigo-950 dark:text-indigo-100">Vault</strong></span>
                                                 </div>
-                                                <div className="text-[11px] text-indigo-800 dark:text-indigo-300 pl-4">
-                                                    Transfer amount: <span className="font-mono font-bold text-indigo-950 dark:text-indigo-100">₹{fmt(toVault)}</span>
-                                                    {dropsNum > 0 && <> (incl. <span className="font-mono font-semibold">₹{fmt(dropsNum)}</span> dropped to safe)</>}.
-                                                    Counter keeps <span className="font-mono font-semibold">₹{fmt(carryOverNum)}</span> overnight.
-                                                </div>
                                             </div>
                                         )}
 
@@ -457,17 +488,47 @@ export function ShiftCloseDialog({
                                             </div>
 
                                             {mode === "vault" ? (
-                                                <div className="space-y-0.5">
-                                                    <Label htmlFor="carry-over" className="text-xs font-medium text-foreground">Keep in counter overnight (₹)</Label>
-                                                    <Input
-                                                        id="carry-over"
-                                                        value={carryOver}
-                                                        onChange={(e) => setCarryOver(parseDecimalInput(e.target.value))}
-                                                        onFocus={(e) => e.target.select()}
-                                                        onClick={(e) => e.currentTarget.select()}
-                                                        placeholder="0 (sweeps all to vault)"
-                                                        className="h-8 font-mono bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500"
-                                                    />
+                                                <div className="space-y-1.5">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="space-y-0.5">
+                                                            <Label htmlFor="to-vault" className="text-xs font-medium text-foreground">Hand over to vault (₹)</Label>
+                                                            <Input
+                                                                id="to-vault"
+                                                                value={toVaultInput}
+                                                                onChange={(e) => editSweep(e.target.value)}
+                                                                onFocus={(e) => e.target.select()}
+                                                                onClick={(e) => e.currentTarget.select()}
+                                                                placeholder="0"
+                                                                className="h-8 font-mono font-bold bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <Label htmlFor="carry-over" className="text-xs font-medium text-foreground">Keep in counter (₹)</Label>
+                                                            <Input
+                                                                id="carry-over"
+                                                                value={carryOver}
+                                                                onChange={(e) => editKeep(e.target.value)}
+                                                                onFocus={(e) => e.target.select()}
+                                                                onClick={(e) => e.currentTarget.select()}
+                                                                placeholder="0"
+                                                                className="h-8 font-mono font-bold bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-[10px] ${overCounted ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                                                        {overCounted
+                                                            ? `More than the ₹${fmt(declaredNum)} counted — reduce it.`
+                                                            : `Count out either pile — the other box fills itself. Both add up to ₹${fmt(declaredNum)}.`}
+                                                    </p>
+                                                    <div className="border-t border-amber-200/70 dark:border-amber-800/50 pt-1 mt-0.5 flex justify-between items-center bg-amber-100/50 dark:bg-amber-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
+                                                        <span className="text-amber-950 dark:text-amber-200">Contra to vault</span>
+                                                        <span className="font-mono text-sm text-amber-900 dark:text-amber-100 font-bold">₹{fmt(toVault)}</span>
+                                                    </div>
+                                                    {dropsNum > 0 && (
+                                                        <p className="text-[10px] text-muted-foreground">
+                                                            ₹{fmt(handOverNow)} handed over now + ₹{fmt(dropsNum)} dropped to the safe during the day.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="space-y-0.5">
