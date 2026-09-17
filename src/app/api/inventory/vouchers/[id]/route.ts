@@ -260,7 +260,14 @@ export async function PATCH(req: Request, { params }: Params) {
     // gets stored. Stays 0 when this PATCH doesn't touch the lines.
     let billDiscIncl = 0;
 
-    if (lines?.length) {
+    // `lines` absent = this PATCH isn't touching the items. An EMPTY ARRAY is a
+    // different statement — "this voucher now has no items" — and must be obeyed,
+    // exactly as POST already allows a sale/purchase carrying only charge rows.
+    // Reading `[]` as "leave the lines alone" silently kept the old line while
+    // the new charge was added on top, so the re-posted JE no longer matched the
+    // payment rows and the whole edit was refused. It also made the last item on
+    // an invoice impossible to delete from the form.
+    if (lines) {
         computedLines = lines.map((l) => {
             const rate = l.rate ?? 0;
             const oldLine = existingLineByProduct.get(l.productId);
@@ -440,7 +447,9 @@ export async function PATCH(req: Request, { params }: Params) {
                 }
             }
             // Phase 5 5C: rewrite the goods lines on the spine (deleted above).
-            if (computedLines) {
+            // An empty list is legitimate (a charge-only sale) — there is simply
+            // nothing to write back.
+            if (computedLines?.length) {
                 await tx.voucherInventoryLine.createMany({
                     data: computedLines.map((l) => ({
                         universalVoucherId: existing.universalVoucherId!,
