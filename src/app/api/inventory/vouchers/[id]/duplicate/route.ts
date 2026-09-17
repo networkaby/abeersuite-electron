@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { Prisma, type InvVoucherType } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
@@ -52,7 +53,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // posted — duplicating a bill to look at it no longer burns one.
                 voucherNo:    null,
                 partyAccountId: source.universalVoucher?.partyAccountId ?? null,
-                branchId:       source.universalVoucher?.branchId,   // 5D-12: branch primary on the spine
+                // The original's branch, or Head Office when it is one of the
+                // pre-2026-09-17 rows that never got one. A duplicate must not
+                // inherit a blank.
+                branchId:       source.universalVoucher!.branchId ?? await systemBranchId(tx),   // 5D-12
                 userId:         user!.id,
             });
             const voucher = await tx.voucherDetail.create({

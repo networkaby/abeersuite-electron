@@ -5,6 +5,8 @@ import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api"
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { giftCardIssueSchema } from "@/shared/lib/schemas/giftCardSchemas";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { auth } from "@/auth";
+import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 
 // POST /api/gift-cards/[id]/issue — SELL a DRAFT card. Posts a balanced JE
@@ -42,6 +44,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const liability = await prisma.account.findUniqueOrThrow({ where: { id: config.giftCardLiabilityAccountId }, select: { id: true, normalBalance: true } });
         const value = Number(card.initialValue);
 
+        // A card is issued from a till or a desk, so it has a working branch like
+        // any other voucher — "All branches" is refused rather than saved blank.
+        const branchId = requireWritableBranchId(req, await auth());
+
         const issued = await prisma.$transaction(async (tx) => {
             // Dr payment ledger / Cr Gift Card Liability — through the engine
             // (writes the JE + balance deltas + universal-voucher spine in one
@@ -56,7 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     { accountId: liability.id,  type: "CREDIT", amount: value, description: `Gift card ${card.code}` },
                 ],
                 stockMoves: [],
-            }, user!.id);
+            }, user!.id, { branchId });
 
             await tx.giftCardTxn.create({
                 data: { giftCardId: card.id, type: "ISSUE", amount: value, balanceAfter: value, createdById: user!.id },

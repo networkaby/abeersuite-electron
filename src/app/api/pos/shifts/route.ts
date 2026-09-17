@@ -12,7 +12,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
-import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { resolveActiveBranchId, requireWritableBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
     const body = data;
 
     let branchId: string;
-    try { branchId = resolveActiveBranchId(req, session); }
+    try { branchId = requireWritableBranchId(req, session); }
     catch (e) {
         if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;
@@ -240,6 +240,7 @@ export async function POST(req: NextRequest) {
             if (body.vaultTopUpPaise > 0) {
                 const rupees = body.vaultTopUpPaise / 100;
                 const contra = await postContra(tx, {
+                    branchId,
                     date:      requestBusinessDate(req),
                     narration: `Shift opening top-up — ${counter.name} @ ${branch!.name}`,
                     userId:    user!.id,

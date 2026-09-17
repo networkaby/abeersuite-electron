@@ -196,7 +196,7 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode,
             });   // GL only — stock IN handled below
-            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
+            const gl = await enginePost(tx, spec, user!.id, { branchId: branchId, existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post lost-invoice return ${vRef}: engine produced no journal entry.`,

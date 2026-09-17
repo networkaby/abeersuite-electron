@@ -977,7 +977,7 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });
-            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
+            const gl = await enginePost(tx, spec, user!.id, { branchId: activeBranchId, existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post POS sale ${voucherRef}: engine produced no journal entry.`,

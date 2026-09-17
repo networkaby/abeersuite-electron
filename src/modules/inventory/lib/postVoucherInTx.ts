@@ -386,8 +386,9 @@ export async function postVoucherInTx(
         // → byte-identical, parity-harness-verified) plus the stock moves;
         // `enginePost` writes both arms. sellerStateCode/buyerStateCode
         // were resolved before the tx (the CGST/SGST vs IGST split inputs).
-        // GL JE lines stay branch-less (org-level), exactly as the legacy
-        // bridge produced them (no branchId passed to the engine).
+        // The voucher's own branch goes to the engine, so the spine and its GL
+        // lines carry it. These used to be left branch-less "exactly as the
+        // legacy bridge produced them", which is what put blanks in the Day Book.
         const spec = await saleToSpec(
             tx,
             { ...voucher, date: voucher.universalVoucher!.date, reference: voucher.universalVoucher?.voucherNo ?? allocatedNo, description: voucher.universalVoucher?.description ?? voucher.type, tenders: settlement.tenders, charges: settlement.charges, sellerStateCode, buyerStateCode },
@@ -400,6 +401,7 @@ export async function postVoucherInTx(
             universalVoucherId = await createPostedSpine(tx, voucher, userId, allocatedNo);
         }
         const out = await enginePost(tx, spec, userId, {
+            branchId:        voucher.branchId,
             existingSpineId: universalVoucherId,
             // Only read when the engine mints the spine; the attach path already
             // has it from the draft.
@@ -459,7 +461,7 @@ export async function postVoucherInTx(
                     },
                 ],
                 stockMoves: [],
-            }, userId, { existingSpineId: universalVoucherId });
+            }, userId, { branchId: voucher.branchId, existingSpineId: universalVoucherId });
             journalEntryId = out.journalEntryId; universalVoucherId = out.universalVoucherId;
             postNotes.push(`Posted ${settlement.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)}.`);
         }

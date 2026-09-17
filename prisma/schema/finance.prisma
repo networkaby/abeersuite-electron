@@ -91,8 +91,26 @@ model UniversalVoucher {
   // estimate/order/quote, no GL/stock). Derived from `type` at creation.
   binding                   VoucherBinding             @default(REGULAR)
   // Phase 5 5D-12: branch where the voucher originates — PRIMARY on the spine
-  // header now (moved off InvVoucher). Nullable: financial vouchers that are
-  // org-level (no branch context) leave it null; inventory/POS vouchers always set it.
+  // header now (moved off InvVoucher).
+  //
+  // EVERY voucher has a branch from 2026-09-17 — but the rule is enforced in the
+  // application, not by this column, and the column stays nullable on purpose.
+  // "Org-level" was never a state anybody chose: it was the working-branch picker
+  // left on "All branches", plus the POS shift-close vouchers that passed no
+  // branch at all, and a blank branch drops the voucher out of every branch-wise
+  // report without saying so. So writes go through requireWritableBranchId (which
+  // refuses "All branches"), `branchId` is a REQUIRED argument on every engine
+  // entry point, and a background job with no picker takes systemBranchId.
+  //
+  // NOT NULL is the one step held back. sync-engine/lib/schemaGuard.js fingerprints
+  // each column as `data_type:is_nullable` and files a difference under `changed`,
+  // which halts that till's whole worker (exit 4). A counter replica cannot receive
+  // a nullability change: resources/local-schema.sql reaches an existing replica
+  // only through `ADD COLUMN IF NOT EXISTS`, which is a no-op on a column that is
+  // already there — scripts/gen-local-schema.ts says so itself ("a new NOT NULL
+  // column ... is not expressible as an additive ALTER"). So marking this required
+  // would make live and every replica disagree for good, and stop every counter.
+  // Locking it needs the replica side to be able to carry the change first.
   branchId                  String?
   branch                    Branch?                    @relation("UvBranch", fields: [branchId], references: [id])
   // Source counter — the till this voucher was RAISED at. Plain int, no FK: a

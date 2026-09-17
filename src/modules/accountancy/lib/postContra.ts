@@ -43,6 +43,10 @@ export type PostContraInput = {
     lines:       ContraLine[];
     /** User performing the action. Becomes `Voucher.createdById`. */
     userId:      number;
+    /** The branch this Contra belongs to — REQUIRED, like every voucher.
+     * Shift open/close and handover pass the shift's own branch; the Contra
+     * dialog passes the working branch. */
+    branchId:    string;
 };
 
 export type PostContraResult = {
@@ -79,6 +83,7 @@ export async function postContra(
         userId:         input.userId,
         narration:      input.narration ?? null,
         partyAccountId: input.partyAccountId ?? null,
+        branchId:       input.branchId,
         lines: input.lines.map((l) => ({
             accountId:   l.accountId,
             type:        l.type,

@@ -10,13 +10,13 @@
 // plus the receiptVoucherId stamp on the order's JSON.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { settlementAccountIdOf } from "@/modules/pos/lib/paymentGateways";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { findUserIdsHoldingRoles } from "@/shared/lib/auth/roleHolders";
 
 /** Seeded HQ branch — the online channel runs under HQ (see bootstrap §1). */
-const HQ_BRANCH_ID = "BR-HQ";
 
 /**
  * The user auto-posted documents are attributed to: the senior-most admin (R1).
@@ -90,10 +90,10 @@ export async function postOnlineOrderReceipt(opts: {
         return null;
     }
 
-    // Online channel books under HQ (fall back to the first branch if renamed).
-    const branch =
-        (await prisma.branch.findUnique({ where: { id: HQ_BRANCH_ID }, select: { id: true } })) ??
-        (await prisma.branch.findFirst({ orderBy: { id: "asc" }, select: { id: true } }));
+    // Online channel books under Head Office — there is no counter and no picker
+    // on this path. `systemBranchId` is the one place that rule lives (it also
+    // carries the fall-back-to-first-branch case this used to hand-roll).
+    const branchId = await systemBranchId(prisma);
 
     const grandPaise = (ticket.order.totalPaise ?? 0) + (ticket.order.shippingChargePaise ?? 0);
     const amountRupees = Math.round(grandPaise) / 100;
@@ -112,7 +112,7 @@ export async function postOnlineOrderReceipt(opts: {
             date: businessToday(),
             userId: actorId,
             narration: `Online payment via ${label} for Order #${ticketId} — auto-posted`,
-            branchId: branch?.id,
+            branchId,
             // No allocation — stands as a customer advance until the order's Sale
             // invoice is raised and allocates against it.
         });

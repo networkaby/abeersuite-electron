@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { requireAuth, requireVoucherPermission } from "@/shared/lib/auth/permissions";
-import { resolveActiveBranchId, COMBINED_BRANCH, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
@@ -172,20 +172,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
 
-    // Stamp the working branch onto the spine (5D-12) so branch-aware views like
-    // the Day Book can show it. Best-effort: leave org-level (null) when no
-    // concrete working branch is active (combined sentinel or unset) rather than
-    // blocking creation — unlike inventory writes, a money voucher can be org-level.
-    let branchId: string | null = null;
+    // Stamp the working branch onto the spine (5D-12). EVERY voucher carries a
+    // branch — a blank one silently drops the voucher out of every branch-wise
+    // report, which is what "org-level money voucher" used to mean in practice.
+    // So "All branches" is refused here (`select_working_branch` → 400, the
+    // screen shows "…switch to a specific branch to post this transaction")
+    // rather than quietly saved as null. Throws → handleApiError answers it.
     try {
-        const resolved = resolveActiveBranchId(req, await auth());
-        if (resolved !== COMBINED_BRANCH) branchId = resolved;
-    } catch (e) {
-        if (!(e instanceof BranchAccessError)) throw e;
-        // no_active_branch / forbidden_branch → org-level, don't block the create.
-    }
+        const branchId = requireWritableBranchId(req, await auth());
 
-    try {
         // Create the voucher through the Transaction Engine — DRAFT, or straight
         // to POSTED when the caller asked for both. A draft takes no number; the
         // series advances only on the posting leg.

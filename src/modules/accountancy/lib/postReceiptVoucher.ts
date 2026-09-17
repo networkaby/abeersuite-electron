@@ -51,8 +51,8 @@ export type PostReceiptVoucherArgs = {
     date:              Date;
     userId:            number;
     narration?:        string;
-    /** Branch context stamped on the journal lines (branch-scoped GL reports). */
-    branchId?:         string;
+    /** The branch this receipt belongs to — REQUIRED, like every voucher. */
+    branchId:          string;
     /** POS counter the receipt was taken at — the counter part of the reference.
      *  Omit for office / online receipts that belong to no counter. */
     counterNumber?:    number | null;
@@ -139,7 +139,7 @@ export async function postSettlementVoucher(
             },
         ],
         post:          true,
-        branchId:      args.branchId ?? null,
+        branchId:      args.branchId,
         counterNumber: args.counterNumber ?? null,
         shiftId:       args.shiftId,
     });

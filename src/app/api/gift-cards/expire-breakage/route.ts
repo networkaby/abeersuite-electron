@@ -4,6 +4,7 @@ import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { moneyNumber, round2 } from "@/shared/lib/format";
 
 // POST /api/gift-cards/expire-breakage — recognise breakage on every ACTIVE card
@@ -36,6 +37,9 @@ export async function POST() {
 
         let total = 0;
         await prisma.$transaction(async (tx) => {
+            // Nobody picked a branch here — this is a sweep, not a screen — so the
+            // breakage lands on Head Office rather than being left branch-less.
+            const branchId = await systemBranchId(tx);
             for (const gc of due) {
                 const amt = moneyNumber(gc.balance);
                 // Dr Gift Card Liability / Cr Breakage Income — through the engine
@@ -49,7 +53,7 @@ export async function POST() {
                         { accountId: breakage.id,  type: "CREDIT", amount: amt, description: `Gift card ${gc.code} breakage` },
                     ],
                     stockMoves: [],
-                }, user!.id);
+                }, user!.id, { branchId });
                 await tx.giftCardTxn.create({
                     data: { giftCardId: gc.id, type: "EXPIRE", amount: -amt, balanceAfter: 0, createdById: user!.id },
                 });

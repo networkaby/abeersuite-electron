@@ -10,7 +10,7 @@ import * as Sentry from "@sentry/nextjs";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { requireWritableBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 
@@ -68,8 +68,13 @@ export async function POST(req: NextRequest) {
         if (postGate.response) return postGate.response;
     }
 
+    // A Journal Voucher is a write, so it must name ONE real branch. The plain
+    // resolver lets the "All branches" sentinel through, which would have been
+    // stored as the literal branch id "__combined__" — a foreign key that matches
+    // no branch. requireWritableBranchId refuses it with the "switch to a
+    // specific branch" message instead.
     let activeBranchId: string;
-    try { activeBranchId = resolveActiveBranchId(req, session); }
+    try { activeBranchId = requireWritableBranchId(req, session); }
     catch (e) {
         if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;

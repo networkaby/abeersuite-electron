@@ -41,6 +41,7 @@ import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import { reverseCouponRedemption, refundGiftCard, giftCardRefundableForSale } from "@/modules/coupons/lib";
@@ -146,7 +147,12 @@ export async function POST(req: Request) {
         }
         // Branch context — prefer the shift, fall back to the original voucher's branch
         // (manager could be processing a return from a different branch than the original sale).
-        const branchId = shift?.branchId ?? original.universalVoucher?.branchId ?? "";   // 5D-12: branch on spine
+        // "" was a silent third option here; it is not a branch id, and with the
+        // column NOT NULL it would fail the foreign key at save. Head Office is
+        // the honest last resort — every voucher carries a real branch.
+        const branchId = shift?.branchId
+            ?? original.universalVoucher?.branchId
+            ?? await systemBranchId(prisma);   // 5D-12: branch on spine
 
         // ── Compute return totals ─────────────────────────────────────────────
         // Prorate the ORIGINAL line's spend-tier discount by the fraction of that line
@@ -330,7 +336,7 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode,
             });   // GL only — stock IN handled below
-            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
+            const gl = await enginePost(tx, spec, user!.id, { branchId: branchId, existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post sale return ${vRef}: engine produced no journal entry.`,

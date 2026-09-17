@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
-import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { requireWritableBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     let branchId: string;
     try {
-        branchId = resolveActiveBranchId(req, session);
+        branchId = requireWritableBranchId(req, session);
     } catch (e) {
         if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;

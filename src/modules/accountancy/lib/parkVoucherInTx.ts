@@ -97,6 +97,10 @@ export async function repostParkedVoucherInTx(
         narration?:  string | null;
         glLines:     EngineGlLine[];
         userId:      number;
+        /** The branch the reposted voucher belongs to — REQUIRED, like every
+         * voucher. The spine keeps the branch it was born with; this stamps the
+         * freshly written GL lines with the same one. */
+        branchId:    string;
         postedAt?:   Date;
     },
 ): Promise<boolean> {
@@ -119,7 +123,7 @@ export async function repostParkedVoucherInTx(
             stockMoves:  [],
         },
         args.userId,
-        { existingSpineId: args.voucherId, ...(args.postedAt ? { postedAt: args.postedAt } : {}) },
+        { branchId: args.branchId, existingSpineId: args.voucherId, ...(args.postedAt ? { postedAt: args.postedAt } : {}) },
     );
     return true;
 }

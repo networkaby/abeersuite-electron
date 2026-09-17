@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
@@ -45,8 +46,6 @@ import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 //
 // Idempotent: an existing non-cancelled SALE_RETURN against the invoice is
 // returned as-is (and the refund spawn is one-per-order).
-
-const HQ_BRANCH_ID = "BR-HQ";
 
 const bodySchema = z.object({ mode: z.enum(["RTO", "CUSTOMER"]) });
 
@@ -167,7 +166,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const partyType = t.account?.personId != null ? "customer" : t.account?.companyId != null ? "company" : "account";
         const partyId = t.account?.personId ?? t.account?.companyId ?? partyAccountId;
         const sellerStateCode = (invSpine.branch?.gstStateCode || "").trim() || null;
-        const branchId = invSpine.branchId ?? HQ_BRANCH_ID;
+        const branchId = invSpine.branchId ?? await systemBranchId(prisma);
 
         const loyaltyConfig = await prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         const loyaltyRates = ratesFromConfig(loyaltyConfig);
@@ -250,7 +249,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 sellerStateCode,
                 buyerStateCode: sellerStateCode,
             });
-            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
+            const gl = await enginePost(tx, spec, user!.id, { branchId: branchId, existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(`Cannot post return ${vRef}: engine produced no journal entry.`);
             }

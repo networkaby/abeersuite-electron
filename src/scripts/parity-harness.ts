@@ -83,21 +83,25 @@ function sameLines(je: GlLine[], spine: ArmLine[]): boolean {
     return a.every((v, i) => v === b[i]);
 }
 
+/** Every voucher carries a branch, so the harness posts everything at Head
+ *  Office — the same id the stock checks below already used inline. */
+const PARITY_BRANCH = "BR-HQ";
+
 /** Pure check of the stock arm: direction + free-qty + MRP stamp. */
 function stockCheck(): boolean {
     const date = new Date();
     const sale = buildTradingStockMoves({
-        type: "SALE", branchId: "BR-HQ", date,
+        type: "SALE", branchId: PARITY_BRANCH, date,
         lines: [{ productId: 7, quantity: 2, freeQty: 1, rate: 100, amount: 236, product: { stock: 50 } }],
     });
     const purchase = buildTradingStockMoves({
-        type: "PURCHASE", branchId: "BR-HQ", date,
+        type: "PURCHASE", branchId: PARITY_BRANCH, date,
         lines: [{ productId: 7, quantity: 3, rate: 80, amount: 240, mrpPaise: 12000, product: { stock: 50 } }],
     });
     // ONLINE_INVOICE shares the SALE direction (stock OUT) — explicit coverage so
     // the new online-channel type can't silently drift off the sale path.
     const online = buildTradingStockMoves({
-        type: "ONLINE_INVOICE", branchId: "BR-HQ", date,
+        type: "ONLINE_INVOICE", branchId: PARITY_BRANCH, date,
         lines: [{ productId: 7, quantity: 2, freeQty: 1, rate: 100, amount: 236, product: { stock: 50 } }],
     });
     const saleOk  = sale.length === 1 && sale[0].outQty === 3 && sale[0].inQty === 0;             // 2 + 1 free
@@ -127,7 +131,7 @@ async function runE2E(): Promise<boolean> {
     const box: { cap: { jeLines: GlLine[]; spineOk: boolean; stock: { productId: number; inQty: number; outQty: number }[]; rolesOk: boolean } | null } = { cap: null };
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "e2e parity sale", voucherNo: `PARITY-E2E-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "e2e parity sale", voucherNo: `PARITY-E2E-${Date.now()}`, branchId: PARITY_BRANCH, userId: user.id });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -145,7 +149,7 @@ async function runE2E(): Promise<boolean> {
                 { ...v, type: "SALE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118, method: "CASH", reference: "E2E-TENDER-REF" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 { branchId: branch.id, lines: vLines },
             );
-            const { journalEntryId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const { journalEntryId } = await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });
             const jeLines = journalEntryId ? await captureJe(tx, journalEntryId) : [];
             const spine   = journalEntryId ? await captureSpine(tx, journalEntryId) : [];
             const stock = await tx.invStockLedger.findMany({ where: { universalVoucherId: spineId }, select: { productId: true, inQty: true, outQty: true } });
@@ -205,7 +209,7 @@ async function runPurchaseE2E(): Promise<boolean> {
             await tx.voucherInventoryLine.createMany({ data: [{ universalVoucherId: spineId, productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] });
             const vLines = await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: spineId }, include: { product: { select: { id: true, stock: true, mrpPaise: true } } } });
             const spec = await saleToSpec(tx, { ...v, type: "PURCHASE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
-            const { journalEntryId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const { journalEntryId } = await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });
             const jeLines = journalEntryId ? await captureJe(tx, journalEntryId) : [];
             const spine   = journalEntryId ? await captureSpine(tx, journalEntryId) : [];
             const stock   = await tx.invStockLedger.findMany({ where: { universalVoucherId: spineId }, select: { inQty: true, outQty: true } });
@@ -284,7 +288,7 @@ async function golden(
     try {
         await prisma.$transaction(async (tx) => {
             const v = await engineCreateVoucher(tx, {
-                type, date: new Date(), userId: acc.userId, lines,
+                type, date: new Date(), userId: acc.userId, lines, branchId: PARITY_BRANCH,
                 narration: `parity ${label}`, partyAccountId: partyAccountId ?? null,
                 post: true, referenceSeries: type === "JOURNAL" ? "JOURNAL" : undefined,
             });
@@ -345,7 +349,7 @@ async function runDraftPost(): Promise<boolean> {
         await prisma.$transaction(async (tx) => {
             // 1. DRAFT spine header — no lines, no balance impact.
             const spineId = await engineCreateSpine(tx, {
-                type: "JOURNAL", date: new Date(), description: "parity draft-post", userId: acc.userId,
+                type: "JOURNAL", date: new Date(), description: "parity draft-post", userId: acc.userId, branchId: PARITY_BRANCH,
             });
             const draft = await tx.universalVoucher.findUnique({
                 where: { id: spineId }, select: { status: true, _count: { select: { lines: true } } },
@@ -356,7 +360,7 @@ async function runDraftPost(): Promise<boolean> {
             });
             // 2. POST: attach GL lines + flip DRAFT→POSTED on the SAME spine id.
             const gl = await engineGlArm(tx, {
-                date: new Date(), description: "parity draft-post", userId: acc.userId, branchId: null, postedAt: new Date(),
+                date: new Date(), description: "parity draft-post", userId: acc.userId, branchId: PARITY_BRANCH, postedAt: new Date(),
                 type: "JOURNAL", existingSpineId: spineId,
                 lines: [
                     { accountId: acc.expense!, type: "DEBIT",  amount: 300 },
@@ -401,7 +405,7 @@ async function runDraftSale(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             // 1. DRAFT InvVoucher + draft spine at create (the route's create path).
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", voucherNo: `PARITY-DRAFTSALE-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "parity draft-sale", voucherNo: `PARITY-DRAFTSALE-${Date.now()}`, branchId: PARITY_BRANCH, userId: user.id });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -417,7 +421,7 @@ async function runDraftSale(): Promise<boolean> {
             const draftStatus = (await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true } }))?.status;
             // 2. POST (the route's post path): mapper + enginePost ATTACH to the draft spine.
             const spec = await saleToSpec(tx, { ...v, type: "SALE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
-            const out = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const out = await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });
             const linesNow = await captureJe(tx, spineId);
             const postedStatus = (await tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true } }))?.status;
             const stock = await tx.invStockLedger.findMany({ where: { universalVoucherId: spineId }, select: { outQty: true, universalVoucherId: true } });
@@ -448,7 +452,7 @@ async function runVoucherLink(): Promise<boolean> {
     let ok = false;
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "POS_ORDER", date: new Date(), description: "parity voucher-link", userId: acc.userId });
+            const spineId = await engineCreateSpine(tx, { type: "POS_ORDER", date: new Date(), description: "parity voucher-link", branchId: PARITY_BRANCH, userId: acc.userId });
             await syncVoucherLinks(tx, spineId, { dealId: 4242, orderStatusId: "P7-S1" });
             const after = await tx.voucherLink.findMany({ where: { universalVoucherId: spineId }, select: { kind: true, targetId: true } });
             await syncVoucherLink(tx, spineId, "ORDER_STATUS", "P7-S2");   // move in place
@@ -485,7 +489,7 @@ async function runStockRecompute(): Promise<boolean> {
     let ok = false;
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "recompute check sale", voucherNo: `PARITY-RECOMP-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "recompute check sale", voucherNo: `PARITY-RECOMP-${Date.now()}`, branchId: PARITY_BRANCH, userId: user.id });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -503,7 +507,7 @@ async function runStockRecompute(): Promise<boolean> {
                 { ...v, type: "SALE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 { branchId: branch.id, lines: vLines },
             );
-            await enginePost(tx, spec, user.id, { existingSpineId: spineId });   // incremental: stock arm + Account.balance deltas
+            await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });   // incremental: stock arm + Account.balance deltas
             const stockAfterPost = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
             const cashAfterPost  = await tx.account.findUnique({ where: { id: cash.id }, select: { balance: true } });
             await recomputeProductStock(tx, [product.id]);       // rebuild stock from openingStock + ledger
@@ -562,7 +566,7 @@ async function runEditCycle(): Promise<boolean> {
     try {
         await prisma.$transaction(async (tx) => {
             // 1. Post a SALE qty 1.
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "edit-cycle sale", voucherNo: `PARITY-EDIT-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "edit-cycle sale", voucherNo: `PARITY-EDIT-${Date.now()}`, branchId: PARITY_BRANCH, userId: user.id });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -576,7 +580,7 @@ async function runEditCycle(): Promise<boolean> {
             await tx.voucherInventoryLine.createMany({ data: [{ universalVoucherId: spineId, productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] });
             const vLines = await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: spineId }, include: { product: { select: { id: true, stock: true, mrpPaise: true } } } });
             const spec1 = await saleToSpec(tx, { ...v, type: "SALE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
-            const { journalEntryId: saleJe } = await enginePost(tx, spec1, user.id, { existingSpineId: spineId });
+            const { journalEntryId: saleJe } = await enginePost(tx, spec1, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });
             if (saleJe == null) throw new Error("no saleJe");
             // 5D-1: InvVoucher.journalEntryId dropped — the spine link is universalVoucherId
             // (already = spineId, set at create; saleJe == spineId via existingSpineId).
@@ -637,7 +641,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
     let ok = false;
     try {
         await prisma.$transaction(async (tx) => {
-            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "G1 alloc sale", voucherNo: `PARITY-G1-${Date.now()}`, userId: user.id });
+            const spineId = await engineCreateSpine(tx, { type: "SALE", date: new Date(), description: "G1 alloc sale", voucherNo: `PARITY-G1-${Date.now()}`, branchId: PARITY_BRANCH, userId: user.id });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -651,13 +655,14 @@ async function runAllocationDualTarget(): Promise<boolean> {
             await tx.voucherInventoryLine.createMany({ data: [{ universalVoucherId: spineId, productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] });
             const vLines = await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: spineId }, include: { product: { select: { id: true, stock: true, mrpPaise: true } } } });
             const spec = await saleToSpec(tx, { ...v, type: "SALE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
-            const { universalVoucherId: saleSpine } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const { universalVoucherId: saleSpine } = await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });
 
             const r = await postReceiptVoucher(tx, {
                 customerAccountId: debtor.id,
                 tenders:           [{ accountId: cash.id, amount: 118 }],
                 date:              new Date(),
                 userId:            user.id,
+                branchId:          PARITY_BRANCH,
                 allocateToUniversalVoucherId: saleSpine!,
             });
 
@@ -706,7 +711,7 @@ async function runShiftCashMath(): Promise<boolean> {
             const shift = counter
                 ? await tx.posShift.create({ data: { userId: user.id, counterId: counter.id, branchId: counter.branchId, openedById: user.id, openingFloatPaise: tillBefore, carryOverFloatPaise: tillBefore, openedAt }, select: { id: true } })
                 : null;
-            const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, userId: user.id, shiftId: shift?.id ?? null });
+            const spineId = await engineCreateSpine(tx, { type: "POS", date: new Date(), description: "parity POS shift", voucherNo: `PARITY-SHIFT-${Date.now()}`, branchId: PARITY_BRANCH, userId: user.id, shiftId: shift?.id ?? null });
             const v = await tx.voucherDetail.create({
                 data: {
                     // 5D-11/5D-12: type + branch on the spine
@@ -720,7 +725,7 @@ async function runShiftCashMath(): Promise<boolean> {
             await tx.voucherInventoryLine.createMany({ data: [{ universalVoucherId: spineId, productId: product.id, quantity: 1, rate: 100, taxRate: 18, taxAmount: 18, amount: 118 }] });
             const vLines = await tx.voucherInventoryLine.findMany({ where: { universalVoucherId: spineId }, include: { product: { select: { id: true, stock: true, mrpPaise: true } } } });
             const spec = await saleToSpec(tx, { ...v, type: "POS", date: new Date(), tenders: [{ accountId: cash.id, amount: 118, method: "CASH" }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"], { branchId: branch.id, lines: vLines });
-            const { universalVoucherId } = await enginePost(tx, spec, user.id, { existingSpineId: spineId });
+            const { universalVoucherId } = await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });
             // POS route links the spine to the voucher — replicate so the window→spine resolution finds it.
             await tx.voucherDetail.update({ where: { id: v.id }, data: { universalVoucherId } });   // 5D-8: status POSTED set on the spine by enginePost
             // A counter RECEIPT at the till (Dr Till 50 / Cr Debtor) moves the book
@@ -728,7 +733,7 @@ async function runShiftCashMath(): Promise<boolean> {
             // "collected" tally reads.
             const expectReceipt = debtor != null && shift != null;
             if (debtor && shift) {
-                await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), userId: user.id, shiftId: shift.id });
+                await postReceiptVoucher(tx, { customerAccountId: debtor.id, tenders: [{ accountId: cash.id, amount: 50 }], date: new Date(), branchId: PARITY_BRANCH, userId: user.id, shiftId: shift.id });
             }
             const tillAfter = await tillBalancePaise(tx, cash.id);
             const expected = BigInt(expectReceipt ? 16800 : 11800);   // POS 11800 + receipt 5000
@@ -759,13 +764,13 @@ async function runVoucherAllocation(): Promise<boolean> {
         await prisma.$transaction(async (tx) => {
             // Receivable side — Dr Debtor / Cr Income: the party owes us 300.
             const bill = await engineCreateVoucher(tx, {
-                type: "DEBIT_NOTE", date: new Date(), userId: acc.userId,
+                type: "DEBIT_NOTE", date: new Date(), userId: acc.userId, branchId: PARITY_BRANCH,
                 lines: [{ accountId: acc.debtor!, type: "DEBIT", amount: 300 }, { accountId: acc.income!, type: "CREDIT", amount: 300 }],
                 partyAccountId: acc.debtor, post: true,
             });
             // Payable side — Dr Income / Cr Debtor: a credit note back to them.
             const note = await engineCreateVoucher(tx, {
-                type: "CREDIT_NOTE", date: new Date(), userId: acc.userId,
+                type: "CREDIT_NOTE", date: new Date(), userId: acc.userId, branchId: PARITY_BRANCH,
                 lines: [{ accountId: acc.income!, type: "DEBIT", amount: 300 }, { accountId: acc.debtor!, type: "CREDIT", amount: 300 }],
                 partyAccountId: acc.debtor, post: true,
             });

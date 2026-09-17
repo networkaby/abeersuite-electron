@@ -11,7 +11,7 @@ import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { loadSettlements } from "@/modules/accountancy/lib/billLink";
-import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { requireWritableBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
@@ -486,7 +486,7 @@ export async function POST(req: NextRequest) {
     try {
         branchId = bodyBranchId
             ? (requireBranchAccess(session, bodyBranchId), bodyBranchId)
-            : resolveActiveBranchId(req, session);
+            : requireWritableBranchId(req, session);
     } catch (e) {
         if (e instanceof BranchAccessError) return branchAccessResponse(e);
         throw e;

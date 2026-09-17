@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -52,8 +53,6 @@ import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 // Idempotent: an existing non-cancelled linked invoice is returned as-is. The
 // posted voucher is a NORMAL voucher afterwards — editable via the accountancy
 // module like any other (no special lock).
-
-const HQ_BRANCH_ID = "BR-HQ";
 
 class GlPostFailedError extends Error {}
 
@@ -313,9 +312,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             .join(", ");
         const placeOfSupply = stateCodeForName(typeof addr.state === "string" ? addr.state : null) ?? null;
 
-        // Seller = the online channel's branch (HQ), falling back to the org.
+        // Seller = the online channel's branch (Head Office), falling back to the
+        // org. `systemBranchId` owns the "which branch does a no-counter write
+        // belong to" rule, so the id is not spelled out again here.
+        const hqBranchId = await systemBranchId(prisma);
         const [hqBranch, org] = await Promise.all([
-            prisma.branch.findUnique({ where: { id: HQ_BRANCH_ID }, select: { gstStateCode: true } }),
+            prisma.branch.findUnique({ where: { id: hqBranchId }, select: { gstStateCode: true } }),
             getOrganisation(),
         ]);
         const sellerStateCode = (hqBranch?.gstStateCode || org.gstStateCode || "").trim() || null;
@@ -371,7 +373,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 description,
                 voucherNo:      voucherRef,
                 partyAccountId: accountId,
-                branchId:       HQ_BRANCH_ID,
+                branchId:       hqBranchId,
                 userId:         user!.id,
             });
             const partyJson = buildPartyJson({
@@ -448,9 +450,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     sellerStateCode,
                     buyerStateCode,
                 },
-                { branchId: HQ_BRANCH_ID, lines: computedLines },
+                { branchId: hqBranchId, lines: computedLines },
             );
-            const gl = await enginePost(tx, spec, user!.id, { existingSpineId: spineId });
+            const gl = await enginePost(tx, spec, user!.id, { branchId: hqBranchId, existingSpineId: spineId });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post ONLINE_INVOICE ${voucherRef}: engine produced no journal entry.`,

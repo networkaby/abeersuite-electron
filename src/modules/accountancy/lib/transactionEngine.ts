@@ -146,7 +146,7 @@ export async function engineGlArm(
         description: string;
         lines:       EngineGlLine[];
         userId:      number;
-        branchId:    string | null;
+        branchId:    string;
         postedAt:    Date;
         // Phase 4 dual-write metadata (Stage C). Optional so the engine compiles
         // for any caller; threaded onto the universal-voucher spine mirror.
@@ -347,7 +347,10 @@ export async function engineCreateSpine(
         narration?:      string | null;
         voucherNo?:    string | null;
         partyAccountId?: number | null;
-        branchId?:       string | null;
+        /** REQUIRED — a voucher with no branch drops out of every branch-wise
+         * report without saying so, so the argument is not optional even though
+         * the column itself is still nullable (see finance.prisma). */
+        branchId:        string;
         userId:          number;
         /** See engineGlArm — omit to resolve from the source counter. */
         shiftId?:        number | null;
@@ -441,7 +444,8 @@ export async function enginePost(
     spec: TransactionSpec,
     userId: number,
     opts: {
-        branchId?: string | null;
+        /** REQUIRED — the branch the voucher belongs to. See CreateGlVoucherSpec. */
+        branchId: string;
         postedAt?: Date;
         existingSpineId?: number | null;
         /**
@@ -453,9 +457,9 @@ export async function enginePost(
          * party ledger drops out of every outstanding and party-ledger view.
          */
         partyAccountId?: number | null;
-    } = {},
+    },
 ): Promise<{ journalEntryId: number | null; universalVoucherId: number | null }> {
-    const branchId = opts.branchId ?? null;
+    const branchId = opts.branchId;
     const postedAt = opts.postedAt ?? new Date();
 
     // A voucher that should post and cannot is a refusal, not a quiet no-op:
@@ -515,8 +519,10 @@ export interface CreateGlVoucherSpec {
     /** VoucherSeries key for the reference. Defaults to the voucher `type`.
      * The Journal-Voucher dialog passes "JOURNAL" to keep its `JV-…` numbering. */
     referenceSeries?: string;
-    /** Branch stamped on the mirror-JE lines when posted (POS callers). */
-    branchId?:        string | null;
+    /** The branch this voucher belongs to. REQUIRED — every voucher has one.
+     * Interactive callers take it from `requireWritableBranchId` (which refuses
+     * "All branches"); background jobs with no user take `systemBranchId`. */
+    branchId:         string;
     /** Posting timestamp when `post` is true. Defaults to now. */
     postedAt?:        Date;
     /**

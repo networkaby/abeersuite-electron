@@ -214,7 +214,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 // raise a fresh one through the engine as before.
                 const reposted = parkedVarianceId != null && await repostParkedVoucherInTx(tx, {
                     voucherId: parkedVarianceId, type: "JOURNAL", date: voucherDate,
-                    description, glLines: lines, userId: user!.id,
+                    description, glLines: lines, userId: user!.id, branchId: shift.branch.id,
                 });
                 if (reposted) {
                     varianceJeId = parkedVarianceId;
@@ -228,7 +228,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         description,
                         glLines:     lines,
                         stockMoves:  [],
-                    }, user!.id);
+                    }, user!.id, { branchId: shift.branch.id });
                     varianceJeId = journalEntryId;
                 }
             } else if (parkedVarianceId != null) {
@@ -251,10 +251,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const reposted = parkedContraId != null && await repostParkedVoucherInTx(tx, {
                     voucherId: parkedContraId, type: "CONTRA", date: voucherDate,
                     description: narration, narration, glLines: lines, userId: user!.id,
+                    branchId: shift.branch.id,
                 });
                 closingContraId = reposted
                     ? parkedContraId
-                    : (await postContra(tx, { date: voucherDate, narration, userId: user!.id, lines })).voucherId;
+                    : (await postContra(tx, { date: voucherDate, narration, userId: user!.id, lines, branchId: shift.branch.id })).voucherId;
             } else if (parkedContraId != null) {
                 // Nothing left to sweep on the corrected close — drop the parked draft.
                 await discardParkedDraftInTx(tx, parkedContraId);

@@ -141,7 +141,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     description: `Shift #${fromShift.id} handover variance — ${tillDiscrepancy > 0 ? "short" : "over"} ₹${absRupees}`,
                     glLines:     lines,
                     stockMoves:  [],
-                }, user!.id);
+                }, user!.id, { branchId });
                 varianceJeId = journalEntryId;
             }
 
@@ -150,6 +150,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             if (toVaultPaise > BigInt(0)) {
                 const rupees = Number(toVaultPaise) / 100;
                 const closing = await postContra(tx, {
+                    branchId,
                     date:      requestBusinessDate(req),
                     narration: `Handover close — ${fromShift.counter.name} → Vault (${fromShift.branch.name})`,
                     userId:    user!.id,
