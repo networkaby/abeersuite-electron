@@ -22,6 +22,7 @@ import { BillLinkStatus } from "@/modules/accountancy/components/BillLinkStatus"
 import { ToLinkChip } from "@/modules/accountancy/components/ToLinkChip";
 import GlVoucherDialog from "@/shared/components/GlVoucherDialog";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -62,6 +63,7 @@ export function OutstandingsReportScreen({
     // party with it — this report lists every party at once, so the popup cannot
     // read the party off the screen the way a profile tab can.
     const [link, setLink] = useState<{ accountId: number; name: string; voucherId: number } | null>(null);
+    const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu: onLinkContextMenu } = useLinkContextMenu();
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<ViewMode>("party");
@@ -184,7 +186,10 @@ export function OutstandingsReportScreen({
 
     return (
         <ScrollArea className="h-full" type="always">
-        <div className="max-w-7xl mx-auto space-y-3 px-6 pt-2 pb-4">
+        {/* Right-click on any link in the report — a party name, a bill ref —
+            offers "Open in new window", the same menu the sidebar and the
+            Quick Actions bar give. The desktop shell has no menu of its own. */}
+        <div className="max-w-7xl mx-auto space-y-3 px-6 pt-2 pb-4" onContextMenu={onLinkContextMenu}>
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
                     <h1 className="text-xl font-bold text-foreground">{title}</h1>
@@ -471,6 +476,7 @@ export function OutstandingsReportScreen({
                 onSaved={() => { clearBillLinkCache(); setLink(null); load(true); }}
             />
         )}
+        <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
         </ScrollArea>
     );
 }
