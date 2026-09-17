@@ -28,6 +28,12 @@
 //
 // Safe to re-run: a voucher with a branch is not looked at again.
 //
+// The blank-hunting queries are RAW SQL on purpose. `UniversalVoucher.branchId`
+// is a required field in the Prisma schema now, so the generated client cannot
+// express `where branchId IS NULL` at all — the very rows this script exists to
+// find. Raw SQL is what still reaches a database whose column has not yet been
+// migrated (a demo reset, a counter replica, a restored backup).
+//
 //   pnpm backfill:voucher-branch            # dry run — writes nothing
 //   pnpm backfill:voucher-branch --apply    # actually fill them in
 //
@@ -52,11 +58,15 @@ async function main(): Promise<void> {
         (await prisma.branch.findMany({ select: { id: true, name: true } })).map((b) => [b.id, b.name]),
     );
 
-    const blanks = await prisma.universalVoucher.findMany({
-        where:   { branchId: null },
-        select:  { id: true, type: true, voucherNo: true, date: true, sourceCounterId: true, sourceShiftId: true },
-        orderBy: { id: "asc" },
-    });
+    const blanks = await prisma.$queryRaw<{
+        id: number; type: string; voucherNo: string | null; date: Date;
+        sourceCounterId: number | null; sourceShiftId: number | null;
+    }[]>`
+        SELECT "id", "type", "voucherNo", "date", "sourceCounterId", "sourceShiftId"
+          FROM "UniversalVoucher"
+         WHERE "branchId" IS NULL
+         ORDER BY "id" ASC
+    `;
 
     if (blanks.length === 0) {
         console.log("Every voucher already carries a branch — nothing to do.");
@@ -115,8 +125,8 @@ async function main(): Promise<void> {
 
     // ── Apply ───────────────────────────────────────────────────────────────
     // Grouped by branch so this is one UPDATE per branch instead of one per
-    // voucher. `branchId: null` stays in the where clause so a row somebody
-    // else filled in between the read and the write is left alone.
+    // voucher. The null guard lives in each statement's own WHERE, so a row
+    // somebody else filled in between the read and the write is left alone.
     const byBranch = new Map<string, number[]>();
     for (const { v, branchId } of plan) {
         const ids = byBranch.get(branchId) ?? [];
@@ -126,15 +136,22 @@ async function main(): Promise<void> {
 
     let written = 0;
     for (const [branchId, ids] of byBranch) {
-        const { count } = await prisma.universalVoucher.updateMany({
-            where: { id: { in: ids }, branchId: null },
-            data:  { branchId },
-        });
+        // `branchId IS NULL` stays in the WHERE so a row somebody else filled in
+        // between the read above and this write is left exactly as they left it.
+        const count = await prisma.$executeRaw`
+            UPDATE "UniversalVoucher"
+               SET "branchId" = ${branchId}
+             WHERE "branchId" IS NULL
+               AND "id" = ANY(${ids}::int[])
+        `;
         written += count;
         console.log(`  ${String(count).padStart(6)}  →  ${branchName.get(branchId) ?? branchId}`);
     }
 
-    const left = await prisma.universalVoucher.count({ where: { branchId: null } });
+    const [{ count: leftRaw }] = await prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT count(*)::bigint AS count FROM "UniversalVoucher" WHERE "branchId" IS NULL
+    `;
+    const left = Number(leftRaw);
     console.log(`\nFilled ${written} voucher(s). ${left} still blank.`);
     if (left > 0) {
         console.log("Some rows were written while this ran — re-run to pick them up.");

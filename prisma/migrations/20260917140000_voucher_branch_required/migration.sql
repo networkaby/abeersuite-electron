@@ -1,4 +1,4 @@
--- Every voucher gets a branch. Backfill only — the column stays NULLABLE.
+-- Every voucher gets a branch. Backfill, then the column goes NOT NULL.
 --
 -- ── The fault ────────────────────────────────────────────────────────────────
 -- The column was made nullable in Phase 5 5D-12 on the reading that a money
@@ -45,25 +45,36 @@
 -- Each step is guarded by `branchId IS NULL`, so re-running changes nothing and
 -- a row already filled by the preview script is left alone.
 --
--- ── Why this does NOT add NOT NULL ───────────────────────────────────────────
--- Locking the column is the natural next step and it is deliberately NOT taken
--- here, because a counter replica cannot be given a nullability change:
+-- ── SET NOT NULL, and the counter rule that goes with it ────────────────────
+-- ⚠ THE COUNTER RELEASE MUST GO OUT BEFORE THE VERCEL DEPLOY THAT CARRIES THIS.
 --
---   * sync-engine/lib/schemaGuard.js fingerprints every column as
---     `data_type:is_nullable`, files any difference under `changed`, and
---     `changed` halts that till's ENTIRE worker (exit 4) — not just this table.
---   * A replica receives schema only through resources/local-schema.sql, which
---     reaches an EXISTING table via `ADD COLUMN IF NOT EXISTS` — a no-op on a
---     column that is already there. scripts/gen-local-schema.ts states the limit
---     itself: "a new NOT NULL column ... is not expressible as an additive
---     ALTER", and there is no second mechanism (electron/localDbProvisioner.ts).
+-- sync-engine/lib/schemaGuard.js compares each column's nullability. Until this
+-- release, ANY difference was filed under `changed`, and `changed` halts that
+-- till's ENTIRE sync worker (exit 4) — not just this table. That mattered here
+-- because a replica receives schema only through resources/local-schema.sql,
+-- which reaches an EXISTING table via `ADD COLUMN IF NOT EXISTS` — a no-op on a
+-- column already present (scripts/gen-local-schema.ts states the limit itself).
+-- So a NOT NULL server could never be mirrored onto an old replica.
 --
--- So a NOT NULL here would put live permanently out of step with every replica
--- and stop every counter, with no shippable way to bring them back into line.
--- The rule is enforced in the application instead — requireWritableBranchId on
--- the write paths, and `branchId` as a required argument on every engine entry
--- point, so the compiler refuses a caller that omits it. Locking the column is
--- worth doing once the replica side can carry a nullability change.
+-- The guard is fixed in this same release: nullability is now DIRECTIONAL. A
+-- replica that is NULLABLE while the source is NOT NULL merely permits something
+-- the source never sends, so every row still lands — that is reported, not
+-- fatal. The dangerous direction (source nullable, replica NOT NULL, which would
+-- drop rows) still halts, as do type changes and missing columns.
+--
+-- Hence the ordering: a till running the OLD guard against this NOT NULL server
+-- would still halt. Ship the counter build first, then deploy this.
+--
+-- The ALTER is guarded rather than bare: if any row is somehow still blank when
+-- this runs, the column is left nullable with a warning instead of failing the
+-- whole deploy on an ALTER that cannot succeed. The backfill above covers every
+-- row it can see, so the only way to reach that branch is a row written between
+-- the UPDATEs and the ALTER.
+--
+-- The foreign key also tightens from ON DELETE SET NULL to ON DELETE RESTRICT,
+-- which is what a required relation means: a branch that still has vouchers
+-- against it can no longer be deleted, and deleting one can no longer silently
+-- blank the branch on its whole history.
 
 -- 1. From the counter that raised it.
 UPDATE "UniversalVoucher" v
@@ -87,3 +98,23 @@ UPDATE "UniversalVoucher"
    SET "branchId" = 'BR-HQ'
  WHERE "branchId" IS NULL
    AND EXISTS (SELECT 1 FROM "Branch" WHERE "id" = 'BR-HQ');
+
+-- 4. Lock it — only when every row actually has one.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM "UniversalVoucher" WHERE "branchId" IS NULL) THEN
+        RAISE WARNING
+            'UniversalVoucher.branchId left NULLABLE: % row(s) still have no branch. Run pnpm backfill:voucher-branch --apply, then re-deploy.',
+            (SELECT count(*) FROM "UniversalVoucher" WHERE "branchId" IS NULL);
+    ELSE
+        ALTER TABLE "UniversalVoucher" ALTER COLUMN "branchId" SET NOT NULL;
+
+        -- A required relation restricts instead of nulling out. Dropped and
+        -- re-added because Postgres cannot alter a foreign key's action in place.
+        ALTER TABLE "UniversalVoucher" DROP CONSTRAINT IF EXISTS "UniversalVoucher_branchId_fkey";
+        ALTER TABLE "UniversalVoucher"
+            ADD CONSTRAINT "UniversalVoucher_branchId_fkey"
+            FOREIGN KEY ("branchId") REFERENCES "Branch"("id")
+            ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END $$;

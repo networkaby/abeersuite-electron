@@ -1057,7 +1057,7 @@ CREATE TABLE IF NOT EXISTS "UniversalVoucher" (
     "denomJson" JSONB,
     "status" "VoucherStatus" NOT NULL DEFAULT 'DRAFT',
     "binding" "VoucherBinding" NOT NULL DEFAULT 'REGULAR',
-    "branchId" TEXT,
+    "branchId" TEXT NOT NULL,
     "sourceCounterId" INTEGER,
     "sourceShiftId" INTEGER,
     "partyAccountId" INTEGER,
@@ -1084,7 +1084,7 @@ ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "narration" TEXT;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "denomJson" JSONB;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "status" "VoucherStatus" NOT NULL DEFAULT 'DRAFT';
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "binding" "VoucherBinding" NOT NULL DEFAULT 'REGULAR';
-ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
+ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "branchId" TEXT NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "sourceCounterId" INTEGER;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "sourceShiftId" INTEGER;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "partyAccountId" INTEGER;
@@ -4535,7 +4535,7 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "UniversalVoucher" ADD CONSTRAINT "UniversalVoucher_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    ALTER TABLE "UniversalVoucher" ADD CONSTRAINT "UniversalVoucher_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

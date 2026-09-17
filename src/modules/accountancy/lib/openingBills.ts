@@ -40,6 +40,7 @@
 // amount simply becomes a real, drillable ledger instead of a computed line.
 
 import type { Prisma } from "@/generated/prisma/client";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { indianFyStartYear } from "./voucherRef";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
@@ -283,6 +284,11 @@ export async function saveOpeningBills(
                 status:         "POSTED",
                 postedAt:       new Date(),
                 partyAccountId: args.accountId,
+                // An opening balance belongs to the books as a whole, so it is
+                // booked at Head Office — there is no counter and no picker on
+                // this path. This create is exactly what left 66 OPENING rows
+                // branch-less before the column was made required.
+                branchId:       await systemBranchId(tx),
                 createdById:    args.userId,
             },
             select: { id: true },

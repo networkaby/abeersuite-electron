@@ -32,6 +32,7 @@
 // Run: pnpm verify:line-resurrection
 
 import * as dotenv from "dotenv";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import type { LineDelegate } from "@/shared/lib/sync/push";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
                     data: {
                         id, type: "POS", date: new Date(), description: "verify-line-resurrection",
                         status: "POSTED", createdById: user.id,
+                        branchId: await systemBranchId(tx),
                     },
                 });
                 return id;

@@ -44,7 +44,7 @@ async function columnMap(client) {
 }
 
 /**
- * @returns {Promise<{ ok: boolean, missing: string[], extra: string[], changed: string[], detail: string }>}
+ * @returns {Promise<{ ok: boolean, missing: string[], extra: string[], changed: string[], looser: string[], detail: string }>}
  *
  * `ignore` skips tables that legitimately exist on only one side.
  *
@@ -66,11 +66,51 @@ async function compare(source, local, ignore) {
     const [src, loc] = await Promise.all([columnMap(source), columnMap(local)]);
 
     const missing = [];  // upstream has it, replica does not -> data silently absent
-    const changed = [];  // both have it, different type -> writes may fail or truncate
+    const changed = [];  // both have it, incompatible shape -> writes may fail or truncate
+    const looser  = [];  // replica permits more than source sends -> harmless, reported only
+
+    // `type:is_nullable`, split on the LAST colon so a type containing one
+    // ("timestamp without time zone" does not, but character varying(n) forms
+    // could) cannot be mis-parsed.
+    const split = (v) => {
+        const i = v.lastIndexOf(":");
+        return { dataType: v.slice(0, i), nullable: v.slice(i + 1) === "YES" };
+    };
+
     for (const [k, v] of src) {
         if (skipCol(k)) continue;
-        if (!loc.has(k)) missing.push(k);
-        else if (loc.get(k) !== v) changed.push(`${k} (source ${v}, replica ${loc.get(k)})`);
+        if (!loc.has(k)) { missing.push(k); continue; }
+        if (loc.get(k) === v) continue;
+
+        const s = split(v);
+        const l = split(loc.get(k));
+
+        // A differing DATA TYPE always halts: it truncates or rejects.
+        if (s.dataType !== l.dataType) {
+            changed.push(`${k} (source ${v}, replica ${loc.get(k)})`);
+            continue;
+        }
+
+        // NULLABILITY is directional — only one of the two mismatches can lose a
+        // row, and treating both as fatal is what made a column's nullability
+        // effectively unchangeable:
+        //
+        //   source nullable, replica NOT NULL -> a NULL the source legitimately
+        //       holds CANNOT be inserted here. The replica is stricter than the
+        //       truth it copies, so the row is dropped. Still halts.
+        //
+        //   source NOT NULL, replica nullable -> the replica merely permits
+        //       something the source will never send. Every row lands unchanged.
+        //       Harmless, so it is reported and does not halt.
+        //
+        // The asymmetry matters because `resources/local-schema.sql` reaches an
+        // EXISTING replica table only through `ADD COLUMN IF NOT EXISTS`, a no-op
+        // on a column already present (scripts/gen-local-schema.ts states this
+        // limit itself). A server-side SET NOT NULL therefore cannot be mirrored
+        // onto an old replica, and under the old equality test every till halted
+        // for good on a difference that cannot corrupt anything.
+        if (l.nullable) looser.push(`${k} (source NOT NULL, replica nullable)`);
+        else changed.push(`${k} (source nullable, replica NOT NULL)`);
     }
 
     const extra = [];    // replica has it, upstream does not -> stale local column
@@ -83,15 +123,19 @@ async function compare(source, local, ignore) {
     if (missing.length) parts.push(`${missing.length} column(s) missing locally: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? " ..." : ""}`);
     if (changed.length) parts.push(`${changed.length} type change(s): ${changed.slice(0, 5).join("; ")}${changed.length > 5 ? " ..." : ""}`);
     if (extra.length) parts.push(`${extra.length} stale local column(s): ${extra.slice(0, 8).join(", ")}${extra.length > 8 ? " ..." : ""}`);
+    if (looser.length) parts.push(`${looser.length} column(s) nullable here, NOT NULL upstream (safe): ${looser.slice(0, 5).join("; ")}${looser.length > 5 ? " ..." : ""}`);
 
     return {
         // `extra` alone does not halt: a column dropped upstream leaves a harmless
-        // unused column here, and the next reseed clears it. Missing or retyped
-        // columns DO halt, because those corrupt what the replica serves.
+        // unused column here, and the next reseed clears it. Nor does `looser`: a
+        // replica that permits a NULL the source never sends still stores every
+        // row faithfully. Missing or retyped columns DO halt, because those
+        // corrupt what the replica serves.
         ok: missing.length === 0 && changed.length === 0,
         missing,
         extra,
         changed,
+        looser,
         detail: parts.join(" | ") || "in step with source",
     };
 }

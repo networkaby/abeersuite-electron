@@ -25,6 +25,7 @@
 // Run: pnpm verify:bill-links
 
 import * as dotenv from "dotenv";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
@@ -85,6 +86,7 @@ async function main(): Promise<void> {
                     data: {
                         type, date, description: `verify ${type}`, status: "POSTED",
                         partyAccountId: party, createdById: user.id, postedAt: date,
+                        branchId: await systemBranchId(tx),
                     },
                     select: { id: true },
                 });
@@ -394,6 +396,7 @@ async function main(): Promise<void> {
                         data: {
                             type: "RECEIPT", date: new Date(), description: "verify opening receipt",
                             status: "POSTED", partyAccountId: party, createdById: user.id,
+                            branchId: await systemBranchId(tx),
                         },
                         select: { id: true },
                     });
