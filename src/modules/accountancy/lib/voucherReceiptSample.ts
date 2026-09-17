@@ -80,7 +80,7 @@ const partyAccountSelect = {
  */
 function readSettlement(raw: unknown): {
     tenders: { accountId: number; amount: number }[];
-    charges: { accountId: number; amount: number; description?: string }[];
+    charges: { accountId: number; amount: number; description?: string; taxAmount?: number; taxRate?: number; isService?: boolean }[];
 } {
     const j = (raw ?? {}) as Record<string, unknown>;
     const arr = (v: unknown) => (Array.isArray(v) ? v : []) as Record<string, unknown>[];
@@ -91,6 +91,12 @@ function readSettlement(raw: unknown): {
             accountId:   num(c.accountId),
             amount:      num(c.amount),
             description: typeof c.description === "string" ? c.description : undefined,
+            // A service row carries its own GST. Without these two the A4
+            // rate-wise (HSN/SAC) table showed the tax but no taxable value to
+            // put it against, so the summary never added up to the bill.
+            taxAmount:   c.taxAmount != null ? num(c.taxAmount) : undefined,
+            taxRate:     c.taxRate   != null ? num(c.taxRate)   : undefined,
+            isService:   c.serviceId != null,
         })),
     };
 }
@@ -283,12 +289,24 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
 
     // Ledger rows, in the order Tally stacks them: bill discount, then income
     // charges, then freight. GST and round-off are appended by the renderer.
-    const charges: { label: string; amount: number }[] = [];
+    const charges: { label: string; amount: number; taxAmount?: number; taxRate?: number }[] = [];
     if (billDiscount > 0.005) charges.push({ label: "Less : Discount on bill", amount: -billDiscount });
     for (const c of settlement.charges) {
         if (Math.abs(c.amount) < 0.005) continue;
         const name = settleNames.get(c.accountId) ?? "Charges";
-        charges.push({ label: c.description ? `${name} — ${c.description}` : name, amount: c.amount });
+        // A service's description already names the service ("Service: Fitting
+        // × 2"), so prefixing the ledger would print the same words twice.
+        // A plain charge keeps the ledger name as its label.
+        // `amount` is the NET; a tax-bearing row's GST rides alongside it so the
+        // renderer can show the row and still reconcile the tax summary.
+        charges.push({
+            label: c.isService && c.description
+                ? c.description
+                : c.description ? `${name} — ${c.description}` : name,
+            amount: c.amount,
+            ...(c.taxAmount ? { taxAmount: c.taxAmount } : {}),
+            ...(c.taxRate   ? { taxRate:   c.taxRate   } : {}),
+        });
     }
     if (shippingNet > 0.005) charges.push({ label: "Shipping", amount: shippingNet });
 

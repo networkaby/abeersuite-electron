@@ -4,7 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, prismaUniqueError, validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 
-// Settings → POS Services — the admin-defined catalogue of sellable services
+// Settings → Services — the admin-defined catalogue of sellable/buyable services
 // (income ledger + GST rate per service). POS reads the active rows via
 // /api/pos/services; this route is the management CRUD.
 

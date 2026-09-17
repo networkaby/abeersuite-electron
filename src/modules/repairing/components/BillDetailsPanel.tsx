@@ -83,7 +83,7 @@ function buildServiceLine(svc: PosServiceOption, s: BillService): CartLine {
 }
 
 // Ongoing draft bill: real stock products + POS catalogue services (Settings →
-// POS Services, each with its own GST + income ledger). Draft only — Generate
+// Services, each with its own GST + ledger). Draft only — Generate
 // Bill preloads POS where the real price, discount, stock and ledger apply.
 export default function BillDetailsPanel({ ticketId, customerAccountId, canGenerateBill, initial }: Props) {
     const router = useRouter();
@@ -97,7 +97,7 @@ export default function BillDetailsPanel({ ticketId, customerAccountId, canGener
     const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const [generating, setGenerating] = useState(false);
 
-    // Same catalogue POS uses (Settings → POS Services).
+    // Same catalogue POS uses (Settings → Services).
     useEffect(() => {
         axios.get<PosServiceOption[]>("/api/pos/services")
             .then((r) => setCatalogue(r.data))
@@ -225,14 +225,14 @@ export default function BillDetailsPanel({ ticketId, customerAccountId, canGener
             <Button variant="outline" size="sm" onClick={() => setProds((rs) => [...rs, blankProd()])} className="mt-2"><Plus size={14} /> Add product</Button>
 
             {/* ── Services (POS catalogue — GST + income ledger from Settings) ── */}
-            <h3 className="mb-1.5 mt-5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Services (from POS Services)</h3>
+            <h3 className="mb-1.5 mt-5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Services</h3>
             <div className="space-y-1.5">
                 {svcs.map((r) => (
                     <div key={r.key} className="grid grid-cols-[1fr_1fr_52px_80px_28px] items-center gap-2">
                         <Select value={r.serviceId ? String(r.serviceId) : ""} onValueChange={(v) => pickService(r.key, Number(v))}>
                             <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Select service…" /></SelectTrigger>
                             <SelectContent>
-                                {catalogue.length === 0 && <SelectItem value="__none__" disabled>No services yet — add in Settings → POS Services</SelectItem>}
+                                {catalogue.length === 0 && <SelectItem value="__none__" disabled>No services yet — add in Settings → Services</SelectItem>}
                                 {catalogue.map((s) => (
                                     <SelectItem key={s.id} value={String(s.id)}>
                                         {s.name}{s.taxRate ? ` · GST ${s.taxRate}%` : ""}

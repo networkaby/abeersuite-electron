@@ -7,6 +7,7 @@ import { round2 } from "@/shared/lib/format";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { loadSettlements } from "@/modules/accountancy/lib/billLink";
@@ -322,6 +323,7 @@ export async function POST(req: NextRequest) {
         post: postNow = false,
         lines = [],
         charges = [],
+        services = [],
         tenders = [],
     } = body as {
         type:         InvVoucherType;
@@ -392,6 +394,19 @@ export async function POST(req: NextRequest) {
             description?: string;
             amount:       number;
         }[];
+        /// Service lines ("Add service" on the voucher form) — the catalogue
+        /// rows from Settings → Services. The client sends only the id and the
+        /// qty × GST-EXCLUSIVE rate it typed; the ledger and the GST rate are
+        /// re-resolved here from the database (resolveServiceCharges), and the
+        /// row joins `charges` as a tax-bearing leg. The SAME ledger is
+        /// credited on a sale and debited on a purchase — postInvVoucher takes
+        /// the direction from the voucher type, so no second ledger is needed.
+        services?: {
+            serviceId:    number;
+            quantity:     number;
+            unitPrice:    number;
+            description?: string;
+        }[];
         /// Multi-tender settlement rows. When provided, replaces the legacy
         /// single `paymentAccountId` + `amountReceived` shape. Each row =
         /// one Dr (sale) / Cr (purchase) on the counter side. AR portion =
@@ -431,16 +446,39 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    // ── Service lines → tax-bearing charge rows ───────────────────────────
+    // Resolved BEFORE the "needs at least one line" guard below, so a voucher
+    // that is nothing but services still counts as having something on it.
+    // The ledger and the GST rate come from the catalogue, never from the
+    // browser; the same ledger is credited on a sale and debited on a purchase.
+    if (services.length > 0 && !SERVICE_VOUCHER_TYPES.has(type)) {
+        return NextResponse.json({ error: "This voucher type does not carry service lines." }, { status: 400 });
+    }
+    for (const s of services) {
+        if (!s.serviceId || !(s.quantity > 0)) {
+            return NextResponse.json({ error: "Each service line needs a service and quantity > 0" }, { status: 400 });
+        }
+    }
+    const resolvedServices = await resolveServiceCharges(prisma, services);
+    if (!resolvedServices.ok) {
+        return NextResponse.json({ error: resolvedServices.error, code: resolvedServices.code }, { status: 422 });
+    }
+    // One list from here on — a service IS a charge, it just carries its own GST
+    // and the identity needed to re-render it as a service line on edit.
+    const allCharges = [...charges, ...resolvedServices.charges];
+
     // Manufacturing Journal is allowed to have zero stock lines IF it has at
     // least one expense (Charges) line — covers pure-overhead allocations.
     // SALE / PURCHASE are allowed to have zero item lines too — a pure
     // service invoice (e.g. "Service charge for computer repairing") posted
     // entirely through the "+ Add Account" charges, no stock item involved.
-    // Every other type still requires at least one item line.
+    // Every other type still requires at least one item line — unless it is
+    // carrying services, which are a document in their own right.
     const isSaleOrPurchase = type === "SALE" || type === "PURCHASE";
     if (!lines.length
         && !(isManufacturingJournal && charges.length > 0)
-        && !(isSaleOrPurchase && charges.length > 0)) {
+        && !(isSaleOrPurchase && charges.length > 0)
+        && resolvedServices.charges.length === 0) {
         return NextResponse.json({ error: "At least one line item or charge required" }, { status: 400 });
     }
 
@@ -525,7 +563,10 @@ export async function POST(req: NextRequest) {
     // chargesNet — signed sum of all charge rows. Positive on a sale-side
     // voucher means body-direction (Cr Income → bill goes UP); negative
     // means opposite (Dr Expense → bill goes DOWN). Mirror on purchase.
-    const chargesNet = charges.reduce((s, c) => s + Number(c.amount), 0);
+    // A tax-bearing row (a service) counts at GROSS — net + its own GST — so
+    // the total matches what the operator saw; the GL splits the gross back
+    // into the charge leg and the voucher's tax legs.
+    const chargesNet = chargesNetTotal(allCharges);
 
     // ── Bill-level discount → subtracted AFTER tax ──────────────────────────
     // Deliberate, by decision (2026-07-28): a LINE discount reduces the price
@@ -674,7 +715,7 @@ export async function POST(req: NextRequest) {
                 deliveryMode:  resolvedDeliveryMode,
                 placeOfSupply: resolvedPlaceOfSupply || null,
                 // G4b: tender + charge INPUT → settlementJson.
-                settlementJson: buildSettlementJson(tenders, charges),
+                settlementJson: buildSettlementJson(tenders, allCharges),
             });
 
             // Phase 5 5C: goods lines hang off the spine (universalVoucherId).
@@ -763,7 +804,7 @@ export async function POST(req: NextRequest) {
                     // The same two snapshots the detail row stores. Both builders are
                     // typed for Prisma INPUT, which is why each needs saying that it
                     // is plain JSON here; the post path only ever READS them.
-                    settlementJson:      buildSettlementJson(tenders, charges) as unknown as Prisma.JsonValue,
+                    settlementJson:      buildSettlementJson(tenders, allCharges) as unknown as Prisma.JsonValue,
                     partyJson:           (buildPartyJson({ name: partyName, phone: partyPhone, address: partyAddress }) ?? null) as unknown as Prisma.JsonValue,
                     subtotal,
                     taxAmount,

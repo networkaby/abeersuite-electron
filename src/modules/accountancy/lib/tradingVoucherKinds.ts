@@ -9,9 +9,24 @@ import { parseDecimalInput, round2 } from "@/shared/lib/format";
 
 // ── Per-line state ─────────────────────────────────────────────────────────
 
+/** A service picked from the catalogue (Settings → Services), as a voucher line
+ *  carries it. `defaultPricePaise` is TAX-INCLUSIVE — what the customer pays —
+ *  so the form converts it to the rate the PRICE column is currently showing. */
+export type SelectedService = {
+    id: number;
+    name: string;
+    taxRate: number;
+    defaultPricePaise: number | null;
+};
+
 export type LineState = {
     id: number;
     product: SelectedProduct | null;
+    /// Set INSTEAD of `product` on a service row. A service line behaves like
+    /// any other line — qty × rate, its own GST, its own amount — but posts to
+    /// the service's ledger as a charge rather than moving stock, which is why
+    /// the two never appear on one row.
+    service: SelectedService | null;
     quantity: string;
     freeQty: string;
     rate: string;
@@ -33,6 +48,7 @@ export const nextLineId = () => ++lineSeq;
 export const newLine = (): LineState => ({
     id: ++lineSeq,
     product: null,
+    service: null,
     quantity: "1",
     // Leave optional numeric fields blank instead of pre-filling "0" —
     // empty inputs read cleaner in dense tables. calcLine handles the
@@ -93,6 +109,38 @@ export function reprice(l: LineState, rateInclTax: boolean): LineState {
         discountAmt: discAmt > 0 ? discAmt.toFixed(2) : "",
         taxAmount: taxAmt > 0 ? taxAmt.toFixed(2) : "",
     };
+}
+
+/** Build a voucher line from a catalogue service.
+ *
+ * The catalogue price is TAX-INCLUSIVE — ₹300 on a service at 18% means the
+ * customer pays ₹300, not ₹354 — but the voucher's PRICE column may be showing
+ * either mode. So the price is converted to whichever mode is on:
+ *
+ *   inclusive column → ₹300.00 goes straight in;
+ *   exclusive column → ₹254.237288 goes in, and the GST column brings it back
+ *                      to ₹300.00 on the AMOUNT.
+ *
+ * The exclusive value keeps six decimals on purpose. Rounded to two it would be
+ * 254.24, which grosses back up to ₹300.0032 — a line the operator never typed
+ * and, on a long bill, a paisa of drift against the payment rows. Six decimals
+ * divide back exactly. (`setLineAmount` keeps the same precision for the same
+ * reason.) The catalogue price may be missing entirely, and then the rate is
+ * left blank for the operator to type, exactly like a product with no price.
+ */
+export function serviceLine(svc: SelectedService, rateInclTax: boolean): LineState {
+    const inclusive = svc.defaultPricePaise != null ? svc.defaultPricePaise / 100 : null;
+    const rate = inclusive == null
+        ? ""
+        : rateInclTax || svc.taxRate <= 0
+            ? inclusive.toFixed(2)
+            : String(Number((inclusive / (1 + svc.taxRate / 100)).toFixed(6)));
+    return reprice({
+        ...newLine(),
+        service: svc,
+        rate,
+        taxRate: svc.taxRate > 0 ? String(svc.taxRate) : "",
+    }, rateInclTax);
 }
 
 // Numeric input sanitizers — type="text" lets us avoid the awful native

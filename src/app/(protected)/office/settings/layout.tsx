@@ -16,7 +16,7 @@ const SETTINGS_CRUMB_LABELS: Record<string, string> = {
     "printer-settings": "Thermal Printer",
     "qr-display-settings": "QR Display",
     "screen-size": "Screen Size",
-    "pos-services": "POS Services",
+    "pos-services": "Services",
     "voucher-templates": "Print Templates",
     preview: "Preview",
     "backup-restore": "Backup & Restore",

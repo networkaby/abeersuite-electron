@@ -496,53 +496,52 @@ export function PosScreenShell({
                             </div>
 
                             {/* Add service charge — pick a service from the catalogue
-                            (Settings → POS Services). Products come from the scan box
-                            above; services come from here (they have no barcode). Adds a
-                            GL-only service line (income ledger + GST). Sale mode only —
-                            Order / Estimate don't carry service lines yet. */}
-                            {active === "sale" && (
-                                <div className="relative shrink-0 border-t border-border px-3 ">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setServiceMenuOpen((o) => !o)}
-                                        className="h-6 gap-1 border border-sky-300/50 bg-sky-50/50 px-1.5 text-xs text-sky-700 hover:bg-sky-100/70 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
-                                    >
-                                        <Wrench size={12} /> Add service
-                                    </Button>
-                                    {serviceMenuOpen && (
-                                        <>
-                                            {/* click-away backdrop */}
-                                            <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
-                                            <ul className="absolute left-4 top-full z-20 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                                                {b.allServices.length === 0 ? (
-                                                    <li className="px-3 py-2 text-xs text-muted-foreground">
-                                                        No services yet — add them in Settings → POS Services.
+                            (Settings → Services). Products come from the scan box above;
+                            services come from here (they have no barcode). Adds a GL-only
+                            service line (its ledger + GST). Offered on every counter mode:
+                            a quote that cannot say "₹300 to install it" is not the quote
+                            the customer asked for, and the sale it becomes carries it. */}
+                            <div className="relative shrink-0 border-t border-border px-3 ">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setServiceMenuOpen((o) => !o)}
+                                    className="h-6 gap-1 border border-sky-300/50 bg-sky-50/50 px-1.5 text-xs text-sky-700 hover:bg-sky-100/70 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                >
+                                    <Wrench size={12} /> Add service
+                                </Button>
+                                {serviceMenuOpen && (
+                                    <>
+                                        {/* click-away backdrop */}
+                                        <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
+                                        <ul className="absolute left-4 top-full z-20 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                            {b.allServices.length === 0 ? (
+                                                <li className="px-3 py-2 text-xs text-muted-foreground">
+                                                    No services yet — add them in Settings → Services.
+                                                </li>
+                                            ) : (
+                                                b.allServices.map((s) => (
+                                                    <li key={s.id}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { b.addServiceToCart(s); setServiceMenuOpen(false); }}
+                                                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                                                        >
+                                                            <Wrench size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                                                            <span className="flex-1 truncate">{s.name}</span>
+                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.taxRate > 0 ? `GST ${s.taxRate}%` : "No tax"}</span>
+                                                            <span className="w-14 text-right text-xs text-muted-foreground">
+                                                                {s.defaultPricePaise != null ? `₹${(s.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
+                                                            </span>
+                                                        </button>
                                                     </li>
-                                                ) : (
-                                                    b.allServices.map((s) => (
-                                                        <li key={s.id}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => { b.addServiceToCart(s); setServiceMenuOpen(false); }}
-                                                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
-                                                            >
-                                                                <Wrench size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
-                                                                <span className="flex-1 truncate">{s.name}</span>
-                                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.taxRate > 0 ? `GST ${s.taxRate}%` : "No tax"}</span>
-                                                                <span className="w-14 text-right text-xs text-muted-foreground">
-                                                                    {s.defaultPricePaise != null ? `₹${(s.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
-                                                                </span>
-                                                            </button>
-                                                        </li>
-                                                    ))
-                                                )}
-                                            </ul>
-                                        </>
-                                    )}
-                                </div>
-                            )}
+                                                ))
+                                            )}
+                                        </ul>
+                                    </>
+                                )}
+                            </div>
 
                             {/* Totals + checkout — shared PosBillSummary. Checkout button is
                             injected per mode via checkoutSlot. */}

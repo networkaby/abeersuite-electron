@@ -9,7 +9,7 @@ import { buildActorSnapshot, type ActorSnapshot } from "@/shared/lib/auth/actorS
 // Ongoing "draft bill" for a repair ticket — the pick-list the technician builds
 // while the job runs. Two kinds of lines:
 //   • products — real stock items (become POS cart lines)
-//   • services — PosService catalogue entries (Settings → POS Services); they
+//   • services — PosService catalogue entries (Settings → Services); they
 //     become kind="service" cart lines in POS with their configured GST +
 //     income ledger, exactly like the cashier's "+ Add service charge".
 // Stored as a snapshot on Ticket.context.billDraft. NO stock/ledger impact — the

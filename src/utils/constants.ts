@@ -764,7 +764,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
     { label: "Couriers", href: "/office/settings/couriers", icon: Bike, permission: "settings:manage" },
     { label: "Standard Courier", href: "/office/settings/standard-courier", icon: BadgeCheck, permission: "settings:manage" },
-    { label: "POS Services", href: "/office/settings/pos-services", icon: ConciergeBell, permission: "settings:manage" },
+    { label: "Services", href: "/office/settings/pos-services", icon: ConciergeBell, permission: "settings:manage" },
     { label: "Credit Limit", href: "/office/settings/credit-limit", icon: ShieldAlert, permission: "settings:manage" },
     { label: "Workflow", href: "/office/settings/workflow", icon: Workflow, permission: "settings:manage" },
     { label: "Naming Convention", icon: SpellCheck, href: "/office/settings/naming-convention", permission: "inventory:masters:edit" },

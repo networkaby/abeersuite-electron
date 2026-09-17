@@ -1475,7 +1475,11 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                 const chargeAmount = (sample.charges ?? [])
                     .filter((c) => (c.taxAmount ?? 0) > 0.005)
                     .reduce((s, c) => s + c.amount, 0);
-                const chargeTaxable = chargeAmount > 0.005 ? Math.max(0, chargeAmount - chargeTax) : 0;
+                // `amount` on a charge row is ALREADY the pre-tax net (its GST
+                // sits in taxAmount), so it IS the taxable value. Subtracting the
+                // tax from it a second time shrank a ₹254.24 service to ₹208.46
+                // and left the summary short of the bill.
+                const chargeTaxable = chargeAmount > 0.005 ? chargeAmount : 0;
                 const chargeRatePct = (sample.charges ?? []).find((c) => (c.taxAmount ?? 0) > 0.005)?.taxRate ?? 0;
                 const totalTaxable = sum.taxable + (chargeTax > 0.005 && chargeAmount > 0.005 ? chargeTaxable : 0);
                 const totalCgst = inter ? 0 : sum.cgst + chargeTax / 2;

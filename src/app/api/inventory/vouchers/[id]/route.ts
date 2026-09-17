@@ -15,6 +15,7 @@ import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 
 type Params = { params: Promise<{ id: string }> };
@@ -169,6 +170,7 @@ export async function PATCH(req: Request, { params }: Params) {
         discountAmt,
         lines,
         charges,
+        services,
         tenders,
     } = body as {
         date?:             string;
@@ -214,9 +216,19 @@ export async function PATCH(req: Request, { params }: Params) {
             accountId:    number;
             description?: string;
             amount:       number;
-            /// GST on a tax-bearing charge (POS-service row) — preserved through
+            /// GST on a tax-bearing charge (a service row) — preserved through
             /// the edit round-trip so the re-post keeps its tax legs.
             taxAmount?:   number;
+        }[];
+        /// Service lines, re-resolved from the catalogue exactly as on create
+        /// (POST /api/inventory/vouchers). Sent alongside `charges`, never
+        /// inside it: the browser may change WHICH service and HOW MANY, never
+        /// which ledger or what GST — those are read here.
+        services?: {
+            serviceId:    number;
+            quantity:     number;
+            unitPrice:    number;
+            description?: string;
         }[];
         tenders?: {
             accountId: number;
@@ -229,6 +241,30 @@ export async function PATCH(req: Request, { params }: Params) {
     const isPhysicalStock = existing.universalVoucher?.type === "PHYSICAL_STOCK";
     const isManufacturingJournal = existing.universalVoucher?.type === "MANUFACTURING_JOURNAL";
     const isBranchTransfer = existing.universalVoucher?.type === "BRANCH_TRANSFER";
+
+    // ── Service lines → tax-bearing charge rows ───────────────────────────
+    // Re-resolved from the catalogue on every save, exactly as on create, so an
+    // edit can never smuggle in a ledger or a GST rate the browser chose.
+    const voucherType = existing.universalVoucher?.type ?? "";
+    if (services !== undefined && services.length > 0 && !SERVICE_VOUCHER_TYPES.has(voucherType)) {
+        return NextResponse.json({ error: "This voucher type does not carry service lines." }, { status: 400 });
+    }
+    const resolvedServices = await resolveServiceCharges(prisma, services ?? []);
+    if (!resolvedServices.ok) {
+        return NextResponse.json({ error: resolvedServices.error, code: resolvedServices.code }, { status: 422 });
+    }
+    // What the charges section becomes after this PATCH. `undefined` on BOTH
+    // arrays means the caller said nothing about charges, so the stored ones
+    // stand; an empty array clears its own half. Services always rewrite the
+    // service rows wholesale — the form sends every one it is showing.
+    const existingCharges = readSettlement(existing.settlementJson).charges;
+    const chargesTouched = charges !== undefined || services !== undefined;
+    const effectiveCharges = chargesTouched
+        ? [
+            ...(charges !== undefined ? charges : existingCharges.filter((c) => c.serviceId == null)),
+            ...(services !== undefined ? resolvedServices.charges : existingCharges.filter((c) => c.serviceId != null)),
+        ]
+        : existingCharges;
 
     // Preserve the sale's original MRP/barcode snapshots across an edit even if
     // the client omits them on a partial save. This keeps the ladder/receipt
@@ -289,9 +325,13 @@ export async function PATCH(req: Request, { params }: Params) {
             });
             return { ...l, rate, mrpPaise, savedSalePricePaise, discountAmt: lineDiscountAmt, taxAmount, amount };
         });
-        // Tax-bearing charges (POS services) count at GROSS — net + their GST —
+        // Tax-bearing charges (services) count at GROSS — net + their GST —
         // mirroring /api/pos/sale, so totalAmount still balances the re-posted JE.
-        const chargesNet = (charges ?? []).reduce((s, c) => s + Number(c.amount) + Number(c.taxAmount ?? 0), 0);
+        // Reads the EFFECTIVE list, not the request's: a PATCH that rewrites the
+        // items without mentioning charges used to drop every stored charge out
+        // of the total while leaving it in settlementJson, so the re-posted JE
+        // and the payment rows disagreed by exactly the charge.
+        const chargesNet = chargesNetTotal(effectiveCharges);
         // ── Bill-level discount → subtracted AFTER tax ──────────────────────
         // Same treatment as POST /api/inventory/vouchers (see the note there):
         // a LINE discount reduces the taxable value, the HEADER discount comes
@@ -383,11 +423,11 @@ export async function PATCH(req: Request, { params }: Params) {
             // merge the provided arrays over the existing settlement and rewrite
             // the column below. An empty array clears that section.
             const existingSettlement = readSettlement(existing.settlementJson);
-            const settlementChanged = charges !== undefined || tenders !== undefined;
+            const settlementChanged = chargesTouched || tenders !== undefined;
             const newSettlementJson = settlementChanged
                 ? buildSettlementJson(
                     tenders !== undefined ? tenders : existingSettlement.tenders,
-                    charges !== undefined ? charges : existingSettlement.charges,
+                    effectiveCharges,
                 )
                 : undefined;
             // Resolve the canonical ledger account from the (possibly updated)

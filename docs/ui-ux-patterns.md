@@ -186,7 +186,7 @@ explicit:
 
 - `update-print-labels` — margin % and MRP (the highest-stakes instance).
 - `pricing-strategy/needs-attention` — cost-excl, cost-incl and MRP.
-- `PosServicesManager` — service name, ledger, GST and price.
+- `PosServicesManager` — service name, ledger, GST and price (Settings → Services; the same catalogue the POS cart and every office trading voucher add from).
 - `CustomerGroupsManager` — the rename, including the empty-value case above.
 
 ---

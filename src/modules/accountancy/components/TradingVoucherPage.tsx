@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import {
     Trash2, Plus, StickyNote, Settings2,
     Image as ImageIcon, FileText, ScanLine, Link2,
-    CopyPlus,
+    CopyPlus, Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,9 +88,11 @@ import type { CreditLimitDetail } from "@/shared/lib/accountancy/checkCreditLimi
 
 // Per-kind config + pure line math — extracted to lib/tradingVoucherKinds.ts.
 import {
-    type LineState, newLine, nextLineId, calcLine, numSigned, reprice,
+    type LineState, type SelectedService, newLine, nextLineId, calcLine, numSigned,
+    reprice, serviceLine,
     type TradingKind, PER_KIND,
 } from "@/modules/accountancy/lib/tradingVoucherKinds";
+import { SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 
 // Re-export so existing importers of the page keep working.
 export type { TradingKind } from "@/modules/accountancy/lib/tradingVoucherKinds";
@@ -376,6 +378,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Expense / Liability ledgers (Packing Income, Service Charges,
     // Insurance, Bank Charges, etc.). Loaded lazily on mount.
     const [chargeAccounts, setChargeAccounts] = useState<GlAccount[]>([]);
+
+    // ── Service catalogue (Settings → Services) ───────────────────────────
+    // The sellable/buyable services, added to the bill by name like an item.
+    // Only the kinds that move money offer them — see SERVICE_VOUCHER_TYPES.
+    const canCarryServices = SERVICE_VOUCHER_TYPES.has(kind);
+    const [allServices, setAllServices] = useState<SelectedService[]>([]);
+    const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
     const [header, setHeader] = useState({
         date: today,
         description: "",
@@ -458,6 +467,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 .filter((l) => l.product != null)
                 .map((l) => ({
                     id: nextLineId(),
+                    service: null,
                     product: {
                         id: l.product!.id,
                         sku: l.product!.sku,
@@ -578,6 +588,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 amount: string | number;
                 description: string | null;
                 account: { id: number; name: string };
+                // Present only on a SERVICE row — see ChargeInput in
+                // shared/lib/accountancy/settlement.ts.
+                serviceId?: number | null;
+                serviceName?: string | null;
+                note?: string | null;
+                quantity?: number | null;
+                rate?: number | null;
+                taxRate?: number | null;
             }[];
         }>(`/api/inventory/vouchers/${editVoucherId}`)
             .then((r) => {
@@ -608,8 +626,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     if (!Number.isFinite(n) || n === 0) return "";
                     return String(n);
                 };
-                setLines(v.lines.length === 0 ? [newLine()] : v.lines.map((l) => ({
+                const productLines: LineState[] = v.lines.map((l) => ({
                     id: nextLineId(),
+                    service: null,
                     product: {
                         id: l.product.id,
                         sku: l.product.sku,
@@ -630,7 +649,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         const tr = typeof l.taxRate === "string" ? parseFloat(l.taxRate) : (l.taxRate ?? 0);
                         // Round the inclusive display rate to 2dp so the client's per-line
                         // total matches the server's recompute (avoids a 1-paise tender mismatch).
-                        return prefs.rateInclTax && tr > 0 ? Math.round(excl * (1 + tr / 100) * 100) / 100 : excl;
+                        // Read through the REF, not `prefs`: this effect runs once on mount and
+                        // its closure froze the DEFAULT prefs, while the saved preference is
+                        // applied by a separate effect. Re-opening a voucher on a kind whose
+                        // PRICE column had been switched therefore re-showed every rate in the
+                        // other mode — and saved it back that way.
+                        return prefsRef.current.rateInclTax && tr > 0 ? Math.round(excl * (1 + tr / 100) * 100) / 100 : excl;
                     })()),
                     // Restore MRP from the saved line (mrpPaise → ₹).
                     mrpRupees: (l as { mrpPaise?: number | null }).mrpPaise != null
@@ -643,7 +667,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     amountInput: "",
                     description: l.description ?? "",
                     showDescription: !!l.description,
-                })));
+                }));
 
                 setPayMode(v.paymentMode === "CASH" ? "CASH" : "CREDIT");
                 if (v.paymentAccountId != null) setPendingPaymentAccountId(v.paymentAccountId);
@@ -717,11 +741,49 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         })));
                 }
 
+                // Charge rows come back in one list, but they are two different
+                // things: a SERVICE row (it carries serviceId) goes back into the
+                // items table as the service line the operator typed, and every
+                // other row is a plain "+ Add Account" leg. Splitting them here is
+                // what keeps a saved service from decaying into a bare ledger
+                // amount the moment the voucher is re-opened.
+                const savedCharges = v.charges ?? [];
+                const serviceLines: LineState[] = savedCharges
+                    .filter((c) => c.serviceId != null)
+                    .map((c) => {
+                        const taxRate = Number(c.taxRate ?? 0);
+                        const exclRate = Number(c.rate ?? c.amount);
+                        // The stored rate is EXCLUSIVE. Show it inclusive when the
+                        // PRICE column is in inclusive mode, rounded to 2dp so the
+                        // line the operator reads and the total agree to the paisa
+                        // — same round-trip the product lines above make.
+                        const shownRate = prefsRef.current.rateInclTax && taxRate > 0
+                            ? Math.round(exclRate * (1 + taxRate / 100) * 100) / 100
+                            : exclRate;
+                        return reprice({
+                            ...newLine(),
+                            service: {
+                                id: c.serviceId as number,
+                                name: c.serviceName ?? c.account?.name ?? "Service",
+                                taxRate,
+                                defaultPricePaise: null,
+                            },
+                            quantity: String(Number(c.quantity ?? 1)),
+                            rate: String(shownRate),
+                            taxRate: taxRate > 0 ? String(taxRate) : "",
+                            description: c.note ?? "",
+                            showDescription: !!c.note,
+                        }, prefsRef.current.rateInclTax);
+                    });
+                const allLines = [...productLines, ...serviceLines];
+                setLines(allLines.length === 0 ? [newLine()] : allLines);
+
                 // Hydrate additional-ledger rows from voucher.charges[].
                 // Amount is stored signed in the DB; the form keeps it
                 // signed (operator types positive or "-50" directly).
-                if (v.charges && v.charges.length > 0) {
-                    setCharges(v.charges.map((c) => ({
+                const plainCharges = savedCharges.filter((c) => c.serviceId == null);
+                if (plainCharges.length > 0) {
+                    setCharges(plainCharges.map((c) => ({
                         id: `cdb${c.id}`,
                         accountId: c.accountId,
                         account: { id: c.account.id, name: c.account.name } as GlAccount,
@@ -772,6 +834,16 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 setTenders((rows) => rows.length === 0 ? [newTender(cash)] : rows);
             })
             .catch(() => { setCashBankAccounts([]); setChargeAccounts([]); });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Service catalogue — the same active-rows read the POS cart uses, so the
+    // counter and the office always offer the identical list.
+    useEffect(() => {
+        if (!canCarryServices) return;
+        axios.get<SelectedService[]>("/api/pos/services")
+            .then((r) => setAllServices(r.data))
+            .catch(() => setAllServices([]));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -917,6 +989,25 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         const fresh = newLine();
         setLines((ls) => [...ls, fresh]);
         setLastFocusRowId(fresh.id);
+    };
+    // Add a catalogue service as a line. The catalogue price is tax-INCLUSIVE,
+    // so serviceLine() converts it to whatever the PRICE column is showing (see
+    // its note). Picking the same service twice adds its quantity to the row
+    // that is already there, the way scanning the same item twice does.
+    const addServiceLine = (svc: SelectedService) => {
+        setLines((ls) => {
+            const twin = ls.find((l) => l.service?.id === svc.id);
+            if (twin) {
+                return ls.map((l) => l.id === twin.id
+                    ? reprice({ ...l, quantity: String((parseFloat(l.quantity) || 0) + 1) }, prefs.rateInclTax)
+                    : l);
+            }
+            const fresh = serviceLine(svc, prefs.rateInclTax);
+            // An untouched blank row (the one every voucher opens with) is
+            // replaced rather than left dangling above the service.
+            const onlyBlank = ls.length === 1 && !ls[0].product && !ls[0].service && !ls[0].rate;
+            return onlyBlank ? [fresh] : [...ls, fresh];
+        });
     };
 
     // Recompute helpers — when the derived value is zero we write "" so the
@@ -1133,7 +1224,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         const cost = l.product?.costPrice ?? 0;
         const revenue = round2(computed[i].gross - computed[i].discAmt);
         const costTotal = round2(qty * cost);
-        return { id: l.id, name: l.product?.name ?? "—", qty, cost, revenue, profit: round2(revenue - costTotal) };
+        // A service has no purchase cost to carry, so its whole revenue is
+        // margin — which is exactly what a service earns.
+        return { id: l.id, name: l.product?.name ?? l.service?.name ?? "—", qty, cost, revenue, profit: round2(revenue - costTotal) };
     });
     const totalLineProfit = round2(lineProfits.reduce((s, p) => s + p.profit, 0));
     const estimatedProfit = round2(totalLineProfit - overallDiscount);
@@ -1180,9 +1273,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             return;
         }
         const validLines = lines.filter((l) => l.product && parseFloat(l.quantity) > 0);
+        const validServiceLines = lines.filter((l) => l.service && parseFloat(l.quantity) > 0);
         const hasValidCharge = charges.some((c) => c.accountId != null && Math.abs(parseFloat(c.amount) || 0) > 0.005);
-        if (!validLines.length && !hasValidCharge) {
-            toast.error("Add at least one item, or an additional charge");
+        if (!validLines.length && !validServiceLines.length && !hasValidCharge) {
+            toast.error("Add at least one item, a service, or an additional charge");
+            return;
+        }
+        if (validServiceLines.some((l) => !(parseFloat(l.rate) > 0))) {
+            toast.error("Every service line needs a price");
             return;
         }
         if (copy.refLabel && !copy.refOptional) {
@@ -1260,21 +1358,41 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         taxRate: tRate,
                     };
                 }),
+                // Service lines. The server re-resolves the ledger and the GST
+                // rate from the catalogue and turns each one into a tax-bearing
+                // charge, credited on a sale and debited on a purchase. Only the
+                // id and the qty × EXCLUSIVE rate travel from here — same
+                // back-calculation the item lines above make, so a price typed
+                // in the inclusive column reaches the server pre-tax.
+                // Sent even when EMPTY, and so are the charges below. The edit
+                // route reads a missing array as "leave the stored rows alone",
+                // so a conditional spread would quietly resurrect the very
+                // service (or charge) the operator just deleted from the form.
+                services: validServiceLines.map((l) => {
+                    const rawRate = parseFloat(l.rate) || 0;
+                    const tRate = prefs.lineTax ? (parseFloat(l.taxRate) || 0) : 0;
+                    const exclusiveRate = prefs.rateInclTax && tRate > 0
+                        ? rawRate / (1 + tRate / 100)
+                        : rawRate;
+                    return {
+                        serviceId: l.service!.id,
+                        quantity: parseFloat(l.quantity) || 1,
+                        unitPrice: exclusiveRate,
+                        ...(l.description.trim() ? { description: l.description.trim() } : {}),
+                    };
+                }),
                 // Additional GL legs (Layer 7e). The signed amount carries
                 // direction — postInvVoucherToGl uses positive = body
                 // direction (Cr on sale / Dr on purchase), negative = the
                 // opposite side with |amount|. Empty / invalid rows are
                 // filtered before send.
-                ...(() => {
-                    const validCharges = charges
-                        .filter((c) => c.accountId != null && Math.abs(parseFloat(c.amount) || 0) > 0.005)
-                        .map((c) => ({
-                            accountId: c.accountId as number,
-                            amount: parseFloat(c.amount),
-                            ...(c.description.trim() ? { description: c.description.trim() } : {}),
-                        }));
-                    return validCharges.length > 0 ? { charges: validCharges } : {};
-                })(),
+                charges: charges
+                    .filter((c) => c.accountId != null && Math.abs(parseFloat(c.amount) || 0) > 0.005)
+                    .map((c) => ({
+                        accountId: c.accountId as number,
+                        amount: parseFloat(c.amount),
+                        ...(c.description.trim() ? { description: c.description.trim() } : {}),
+                    })),
                 // Multi-tender payload (Layer 7d). Built from the operator-
                 // typed rows plus an auto-appended Customer-AR row for any
                 // unsettled balance (only when a party is picked — walk-in
@@ -1710,12 +1828,24 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                 </div>
                                             </td>
                                             <td className="px-2 py-1">
-                                                <InvProductCombobox
-                                                    value={line.product?.id ?? null}
-                                                    onChange={(p) => handleProductSelect(line.id, p)}
-                                                    clearNonce={clearedRow?.id === line.id ? clearedRow.n : 0}
-                                                    autoFocus={(i === 0 && !line.product) || line.id === lastFocusRowId}
-                                                />
+                                                {/* A service is not searchable stock — it is the catalogue
+                                                    row the operator picked from "Add service", so the cell
+                                                    names it instead of offering the item box. Everything to
+                                                    the right of here (qty, price, GST, amount) behaves
+                                                    exactly as it does on a product line. */}
+                                                {line.service ? (
+                                                    <span className="inline-flex items-center gap-1.5 rounded border border-sky-300/50 bg-sky-50/50 px-1.5 py-1 text-xs text-sky-800 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300">
+                                                        <Wrench size={11} className="shrink-0" />
+                                                        <span className="truncate">{line.service.name}</span>
+                                                    </span>
+                                                ) : (
+                                                    <InvProductCombobox
+                                                        value={line.product?.id ?? null}
+                                                        onChange={(p) => handleProductSelect(line.id, p)}
+                                                        clearNonce={clearedRow?.id === line.id ? clearedRow.n : 0}
+                                                        autoFocus={(i === 0 && !line.product) || line.id === lastFocusRowId}
+                                                    />
+                                                )}
                                             </td>
                                             {prefs.lineDescription && (
                                                 <td className="px-1 py-1">
@@ -1743,7 +1873,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                 <td className="px-1 py-1 text-right text-xs tabular-nums">
                                                     {/* PURCHASE: editable MRP so the product master stays current.
                                                         Other kinds: read-only hint from the product lookup. */}
-                                                    {kind === "PURCHASE" ? (
+                                                    {kind === "PURCHASE" && !line.service ? (
                                                         <input
                                                             type="text"
                                                             inputMode="decimal"
@@ -1771,14 +1901,18 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                             </td>
                                             {prefs.freeQty && (
                                                 <td className="px-1 py-1">
-                                                    <input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={line.freeQty}
-                                                        onChange={(e) => updateLine(line.id, { freeQty: parseDecimalInput(e.target.value) })}
-                                                        className={cell}
-                                                        tabIndex={-1}
-                                                    />
+                                                    {line.service ? (
+                                                        <span className="block text-center text-xs text-muted-foreground">—</span>
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={line.freeQty}
+                                                            onChange={(e) => updateLine(line.id, { freeQty: parseDecimalInput(e.target.value) })}
+                                                            className={cell}
+                                                            tabIndex={-1}
+                                                        />
+                                                    )}
                                                 </td>
                                             )}
                                             <td className="px-1 py-1 text-center text-xs text-muted-foreground">
@@ -1886,9 +2020,55 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                             })}
                             <tr>
                                 <td colSpan={15} className="px-5 py-2 border-b border-border/50">
-                                    <Button variant="ghost" size="sm" className="text-primary h-auto py-1 text-xs" onClick={addLine}>
-                                        <Plus size={12} className="mr-1" /> Add Row
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="ghost" size="sm" className="text-primary h-auto py-1 text-xs" onClick={addLine}>
+                                            <Plus size={12} className="mr-1" /> Add Row
+                                        </Button>
+                                        {/* Services have no barcode and no stock, so they are picked
+                                            by name from the catalogue instead of the item box — the
+                                            same list, and the same button, as the POS cart. */}
+                                        {canCarryServices && (
+                                            <div className="relative">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    tabIndex={-1}
+                                                    onClick={() => setServiceMenuOpen((o) => !o)}
+                                                    className="h-auto gap-1 border border-sky-300/50 bg-sky-50/50 px-1.5 py-1 text-xs text-sky-700 hover:bg-sky-100/70 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                                >
+                                                    <Wrench size={12} /> Add service
+                                                </Button>
+                                                {serviceMenuOpen && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
+                                                        <ul className="absolute left-0 bottom-full z-20 mb-1 max-h-80 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                                            {allServices.length === 0 ? (
+                                                                <li className="px-3 py-2 text-xs text-muted-foreground">
+                                                                    No services yet — add them in Settings → Services.
+                                                                </li>
+                                                            ) : allServices.map((svc) => (
+                                                                <li key={svc.id}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => { addServiceLine(svc); setServiceMenuOpen(false); }}
+                                                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                                                                    >
+                                                                        <Wrench size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                                                                        <span className="flex-1 truncate">{svc.name}</span>
+                                                                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{svc.taxRate > 0 ? `GST ${svc.taxRate}%` : "No tax"}</span>
+                                                                        <span className="w-14 text-right text-xs text-muted-foreground">
+                                                                            {svc.defaultPricePaise != null ? `₹${(svc.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
+                                                                        </span>
+                                                                    </button>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                             {/* Column totals — read-only summary row matching the reference */}
@@ -2071,6 +2251,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         // Verbatim line copy — user can edit qty for partial fulfilment.
                                         setLines(parent.lines.length === 0 ? [newLine()] : parent.lines.map((l) => ({
                                             id: nextLineId(),
+                                            service: null,
                                             product: {
                                                 id: l.product.id,
                                                 sku: l.product.sku,

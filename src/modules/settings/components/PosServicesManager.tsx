@@ -1,9 +1,14 @@
 "use client";
 
-// Settings → POS Services — manage the catalogue of sellable services offered
-// on the POS screen. Each service = name + income ledger + GST rate (+ optional
-// default tax-inclusive price). Active services appear in the POS product
-// search (after products) and post GL-only on sale (Cr income net + Cr GST).
+// Settings → Services — manage the catalogue of services the business sells or
+// buys. Each service = name + ledger + GST rate (+ optional default tax-inclusive
+// price). Added by name from "Add service" on the POS cart and on every office
+// trading voucher; posts GL-only (never stock) as a tax-bearing charge row.
+//
+// ONE ledger covers both sides of the trade. Selling the service CREDITS it and
+// buying it DEBITS the same ledger, because postInvVoucher takes a charge row's
+// direction from the voucher type. So the ledger reads as what the work earned
+// NET — sold minus bought — and no second "expense" ledger is configured here.
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -226,6 +231,7 @@ export function PosServicesManager() {
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                     Price is tax-inclusive (what the customer pays). GST defaults to 18% — change it per service if needed.
+                    The same ledger is credited when you sell the service and debited when you buy it, so it shows the net.
                 </p>
             </div>
         </div>

@@ -6,6 +6,7 @@ import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/acti
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
+import { ServiceLineError } from "@/shared/lib/accountancy/serviceCharges";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
@@ -134,6 +135,9 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ ...order, receiptVoucherId, receiptVoucherRef }, { status: 201 });
     } catch (e) {
+        // A service switched off since the screen loaded is the cashier's to fix
+        // (remove the line), not a server fault — say so instead of "Failed to save order".
+        if (e instanceof ServiceLineError) return NextResponse.json({ error: e.message, code: e.code }, { status: 422 });
         return handleApiError(e, "Failed to save order");
     }
 }

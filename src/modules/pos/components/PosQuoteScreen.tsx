@@ -79,6 +79,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     accountId: number | null;
                     editable: boolean;
                     lines: { productId: number; sku: string; name: string; description: string | null; quantity: number; rate: number; taxRate: number; mrpPaise: number | null; savedSalePricePaise: number | null }[];
+                    services?: { serviceId: number; name: string; quantity: number; rate: number; taxRate: number; description: string | null }[];
                 }>(`/api/orders/inv/${editId}`);
                 if (cancelled) return;
                 if (!data.editable) {
@@ -88,18 +89,32 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 }
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
                 if (cancelled) return;
-                b.setCart(data.lines.map((l) => ({
-                    productId: l.productId,
-                    sku: l.sku,
-                    name: l.name,
-                    qty: l.quantity,
-                    unitPrice: l.rate,
-                    // The server embeds "sku — name · note"; keep only the cashier's note.
-                    description: l.description?.split(" · ").slice(1).join(" · ") || "",
-                    taxRate: l.taxRate,
-                    mrpPaise: l.mrpPaise,
-                    barcodePaise: l.savedSalePricePaise,
-                })));
+                b.setCart([
+                    ...data.lines.map((l) => ({
+                        productId: l.productId,
+                        sku: l.sku,
+                        name: l.name,
+                        qty: l.quantity,
+                        unitPrice: l.rate,
+                        // The server embeds "sku — name · note"; keep only the cashier's note.
+                        description: l.description?.split(" · ").slice(1).join(" · ") || "",
+                        taxRate: l.taxRate,
+                        mrpPaise: l.mrpPaise,
+                        barcodePaise: l.savedSalePricePaise,
+                    })),
+                    // Service lines come back keyed the way the cart holds them:
+                    // −serviceId, so they can never collide with a product id.
+                    ...(data.services ?? []).map((s) => ({
+                        productId: -s.serviceId,
+                        sku: "SVC",
+                        name: s.name,
+                        kind: "service" as const,
+                        qty: s.quantity,
+                        unitPrice: s.rate,
+                        description: s.description ?? "",
+                        taxRate: s.taxRate,
+                    })),
+                ]);
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, `Could not load the ${mode} to edit`));
@@ -116,20 +131,17 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         if (!snapshot?.account) { toast.error("Select a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-        // TODO(pos-services): Order/Estimate vouchers don't carry service lines yet —
-        // only the Sale screen posts them. Bridge guard until quotes learn services.
-        if (cart.some((l) => l.kind === "service")) {
-            toast.error(`Service lines work on Sale only for now — remove them to save this ${mode}.`);
-            return;
-        }
-
+        // Products and services travel in separate arrays: a product line moves
+        // stock, a service line posts to its ledger. The cart holds both.
+        const goodsCart = cart.filter((l) => l.kind !== "service");
+        const serviceCart = cart.filter((l) => l.kind === "service");
         // Edit mode → PATCH the existing order's lines + discount (server recomputes
         // exactly like creation). No checkout / advance / print on an edit.
         if (isEdit) {
             b.setSubmitting(true);
             try {
                 await axios.patch(`/api/orders/inv/${editId}`, {
-                    lines: cart.map((l) => ({
+                    lines: goodsCart.map((l) => ({
                         productId: l.productId,
                         description: l.description || null,
                         quantity: l.qty,
@@ -137,6 +149,12 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                         taxRate: l.taxRate,
                         mrpPaise: l.mrpPaise ?? null,
                         savedSalePricePaise: l.barcodePaise ?? null,
+                    })),
+                    services: serviceCart.map((l) => ({
+                        serviceId: -l.productId,
+                        quantity: l.qty,
+                        unitPrice: l.unitPrice,
+                        description: l.description || null,
                     })),
                     // Order locks the full bill discount (tier + loyalty + coupon) + shipping
                     // + round-off; an estimate is a tag-price quote → tier discount only.
@@ -172,7 +190,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         b.setSubmitting(true);
         try {
             const today = todayIso();
-            const lines = cart.map((l) => ({
+            const lines = goodsCart.map((l) => ({
                 productId: l.productId,
                 description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
                 quantity: l.qty,
@@ -180,6 +198,14 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 taxRate: l.taxRate,
                 mrpPaise: l.mrpPaise ?? null,
                 savedSalePricePaise: l.barcodePaise ?? null,
+            }));
+            // A service line's cart id is −serviceId (see addServiceToCart), so
+            // the catalogue id is read straight back off it.
+            const services = serviceCart.map((l) => ({
+                serviceId: -l.productId,
+                quantity: l.qty,
+                unitPrice: l.unitPrice,
+                description: l.description || null,
             }));
             const party = {
                 accountId: snapshot.account.id,
@@ -202,6 +228,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     discountPct: b.discountAmount > 0 ? b.discountPct : 0,
                     shippingAmt: b.shippingAmt,
                     roundOff: b.roundOff,
+                    services,
                     notes: `POS Order — tier ${b.discountPct}%`
                         + (b.effRedeemPts > 0 ? `, loyalty ${b.effRedeemPts}pts ₹${b.effRedemptionRupees.toFixed(2)}` : "")
                         + (b.appliedCoupon ? `, coupon ${b.appliedCoupon.code ?? b.appliedCoupon.name} ₹${b.couponRupees.toFixed(2)}` : "")
@@ -215,6 +242,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     discountPct: b.discountAmount > 0 ? b.discountPct : 0,
                     notes: `POS Estimate (discount ${b.discountPct}%)`,
                     lines,
+                    services,
                 };
             const { data } = await axios.post<{ voucherId: number; reference: string; dealId: number | null; receiptVoucherId?: number | null; receiptVoucherRef?: string | null }>(cfg.endpoint, body);
             if (mode === "order") {

@@ -7,7 +7,8 @@ import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
-import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { buildSettlementJson, type ChargeInput } from "@/shared/lib/accountancy/settlement";
+import { resolveServiceCharges, chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
@@ -107,7 +108,7 @@ const chargeSchema = z.object({
     amount: z.number().refine((n) => Math.abs(n) >= 0.005, "Charge amount must be non-zero"),
 });
 
-// POS-service line (Settings → POS Services catalogue). The client sends only
+// Service line (Settings → Services catalogue). The client sends only
 // the id + qty + tax-EXCLUSIVE unit price; the server re-resolves the income
 // ledger + GST rate from the catalogue — never trusted from the browser. Posts
 // GL-only (Cr income net + Cr Output GST as a tax-bearing charge); no stock.
@@ -295,44 +296,20 @@ export async function POST(req: Request) {
             .map((m) => ({ id: m.id, threshold: Number(m.threshold), bonusPoints: m.bonusPoints, label: m.label, issuesCouponTemplateId: m.issuesCouponTemplateId }))
         : [];
 
-    // ── Resolve POS services (server-authoritative ledger + GST rate) ─────
-    // Each service line becomes a TAX-BEARING charge row: Cr income ledger for
-    // the NET, its GST joining the voucher's Output CGST/SGST legs (see
+    // ── Resolve services (server-authoritative ledger + GST rate) ─────────
+    // Each service line becomes a TAX-BEARING charge row: the service's ledger
+    // takes the NET and its GST joins the voucher's Output CGST/SGST legs (see
     // buildInvVoucherGlLines). No stock, no loyalty earn, no coupon base.
-    const serviceIds = [...new Set(body.services.map((s) => s.serviceId))];
-    const serviceById = new Map(
-        (serviceIds.length === 0 ? [] : await prisma.posService.findMany({
-            where: { id: { in: serviceIds }, isActive: true },
-            select: { id: true, name: true, accountId: true, gstRate: { select: { rate: true } } },
-        })).map((s) => [s.id, s]),
-    );
-    const missingService = body.services.find((s) => !serviceById.has(s.serviceId));
-    if (missingService) {
-        return NextResponse.json(
-            { error: "A service on the bill no longer exists or is inactive. Remove it and retry.", code: "POS_SERVICE_NOT_FOUND" },
-            { status: 422 },
-        );
+    // Shared with the office vouchers and the counter's quotes, so a service
+    // cannot land on one ledger here and another one there.
+    const resolvedServices = await resolveServiceCharges(prisma, body.services);
+    if (!resolvedServices.ok) {
+        return NextResponse.json({ error: resolvedServices.error, code: resolvedServices.code }, { status: 422 });
     }
-    // Net/tax stay UNROUNDED here — exactly like product lines (calcLineTotals) —
-    // so the server total matches the client's float-for-float and the ±1p
-    // payment guard never trips on multi-line rounding drift. The engine rounds
-    // every GL leg once at the write boundary.
-    const serviceCharges = body.services.map((s) => {
-        const svc = serviceById.get(s.serviceId)!;
-        const rate = svc.gstRate ? Number(svc.gstRate.rate) : 0;
-        const net = s.quantity * s.unitPrice;
-        const tax = (net * rate) / 100;
-        const qtyTag = s.quantity !== 1 ? ` × ${s.quantity}` : "";
-        return {
-            accountId: svc.accountId,
-            description: `Service: ${svc.name}${s.description ? ` · ${s.description}` : ""}${qtyTag}`,
-            amount: net,
-            taxAmount: tax,
-        };
-    });
+    const serviceCharges = resolvedServices.charges;
     // Customer-facing value of the services (net + GST) — rides chargesNet so
     // totalAmount, the tier/loyalty floors, and the JE all see the same bill.
-    const serviceGross = serviceCharges.reduce((s, c) => s + c.amount + c.taxAmount, 0);
+    const serviceGross = chargesNetTotal(serviceCharges);
 
     // ── Shipping GST (composite supply — freight follows the bill) ────────
     // `shippingAmt` is tax-INCLUSIVE (customer pays exactly what the cashier
@@ -343,7 +320,9 @@ export async function POST(req: Request) {
     // Unrounded like line/service tax — the engine rounds at the GL boundary.
     const shippingRateLines = body.lines.length > 0
         ? body.lines.map((l) => ({ value: l.quantity * l.unitPrice, taxRate: l.taxRate }))
-        : body.services.map((s) => ({ value: s.quantity * s.unitPrice, taxRate: serviceById.get(s.serviceId)?.gstRate ? Number(serviceById.get(s.serviceId)!.gstRate!.rate) : 0 }));
+        // A service-only bill weighs the service rates instead — `amount` is
+        // already the pre-tax qty × rate the resolver computed.
+        : serviceCharges.map((c) => ({ value: c.amount, taxRate: c.taxRate ?? 0 }));
     const shippingGstRate = body.shippingAmt > 0 ? resolveShippingGstRate(shippingRateLines) : 0;
     const shippingTaxAmt = (body.shippingAmt * shippingGstRate) / (100 + shippingGstRate);
 
@@ -721,7 +700,7 @@ export async function POST(req: Request) {
     const loyaltyCharge = redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId != null
         ? { accountId: loyaltyConfig.redeemExpenseAccountId, description: `Loyalty: ${redeemPoints} pts redeemed`, amount: -redemptionRupees }
         : null;
-    const allCharges: Array<{ accountId: number; description?: string; amount: number; taxAmount?: number }> = [
+    const allCharges: ChargeInput[] = [
         ...body.charges,
         ...serviceCharges,
         ...(loyaltyCharge ? [loyaltyCharge] : []),
@@ -730,7 +709,8 @@ export async function POST(req: Request) {
 
     // chargesNet feeds totalAmount, so tax-bearing rows (services) contribute
     // their GROSS — the GL splits it back into net (charge leg) + GST (tax legs).
-    const chargesNet = allCharges.reduce((s, c) => s + c.amount + (c.taxAmount ?? 0), 0);
+    // Rounded per row, matching the cart's own per-line figures.
+    const chargesNet = chargesNetTotal(allCharges);
     // Σ per-line pre-tax tier discount — stored as the voucher-level discountAmt so
     // the engine still posts the "Discount Allowed" leg (P&L visibility kept). To keep
     // the JE balanced with NET lines, subtotal is stored GROSS of that discount:

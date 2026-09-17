@@ -22,6 +22,8 @@ import { syncVoucherLinks, syncVoucherLink } from "@/modules/accountancy/lib/vou
 import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/dealsPipeline";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
+import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { resolveServiceCharges, chargesNetTotal, ServiceLineError, type ServiceLineInput } from "@/shared/lib/accountancy/serviceCharges";
 
 export type PosQuoteType = "POS_ESTIMATE" | "POS_ORDER";
 
@@ -57,6 +59,11 @@ export type PosQuoteBody = {
     shippingAmt?: number | null;
     roundOff?: number | null;
     lines: PosQuoteLine[];
+    /// Service lines (Settings → Services). A quote is GL-silent, so these are
+    /// only RECORDED here — stored in settlementJson and counted in the total —
+    /// and become real GL legs when the quote is turned into a sale. `unitPrice`
+    /// is GST-exclusive, like every other line on the way in.
+    services?: ServiceLineInput[];
 };
 
 const LABEL: Record<PosQuoteType, string> = {
@@ -75,10 +82,20 @@ export async function createPosQuoteVoucher(opts: {
 }): Promise<{ voucherId: number; universalVoucherId: number; reference: string; dealId: number | null }> {
     const { type, branchId, userId, body, today } = opts;
     const lines = Array.isArray(body.lines) ? body.lines : [];
-    if (lines.length === 0) throw new Error("At least one line item required");
+    const services = Array.isArray(body.services) ? body.services : [];
+    // A quote of services alone is a real quote — "₹300 to install your camera"
+    // needs no product on it — so the line requirement is satisfied by either.
+    if (lines.length === 0 && services.length === 0) throw new Error("At least one line item required");
     for (const l of lines) {
         if (!l.productId || !(l.quantity > 0)) throw new Error("Each line needs a product and quantity > 0");
     }
+    for (const s of services) {
+        if (!s.serviceId || !(s.quantity > 0)) throw new Error("Each service line needs a service and quantity > 0");
+    }
+    // Ledger + GST re-resolved from the catalogue, never taken from the screen.
+    const resolvedServices = await resolveServiceCharges(prisma, services);
+    if (!resolvedServices.ok) throw new ServiceLineError(resolvedServices.error);
+    const serviceCharges = resolvedServices.charges;
 
     // Spend-tier discount = discount% × COST (incl. tax), applied per line BEFORE tax
     // — same basis + mechanism as the POS sale, so a quote's numbers match the sale it
@@ -124,7 +141,10 @@ export async function createPosQuoteVoucher(opts: {
     const overallDiscount = Math.max(0, requestedDiscount - tierInclusive);
     const shippingAmt = Number(body.shippingAmt) || 0;
     const roundOff = Number(body.roundOff) || 0;
-    const netTotals = calcVoucherTotals(computedLines, shippingAmt, overallDiscount, roundOff, 0);
+    // Services ride chargesNet at GROSS (net + their own GST), exactly as they do
+    // on the POS sale, so the quote's total is the bill the customer will pay.
+    const serviceGross = chargesNetTotal(serviceCharges);
+    const netTotals = calcVoucherTotals(computedLines, shippingAmt, overallDiscount, roundOff, serviceGross);
     // Stored-field convention (matches /api/pos/sale): subtotal is GROSS of the
     // per-line pre-tax tier discount and discountAmt carries it (+ the voucher-level
     // remainder), so subtotal − discountAmt + shipping + roundOff still reconciles to
@@ -192,12 +212,19 @@ export async function createPosQuoteVoucher(opts: {
                 subtotal,
                 taxAmount,
                 totalAmount,
+                // Service rows live in settlementJson's charges section — the
+                // same place the office voucher and the POS sale keep them, so
+                // one reader re-renders them wherever the quote is opened.
+                settlementJson: serviceCharges.length > 0
+                    ? (buildSettlementJson([], serviceCharges) as Prisma.InputJsonValue)
+                    : Prisma.DbNull,
                 // 5D-2: creator lives on the spine.
             },
             select: { id: true },
         });
-        // Phase 5 5C: goods lines hang off the spine.
-        await tx.voucherInventoryLine.createMany({
+        // Phase 5 5C: goods lines hang off the spine. A services-only quote has
+        // no goods at all — skip rather than send an empty insert.
+        if (computedLines.length > 0) await tx.voucherInventoryLine.createMany({
             data: computedLines.map((l) => ({
                 universalVoucherId: spineId,
                 productId: l.productId,

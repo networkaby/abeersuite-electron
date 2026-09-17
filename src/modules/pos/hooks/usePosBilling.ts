@@ -80,7 +80,7 @@ export function usePosBilling(opts: {
     // customer can see and agree to it before it lands in the cart. null =
     // not hovering (usePosCustomerDisplay falls through to the real cart).
     const [hoverPreviewProduct, setHoverPreviewProduct] = useState<ProductOption | null>(null);
-    // Active POS-service catalogue (Settings → POS Services) — surfaced in the
+    // Active service catalogue (Settings → Services) — surfaced in the
     // same search list AFTER product matches, added to the cart like products.
     const [allServices, setAllServices] = useState<PosServiceOption[]>([]);
     const cart = usePosDraftStore((s) => s.cart);
@@ -1003,7 +1003,7 @@ export function usePosBilling(opts: {
         setTimeout(() => productSearchRef.current?.focus(), 0);
     };
 
-    // Add a POS service (Settings → POS Services) to the cart as a GL-only line
+    // Add a service (Settings → Services) to the cart as a GL-only line
     // (kind="service"): its default price is TAX-INCLUSIVE, so back-calculate the
     // pre-tax rate exactly like a product. No barcode / cost / MRP / stock. The
     // line id is −serviceId so it never collides with a product id, and the same
