@@ -8,6 +8,7 @@ import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { autoLinkSettlement } from "@/modules/accountancy/lib/autoLinkSettlement";
+import { loadSettlements } from "@/modules/accountancy/lib/billLink";
 import { validateRequest } from "@/shared/lib/api";
 import { PAYMENT_INSTRUMENT_VALUES } from "@/shared/lib/constants/accounting";
 import { handleApiError } from "@/shared/lib/api";
@@ -85,7 +86,10 @@ export async function GET(req: Request) {
                 { createdAt: "desc" },
             ],
             include: {
-                lines:  { select: { type: true, amount: true } },
+                // `accountId` is here for the bill-wise chip — the party's own leg
+                // on this voucher. These lines are already loaded for the total
+                // below, so it costs no extra query.
+                lines:  { select: { type: true, amount: true, accountId: true } },
                 // 5D-12: branch is primary on the spine — read it straight off the
                 // header (the old per-line VoucherGlLine.branchId scan is gone).
                 branch: { select: { id: true, name: true } },
@@ -101,6 +105,30 @@ export async function GET(req: Request) {
         ]);
         const creatorById = new Map(creators.map((u) => [u.id, u]));
         const partyById   = new Map(parties.map((a) => [a.id, a]));
+
+        // Bill-wise settlement — Settled / Partial / Due, the same chip the
+        // party's own Transactions tab shows. The party leg comes off the lines
+        // already loaded, so the only added cost is `sumLinked`.
+        const partyMovement = new Map<number, number>();
+        for (const v of rows) {
+            if (v.partyAccountId == null) continue;
+            let movement = 0;
+            for (const l of v.lines) {
+                if (l.accountId !== v.partyAccountId) continue;
+                movement += l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+            }
+            partyMovement.set(v.id, movement);
+        }
+        const settlements = await loadSettlements(
+            prisma,
+            rows.map((v) => ({
+                universalVoucherId: v.id,
+                partyAccountId:     v.partyAccountId,
+                kind:               v.type,
+                status:             v.status,
+            })),
+            partyMovement,
+        );
         // 5D-12: branch is read straight off the spine (`branch` relation included
         // above) so branch-aware views like the Day Book can show it. Org-level
         // vouchers (no working branch at create time) carry null.
@@ -111,6 +139,9 @@ export async function GET(req: Request) {
             totalAmount:  v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
             branch:       v.branch ?? null,
             _count:       { lines: v.lines.length },
+            /** Bill-wise state — null where there is no bill to settle. */
+            settlement:     settlements[v.id]?.state ?? null,
+            settlementOpen: settlements[v.id]?.open  ?? 0,
         }));
 
         return NextResponse.json(vouchers);

@@ -9,6 +9,7 @@ import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from 
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
+import { loadSettlements } from "@/modules/accountancy/lib/billLink";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
@@ -269,7 +270,23 @@ export async function GET(req: NextRequest) {
         };
     });
 
-    return NextResponse.json(enriched);
+    // Bill-wise settlement — Settled / Partial / Due, the same chip the party's
+    // own Transactions tab shows. A VoucherDetail carries no GL lines, so unlike
+    // the Day Book and the GL register this one pays for its own party-leg query:
+    // three bounded queries for the whole list, never one per row.
+    const settlements = await loadSettlements(prisma, enriched.map((v) => ({
+        universalVoucherId: v.universalVoucherId,
+        partyAccountId:     v.partyAccountId ?? null,
+        kind:               v.type ?? null,
+        status:             v.status ?? null,
+    })));
+    const withSettlement = enriched.map((v) => ({
+        ...v,
+        settlement:     (v.universalVoucherId != null ? settlements[v.universalVoucherId]?.state : null) ?? null,
+        settlementOpen: (v.universalVoucherId != null ? settlements[v.universalVoucherId]?.open  : 0) ?? 0,
+    }));
+
+    return NextResponse.json(withSettlement);
 }
 
 // POST /api/inventory/vouchers

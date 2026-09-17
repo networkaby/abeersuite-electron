@@ -6,6 +6,7 @@ import { handleApiError, parseCursor, deltaSlice, pageSlice } from "@/shared/lib
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
+import { loadSettlements } from "@/modules/accountancy/lib/billLink";
 import { kindsForFilter, kindsForCategory } from "@/modules/accountancy/lib/voucherKinds";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 
@@ -151,7 +152,10 @@ export async function GET(req: Request) {
             description: true, narration: true, status: true,
             cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true,
             branchId: true, createdById: true, partyAccountId: true,
-            lines: { select: { type: true, amount: true } },
+            // `accountId` is here for the bill-wise chip: the party's own leg on
+            // this voucher is what settlement is measured on, and these lines are
+            // already loaded for the GL total below — so it costs no extra query.
+            lines: { select: { type: true, amount: true, accountId: true } },
             // The trade detail carries its own id — which is what every inventory
             // edit URL and line-expand fetch keys on, NOT the spine id. Getting
             // this wrong would break the link on every inventory row.
@@ -235,6 +239,34 @@ export async function GET(req: Request) {
         });
         const convertedIds = new Set(liveRefs.map((r) => r.refVoucherId));
 
+        // ── Bill-wise settlement ────────────────────────────────────────────
+        // The party's own leg is read off the lines already loaded above for the
+        // GL total, so the only extra cost here is `sumLinked` — two queries for
+        // the whole page, never one per row. Trading vouchers post their party
+        // leg on the same spine (`role:"TENDER"`), so a sale and a receipt are
+        // measured by exactly the same rule; a bill taken in full at the counter
+        // leaves no leg at all, and that reads as Settled.
+        const partyMovement = new Map<number, number>();
+        for (const v of found) {
+            if (v.partyAccountId == null) continue;
+            let movement = 0;
+            for (const l of v.lines) {
+                if (l.accountId !== v.partyAccountId) continue;
+                movement += l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+            }
+            partyMovement.set(v.id, movement);
+        }
+        const settlements = await loadSettlements(
+            prisma,
+            found.map((v) => ({
+                universalVoucherId: v.id,
+                partyAccountId:     v.partyAccountId,
+                kind:               v.type,
+                status:             v.status,
+            })),
+            partyMovement,
+        );
+
         const rows = found.map((v) => {
             const source = voucherSourceForType(v.type);
             const detail = v.voucherDetail;
@@ -274,6 +306,14 @@ export async function GET(req: Request) {
                 sourceCreatedAt: v.sourceCreatedAt,
                 sourceCounterId: v.sourceCounterId,
                 converted:   detail ? convertedIds.has(detail.id) : false,
+                // The spine id — what the bill-wise popup settles against. An
+                // inventory row's `rawId` is its DETAIL id, so it cannot stand in
+                // for this.
+                universalVoucherId: v.id,
+                // Bill-wise state. Null where there is no bill to settle: no
+                // party, not posted, or a documentary voucher that posts no money.
+                settlement:     settlements[v.id]?.state ?? null,
+                settlementOpen: settlements[v.id]?.open  ?? 0,
             };
         });
 

@@ -9,6 +9,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, Loader2 } from "lucide-react";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { Button } from "@/components/ui/button";
 import {
     VoucherRegisterTable,
@@ -37,6 +38,9 @@ interface RawEntry {
     createdById:  number;
     branchId:     string | null;
     createdBy:    { name: string };
+    partyAccountId?:  number | null;
+    settlement?:      SettlementState | null;
+    settlementOpen?:  number;
 }
 
 export function JournalEntriesRegister() {
@@ -69,8 +73,10 @@ export function JournalEntriesRegister() {
                     kind:           "JOURNAL",
                     reference:      e.voucherNo ?? formatUvNo(Number(e.id)),
                     date:           e.date,
+                    // This route sends no party NAME (it joins no Account), but
+                    // the id is enough for the bill-wise popup to measure on.
                     party:          null,
-                    partyAccountId: null,
+                    partyAccountId: e.partyAccountId ?? null,
                     partyKind:      null,
                     partyEntityId:  null,
                     narration:      e.description,
@@ -85,6 +91,10 @@ export function JournalEntriesRegister() {
                     branchName:     null,
                     createdBy:      e.createdBy?.name ?? null,
                     converted:      false,
+                    // A journal IS the spine, so its own id is the spine id.
+                    universalVoucherId: Number(e.id),
+                    settlement:     e.settlement ?? null,
+                    settlementOpen: e.settlementOpen ?? 0,
                 }));
                 setAllRows(mapped);
             })
@@ -141,6 +151,7 @@ export function JournalEntriesRegister() {
                     onChanged={reload}
                     hideKind
                     statusInline
+                    showSettlement
                     emptyMessage="No journal entries yet."
                 />
             )}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Link2 } from "lucide-react";
+import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
@@ -10,6 +10,7 @@ import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -22,8 +23,10 @@ import {
 } from "@/components/ui/table";
 
 /** Whether this voucher has been matched off against the other side, bill by
- *  bill. Not the voucher's lifecycle — only POSTED vouchers are listed at all. */
-export type SettlementState = "SETTLED" | "PARTIAL" | "DUE";
+ *  bill. Not the voucher's lifecycle — only POSTED vouchers are listed at all.
+ *  Defined in `billLink.ts` alongside the rule that computes it; re-exported
+ *  here so this tab's own callers are unchanged. */
+export type { SettlementState } from "@/modules/accountancy/lib/billLink";
 
 export type TxInvVoucher = {
     /** Unique across sources — a bill's detail id and a receipt's spine id live
@@ -80,12 +83,6 @@ const TYPE_DOT: Record<string, string> = {
     SALE_RETURN: "bg-amber-500", PURCHASE_RETURN: "bg-amber-500",
     CREDIT_NOTE: "bg-amber-500", DEBIT_NOTE: "bg-amber-500",
     OPENING: "bg-muted-foreground/40",
-};
-
-const SETTLEMENT_STYLES: Record<SettlementState, { label: string; className: string }> = {
-    SETTLED: { label: "Settled", className: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
-    PARTIAL: { label: "Partial", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-    DUE:     { label: "Due",     className: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300" },
 };
 
 export function TransactionsTable({ invVouchers, accountId, partyName, onChanged }: {
@@ -243,37 +240,16 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                     {money(row.balance)}
                                 </TableCell>
                                 <TableCell>
-                                    {(() => {
-                                        if (!row.settlement) return <span className="opacity-40 text-xs">—</span>;
-                                        const style = SETTLEMENT_STYLES[row.settlement];
-                                        // Only a partly matched row needs its figure spelled
-                                        // out. On a fully due row the open amount IS the
-                                        // total already sitting in the same line, and on a
-                                        // settled one there is nothing left to say.
-                                        const label = row.settlement === "PARTIAL"
-                                            ? `${style.label} ${money(row.open)}`
-                                            : style.label;
-                                        // Only a voucher that actually put something on the
-                                        // party's account can be matched off. A bill taken in
-                                        // full at the counter has nothing to point at a receipt.
-                                        const linkable = row.uvId !== null
-                                            && accountId != null
-                                            && Math.abs(row.movement) > 0.005;
-                                        const chip = `inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${style.className}`;
-                                        return linkable ? (
-                                            <button
-                                                type="button"
-                                                title="Match this against the other side, bill by bill"
-                                                onClick={() => setLinkVoucherId(row.uvId)}
-                                                className={`${chip} cursor-pointer transition-opacity hover:opacity-80`}
-                                            >
-                                                {label}
-                                                <Link2 size={11} className="opacity-70" />
-                                            </button>
-                                        ) : (
-                                            <span className={chip}>{label}</span>
-                                        );
-                                    })()}
+                                    {/* Only a voucher that actually put something on the
+                                        party's account can be matched off. A bill taken in
+                                        full at the counter has nothing to point at a receipt. */}
+                                    <SettlementChip
+                                        state={row.settlement}
+                                        open={row.open}
+                                        onLink={row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
+                                            ? () => setLinkVoucherId(row.uvId)
+                                            : undefined}
+                                    />
                                 </TableCell>
                                 <TableCell className="text-right">
                                     {!row.isOpening && (

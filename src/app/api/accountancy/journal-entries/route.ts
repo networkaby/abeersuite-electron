@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { loadSettlements } from "@/modules/accountancy/lib/billLink";
 
 // GET /api/accountancy/journal-entries
 //
@@ -44,7 +45,10 @@ export async function GET(req: Request) {
             ],
             include: {
                 _count: { select: { lines: true } },
-                lines: { select: { type: true, amount: true } },
+                // `accountId` is for the bill-wise chip — a journal with a party
+                // leg links like anything else (see billLink.ts). The lines are
+                // stripped from the response below, so nothing extra is sent.
+                lines: { select: { type: true, amount: true, accountId: true } },
             },
         });
 
@@ -56,11 +60,42 @@ export async function GET(req: Request) {
         });
         const creatorById = new Map(creators.map((u) => [u.id, u]));
 
+        // Bill-wise settlement. A journal that touches a party ledger has a side
+        // like any other voucher, so it links with no special case — which is
+        // what lets a re-class journal be matched off against a bill here.
+        const partyMovement = new Map<number, number>();
+        for (const e of entries) {
+            if (e.partyAccountId == null) continue;
+            let movement = 0;
+            for (const l of e.lines) {
+                if (l.accountId !== e.partyAccountId) continue;
+                movement += l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+            }
+            partyMovement.set(e.id, movement);
+        }
+        const settlements = await loadSettlements(
+            prisma,
+            entries.map((e) => ({
+                universalVoucherId: e.id,
+                partyAccountId:     e.partyAccountId,
+                kind:               e.type,
+                status:             e.status,
+            })),
+            partyMovement,
+        );
+
         const result = entries.map((e) => {
             const totalDebit = e.lines
                 .filter((l) => l.type === "DEBIT")
                 .reduce((s, l) => s + Number(l.amount), 0);
-            return { ...e, createdBy: creatorById.get(e.createdById) ?? null, lines: undefined, totalDebit };
+            return {
+                ...e,
+                createdBy: creatorById.get(e.createdById) ?? null,
+                lines: undefined,
+                totalDebit,
+                settlement:     settlements[e.id]?.state ?? null,
+                settlementOpen: settlements[e.id]?.open  ?? 0,
+            };
         });
 
         return NextResponse.json(result);

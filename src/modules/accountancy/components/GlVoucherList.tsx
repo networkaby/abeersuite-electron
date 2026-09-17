@@ -11,6 +11,7 @@ import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +44,8 @@ type RawRow = {
     branch:       { id: string; name: string } | null;
     createdBy:    { name: string };
     partyAccount: { id: number; code: string; name: string; personId: number | null; companyId: number | null } | null;
+    settlement?:     SettlementState | null;
+    settlementOpen?: number;
 };
 
 /** Stable empty list, so a register with no rows of its own does not hand a
@@ -104,6 +107,10 @@ export function GlVoucherList({
                     branchName:     v.branch?.name ?? null,
                     createdBy:      v.createdBy?.name ?? null,
                     converted:      false,
+                    // A GL voucher IS the spine, so its own id is the spine id.
+                    universalVoucherId: v.id,
+                    settlement:     v.settlement ?? null,
+                    settlementOpen: v.settlementOpen ?? 0,
                 }));
                 setLoaded({ type, rows: mapped });
             })
@@ -158,6 +165,7 @@ export function GlVoucherList({
                     onChanged={reload}
                     hideKind
                     statusInline
+                    showSettlement
                     emptyMessage={`No ${title.toLowerCase()} yet.`}
                 />
             )}

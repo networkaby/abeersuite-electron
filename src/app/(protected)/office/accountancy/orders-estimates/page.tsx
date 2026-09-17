@@ -90,6 +90,11 @@ export default function OrdersEstimatesPage() {
                     branchName:     v.branch?.name ?? null,
                     createdBy:      v.createdBy?.name ?? null,
                     converted:      v.converted ?? false,
+                    // Orders and estimates post no money, so they carry no
+                    // bill-wise state and this page shows no such column.
+                    universalVoucherId: null,
+                    settlement:     null,
+                    settlementOpen: 0,
                 }));
                 setAllRows(mapped);
             })

@@ -134,6 +134,7 @@ export default function AllVouchersPage() {
                         <VoucherRegisterTable
                             rows={filtered}
                             showSource
+                            showSettlement
                             onChanged={reload}
                             emptyMessage="No vouchers match the current filters."
                         />

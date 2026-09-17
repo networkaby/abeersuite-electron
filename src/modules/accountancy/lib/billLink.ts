@@ -39,6 +39,7 @@ import { round2 } from "@/shared/lib/format/moneyInr";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { partyLedgerIds } from "./accountGroups";
+import { NON_REGULAR_KINDS } from "./voucherKinds";
 import { EPS, dueDateOf, sideOf, type LinkableDoc } from "./billLinkPlan";
 
 // The pure planning half lives in `billLinkPlan.ts` (no Prisma, so the popup can
@@ -718,4 +719,115 @@ export async function removeLinksForVoucher(
     if (rows.length === 0) return [];
     await tx.voucherAllocation.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
     return rows.map((r) => ({ id: r.id, targetId: r.targetId, sourceId: r.sourceId, amount: Number(r.amount) }));
+}
+
+// ── Settlement — the bill-wise chip ──────────────────────────────────────────
+//
+// "Has this voucher been matched off against the other side, bill by bill?"
+// Settled / Partial / Due — the chip the party's Transactions tab has always
+// shown, now shared with the Day Book and every voucher register.
+//
+// It answers a DIFFERENT question from the ledger balance, and deliberately so.
+// The balance is what the party owes. Settlement is what `VoucherAllocation`
+// says the money was pointed AT. A party can be square on the ledger and still
+// have every bill sitting unmatched, which is exactly the state worth showing.
+//
+// Note it reads |movement|, not the signed figure — so the party account's
+// normal side never has to be resolved. A receivable of 4,000 and a payable of
+// 4,000 are equally "4,000 waiting to be matched".
+
+/** Whether a voucher has been matched off against the other side, bill by bill.
+ *  Not the voucher's lifecycle — Draft / Posted / Cancelled is a separate axis. */
+export type SettlementState = "SETTLED" | "PARTIAL" | "DUE";
+
+export type Settlement = {
+    state: SettlementState;
+    /** What is still unmatched on this voucher — 0 once settled. */
+    open:  number;
+};
+
+/**
+ * How much of a voucher's own ledger movement is still unmatched, and what that
+ * reads as. A voucher that never touched the party's account — a bill settled at
+ * the counter — has nothing to match and is done by definition.
+ */
+export function settlementOf(movement: number, linked: number): Settlement {
+    const onAccount = Math.abs(movement);
+    if (onAccount <= EPS) return { state: "SETTLED", open: 0 };
+    const open = round2(onAccount - Math.min(linked, onAccount));
+    if (open <= EPS) return { state: "SETTLED", open: 0 };
+    if (open >= onAccount - EPS) return { state: "DUE", open };
+    return { state: "PARTIAL", open };
+}
+
+/** One register row, reduced to what settlement needs to know about it. */
+export type SettlementInput = {
+    universalVoucherId: number | null;
+    partyAccountId:     number | null;
+    /** Voucher kind. Documentary kinds post no money and get no chip. */
+    kind:               string | null;
+    /** Lifecycle. Only a POSTED voucher is in the books, so only a POSTED one
+     *  has a bill to settle — the same gate `ledgerStatusFilterUv` applies to
+     *  every other GL reader. */
+    status:             string | null;
+};
+
+/**
+ * The bill-wise state of a WHOLE PAGE of vouchers, in a bounded number of
+ * queries — never one per row.
+ *
+ * Rows with no party, no spine id, or a documentary kind are simply absent from
+ * the result: there is no bill there to settle, and a green "Settled" on an
+ * estimate would be a lie.
+ *
+ * `partyMovement` lets a caller that ALREADY holds the voucher's GL lines hand
+ * the leg sums straight in — the Day Book and the GL register both load every
+ * line for their own totals, so for them this costs no leg query at all.
+ */
+export async function loadSettlements(
+    db: Prisma.TransactionClient,
+    rows: SettlementInput[],
+    partyMovement?: Map<number, number>,
+): Promise<Record<number, Settlement>> {
+    // Pair each spine id with the party ledger its settlement is measured on.
+    const partyByUv = new Map<number, number>();
+    for (const r of rows) {
+        if (r.universalVoucherId == null || r.partyAccountId == null) continue;
+        if (r.status !== "POSTED") continue;
+        if (r.kind != null && NON_REGULAR_KINDS.has(r.kind)) continue;
+        partyByUv.set(r.universalVoucherId, r.partyAccountId);
+    }
+    if (partyByUv.size === 0) return {};
+
+    const uvIds = [...partyByUv.keys()];
+
+    // The party's own leg on each voucher. Only the vouchers on this page, and
+    // only the party ledgers they name — two indexed `in` lists, one query.
+    const legs = partyMovement ?? new Map<number, number>();
+    const [, linked] = await Promise.all([
+        partyMovement ? Promise.resolve(null) : db.voucherGlLine.findMany({
+            where: {
+                universalVoucherId: { in: uvIds },
+                accountId:          { in: [...new Set(partyByUv.values())] },
+                universalVoucher:   ledgerStatusFilterUv(),
+            },
+            select: { universalVoucherId: true, accountId: true, type: true, amount: true },
+        }).then((lines) => {
+            for (const l of lines) {
+                // A journal can touch two party ledgers; only the voucher's OWN
+                // party leg is its settlement.
+                if (partyByUv.get(l.universalVoucherId) !== l.accountId) continue;
+                const delta = l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+                legs.set(l.universalVoucherId, round2((legs.get(l.universalVoucherId) ?? 0) + delta));
+            }
+            return null;
+        }),
+        sumLinked(db, uvIds),
+    ]);
+
+    const out: Record<number, Settlement> = {};
+    for (const uvId of uvIds) {
+        out[uvId] = settlementOf(legs.get(uvId) ?? 0, linked[uvId] ?? 0);
+    }
+    return out;
 }

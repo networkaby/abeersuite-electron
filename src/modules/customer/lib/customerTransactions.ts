@@ -3,11 +3,9 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/ledgerStatus";
 import { voucherSourceForType, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
-import { sumLinked } from "@/modules/accountancy/lib/billLink";
-import { EPS } from "@/modules/accountancy/lib/billLinkPlan";
+import { settlementOf, sumLinked } from "@/modules/accountancy/lib/billLink";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
-import { round2 } from "@/shared/lib/format/moneyInr";
-import type { SettlementState, TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
+import type { TxInvVoucher } from "@/modules/customer/components/TransactionsTable";
 
 // The party's Transactions tab — their bills AND the money that came in
 // against them, as one running ledger.
@@ -113,18 +111,6 @@ export const CUSTOMER_ACCOUNT_OPENING_SELECT = {
     normalBalance: true,
     group: { select: { type: true } },
 } as const;
-
-/** How much of a voucher's own ledger movement is still unmatched, and what
- *  that reads as. A voucher that never touched the party's account — a bill
- *  settled at the counter — has nothing to match and is done by definition. */
-function settlementOf(movement: number, linked: number): { state: SettlementState; open: number } {
-    const onAccount = Math.abs(movement);
-    if (onAccount <= EPS) return { state: "SETTLED", open: 0 };
-    const open = round2(onAccount - Math.min(linked, onAccount));
-    if (open <= EPS) return { state: "SETTLED", open: 0 };
-    if (open >= onAccount - EPS) return { state: "DUE", open };
-    return { state: "PARTIAL", open };
-}
 
 /** The account's normal side, resolved the way the posting engine does. */
 function normalSideOf(account: AccountForOpening): "DEBIT" | "CREDIT" {

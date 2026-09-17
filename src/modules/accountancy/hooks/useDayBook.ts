@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { localDb } from "@/shared/lib/browser/localDb";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 
 const API = "/api/accountancy/reports/day-book";
 /** One entry per filter view. Bounded so a session of fiddling can't grow forever. */
@@ -65,6 +66,15 @@ type RawRow = {
     /** The till this voucher was raised at. Null = office. */
     sourceCounterId: number | null;
     converted:      boolean;
+    /** The SPINE id — what the bill-wise popup settles against. Distinct from
+     *  `rawId`, which on an inventory row is the trade detail's own id. */
+    universalVoucherId: number | null;
+    /** Bill-wise state — whether this voucher has been matched off against the
+     *  other side, bill by bill. Null where there is no bill to settle: no
+     *  party, not posted, or a documentary voucher that posts no money. */
+    settlement:     SettlementState | null;
+    /** What is still unmatched on this voucher, in rupees. */
+    settlementOpen: number;
 };
 
 type RefBranch  = { id: string; name: string };
@@ -144,12 +154,27 @@ const EMPTY_STORE: Store = {
 type CachedView = Store & { savedAt: number };
 
 /**
+ * The shape of a cached `RawRow`. BUMP THIS whenever a field is added to or
+ * removed from `RawRow`.
+ *
+ * A cached view is only ever topped up by a DELTA — rows whose `updatedAt` has
+ * moved. So a client holding rows written by an older build never learns about a
+ * new field: nothing about those vouchers has changed, so the server never
+ * resends them, and the column reads blank for as long as the cache survives.
+ * (`settlement` hit exactly this on the way in.) Stamping the shape into the key
+ * means an older cache simply no longer matches and is re-paged from scratch,
+ * and the existing `MAX_CACHED_VIEWS` trim sweeps the orphan away.
+ */
+const ROW_SHAPE = "v2-settlement";
+
+/**
  * Identifies a filter view. `search` is deliberately excluded — a searched view is
  * transient and never cached, so keying on it would fill the cache with one-offs
  * and evict the everyday unfiltered view that actually benefits.
  */
 function viewKey(q: DayBookQuery): string {
     return [
+        ROW_SHAPE,
         q.from, q.to, q.kind ?? "", (q.statuses ?? []).slice().sort().join("+"),
         q.branchId ?? "", q.category ?? "",
     ].join("|");

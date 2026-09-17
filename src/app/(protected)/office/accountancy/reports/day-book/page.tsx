@@ -331,6 +331,7 @@ export default function DayBookPage() {
                                 statusInline={true}
                                 accentBySource={true}
                                 showBranch={true}
+                                showSettlement={true}
                                 optionalKinds={NON_REGULAR_KINDS}
                             />
                             {hasMore && (

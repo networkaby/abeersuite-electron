@@ -26,6 +26,7 @@ import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilt
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useRegisterReads } from "@/shared/hooks/useRegisterReads";
 import type { InvVoucherKind } from "./InvVoucherForm";
+import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 
 export type InvVoucherListKind =
     | InvVoucherKind
@@ -36,6 +37,9 @@ export type InvVoucherListKind =
 
 type ListRow = {
     id:              number;
+    /** The SPINE id. `id` above is the trade detail's own id — the edit URL and
+     *  the line-expand fetch key on that, but the bill-wise popup keys on this. */
+    universalVoucherId?: number | null;
     type?:           string;
     reference:       string;
     date:            string;
@@ -56,6 +60,8 @@ type ListRow = {
     _count:          { lines: number };
     createdBy:       { name: string };
     converted?:      boolean;
+    settlement?:     SettlementState | null;
+    settlementOpen?: number;
 };
 
 /** Row shape extended with optional fields injected for caller-supplied
@@ -140,6 +146,9 @@ export function InvVoucherList({
                     branchName:     v.branch?.name ?? null,
                     createdBy:      v.createdBy?.name ?? null,
                     converted:      v.converted ?? false,
+                    universalVoucherId: v.universalVoucherId ?? null,
+                    settlement:     v.settlement ?? null,
+                    settlementOpen: v.settlementOpen ?? 0,
                 }));
                 setLoaded({ type, rows: mapped });
             })
@@ -206,6 +215,7 @@ export function InvVoucherList({
                     hideKind
                     statusInline
                     showBranch={availableBranches.length > 0}
+                    showSettlement
                     extraColumns={extraColumns}
                     emptyMessage={`No ${emptyLabel ?? title.toLowerCase()} yet.`}
                 />

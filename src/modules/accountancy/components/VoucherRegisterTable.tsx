@@ -13,6 +13,7 @@
 //       statusInline  — status pill inside Type cell, hides Status column
 //       optionalKinds — bg-muted/10 + italic for documentary voucher rows
 //       accentBySource — coloured left stripe per row (inv=blue, gl=violet, je=amber)
+//       showSettlement — "Bill-wise" column: Settled / Partial / Due, click to match
 //
 // Adding a new register page = fetch rows in CombinedRow shape, hand them to
 // this table, done.  Behaviour stays uniform — fix once, fixed everywhere.
@@ -25,6 +26,9 @@ import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { StatusBadge } from "@/shared/components/StatusBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
+import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
+import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import type { CombinedRow } from "@/modules/accountancy/hooks/useDayBook";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
@@ -112,6 +116,12 @@ export interface VoucherRegisterTableProps {
     accentBySource?: boolean;
     /** Show a Branch column (after Reference). inv rows show their branch name; gl/je show —. */
     showBranch?: boolean;
+    /** Show the "Bill-wise" column — whether each voucher has been matched off
+     *  against the other side, bill by bill, and a click into the popup that
+     *  does the matching. A different axis from the lifecycle Status column:
+     *  Posted says what the voucher IS, Settled says what its money was
+     *  pointed AT. */
+    showSettlement?: boolean;
     /** Empty-state copy. */
     emptyMessage?:  string;
 }
@@ -130,9 +140,12 @@ export function VoucherRegisterTable({
     optionalKinds,
     accentBySource = false,
     showBranch     = false,
+    showSettlement = false,
     emptyMessage   = "No vouchers match the current filters.",
 }: VoucherRegisterTableProps) {
     // Hooks before any early return.
+    // Which voucher's bill-wise popup is open, and on whose ledger it is measured.
+    const [linkRow, setLinkRow] = useState<{ uvId: number; accountId: number; party: string | null } | null>(null);
     const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
     const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
 
@@ -176,6 +189,7 @@ export function VoucherRegisterTable({
         + 1 /* Narration */
         + (extraColumns?.length ?? 0)
         + 1 /* Total */
+        + (showSettlement ? 1 : 0) /* Bill-wise */
         + (statusInline ? 0 : 1) /* Status column — absent when inline */
         + (hideActions ? 0 : 1);
 
@@ -208,6 +222,7 @@ export function VoucherRegisterTable({
                             </th>
                         ))}
                         <th className="px-3 py-3 text-right font-medium">Total</th>
+                        {showSettlement && <th className="px-3 py-3 text-center font-medium">Bill-wise</th>}
                         {!statusInline && <th className="px-3 py-3 text-center font-medium">Status</th>}
                         {!hideActions  && <th className="w-10 p-0" />}
                     </tr>
@@ -345,6 +360,28 @@ export function VoucherRegisterTable({
                                         ₹ {fmt(r.totalAmount)}
                                     </td>
 
+                                    {/* Bill-wise — a different axis from Status. Only a
+                                        voucher that actually put something on a party's
+                                        account can be matched off, so a bill taken in
+                                        full at the counter shows the word without the
+                                        click. */}
+                                    {showSettlement && (
+                                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <SettlementChip
+                                                state={r.settlement}
+                                                open={r.settlementOpen}
+                                                onLink={r.settlement && r.settlement !== "SETTLED"
+                                                    && r.universalVoucherId != null && r.partyAccountId != null
+                                                    ? () => setLinkRow({
+                                                        uvId:      r.universalVoucherId!,
+                                                        accountId: r.partyAccountId!,
+                                                        party:     r.party,
+                                                    })
+                                                    : undefined}
+                                            />
+                                        </td>
+                                    )}
+
                                     {/* Status column — hidden when statusInline */}
                                     {!statusInline && (
                                         <td className="px-3 py-2.5 text-center">
@@ -450,6 +487,8 @@ export function VoucherRegisterTable({
                                             <td className="px-3 py-1 text-right font-mono text-xs tabular-nums text-muted-foreground">
                                                 ₹ {fmt(Number(l.amount))}
                                             </td>
+                                            {/* Bill-wise placeholder — only when column exists */}
+                                            {showSettlement && <td />}
                                             {/* Status placeholder — only when column exists */}
                                             {!statusInline && <td />}
                                             {/* Actions — blank */}
@@ -462,6 +501,29 @@ export function VoucherRegisterTable({
                     })}
                 </tbody>
             </table>
+
+            {/* The same bill-wise popup the party's Transactions tab and the
+                receipt form open — tick list, Auto, part amounts and all. The
+                table hosts it rather than the chip, so one popup serves every
+                row instead of fifty mounted dialogs. */}
+            {linkRow && (
+                <BillLinkDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setLinkRow(null); }}
+                    accountId={linkRow.accountId}
+                    partyName={linkRow.party ?? undefined}
+                    voucherId={linkRow.uvId}
+                    // A link writes no GL and does not touch the voucher's own
+                    // row, so a Day Book delta would never notice it. The reload
+                    // is what brings the chip down to Settled.
+                    onSaved={() => {
+                        clearBillLinkCache();
+                        clearPartyCache(linkRow.accountId);
+                        setLinkRow(null);
+                        onChanged();
+                    }}
+                />
+            )}
         </div>
     );
 }
