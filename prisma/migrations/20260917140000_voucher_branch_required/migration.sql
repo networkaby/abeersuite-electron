@@ -76,10 +76,13 @@
 -- against it can no longer be deleted, and deleting one can no longer silently
 -- blank the branch on its whole history.
 
+-- The POS tables are @@map(ed): the MODELS are PosCounter/PosShift, the TABLES
+-- are pos_counters/pos_shifts. Raw SQL names the table, never the model.
+
 -- 1. From the counter that raised it.
 UPDATE "UniversalVoucher" v
    SET "branchId" = c."branchId"
-  FROM "PosCounter" c
+  FROM "pos_counters" c
  WHERE v."branchId" IS NULL
    AND v."sourceCounterId" = c."id"
    AND c."branchId" IS NOT NULL;
@@ -87,7 +90,7 @@ UPDATE "UniversalVoucher" v
 -- 2. From the shift it was raised on.
 UPDATE "UniversalVoucher" v
    SET "branchId" = s."branchId"
-  FROM "PosShift" s
+  FROM "pos_shifts" s
  WHERE v."branchId" IS NULL
    AND v."sourceShiftId" = s."id"
    AND s."branchId" IS NOT NULL;
