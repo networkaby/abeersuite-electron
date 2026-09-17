@@ -34,7 +34,9 @@ type Row = {
     name: string;
     stock: number;
     lowStockThreshold: number;
-    pricePaise: number | null;
+    /** Named exactly as the API sends it — this field is read straight off the
+     *  JSON, so a rename on either side has to be a rename on both. */
+    effectiveSalePricePaise: number | null;
     /** Stock is stored in THIS unit — the one the voucher was typed in. */
     unit: { id: number; code: string; label: string };
     group: { id: number; name: string } | null;
@@ -95,6 +97,21 @@ const METHOD_LABELS: Record<ValuationMethod, string> = {
     MONTHLY_AVG:  "Monthly Avg",
 };
 
+/**
+ * The empty row both tables show. It only ever reaches the screen after a read
+ * has come back — until then the spinner is up — so "no products" is an answer,
+ * not a guess. A read that failed says that instead of blaming the catalogue.
+ */
+function EmptyRow({ colSpan, failed }: { colSpan: number; failed: boolean }) {
+    return (
+        <tr>
+            <td colSpan={colSpan} className="px-3 py-10 text-center text-muted-foreground">
+                {failed ? "Could not load stock summary." : "No active products found."}
+            </td>
+        </tr>
+    );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StockSummaryPage() {
@@ -126,7 +143,12 @@ export default function StockSummaryPage() {
 
     const [rows, setRows] = useState<Row[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
-    const [loading, setLoading] = useState(false);
+    // Starts TRUE. With `false` the screen's first paint — the server-rendered
+    // one, before the browser has even asked — said "loaded, and there is nothing
+    // here", so it announced an empty catalogue for the whole of hydration plus
+    // the ~4s valuation walk. A report may not claim a result before it has read.
+    const [loading, setLoading] = useState(true);
+    const [failed, setFailed] = useState(false);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     // Inline edit dialog state
@@ -162,8 +184,8 @@ export default function StockSummaryPage() {
         if (branchId !== "all") qs.set("branchId", branchId);
         return axios
             .get<Response>(`/api/inventory/reports/stock-summary?${qs.toString()}`)
-            .then((r) => { setRows(r.data.rows); setBranches(r.data.branches); })
-            .catch(() => toast.error("Failed to load stock summary"))
+            .then((r) => { setRows(r.data.rows); setBranches(r.data.branches); setFailed(false); })
+            .catch(() => { setFailed(true); toast.error("Failed to load stock summary"); })
             .finally(() => setLoading(false));
     }, [method, branchId]);
 
@@ -195,9 +217,9 @@ export default function StockSummaryPage() {
 
                 // Profit roll-up — only rows with usable cost (valuation.value > 0)
                 // and sale price. valuation.value is already stock × unitCost in rupees.
-                const profitRows = items.filter((r) => r.valuation.value > 0 && r.pricePaise != null && r.stock > 0);
+                const profitRows = items.filter((r) => r.valuation.value > 0 && r.effectiveSalePricePaise != null && r.stock > 0);
                 const totalSaleValue = profitRows.reduce(
-                    (s, r) => s + (r.stock * (r.pricePaise ?? 0)) / 100, 0,
+                    (s, r) => s + (r.stock * (r.effectiveSalePricePaise ?? 0)) / 100, 0,
                 );
                 const totalCostValue = profitRows.reduce(
                     (s, r) => s + r.valuation.value, 0,
@@ -225,25 +247,25 @@ export default function StockSummaryPage() {
                 case "quantity": return dir * (a.stock - b.stock);
                 case "rate": return dir * (a.valuation.unitCost - b.valuation.unitCost);
                 case "value": return dir * (a.valuation.value - b.valuation.value);
-                case "saleRate": return dir * (num(a.pricePaise) - num(b.pricePaise));
+                case "saleRate": return dir * (num(a.effectiveSalePricePaise) - num(b.effectiveSalePricePaise));
                 case "saleValue": {
-                    const av = a.pricePaise != null && a.stock > 0 ? (a.stock * a.pricePaise) / 100 : -Infinity;
-                    const bv = b.pricePaise != null && b.stock > 0 ? (b.stock * b.pricePaise) / 100 : -Infinity;
+                    const av = a.effectiveSalePricePaise != null && a.stock > 0 ? (a.stock * a.effectiveSalePricePaise) / 100 : -Infinity;
+                    const bv = b.effectiveSalePricePaise != null && b.stock > 0 ? (b.stock * b.effectiveSalePricePaise) / 100 : -Infinity;
                     return dir * (av - bv);
                 }
                 case "profit": {
-                    // valuation.unitCost is in rupees; pricePaise / 100 = sale rupees.
-                    const ap = a.valuation.unitCost > 0 && a.pricePaise != null && a.stock > 0
-                        ? (a.pricePaise / 100 - a.valuation.unitCost) * a.stock : -Infinity;
-                    const bp = b.valuation.unitCost > 0 && b.pricePaise != null && b.stock > 0
-                        ? (b.pricePaise / 100 - b.valuation.unitCost) * b.stock : -Infinity;
+                    // valuation.unitCost is in rupees; effectiveSalePricePaise / 100 = sale rupees.
+                    const ap = a.valuation.unitCost > 0 && a.effectiveSalePricePaise != null && a.stock > 0
+                        ? (a.effectiveSalePricePaise / 100 - a.valuation.unitCost) * a.stock : -Infinity;
+                    const bp = b.valuation.unitCost > 0 && b.effectiveSalePricePaise != null && b.stock > 0
+                        ? (b.effectiveSalePricePaise / 100 - b.valuation.unitCost) * b.stock : -Infinity;
                     return dir * (ap - bp);
                 }
                 case "margin": {
-                    const am = a.valuation.unitCost > 0 && a.pricePaise != null && a.pricePaise > 0
-                        ? ((a.pricePaise / 100 - a.valuation.unitCost) / (a.pricePaise / 100)) * 100 : -Infinity;
-                    const bm = b.valuation.unitCost > 0 && b.pricePaise != null && b.pricePaise > 0
-                        ? ((b.pricePaise / 100 - b.valuation.unitCost) / (b.pricePaise / 100)) * 100 : -Infinity;
+                    const am = a.valuation.unitCost > 0 && a.effectiveSalePricePaise != null && a.effectiveSalePricePaise > 0
+                        ? ((a.effectiveSalePricePaise / 100 - a.valuation.unitCost) / (a.effectiveSalePricePaise / 100)) * 100 : -Infinity;
+                    const bm = b.valuation.unitCost > 0 && b.effectiveSalePricePaise != null && b.effectiveSalePricePaise > 0
+                        ? ((b.effectiveSalePricePaise / 100 - b.valuation.unitCost) / (b.effectiveSalePricePaise / 100)) * 100 : -Infinity;
                     return dir * (am - bm);
                 }
             }
@@ -267,15 +289,15 @@ export default function StockSummaryPage() {
     );
     const grandSaleValue = useMemo(
         () => rows
-            .filter((r) => r.valuation.value > 0 && r.pricePaise != null && r.stock > 0)
-            .reduce((s, r) => s + (r.stock * (r.pricePaise ?? 0)) / 100, 0),
+            .filter((r) => r.valuation.value > 0 && r.effectiveSalePricePaise != null && r.stock > 0)
+            .reduce((s, r) => s + (r.stock * (r.effectiveSalePricePaise ?? 0)) / 100, 0),
         [rows],
     );
     const grandProfit = useMemo(
         () => rows
-            .filter((r) => r.valuation.value > 0 && r.pricePaise != null && r.stock > 0)
+            .filter((r) => r.valuation.value > 0 && r.effectiveSalePricePaise != null && r.stock > 0)
             .reduce(
-                (s, r) => s + ((r.pricePaise ?? 0) / 100 - r.valuation.unitCost) * r.stock,
+                (s, r) => s + ((r.effectiveSalePricePaise ?? 0) / 100 - r.valuation.unitCost) * r.stock,
                 0,
             ),
         [rows],
@@ -478,11 +500,7 @@ export default function StockSummaryPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                             {grouped.length === 0 && (
-                                <tr>
-                                    <td colSpan={showProfit ? 9 : 7} className="px-3 py-10 text-center text-muted-foreground">
-                                        No active products found.
-                                    </td>
-                                </tr>
+                                <EmptyRow colSpan={showProfit ? 9 : 7} failed={failed} />
                             )}
                             {grouped.map((g) => {
                                 const isOpen = expanded.has(g.name);
@@ -533,9 +551,9 @@ export default function StockSummaryPage() {
                                         </tr>
                                         {/* Item rows */}
                                         {isOpen && g.items.map((r) => {
-                                            const saleValue = r.pricePaise != null && r.stock > 0 ? (r.stock * r.pricePaise) / 100 : null;
-                                            const profit = r.valuation.unitCost > 0 && r.pricePaise != null && r.stock > 0
-                                                ? ((r.pricePaise / 100) - r.valuation.unitCost) * r.stock
+                                            const saleValue = r.effectiveSalePricePaise != null && r.stock > 0 ? (r.stock * r.effectiveSalePricePaise) / 100 : null;
+                                            const profit = r.valuation.unitCost > 0 && r.effectiveSalePricePaise != null && r.stock > 0
+                                                ? ((r.effectiveSalePricePaise / 100) - r.valuation.unitCost) * r.stock
                                                 : null;
                                             const margin = saleValue != null && saleValue > 0 && profit != null ? (profit / saleValue) * 100 : null;
                                             return (
@@ -585,7 +603,7 @@ export default function StockSummaryPage() {
                                                     {showProfit && (
                                                         <>
                                                             <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                                                                {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/65">—</span>}
+                                                                {r.effectiveSalePricePaise != null ? fmt(r.effectiveSalePricePaise / 100) : <span className="text-muted-foreground/65">—</span>}
                                                             </td>
                                                             <td className="px-3 py-1.5 text-right font-mono">
                                                                 {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/65">—</span>}
@@ -676,19 +694,15 @@ export default function StockSummaryPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                             {sortedItems.length === 0 && (
-                                <tr>
-                                    <td colSpan={showProfit ? 12 : 8} className="px-3 py-10 text-center text-muted-foreground">
-                                        No active products found.
-                                    </td>
-                                </tr>
+                                <EmptyRow colSpan={showProfit ? 12 : 8} failed={failed} />
                             )}
                             {sortedItems.map((r) => {
-                                const saleValue = r.pricePaise != null && r.stock > 0 ? (r.stock * r.pricePaise) / 100 : null;
-                                const profit = r.valuation.unitCost > 0 && r.pricePaise != null && r.stock > 0
-                                    ? ((r.pricePaise / 100) - r.valuation.unitCost) * r.stock
+                                const saleValue = r.effectiveSalePricePaise != null && r.stock > 0 ? (r.stock * r.effectiveSalePricePaise) / 100 : null;
+                                const profit = r.valuation.unitCost > 0 && r.effectiveSalePricePaise != null && r.stock > 0
+                                    ? ((r.effectiveSalePricePaise / 100) - r.valuation.unitCost) * r.stock
                                     : null;
-                                const margin = r.valuation.unitCost > 0 && r.pricePaise != null && r.pricePaise > 0
-                                    ? ((r.pricePaise / 100 - r.valuation.unitCost) / (r.pricePaise / 100)) * 100
+                                const margin = r.valuation.unitCost > 0 && r.effectiveSalePricePaise != null && r.effectiveSalePricePaise > 0
+                                    ? ((r.effectiveSalePricePaise / 100 - r.valuation.unitCost) / (r.effectiveSalePricePaise / 100)) * 100
                                     : null;
                                 return (
                                     <tr
@@ -735,7 +749,7 @@ export default function StockSummaryPage() {
                                         {showProfit && (
                                             <>
                                                 <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                                                    {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/65">—</span>}
+                                                    {r.effectiveSalePricePaise != null ? fmt(r.effectiveSalePricePaise / 100) : <span className="text-muted-foreground/65">—</span>}
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-mono">
                                                     {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/65">—</span>}
