@@ -16,6 +16,11 @@ const previewSchema = z.object({
     rows: z.array(rowSchema).max(10000),
     mode: z.enum(["skip", "update", "patch"]),
     autoCreateMasters: z.boolean().optional().default(true),
+    // STOCK LOCATION for the opening quantity — one branch for the whole file,
+    // picked in the UI beside the column mapping. Not a CSV column on purpose:
+    // a file is one stock-take at one place. Null = unassigned, which folds
+    // into every branch (liveStock.ts).
+    openingBranchId: z.string().min(1).nullable().optional(),
 });
 
 export const runtime = "nodejs";
@@ -34,6 +39,7 @@ export async function POST(req: Request) {
         mode: data.mode,
         dryRun: true,
         autoCreateMasters: data.autoCreateMasters,
+        openingBranchId: data.openingBranchId ?? null,
     });
     return NextResponse.json(result);
 }

@@ -10,6 +10,9 @@ import { parseCsv } from "@/shared/lib/import/csvParse";
 import { type ProductImportField } from "@/shared/lib/import/productImportFields";
 import { toCsv } from "@/shared/lib/import/csvSerialize";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useActiveBranchStore } from "@/store/activeBranchStore";
+
+type BranchOption = { id: string; name: string; isActive?: boolean };
 
 const FIELD_LABELS: Record<ProductImportField, string> = {
     name: "Name (required)",
@@ -137,6 +140,8 @@ function autoSuggestField(header: string): ProductImportField | typeof IGNORE {
 }
 
 export function ItemImportPanel() {
+    // The working branch from the top-bar switcher — the default stock location.
+    const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [file, setFile] = useState<File | null>(null);
     const [headers, setHeaders] = useState<string[]>([]);
     const [rows, setRows] = useState<string[][]>([]);
@@ -148,6 +153,14 @@ export function ItemImportPanel() {
     const [preview, setPreview] = useState<PreviewResult | null>(null);
     const [commitResult, setCommitResult] = useState<PreviewResult | null>(null);
     const [units, setUnits] = useState<UnitMaster[]>([]);
+    /// Branch list for the stock-location picker (step 3). Only ever read
+    /// when an Opening stock column is mapped.
+    const [branches, setBranches] = useState<BranchOption[]>([]);
+    /// STOCK LOCATION for this file's opening quantities — where the goods
+    /// are lying. One value for the whole file, never a CSV column. Starts
+    /// as the working branch from the top-bar switcher, which is what an
+    /// operator almost always means, and "" = leave unassigned.
+    const [openingBranchId, setOpeningBranchId] = useState<string>("");
     /// Manual unit picks only, keyed by the normalized source value. The
     /// effective choice is derived (see `unitResolution`) as
     /// `override ?? autoMatch`, so there is no state to keep in sync when the
@@ -174,6 +187,38 @@ export function ItemImportPanel() {
             cancelled = true;
         };
     }, []);
+
+    // Branch master drives the step-3 stock-location dropdown. Same shape as the
+    // units fetch above: small list, open to any signed-in user, fetched once.
+    // A failure here is NOT fatal — the import still runs, the opening just goes
+    // in unassigned (which folds into every branch, the pre-2026-09-17 meaning).
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch("/api/branches");
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = (await res.json()) as BranchOption[];
+                if (cancelled) return;
+                const live = json.filter((b) => b.isActive !== false);
+                setBranches(live);
+                // Default to the working branch from the top bar when it is one
+                // of these, else the only branch when there is only one. Never
+                // guess between several — an unassigned opening is recoverable,
+                // a confidently wrong location is not.
+                setOpeningBranchId((cur) => {
+                    if (cur) return cur;
+                    if (activeBranchId && live.some((b) => b.id === activeBranchId)) return activeBranchId;
+                    return live.length === 1 ? live[0]!.id : "";
+                });
+            } catch {
+                if (!cancelled) toast.error("Could not load branches — opening stock will be imported without a location");
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeBranchId]);
 
     const mappedFields = useMemo(() => {
         const set = new Set<ProductImportField>();
@@ -309,7 +354,7 @@ export function ItemImportPanel() {
             const res = await fetch("/api/settings/item-import/preview", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: buildRowsPayload(), mode, autoCreateMasters }),
+                body: JSON.stringify({ rows: buildRowsPayload(), mode, autoCreateMasters, openingBranchId: openingBranchId || null }),
             });
             const json = (await res.json()) as PreviewResult & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -337,7 +382,7 @@ export function ItemImportPanel() {
             const res = await fetch("/api/settings/item-import/commit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: buildRowsPayload(), mode, autoCreateMasters }),
+                body: JSON.stringify({ rows: buildRowsPayload(), mode, autoCreateMasters, openingBranchId: openingBranchId || null }),
             });
             const json = (await res.json()) as PreviewResult & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -563,6 +608,33 @@ export function ItemImportPanel() {
                             {mode === "patch" && "Only the columns you mapped are written. Other fields stay untouched. Patch mode never creates — a code matching neither a SKU nor a scannable code errors out. Useful for price refresh, opening-stock refresh, brand fixes, etc. A row matched by barcode keeps its existing SKU."}
                         </p>
                     </div>
+                    {/* Stock location — only when there IS an opening quantity to
+                        place. Mapping no Opening stock column means nothing here
+                        can apply, and a dropdown that changes nothing is a
+                        dropdown that teaches the operator to ignore it. */}
+                    {mappedFields.has("openingStock") && (
+                        <div className="space-y-1">
+                            <Label className="text-xs" htmlFor="import-opening-branch">
+                                Stock location for opening quantities
+                            </Label>
+                            <select
+                                id="import-opening-branch"
+                                className="h-8 w-full max-w-xs rounded-md border bg-background px-2 text-xs"
+                                value={openingBranchId}
+                                onChange={(e) => setOpeningBranchId(e.target.value)}
+                            >
+                                <option value="">Not specified — counts at every branch</option>
+                                {branches.map((b) => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-muted-foreground">
+                                {openingBranchId
+                                    ? "The opening quantity in this file is treated as lying at this branch, so it shows up there and nowhere else. It does not make the products themselves belong to that branch — one product is still shared by every branch — and it does not change any value, only the count."
+                                    : "Leave this as-is and the opening quantity counts at every branch, which is the old behaviour. Fine for a single-branch shop; with more than one branch, adding the branch reports together will then count this stock twice."}
+                            </p>
+                        </div>
+                    )}
                     <div className="space-y-1">
                         <Label className="text-xs">Missing masters</Label>
                         <label className="flex items-center gap-1.5 text-xs">

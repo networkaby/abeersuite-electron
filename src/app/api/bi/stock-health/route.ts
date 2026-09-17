@@ -29,7 +29,7 @@ export async function GET(req: Request) {
             orderBy: { name: "asc" },
             select: {
                 id: true, sku: true, name: true, createdAt: true,
-                openingStock: true, groupId: true, categoryId: true,
+                openingStock: true, openingBranchId: true, groupId: true, categoryId: true,
                 codes: { select: { kind: true, value: true } },
                 bomOutputs: { select: { id: true }, take: 1 },
                 unit: { select: { code: true } },

@@ -36,6 +36,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 openingRate:      data.rate,
                 openingValue:     productOpeningValue(opening),
                 openingStockDate: null,
+                // Clearing the quantity clears where it was lying. This route
+                // does not otherwise touch openingBranchId, so a location set
+                // by the importer survives an edit to the rate — but a location
+                // left behind on a product that now opens with nothing would be
+                // a stock location for no stock.
+                ...(data.qty == null ? { openingBranchId: null } : {}),
                 // PR 3 simplified this to just `stock` — the opening rate
                 // seeds cost via the synthetic first lot in loadInwardLots,
                 // so no cache column needs touching.

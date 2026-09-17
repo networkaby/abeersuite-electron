@@ -157,6 +157,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     openingValue: productOpeningValue(b),
                     // Universal opening — no date; always from the start of the books.
                     openingStockDate: null,
+                    // A location for no stock is not a location. Setting a
+                    // quantity here leaves openingBranchId as it stands — the
+                    // importer owns it, and this form has no picker for it yet.
+                    ...(b.openingStock == null ? { openingBranchId: null } : {}),
                     // Sync running caches via shared helper. Explicit
                     // costPaise (Pricing tab) wins over opening-derived cost.
                     ...syncProductCacheFromOpening(b),

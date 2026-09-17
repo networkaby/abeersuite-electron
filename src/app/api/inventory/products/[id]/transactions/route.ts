@@ -38,6 +38,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 openingRate: true,
                 openingValue: true,
                 openingStockDate: true,
+                // Stock location of the opening quantity. loadLiveStockByBranch
+                // gives the opening to this branch alone, and adds it to the
+                // picker even when the ledger has never mentioned it — the
+                // `unnamed` lookup below resolves its name.
+                openingBranchId: true,
                 unit: { select: { code: true, label: true } },
                 category: { select: { name: true } },
                 brand: { select: { name: true } },

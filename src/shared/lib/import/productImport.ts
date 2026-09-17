@@ -53,6 +53,18 @@ export interface ProductImportRequest {
     dryRun: boolean;
     /** Auto-create missing categories / groups / brands / warranty terms. */
     autoCreateMasters: boolean;
+    /**
+     * STOCK LOCATION for the opening quantity — one branch for the whole file,
+     * chosen in the UI, deliberately NOT a CSV column. A file is one physical
+     * stock-take at one place; making it per-row would invite a spreadsheet to
+     * scatter a count across branches by typo.
+     *
+     * Only meaningful when `openingStock` is mapped, and only written when an
+     * opening field is actually being written (see buildPatchPayload — opening
+     * fields move as a group). null / undefined leaves the column NULL, which
+     * means "folds into every branch" — see liveStock.ts.
+     */
+    openingBranchId?: string | null;
 }
 
 export interface RowResult {
@@ -161,6 +173,18 @@ function toNumber(raw: string | undefined): number | null | undefined {
 }
 
 export async function runProductImport(req: ProductImportRequest): Promise<ProductImportResult> {
+    // Fail the whole file, not each row, on a bad stock location. It is one
+    // value for the whole import, so a wrong one is a wrong import — and on
+    // commit it would otherwise surface as a raw FK violation halfway through
+    // the write pass, after some products had already landed.
+    if (req.openingBranchId) {
+        const branch = await prisma.branch.findUnique({
+            where: { id: req.openingBranchId },
+            select: { id: true },
+        });
+        if (!branch) throw new Error(`Stock location "${req.openingBranchId}" is not a branch.`);
+    }
+
     let masters = await loadMasters();
 
     // Detect which categories / groups / brands / warranty terms are referenced
@@ -566,6 +590,10 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             openingStock: v.data.openingStock,
             openingRate: v.data.openingRate,
             openingValue: openingValueComputed,
+            // Stock location of that opening quantity. Only stamped when there
+            // IS an opening quantity — a branch on a product that opened with
+            // nothing would be a lie the branch screens then have to explain.
+            openingBranchId: v.data.openingStock != null ? (req.openingBranchId ?? null) : null,
             // `cachePatch` provides `costPaise` (derived from openingRate) and
             // `stock`. `costPaise` is not importable directly (see
             // productImportFields.ts) — opening rate is the only path in.
@@ -623,6 +651,13 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         if (openingTouched) {
             if (p.has("openingStock")) out.openingStock = v.data.openingStock;
             if (p.has("openingRate"))  out.openingRate  = v.data.openingRate;
+            // The stock location moves with the quantity, and only with the
+            // quantity: an operator refreshing counts for one branch is saying
+            // where those counts are. A rate-only patch leaves the existing
+            // location alone — it is not restating where anything is lying.
+            if (p.has("openingStock") && v.data.openingStock != null) {
+                out.openingBranchId = req.openingBranchId ?? null;
+            }
             // Recompute openingValue + cache only when we have BOTH opening
             // stock and opening rate (either from this CSV or already on the
             // row). Safe approximation: only write the derivatives when both

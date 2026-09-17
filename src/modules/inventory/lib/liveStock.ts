@@ -4,12 +4,29 @@
 // (stockMovement.ts):
 //
 //     stock = openingStock + Σ(inQty − outQty)
-//             └ master column, org-level, NOT a ledger row
+//             └ master column, NOT a ledger row
 //
-// `branchId` narrows the SECOND half only. Opening stock is typed on the product
-// master and carries no branch — it is the quantity the books began with — so it
-// folds into every scope, exactly as `Account.openingBalance` folds into
-// `aggregateClosingAsOf` on the GL side.
+// `branchId` narrows BOTH halves, but by different means. The ledger half is a
+// `where` on the query. The opening half is decided by `openingBranchId` on the
+// product master — the stock LOCATION of the opening quantity:
+//
+//     openingBranchId = null           → folds into every branch (see below)
+//     openingBranchId = the asked one  → folds in
+//     openingBranchId = another branch → left out
+//     no branch asked (org-wide)       → always folds in, exactly once
+//
+// ── Why null folds into every branch ────────────────────────────────────────
+// Before 2026-09-17 the opening carried no branch at all and folded into every
+// scope unconditionally. Migration 20260917090000_product_opening_branch stamps
+// BR-HQ on every opening that existed then, so on live "null" now means an
+// opening created since, by an operator who did not pick a location. Folding it
+// everywhere keeps that row reading as it always did rather than quietly
+// dropping to zero on every branch screen — the failure this whole file exists
+// to prevent. It is the lenient half of the rule, and deliberately so.
+//
+// The money side is NOT branch-aware and must not become so here: `openingValue`,
+// computeTradingStockAdjustment and valuation.ts are all org-level. This column
+// scopes a QUANTITY only.
 //
 // ── Why this file exists ────────────────────────────────────────────────────
 // The per-branch cache (`InvProductBranch.stock`, table inv_product_branches) is
@@ -26,18 +43,36 @@
 // question. Come through here.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { isCombined } from "@/shared/lib/auth/activeBranch";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+
+/**
+ * The combined sentinel ("__combined__") is a scope, not a branch id, and
+ * `resolveActiveBranchId` passes it straight through to readers — so it does
+ * arrive here (products/route.ts:77). Treat it as org-wide.
+ *
+ * This is load-bearing, not defensive. Left alone it would go into the ledger
+ * `where` as a literal branch id, match no rows, AND exclude every opening that
+ * has a real branch on it — turning the whole catalogue to zero on a screen that
+ * is asking to see everything.
+ */
+function scopeBranch(branchId?: string | null): string | null {
+    return !branchId || isCombined(branchId) ? null : branchId;
+}
 
 /**
  * A product row as this helper needs it.
  *
- * `openingStock` is REQUIRED, not optional, and deliberately so: a caller that
- * forgets to select it now fails to compile instead of silently dropping the
- * opening quantity — which is the exact bug this helper replaces.
+ * Both opening fields are REQUIRED, not optional, and deliberately so: a caller
+ * that forgets to select one now fails to compile instead of silently dropping
+ * the opening quantity — which is the exact bug this helper replaces. Adding
+ * `openingBranchId` to this type is what forced every one of the seven call
+ * sites to be revisited rather than quietly keeping the old answer.
  */
 export type ProductStockRow = {
     id: number;
     openingStock: { toString(): string } | number | string | null;
+    openingBranchId: string | null;
 };
 
 /**
@@ -60,11 +95,13 @@ export async function loadLiveStockMap(
     const out = new Map<number, number | null>();
     if (products.length === 0) return out;
 
+    const scope = scopeBranch(branchId);
+
     const sums = await prisma.invStockLedger.groupBy({
         by: ["productId"],
         where: {
             productId: { in: products.map((p) => p.id) },
-            ...(branchId ? { branchId } : {}),
+            ...(scope ? { branchId: scope } : {}),
         },
         _sum: { inQty: true, outQty: true },
     });
@@ -75,7 +112,11 @@ export async function loadLiveStockMap(
     }
 
     for (const p of products) {
-        out.set(p.id, foldOpening(p.openingStock, moved.has(p.id) ? moved.get(p.id)! : null));
+        out.set(p.id, foldOpening(
+            p.openingStock,
+            moved.has(p.id) ? moved.get(p.id)! : null,
+            openingAppliesTo(p, scope),
+        ));
     }
     return out;
 }
@@ -104,25 +145,68 @@ export async function loadLiveStockByBranch(
     for (const s of sums) {
         const delta = toNumber(s._sum.inQty ?? 0) - toNumber(s._sum.outQty ?? 0);
         movedTotal += delta;
-        byBranch.set(s.branchId, foldOpening(product.openingStock, delta) ?? 0);
-    }
-    for (const id of extraBranchIds) {
-        if (!byBranch.has(id)) byBranch.set(id, foldOpening(product.openingStock, 0) ?? 0);
+        byBranch.set(s.branchId, foldOpening(
+            product.openingStock, delta, openingAppliesTo(product, s.branchId),
+        ) ?? 0);
     }
 
-    return { total: foldOpening(product.openingStock, movedTotal) ?? 0, byBranch };
+    // The opening's own branch may have no ledger row at all — a product that
+    // opened with stock and has not moved since. It still belongs in the picker,
+    // and it is the one branch showing the quantity.
+    const extras = product.openingBranchId
+        ? [...extraBranchIds, product.openingBranchId]
+        : extraBranchIds;
+    for (const id of extras) {
+        if (!byBranch.has(id)) byBranch.set(id, foldOpening(
+            product.openingStock, 0, openingAppliesTo(product, id),
+        ) ?? 0);
+    }
+
+    // The total is the org-wide scope, so the opening counts once regardless of
+    // where it sits — this is NOT the sum of the branch figures above, and with
+    // an unassigned opening it deliberately is not.
+    return { total: foldOpening(product.openingStock, movedTotal, true) ?? 0, byBranch };
 }
 
 /**
- * The rule itself, in one place. `null` movement means the ledger has never
- * mentioned this product — paired with no opening balance, that is "not tracked"
- * rather than zero.
+ * Does this product's opening quantity belong to the scope being asked about?
+ *
+ * See the rule table in the file header. `null` branchId is the org-wide scope,
+ * where every opening counts exactly once; `null` openingBranchId is an
+ * unassigned opening, which counts everywhere.
+ *
+ * Exported because the BI movement register cannot use `loadLiveStockMap` — its
+ * opening is date-aware (`openingStockDate < from`) and it also needs the prior
+ * ledger period, so it folds the opening itself. It must still answer the BRANCH
+ * question the same way, or the same product reads two different opening figures
+ * on two reports. Takes the sentinel-normalising path via `scopeBranch`, so
+ * callers may hand it whatever they resolved.
+ */
+export function openingAppliesTo(
+    product: Pick<ProductStockRow, "openingBranchId">,
+    branchId?: string | null,
+): boolean {
+    const scope = scopeBranch(branchId);
+    if (!scope) return true;
+    if (product.openingBranchId == null) return true;
+    return product.openingBranchId === scope;
+}
+
+/**
+ * The rule itself, in one place.
+ *
+ * `null` movement means the ledger has never mentioned this product in this
+ * scope. Paired with no opening balance ANYWHERE, that is "not tracked" rather
+ * than zero — and the distinction is why `openingStock` is passed in whole
+ * rather than pre-zeroed. A product whose opening sits at another branch is
+ * still a tracked product: asked about this branch it answers 0, not "—".
  */
 function foldOpening(
     openingStock: ProductStockRow["openingStock"],
     movement: number | null,
+    openingApplies: boolean,
 ): number | null {
     const opening = openingStock == null ? null : toNumber(openingStock);
     if (opening == null && movement == null) return null;
-    return (opening ?? 0) + (movement ?? 0);
+    return (openingApplies ? (opening ?? 0) : 0) + (movement ?? 0);
 }

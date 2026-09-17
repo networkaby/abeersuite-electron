@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
+import { openingAppliesTo } from "@/modules/inventory/lib/liveStock";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { r2 } from "@/modules/bi/lib/marginEngine";
 
@@ -46,11 +47,18 @@ export async function GET(req: Request) {
             }),
             prisma.invProduct.findMany({
                 where: { id: productId },
-                select: { id: true, sku: true, name: true, openingStock: true, openingStockDate: true },
+                select: { id: true, sku: true, name: true, openingStock: true, openingStockDate: true, openingBranchId: true },
             }).then((r) => r[0] ?? null),
         ]);
 
-        const masterOpening = !branchId && product?.openingStock != null
+        // The branch half of this test is liveStock.ts's rule, shared rather than
+        // restated: fold the opening when the scope is org-wide, when the opening
+        // is unassigned, or when it is lying at the branch being asked about. It
+        // used to be `!branchId`, which hid the opening from EVERY branch view —
+        // so a product that opened with stock and had not moved since read as
+        // nothing on this report, even at its own branch.
+        const masterOpening = product?.openingStock != null
+            && openingAppliesTo(product, branchId)
             && (!product.openingStockDate || product.openingStockDate < from)
             ? toNumber(product.openingStock) : 0;
         const opening = masterOpening
@@ -96,7 +104,7 @@ export async function GET(req: Request) {
             where: { isActive: true },
             select: {
                 id: true, sku: true, name: true,
-                openingStock: true, openingStockDate: true,
+                openingStock: true, openingStockDate: true, openingBranchId: true,
                 unit: { select: { code: true } },
                 category: { select: { name: true } },
             },
@@ -111,7 +119,9 @@ export async function GET(req: Request) {
 
     const rows = [];
     for (const p of products) {
-        const masterOpening = !branchId && p.openingStock != null
+        // Same shared rule as the single-product branch above.
+        const masterOpening = p.openingStock != null
+            && openingAppliesTo(p, branchId)
             && (!p.openingStockDate || p.openingStockDate < from)
             ? toNumber(p.openingStock) : 0;
         const prior = priorByProduct.get(p.id);

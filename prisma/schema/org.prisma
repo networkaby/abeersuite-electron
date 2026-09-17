@@ -43,6 +43,11 @@ model Branch {
   invVouchersAsDest VoucherDetail[]    @relation("InvVoucherDestBranch")
   invStockLedger    InvStockLedger[]   @relation("InvStockLedgerBranch")
   invProductStock   InvProductBranch[]
+  // Products whose OPENING quantity is lying at this branch. Stock location
+  // only — the product master is org-wide. SetNull on delete: losing a branch
+  // must not take the opening quantity with it, it just becomes unassigned
+  // (and an unassigned opening folds into every branch again).
+  invProductOpenings InvProduct[]      @relation("InvProductOpeningBranch")
 
   // POS — per-branch vault account where end-of-day surplus lands
   vaultAccountId Int?

@@ -361,6 +361,21 @@ model InvProduct {
   openingRate      Decimal?  @db.Decimal(14, 2)
   openingValue     Decimal?  @db.Decimal(14, 2)
   openingStockDate DateTime? @db.Date
+  /// STOCK LOCATION of the opening quantity — where the goods were lying when
+  /// the books began. The product master stays org-wide (there is deliberately
+  /// no branchId on this model); this column scopes the QUANTITY only, never
+  /// the master and never the money — `openingValue` and every valuation stay
+  /// org-level.
+  ///
+  /// null = the opening carries no branch, and folds into EVERY branch's
+  /// on-hand figure. That was the only behaviour before 2026-09-17, so a
+  /// product left unassigned reads exactly as it always did — nothing
+  /// disappears from a screen. Existing rows were backfilled to BR-HQ by
+  /// migration 20260917090000_product_opening_branch.
+  ///
+  /// liveStock.ts owns what this means on read. Do not interpret it elsewhere.
+  openingBranchId  String?
+  openingBranch    Branch?   @relation("InvProductOpeningBranch", fields: [openingBranchId], references: [id], onDelete: SetNull)
 
   // ── GST classification (optional — inherited from group/parent group when null) ──
   /// HSN (goods) or SAC (services) code — drives the rate-wise summary.
@@ -401,6 +416,7 @@ model InvProduct {
   @@index([warrantyTermId])
   @@index([gstRateId])
   @@index([isListedInShop])
+  @@index([openingBranchId])
   // Catalogue delta sync: the POS asks "which products changed since <ts>?" on
   // every till open. `stock` lives on this row and is rewritten after every
   // sale, so this is a hot column — without the index the delta is a full scan.

@@ -40,7 +40,7 @@ export async function GET(req: Request) {
         prisma.invProduct.findMany({
             where: { isActive: true },
             select: {
-                id: true, sku: true, name: true, openingStock: true,
+                id: true, sku: true, name: true, openingStock: true, openingBranchId: true,
                 category: { select: { name: true } },
                 brand: { select: { name: true } },
                 unit: { select: { code: true } },

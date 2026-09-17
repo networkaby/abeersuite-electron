@@ -1685,6 +1685,7 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "openingRate" DECIMAL(14,2),
     "openingValue" DECIMAL(14,2),
     "openingStockDate" DATE,
+    "openingBranchId" TEXT,
     "hsnCode" TEXT,
     "gstRateId" INTEGER,
     "taxability" "Taxability",
@@ -1740,6 +1741,7 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "openingStock" DECIMAL(10,3);
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "openingRate" DECIMAL(14,2);
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "openingValue" DECIMAL(14,2);
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "openingStockDate" DATE;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "openingBranchId" TEXT;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "hsnCode" TEXT;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "gstRateId" INTEGER;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "taxability" "Taxability";
@@ -3859,6 +3861,9 @@ CREATE INDEX IF NOT EXISTS "InvProduct_gstRateId_idx" ON "InvProduct"("gstRateId
 CREATE INDEX IF NOT EXISTS "InvProduct_isListedInShop_idx" ON "InvProduct"("isListedInShop");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "InvProduct_openingBranchId_idx" ON "InvProduct"("openingBranchId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "InvProduct_updatedAt_idx" ON "InvProduct"("updatedAt");
 
 -- CreateIndex
@@ -4634,6 +4639,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "InvAttributeMaster" ADD CONSTRAINT "InvAttributeMaster_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "InvCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "InvProduct" ADD CONSTRAINT "InvProduct_openingBranchId_fkey" FOREIGN KEY ("openingBranchId") REFERENCES "Branch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

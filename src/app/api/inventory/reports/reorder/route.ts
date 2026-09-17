@@ -58,6 +58,7 @@ export async function GET(req: Request) {
                 lowStockThreshold: true, leadTimeDays: true,
                 orderPackQty: true, minOrderQty: true,
                 openingStock: true,
+                openingBranchId: true,
                 effectiveSalePricePaise: true,
                 groupId: true, categoryId: true,
                 codes: { select: { kind: true, value: true } },
