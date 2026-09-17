@@ -36,8 +36,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 group:    { type: "EXPENSE" },
                 ...(allowed.length > 0 ? { id: { in: allowed } } : {}),
             },
-            orderBy: [{ code: "asc" }, { name: "asc" }],
-            select:  { id: true, code: true, name: true, normalBalance: true, group: { select: { id: true, name: true, type: true } } },
+            orderBy: [{ name: "asc" }],
+            select:  { id: true, name: true, normalBalance: true, group: { select: { id: true, name: true, type: true } } },
         });
 
         return NextResponse.json(accounts);

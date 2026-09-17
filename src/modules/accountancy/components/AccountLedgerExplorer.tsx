@@ -6,7 +6,7 @@
 //   /office/accountancy/bank-ledgers      — groupNames: ["Bank Accounts"]
 //   /office/accountancy/loan-ledgers      — groupNames: ["Loans (Liability)", "Secured Loans", "Unsecured Loans"]
 //
-// Left panel: filtered list of accounts (search by name/alias/code/group).
+// Left panel: filtered list of accounts (search by name/alias/group).
 // Right panel: selected account's ledger with running balance, opening/closing
 // pseudo-rows, source-voucher links. Uses /api/accountancy/reports/ledger/[id]
 // (truth-path running balance) and /api/accountancy/ledgers (flat GL list).
@@ -51,7 +51,6 @@ interface LedgerListItem {
     name: string;
     /** Alternate names — searchable here, editable in the Edit dialog. */
     aliases?: string[];
-    code: string | null;
     normalBalance: NormalBalance | null;
     balance: number;
     isActive: boolean;
@@ -102,7 +101,7 @@ interface LedgerRow {
 
 interface LedgerDetail {
     account: {
-        id: number; code: string | null; name: string;
+        id: number; name: string;
         normalBalance: NormalBalance;
         groupId: number | null; groupName: string | null;
         // Reconciliation watermark — how far this ledger is matched against its
@@ -275,7 +274,6 @@ export function AccountLedgerExplorer({
             (a) =>
                 a.name.toLowerCase().includes(q) ||
                 aliasMatches(a.aliases, q) ||
-                (a.code ?? "").toLowerCase().includes(q) ||
                 (a.group?.name ?? "").toLowerCase().includes(q),
         );
     }, [accounts, search]);
@@ -346,7 +344,7 @@ export function AccountLedgerExplorer({
                     count={accounts.length}
                     search={search}
                     onSearchChange={setSearch}
-                    searchPlaceholder="Search name, alias, code, or group…"
+                    searchPlaceholder="Search name, alias, or group…"
                     onAdd={() => setCreateOpen(true)}
                     addLabel="Create"
                     onTitleClick={selectedId ? () => setSelectedId(null) : undefined}
@@ -439,9 +437,6 @@ export function AccountLedgerExplorer({
                                 <div className="flex items-start justify-between gap-4 flex-wrap">
                                     <div>
                                         <h2 className="text-lg font-bold leading-tight">{detail.account.name}</h2>
-                                        {detail.account.code && (
-                                            <p className="font-mono text-xs text-muted-foreground mt-0.5">{detail.account.code}</p>
-                                        )}
                                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                                             {detail.account.groupName && (
                                                 <Link

@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "version": 1,
+    "version": 2,
     "exportedAt": "2026-09-13T16:55:27.833Z",
     "note": "Personal config snapshot — everything except tickets, vouchers, customers, products."
   },
@@ -413,7 +413,6 @@
       "minRedeemPoints": 1,
       "maxRedeemPctOfBill": "7",
       "redeemExpenseAccountId": {
-        "code": null,
         "name": "Loyalty Points Redeemed"
       },
       "updatedAt": "2026-07-20T13:13:06.290Z"
@@ -421,15 +420,12 @@
     "couponConfig": {
       "maxTotalDiscountPct": "0",
       "couponExpenseAccountId": {
-        "code": null,
         "name": "Coupon Discounts"
       },
       "giftCardLiabilityAccountId": {
-        "code": null,
         "name": "Gift Card Liability"
       },
       "giftCardBreakageAccountId": {
-        "code": null,
         "name": "Income Gift Card Breakage"
       },
       "updatedAt": "2026-09-12T08:42:58.139Z"
@@ -5610,7 +5606,6 @@
   "accounts": [
     {
       "name": "Service Tools and Materials",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5633,7 +5628,6 @@
     },
     {
       "name": "New Room Ready exp",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5656,7 +5650,6 @@
     },
     {
       "name": "Salary & Wages",
-      "code": "6200",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5679,7 +5672,6 @@
     },
     {
       "name": "Accounts Receivable",
-      "code": "1100",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5702,7 +5694,6 @@
     },
     {
       "name": "Payu",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -5725,7 +5716,6 @@
     },
     {
       "name": "New Room",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -5748,7 +5738,6 @@
     },
     {
       "name": "Razorpay",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -5771,7 +5760,6 @@
     },
     {
       "name": "Capital",
-      "code": "3000",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -5794,7 +5782,6 @@
     },
     {
       "name": "Accrued Expenses",
-      "code": "2200",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -5817,7 +5804,6 @@
     },
     {
       "name": "Cash Short",
-      "code": "6950",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5840,7 +5826,6 @@
     },
     {
       "name": "Cashfree",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -5863,7 +5848,6 @@
     },
     {
       "name": "Computer & Peripherals",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5886,7 +5870,6 @@
     },
     {
       "name": "Hamid Soceity @1.5%",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -5909,7 +5892,6 @@
     },
     {
       "name": "Navi 2",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -5932,7 +5914,6 @@
     },
     {
       "name": "Mother in Law @ 1%",
-      "code": null,
       "normalBalance": null,
       "description": "loan from mother in low",
       "isActive": true,
@@ -5955,7 +5936,6 @@
     },
     {
       "name": "Furniture & Fixtures",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -5978,7 +5958,6 @@
     },
     {
       "name": "income Other Revenue",
-      "code": "4900",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6001,7 +5980,6 @@
     },
     {
       "name": "Suspense A/c",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -6024,7 +6002,6 @@
     },
     {
       "name": "Exp Loan Interest",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -6047,7 +6024,6 @@
     },
     {
       "name": "Walk-in Cash Customer",
-      "code": "CASH-WALKIN",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6070,7 +6046,6 @@
     },
     {
       "name": "Wife Loan @ 2%",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -6093,7 +6068,6 @@
     },
     {
       "name": "Interest Received",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6116,7 +6090,6 @@
     },
     {
       "name": "Profit & Loss A/c",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6137,7 +6110,6 @@
     },
     {
       "name": "Naba Salary",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -6160,7 +6132,6 @@
     },
     {
       "name": "Advance to Suppliers",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6183,7 +6154,6 @@
     },
     {
       "name": "UNI BB Visa 2797",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6206,7 +6176,6 @@
     },
     {
       "name": "IGST",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6229,7 +6198,6 @@
     },
     {
       "name": "Purchase Returns",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6252,7 +6220,6 @@
     },
     {
       "name": "Repair & Maintenance",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6275,7 +6242,6 @@
     },
     {
       "name": "3 Routing A/c",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6298,7 +6264,6 @@
     },
     {
       "name": "Printing & Stationery (Office Exp/Packaging Materials)",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6324,7 +6289,6 @@
     },
     {
       "name": "Tax Payable",
-      "code": "2100",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6347,7 +6311,6 @@
     },
     {
       "name": "Telephone / Internet",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6373,7 +6336,6 @@
     },
     {
       "name": "Round Off",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6396,7 +6358,6 @@
     },
     {
       "name": "Plant & Machinery",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6419,7 +6380,6 @@
     },
     {
       "name": "Income Gift Card Breakage",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6442,7 +6402,6 @@
     },
     {
       "name": "Sales Ecommerce A/c",
-      "code": "4150",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6465,7 +6424,6 @@
     },
     {
       "name": "Income Commission Received",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6488,7 +6446,6 @@
     },
     {
       "name": "Exp Bad Debts",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6511,7 +6468,6 @@
     },
     {
       "name": "Sales Returns",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6534,7 +6490,6 @@
     },
     {
       "name": "Exp CC Interest & Penalty",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -6557,7 +6512,6 @@
     },
     {
       "name": "Rakesh Salary",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -6580,7 +6534,6 @@
     },
     {
       "name": "CCTV & Security Equipment",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6603,7 +6556,6 @@
     },
     {
       "name": "Income Discount Received",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6626,7 +6578,6 @@
     },
     {
       "name": "Retained Earnings",
-      "code": "3100",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6649,7 +6600,6 @@
     },
     {
       "name": "Insurance",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6672,7 +6622,6 @@
     },
     {
       "name": "Depreciation",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6695,7 +6644,6 @@
     },
     {
       "name": "Security Deposit",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6718,7 +6666,6 @@
     },
     {
       "name": "Adjustment",
-      "code": null,
       "normalBalance": null,
       "description": "for adjust the liabilities and asset diffrences",
       "isActive": true,
@@ -6741,7 +6688,6 @@
     },
     {
       "name": "Earnest Money Deposit",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6764,7 +6710,6 @@
     },
     {
       "name": "Staff Advance",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6787,7 +6732,6 @@
     },
     {
       "name": "TDS Receivable",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6810,7 +6754,6 @@
     },
     {
       "name": "Preliminary Expenses",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6833,7 +6776,6 @@
     },
     {
       "name": "Prepaid Expenses",
-      "code": "1300",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6856,7 +6798,6 @@
     },
     {
       "name": "Coupon Discounts",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6879,7 +6820,6 @@
     },
     {
       "name": "Drawings",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -6902,7 +6842,6 @@
     },
     {
       "name": "UTGST",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6925,7 +6864,6 @@
     },
     {
       "name": "Accounts Payable",
-      "code": "2000",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6948,7 +6886,6 @@
     },
     {
       "name": "TDS",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6971,7 +6908,6 @@
     },
     {
       "name": "Professional Tax",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -6994,7 +6930,6 @@
     },
     {
       "name": "ESI Payable",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7017,7 +6952,6 @@
     },
     {
       "name": "PF Payable",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7040,7 +6974,6 @@
     },
     {
       "name": "Provision for Tax",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7063,7 +6996,6 @@
     },
     {
       "name": "Provision for Bad Debts",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7086,7 +7018,6 @@
     },
     {
       "name": "General Reserve",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7109,7 +7040,6 @@
     },
     {
       "name": "Cash – Counter 24 aka – Head Office",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7132,7 +7062,6 @@
     },
     {
       "name": "Utilities Expense",
-      "code": "6100",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7155,7 +7084,6 @@
     },
     {
       "name": "Consumables & Spares",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7178,7 +7106,6 @@
     },
     {
       "name": "Bandhan Bank Loan 0193",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7201,7 +7128,6 @@
     },
     {
       "name": "KreditBee",
-      "code": null,
       "normalBalance": null,
       "description": "sum of total emi",
       "isActive": true,
@@ -7224,7 +7150,6 @@
     },
     {
       "name": "Office Equipment",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7247,7 +7172,6 @@
     },
     {
       "name": "Amazon Pay 5009",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7270,7 +7194,6 @@
     },
     {
       "name": "Travelling Expenses",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7293,7 +7216,6 @@
     },
     {
       "name": "Bandhan Bank SB 4022",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7322,7 +7244,6 @@
     },
     {
       "name": "Exp Bank Charges",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7345,7 +7266,6 @@
     },
     {
       "name": "Bankdhan Bank Current A/c  0020",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7374,7 +7294,6 @@
     },
     {
       "name": "Petty Cash",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7397,7 +7316,6 @@
     },
     {
       "name": "Shipping Income",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7420,7 +7338,6 @@
     },
     {
       "name": "Rent",
-      "code": "6000",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7443,7 +7360,6 @@
     },
     {
       "name": "Electricity Charges",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7471,7 +7387,6 @@
     },
     {
       "name": "Exp Commission Paid",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7494,7 +7409,6 @@
     },
     {
       "name": "Exp MDR",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7517,7 +7431,6 @@
     },
     {
       "name": "Tools & Equipment",
-      "code": "6300",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7540,7 +7453,6 @@
     },
     {
       "name": "Miscellaneous Expense",
-      "code": "6900",
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7563,7 +7475,6 @@
     },
     {
       "name": "Gift Card Liability",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7586,7 +7497,6 @@
     },
     {
       "name": "Exp Advertisement",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7609,7 +7519,6 @@
     },
     {
       "name": "SBI POS",
-      "code": null,
       "normalBalance": null,
       "description": "Swipe Machine",
       "isActive": true,
@@ -7632,7 +7541,6 @@
     },
     {
       "name": "ShipRoket COD",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7655,7 +7563,6 @@
     },
     {
       "name": "Exp Audit Fees",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7678,7 +7585,6 @@
     },
     {
       "name": "Desktop Servicing",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7701,7 +7607,6 @@
     },
     {
       "name": "Printer Servicing",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7724,7 +7629,6 @@
     },
     {
       "name": "Loyalty Points Redeemed",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7747,7 +7651,6 @@
     },
     {
       "name": "Aka Salary",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7770,7 +7673,6 @@
     },
     {
       "name": "Exp Bandhan Bank Loan Interest",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7793,7 +7695,6 @@
     },
     {
       "name": "Cash Over",
-      "code": "4950",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -7816,7 +7717,6 @@
     },
     {
       "name": "Cash – Counter 22 Prokash – Head Office",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7839,7 +7739,6 @@
     },
     {
       "name": "Prakash Salary",
-      "code": null,
       "normalBalance": null,
       "description": null,
       "isActive": true,
@@ -7862,7 +7761,6 @@
     },
     {
       "name": "Cheques in Hand",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7885,7 +7783,6 @@
     },
     {
       "name": "Discount Allowed",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7908,7 +7805,6 @@
     },
     {
       "name": "Amazon Pay Balance Income",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -7931,7 +7827,6 @@
     },
     {
       "name": "Exp Tea & Donation (Counter)",
-      "code": null,
       "normalBalance": null,
       "description": "Daily Tea and Donation Exp",
       "isActive": true,
@@ -7954,7 +7849,6 @@
     },
     {
       "name": "SBI CC A/c 873",
-      "code": "1010",
       "normalBalance": "CREDIT",
       "description": "",
       "isActive": true,
@@ -7985,7 +7879,6 @@
     },
     {
       "name": "PhonePe",
-      "code": null,
       "normalBalance": null,
       "description": "UPI Payment",
       "isActive": true,
@@ -8008,7 +7901,6 @@
     },
     {
       "name": "Exp Freight Inward (Purchase Courier)",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -8031,7 +7923,6 @@
     },
     {
       "name": "Freight Charges (Courier Charges)",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -8054,7 +7945,6 @@
     },
     {
       "name": "Laptop Servicing",
-      "code": "4000",
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -8077,7 +7967,6 @@
     },
     {
       "name": "Purchase A/c",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -8100,7 +7989,6 @@
     },
     {
       "name": "Sales A/c",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -8123,7 +8011,6 @@
     },
     {
       "name": "CGST",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -8146,7 +8033,6 @@
     },
     {
       "name": "SGST",
-      "code": null,
       "normalBalance": "CREDIT",
       "description": null,
       "isActive": true,
@@ -8169,7 +8055,6 @@
     },
     {
       "name": "Cash – Counter 21 naba – Head Office",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -8192,7 +8077,6 @@
     },
     {
       "name": "Cash – Vault – Head Office",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -8215,7 +8099,6 @@
     },
     {
       "name": "Cash – Counter 23 rakesh – Head Office",
-      "code": null,
       "normalBalance": "DEBIT",
       "description": null,
       "isActive": true,
@@ -8492,7 +8375,6 @@
       "isActive": true,
       "updatedAt": "2026-08-28T15:34:26.990Z",
       "vaultAccountId": {
-        "code": null,
         "name": "Cash – Vault – Head Office"
       }
     }
@@ -11588,7 +11470,6 @@
       "name": "Counter 23 rakesh",
       "counterNumber": 93,
       "tillAccountId": {
-        "code": null,
         "name": "Cash – Counter 23 rakesh – Head Office"
       },
       "allowedExpenseAccountIds": [],
@@ -11600,16 +11481,13 @@
       "name": "Counter 22 Prokash",
       "counterNumber": 92,
       "tillAccountId": {
-        "code": null,
         "name": "Cash – Counter 22 Prokash – Head Office"
       },
       "allowedExpenseAccountIds": [
         {
-          "code": null,
           "name": "Exp Tea & Donation (Counter)"
         },
         {
-          "code": null,
           "name": "Exp Freight Inward (Purchase Courier)"
         }
       ],
@@ -11621,12 +11499,10 @@
       "name": "Counter 24 aka",
       "counterNumber": 94,
       "tillAccountId": {
-        "code": null,
         "name": "Cash – Counter 24 aka – Head Office"
       },
       "allowedExpenseAccountIds": [
         {
-          "code": null,
           "name": "Exp Tea & Donation (Counter)"
         }
       ],
@@ -11638,20 +11514,16 @@
       "name": "Counter 21 naba",
       "counterNumber": 91,
       "tillAccountId": {
-        "code": null,
         "name": "Cash – Counter 21 naba – Head Office"
       },
       "allowedExpenseAccountIds": [
         {
-          "code": null,
           "name": "Exp Freight Inward (Purchase Courier)"
         },
         {
-          "code": null,
           "name": "Printing & Stationery (Office Exp/Packaging Materials)"
         },
         {
-          "code": null,
           "name": "Exp Tea & Donation (Counter)"
         }
       ],
@@ -11668,7 +11540,6 @@
       "channel": "UPI",
       "label": "PhonePe",
       "accountId": {
-        "code": null,
         "name": "PhonePe"
       },
       "vpa": "Q001860615@ybl",
@@ -11686,7 +11557,6 @@
       "channel": "CARD",
       "label": "SBI Swipe",
       "accountId": {
-        "code": null,
         "name": "SBI POS"
       },
       "vpa": null,
@@ -11704,7 +11574,6 @@
       "channel": "UPI",
       "label": "PhonePe",
       "accountId": {
-        "code": null,
         "name": "PhonePe"
       },
       "vpa": "Q001860615@ybl",
@@ -11722,7 +11591,6 @@
       "channel": "CARD",
       "label": "SBI Swipe",
       "accountId": {
-        "code": null,
         "name": "SBI POS"
       },
       "vpa": null,
@@ -11740,7 +11608,6 @@
       "channel": "UPI",
       "label": "PhonePe",
       "accountId": {
-        "code": null,
         "name": "PhonePe"
       },
       "vpa": "Q001860615@ybl",
@@ -11758,7 +11625,6 @@
       "channel": "CARD",
       "label": "SBI Swipe",
       "accountId": {
-        "code": null,
         "name": "SBI POS"
       },
       "vpa": null,
@@ -11776,7 +11642,6 @@
       "channel": "UPI",
       "label": "PhonePe",
       "accountId": {
-        "code": null,
         "name": "PhonePe"
       },
       "vpa": "Q001860615@ybl",
@@ -11794,7 +11659,6 @@
       "channel": "CARD",
       "label": "SBI Swipe",
       "accountId": {
-        "code": null,
         "name": "SBI POS"
       },
       "vpa": null,
@@ -11809,7 +11673,6 @@
     {
       "name": "Computer Repairing",
       "accountId": {
-        "code": "4000",
         "name": "Laptop Servicing"
       },
       "gstRateId": {
@@ -11822,7 +11685,6 @@
     {
       "name": "Printer Repairing",
       "accountId": {
-        "code": "4000",
         "name": "Laptop Servicing"
       },
       "gstRateId": {

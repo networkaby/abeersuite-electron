@@ -33,7 +33,6 @@ interface LedgerItem {
     id: number;
     name: string;
     aliases: string[];
-    code: string | null;
     type: string | null;
     normalBalance: NormalBalance | null;
     balance: number;

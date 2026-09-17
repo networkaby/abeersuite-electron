@@ -30,9 +30,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const account = await prisma.account.findUnique({
         where: { id: Number(id) },
         include: {
-            parent: { select: { id: true, code: true, name: true } },
+            parent: { select: { id: true, name: true } },
             children: {
-                select: { id: true, code: true, name: true, normalBalance: true },
+                select: { id: true, name: true, normalBalance: true },
             },
         },
     });
@@ -47,7 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         _count: { lines: lineCount },
         balance: closingMap.get(account.id) ?? 0,
         children: account.children.map((c) => ({
-            id: c.id, code: c.code, name: c.name,
+            id: c.id, name: c.name,
             balance: closingMap.get(c.id) ?? 0,
         })),
     });

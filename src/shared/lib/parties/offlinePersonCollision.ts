@@ -18,9 +18,7 @@
 // so even a genuine walk-in fallback still shows who the cashier said it was.
 
 import type { PrismaClient } from "@/generated/prisma/client";
-
-/** Seeded once, never re-created — see bootstrap-seed.ts. */
-const WALK_IN_ACCOUNT_CODE = "CASH-WALKIN";
+import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 
 let walkInAccountIdCache: number | null = null;
 
@@ -30,12 +28,16 @@ let walkInAccountIdCache: number | null = null;
  */
 export async function getWalkInAccountId(prismaLive: PrismaClient): Promise<number> {
     if (walkInAccountIdCache != null) return walkInAccountIdCache;
-    const account = await prismaLive.account.findUnique({
-        where: { code: WALK_IN_ACCOUNT_CODE },
+    // Matched on the seeded NAME — `Account.code` was retired (see
+    // 20260917090000_product_opening_branch). Name is exact, never fuzzy, and the
+    // identity columns are pinned null so a real customer who happens to be
+    // called this can never be picked up instead.
+    const account = await prismaLive.account.findFirst({
+        where: { name: ACCOUNT_LEDGERS.WALK_IN, personId: null, companyId: null },
         select: { id: true },
     });
     if (!account) {
-        throw new Error(`Walk-in account (code="${WALK_IN_ACCOUNT_CODE}") not seeded on live.`);
+        throw new Error(`Walk-in account ("${ACCOUNT_LEDGERS.WALK_IN}") not seeded on live.`);
     }
     walkInAccountIdCache = account.id;
     return account.id;

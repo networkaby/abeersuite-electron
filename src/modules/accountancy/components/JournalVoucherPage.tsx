@@ -102,7 +102,6 @@ type Side = "DEBIT" | "CREDIT";
 
 interface GlAccount {
     id:            number;
-    code:          string | null;
     name:          string;
     balance:       number;
     normalBalance: "DEBIT" | "CREDIT" | null;

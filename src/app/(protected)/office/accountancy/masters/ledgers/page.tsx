@@ -23,7 +23,6 @@ interface LedgerRow {
     name: string;
     /** Alternate names — passed straight to the edit dialog so it opens filled. */
     aliases: string[];
-    code: string | null;
     normalBalance: "DEBIT" | "CREDIT" | null;
     isActive: boolean;
     personId: number | null;
@@ -337,9 +336,6 @@ export default function LedgersPage() {
                                                     <div style={{ paddingLeft: row.depth * 20 }}>
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-foreground">{l.name}</span>
-                                                            {l.code && (
-                                                                <span className="font-mono text-xs text-muted-foreground/70">{l.code}</span>
-                                                            )}
                                                             {isIdentity && (
                                                                 <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
                                                                     {l.personId ? "Customer" : "Company"}

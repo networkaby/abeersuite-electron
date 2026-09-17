@@ -71,7 +71,6 @@ export async function GET(req: Request) {
             injectLedger(tree, STOCK_GROUP, {
                 id: SYNTHETIC_STOCK_ID,          // sentinel — no real Account row
                 name: "Closing Stock (live)",
-                code: null,
                 normalBalance: "DEBIT",
                 personId: null,
                 companyId: null,

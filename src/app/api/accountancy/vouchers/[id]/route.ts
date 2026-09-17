@@ -24,7 +24,7 @@ async function enrichVoucher(v: { id: number; createdById: number; cancelledById
     const acctIds = [...new Set([...(v.partyAccountId != null ? [v.partyAccountId] : []), ...v.lines.map((l) => l.accountId)])];
     const [users, accounts] = await Promise.all([
         prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
-        acctIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, code: true, name: true, normalBalance: true } }),
+        acctIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true, normalBalance: true } }),
     ]);
     const userById = new Map(users.map((u) => [u.id, u]));
     const acctById = new Map(accounts.map((a) => [a.id, a]));

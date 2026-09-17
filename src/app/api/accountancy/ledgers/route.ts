@@ -130,7 +130,6 @@ const emptyGateway = (g: z.infer<typeof gatewayJsonSchema>): boolean =>
 const createSchema = z.object({
     name: z.string().trim().min(1).max(200),
     groupId: z.number().int().positive(),
-    code: z.string().trim().max(32).nullish(),
     // Alternate names / keywords — not unique, may repeat across ledgers.
     aliases: z.array(z.string().trim().max(ALIAS_MAX_LENGTH)).max(20).optional(),
     description: z.string().trim().max(1000).nullish(),
@@ -238,7 +237,6 @@ export async function POST(req: Request) {
             data: {
                 name: body.name,
                 groupId: body.groupId,
-                code: body.code ?? null,
                 description: body.description ?? null,
                 normalBalance: body.normalBalance ?? null,
                 openingBalance: body.openingBalance ?? null,
@@ -256,9 +254,6 @@ export async function POST(req: Request) {
         if (body.openingBalance != null) await reconcileOpeningSuspense();
         return NextResponse.json(account, { status: 201 });
     } catch (e) {
-        if (e instanceof Error && e.message.includes("Unique constraint")) {
-            return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
-        }
         return handleApiError(e, "Failed to create ledger");
     }
 }

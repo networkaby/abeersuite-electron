@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     try {
         const accounts = await prisma.account.findMany({
             select: {
-                id: true, code: true, name: true, balance: true,
+                id: true, name: true, balance: true,
                 normalBalance: true, group: { select: { type: true } },
             },
         });
@@ -47,13 +47,13 @@ export async function POST(req: Request) {
             computed.set(r.accountId, (computed.get(r.accountId) ?? 0) + balanceDelta(nb, r.type, amt));
         }
 
-        const drift: { id: number; code: string | null; name: string; cached: number; computed: number; delta: number }[] = [];
+        const drift: { id: number; name: string; cached: number; computed: number; delta: number }[] = [];
         for (const a of accounts) {
             const cached = toNumber(a.balance);
             const comp = computed.get(a.id) ?? 0;
             const delta = comp - cached;
             if (Math.abs(delta) > 0.005) {
-                drift.push({ id: a.id, code: a.code, name: a.name, cached, computed: comp, delta });
+                drift.push({ id: a.id, name: a.name, cached, computed: comp, delta });
             }
         }
 

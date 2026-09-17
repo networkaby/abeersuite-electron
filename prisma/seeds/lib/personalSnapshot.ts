@@ -27,7 +27,7 @@
 // ids (R1, DEP-ADMIN, ...), which survive a reseed unchanged, so their rows +
 // join tables port by id. The Int-autoincrement models (accounts, gst, units,
 // categories, counters, gateways) are referenced across the snapshot by their
-// NATURAL KEY (account code/name, gst label, ...); those refs are re-resolved
+// NATURAL KEY (account name, gst label, ...); those refs are re-resolved
 // to local ids on import, so nothing breaks even on a fresh database.
 //
 // SAFETY — import is UPSERT-ONLY. It never deletes. It layers on top of a
@@ -46,7 +46,7 @@ import type { PrismaClient } from "../../../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { aliasRows } from "../../../src/modules/accountancy/lib/accountAlias";
 
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
 // Staff password hashes are NEVER exported (would leak into git). A user
 // CREATED by an overlay gets this default; existing users keep their password
@@ -119,7 +119,7 @@ interface RefIndex {
 
 async function buildRefIndex(prisma: Db): Promise<RefIndex> {
     const [accounts, groups, gsts, units, cats, users, counters, gateways] = await Promise.all([
-        prisma.account.findMany({ select: { id: true, code: true, name: true, personId: true, companyId: true } }),
+        prisma.account.findMany({ select: { id: true, name: true, personId: true, companyId: true } }),
         prisma.accountGroup.findMany({ select: { id: true, name: true } }),
         prisma.gstRate.findMany({ select: { id: true, label: true } }),
         prisma.invUnit.findMany({ select: { id: true, code: true } }),
@@ -130,7 +130,6 @@ async function buildRefIndex(prisma: Db): Promise<RefIndex> {
     ]);
 
     const accById = new Map(accounts.map((a) => [a.id, a]));
-    const accByCode = new Map(accounts.filter((a) => a.code).map((a) => [a.code as string, a.id]));
     // Only GL ledgers (no party) are addressed by name — party ledgers are excluded.
     const glAccByName = new Map(
         accounts.filter((a) => a.personId == null && a.companyId == null).map((a) => [a.name, a.id]),
@@ -156,11 +155,10 @@ async function buildRefIndex(prisma: Db): Promise<RefIndex> {
             toRef: (id) => {
                 if (id == null) return null;
                 const a = accById.get(id);
-                return a ? { code: a.code ?? null, name: a.name } : null;
+                return a ? { name: a.name } : null;
             },
             toId: (ref) => {
                 if (!ref) return null;
-                if (ref.code && accByCode.has(ref.code)) return accByCode.get(ref.code)!;
                 if (ref.name && glAccByName.has(ref.name)) return glAccByName.get(ref.name)!;
                 return null;
             },
@@ -504,9 +502,10 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     }
     count("accountGroups", snap.accountGroups.length);
 
-    // Accounts (GL): group ref + self-ref parent by name. Key by code if present, else name.
+    // Accounts (GL): group ref + self-ref parent by name. Keyed by NAME — the
+    // `code` natural key was retired with the column (SNAPSHOT_VERSION 2).
     idx = await buildRefIndex(prisma); // groups now exist
-    const accWhere = (a: Row) => (a.code ? { code: a.code } : { name: a.name, personId: null, companyId: null });
+    const accWhere = (a: Row) => ({ name: a.name, personId: null, companyId: null });
     for (const a of snap.accounts) {
         const { parentName, aliases, ...rest } = internalize(a, { groupId: "accountGroup" }, idx);
         // Snapshots captured before reconciliation state was excluded still carry

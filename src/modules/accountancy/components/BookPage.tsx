@@ -27,7 +27,6 @@ import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 type LedgerNode = {
     id:      number;
     name:    string;
-    code:    string | null;
     opening: number;
     debits:  number;
     credits: number;

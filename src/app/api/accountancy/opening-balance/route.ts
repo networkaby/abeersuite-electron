@@ -15,9 +15,9 @@ export async function GET() {
         const [accounts, products, partyIds] = await Promise.all([
             prisma.account.findMany({
                 where: { openingBalance: { not: null } },
-                orderBy: [{ code: "asc" }],
+                orderBy: [{ name: "asc" }],
                 select: {
-                    id: true, code: true, name: true,
+                    id: true, name: true,
                     openingBalance: true, openingBalanceType: true, openingBalanceDate: true,
                     normalBalance: true,
                     group: { select: { id: true, name: true, type: true } },

@@ -20,7 +20,7 @@ type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type Side = "DEBIT" | "CREDIT";
 
 interface LedgerNode {
-    id: number; name: string; code: string | null;
+    id: number; name: string;
     normalBalance: Side | null;
     opening: number; debits: number; credits: number; closing: number;
 }

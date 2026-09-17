@@ -396,7 +396,6 @@ ALTER TABLE "AccountGroup" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL 
 CREATE TABLE IF NOT EXISTS "Account" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "code" TEXT,
     "normalBalance" "NormalBalance",
     "description" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
@@ -425,7 +424,6 @@ CREATE TABLE IF NOT EXISTS "Account" (
 );
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
-ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "code" TEXT;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "normalBalance" "NormalBalance";
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
@@ -3559,9 +3557,6 @@ CREATE INDEX IF NOT EXISTS "AccountGroup_parentId_sortOrder_idx" ON "AccountGrou
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "AccountGroup_type_idx" ON "AccountGroup"("type");
-
--- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "Account_code_key" ON "Account"("code");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Account_personId_key" ON "Account"("personId");

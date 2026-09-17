@@ -45,7 +45,7 @@ function balanceDelta(nb: "DEBIT" | "CREDIT", type: "DEBIT" | "CREDIT", amount: 
 
 async function accounts(): Promise<Drift[]> {
     const [rows, sums] = await Promise.all([
-        prisma.account.findMany({ select: { id: true, code: true, name: true, balance: true, normalBalance: true, group: { select: { type: true } } } }),
+        prisma.account.findMany({ select: { id: true, name: true, balance: true, normalBalance: true, group: { select: { type: true } } } }),
         prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
@@ -68,7 +68,7 @@ async function accounts(): Promise<Drift[]> {
     const drift: Drift[] = [];
     for (const a of rows) {
         const c = round2(computed.get(a.id) ?? 0);
-        if (Math.abs(c - n(a.balance)) > EPS) drift.push({ what: "Account.balance", key: `${a.id} ${a.code ?? ""} ${a.name}`, cached: n(a.balance), computed: c });
+        if (Math.abs(c - n(a.balance)) > EPS) drift.push({ what: "Account.balance", key: `${a.id} ${a.name}`, cached: n(a.balance), computed: c });
     }
     if (FIX) for (const d of drift) await prisma.account.update({ where: { id: Number(d.key.split(" ")[0]) }, data: { balance: d.computed } });
     return drift;

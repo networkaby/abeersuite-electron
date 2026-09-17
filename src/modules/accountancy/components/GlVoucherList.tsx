@@ -43,7 +43,7 @@ type RawRow = {
     createdById:  number;
     branch:       { id: string; name: string } | null;
     createdBy:    { name: string };
-    partyAccount: { id: number; code: string; name: string; personId: number | null; companyId: number | null } | null;
+    partyAccount: { id: number; name: string; personId: number | null; companyId: number | null } | null;
     settlement?:     SettlementState | null;
     settlementOpen?: number;
 };

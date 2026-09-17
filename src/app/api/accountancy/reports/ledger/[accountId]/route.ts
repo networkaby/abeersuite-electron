@@ -139,7 +139,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
 
         return NextResponse.json({
             account: {
-                id: account.id, code: account.code, name: account.name,
+                id: account.id, name: account.name,
                 normalBalance: nb,
                 groupId: account.groupId, groupName: account.group?.name ?? null,
                 // Reconciliation watermark — shown on the detail strip so the

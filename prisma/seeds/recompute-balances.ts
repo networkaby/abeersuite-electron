@@ -75,18 +75,18 @@ async function main() {
     }
 
     const accounts = await prisma.account.findMany({
-        select: { id: true, code: true, name: true, balance: true },
-        orderBy: { code: "asc" },
+        select: { id: true, name: true, balance: true },
+        orderBy: { name: "asc" },
     });
 
-    type Drift = { id: number; code: string; name: string; cached: number; computed: number; delta: number };
+    type Drift = { id: number; name: string; cached: number; computed: number; delta: number };
     const drift: Drift[] = [];
     for (const a of accounts) {
         const cached = Number(a.balance);
         const comp = computed.get(a.id) ?? 0;
         const delta = comp - cached;
         if (Math.abs(delta) > 0.005) {
-            drift.push({ id: a.id, code: a.code ?? "—", name: a.name, cached, computed: comp, delta });
+            drift.push({ id: a.id, name: a.name, cached, computed: comp, delta });
         }
     }
 
@@ -101,10 +101,10 @@ async function main() {
 
     console.log(`\n⚠️  ${drift.length} account(s) have drift:\n`);
     const f = (n: number) => n.toFixed(2).padStart(13);
-    console.log("Code   Name                              Cached         Computed       Delta");
+    console.log("Id     Name                              Cached         Computed       Delta");
     console.log("─────  ────────────────────────────────  ─────────────  ─────────────  ─────────────");
     for (const d of drift) {
-        console.log(`${d.code.padEnd(5)}  ${d.name.padEnd(32).slice(0, 32)}  ${f(d.cached)}  ${f(d.computed)}  ${f(d.delta)}`);
+        console.log(`${String(d.id).padEnd(5)}  ${d.name.padEnd(32).slice(0, 32)}  ${f(d.cached)}  ${f(d.computed)}  ${f(d.delta)}`);
     }
 
     if (!apply) {

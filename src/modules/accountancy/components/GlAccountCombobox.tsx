@@ -2,7 +2,7 @@
 
 /**
  * GlAccountCombobox — searchable GL account picker for journal-voucher rows.
- * Inline text input + dropdown; type to filter by code or name. No API call
+ * Inline text input + dropdown; type to filter by name or alias. No API call
  * per keystroke — parent owns the accounts list (preloaded once).
  *
  * Modeled after `InvProductCombobox` (same UX rules: inline, keyboard nav,
@@ -16,7 +16,6 @@ import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 
 export interface GlAccount {
     id: number;
-    code: string | null;
     name: string;
     balance?: number;
     normalBalance?: "DEBIT" | "CREDIT" | null;
@@ -70,8 +69,7 @@ export function GlAccountCombobox({
         return () => clearTimeout(t);
     }, [query]);
 
-    // Sync display text when external value changes. The GL code stays in the
-    // model (search filter still matches it) but is hidden from the UI.
+    // Sync display text when external value changes.
     const selectedAccount = accounts.find((a) => a.id === value);
     const selectedLabel = selectedAccount ? selectedAccount.name : "";
 
@@ -93,7 +91,6 @@ export function GlAccountCombobox({
             ? accounts.filter((a) =>
                 a.name.toLowerCase().includes(q) ||
                 aliasMatches(a.aliases, q) ||
-                (a.code ?? "").toLowerCase().includes(q) ||
                 (qDigits.length >= 3 && (a.phones ?? []).some(
                     (p) => p.replace(/\D/g, "").includes(qDigits),
                 )))

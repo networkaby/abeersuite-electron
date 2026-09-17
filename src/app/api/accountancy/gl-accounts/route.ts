@@ -9,7 +9,6 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
-    code: z.string().trim().min(1),
     name: z.string().trim().min(1),
     groupId: z.number().int().positive(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]),
@@ -49,9 +48,9 @@ export async function GET(req: Request) {
                     ? { group: { type: type as "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" } }
                     : {}),
             },
-            orderBy: [{ code: "asc" }],
+            orderBy: [{ name: "asc" }],
             include: {
-                parent: { select: { id: true, code: true, name: true } },
+                parent: { select: { id: true, name: true } },
                 group:  { select: { id: true, name: true, type: true } },
                 // Alternate names — the combobox filters on them client-side.
                 aliases: { select: { alias: true }, orderBy: { id: "asc" } },
@@ -108,7 +107,6 @@ export async function POST(req: Request) {
     try {
         const account = await prisma.account.create({
             data: {
-                code: body.code,
                 name: body.name,
                 groupId: body.groupId,
                 normalBalance: body.normalBalance,
@@ -121,9 +119,6 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(account, { status: 201 });
     } catch (e) {
-        if (e instanceof Error && e.message.includes("Unique constraint")) {
-            return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
-        }
         return handleApiError(e, "Failed to create GL account");
     }
 }

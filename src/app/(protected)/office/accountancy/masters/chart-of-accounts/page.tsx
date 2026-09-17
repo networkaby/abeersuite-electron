@@ -24,7 +24,6 @@ interface AccountGroupLite {
 
 interface GlAccount {
     id: number;
-    code: string | null;
     name: string;
     normalBalance: NormalBalance;
     description: string | null;

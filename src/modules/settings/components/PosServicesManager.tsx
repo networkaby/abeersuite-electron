@@ -27,7 +27,7 @@ type ServiceRow = {
     defaultPricePaise: number | null;
     sortOrder: number;
     isActive: boolean;
-    account: { id: number; name: string; code: string | null };
+    account: { id: number; name: string };
     gstRate: { id: number; rate: string | number; label: string } | null;
 };
 

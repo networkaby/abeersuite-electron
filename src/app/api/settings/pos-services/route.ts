@@ -9,7 +9,7 @@ import { z } from "zod";
 // /api/pos/services; this route is the management CRUD.
 
 const serviceInclude = {
-    account: { select: { id: true, name: true, code: true } },
+    account: { select: { id: true, name: true } },
     gstRate: { select: { id: true, rate: true, label: true } },
 } as const;
 

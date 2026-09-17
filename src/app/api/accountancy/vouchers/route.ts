@@ -101,7 +101,7 @@ export async function GET(req: Request) {
         const partyIds   = [...new Set(rows.map((v) => v.partyAccountId).filter((x): x is number => x != null))];
         const [creators, parties] = await Promise.all([
             prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true } }),
-            partyIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, name: true, personId: true, companyId: true } }),
+            partyIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({ where: { id: { in: partyIds } }, select: { id: true, name: true, personId: true, companyId: true } }),
         ]);
         const creatorById = new Map(creators.map((u) => [u.id, u]));
         const partyById   = new Map(parties.map((a) => [a.id, a]));

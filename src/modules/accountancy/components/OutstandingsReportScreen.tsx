@@ -95,7 +95,7 @@ export function OutstandingsReportScreen({
         return () => window.removeEventListener("keydown", onKey);
     }, [focus]);
 
-    // `searchKey` carries the party's name, code, GSTIN and phone numbers, and on
+    // `searchKey` carries the party's name, GSTIN and phone numbers, and on
     // a bill row its reference number too. Searching and the period toggle only
     // narrow what is already on screen — no refetch, no extra DB read.
     const q = query.trim().toLowerCase();
@@ -187,7 +187,7 @@ export function OutstandingsReportScreen({
                 <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search party name, number, GSTIN, code or bill no…"
+                    placeholder="Search party name, number, GSTIN or bill no…"
                     className="h-8 pl-8"
                 />
             </div>

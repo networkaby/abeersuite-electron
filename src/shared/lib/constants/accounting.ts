@@ -40,6 +40,7 @@ export type AccountGroupName = (typeof ACCOUNT_GROUPS)[keyof typeof ACCOUNT_GROU
  */
 export const ACCOUNT_LEDGERS = {
     PETTY_CASH: "Petty Cash",
+    WALK_IN:    "Walk-in Cash Customer",
 } as const;
 
 /**

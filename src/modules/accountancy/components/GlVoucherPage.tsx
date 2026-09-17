@@ -81,7 +81,7 @@ type LoadedVoucher = {
     cancelledAt:    string | null;
     deletedAt:      string | null;
     partyAccountId: number | null;
-    partyAccount:   { id: number; code: string | null; name: string } | null;
+    partyAccount:   { id: number; name: string } | null;
     lines:          LoadedLine[];
     /** Contra deposit-slip capture (final combined breakdown) — see denomJson.ts. */
     denomJson?:     unknown;

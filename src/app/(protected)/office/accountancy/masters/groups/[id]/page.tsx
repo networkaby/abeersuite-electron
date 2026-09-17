@@ -27,7 +27,7 @@ interface SubGroup {
     rolledUpBalance: number;
 }
 interface Ledger {
-    id: number; name: string; code: string | null;
+    id: number; name: string;
     customerId: number | null; companyId: number | null;
     balance: number;
     normalBalance: "DEBIT" | "CREDIT" | null;

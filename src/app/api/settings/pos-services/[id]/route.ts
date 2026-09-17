@@ -5,7 +5,7 @@ import { handleApiError, prismaUniqueError, validateRequest } from "@/shared/lib
 import { z } from "zod";
 
 const serviceInclude = {
-    account: { select: { id: true, name: true, code: true } },
+    account: { select: { id: true, name: true } },
     gstRate: { select: { id: true, rate: true, label: true } },
 } as const;
 

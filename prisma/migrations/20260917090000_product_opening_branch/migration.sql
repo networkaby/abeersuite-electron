@@ -82,3 +82,46 @@ UPDATE "InvProduct"
  WHERE "openingBranchId" IS NULL
    AND "openingStock" IS NOT NULL
    AND EXISTS (SELECT 1 FROM "Branch" WHERE "id" = 'BR-HQ');
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- SECOND CHANGE IN THIS RELEASE — `Account.code` is retired.
+-- Folded in here rather than filed separately because this migration had not
+-- reached any database yet (AGENTS.md §3, one migration per release).
+-- ════════════════════════════════════════════════════════════════════════════
+-- `Account.code` is retired. The chart of accounts is keyed by NAME alone from here on.
+--
+-- ── What the code was ────────────────────────────────────────────────────────
+-- A Tally-style numeric account code ("5006" on Capital), unique where present and
+-- null everywhere else. It was never editable from the Ledgers master — neither the
+-- create nor the edit dialog ever carried the field — so the only rows that ever got
+-- one were the ledgers bootstrap-seed.ts wrote and whatever was typed into the old
+-- Chart of accounts dialog. Every party ledger, and every ledger made the normal way,
+-- has carried code = NULL since the Ledgers screen replaced that dialog as the way
+-- accounts are made.
+--
+-- That left a column that mostly held nothing, was shown in three places, and was
+-- silently mixed into two search boxes — while the one thing a code is for, a stable
+-- handle, it could not provide, because most rows had none.
+--
+-- ── It also broke the one ordering that depended on it ───────────────────────
+-- /api/accountancy/gl-accounts ordered `code ASC`. Postgres sorts NULLs last, so the
+-- code-less ledgers -- the cash ledger among them -- fell to the bottom of every GL
+-- account list in an order nobody chose. See the note at TradingVoucherPage.tsx:112,
+-- which worked around exactly this. That ordering is now `name ASC`, which every row
+-- can actually satisfy.
+--
+-- ── Replicas do not need to move first ───────────────────────────────────────
+-- This is the safe direction for a counter. sync-engine/lib/schemaGuard.js files a
+-- column the replica still has and the source does not under `extra`, and `extra`
+-- alone does NOT halt the worker (only `missing` and `changed` do). pull.js takes its
+-- insert column list from the source rows themselves (`Object.keys(rows[0])`), so the
+-- stale local "code" column simply stops being written and is cleared by the next
+-- reseed. No counter release is needed ahead of this deploy.
+--
+-- ── The data is not recoverable after this ───────────────────────────────────
+-- DROP COLUMN, not a rename. The codes that existed are gone with it; nothing read
+-- them for a decision, so there is nothing to carry forward.
+
+-- IF EXISTS so a database that never had the column -- or already ran this -- passes
+-- through. Dropping the column takes its UNIQUE index with it.
+ALTER TABLE "Account" DROP COLUMN IF EXISTS "code";

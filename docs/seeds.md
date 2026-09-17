@@ -153,7 +153,7 @@ demo clutter. Reset staff passwords after (new users get `changeme123`).
 **string ids** (`R1`, `DEP-ADMIN`, `PIPE-REPAIR` …) that survive a reseed
 unchanged, so their rows and join tables port by id. The Int-autoincrement
 models (accounts, GST, units, categories, counters, gateways) are referenced
-across the snapshot by their **natural key** (account code/name, GST label,
+across the snapshot by their **natural key** (account name, GST label,
 counter branch+name …); the importer re-resolves each ref to the local id, so
 nothing breaks even on a fresh database.
 

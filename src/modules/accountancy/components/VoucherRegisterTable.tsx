@@ -35,7 +35,7 @@ import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 // ── Line shapes ───────────────────────────────────────────────────────────
 
 type GlLine = {
-    account: { id?: number; code: string; name: string };
+    account: { id?: number; name: string };
     type: "DEBIT" | "CREDIT";
     amount: number;
 };
@@ -462,9 +462,10 @@ export function VoucherRegisterTable({
                                             )}
                                             {/* Source — blank placeholder */}
                                             {showSource && <td />}
-                                            {/* Reference — account code or SKU */}
+                                            {/* Reference — SKU on an item line; a GL line has no
+                                                identifier of its own, so the cell stays empty. */}
                                             <td className="px-3 py-1 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-                                                {isGl ? l.account.code : l.product.sku}
+                                                {isGl ? null : l.product.sku}
                                             </td>
                                             {/* Branch placeholder */}
                                             {showBranch && <td />}

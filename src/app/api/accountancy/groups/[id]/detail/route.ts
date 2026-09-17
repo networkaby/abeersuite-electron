@@ -102,7 +102,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             where: { groupId, isActive: true },
             orderBy: [{ name: "asc" }],
             select: {
-                id: true, name: true, code: true,
+                id: true, name: true,
                 personId: true, companyId: true,
                 normalBalance: true,
             },
@@ -126,7 +126,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             },
             subGroups,
             ledgers: ledgersWithEffective.map((l) => ({
-                id: l.id, name: l.name, code: l.code,
+                id: l.id, name: l.name,
                 personId: l.personId, companyId: l.companyId,
                 normalBalance: l.normalBalance,
                 balance: l.balance,

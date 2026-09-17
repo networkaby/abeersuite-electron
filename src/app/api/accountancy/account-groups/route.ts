@@ -22,7 +22,6 @@ const createSchema = z.object({
 type LedgerRow = {
     id: number;
     name: string;
-    code: string | null;
     normalBalance: "DEBIT" | "CREDIT" | null;
     /** Alternate names — carried through so the Edit dialog opens pre-filled. */
     aliases: string[];
@@ -149,7 +148,7 @@ export async function GET(req: Request) {
                 where: { groupId: { not: null } },
                 orderBy: { name: "asc" },
                 select: {
-                    id: true, name: true, code: true, normalBalance: true,
+                    id: true, name: true, normalBalance: true,
                     isActive: true, personId: true, companyId: true, groupId: true,
                     bankJson: true, loanJson: true, creditCardJson: true,
                     bnplJson: true, walletJson: true, gatewayJson: true,

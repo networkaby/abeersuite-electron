@@ -58,7 +58,7 @@ export async function GET(_req: Request, { params }: Params) {
     const settlement = readSettlement(voucher.settlementJson);
     const acctIds = [...new Set([...settlement.tenders, ...settlement.charges].map((r) => r.accountId))];
     const acctById = new Map(
-        (acctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true, code: true } }))
+        (acctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true } }))
             .map((a) => [a.id, a]),
     );
     const withAccount = <T extends { accountId: number }>(r: T) => ({ ...r, account: acctById.get(r.accountId) ?? null });

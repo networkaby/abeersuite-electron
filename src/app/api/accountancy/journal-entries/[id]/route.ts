@@ -39,7 +39,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const [accounts, createdBy] = await Promise.all([
         prisma.account.findMany({
             where:  { id: { in: acctIds } },
-            select: { id: true, code: true, name: true, normalBalance: true },
+            select: { id: true, name: true, normalBalance: true },
         }),
         prisma.user.findUnique({ where: { id: entry.createdById }, select: { id: true, name: true } }),
     ]);

@@ -59,7 +59,7 @@ export type PartyOutstanding = {
     accountId:        number;
     accountName:      string;
     /** Everything the report's search box may match on, lower-cased and joined:
-     *  party name, account code, GSTIN and every phone number of the party. The
+     *  party name, GSTIN and every phone number of the party. The
      *  bill rows add their own voucher no on top. Built once here so the screen
      *  filters with a single `includes` and never goes back to the DB to search. */
     searchKey:        string;
@@ -564,12 +564,12 @@ function toOutstandingBill(raw: RawBill, asOf: Date): OutstandingBill | null {
 }
 
 /**
- * The searchable identifiers of each party account — name, code, GSTIN and
- * phone numbers — as one lower-cased blob per account id. Three small reads,
+ * The searchable identifiers of each party account — name, GSTIN and phone
+ * numbers — as one lower-cased blob per account id. Three small reads,
  * only the columns needed; the screen then searches without touching the DB.
  */
 async function loadSearchKeys(
-    accounts: { id: number; name: string; code: string | null; personId: number | null; companyId: number | null }[],
+    accounts: { id: number; name: string; personId: number | null; companyId: number | null }[],
 ): Promise<Map<number, string>> {
     const personIds  = accounts.map((a) => a.personId).filter((v): v is number => v !== null);
     const companyIds = accounts.map((a) => a.companyId).filter((v): v is number => v !== null);
@@ -606,7 +606,7 @@ async function loadSearchKeys(
 
     const out = new Map<number, string>();
     for (const a of accounts) {
-        const bits = [a.name, a.code ?? ""];
+        const bits = [a.name];
         if (a.personId  !== null) bits.push(...(personBits.get(a.personId)   ?? []));
         if (a.companyId !== null) bits.push(...(companyBits.get(a.companyId) ?? []));
         out.set(a.id, bits.filter(Boolean).join(" ").toLowerCase());
@@ -636,7 +636,7 @@ export async function getOutstandings(
     const [accounts, bills, unallocated] = await Promise.all([
         prisma.account.findMany({
             where: { id: { in: accountIds } },
-            select: { id: true, name: true, code: true, personId: true, companyId: true },
+            select: { id: true, name: true, personId: true, companyId: true },
             orderBy: [{ name: "asc" }],
         }),
         loadOpenBills(accountIds, asOf, invType),

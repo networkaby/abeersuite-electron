@@ -31,7 +31,7 @@ import { fmt } from "@/utils/constants";
 import { parseRupeesToPaise } from "@/shared/lib/format";
 
 type AccountRow = {
-    id: number; code: string; name: string;
+    id: number; name: string;
     openingBalance: number; openingBalanceType: "DEBIT" | "CREDIT" | null;
     /** Under Sundry Debtors or Sundry Creditors — the only ledgers that keep
      *  bill-wise details. A bank or capital opening has no bills behind it. */
@@ -294,16 +294,15 @@ function AccountOpeningSection({
     const [saving, setSaving] = useState(false);
     const [filter, setFilter] = useState("");
 
-    // The table filter matches the same identifiers the picker searches — code,
-    // name, alias, party mobile — so whatever finds a ledger in the dropdown
-    // also finds its row below. Aliases and phones live on the full list only.
+    // The table filter matches the same identifiers the picker searches — name,
+    // alias, party mobile — so whatever finds a ledger in the dropdown also
+    // finds its row below. Aliases and phones live on the full list only.
     const meta = useMemo(() => new Map(allAccounts.map((a) => [a.id, a])), [allAccounts]);
     const q = filter.trim().toLowerCase();
     const visible = q
         ? accounts.filter((a) => {
             const m = meta.get(a.id);
             return a.name.toLowerCase().includes(q)
-                || (a.code ?? "").toLowerCase().includes(q)
                 || aliasMatches(m?.aliases, q)
                 || (m?.phones ?? []).some((p) => p.toLowerCase().includes(q));
         })
@@ -387,7 +386,7 @@ function AccountOpeningSection({
                             value={form.accountId || null}
                             onChange={(a) => setForm((f) => ({ ...f, accountId: a?.id ?? 0 }))}
                             accounts={allAccounts}
-                            placeholder="Search name, code, alias or mobile…"
+                            placeholder="Search name, alias or mobile…"
                         />
                     </div>
                     <div className="space-y-1.5">
@@ -420,7 +419,7 @@ function AccountOpeningSection({
                     <div className="relative max-w-xs">
                         <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input value={filter} onChange={(e) => setFilter(e.target.value)}
-                            className="h-8 pl-8" placeholder="Filter by name, code, alias or mobile…" />
+                            className="h-8 pl-8" placeholder="Filter by name, alias or mobile…" />
                     </div>
                 </div>
             )}
@@ -708,7 +707,6 @@ function QuickCreateAccountDialog({
 }) {
     const [groups, setGroups] = useState<AccountGroupOpt[]>([]);
     const [form, setForm] = useState({
-        code: "",
         name: "",
         groupId: "",
         normalBalance: "DEBIT" as "DEBIT" | "CREDIT",
@@ -736,19 +734,18 @@ function QuickCreateAccountDialog({
     }, [open]);
 
     const reset = () => setForm({
-        code: "", name: "", groupId: "", normalBalance: "DEBIT",
+        name: "", groupId: "", normalBalance: "DEBIT",
         openingAmount: "", openingType: "DEBIT",
     });
 
     const save = async () => {
-        if (!form.code.trim() || !form.name.trim()) { toast.error("Code and name required"); return; }
+        if (!form.name.trim()) { toast.error("Name required"); return; }
         if (!form.groupId) { toast.error("Pick a group"); return; }
         const opening = parseFloat(form.openingAmount);
         const hasOpening = Number.isFinite(opening) && opening > 0;
         setSaving(true);
         try {
             const { data } = await axios.post<{ id: number }>("/api/accountancy/gl-accounts", {
-                code: form.code.trim(),
                 name: form.name.trim(),
                 groupId: Number(form.groupId),
                 normalBalance: form.normalBalance,
@@ -773,8 +770,8 @@ function QuickCreateAccountDialog({
                 <div className="space-y-3 pt-2">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Code</Label>
-                            <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="e.g. 1300" />
+                            <Label>Name</Label>
+                            <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Petty Cash" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Dr / Cr (normal)</Label>
@@ -786,10 +783,6 @@ function QuickCreateAccountDialog({
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Name</Label>
-                        <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Petty Cash" />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Group</Label>

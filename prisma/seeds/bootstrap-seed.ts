@@ -763,7 +763,7 @@ async function upsertGroup(
 }
 
 async function upsertLedger(
-    name: string, groupName: string | null, normalBalance: NormBal | null, code?: string,
+    name: string, groupName: string | null, normalBalance: NormBal | null,
 ): Promise<void> {
     let groupId: number | null = null;
     if (groupName) {
@@ -773,46 +773,34 @@ async function upsertLedger(
         );
         groupId = rows[0]?.id ?? null;
     }
-    // Code is the stable identity. If a ledger already holds this code — even
-    // under a different name (admins rename the seeded "Bank Account" to their
-    // real bank, etc.) — that row IS this ledger: backfill a missing group only,
-    // never rename, never re-insert (which would trip Account_code_key).
-    if (code) {
-        const { rows: byCode } = await pool.query<{ id: number; "groupId": number | null }>(
-            `SELECT id, "groupId" FROM "Account"
-             WHERE code = $1 AND "personId" IS NULL AND "companyId" IS NULL
-             LIMIT 1`,
-            [code],
-        );
-        if (byCode[0]) {
-            if (byCode[0].groupId === null && groupId !== null) {
-                await pool.query(`UPDATE "Account" SET "groupId" = $1 WHERE id = $2`, [groupId, byCode[0].id]);
-            }
-            return;
-        }
-    }
-    const { rows } = await pool.query<{ id: number; "groupId": number | null; code: string | null }>(
-        `SELECT id, "groupId", code FROM "Account"
+    // NAME is the identity, matched case-insensitively — `Account.code` was
+    // retired (see 20260917090000_product_opening_branch). An existing row is only
+    // ever topped up with a missing group; it is never renamed and never
+    // re-inserted.
+    //
+    // The one thing this cannot survive is a RENAME: an admin who renames the
+    // seeded "Bank Account" to their real bank leaves no row this function can
+    // recognise, so a full reseed creates "Bank Account" again beside it. That
+    // was already true of the 60-odd ledgers seeded without a code; it now
+    // applies to all of them. Reseeds are for reset and drift recovery (see
+    // docs/seeds.md), so the duplicate is visible and removable when it happens.
+    const { rows } = await pool.query<{ id: number; "groupId": number | null }>(
+        `SELECT id, "groupId" FROM "Account"
          WHERE LOWER(name) = LOWER($1)
            AND "personId" IS NULL AND "companyId" IS NULL
          LIMIT 1`,
         [name],
     );
     if (rows[0]) {
-        const updates: string[] = [];
-        const vals: unknown[] = [];
-        if (rows[0].groupId === null && groupId !== null) { vals.push(groupId); updates.push(`"groupId" = $${vals.length}`); }
-        if (rows[0].code === null && code) { vals.push(code); updates.push(`code = $${vals.length}`); }
-        if (updates.length) {
-            vals.push(rows[0].id);
-            await pool.query(`UPDATE "Account" SET ${updates.join(", ")} WHERE id = $${vals.length}`, vals);
+        if (rows[0].groupId === null && groupId !== null) {
+            await pool.query(`UPDATE "Account" SET "groupId" = $1 WHERE id = $2`, [groupId, rows[0].id]);
         }
         return;
     }
     await pool.query(
-        `INSERT INTO "Account" (name, code, "normalBalance", "groupId", "isActive", balance, "createdAt")
-         VALUES ($1, $2, $3, $4, true, 0, NOW())`,
-        [name, code ?? null, normalBalance, groupId],
+        `INSERT INTO "Account" (name, "normalBalance", "groupId", "isActive", balance, "createdAt")
+         VALUES ($1, $2, $3, true, 0, NOW())`,
+        [name, normalBalance, groupId],
     );
 }
 
@@ -997,9 +985,9 @@ async function main() {
     await upsertGroup("Payment Gateway", "ASSET", 66, currentAssetsId);
 
     // GL ledgers — Stock-in-Hand intentionally has NO children.
-    await upsertLedger("Cash", "Cash-in-Hand", "DEBIT", "1000");
+    await upsertLedger("Cash", "Cash-in-Hand", "DEBIT");
     await upsertLedger("Petty Cash", "Cash-in-Hand", "DEBIT");
-    await upsertLedger("Bank Account", "Bank Accounts", "DEBIT", "1010");
+    await upsertLedger("Bank Account", "Bank Accounts", "DEBIT");
     // Gateway settlement ledgers. Section 17 points each PaymentGateway at one of
     // these BY NAME — the live rows carry no account code, so the name is the key.
     // Rename one here and you must rename it in GATEWAYS too, or the link silently
@@ -1008,17 +996,17 @@ async function main() {
     await upsertLedger("Payu", "Payment Gateway", "DEBIT");
     await upsertLedger("Cashfree", "Payment Gateway", "DEBIT");
     await upsertLedger("ShipRoket COD", "Payment Gateway", "DEBIT");
-    await upsertLedger("Accounts Receivable", "Sundry Debtors", "DEBIT", "1100");
-    await upsertLedger("Accounts Payable", "Sundry Creditors", "CREDIT", "2000");
-    await upsertLedger("Walk-in Cash Customer", "Sundry Debtors", "DEBIT", "CASH-WALKIN");
-    await upsertLedger("Prepaid Expenses", "Loans & Advances (Asset)", "DEBIT", "1300");
+    await upsertLedger("Accounts Receivable", "Sundry Debtors", "DEBIT");
+    await upsertLedger("Accounts Payable", "Sundry Creditors", "CREDIT");
+    await upsertLedger("Walk-in Cash Customer", "Sundry Debtors", "DEBIT");
+    await upsertLedger("Prepaid Expenses", "Loans & Advances (Asset)", "DEBIT");
     await upsertLedger("Profit & Loss A/c", null, "CREDIT");
-    await upsertLedger("Capital", "Capital Account", "CREDIT", "3000");
+    await upsertLedger("Capital", "Capital Account", "CREDIT");
     await upsertLedger("Drawings", "Capital Account", "DEBIT");
-    await upsertLedger("Retained Earnings", "Reserves & Surplus", "CREDIT", "3100");
+    await upsertLedger("Retained Earnings", "Reserves & Surplus", "CREDIT");
     await upsertLedger("Sales A/c", "Sales Accounts", "CREDIT");
-    await upsertLedger("Parts Revenue", "Sales Accounts", "CREDIT", "4100");
-    await upsertLedger("Shop Sales Revenue", "Sales Accounts", "CREDIT", "4150");
+    await upsertLedger("Parts Revenue", "Sales Accounts", "CREDIT");
+    await upsertLedger("Shop Sales Revenue", "Sales Accounts", "CREDIT");
     await upsertLedger("Purchase A/c", "Purchase Accounts", "DEBIT");
     await upsertLedger("Sales Returns", "Sales Accounts", "DEBIT");
     await upsertLedger("Purchase Returns", "Purchase Accounts", "CREDIT");
@@ -1027,17 +1015,17 @@ async function main() {
     await upsertLedger("IGST", "Duties & Taxes", "CREDIT");
     await upsertLedger("UTGST", "Duties & Taxes", "CREDIT");
     await upsertLedger("TDS", "Duties & Taxes", "CREDIT");
-    await upsertLedger("Tax Payable", "Duties & Taxes", "CREDIT", "2100");
+    await upsertLedger("Tax Payable", "Duties & Taxes", "CREDIT");
     await upsertLedger("Professional Tax", "Duties & Taxes", "CREDIT");
     await upsertLedger("ESI Payable", "Duties & Taxes", "CREDIT");
     await upsertLedger("PF Payable", "Duties & Taxes", "CREDIT");
-    await upsertLedger("Accrued Expenses", "Provisions", "CREDIT", "2200");
+    await upsertLedger("Accrued Expenses", "Provisions", "CREDIT");
     await upsertLedger("Provision for Tax", "Provisions", "CREDIT");
     await upsertLedger("Provision for Bad Debts", "Provisions", "CREDIT");
     await upsertLedger("General Reserve", "Reserves & Surplus", "CREDIT");
-    await upsertLedger("Service Charges Income", "Direct Incomes", "CREDIT", "4000");
-    await upsertLedger("Warranty Revenue", "Direct Incomes", "CREDIT", "4200");
-    await upsertLedger("Other Revenue", "Indirect Incomes", "CREDIT", "4900");
+    await upsertLedger("Service Charges Income", "Direct Incomes", "CREDIT");
+    await upsertLedger("Warranty Revenue", "Direct Incomes", "CREDIT");
+    await upsertLedger("Other Revenue", "Indirect Incomes", "CREDIT");
     await upsertLedger("Discount Received", "Indirect Incomes", "CREDIT");
     // Outward freight collected from customers on the sale invoice.
     // Separated from Sales A/c so the P&L breaks out delivery revenue.
@@ -1045,16 +1033,16 @@ async function main() {
     await upsertLedger("Round Off", "Indirect Incomes", "CREDIT");
     await upsertLedger("Interest Received", "Indirect Incomes", "CREDIT");
     await upsertLedger("Commission Received", "Indirect Incomes", "CREDIT");
-    await upsertLedger("Cost of Parts Sold", "Direct Expenses", "DEBIT", "5000");
-    await upsertLedger("Tools & Equipment", "Direct Expenses", "DEBIT", "6300");
+    await upsertLedger("Cost of Parts Sold", "Direct Expenses", "DEBIT");
+    await upsertLedger("Tools & Equipment", "Direct Expenses", "DEBIT");
     await upsertLedger("Repair & Maintenance", "Direct Expenses", "DEBIT");
     await upsertLedger("Consumables & Spares", "Direct Expenses", "DEBIT");
     await upsertLedger("Freight Charges", "Direct Expenses", "DEBIT");
     await upsertLedger("Carriage Inward", "Direct Expenses", "DEBIT");
-    await upsertLedger("Salary & Wages", "Indirect Expenses", "DEBIT", "6200");
-    await upsertLedger("Rent", "Indirect Expenses", "DEBIT", "6000");
-    await upsertLedger("Utilities Expense", "Indirect Expenses", "DEBIT", "6100");
-    await upsertLedger("Miscellaneous Expense", "Indirect Expenses", "DEBIT", "6900");
+    await upsertLedger("Salary & Wages", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Rent", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Utilities Expense", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Miscellaneous Expense", "Indirect Expenses", "DEBIT");
     await upsertLedger("Electricity Charges", "Indirect Expenses", "DEBIT");
     await upsertLedger("Telephone / Internet", "Indirect Expenses", "DEBIT");
     await upsertLedger("Discount Allowed", "Indirect Expenses", "DEBIT");
@@ -1097,8 +1085,8 @@ async function main() {
     // POS cash-drawer variance — sister P&L accounts used by shift close
     // adjustment JEs. Short = staff handed in less than expected (expense);
     // Over = handed in more (income).
-    await upsertLedger("Cash Short", "Indirect Expenses", "DEBIT", "6950");
-    await upsertLedger("Cash Over", "Indirect Incomes", "CREDIT", "4950");
+    await upsertLedger("Cash Short", "Indirect Expenses", "DEBIT");
+    await upsertLedger("Cash Over", "Indirect Incomes", "CREDIT");
     // "Difference in Opening Balances" is intentionally NOT seeded — it's
     // a pure synthetic computed by the BS UI = |Σ Dr opening − Σ Cr opening|,
     // shown on the side that needs balancing. Don't add a real ledger by

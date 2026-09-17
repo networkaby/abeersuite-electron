@@ -43,18 +43,18 @@ export function CreateGlAccountDialog({
 }) {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
-        code: "", name: "", groupId: 0,
+        name: "", groupId: 0,
         normalBalance: "DEBIT" as NormalBalance, description: "",
     });
 
     useEffect(() => {
         if (!open) return;
-        setForm({ code: "", name: "", groupId: 0, normalBalance: "DEBIT", description: "" });
+        setForm({ name: "", groupId: 0, normalBalance: "DEBIT", description: "" });
     }, [open]);
 
     const save = async () => {
-        if (!form.code || !form.name || !form.groupId) {
-            toast.error("Code, name, and group required");
+        if (!form.name || !form.groupId) {
+            toast.error("Name and group required");
             return;
         }
         setSaving(true);
@@ -82,21 +82,13 @@ export function CreateGlAccountDialog({
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                        <Label>Code</Label>
-                        <Input
-                            value={form.code}
-                            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                            placeholder="e.g. 1100"
-                            autoFocus
-                        />
-                    </div>
-                    <div className="space-y-1.5">
                         <Label>Name</Label>
                         <Input
                             value={form.name}
                             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                             placeholder="Account name"
                             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+                            autoFocus
                         />
                     </div>
                     <div className="space-y-1.5">

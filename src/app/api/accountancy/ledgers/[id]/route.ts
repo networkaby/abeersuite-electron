@@ -97,7 +97,6 @@ const emptyGateway = (g: z.infer<typeof gatewayJsonSchema>): boolean =>
 const updateSchema = z.object({
     name: z.string().trim().min(1).max(200).optional(),
     groupId: z.number().int().positive().nullable().optional(),
-    code: z.string().trim().max(32).nullable().optional(),
     // Full replacement set — omit to leave aliases untouched, [] to clear them.
     aliases: z.array(z.string().trim().max(ALIAS_MAX_LENGTH)).max(20).optional(),
     description: z.string().trim().max(1000).nullable().optional(),
@@ -151,7 +150,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...pickDefined({
                     name: body.name,
                     groupId: body.groupId,
-                    code: body.code,
                     description: body.description,
                     isActive: body.isActive,
                 }),
@@ -203,9 +201,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             openingBalanceDate: account.openingBalanceDate ? toDateOnly(account.openingBalanceDate) : null,
         });
     } catch (e) {
-        if (e instanceof Error && e.message.includes("Unique constraint")) {
-            return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
-        }
         return handleApiError(e, "Failed to update ledger");
     }
 }

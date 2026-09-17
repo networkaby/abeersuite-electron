@@ -108,9 +108,9 @@ export type { TradingKind } from "@/modules/accountancy/lib/tradingVoucherKinds"
 // localStorage key is per-kind, so a Sale's bank pick can't leak into Purchase),
 // else the Tally-standard Petty Cash ledger — matched by EXACT name, since that
 // name is fixed and bootstrap-seeded. Nothing after that: the old Vault /
-// first-Cash-in-Hand fallbacks resolved to an ARBITRARY counter till, because every
-// cash ledger has code = null and the API's `ORDER BY code` cannot order them. An
-// empty picker the operator must fill is better than a confidently wrong till.
+// first-Cash-in-Hand fallbacks resolved to an ARBITRARY counter till, because the
+// list came back in no order anyone chose. An empty picker the operator must fill
+// is better than a confidently wrong till.
 // `list` is already money ledgers only (isMoneyGroupName), so no group check.
 function pickDefaultTenderAccount(list: GlAccount[], storageKey: string): GlAccount | null {
     let lastId: number | null = null;
@@ -570,14 +570,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 amount: string | number;
                 method: string | null;
                 reference: string | null;
-                account: { id: number; name: string; code: string | null };
+                account: { id: number; name: string };
             }[];
             charges?: {
                 id: number;
                 accountId: number;
                 amount: string | number;
                 description: string | null;
-                account: { id: number; name: string; code: string | null };
+                account: { id: number; name: string };
             }[];
         }>(`/api/inventory/vouchers/${editVoucherId}`)
             .then((r) => {
@@ -692,7 +692,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 if (typeof v.showPrices === "boolean") setShowPricesOnPrint(v.showPrices);
 
                 // Hydrate tender rows. Each saved tender carries the
-                // resolved Account (name + code) so the picker labels render
+                // resolved Account name so the picker labels render
                 // immediately without a second lookup. Filter out the
                 // party-AR row (auto-recomputed on save from the Balance);
                 // operator-edited tender rows persist as typed.
@@ -710,7 +710,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         .map((t, idx) => ({
                             id: `tdb${idx}${Math.random().toString(36).slice(2, 6)}`,
                             accountId: t.accountId,
-                            account: { id: t.account.id, name: t.account.name, code: t.account.code ?? "" } as GlAccount,
+                            account: { id: t.account.id, name: t.account.name } as GlAccount,
                             amount: String(Number(t.amount)),
                             method: (t.method as TenderRow["method"]) ?? "",
                             reference: t.reference ?? "",
@@ -724,7 +724,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     setCharges(v.charges.map((c) => ({
                         id: `cdb${c.id}`,
                         accountId: c.accountId,
-                        account: { id: c.account.id, name: c.account.name, code: c.account.code ?? "" } as GlAccount,
+                        account: { id: c.account.id, name: c.account.name } as GlAccount,
                         description: c.description ?? "",
                         amount: String(Number(c.amount)),
                     })));
