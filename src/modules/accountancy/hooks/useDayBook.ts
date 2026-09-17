@@ -109,6 +109,8 @@ export type DayBookQuery = {
     branchId?: string;
     /** "optional" | "inventory" — the Day Book's category quick-filters. */
     category?: string;
+    /** Show only bills that still owe something — due or partial. */
+    unpaidOnly?: boolean;
     search?:   string;
 };
 
@@ -176,7 +178,7 @@ function viewKey(q: DayBookQuery): string {
     return [
         ROW_SHAPE,
         q.from, q.to, q.kind ?? "", (q.statuses ?? []).slice().sort().join("+"),
-        q.branchId ?? "", q.category ?? "",
+        q.branchId ?? "", q.category ?? "", q.unpaidOnly ? "unpaid" : "",
     ].join("|");
 }
 
@@ -264,6 +266,7 @@ async function fetchDayBook(
             ...((q.statuses ?? []).length > 0 ? { statuses: (q.statuses ?? []).join(",") } : {}),
             ...(q.branchId && q.branchId !== "__all__" ? { branchId: q.branchId } : {}),
             ...(q.category ? { category: q.category } : {}),
+            ...(q.unpaidOnly ? { settlement: "open" } : {}),
             ...(search ? { search } : {}),
             ...(opts.cursor ? { cursor: opts.cursor } : {}),
             ...(opts.since  ? { since: opts.since, refsSince: opts.since } : {}),

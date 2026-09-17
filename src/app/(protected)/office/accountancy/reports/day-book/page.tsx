@@ -46,6 +46,14 @@ export default function DayBookPage() {
         catch { return ""; }
     });
 
+    // Bill-wise quick filter. Settlement is not a stored column, so the server
+    // scans forward for it — see the route's unpaid scan.
+    const [unpaidOnly, setUnpaidOnly] = useState(() => {
+        try { return localStorage.getItem("daybook:unpaid") === "1"; }
+        catch { return false; }
+    });
+
+    useEffect(() => { try { localStorage.setItem("daybook:unpaid", unpaidOnly ? "1" : "0"); } catch {} }, [unpaidOnly]);
     useEffect(() => { try { localStorage.setItem("daybook:kind",     kind);     } catch {} }, [kind]);
     useEffect(() => { try { localStorage.setItem("daybook:category", category); } catch {} }, [category]);
 
@@ -57,8 +65,9 @@ export default function DayBookPage() {
         statuses,
         branchId: filters.branchFilter,
         category,
+        unpaidOnly,
         search:   filters.search,
-    }), [filters.from, filters.to, kind, statuses, filters.branchFilter, category, filters.search]);
+    }), [filters.from, filters.to, kind, statuses, filters.branchFilter, category, unpaidOnly, filters.search]);
 
     // Live updates come with the data source now — `useDayBook` subscribes to
     // `ledger` itself, so every consumer of it follows the floor, not just this page.
@@ -102,6 +111,7 @@ export default function DayBookPage() {
         filters.clearFilters();
         setKind("__all__");
         setCategory("");
+        setUnpaidOnly(false);
     };
 
     // ── Render ────────────────────────────────────────────────────────────
@@ -284,6 +294,21 @@ export default function DayBookPage() {
                             />
                             <Label htmlFor="cat-inventory" className="text-xs cursor-pointer">Inventory only</Label>
                         </div>
+                    </div>
+                </div>
+
+                {/* Bill-wise quick-filter */}
+                <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Bill</span>
+                    <div className="flex items-center gap-1.5 h-8">
+                        <Checkbox
+                            id="unpaid-only"
+                            checked={unpaidOnly}
+                            onCheckedChange={(v) => setUnpaidOnly(Boolean(v))}
+                        />
+                        <Label htmlFor="unpaid-only" className="text-xs cursor-pointer" title="Only bills that still owe something — due or part-paid">
+                            Unpaid only
+                        </Label>
                     </div>
                 </div>
 

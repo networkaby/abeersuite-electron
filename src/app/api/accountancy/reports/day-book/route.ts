@@ -6,8 +6,8 @@ import { handleApiError, parseCursor, deltaSlice, pageSlice } from "@/shared/lib
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
-import { loadSettlements } from "@/modules/accountancy/lib/billLink";
-import { kindsForFilter, kindsForCategory } from "@/modules/accountancy/lib/voucherKinds";
+import { loadSettlements, type SettlementState } from "@/modules/accountancy/lib/billLink";
+import { kindsForFilter, kindsForCategory, NON_REGULAR_KINDS } from "@/modules/accountancy/lib/voucherKinds";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 /**
@@ -49,6 +49,17 @@ const MAX_SEARCH_ACCOUNTS = 500;
 const VALID_STATUSES = ["DRAFT", "POSTED", "CANCELLED"] as const;
 type VoucherStatusFilter = (typeof VALID_STATUSES)[number];
 
+// ── Unpaid-only ("due / partial") ───────────────────────────────────────────
+// Settlement is NOT a stored column — it is movement-minus-linked, worked out
+// per page (see `loadSettlements`). So `?settlement=open` cannot be a `where`
+// clause; the walk stays exactly the same and the route simply scans forward in
+// chunks, keeping only the rows that still owe something, until it has a page or
+// runs out. The chunk cap keeps one request bounded: hitting it returns a short
+// page with a cursor, and the client's normal scroll pulls the rest.
+const UNPAID_SCAN_CHUNK = 500;
+const MAX_UNPAID_SCAN_CHUNKS = 6;
+const OPEN_STATES = new Set(["DUE", "PARTIAL"]);
+
 /** AuditLog.entityType → the CombinedRow source prefix its `originalId` keys. */
 const TOMBSTONE_SOURCE: Record<string, string> = {
     INV_VOUCHER:   "inv",
@@ -62,6 +73,36 @@ function intersectKinds(a: string[] | null, b: string[] | null): string[] | null
     if (!b) return a;
     const bs = new Set(b);
     return a.filter((k) => bs.has(k));
+}
+
+/**
+ * Bill-wise state for a batch of vouchers. The party's own leg is read off the
+ * lines already loaded for the GL total, so the only extra cost is `sumLinked` —
+ * a fixed couple of queries per batch, never one per row.
+ */
+async function settlementsFor(
+    batch: { id: number; type: string; status: string; partyAccountId: number | null; lines: { type: string; amount: unknown; accountId: number }[] }[],
+) {
+    const partyMovement = new Map<number, number>();
+    for (const v of batch) {
+        if (v.partyAccountId == null) continue;
+        let movement = 0;
+        for (const l of v.lines) {
+            if (l.accountId !== v.partyAccountId) continue;
+            movement += l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+        }
+        partyMovement.set(v.id, movement);
+    }
+    return loadSettlements(
+        prisma,
+        batch.map((v) => ({
+            universalVoucherId: v.id,
+            partyAccountId:     v.partyAccountId,
+            kind:               v.type,
+            status:             v.status,
+        })),
+        partyMovement,
+    );
 }
 
 export async function GET(req: Request) {
@@ -80,6 +121,8 @@ export async function GET(req: Request) {
     const branchId = searchParams.get("branchId");
     const refsSince = parseSince(searchParams.get("refsSince"));
     const since = parseSince(searchParams.get("since"));
+    /** Only bills that still owe something — "due" or "partial". */
+    const unpaidOnly = searchParams.get("settlement") === "open";
     const statuses = (searchParams.get("statuses") ?? "")
         .split(",")
         .map((s) => s.trim())
@@ -132,6 +175,19 @@ export async function GET(req: Request) {
                     // written this afternoon drops out of a window ending today.
                     ...(to ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
                 },
+            } : {}),
+            // A voucher with no party, not posted, or of a documentary kind can
+            // never carry a bill — `loadSettlements` skips exactly these. Saying
+            // so in SQL keeps the scan below off rows it would only throw away.
+            // A voucher with no party, not posted, or of a documentary kind can
+            // never carry a bill — `loadSettlements` skips exactly these. Saying
+            // so in SQL keeps the scan below off rows it would only throw away.
+            // The kind exclusion goes through `NOT` because `type` is already
+            // spoken for above by the kind dropdown.
+            ...(unpaidOnly ? {
+                partyAccountId: { not: null },
+                status: "POSTED" as const,
+                NOT: { type: { in: [...NON_REGULAR_KINDS] } },
             } : {}),
             ...(search ? {
                 OR: [
@@ -187,6 +243,9 @@ export async function GET(req: Request) {
         let nextCursor: number | null = null;
         let overflow = false;
         let deleted: string[] = [];
+        // Settlements worked out while scanning are kept, so the row mapper below
+        // never re-reads what this request already measured.
+        const settlements: Record<number, { state: string; open: number }> = {};
 
         if (since) {
             // Delta: everything touched since the client last looked. Rows older
@@ -213,6 +272,41 @@ export async function GET(req: Request) {
                 deleted = tombstones
                     .filter((t) => TOMBSTONE_SOURCE[t.entityType])
                     .map((t) => `${TOMBSTONE_SOURCE[t.entityType]}-${t.originalId}`);
+            }
+        } else if (unpaidOnly) {
+            // Scan forward in chunks, keeping only what still owes. The cursor is
+            // always an id we have actually looked at, so the walk stays gap-free
+            // whether we stop because the page filled or because the cap was hit.
+            const kept: typeof found = [];
+            let scanCursor = cursor ?? null;
+            let exhausted = false;
+
+            for (let chunk = 0; chunk < MAX_UNPAID_SCAN_CHUNKS && kept.length <= take; chunk++) {
+                const batch = await prisma.universalVoucher.findMany({
+                    where,
+                    orderBy,
+                    take: UNPAID_SCAN_CHUNK,
+                    ...(scanCursor ? { cursor: { id: scanCursor }, skip: 1 } : {}),
+                    select,
+                });
+                if (batch.length === 0) { exhausted = true; break; }
+                scanCursor = batch[batch.length - 1].id;
+                Object.assign(settlements, await settlementsFor(batch));
+                for (const v of batch) {
+                    if (OPEN_STATES.has(settlements[v.id]?.state ?? "")) kept.push(v);
+                }
+                if (batch.length < UNPAID_SCAN_CHUNK) { exhausted = true; break; }
+            }
+
+            if (kept.length > take) {
+                // More matches than a page: resume from the last row we RETURN.
+                found = kept.slice(0, take);
+                nextCursor = found[found.length - 1].id;
+            } else {
+                found = kept;
+                // Short page but the books are not finished — hand back the last
+                // id scanned so the next scroll picks up exactly where we stopped.
+                nextCursor = exhausted ? null : scanCursor;
             }
         } else {
             // take + 1 so we learn whether another page exists without a second query.
@@ -246,28 +340,12 @@ export async function GET(req: Request) {
         // leg on the same spine (`role:"TENDER"`), so a sale and a receipt are
         // measured by exactly the same rule; a bill taken in full at the counter
         // leaves no leg at all, and that reads as Settled.
-        const partyMovement = new Map<number, number>();
-        for (const v of found) {
-            if (v.partyAccountId == null) continue;
-            let movement = 0;
-            for (const l of v.lines) {
-                if (l.accountId !== v.partyAccountId) continue;
-                movement += l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
-            }
-            partyMovement.set(v.id, movement);
-        }
-        const settlements = await loadSettlements(
-            prisma,
-            found.map((v) => ({
-                universalVoucherId: v.id,
-                partyAccountId:     v.partyAccountId,
-                kind:               v.type,
-                status:             v.status,
-            })),
-            partyMovement,
-        );
+        // The unpaid scan above already measured its rows; anything not measured
+        // yet (the ordinary page, or a delta) is worked out here in one go.
+        const unmeasured = found.filter((v) => settlements[v.id] === undefined);
+        if (unmeasured.length > 0) Object.assign(settlements, await settlementsFor(unmeasured));
 
-        const rows = found.map((v) => {
+        let rows = found.map((v) => {
             const source = voucherSourceForType(v.type);
             const detail = v.voucherDetail;
             // An inventory row keys on its detail id, a GL/journal row on the
@@ -312,10 +390,21 @@ export async function GET(req: Request) {
                 universalVoucherId: v.id,
                 // Bill-wise state. Null where there is no bill to settle: no
                 // party, not posted, or a documentary voucher that posts no money.
-                settlement:     settlements[v.id]?.state ?? null,
+                settlement:     (settlements[v.id]?.state ?? null) as SettlementState | null,
                 settlementOpen: settlements[v.id]?.open  ?? 0,
             };
         });
+
+        // A delta cannot simply omit a row that has just been paid off — the
+        // client still holds it. Under "unpaid only" a newly settled voucher is
+        // therefore reported as a removal, which is what makes it leave the list.
+        if (unpaidOnly && since) {
+            deleted = [
+                ...deleted,
+                ...rows.filter((r) => !OPEN_STATES.has(r.settlement ?? "")).map((r) => r.id),
+            ];
+            rows = rows.filter((r) => OPEN_STATES.has(r.settlement ?? ""));
+        }
 
         // ── refs ────────────────────────────────────────────────────────────
         // Branch and User are small enough to ship whole every time, which makes a
