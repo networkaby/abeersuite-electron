@@ -116,6 +116,23 @@ export function OutstandingsReportScreen({
         [data],
     );
 
+    // Party link — the customer explorer opens on the Person or Company behind
+    // the ledger, the same URL the day book and the voucher reports use. A
+    // creditor/debtor account with neither (a plain ledger head) stays text.
+    const partyHrefByAccount = useMemo(
+        () => new Map(
+            (data?.parties ?? []).map((p) => [
+                p.accountId,
+                p.personId != null
+                    ? `/office/customers/all?personId=${p.personId}`
+                    : p.companyId != null
+                        ? `/office/customers/all?companyId=${p.companyId}`
+                        : null,
+            ] as const),
+        ),
+        [data],
+    );
+
     const bills = useMemo(() => {
         if (!data) return [];
         let rows = q ? data.bills.filter((b) => b.searchKey.includes(q)) : data.bills;
@@ -284,7 +301,16 @@ export function OutstandingsReportScreen({
                                     >
                                         <td className="px-3 py-1.5 font-medium text-foreground">
                                             <span className="inline-flex items-center gap-2">
-                                                {p.accountName}
+                                                {partyHrefByAccount.get(p.accountId) ? (
+                                                    <Link
+                                                        href={partyHrefByAccount.get(p.accountId)!}
+                                                        className="text-primary hover:underline"
+                                                        title="Open this party in Customers"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {p.accountName}
+                                                    </Link>
+                                                ) : p.accountName}
                                                 <ToLinkChip toLink={p.toLink} />
                                             </span>
                                         </td>
@@ -353,11 +379,20 @@ export function OutstandingsReportScreen({
                                                 ) : b.ref}
                                             </td>
                                             <td
-                                                className="px-3 py-1.5 font-medium text-foreground cursor-pointer hover:underline"
+                                                className="px-3 py-1.5 font-medium text-foreground cursor-pointer"
                                                 title="Show only this party"
                                                 onClick={() => setFocus({ accountId: b.accountId, name: b.accountName })}
                                             >
-                                                {b.accountName}
+                                                {partyHrefByAccount.get(b.accountId) ? (
+                                                    <Link
+                                                        href={partyHrefByAccount.get(b.accountId)!}
+                                                        className="text-primary hover:underline"
+                                                        title="Open this party in Customers"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {b.accountName}
+                                                    </Link>
+                                                ) : b.accountName}
                                             </td>
                                             <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{formatDateCompact(b.dueDate)}</td>
                                             <td className="px-3 py-1.5 text-right font-mono">{fmt(b.totalAmount)}</td>

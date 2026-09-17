@@ -6,7 +6,7 @@ export default function PayablesPage() {
     return (
         <OutstandingsReportScreen
             title="Payables"
-            subtitle="Open bills to Sundry Creditors with ageing buckets — click a party to drill into bills."
+            subtitle="Open bills to Sundry Creditors with ageing buckets — click a row to drill into bills, or the party name to open it in Customers."
             apiPath="/api/accountancy/reports/payables"
             loadError="Failed to load payables"
             emptyText={{ party: "No outstanding payables.", bill: "No outstanding bills." }}
