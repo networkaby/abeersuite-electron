@@ -6,6 +6,7 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
 import { loadUnitCostMap } from "@/modules/inventory/lib/costBasis";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -16,7 +17,7 @@ export const maxDuration = 60;
 //   average inventory value = (opening value + closing value) / 2, both at the
 //   derived unit cost; opening qty derived: closing − in + out.
 //   days of inventory = period days ÷ turnover.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the stock turnover report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -94,4 +95,4 @@ export async function GET(req: Request) {
     rows.sort((a, b) => (a.turnover ?? -1) - (b.turnover ?? -1) || b.stockValue - a.stockValue);
 
     return NextResponse.json({ period: { from, to }, periodDays, costMethod, branches, rows });
-}
+});

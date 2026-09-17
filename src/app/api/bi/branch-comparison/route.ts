@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -11,7 +12,7 @@ export const maxDuration = 60;
 // Per-branch performance from the margin lines (vouchers with no branch
 // stamped pool under "(no branch)"). No branch filter here on purpose —
 // the report IS the branch comparison.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the branch comparison", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -56,4 +57,4 @@ export async function GET(req: Request) {
         .sort((a, b) => b.revenue - a.revenue);
 
     return NextResponse.json({ period: { from, to }, costMethod, rows });
-}
+});

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -20,7 +21,7 @@ interface Bucket {
 // bill-level coupon (CouponRedemption rows) and loyalty redeemed ₹ (the DEBIT
 // GL legs on the configured redeem-expense ledger) attributed per customer.
 // Item pivot stays line-only — bill-level ₹ can't honestly split over items.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the discount impact report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -129,4 +130,4 @@ export async function GET(req: Request) {
             marginPct: marginPct(totals.revenue, totals.profit),
         },
     });
-}
+});

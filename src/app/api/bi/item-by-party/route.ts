@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
 import { loadPurchaseLines } from "@/modules/bi/lib/purchaseLines";
+import { withApiError } from "@/shared/lib/api";
 
 // Heavy aggregation: every sale + purchase line in the period.
 export const maxDuration = 60;
@@ -14,7 +15,7 @@ export const maxDuration = 60;
 // profit (margin engine) and bought qty/value (purchase lines) side by side.
 // With productId: the party breakup for that one item — which customers bought
 // it (qty, revenue, profit) and which suppliers supplied it (qty, value, rate).
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the item-by-party report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -116,4 +117,4 @@ export async function GET(req: Request) {
         .sort((a, b) => b.revenue - a.revenue);
 
     return NextResponse.json({ period: { from, to }, costMethod, branches, rows });
-}
+});

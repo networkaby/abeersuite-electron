@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -11,7 +12,7 @@ export const maxDuration = 60;
 // The BI dashboard payload: headline KPIs (revenue / COGS / profit / margin %,
 // bill + customer counts), a monthly revenue-vs-profit series across the
 // period, and top-5 customers + items by profit.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the BI overview", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -97,4 +98,4 @@ export async function GET(req: Request) {
         topItems: [...byItem.values()].sort((a, b) => b.profit - a.profit).slice(0, 5)
             .map((i) => ({ ...i, profit: r2(i.profit), revenue: r2(i.revenue) })),
     });
-}
+});

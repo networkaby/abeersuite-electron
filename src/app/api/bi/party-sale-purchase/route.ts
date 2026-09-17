@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
 import { loadPurchaseLines } from "@/modules/bi/lib/purchaseLines";
+import { withApiError } from "@/shared/lib/api";
 
 // Heavy aggregation: every sale + purchase line in the period.
 export const maxDuration = 60;
@@ -13,7 +14,7 @@ export const maxDuration = 60;
 // One row per party showing both sides of the relationship — what we sold to
 // them (pre-tax revenue + profit) and what we bought from them (pre-tax value).
 // Net flow = sale − purchase. Party-less vouchers pool as "Walk-in / No party".
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the party sale and purchase report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -89,4 +90,4 @@ export async function GET(req: Request) {
             netFlow: r2(totals.sale - totals.purchase),
         },
     });
-}
+});

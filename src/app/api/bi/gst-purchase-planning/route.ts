@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 import {
     fyStartYearOf,
     loadGstPartyPurchases,
@@ -24,7 +25,7 @@ function parseOverride(value: unknown): number | null | undefined {
 }
 
 // GET /api/bi/gst-purchase-planning?month=2026-08&branchId=
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the GST purchase plan", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -91,11 +92,11 @@ export async function GET(req: Request) {
         },
         rows: partyRows,
     });
-}
+});
 
 // PATCH /api/bi/gst-purchase-planning — save this month's overrides.
 // Bank selection is a per-FY setting; it lives on the /fy route.
-export async function PATCH(req: Request) {
+export const PATCH = withApiError("Failed to save the GST purchase plan", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -130,4 +131,4 @@ export async function PATCH(req: Request) {
         saleOverride: row.saleOverride != null ? toNumber(row.saleOverride) : null,
         depositOverride: row.depositOverride != null ? toNumber(row.depositOverride) : null,
     });
-}
+});

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
 import { endOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -14,7 +15,7 @@ const BASE_WINDOW_MONTHS = 24;
 // Identified customers whose LAST purchase is older than `days` (30/60/90/180),
 // ranked by what they used to be worth. Base = last 24 months of sales; phone
 // pulled from the linked person/company for the win-back call list.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to list inactive customers", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -92,4 +93,4 @@ export async function GET(req: Request) {
         activeCustomers: byCustomer.size - rows.length,
         rows,
     });
-}
+});

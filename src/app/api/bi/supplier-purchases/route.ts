@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
 import { loadPurchaseLines } from "@/modules/bi/lib/purchaseLines";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -16,7 +17,7 @@ export const maxDuration = 60;
 // bought 70/30 from two suppliers splits its profit 70/30). Profit on goods
 // with NO purchase in the period (opening / older stock) is shown as its own
 // row so attributed profit still reconciles to total gross profit.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the supplier purchases report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -132,4 +133,4 @@ export async function GET(req: Request) {
             marginPct: marginPct(totalSold, totalProfit),
         },
     });
-}
+});

@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { classifyProducts, type MovementClass } from "@/modules/inventory/lib/movementClass";
 import { valueStockBatch, VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -16,7 +17,7 @@ export const maxDuration = 60;
 // WHERE it came from, stock on hand, value locked (org valuation method), and
 // the action the Reorder page takes. Dormant SKUs (no stock, no movement,
 // never sold) are skipped.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the stock health report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -134,4 +135,4 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ method, branches, summary, rows });
-}
+});

@@ -5,6 +5,7 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { openingAppliesTo } from "@/modules/inventory/lib/liveStock";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -15,7 +16,7 @@ export const maxDuration = 60;
 // view only; the master opening has no branch) + Σ(in − out) before `from`.
 // With productId: the dated in/out ledger rows for that product in the period,
 // plus the product's opening so the UI can run a balance column.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the movement register", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -160,4 +161,4 @@ export async function GET(req: Request) {
         rows,
         totals: { inQty: r2(totals.inQty), inValue: r2(totals.inValue), outQty: r2(totals.outQty), outValue: r2(totals.outValue) },
     });
-}
+});

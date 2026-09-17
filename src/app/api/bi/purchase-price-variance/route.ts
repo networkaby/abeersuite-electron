@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { r2 } from "@/modules/bi/lib/marginEngine";
 import { loadPurchaseLines, PURCHASE_TYPE } from "@/modules/bi/lib/purchaseLines";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -12,7 +13,7 @@ export const maxDuration = 60;
 // Same item bought at different rates in the period. Rate stats use POSITIVE
 // purchase lines only (returns don't set prices). Items need ≥ 2 buys to have
 // a variance. With productId: the dated buy list for the drill-down.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the purchase price variance report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -93,4 +94,4 @@ export async function GET(req: Request) {
         .sort((a, b) => b.variancePct - a.variancePct);
 
     return NextResponse.json({ period: { from, to }, branches, rows });
-}
+});

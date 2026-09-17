@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -25,7 +26,7 @@ function segmentFor(r: number, f: number, m: number): RfmSegment {
 // identity to segment). R = days since last purchase (relative to `to`),
 // F = bills in the window, M = pre-tax revenue in the window. Each dimension
 // scored 1–5 by quintile rank within the population, then mapped to segments.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the RFM analysis", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -94,4 +95,4 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ period: { from, to }, branches, summary, rows });
-}
+});

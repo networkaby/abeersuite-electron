@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -16,7 +17,7 @@ const MAX_PAIRS = 50;
 //   support    = pair bills ÷ all bills in the period
 //   confidence = pair bills ÷ bills containing one side
 // Sale returns don't form baskets — only positive-qty sale lines count.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the basket analysis", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -79,4 +80,4 @@ export async function GET(req: Request) {
         minPairBills: MIN_PAIR_BILLS,
         rows,
     });
-}
+});

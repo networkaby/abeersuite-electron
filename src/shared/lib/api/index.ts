@@ -16,3 +16,4 @@ export { ASSIGNED_POSITION_SELECT } from "./ticketSelects";
 export { pickDefined } from "./pickDefined";
 export { generateNextOpaqueId } from "./generateNextOpaqueId";
 export { requestBusinessDate } from "./requestBusinessDate";
+export { withApiError } from "./withApiError";

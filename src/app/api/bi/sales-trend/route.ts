@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2, type MarginLine } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -30,7 +31,7 @@ const shiftYear = (d: Date, by: number) => {
 //
 // Seasonality view: monthly revenue/profit for the range vs the SAME calendar
 // months one year earlier (YoY), plus a day-of-week revenue profile.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the sales trend", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -81,4 +82,4 @@ export async function GET(req: Request) {
     const dayOfWeek = dowTotals.map((d) => ({ ...d, revenue: r2(d.revenue), profit: r2(d.profit) }));
 
     return NextResponse.json({ period: { from, to }, branches, months, dayOfWeek });
-}
+});

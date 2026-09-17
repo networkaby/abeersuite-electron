@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadMarginLines, marginPct, r2 } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 // Heavy aggregation: every sale line in the period + an inward-lot cost walk.
 export const maxDuration = 60;
@@ -14,7 +15,7 @@ export const maxDuration = 60;
 // with accountId = 0.
 // With accountId (number, or 0 for the walk-in pool): item-wise breakup for
 // that customer, same measure columns.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the customer profit report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -99,4 +100,4 @@ export async function GET(req: Request) {
         rows,
         totals: { ...totals, qty: r2(totals.qty), revenue: r2(totals.revenue), cogs: r2(totals.cogs), profit: r2(totals.profit), marginPct: marginPct(totals.revenue, totals.profit) },
     });
-}
+});

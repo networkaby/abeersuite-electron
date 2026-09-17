@@ -6,6 +6,7 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { r2 } from "@/modules/bi/lib/marginEngine";
 import { valueStockBatch, VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
+import { withApiError } from "@/shared/lib/api";
 
 export const maxDuration = 60;
 
@@ -23,7 +24,7 @@ export type FsnClass = "FAST" | "SLOW" | "NON_MOVING";
 //   • Non-moving = zero outward in period with stock on hand → dead stock,
 //     with the on-hand value locked (org valuation method).
 // Products with no stock AND no movement are skipped.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the FSN analysis", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -130,4 +131,4 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ period: { from, to }, method, fastMinTurnover: FAST_MIN_TURNOVER, branches, summary, rows });
-}
+});

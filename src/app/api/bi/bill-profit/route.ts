@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { loadBillAdjustments, loadMarginLines, marginPct, r2, type BillAdjustment } from "@/modules/bi/lib/marginEngine";
+import { withApiError } from "@/shared/lib/api";
 
 // Heavy aggregation: every sale line in the period + an inward-lot cost walk.
 export const maxDuration = 60;
@@ -13,7 +14,7 @@ export const maxDuration = 60;
 // derived COGS, profit, margin %. Sale returns appear as their own (negative)
 // bills so a costly return is visible, not silently netted into some other bill.
 // With voucherId: item-wise breakup of that one bill.
-export async function GET(req: Request) {
+export const GET = withApiError("Failed to build the bill-wise profit report", async (req: Request) => {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -168,4 +169,4 @@ export async function GET(req: Request) {
             netMarginPct: marginPct(totals.revenue, totals.netProfit),
         },
     });
-}
+});
