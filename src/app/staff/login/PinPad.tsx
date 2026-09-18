@@ -85,7 +85,7 @@ export default function PinPad({
             {error && <p className={styles.err}>{error}</p>}
 
             <div className={styles.rowlinks}>
-                <button type="button" className={styles.pinlink} onClick={onBack}>Back to photos</button>
+                <button type="button" className={styles.pinlink} onClick={onBack}>Login with PIN</button>
                 {/* A PIN cannot be changed from here — the route asks for the password
                     first — so this is the way to it. */}
                 <button type="button" className={styles.pinlink} onClick={onUsePassword}>Use password</button>
