@@ -72,10 +72,15 @@ type ViewMode = "merged" | "split";
 // ticks the whole group so Match is one press away.
 type Suggestion = { key: string; first: boolean; last: boolean; stIds: number[]; glIds: number[]; size: number };
 
+// A run of neighbouring rows that belong together — an existing match, or a
+// suggestion. Only a run of two or more is a group: it gets the bracket and a
+// rule above and below. A row belonging to nobody keeps the hairline divider.
+type Run = { kind: "matched" | "suggested"; first: boolean; last: boolean; size: number };
+
 // One row of the merged table. Both sides share a signed delta — money into the
 // bank is positive — so a statement line and the book entry that explains it
 // carry the same number and sort next to each other.
-type MergedRowBase = { key: string; date: string; delta: number; sug?: Suggestion };
+type MergedRowBase = { key: string; date: string; delta: number; sug?: Suggestion; run?: Run; strongBelow?: boolean };
 type MergedRow =
     | (MergedRowBase & { kind: "st"; st: StatementLineView })
     | (MergedRowBase & { kind: "gl"; gl: GlLineView });
@@ -205,6 +210,32 @@ export function BankReconciliationPage() {
         rows.forEach((r, i) => {
             if (!r.sug) return;
             r.sug = { ...r.sug, first: rows[i - 1]?.sug?.key !== r.sug.key, last: rows[i + 1]?.sug?.key !== r.sug.key };
+        });
+
+        // What each row belongs to: a suggestion, an existing match, or nothing.
+        // Runs are read off neighbours, so a match whose two halves are days
+        // apart — and so not adjacent here — gets no bracket rather than a
+        // wrong one.
+        const keyOf = (r: MergedRow) => {
+            if (r.sug) return `s:${r.sug.key}`;
+            const g = r.kind === "st" ? (r.st.match && !r.st.match.stale ? r.st.match.groupId : null) : (r.gl.match?.groupId ?? null);
+            return g ? `m:${g}` : `x:${r.key}`;
+        };
+        const keys = rows.map(keyOf);
+        for (let i = 0; i < rows.length;) {
+            let j = i;
+            while (j + 1 < rows.length && keys[j + 1] === keys[i]) j++;
+            if (j > i) {
+                const kind = keys[i].startsWith("s:") ? "suggested" : "matched";
+                for (let k = i; k <= j; k++) rows[k].run = { kind, first: k === i, last: k === j, size: j - i + 1 };
+            }
+            i = j + 1;
+        }
+        // A heavy rule closes a group and opens the next one. Rows outside any
+        // group keep the hairline, or the whole table reads as bars.
+        rows.forEach((r, i) => {
+            const next = rows[i + 1];
+            r.strongBelow = next != null && (r.run?.last === true || next.run?.first === true);
         });
         return rows;
     }, [stRows, glRows]);
@@ -439,7 +470,7 @@ export function BankReconciliationPage() {
                                             <th className="w-36 px-2 py-1.5" />
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y">
+                                    <tbody>
                                         {mergedPage.pageRows.length === 0 && (
                                             <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                                                 {data.statementLines.length === 0 && data.glLines.length === 0 ? "Nothing in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
@@ -599,6 +630,7 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
         ? row.st.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`)
         : [];
     const sug = row.sug;
+    const run = row.run;
     // One background, chosen — not three bg-* utilities stacked, where which one
     // wins is down to the order Tailwind happens to emit them in. Hover deepens
     // the row's own colour rather than washing it with a neutral, which read as
@@ -612,19 +644,23 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                 : "bg-violet-100/60 hover:bg-violet-200/90 dark:bg-violet-950/40 dark:hover:bg-violet-900/50";
     return (
         <tr className={cn(
-            "border-l-[3px]",
+            "border-b border-l-[3px]",
             isSt ? "border-l-sky-500" : "border-l-violet-500",
+            // A group is closed and the next one opened by a rule you cannot
+            // miss; everything else keeps the hairline.
+            row.strongBelow ? "border-b-2 border-b-foreground/30" : "border-b-border/60",
             background,
             r.locked && "opacity-60",
         )}>
             <td className="relative px-2 py-1.5 align-top">
-                {sug && (
+                {run && (
                     <span
                         aria-hidden
                         className={cn(
-                            "absolute left-0 w-[3px] bg-amber-400",
-                            sug.first ? "top-1.5 rounded-t-full" : "top-0",
-                            sug.last ? "bottom-1.5 rounded-b-full" : "bottom-0",
+                            "absolute left-0 w-[3px]",
+                            run.kind === "suggested" ? "bg-amber-400" : "bg-green-500",
+                            run.first ? "top-1.5 rounded-t-full" : "top-0",
+                            run.last ? "bottom-1.5 rounded-b-full" : "bottom-0",
                         )}
                     />
                 )}
@@ -639,7 +675,7 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                     "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
                     isSt ? "bg-sky-200 text-sky-900 dark:bg-sky-900/60 dark:text-sky-100" : "bg-violet-200 text-violet-900 dark:bg-violet-900/60 dark:text-violet-100",
                 )}>{isSt ? "Bank" : "Books"}</span>
-                {sug?.first && (
+                {sug && run?.first && (
                     <button
                         type="button"
                         onClick={() => onSelectGroup(sug)}
