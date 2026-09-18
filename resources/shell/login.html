@@ -144,6 +144,10 @@
   /* ── Faces: who has signed in on this PC ─────────────────────────────────
      A photograph to tap instead of an address to type. The grid comes from a
      file main keeps on this PC, so it paints with the line down. */
+  .col{display:flex;flex-direction:column;position:relative;z-index:3;flex:0 0 372px}
+  .col .card{flex:none}
+  .statuscard{margin:10px 0 0;padding:16px 30px}
+  .statuscard .status{margin:0;padding:0;border-top:0}
   .faces{display:none}
   .faces.on{display:block}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:2px 0 0}
@@ -239,6 +243,7 @@
   <div class="mods" id="mods"></div>
 </section>
 
+<div class="col">
 <section class="card faces" id="faces">
   <h1 class="greet" id="fgreet">Good morning</h1>
   <p class="clock" id="fclock">&nbsp;</p>
@@ -258,6 +263,12 @@
     <div class="dots" id="dots"></div>
     <div class="keys" id="keys"></div>
     <p class="err" id="paderr"></p>
+    <div class="rowlinks">
+      <button class="link" id="padback" type="button">Back to photos</button>
+      <!-- A PIN cannot be changed from the keypad — the route asks for the password
+           first — so this is the way to it, and to "Set PIN" beside it. -->
+      <button class="link quiet" id="padpass" type="button">Use password</button>
+    </div>
   </div>
 </section>
 
@@ -280,17 +291,29 @@
 
   <button class="go" id="go" type="submit" disabled>Starting&hellip;</button>
   <p class="err" id="err"></p>
-  <button class="link" id="pinlink" type="button" hidden></button>
 
+  <!-- TWO controls, never one link doing both jobs. That was the bug: a person with no
+       PIN saw only "Set PIN" and had no way back to the photographs at all. -->
+  <div class="rowlinks">
+    <button class="link" id="backfaces" type="button" hidden>Back to photos</button>
+    <button class="link quiet" id="setpin" type="button">Set PIN</button>
+  </div>
+</form>
+
+<!-- The boot status sits UNDER both cards, not inside the password form. Inside it, a
+     till with photographs on screen showed no bar, no "Ready" and no tips at all — the
+     one machine whose owner most needs to know it is still starting. -->
+<aside class="card statuscard">
   <div class="status">
     <div class="bar"><span id="barfill"></span></div>
     <div class="srow"><i class="dot" id="dot"></i><span class="smsg" id="smsg">Starting&hellip;</span></div>
     <p class="tip" id="tip"></p>
     <p class="shopmsg" id="shopmsg"></p>
-    <p class="hint">Tired of typing this? Press <b>Set PIN</b> above, sign in, and choose six
+    <p class="hint">Tired of typing this? Press <b>Set PIN</b>, sign in, and choose six
       digits — tomorrow you just tap your photo.</p>
   </div>
-</form>
+</aside>
+</div>
 
 </div>
 
@@ -562,6 +585,9 @@
     elGo.textContent = "Sign in";
     clearInterval(tipTimer);
     elTip.classList.remove("in");
+    // A PIN typed while the server was still coming up has been held; send it now.
+    if (waiting) { submitPin(); return; }
+    if (state !== "password") return;
     if (!elEmail.value) elEmail.focus(); else elPass.focus();
   }
 
@@ -638,32 +664,60 @@
       });
   });
 
-  // ── The faces ─────────────────────────────────────────────────────────────
-  // Who has signed in on THIS PC, from a file main keeps beside the app's other
-  // settings. Nothing here decides anything: a card is a shortcut to an email
-  // address and a keypad, and the sign-in itself still happens on the server
-  // exactly as it does for a typed password. A hand-edited roster buys nobody a
-  // single permission.
+  // ── The sequence ─────────────────────────────────────────────────────────
   //
-  // No network in any of this, on purpose — the grid has to paint on a morning
-  // when the line is down, which is the morning it matters most.
+  //   faces ──tap a face with a PIN──→ keypad ──6 digits──→ signed in
+  //     ↑                                │ Back / Escape
+  //     │ Back to photos                 └──────→ faces
+  //     │
+  //   password ──sign in──→ signed in ──(if Set PIN was pressed)──→ choosePin
+  //
+  // `choosePin` is not here: a PIN cannot be set before anyone is signed in, so it
+  // lives on /staff/login, which is also where this hands over. THE SAME STATE NAMES
+  // are used there. The two screens cannot share code — this one is a file:// page
+  // that paints before any server exists — so they are kept in step by hand, the same
+  // arrangement as the CONFIG wording above. Change one, change the other.
+  //
+  // The rule that earns its keep: EVERY state has a way out. Three of them used to be
+  // one-way — a face with no PIN, "Someone else" where nobody had a PIN, and a keypad
+  // tapped before the server was ready.
+
   var elFaces  = document.getElementById("faces");
   var elGrid   = document.getElementById("grid");
   var elPick   = document.getElementById("pick");
   var elPad    = document.getElementById("pad");
   var elDots   = document.getElementById("dots");
   var elPadErr = document.getElementById("paderr");
+  var elBack   = document.getElementById("backfaces");
+  var elSetPin = document.getElementById("setpin");
+
+  var state    = "password";   // faces | keypad | password
   var roster   = [];
-  var chosen   = null;
+  var chosen   = null;         // the face the keypad belongs to
+  var formFor  = null;         // the face the password form is standing in for
   var typed    = "";
+  var wantsPin = false;        // "Set PIN" was pressed; rides along with the sign-in
+  var waiting  = false;        // six digits in, server not up yet
   // Cards greyed after three wrong tries here. Cosmetic only — restarting the app
-  // clears it. The real lock is the server's, and the real wall is that a PIN works
-  // on this counter alone.
+  // clears it. The real lock is the server's, and the real wall is that a PIN works on
+  // this counter alone.
   var missed   = {};
-  // Who the password form is standing in for, when it was reached from a card, and
-  // whether they asked for a PIN on the way through.
-  var formFor  = null;
-  var wantsPin = false;
+
+  /** The one place a state change happens. */
+  function show(next) {
+    state = next;
+    elForm.style.display = next === "password" ? "" : "none";
+    elFaces.classList.toggle("on", next !== "password");
+    elPick.style.display = next === "faces" ? "" : "none";
+    elPad.classList.toggle("on", next === "keypad");
+    // Always offered while this PC has photographs — never conditional on whether
+    // anyone holds a PIN, which is what made this a one-way door before.
+    elBack.hidden = roster.length === 0;
+    if (next === "faces") { chosen = null; typed = ""; waiting = false; }
+    if (next === "password" && ready) {
+      if (!elEmail.value.trim()) elEmail.focus(); else elPass.focus();
+    }
+  }
 
   function initials(name) {
     var parts = String(name || "").trim().split(/\s+/), out = "";
@@ -706,8 +760,8 @@
 
       var post = document.createElement("p");
       post.className = "post";
-      // No PIN is not a fault and is not hidden — a card that quietly disappeared
-      // would be the most confusing thing on this screen.
+      // Somebody with no PIN still shows. A card that quietly disappeared would be the
+      // most confusing thing on this screen.
       post.textContent = entry.title || (entry.hasPin ? "" : "Password");
       card.appendChild(post);
 
@@ -720,7 +774,8 @@
         ev.stopPropagation();
         if (api && api.forgetShellUser) api.forgetShellUser(entry.email);
         roster = roster.filter(function (r) { return r.email !== entry.email; });
-        if (!roster.length) showForm(); else drawFaces();
+        drawFaces();
+        show(roster.length ? "faces" : "password");
       });
       card.appendChild(drop);
 
@@ -729,26 +784,15 @@
     });
   }
 
-  function showForm() {
-    elFaces.classList.remove("on");
-    elForm.style.display = "";
-    nameTheLink();
-    if (ready) { if (!elEmail.value) elEmail.focus(); else elPass.focus(); }
-  }
-
-  function showFaces() {
-    elForm.style.display = "none";
-    elFaces.classList.add("on");
-    elPad.classList.remove("on");
-    elPick.style.display = "";
-  }
-
-  // Someone with no PIN, or one the clocks have run out on, goes to the form with
-  // their address already in — and is told why, so a refused PIN never reads as a
-  // broken till.
+  /**
+   * Hand a person to the password form, and say why they are there.
+   *
+   * `formFor` remembers whose form it is, so the card keeps their address and the way
+   * back to their photograph stays open.
+   */
   function toPassword(entry, why) {
     formFor = entry;
-    showForm();
+    show("password");
     elEmail.value = entry.email;
     elErr.textContent = why || "";
     if (ready) elPass.focus();
@@ -758,34 +802,30 @@
     if (!entry.hasPin) { toPassword(entry, ""); return; }
     chosen = entry;
     typed = "";
+    waiting = false;
     elPadErr.textContent = "";
     document.getElementById("padwho").textContent = "Welcome back, " + String(entry.name).split(/\s+/)[0];
-    document.getElementById("padsay").textContent = "Enter your 6-digit PIN";
+    say("Enter your 6-digit PIN");
     pic(entry, document.getElementById("padpic"));
     drawDots();
-    elPick.style.display = "none";
-    elPad.classList.add("on");
+    show("keypad");
 
-    // Ask the server whether this PIN is still live BEFORE the cashier types six
-    // digits into a keypad that was never going to accept them. Silent when it
-    // cannot answer — the sign-in itself is the real check either way. This is the
-    // one fetch on this screen and it goes to our own server, never the internet.
-    fetch("/api/counter-pin/status", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: entry.email })
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (out) {
-        if (!out || chosen !== entry) return;
-        if (out.state === "password-due") {
-          toPassword(entry, "Password time — it has been a few days. Your PIN keeps working after this.");
-        } else if (out.state === "none") {
-          toPassword(entry, "");
-        }
-      })
-      .catch(function () { /* offline, or not a counter — let the sign-in decide */ });
+    // Is that PIN still live? Asked through MAIN, not with a fetch from here: this
+    // document's origin is file://, so a relative fetch resolves to file:///api/… and
+    // fails silently — which is exactly what it used to do, making a due password
+    // discoverable only after six digits had been typed.
+    if (!api || !api.shellPinStatus) return;
+    api.shellPinStatus(entry.email).then(function (out) {
+      if (chosen !== entry) return;                // they moved on while we asked
+      if (out === "password-due") {
+        toPassword(entry, "Password time — it has been a few days. Your PIN keeps working after this.");
+      } else if (out === "none") {
+        toPassword(entry, "");
+      }
+    }).catch(function () { /* the sign-in is the real check either way */ });
   }
+
+  function say(line) { document.getElementById("padsay").textContent = line; }
 
   function drawDots() {
     elDots.textContent = "";
@@ -803,12 +843,23 @@
     if (typed.length === 6) submitPin();
   }
 
+  /**
+   * Six digits are in. If the server is not up yet, HOLD them and go the moment it is —
+   * the old code returned here with the buffer still full, so every further key was
+   * refused and nothing on screen said why.
+   */
   function submitPin() {
-    if (!ready || !chosen) return;
+    if (!chosen) return;
+    if (!ready) {
+      waiting = true;
+      say("Starting… your PIN goes in the moment it is ready.");
+      return;
+    }
+    waiting = false;
     var entry = chosen, pin = typed;
     typed = ""; drawDots();
     if (!api || !api.shellSignInPin) { toPassword(entry, ""); return; }
-    document.getElementById("padsay").textContent = "Signing in…";
+    say("Signing in…");
     api.shellSignInPin({ email: entry.email, pin: pin })
       .then(function (res) {
         if (res && res.ok) return;                 // main navigates the window away
@@ -818,10 +869,9 @@
   }
 
   function wrong(entry, message) {
-    document.getElementById("padsay").textContent = "Enter your 6-digit PIN";
+    say("Enter your 6-digit PIN");
     missed[entry.email] = (missed[entry.email] || 0) + 1;
     if (missed[entry.email] >= 3) {
-      chosen = null;
       drawFaces();
       elPadErr.textContent = "";
       toPassword(entry, "Three wrong PINs. Use your password.");
@@ -839,7 +889,7 @@
       k.className = "key" + (label === "back" || label === "del" ? " soft" : "");
       k.textContent = label === "back" ? "Back" : label === "del" ? "⌫" : label;
       if (label === "back") {
-        k.addEventListener("click", function () { chosen = null; showFaces(); });
+        k.addEventListener("click", function () { show("faces"); });
       } else if (label === "del") {
         k.addEventListener("click", function () { typed = typed.slice(0, -1); drawDots(); });
       } else {
@@ -849,70 +899,59 @@
     });
   })();
 
-  /**
-   * One link under the password box, and which of its two jobs it does depends on
-   * whether the person in front of it HAS a PIN.
-   *
-   *  • They have one, and are on this form by accident or because the password fell
-   *    due → "PIN login", straight back to the photographs.
-   *  • They have none → "Set PIN". A PIN cannot be set before signing in, so this
-   *    only remembers the intent; the app opens the panel the moment they are in.
-   *
-   * Always offered, including on a PC that has never seen anybody: a first cashier
-   * on a fresh till is exactly who this feature is for.
-   */
-  function nameTheLink() {
-    var link = document.getElementById("pinlink");
-    var known = formFor || null;
-    var hasPin = known ? !!known.hasPin : roster.some(function (r) { return r.hasPin; });
-    link.hidden = false;
-    link.textContent = hasPin ? "PIN login" : "Set PIN";
-    link.dataset.mode = hasPin ? "back" : "set";
-  }
+  // ── The two controls under the password box ───────────────────────────────
+  elBack.addEventListener("click", function () {
+    formFor = null;
+    elErr.textContent = "";
+    show("faces");
+  });
 
-  document.getElementById("pinlink").addEventListener("click", function () {
-    if (this.dataset.mode === "back") {
-      elErr.textContent = "";
-      showFaces();
-      return;
-    }
-    // "Set PIN" before a sign-in: take the intent, and let the ordinary sign-in
-    // carry it. Nothing is unlocked by asking, and asking again takes it back.
+  elSetPin.addEventListener("click", function () {
+    // Nothing can be set from here — nobody is signed in yet. This only takes the
+    // intent; /staff/login opens the step on the other side. Asking again takes it back.
     wantsPin = !wantsPin;
     this.textContent = wantsPin ? "Set PIN after signing in ✓" : "Set PIN";
     elErr.textContent = "";
     if (ready) { if (!elEmail.value.trim()) elEmail.focus(); else elPass.focus(); }
   });
 
+  document.getElementById("padback").addEventListener("click", function () { show("faces"); });
+  document.getElementById("padpass").addEventListener("click", function () {
+    if (chosen) toPassword(chosen, ""); else show("password");
+  });
+
   document.getElementById("other").addEventListener("click", function () {
     formFor = null;
-    elEmail.value = ""; elErr.textContent = ""; showForm();
+    elEmail.value = "";
+    elErr.textContent = "";
+    show("password");
   });
+
   document.getElementById("edit").addEventListener("click", function () {
     elFaces.classList.toggle("editing");
     this.textContent = elFaces.classList.contains("editing") ? "Done" : "Edit list";
   });
 
-  // The keypad takes the number row and the numpad too — a cashier who reaches for
-  // the keyboard should not have to go back to the mouse.
+  // The keypad takes the number row and the numpad too — a cashier who reaches for the
+  // keyboard should not have to go back to the mouse.
   document.addEventListener("keydown", function (e) {
-    if (!elPad.classList.contains("on")) return;
+    if (state !== "keypad") return;
     if (e.key >= "0" && e.key <= "9") { press(e.key); e.preventDefault(); }
     else if (e.key === "Backspace") { typed = typed.slice(0, -1); drawDots(); e.preventDefault(); }
-    else if (e.key === "Escape") { chosen = null; showFaces(); }
+    else if (e.key === "Escape") { show("faces"); }
   });
 
   // First boot, an unreadable file, or a PC where everyone has been forgotten: the
-  // form is what is already on screen, and none of the above ever runs.
+  // password form is what is already on screen and none of the above ever runs.
   if (api && api.shellRoster) {
     api.shellRoster().then(function (list) {
-      if (!list || !list.length) { nameTheLink(); return; }
+      if (!list || !list.length) { show("password"); return; }
       roster = list;
       drawFaces();
-      showFaces();
-    }).catch(function () { nameTheLink(); });
+      show("faces");
+    }).catch(function () { show("password"); });
   } else {
-    nameTheLink();
+    show("password");
   }
 })();
 </script>

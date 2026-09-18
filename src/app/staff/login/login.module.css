@@ -264,3 +264,89 @@
     color: rgba(148, 163, 184, .75);
     margin: 0;
 }
+
+/* ── The faces and the keypad ───────────────────────────────────────────────
+   The twin of the same block in resources/shell/login.html. The two screens cannot
+   share code — that one is a file:// page that paints before any server exists — so
+   they are kept in step by hand. Same sizes, same words, same order. */
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0 0 }
+
+.face {
+  position: relative;
+  padding: 14px 8px 12px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  transition: background .15s, border-color .15s, transform .08s;
+}
+.face:hover { background: rgba(255, 255, 255, .11); border-color: rgba(255, 255, 255, .28) }
+.face:active { transform: scale(.985) }
+.face:disabled { opacity: .45; cursor: default }
+
+.pic {
+  border-radius: 50%;
+  margin: 0 auto 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 189, 248, .18);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+}
+.pic img { width: 100%; height: 100%; object-fit: cover }
+
+.who { font-size: 13.5px; font-weight: 600; margin: 0; line-height: 1.3 }
+.post { font-size: 11.5px; color: var(--ink-dim); margin: 2px 0 0; line-height: 1.3 }
+
+.drop {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, .22);
+  color: #fca5a5;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.editing .drop { display: flex }
+
+.rowlinks { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 0; gap: 12px }
+.rowlinks .pinlink { margin: 0 }
+
+.padcard { text-align: center }
+.padcard .pic { font-size: 18px }
+.padcard .who { font-size: 15px }
+.padcard .post { margin: 3px 0 0 }
+
+.dots { display: flex; gap: 9px; justify-content: center; margin: 14px 0 18px; min-height: 13px }
+.dots i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35) }
+.dots i.fill { background: var(--ink); border-color: var(--ink) }
+
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px }
+.key {
+  height: 48px;
+  background: rgba(255, 255, 255, .07);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 18px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .12s, transform .08s;
+}
+.key:hover { background: rgba(255, 255, 255, .13) }
+.key:active { transform: scale(.96) }
+.key.soft { background: none; border-color: transparent; color: var(--ink-dim); font-size: 13px }

@@ -108,6 +108,9 @@ export interface ElectronAPI {
     shellRoster: () => Promise<ShellRosterEntry[]>;
     rememberShellUser: (who: ShellRosterEntry) => Promise<boolean>;
     forgetShellUser: (email: string) => Promise<boolean>;
+    /** "none" | "ready" | "password-due", or null when it cannot be answered. Goes
+     *  through main because the shell is a file:// page and cannot fetch the server. */
+    shellPinStatus: (email: string) => Promise<string | null>;
     /** Keeps a copy of a background the shell fetched, so tomorrow needs no network. */
     cacheLoginBackground: (url: string) => void;
     /**
@@ -188,6 +191,7 @@ const electronAPI: ElectronAPI = {
     shellRoster: () => ipcRenderer.invoke("shell:roster"),
     rememberShellUser: (who) => ipcRenderer.invoke("shell:remember-user", who),
     forgetShellUser: (email) => ipcRenderer.invoke("shell:forget-user", email),
+    shellPinStatus: (email) => ipcRenderer.invoke("shell:pin-status", email),
     cacheLoginBackground: (url) => { void ipcRenderer.invoke("shell:cache-background", url); },
     onSyncApplied: (callback) => {
         ipcRenderer.on("sync:applied", (_event, info: { rows: number; models: string[] }) => callback(info));

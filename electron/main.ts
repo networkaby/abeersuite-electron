@@ -806,6 +806,35 @@ ipcMain.handle("shell:remember-user", async (_, who: {
  * action (`/api/me/counter-pin`); letting an unauthenticated screen reach an account
  * would be a door, not a convenience.
  */
+/**
+ * Does this person have a usable PIN on this counter?
+ *
+ * Asked by the shell before it puts a keypad up — and it has to come through main,
+ * because the shell is a `file://` page: a relative `fetch("/api/...")` there resolves
+ * to `file:///api/...` and fails. That was the bug this replaces; the check looked
+ * present and had never once run, so a password falling due was only discovered after
+ * six digits had been typed.
+ *
+ * Null whenever the question cannot be answered — the server not up yet, or anything
+ * thrown. The sign-in itself is the real check either way; this only decides whether
+ * the cashier is shown a keypad or asked for their password.
+ */
+ipcMain.handle("shell:pin-status", async (_, email: string): Promise<string | null> => {
+    if (typeof email !== "string" || !email.trim() || !serverUrl) return null;
+    try {
+        const res = await net.fetch(`${serverUrl}/api/counter-pin/status`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email }),
+        });
+        if (!res.ok) return null;
+        const out = await res.json() as { state?: unknown };
+        return typeof out.state === "string" ? out.state : null;
+    } catch {
+        return null;
+    }
+});
+
 ipcMain.handle("shell:forget-user", (_, email: string) => {
     if (typeof email !== "string") return false;
     const key = email.trim().toLowerCase();

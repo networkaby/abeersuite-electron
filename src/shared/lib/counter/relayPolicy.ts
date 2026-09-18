@@ -42,6 +42,13 @@ const NEVER_RELAY: readonly RegExp[] = [
     /^\/api\/sync(\/|$)/,                        // the outbox push is this machine's work
     /^\/api\/pos\/counters(\/|$)/,               // bind THIS device; already write authoritatively
     /^\/api\/settings\/(backup|restore)(\/|$)/,  // credentials withheld from tills on purpose
+    // A PIN belongs to THIS counter, and the office is not one: relayed, `thisCounterId()`
+    // answers null there and the route refuses its own till. Nothing is lost by staying
+    // here — the write already goes through `prismaAuthoritative`, a direct Supabase
+    // connection on a counter, so it still lands in the office books; and the status read
+    // stays on the replica, which is what lets a PIN work with the line down.
+    /^\/api\/counter-pin(\/|$)/,                 // "is there a PIN on this counter?"
+    /^\/api\/me\/counter-pin(\/|$)/,             // set or remove one FOR this counter
 ];
 
 export type RelaySkipReason =
