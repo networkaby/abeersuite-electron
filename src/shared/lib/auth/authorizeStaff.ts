@@ -4,6 +4,7 @@ import { randomBytes, timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
 import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
+import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
 
 export type StaffAuthUser = {
     id: string;
@@ -110,28 +111,15 @@ async function resolveSuperAdminId(prisma: PrismaClient, u: StaffAuthUser): Prom
     }
 }
 
-export async function authorizeStaffCredentials(
-    prisma: PrismaClient,
-    email: string,
-    password: string
-): Promise<StaffAuthUser | null> {
-    // Brute-force throttle — checked before any credential work so a blocked
-    // identifier costs nothing (no bcrypt, no DB).
-    if (isLoginBlocked(email)) return null;
-
-    // Env super-admin takes priority — credentials are verified with no DB.
-    // The DB is touched only afterwards, to swap the sentinel id for a real
-    // User row's id so FK-bearing writes (audit log, reconciliation, POS shift
-    // close) work; it degrades to "0" if that is not possible.
-    const superAdmin = checkSuperAdminEnv(email, password);
-    if (superAdmin) {
-        clearLoginFailures(email);
-        return { ...superAdmin, id: await resolveSuperAdminId(prisma, superAdmin) };
-    }
-
-    if (!isStaffEmailDomainAllowed(email)) return null;
-
-    const user = await prisma.user.findUnique({
+/**
+ * The one staff-user read every sign-in path makes — password, and now PIN.
+ *
+ * Kept in one place because `buildStaffAuthUser` below reads every relation it
+ * pulls: a second call site with a thinner `include` would type-check and then
+ * hand out a session with no permissions in it.
+ */
+async function findStaffUser(prisma: PrismaClient, email: string) {
+    return prisma.user.findUnique({
         where: { email },
         include: {
             userRole: {
@@ -158,19 +146,19 @@ export async function authorizeStaffCredentials(
             },
         },
     });
+}
 
-    if (!user) {
-        recordLoginFailure(email);
-        return null;
-    }
+type StaffUserRow = NonNullable<Awaited<ReturnType<typeof findStaffUser>>>;
 
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
-        recordLoginFailure(email);
-        return null;
-    }
-    clearLoginFailures(email);
-
+/**
+ * Everything that turns a verified staff row into a session — roles, permissions,
+ * rank, branch and department reach.
+ *
+ * Shared by BOTH authorizers on purpose. Whatever proved who this is (a password or
+ * a counter PIN), the authority they end up holding must be identical; two copies of
+ * this would drift, and the drift would be silent.
+ */
+async function buildStaffAuthUser(prisma: PrismaClient, user: StaffUserRow): Promise<StaffAuthUser> {
     // Roles flow from Position appointments. `User.role` is a manual override /
     // cache (e.g. promoted admins); it's included in the union when present.
     const positionRoleIds = user.userPositions.flatMap((up) =>
@@ -313,4 +301,102 @@ export async function authorizeStaffCredentials(
         avatarUrl: user.avatarUrl ?? undefined,
         kind: "staff",
     };
+}
+
+export async function authorizeStaffCredentials(
+    prisma: PrismaClient,
+    email: string,
+    password: string
+): Promise<StaffAuthUser | null> {
+    // Brute-force throttle — checked before any credential work so a blocked
+    // identifier costs nothing (no bcrypt, no DB).
+    if (isLoginBlocked(email)) return null;
+
+    // Env super-admin takes priority — credentials are verified with no DB.
+    // The DB is touched only afterwards, to swap the sentinel id for a real
+    // User row's id so FK-bearing writes (audit log, reconciliation, POS shift
+    // close) work; it degrades to "0" if that is not possible.
+    const superAdmin = checkSuperAdminEnv(email, password);
+    if (superAdmin) {
+        clearLoginFailures(email);
+        return { ...superAdmin, id: await resolveSuperAdminId(prisma, superAdmin) };
+    }
+
+    if (!isStaffEmailDomainAllowed(email)) return null;
+
+    const user = await findStaffUser(prisma, email);
+
+    if (!user) {
+        recordLoginFailure(email);
+        return null;
+    }
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+        recordLoginFailure(email);
+        return null;
+    }
+    clearLoginFailures(email);
+
+    // Typing the password here is exactly what the 10-day rule asks for — both clocks
+    // go back to zero, and the PIN this person set on this counter keeps working.
+    // A no-op for anyone who has no PIN, and off a counter entirely.
+    await stampCounterPinLogin(prisma, user.id, "password");
+
+    return buildStaffAuthUser(prisma, user);
+}
+
+
+/**
+ * Sign in with a counter PIN instead of a password.
+ *
+ * Same session, same authority — `buildStaffAuthUser` is shared with the password path,
+ * so six digits never buy a different set of permissions. What differs is everything
+ * BEFORE that: where this is allowed to happen, and for how long it stays allowed.
+ * `counterPin.ts` holds those rules and the reasoning behind them.
+ *
+ * Note what is missing here on purpose: the env super-admin bypass. That account has no
+ * PIN row and must not be reachable by a six-digit guess on a shop floor.
+ */
+export async function authorizeStaffPin(
+    prisma: PrismaClient,
+    email: string,
+    pin: string
+): Promise<StaffAuthUser | null> {
+    // Own key, own budget — a fumbled PIN must not lock the password the cashier
+    // still needs, and three tries is enough for a secret this short.
+    const throttleKey = `pin:${email}`;
+    if (isLoginBlocked(throttleKey, 3)) return null;
+
+    // Not a counter → not a credential. On the web deployment this is simply never set.
+    const counterId = thisCounterId();
+    if (!counterId) return null;
+
+    if (!isStaffEmailDomainAllowed(email)) return null;
+
+    const user = await findStaffUser(prisma, email);
+    if (!user) {
+        recordLoginFailure(throttleKey);
+        return null;
+    }
+
+    const row = await prisma.userCounterPin.findUnique({
+        where: { userId_counterId: { userId: user.id, counterId } },
+    });
+    // No PIN on THIS counter — including the case where they hold one on another
+    // counter. That is the whole point of the per-counter row.
+    if (!row) return null;
+
+    // Password time. Not a failed attempt: the digits may well be right, so this must
+    // not eat the throttle budget, and the screen says why (see /api/counter-pin/status).
+    if (pinClocksExpired(row)) return null;
+
+    if (!await bcrypt.compare(pin, row.pinHash)) {
+        recordLoginFailure(throttleKey);
+        return null;
+    }
+    clearLoginFailures(throttleKey);
+
+    await stampCounterPinLogin(prisma, user.id, "pin");
+    return buildStaffAuthUser(prisma, user);
 }

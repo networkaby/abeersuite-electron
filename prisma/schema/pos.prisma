@@ -78,6 +78,7 @@ model PosCounter {
   // first bind, or a rebind made after it, still applies. Cleared on every bind.
   releasedAt               DateTime?
   shifts                   PosShift[]
+  counterPins              UserCounterPin[]
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -338,4 +339,43 @@ enum PosHandoverStatus {
   PENDING
   ACCEPTED
   CANCELLED
+}
+
+// ── Counter PIN (a fast way back in, on ONE counter) ──────────────────────────
+//
+// Typing a full email and password at the till every morning is the slowest minute
+// of the shop's day. A staff member may set a 6-digit PIN and then just tap their
+// photo on the sign-in screen (resources/shell/login.html).
+//
+// One row per person PER COUNTER, and that is the whole security model. Every
+// counter holds a local replica of this table, so a PIN that worked everywhere
+// would make one stolen till PC a key to every till. Bound to a counter, the worst
+// case stays on that machine. `authorizeStaffPin` additionally refuses unless the
+// server is running INSIDE a counter shell (COUNTER_MACHINE_ID + counter-setup.json),
+// so a PIN is not a credential on the website at all.
+//
+// The two clocks are why a PIN never becomes a permanent replacement for the
+// password: `lastPasswordAt` forces the real password every 10 days, and
+// `lastLoginAt` forces it after 3 idle days. Both are stamped by the counter itself
+// — the till must be able to judge this with the line down — so they are the only
+// columns a counter is authoritative for here. `pinHash` is written by the office
+// and only ever pulled down.
+model UserCounterPin {
+  id             Int        @id @default(autoincrement())
+  userId         Int
+  user           User       @relation("UserCounterPins", fields: [userId], references: [id], onDelete: Cascade)
+  counterId      Int
+  counter        PosCounter @relation(fields: [counterId], references: [id], onDelete: Cascade)
+  /// bcrypt of the 6 digits, cost 10 — same as User.password.
+  pinHash        String
+  /// Last time this person typed their PASSWORD on this counter. PIN refused after 10 days.
+  lastPasswordAt DateTime   @default(now())
+  /// Last successful sign-in of any kind on this counter. PIN refused after 3 idle days.
+  lastLoginAt    DateTime   @default(now())
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @default(now()) @updatedAt
+
+  @@unique([userId, counterId])
+  @@index([counterId])
+  @@map("user_counter_pins")
 }

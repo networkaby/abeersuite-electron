@@ -721,6 +721,96 @@ ipcMain.handle("shell:take-credentials", () => {
 });
 
 /**
+ * Sign in with a counter PIN. Same handoff as `shell:sign-in`, different field.
+ *
+ * Main checks nothing about the PIN itself — it cannot: the check needs the database,
+ * and the rules around it (this counter only, the ten-day password clock) live in
+ * `shared/lib/auth/counterPin.ts` where the server can enforce them. This only carries
+ * the digits across to `/staff/login`.
+ */
+ipcMain.handle("shell:sign-in-pin", async (_, credentials: { email: string; pin: string }) => {
+    if (!credentials || typeof credentials.email !== "string" || typeof credentials.pin !== "string") {
+        return { ok: false, error: "Enter your PIN." };
+    }
+    if (!serverUrl) return { ok: false, error: "Still starting. Try again in a moment." };
+    parkedCredentials = { email: credentials.email, pin: credentials.pin };
+    await loadApp(serverUrl);
+    return { ok: true };
+});
+
+// ── The face roster ─────────────────────────────────────────────────────────
+// Who has signed in on THIS PC, so the shell can offer a photograph to tap instead of
+// an email address to type. See rosterPath() for what this is and is not.
+
+ipcMain.handle("shell:roster", (): ShellRosterEntry[] => readRoster().map((entry) => ({
+    ...entry,
+    // Handed to CSS by the shell, so it needs a URL, not a path — same reasoning as
+    // the background at shellQuery().
+    avatarFile: entry.avatarFile && fs.existsSync(faceFile(entry.avatarFile))
+        ? pathToFileURL(faceFile(entry.avatarFile)).href
+        : undefined,
+})));
+
+ipcMain.handle("shell:remember-user", async (_, who: {
+    email?: unknown; name?: unknown; title?: unknown; avatarUrl?: unknown; hasPin?: unknown;
+}) => {
+    if (typeof who?.email !== "string" || typeof who?.name !== "string") return false;
+    const email = who.email.trim().toLowerCase();
+    if (!email) return false;
+
+    const roster = readRoster();
+    const existing = roster.find((r) => r.email === email);
+    const avatarUrl = typeof who.avatarUrl === "string" ? who.avatarUrl : undefined;
+
+    // Re-fetch the photograph only when it actually changed — unlike the login
+    // background, which is cached once and never refreshed, a face has to follow the
+    // person's profile. Nothing here is allowed to fail the sign-in it follows.
+    let avatarFile = existing?.avatarFile;
+    if (avatarUrl && avatarUrl !== existing?.avatarUrl) {
+        avatarFile = await cacheFace(email, avatarUrl) ?? undefined;
+    } else if (!avatarUrl) {
+        avatarFile = undefined;
+    }
+
+    const entry: ShellRosterEntry = {
+        email,
+        name: who.name,
+        title: typeof who.title === "string" ? who.title : undefined,
+        avatarUrl,
+        avatarFile,
+        hasPin: who.hasPin === true,
+        lastLoginAt: new Date().toISOString(),
+    };
+
+    const next = [entry, ...roster.filter((r) => r.email !== email)]
+        .sort((a, b) => (b.lastLoginAt ?? "").localeCompare(a.lastLoginAt ?? ""));
+    // A till that has seen twenty people does not need twenty faces on the screen —
+    // past a dozen the grid is worse than the form it replaced.
+    for (const dropped of next.slice(ROSTER_MAX)) forgetFace(dropped.avatarFile);
+    writeRoster(next.slice(0, ROSTER_MAX));
+    return true;
+});
+
+/**
+ * Take a face off this screen. LOCAL ONLY — and that is the point.
+ *
+ * It forgets a name and a photograph on this PC. It does not touch the account, the
+ * PIN, or anything the office can see. Removing a PIN everywhere is a signed-in
+ * action (`/api/me/counter-pin`); letting an unauthenticated screen reach an account
+ * would be a door, not a convenience.
+ */
+ipcMain.handle("shell:forget-user", (_, email: string) => {
+    if (typeof email !== "string") return false;
+    const key = email.trim().toLowerCase();
+    const roster = readRoster();
+    const gone = roster.find((r) => r.email === key);
+    if (!gone) return false;
+    forgetFace(gone.avatarFile);
+    writeRoster(roster.filter((r) => r.email !== key));
+    return true;
+});
+
+/**
  * Saves the background the shell just displayed, so a counter that opens tomorrow with
  * the line down still gets its photograph.
  *
@@ -1108,6 +1198,90 @@ function shellPath(): string {
         : path.join(__dirname, "..", "resources", "shell", "login.html");
 }
 
+/**
+ * Who has signed in on this PC — the face grid on the sign-in screen.
+ *
+ * A CONVENIENCE CACHE and nothing more. It decides whose photograph is offered, never
+ * who may sign in: every card still goes through the same server-side sign-in, and a
+ * roster someone hand-edited buys them precisely nothing. It lives on disk because the
+ * shell paints before the server is up and often before the line is.
+ *
+ * Kept beside counter-setup.json in userData, so an app update leaves it alone.
+ */
+type ShellRosterEntry = {
+    email: string;
+    name: string;
+    title?: string;
+    /** The profile photo's source URL — kept only to notice when it changes. */
+    avatarUrl?: string;
+    /** File name under faces/, or (over IPC) the file:// URL the shell can use. */
+    avatarFile?: string;
+    hasPin: boolean;
+    lastLoginAt: string;
+};
+
+/** Past a dozen faces the grid is worse than the form it replaced. */
+const ROSTER_MAX = 12;
+
+function rosterPath(): string {
+    return path.join(app.getPath("userData"), "counter-roster.json");
+}
+
+function faceFile(name: string): string {
+    return path.join(app.getPath("userData"), "faces", name);
+}
+
+function readRoster(): ShellRosterEntry[] {
+    try {
+        const raw = fs.readFileSync(rosterPath(), "utf-8");
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((e): e is ShellRosterEntry =>
+            !!e && typeof (e as ShellRosterEntry).email === "string" && typeof (e as ShellRosterEntry).name === "string");
+    } catch {
+        return [];   // Missing or unreadable — the shell falls back to its form.
+    }
+}
+
+function writeRoster(entries: ShellRosterEntry[]): void {
+    try {
+        fs.writeFileSync(rosterPath(), JSON.stringify(entries, null, 2), "utf-8");
+    } catch (err) {
+        console.warn("[Shell] Could not save the face roster:", (err as Error).message);
+    }
+}
+
+/**
+ * Keep a copy of someone's profile photo, so tomorrow's sign-in needs no network.
+ *
+ * Same guards as the login background — an `image/` content type and a size cap — but
+ * NOT the same "already held, skip" rule: a face has to follow the person's profile,
+ * so the caller re-fetches whenever the source URL changes. Returns the file name to
+ * store, or null, and a null costs a photograph and never a sign-in.
+ */
+async function cacheFace(email: string, url: string): Promise<string | null> {
+    if (!/^https?:\/\//i.test(url)) return null;
+    const name = `${crypto.createHash("sha1").update(email).digest("hex")}.img`;
+    try {
+        const res = await net.fetch(url);
+        if (!res.ok) return null;
+        if (!(res.headers.get("content-type") || "").startsWith("image/")) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.byteLength > 8 * 1024 * 1024) return null;
+        fs.mkdirSync(path.dirname(faceFile(name)), { recursive: true });
+        fs.writeFileSync(faceFile(name), buf);
+        return name;
+    } catch (err) {
+        console.warn("[Shell] Could not cache a profile photo:", (err as Error).message);
+        return null;
+    }
+}
+
+function forgetFace(name: string | undefined): void {
+    if (!name) return;
+    try { fs.rmSync(faceFile(name), { force: true }); } catch { /* a leftover picture is harmless */ }
+}
+
 /** Where an owner's own background lives, if they have dropped one in. */
 function loginBackgroundPath(): string {
     return path.join(app.getPath("userData"), "login-background.jpg");
@@ -1137,8 +1311,13 @@ function shellQuery(): Record<string, string> {
  * with them: `/staff/login` also reconciles this PC's counter binding and enforces the
  * "login outside counter" permission, and signing in behind its back would skip both.
  * So the shell saves the cashier the typing and the real page still does the work.
+ *
+ * Exactly ONE of `password` / `pin` is ever set, and they are separate fields on
+ * purpose: `/staff/login` picks the auth provider from which one arrived. Reusing the
+ * password field for six digits would let an older shell paired with a newer page
+ * submit a PIN as a password — refused, but refused confusingly.
  */
-let parkedCredentials: { email: string; password: string } | null = null;
+let parkedCredentials: { email: string; password?: string; pin?: string } | null = null;
 
 /** Tells the shell its button may go live. */
 function notifyServerReady(): void {

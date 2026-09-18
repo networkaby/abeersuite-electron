@@ -199,6 +199,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 },
             }),
         ]),
+        // Counter PIN — the same staff session, reached by six digits instead of a
+        // password. Left off the public build with the staff provider above, and
+        // refused outright by `authorizeStaffPin` anywhere that is not a counter,
+        // so on the office deployment this provider exists but can never succeed.
+        ...(IS_PUBLIC ? [] : [
+            Credentials({
+                id: "credentials-staff-pin",
+                name: "Counter PIN",
+                credentials: {
+                    email: { label: "Email", type: "email" },
+                    pin: { label: "PIN", type: "password" },
+                },
+                async authorize(credentials) {
+                    if (!credentials?.email || !credentials?.pin) return null;
+                    const { authorizeStaffPin } = await import("@/shared/lib/auth/authorizeStaff");
+                    return authorizeStaffPin(
+                        prisma,
+                        credentials.email as string,
+                        credentials.pin as string
+                    );
+                },
+            }),
+        ]),
         Credentials({
             id: "credentials-portal",
             name: "Portal",

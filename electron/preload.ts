@@ -13,6 +13,18 @@ export interface DisplaySetting {
     steps?: number[];
 }
 
+/** One face on the sign-in screen. Mirrors the roster entry in electron/main.ts. */
+export interface ShellRosterEntry {
+    email: string;
+    name: string;
+    title?: string;
+    avatarUrl?: string;
+    /** A `file://` URL when it comes FROM main; left off when handing an entry TO it. */
+    avatarFile?: string;
+    hasPin: boolean;
+    lastLoginAt?: string;
+}
+
 export interface ElectronAPI {
     isElectron: true;
     getCounterId: () => Promise<string>;
@@ -80,8 +92,22 @@ export interface ElectronAPI {
      */
     onServerReady: (callback: () => void) => void;
     shellSignIn: (credentials: { email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
-    /** Read-once: returns the parked credentials and clears them in main. */
-    takeShellCredentials: () => Promise<{ email: string; password: string } | null>;
+    /** Read-once: returns the parked credentials and clears them in main. Exactly one
+     *  of `password` / `pin` is set — `/staff/login` picks its provider from that. */
+    takeShellCredentials: () => Promise<{ email: string; password?: string; pin?: string } | null>;
+    /** Same handoff as `shellSignIn`, with six digits instead of a password. */
+    shellSignInPin: (credentials: { email: string; pin: string }) => Promise<{ ok: boolean; error?: string }>;
+    /**
+     * The faces on the sign-in screen: who has signed in on THIS PC.
+     *
+     * A local convenience cache, never an authority. It decides whose photograph is
+     * offered to tap, never who may sign in — every card still goes through the same
+     * server-side check. `forgetShellUser` likewise forgets a face on this PC only: it
+     * does not touch the account or the PIN, which are signed-in actions on the server.
+     */
+    shellRoster: () => Promise<ShellRosterEntry[]>;
+    rememberShellUser: (who: ShellRosterEntry) => Promise<boolean>;
+    forgetShellUser: (email: string) => Promise<boolean>;
     /** Keeps a copy of a background the shell fetched, so tomorrow needs no network. */
     cacheLoginBackground: (url: string) => void;
     /**
@@ -158,6 +184,10 @@ const electronAPI: ElectronAPI = {
     },
     shellSignIn: (credentials) => ipcRenderer.invoke("shell:sign-in", credentials),
     takeShellCredentials: () => ipcRenderer.invoke("shell:take-credentials"),
+    shellSignInPin: (credentials) => ipcRenderer.invoke("shell:sign-in-pin", credentials),
+    shellRoster: () => ipcRenderer.invoke("shell:roster"),
+    rememberShellUser: (who) => ipcRenderer.invoke("shell:remember-user", who),
+    forgetShellUser: (email) => ipcRenderer.invoke("shell:forget-user", email),
     cacheLoginBackground: (url) => { void ipcRenderer.invoke("shell:cache-background", url); },
     onSyncApplied: (callback) => {
         ipcRenderer.on("sync:applied", (_event, info: { rows: number; models: string[] }) => callback(info));

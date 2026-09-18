@@ -54,6 +54,7 @@ model User {
   posShiftsOpenedBy                PosShift[]                 @relation("PosShiftOpenedBy")
   posShiftsClosedBy                PosShift[]                 @relation("PosShiftClosedBy")
   posCashDrops                     PosCashDrop[]              @relation("PosCashDropBy")
+  counterPins                      UserCounterPin[]           @relation("UserCounterPins")
   handoversReceived                PosHandover[]              @relation("HandoverToUser")
   quickNotes                       QuickNote[]
   savedFilters                     SavedFilter[]              @relation("UserSavedFilters")

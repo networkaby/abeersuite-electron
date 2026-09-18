@@ -141,6 +141,64 @@
 
   .err{margin:12px 0 0;font-size:12.5px;color:#fca5a5;min-height:16px}
 
+  /* ── Faces: who has signed in on this PC ─────────────────────────────────
+     A photograph to tap instead of an address to type. The grid comes from a
+     file main keeps on this PC, so it paints with the line down. */
+  .faces{display:none}
+  .faces.on{display:block}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:2px 0 0}
+  .face{
+    position:relative;padding:14px 8px 12px;text-align:center;cursor:pointer;
+    background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:14px;
+    font-family:inherit;color:var(--ink);transition:background .15s,border-color .15s,transform .08s;
+  }
+  .face:hover{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.28)}
+  .face:active{transform:scale(.985)}
+  .face[disabled]{opacity:.45;cursor:default}
+  .pic{
+    width:52px;height:52px;border-radius:50%;margin:0 auto 9px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(56,189,248,.18);color:var(--ink);
+    font-size:16px;font-weight:600;overflow:hidden;
+  }
+  .pic img{width:100%;height:100%;object-fit:cover}
+  .who{font-size:13.5px;font-weight:600;margin:0;line-height:1.3}
+  .post{font-size:11.5px;color:var(--ink-dim);margin:2px 0 0;line-height:1.3}
+  .drop{
+    position:absolute;top:5px;right:5px;width:22px;height:22px;display:none;
+    align-items:center;justify-content:center;border-radius:50%;
+    background:rgba(248,113,113,.22);color:#fca5a5;border:0;font-size:13px;
+    font-family:inherit;cursor:pointer;line-height:1;
+  }
+  .faces.editing .face .drop{display:flex}
+  .rowlinks{display:flex;justify-content:space-between;align-items:center;margin:16px 0 0}
+  .link{
+    background:none;border:0;padding:0;font-family:inherit;font-size:12.5px;
+    color:var(--accent);cursor:pointer;
+  }
+  .link.quiet{color:var(--ink-dim)}
+  .link:hover{text-decoration:underline}
+
+  /* ── The keypad ──────────────────────────────────────────────────────────- */
+  .pad{display:none;text-align:center}
+  .pad.on{display:block}
+  .pad .pic{width:60px;height:60px;margin:0 auto 10px;font-size:18px}
+  .pad .who{font-size:15px}
+  .pad .post{margin:3px 0 0}
+  .dots{display:flex;gap:9px;justify-content:center;margin:14px 0 18px;min-height:13px}
+  .dots i{width:11px;height:11px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+  .dots i.fill{background:var(--ink);border-color:var(--ink)}
+  .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .key{
+    height:48px;background:rgba(255,255,255,.07);color:var(--ink);
+    border:1px solid var(--line);border-radius:12px;
+    font-size:18px;font-family:inherit;cursor:pointer;transition:background .12s,transform .08s;
+  }
+  .key:hover{background:rgba(255,255,255,.13)}
+  .key:active{transform:scale(.96)}
+  .key.soft{background:none;border-color:transparent;color:var(--ink-dim);font-size:13px}
+  .hint{margin:14px 0 0;font-size:11.5px;color:var(--ink-dim);line-height:1.5}
+
   /* ── Boot status ───────────────────────────────────────────────────────── */
   .status{margin:20px 0 0;padding:14px 0 0;border-top:1px solid var(--line)}
   .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;margin:0 0 10px}
@@ -181,6 +239,28 @@
   <div class="mods" id="mods"></div>
 </section>
 
+<section class="card faces" id="faces">
+  <h1 class="greet" id="fgreet">Good morning</h1>
+  <p class="clock" id="fclock">&nbsp;</p>
+
+  <div id="pick">
+    <div class="grid" id="grid"></div>
+    <div class="rowlinks">
+      <button class="link" id="other" type="button">Someone else</button>
+      <button class="link quiet" id="edit" type="button">Edit list</button>
+    </div>
+  </div>
+
+  <div class="pad" id="pad">
+    <div class="pic" id="padpic"></div>
+    <p class="who" id="padwho"></p>
+    <p class="post" id="padsay">Enter your 6-digit PIN</p>
+    <div class="dots" id="dots"></div>
+    <div class="keys" id="keys"></div>
+    <p class="err" id="paderr"></p>
+  </div>
+</section>
+
 <form class="card" id="form" autocomplete="on">
   <span class="logo"><img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+DQo8IS0tIENyZWF0ZWQgd2l0aCBJbmtzY2FwZSAoaHR0cDovL3d3dy5pbmtzY2FwZS5vcmcvKSAtLT4NCg0KPHN2Zw0KICAgdmVyc2lvbj0iMS4xIg0KICAgaWQ9InN2ZzEiDQogICB3aWR0aD0iNjIyNS4zMzM1Ig0KICAgaGVpZ2h0PSIxODExLjU2ODgiDQogICB2aWV3Qm94PSIwIDAgNjIyNS4zMzM1IDE4MTEuNTY4OCINCiAgIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIg0KICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIg0KICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+DQogIDxkZWZzDQogICAgIGlkPSJkZWZzMSIgLz4NCiAgPGcNCiAgICAgaWQ9ImcxIg0KICAgICB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLC0yNzYuNDMxMSkiPg0KICAgIDxwYXRoDQogICAgICAgc3R5bGU9ImRpc3BsYXk6aW5saW5lO2ZpbGw6IzAxMzNmZjtzdHJva2U6bm9uZSINCiAgICAgICBkPSJtIDQwMDkuMzMzNCwyNzcuODk5MjUgYyAtMjguOTM1MiwzLjc5ODgzIC01Ny43MzUzLDMuNTQzNDYgLTg2LjY2NjYsOS4zNjYyMSAtNzAuMTI0NCwxNC4xMTM0NSAtMTM3LjA5NDgsNDguOTQ4NTcgLTE4Ny43NzM4LDk5LjYyNzYxIC0xNTguMTU4NSwxNTguMTU4NTMgLTE0MS4yODU1LDQ1My4zODM5NSAzNy4xMDcxLDU5MC4xMjY0NiA4OC40ODcsNjcuODI3NDcgMjA5LjYxMDQsODIuMzIzMDcgMzE3LjMzMzMsNjkuMjY2NDcgNjUuMjYwMSwtNy45MDk5IDEyOS42NjI4LC0yOS4xMjEzIDE4Mi42NjY3LC02OC44MTI3NyAxMDEuNzg0NSwtNzYuMjIwNDYgMTQzLjAyMDgsLTIwMS4yMTI5OCAxNDAuMDE5NSwtMzI0LjEzOTkgLTEuNzYsLTcyLjA5ODMgLTE2LjY1MjksLTE0My4zMzA1NiAtNTUuMjUzMiwtMjA1LjMzMzMzIC01My4zNzk5LC04NS43NDI2OCAtMTM5Ljg4MTgsLTE0MS40MjAwOCAtMjM4LjA5OTYsLTE2MS4wNjY4OSAtMzMuOTE3LC02Ljc4NDUxIC03NC44NDI1LC0xMy41NjIwMiAtMTA5LjMzMzQsLTkuMDMzODYgTSAzODUuMzMzMzQsMjc4LjY2NjY3IFYgMTA1MC42NjY3IEggNTgxLjMzMzM1IFYgNTk4LjY2NjY3IGggMS4zMzMzMyBjIDE3Ljg1MzYsMzcuNTczNCA0OS44MjgwOSw3Mi41NTI4OSA3My43MDY3OSwxMDYuNjY2NjYgNTEuOTI5NjEsNzQuMTg3OTEgMTA0LjEwMzExLDE0OC4yMTkxNiAxNTUuNjU5NTEsMjIyLjY2NjY3IDE5LjE0NTgzLDI3LjY0NjU3IDM4LjQ0MzYsNTUuMjEzOTUgNTcuODY2MjEsODIuNjY2NyA3Ljk5MjkyLDExLjI5NzUgMjIuNzQyODQsMjYuMTI1NiAyNC43Njc1LDQwIGggMTk4LjY2NjcxIGMgLTcuODUxOCwtMjEuNTQzMiAtMi42NjY3LC01MS44NDY3MSAtMi42NjY3LC03NC42NjY3IFYgODE3LjMzMzMzIDI4MCBIIDg5NC42NjY2OSBWIDcyNi42NjY2NyBDIDg2Ny41NDk4Myw2OTUuMzI1NjggODQ2LjAzNjQsNjU3LjgzMTU0IDgyMi4xMDA4NSw2MjQgNzY5LjE2OTU0LDU0OS4xODQ5IDcxNy40ODIwMyw0NzMuNDkzODIgNjY0LjU2NTg1LDM5OC42NjY2NyA2NDQuMjI2NjIsMzY5LjkwNTYgNjI0LjA4OTAxLDM0MC45NjEyNiA2MDQuMDMyOTMsMzEyIGMgLTUuOTc5ODEsLTguNjM0OTMgLTE0LjY3MTkxLC0yOC4yMTI1NyAtMjQuNDY2MDIsLTMyLjUyODgxIC0xNC4wMzM0OSwtNi4xODQ1NyAtNDEuNTI5NSwtMC44MDQ1MiAtNTYuOTAwMjMsLTAuODA0NTIgSCAzODUuMzMzMzQgTSAzMjUzLjMzMzQsNzEzLjMzMzMzIGggLTIuNjY2NiBsIC00NC4yMDA2LC0xMDQgTCAzMTE0LjEwNDksMzk2IDMwNzguNDY2MiwzMTMuMzMzMzMgMzA2My4xNDkyLDI4MS4zNzAyOCAzMDQ2LjY2NjcsMjgwIGggLTM4LjY2NjYgLTE1MiBsIDI3LjQzNDIsNjQgNTguMDg1MywxMzIgMTY2LjA3MjksMzc3LjMzMzMzIDYyLjY5OTksMTQyLjY2NjY3IDE2LjM3NTMsMzcuMzMzMyA4LjU1NjcsMTUuOTYzIDE2Ljc3NTcsMS4zNzA0IGggMzguNjY2NyAxNDYuNjY2NiBsIC0zMi4xODYyLC03Ni4wMDAwMyAtNjYuMjc5OSwtMTUzLjMzMzM0IC0zMy41MzM5LC03OC42NjY2NiBoIDEzNC42NjY3IGMgMTIuMTYxMSwwIDM5Ljg1MDYsNS4xOTcxIDUwLjE0NjEsLTEuMzcwMzYgOC4wODQ3LC01LjE1NzA3IDEyLjgxMDMsLTIzLjQ4OTUxIDE2LjgxMjksLTMxLjk2Mjk4IDEzLjU5MzcsLTI4Ljc3OTEzIDI2LjgzNzksLTU3Ljc0MTg2IDQwLjExOTEsLTg2LjY2NjY2IDM1LjU5NDEsLTc3LjUxODg4IDcyLjQwNTYsLTE1NC40ODA2MyAxMDgsLTIzMiAxNi42Mjc5LC0zNi4yMTMzOCA0MC41NjgxLC03My43NDYxIDUxLjU4ODYsLTExMiBoIC0xNTIgLTM4LjY2NjcgYyAtNC42NzU4LDAgLTEyLjQ0MDgsLTEuNDUyNDggLTE2LjQ4MzcsMS4zNzAyOCAtNy42MDAzLDUuMzA2MzEgLTExLjIxNDYsMjEuMjA3ODQgLTE1LjE5MTEsMjkuMjk2MzggLTEzLjAyMzgsMjYuNDkwODkgLTI0Ljg2NTIsNTMuNTY3MDYgLTM3Ljk4ODYsODAgLTM0LjEyMTQsNjguNzI2NCAtNjUuMjYyNywxMzguOTM0NDEgLTk4LjY4MTMsMjA4IC0xNy45MTA1LDM3LjAxNTE0IC00Mi45NDUsNzYuNTA3NjUgLTU0LjMyMiwxMTYgTSA1MzY1LjMzMzUsNTc4LjY2NjY3IFYgMjgwIGggLTE5NC42NjY3IHYgNzcwLjY2NjcgaCAxOTQuNjY2NyBWIDY1Ny4zMzMzMyBjIDc4LjU2MzEsOTAuNzg1NDkgMTQ5LjQzNDksMTg5LjY1MjUxIDIyMy43MTk0LDI4NCAyMC42Mzg3LDI2LjIxMjczIDQxLjA4NzksNTIuNTczOSA2MS44Nzk1LDc4LjY2NjY3IDYuNTU3Myw4LjIyOSAxNS40MDk1LDI1Ljc3ODcgMjUuMjk5NSwyOS44NjIxIDUuODY3MiwyLjQyMjYgMTQuODQ1MSwwLjgwNDYgMjEuMTAxNiwwLjgwNDYgaCA0OCAxNjYuNjY2NyBsIC0zMS41MDIsLTQ0IC02Ni42NjY3LC04OC4wMDAwMyBMIDU1ODUuMzMzNSw2MTYgYyAyNC44Nzk1LC0xNC4wMTIwNCA0NS40NTA1LC00Ni4yNjQ2NSA2NS4zNTI4LC02Ni42NjY2NyA1My41NTA4LC01NC44OTUxOCAxMDQuNzYwNSwtMTEyLjEyNjc5IDE1OC42NTI0LC0xNjYuNjY2NjYgMjQuNTAxOSwtMjQuNzk2NTUgNDkuMzE4NCwtNDkuODU5MjIgNzIuMzc1NiwtNzYgOC4wMTExLC05LjA4MjIgMTkuNzg5OCwtMTYuOTI4NzEgMjQuOTUyNSwtMjggaCAtMTc3LjMzMzMgLTQ5LjMzMzQgbCAtMjIuNjY2NiwxLjM3MDI4IC0yNS4zMzIxLDIzLjk2MzA1IC01NC43ODcxLDU3LjMzMzMzIC0xNDcuODgwOCwxNTIgLTY0LDY1LjMzMzM0IE0gMTEyOS4zMzM0LDI4MCBWIDQ0OCBIIDE1MzIgMTYzNy4zMzM0IGMgOS4zOTU1LDAgMzEuMzQzOSw0LjA3OTU5IDM5LjE1MDIsLTEuMzcwMjggMTEuMzIzMSwtNy45MDUxMSAxOS4wNDY5LC0zNC4zNjU0IDI1LjE3OSwtNDYuNjI5NzIgMTkuOTE0MywtMzkuODI4NDUgNDMuODk5OSwtNzguOTE2MTggNjEuMDA0MSwtMTIwIGggLTYzMy4zMzMzIG0gNjQ4LDAgdiAxNjUuMzMzMzMgaCAyMzQuNjY2NyB2IDYwNS4zMzMzNyBoIDE5NiBWIDQ0NS4zMzMzMyBoIDEzOC42NjY2IGMgMTQuNjI1NCwwIDQyLjI4NjgsNS40MTExNCA1NS40Nzk1LC0wLjgwNDUyIDQuMzU0LC0yLjA1MTI3IDUuNzU5LC04LjUyMjE0IDcuNTk4OCwtMTIuNTI4ODEgNC41MTM1LC05LjgyOTI2IDkuMzQzMywtMTkuNTUzMjIgMTMuOTYyOSwtMjkuMzMzMzMgMTguNjU4OSwtMzkuNTAzMSA0NS41MzUyLC04MC42OTYyOSA1Ny42MjU1LC0xMjIuNjY2NjcgaCAtNzA0IG0gNzI1LjMzMzMsMCAyNi4xMDQ5LDYyLjY2NjY3IDUzLjMzMzMsMTI0IEwgMjc0OC4xODYzLDg1MiBsIDYxLjM0NzYsMTQyLjY2NjY3IDE2Ljc1ODUsMzguNjY2NjMgNy45NzMsMTUuOTYzIDE1LjA2OCwxLjM3MDQgaCAzOC42NjY3IDE0OS4zMzMzIGwgLTc2Ljc2NzYsLTE4MS4zMzMzNyAtMTYxLjMzNzIsLTM4MCAtNjIuOTYxLC0xNDggLTE4LjEyOTcsLTQyLjY2NjY2IC04LjQwMzMsLTE3LjI5NjM5IEwgMjY5NC42NjY3LDI4MCBoIC00MCAtMTUyIG0gMTk0OS4zMzM0LDAgdiA3NzAuNjY2NyBoIDE5NC42NjY3IFYgNjU3LjMzMzMzIGggMS4zMzMzIGwgMjEuMzMzNCwzMiA0NC43NzE0LDYyLjY2NjY3IDE0MC45MzUzLDE5Ny4zMzMzMyA1MS4yMzg2LDcxLjk5OTk3IDIyLjE1NDMsMjguNTI4OCAyMC45MDA0LDAuODA0NiBoIDQ4IDE2OCBsIC01OS4wNDAxLC04NS4zMzMzNyAtMTM2Ljk1OTksLTE5NiBjIDU0LjUwODgsLTE3LjQyOTY4IDEwMi44OTc4LC00MS4wMjQ0OSAxMzYuNzQ5LC04OS4zMzMzMyAyNC44NjcyLC0zNS40ODc5NiAzNi4zNzY2LC03OS45NDIzOCAzOS4zNzAxLC0xMjIuNjY2NjcgNi44Mjc1LC05Ny40Mzg2NCAtMjcuNzY3NiwtMTkxLjUzMDc2IC0xMTYuMTE5MSwtMjQyLjA5NjY4IEMgNDk1OC43ODQzLDI3NC44NTkzNyA0ODc5LjU4OCwyODAgNDgwMS4zMzM1LDI4MCBoIC0zNDkuMzMzNCBtIC00NDUuMzMzMywxNjMuMDQ3MzYgYyAxOC44Mjg3LC0yLjIyMjk4IDM5Ljk5NDEsLTEuMjAwMzUgNTguNjY2NiwxLjczOTc1IDEyNy40NTg0LDIwLjA2OTY2IDE1NS4yOTgyLDE3MC4yMDYwNSAxMzcuNjYxNSwyNzcuODc5NTYgLTEzLjE2MDIsODAuMzQyOTMgLTU4LjMyMTMsMTUxLjY4OTQ1IC0xNDQuMzI4MSwxNjIuMjg0OTkgLTQ1LjUzNTgsNS42MDk3OCAtOTYuMDYyOSwtMS4wMDI2OSAtMTM0LjY2NjcsLTI3LjI3OTg3IC0yNy4zMjU1LC0xOC42MDAyNiAtNDQuNDkwNiwtNDUuOTkxMjkgLTU4Ljk5NTgsLTc1LjAwNTEyIC00NC42MjcyLC04OS4yNjUzIC00MS40NzY1LC0yMjAuOTQ0MDEgMzMuNjgyLC0yOTQuNjE0MjYgMjkuNTgwMSwtMjguOTk0MTQgNjcuOTQxNywtNDAuMjc4IDEwNy45ODA1LC00NS4wMDUwNSBtIDY0MCwxNzEuNjE5MzEgViA0OTMuMzMzMzMgYyAwLC05LjU0ODM0IC00LjYwOTEsLTM1LjY0NTY3IDEuMzcwNCwtNDMuMTk1NDcgMy4xMjAxLC0zLjkzOTI5IDEyLjg3NTcsLTIuMTM3ODYgMTcuMjk2MywtMi4xMzc4NiBoIDUwLjY2NjYgMTI1LjMzMzQgYyAzMi44NjIzLDAgNjUuMjQyOCwwLjcxMjQgODcuMjk0MiwyOS4zMzMzMyAzMy40Nzg5LDQzLjQ1MjggMTQuNDkwOSwxMzQuMjA2ODcgLTQ4LjYyNzYsMTM3LjI3OTc5IC0zMS4zOTUyLDEuNTI4NDggLTYzLjIzMDgsMC4wNTM1IC05NC42NjY2LDAuMDUzNSBIIDQ2NDYuNjY2OCBNIDExMjkuMzMzNCw1NzcuMzMzMzMgViA3NDIuNjY2NjcgSCAxNjc2IFYgNTc3LjMzMzMzIGggLTU0Ni42NjY2IG0gMCwzMDUuMzMzMzQgViAxMDUwLjY2NjcgSCAxNzI0IFYgOTI4IGMgMCwtOS41NDgxOCA0LjYwOTEsLTM1LjY0NTgzIC0xLjM3MDIsLTQzLjE5NTQ4IC00Ljc5OTgsLTYuMDYwMjIgLTI5LjkzNDksLTIuMTM3ODUgLTM3LjI5NjQsLTIuMTM3ODUgSCAxNTc2IDExMjkuMzMzNCBNIDAsMTE5Ny4zMzMzIFYgMjA4OCBIIDYyMjUuMzMzNSBWIDExOTcuMzMzMyBIIDAgbSAzNzQyLjY2NjgsODAuMzgxNyBjIDMyLjM1MzUsLTMuOTczNSA3Mi4xMzE1LDMuMzUyNyA5Mi4yODA5LDMxLjYxODMgMjkuNDMxNiw0MS4yODY3IC0yMS43NTcyLDc4Ljc4MTEgLTU4Ljk0NzYsODMuNjE0MyAtMzAuNDMyNiwzLjk1NDcgLTY5LjAyNTQsLTMuMjA1NyAtODkuNzc0NywtMjcuNzMzNiAtMzUuNzcyMiwtNDIuMjg2MiAxNS45NTIxLC04Mi41MjYzIDU2LjQ0MTQsLTg3LjQ5OSBNIDE2NTIsMTU0NCBoIC00MDQgYyAtMTkuNDE5NCwwIC0zOS45Njk3LC0wLjEyMzUgLTU3LjMzMzMsOS45NTI2IC0yNC42NDk3LDE0LjMwNDQgLTMyLjUwNTMsMzkuNTYxNCAtOCw1OC40NzMzIDMwLjY2MDksMjMuNjYyNiA4MC45ODAxLDE0LjI0MDggMTE3LjMzMzMsMTQuMjQwOCBoIDgwIGMgODcuNjgwNSwwIDIwMy4xNTc0LC05Ljg5MiAyNTcuNzM5OCw3NiA1LjQ2MzQsOC41OTczIDkuMDU1MiwxOC4xMjIgMTEuNDE5NywyOCAxNi45ODM0LDcwLjk0NzcgLTQ4LjM2MTYsMTIwLjk0MTUgLTEwOS4xNTk1LDEzOC4wOTU3IC01Ni4yMTM4LDE1Ljg2MDYgLTExOS41MDYzLDguNTcwOSAtMTc3LjMzMzMsOC41NzA5IGggLTMxNiB2IC04Mi42NjY2IGggMTg4IDEyNS4zMzMzIDg2LjY2NjcgYyAxNy42MDUxLDAgMzUuNTM2NSwxLjcyNDkgNTIsLTUuNzUgNDAuMzgwMSwtMTguMzMzNyAzNy42NTUsLTYxLjY1ODEgLTUuMzMzMywtNzQuNTU1NSAtMjcuMjA3OSwtOC4xNjMgLTU5LjkwMDQsLTMuNjk0NSAtODgsLTMuNjk0NSBoIC0xMzguNjY2NyBjIC00Ni4xMDEsMCAtOTAuMDgyLDAuMzkyMSAtMTMzLjMzMzMsLTE4LjEwNSAtNTguNzQ3NiwtMjUuMTI0MiAtMTEwLjAzMzksLTgzLjc3MzggLTc2Ljk3MzMsLTE0OS44OTUgMjIuMDE5NiwtNDQuMDM5MSA3NC4zMjY1LC02OS41MDU5IDEyMC45NzMzLC03Ny40MzkzIDQzLjQ0NTYsLTcuMzg5IDg4LjA0MTYsLTUuMjI3NCAxMzIsLTUuMjI3NCBIIDE1MDQgMTYxMC42NjY3IGMgOC43OTgsMCAzMi4yMDEsLTQuMTY5MyAzOS4xOTU1LDEuMzcwNCA0LjQyNjQsMy41MDU3IDIuMTM3OCwxNi4yNDc4IDIuMTM3OCwyMS4yOTYzIFYgMTU0NCBtIDcwMC4wMDAxLDE2Ni42NjY3IGggLTQ3My4zMzM0IGMgMjQuMTk5MSw0NS40NTgxIDc1LjIzMDMsNzAuNDYyNyAxMjQsNzkuOTk5IDQxLjQ2ODgsOC4xMDg3IDg1LjkxODIsNC4wMDEgMTI4LDQuMDAxIGggMjIxLjMzMzQgdiA4Mi42NjY2IGggLTI4NS4zMzM0IGMgLTU0LjI2ODcsMCAtMTA3LjE5NDgsLTMuODY1OSAtMTU4LjY2NjcsLTIyLjczNzYgLTg5LjY4MjksLTMyLjg4MTUgLTE3Ni4yODc0LC0xMDkuMjkwNyAtMTU4Ljc3MjYsLTIxMy4yNjI0IDIuNzI1MSwtMTYuMTc2NCA3LjkxNywtMzIuMzE3NSAxNS45MjE5LC00Ni42NjY2IDkuMTg5LC0xNi40NzE5IDIwLjgzNDUsLTMyLjQwOTUgMzQuODUwNywtNDUuMTA3IDEwNC41OTkyLC05NC43NTcgMjcwLjcwMjIsLTExNC4wODEgNDAwLjAwMDEsLTYyLjM2MDIgNTcuNDYzMywyMi45ODYyIDExNS45MDYyLDYzLjU2NTggMTQwLjc2MjMsMTIyLjEzMzggMTMuNjk4OSwzMi4yNzg1IDExLjIzNzcsNjcuMTAzNyAxMS4yMzc3LDEwMS4zMzM0IE0gMjg2OS4zMzM0LDE0NjAgdiA4NCBjIC03My43NjY2LDAgLTE1Ny4xOTI5LC0xMC4zMTYyIC0yMjUuMzMzMywyMy42NzA3IC0yNy43OTA3LDEzLjg2MTUgLTU1LjIzMjUsMzQuMjI4NCAtNjguOTA2Myw2Mi45OTYgLTEyLjQ5ODIsMjYuMjk0MiAtOC40MjcxLDU3LjAyODggLTguNDI3MSw4NS4zMzMzIHYgMTYxLjMzMzMgaCAtMTIwIFYgMTcxNiBjIDAsLTMyLjI4NjYgLTMuMjI1MSwtNjYuMzEzOCA3LjU5MzgsLTk3LjMzMzMgMTMuOTA4OCwtMzkuODc5MSA0Mi42MzI2LC02OS43NTkzIDc2LjQwNjIsLTkzLjg5NTEgQyAyNjMxLjYwNzUsMTQ1Mi42MzU3IDI3NTEuMzY1NiwxNDYwIDI4NjkuMzMzNCwxNDYwIG0gMzk4LjY2NjcsMjUwLjY2NjcgaCAyLjY2NjcgYyA4LjQ5NzMsLTIyLjA4OTcgMjkuNjU0NiwtNDMuMzg4MSA0My40MzgxLC02Mi42NjY3IDI5LjI2MTQsLTQwLjkyNjkgNTguMTQ5NywtODIuMjE3MyA4OC4wNjcxLC0xMjIuNjY2NyAxMC43Mjg4LC0xNC41MDU4IDIxLjA3ODQsLTI5LjMwNjkgMzEuNTQ5NCwtNDQgNC4zNjU2LC02LjEyNTkgOS4xMzAzLC0xNi4yMDIzIDE1Ljg0MzUsLTE5Ljk2MjkgOC4yMzY5LC00LjYxNDUgMjUuMTQ3NCwtMS4zNzA0IDM0LjQzNTIsLTEuMzcwNCBoIDg2LjY2NjcgbCAtMjguNzY3Niw0MS4zMzMzIC01MS4wMzA2LDcwLjY2NjcgLTE0My40MzQzLDE5OC42NjY3IC03Ni43Njc1LDEwNi42NjY2IGggLTIuNjY2NyBsIC03MC4xMDA5LC05NiBMIDMwNTQuODIxLDE1ODQgMjk5NS43OTgzLDE1MDIuNjY2NyAyOTY2LjY2NjcsMTQ2MCBoIDg0IGMgOS4yODg4LDAgMjYuMTk2NywtMy4yNDMzIDM0LjQzNTMsMS4zNzA0IDcuMTM3NywzLjk5NzEgMTIuNTEwNywxNC43Nzk1IDE3LjE3OCwyMS4yOTYzIDEwLjkwMTcsMTUuMjIxNiAyMi4wNjEyLDMwLjMwMzcgMzMuMjI2Myw0NS4zMzMzIDI5LjI0ODMsMzkuMzcyOSA1Ny45MzY4LDc5LjE2MTkgODcuMDA2MiwxMTguNjY2NyAxNC42MDM1LDE5Ljg0NiAzNS45MDA3LDQxLjMyMDYgNDUuNDg3Niw2NCBtIDU1MiwxNjYuNjY2NiBoIC0xMjAgViAxNDYwIGggODYuNjY2NyBsIDMxLjE5NTMsMS4zNzA0IDIuMTM4LDI2LjYyOTYgdiA3NiAzMTMuMzMzMyBtIDczMiwtMjUwLjY2NjYgaCAtODYuNjY2NiBjIC0xMC4zMTg0LDAgLTI3LjU0MTcsMy4zMjQgLTM3LjA0OTUsLTAuODA0NiAtNi4wNDQ2LC0yLjYyNDggLTkuOTA5NSwtMTIuOTEyNCAtMTQuMDUwMiwtMTcuODYyMSAtOC43MjkxLC0xMC40MzQ5IC0xOS4wODE3LC0xOS42ODM5IC0zMC4yMzM3LC0yNy40MTk4IC00Ny4zNjk1LC0zMi44NTg4IC0xMDkuMjk3OCwtNDEuNDU2NSAtMTY1LjMzMzMsLTMzLjM0MjYgLTY0LjQ2NzgsOS4zMzUgLTE1Ny4yMjc2LDU1LjE0OCAtMTQ0LjMyODIsMTM0LjA5NTcgMS42MzE5LDkuOTg3OCA0Ljc2MTEsMTguOTg0MSA5LjMzNjMsMjggNS43MTk3LDExLjI3MTIgMTMuNzk2MiwyMS44NzQxIDIyLjk5NzEsMzAuNTQ3NCAxNS42NDc0LDE0Ljc1IDMyLjc1MTYsMjUuMTMxNSA1MS45OTQ4LDM0LjQ0MTIgNDkuOTM3MiwyNC4xNTk1IDEwNC44NDYzLDIwLjM0NDggMTU4LjY2NjYsMjAuMzQ0OCBoIDI0MS4zMzM0IHYgODIuNjY2NiBoIC0yODEuMzMzNCBjIC01Ni40Njg0LDAgLTExMS45ODM0LC0zLjE0ODIgLTE2NS4zMzMzLC0yMy43NDc5IC0zNC4zMDExLC0xMy4yNDQ2IC02Ni40OTY0LC0zMS43NyAtOTQuNjY2NywtNTUuNTA0MiAtNjAuMzY3OCwtNTAuODYxNSAtODMuODg2NCwtMTM0LjkyMjggLTQ0LjE4NDIsLTIwNi4wODEyIDE0LjQ5NjEsLTI1Ljk4MTYgMzYuMjQxOSwtNDcuMDQwMiA2MC4xODQyLC02NC4zMzk1IDExMy40NDU0LC04MS45NjkxIDI3Ny4zMzA4LC04OC42NjU1IDQwMS4zMzM0LC0yNi42NTY0IDQ4LjQ1OCwyNC4yMzIyIDEwOC43MzcsNjcuNDU3OCAxMTcuMzMzMywxMjUuNjYyNiBtIDcwMCw4NCBoIC00NzMuMzMzMyBjIDE5LjA1OTIsNDQuMTY1IDczLjI3NjcsNjguNjg2NSAxMTcuMzMzMyw3OC44MTY5IDQyLjA5MTIsOS42NzgzIDg3Ljc1OTEsNS4xODMxIDEzMC42NjY3LDUuMTgzMSBoIDIyNS4zMzMzIHYgODIuNjY2NiBoIC0yODUuMzMzMyBjIC01NC43Mjc5LDAgLTEwNi41OTQxLC00LjU1NTggLTE1OC42NjY3LC0yMi42NjY2IC05Mi40NjM4LC0zMi4xNTkxIC0xNzYuNDc3OCwtMTExLjE2MzggLTE1OC43NzI4LC0yMTYgMi43Njc2LC0xNi4zODY5IDguODY3OSwtMzIuMjQ1IDE3LjA2NzEsLTQ2LjY2NjcgMTAuMTQ4NCwtMTcuODQ5OCAyMy42MDU4LC0zNC4wODA0IDM5LjAzOTEsLTQ3LjYxODMgMTA4LjI1MzUsLTk0Ljk1ODggMjg4LjIwMzEsLTExMS4yNjc4IDQxNiwtNDcuMzc3NiA0Ni4wNzAzLDIzLjAzMjIgOTIuOTM0OSw1Ni41NzQgMTE1LjU3MjksMTA0LjMyOTIgMTYuNDkxOCwzNC43ODk5IDE1LjA5MzcsNzEuODQwNyAxNS4wOTM3LDEwOS4zMzM0IG0gLTMzNzMuMzMzNCwtODQgaCAzNDEuMzMzNCBjIC0xNC4xMjIzLC0zMy43NDE2IC01MC45NjcyLC01NS45NDk0IC04NCwtNjguMDYyOSAtODIuNTIyMywtMzAuMjYxNCAtMjExLjY1LC0xNy43NTM1IC0yNTcuMzMzNCw2OC4wNjI5IG0gMjkwMC4wMDAxLDAgaCAzNDEuMzMzMyBjIC0xMi42MzgzLC0yNy4wMzY1IC0zNy45Mjc3LC00NS45NTk4IC02NCwtNTguOTk2IC02MS4wMzUxLC0zMC41MTc1IC0xNDYuMzM0OSwtMzMuNDIgLTIwOCwtMi42NjY2IC0yNy4zODMxLDEzLjY1NjQgLTU2LjY3MzUsMzIuMzI2NiAtNjkuMzMzMyw2MS42NjI2IHoiDQogICAgICAgaWQ9InBhdGgxIiAvPg0KICA8L2c+DQo8L3N2Zz4NCg==" alt="AbeerSuite"></span>
 
@@ -200,12 +280,15 @@
 
   <button class="go" id="go" type="submit" disabled>Starting&hellip;</button>
   <p class="err" id="err"></p>
+  <button class="link" id="backfaces" type="button" hidden>Back to the photos</button>
 
   <div class="status">
     <div class="bar"><span id="barfill"></span></div>
     <div class="srow"><i class="dot" id="dot"></i><span class="smsg" id="smsg">Starting&hellip;</span></div>
     <p class="tip" id="tip"></p>
     <p class="shopmsg" id="shopmsg"></p>
+    <p class="hint">Tired of typing this? Sign in, then set a PIN from your own name at the
+      top of the screen — tomorrow you just tap your photo.</p>
   </div>
 </form>
 
@@ -378,9 +461,14 @@
     for (i = 0; i < CONFIG.GREETINGS.length; i++) {
       if (h >= CONFIG.GREETINGS[i].from) pick = CONFIG.GREETINGS[i].text;
     }
-    elGreet.textContent = pick;
-    elClock.textContent = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
+    var when = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
       + "  ·  " + now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    elGreet.textContent = pick;
+    elClock.textContent = when;
+    // The faces card carries the same greeting — whichever of the two is up, the
+    // cashier is looked at by one screen, not two.
+    document.getElementById("fgreet").textContent = pick;
+    document.getElementById("fclock").textContent = when;
   }
   if (CONFIG.SHOW_CLOCK) { tick(); setInterval(tick, 20000); }
   else { elClock.style.display = "none"; tick(); }
@@ -549,6 +637,247 @@
         elGo.textContent = "Sign in";
       });
   });
+
+  // ── The faces ─────────────────────────────────────────────────────────────
+  // Who has signed in on THIS PC, from a file main keeps beside the app's other
+  // settings. Nothing here decides anything: a card is a shortcut to an email
+  // address and a keypad, and the sign-in itself still happens on the server
+  // exactly as it does for a typed password. A hand-edited roster buys nobody a
+  // single permission.
+  //
+  // No network in any of this, on purpose — the grid has to paint on a morning
+  // when the line is down, which is the morning it matters most.
+  var elFaces  = document.getElementById("faces");
+  var elGrid   = document.getElementById("grid");
+  var elPick   = document.getElementById("pick");
+  var elPad    = document.getElementById("pad");
+  var elDots   = document.getElementById("dots");
+  var elPadErr = document.getElementById("paderr");
+  var roster   = [];
+  var chosen   = null;
+  var typed    = "";
+  // Cards greyed after three wrong tries here. Cosmetic only — restarting the app
+  // clears it. The real lock is the server's, and the real wall is that a PIN works
+  // on this counter alone.
+  var missed   = {};
+
+  function initials(name) {
+    var parts = String(name || "").trim().split(/\s+/), out = "";
+    if (parts[0]) out += parts[0].charAt(0);
+    if (parts.length > 1) out += parts[parts.length - 1].charAt(0);
+    return out.toUpperCase() || "·";
+  }
+
+  function pic(entry, into) {
+    into.textContent = "";
+    if (entry.avatarFile) {
+      var img = new Image();
+      img.alt = "";
+      // A cached face that will not load falls back to initials, never a hole.
+      img.onerror = function () { into.textContent = initials(entry.name); };
+      img.src = entry.avatarFile;
+      into.appendChild(img);
+    } else {
+      into.textContent = initials(entry.name);
+    }
+  }
+
+  function drawFaces() {
+    elGrid.textContent = "";
+    roster.forEach(function (entry) {
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "face";
+      if ((missed[entry.email] || 0) >= 3) card.disabled = true;
+
+      var face = document.createElement("div");
+      face.className = "pic";
+      pic(entry, face);
+      card.appendChild(face);
+
+      var who = document.createElement("p");
+      who.className = "who";
+      who.textContent = entry.name;
+      card.appendChild(who);
+
+      var post = document.createElement("p");
+      post.className = "post";
+      // No PIN is not a fault and is not hidden — a card that quietly disappeared
+      // would be the most confusing thing on this screen.
+      post.textContent = entry.title || (entry.hasPin ? "" : "Password");
+      card.appendChild(post);
+
+      var drop = document.createElement("button");
+      drop.type = "button";
+      drop.className = "drop";
+      drop.textContent = "×";
+      drop.setAttribute("aria-label", "Forget " + entry.name + " on this PC");
+      drop.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        if (api && api.forgetShellUser) api.forgetShellUser(entry.email);
+        roster = roster.filter(function (r) { return r.email !== entry.email; });
+        if (!roster.length) showForm(); else drawFaces();
+      });
+      card.appendChild(drop);
+
+      card.addEventListener("click", function () { choose(entry); });
+      elGrid.appendChild(card);
+    });
+  }
+
+  function showForm() {
+    elFaces.classList.remove("on");
+    elForm.style.display = "";
+    // Someone who lands here by mistake — a stray "Someone else", or three wrong
+    // PINs — must be able to get back to their own photograph without restarting
+    // the till.
+    document.getElementById("backfaces").hidden = roster.length === 0;
+    if (ready) { if (!elEmail.value) elEmail.focus(); else elPass.focus(); }
+  }
+
+  function showFaces() {
+    elForm.style.display = "none";
+    elFaces.classList.add("on");
+    elPad.classList.remove("on");
+    elPick.style.display = "";
+  }
+
+  // Someone with no PIN, or one the clocks have run out on, goes to the form with
+  // their address already in — and is told why, so a refused PIN never reads as a
+  // broken till.
+  function toPassword(entry, why) {
+    showForm();
+    elEmail.value = entry.email;
+    elErr.textContent = why || "";
+    if (ready) elPass.focus();
+  }
+
+  function choose(entry) {
+    if (!entry.hasPin) { toPassword(entry, ""); return; }
+    chosen = entry;
+    typed = "";
+    elPadErr.textContent = "";
+    document.getElementById("padwho").textContent = "Welcome back, " + String(entry.name).split(/\s+/)[0];
+    document.getElementById("padsay").textContent = "Enter your 6-digit PIN";
+    pic(entry, document.getElementById("padpic"));
+    drawDots();
+    elPick.style.display = "none";
+    elPad.classList.add("on");
+
+    // Ask the server whether this PIN is still live BEFORE the cashier types six
+    // digits into a keypad that was never going to accept them. Silent when it
+    // cannot answer — the sign-in itself is the real check either way. This is the
+    // one fetch on this screen and it goes to our own server, never the internet.
+    fetch("/api/counter-pin/status", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: entry.email })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (out) {
+        if (!out || chosen !== entry) return;
+        if (out.state === "password-due") {
+          toPassword(entry, "Password time — it has been a few days. Your PIN keeps working after this.");
+        } else if (out.state === "none") {
+          toPassword(entry, "");
+        }
+      })
+      .catch(function () { /* offline, or not a counter — let the sign-in decide */ });
+  }
+
+  function drawDots() {
+    elDots.textContent = "";
+    for (var i = 0; i < 6; i++) {
+      var d = document.createElement("i");
+      if (i < typed.length) d.className = "fill";
+      elDots.appendChild(d);
+    }
+  }
+
+  function press(digit) {
+    if (typed.length >= 6) return;
+    typed += digit;
+    drawDots();
+    if (typed.length === 6) submitPin();
+  }
+
+  function submitPin() {
+    if (!ready || !chosen) return;
+    var entry = chosen, pin = typed;
+    typed = ""; drawDots();
+    if (!api || !api.shellSignInPin) { toPassword(entry, ""); return; }
+    document.getElementById("padsay").textContent = "Signing in…";
+    api.shellSignInPin({ email: entry.email, pin: pin })
+      .then(function (res) {
+        if (res && res.ok) return;                 // main navigates the window away
+        wrong(entry, (res && res.error) || "");
+      })
+      .catch(function () { wrong(entry, ""); });
+  }
+
+  function wrong(entry, message) {
+    document.getElementById("padsay").textContent = "Enter your 6-digit PIN";
+    missed[entry.email] = (missed[entry.email] || 0) + 1;
+    if (missed[entry.email] >= 3) {
+      chosen = null;
+      drawFaces();
+      elPadErr.textContent = "";
+      toPassword(entry, "Three wrong PINs. Use your password.");
+      return;
+    }
+    elPadErr.textContent = message || "That PIN is not right.";
+  }
+
+  (function buildKeys() {
+    var keys = document.getElementById("keys");
+    var labels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "back", "0", "del"];
+    labels.forEach(function (label) {
+      var k = document.createElement("button");
+      k.type = "button";
+      k.className = "key" + (label === "back" || label === "del" ? " soft" : "");
+      k.textContent = label === "back" ? "Back" : label === "del" ? "⌫" : label;
+      if (label === "back") {
+        k.addEventListener("click", function () { chosen = null; showFaces(); });
+      } else if (label === "del") {
+        k.addEventListener("click", function () { typed = typed.slice(0, -1); drawDots(); });
+      } else {
+        k.addEventListener("click", function () { press(label); });
+      }
+      keys.appendChild(k);
+    });
+  })();
+
+  document.getElementById("backfaces").addEventListener("click", function () {
+    elErr.textContent = "";
+    showFaces();
+  });
+  document.getElementById("other").addEventListener("click", function () {
+    elEmail.value = ""; elErr.textContent = ""; showForm();
+  });
+  document.getElementById("edit").addEventListener("click", function () {
+    elFaces.classList.toggle("editing");
+    this.textContent = elFaces.classList.contains("editing") ? "Done" : "Edit list";
+  });
+
+  // The keypad takes the number row and the numpad too — a cashier who reaches for
+  // the keyboard should not have to go back to the mouse.
+  document.addEventListener("keydown", function (e) {
+    if (!elPad.classList.contains("on")) return;
+    if (e.key >= "0" && e.key <= "9") { press(e.key); e.preventDefault(); }
+    else if (e.key === "Backspace") { typed = typed.slice(0, -1); drawDots(); e.preventDefault(); }
+    else if (e.key === "Escape") { chosen = null; showFaces(); }
+  });
+
+  // First boot, an unreadable file, or a PC where everyone has been forgotten: the
+  // form is what is already on screen, and none of the above ever runs.
+  if (api && api.shellRoster) {
+    api.shellRoster().then(function (list) {
+      if (!list || !list.length) return;
+      roster = list;
+      drawFaces();
+      showFaces();
+    }).catch(function () { /* the form stays */ });
+  }
 })();
 </script>
 </body>

@@ -24,11 +24,18 @@ function prune(key: string, now: number): number[] {
     return list;
 }
 
-/** True when this identifier has exhausted its failed-attempt budget. */
-export function isLoginBlocked(identifier: string): boolean {
+/**
+ * True when this identifier has exhausted its failed-attempt budget.
+ *
+ * `maxFailures` tightens the budget for a weaker secret — the counter PIN passes 3,
+ * since six digits are guessable in a way a password is not. Callers that pass a
+ * prefixed key ("pin:someone@shop") get their own counter, so a fumbled PIN can never
+ * lock somebody out of the password they still need.
+ */
+export function isLoginBlocked(identifier: string, maxFailures = MAX_FAILURES): boolean {
     const key = identifier.trim().toLowerCase();
     if (!key) return false;
-    return prune(key, Date.now()).length >= MAX_FAILURES;
+    return prune(key, Date.now()).length >= maxFailures;
 }
 
 /** Record one failed attempt for this identifier. */

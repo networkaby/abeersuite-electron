@@ -2831,6 +2831,28 @@ ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "acceptedAt" TIMESTAMP(3);
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "user_counter_pins" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "counterId" INTEGER NOT NULL,
+    "pinHash" TEXT NOT NULL,
+    "lastPasswordAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastLoginAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "user_counter_pins_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "counterId" INTEGER NOT NULL;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "pinHash" TEXT NOT NULL;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "lastPasswordAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Role" (
     "id" TEXT NOT NULL,
     "label" TEXT NOT NULL,
@@ -4055,6 +4077,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS "pos_handovers_toShiftId_key" ON "pos_handover
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "pos_handovers_updatedAt_idx" ON "pos_handovers"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "user_counter_pins_counterId_idx" ON "user_counter_pins"("counterId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "user_counter_pins_userId_counterId_key" ON "user_counter_pins"("userId", "counterId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "UserPermission_userId_permissionId_key" ON "UserPermission"("userId", "permissionId");
@@ -5284,6 +5312,20 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
+    ALTER TABLE "user_counter_pins" ADD CONSTRAINT "user_counter_pins_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "user_counter_pins" ADD CONSTRAINT "user_counter_pins_counterId_fkey" FOREIGN KEY ("counterId") REFERENCES "pos_counters"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
     ALTER TABLE "Role" ADD CONSTRAINT "Role_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -6497,6 +6539,13 @@ END $$;
 DO $$ BEGIN
     IF to_regclass('public."User"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "User"; -- never pushed
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."user_counter_pins"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "user_counter_pins";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "user_counter_pins"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

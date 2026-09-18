@@ -107,6 +107,30 @@ function useLocalClock(): { greet: string; clock: string } {
     };
 }
 
+/**
+ * Does this person have a live PIN on this counter?
+ *
+ * Only so the shell knows whether to put a keypad up next time. Silent on every
+ * failure — off a counter, offline, or on an older server the answer is simply "no
+ * keypad", which costs one typed password and never a sign-in.
+ */
+async function hasCounterPin(email: string): Promise<boolean> {
+    try {
+        const res = await fetch("/api/counter-pin/status", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email }),
+        });
+        if (!res.ok) return false;
+        const out = await res.json() as { state?: string };
+        // "password-due" still means a PIN exists — the card should show, and the
+        // shell asks again when it is tapped.
+        return out.state === "ready" || out.state === "password-due";
+    } catch {
+        return false;
+    }
+}
+
 function StaffLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -122,15 +146,25 @@ function StaffLoginForm() {
     const { greet, clock } = useLocalClock();
     const backdrop = useBackdropPhoto(LOGIN_BACKGROUNDS);
 
-    const doSignIn = useCallback(async (emailValue: string, passwordValue: string) => {
+    /**
+     * `kind` picks the provider, and nothing else changes.
+     *
+     * A PIN buys a faster way to prove who you are, never a shorter way in: the
+     * counter reconciliation, the released-PC reset and the "login outside counter"
+     * rule below run exactly the same for both, and both end up with the identical
+     * session (see shared/lib/auth/authorizeStaff.ts).
+     */
+    const doSignIn = useCallback(async (
+        emailValue: string,
+        secret: string,
+        kind: "password" | "pin" = "password",
+    ) => {
         setLoading(true);
         setError("");
 
-        const res = await signIn("credentials-staff", {
-            email: emailValue,
-            password: passwordValue,
-            redirect: false,
-        });
+        const res = kind === "pin"
+            ? await signIn("credentials-staff-pin", { email: emailValue, pin: secret, redirect: false })
+            : await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
 
         if (res?.error) {
             // A PC with no counter has an empty replica, so the user lookup goes to the
@@ -139,7 +173,9 @@ function StaffLoginForm() {
             const unbound = isElectronEnvironment() && !(await getLocalCounterSetup());
             setError(unbound
                 ? "Sign-in failed. This PC is not set up as a counter yet, so it needs the internet to sign in and bind a counter. Check the connection, or the email and password."
-                : "Invalid email or password");
+                : kind === "pin"
+                    ? "That PIN did not work. Use your password."
+                    : "Invalid email or password");
             setLoading(false);
         } else {
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
@@ -150,6 +186,11 @@ function StaffLoginForm() {
             // has changed and a counter's badge would stay dark until the next tab focus.
             refreshCounterStatus();
             refreshSyncStatus();
+
+            // One read, two readers: the permission gate below and the face roster at
+            // the end. getSession() is a round trip — asking twice on the slowest
+            // screen of the day would waste the seconds this feature exists to save.
+            const session = await getSession();
 
             // ── Is this machine a counter? ──────────────────────────────────────
             // Desktop app: the local file plus the counter row (one DB read when
@@ -174,7 +215,6 @@ function StaffLoginForm() {
             // onboard a fresh PC — setting up a counter is an office action, not a
             // cashier's.
             if (!isCounter) {
-                const session = await getSession();
                 const perms = (session?.user as { permissions?: string[] })?.permissions ?? [];
                 if (!hasPermissionWithScope(perms, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
                     await signOut({ redirect: false });
@@ -189,6 +229,24 @@ function StaffLoginForm() {
                     router.push(`/setup/counter?next=${encodeURIComponent(dest)}`);
                     return;
                 }
+            }
+
+            // ── Leave a face on the sign-in screen for next time ────────────────
+            // The shell has no server and no session, so what it knows about a person
+            // it learns here, on the way past. Local to this PC, best-effort, and a
+            // convenience only — see electron/main.ts's roster helpers.
+            const remember = window.electronAPI?.rememberShellUser;
+            if (remember && session?.user) {
+                const u = session.user as { name?: string | null; title?: string; avatarUrl?: string };
+                void remember({
+                    email: emailValue.trim().toLowerCase(),
+                    name: u.name || emailValue,
+                    title: u.title,
+                    avatarUrl: u.avatarUrl,
+                    // Signed in BY a PIN is proof of one. Otherwise ask the server, so a
+                    // PIN set yesterday still puts a keypad up tomorrow.
+                    hasPin: kind === "pin" || await hasCounterPin(emailValue),
+                }).catch(() => { /* a missing face costs nothing */ });
             }
 
             router.push(dest);
@@ -219,8 +277,15 @@ function StaffLoginForm() {
         void take().then((held) => {
             if (cancelled || !held) return;
             setEmail(held.email);
-            setPassword(held.password);
-            void doSignIn(held.email, held.password);
+            // Exactly one of the two is ever set. A PIN is never put in the password
+            // box: it would be shown by the peek button and submitted to the wrong
+            // provider on a retry.
+            if (held.pin) {
+                void doSignIn(held.email, held.pin, "pin");
+            } else if (held.password) {
+                setPassword(held.password);
+                void doSignIn(held.email, held.password);
+            }
         }).catch(() => { /* nothing parked, or an older build — the form just waits */ });
         return () => { cancelled = true; };
     }, [doSignIn]);

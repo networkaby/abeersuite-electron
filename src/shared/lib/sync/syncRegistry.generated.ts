@@ -125,6 +125,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "TicketWorker": { model: "TicketWorker", delegate: "ticketWorker", pk: ["id"], exact: [], dates: [], cache: [] },
     "UniversalVoucher": { model: "UniversalVoucher", delegate: "universalVoucher", pk: ["id"], exact: [], dates: ["cancelledAt", "createdAt", "date", "deletedAt", "postedAt", "sourceCreatedAt", "updatedAt"], cache: [] },
     "User": { model: "User", delegate: "user", pk: ["id"], exact: [], dates: ["birthday", "createdAt", "tokensValidFrom", "updatedAt"], cache: [] },
+    "user_counter_pins": { model: "UserCounterPin", delegate: "userCounterPin", pk: ["id"], exact: [], dates: ["createdAt", "lastLoginAt", "lastPasswordAt", "updatedAt"], cache: [], localAuthority: true },
     "UserPermission": { model: "UserPermission", delegate: "userPermission", pk: ["id"], exact: [], dates: ["createdAt", "expiresAt"], cache: [] },
     "UserPosition": { model: "UserPosition", delegate: "userPosition", pk: ["userId", "positionId"], exact: [], dates: ["createdAt"], cache: [] },
     "UserSurfaceSeen": { model: "UserSurfaceSeen", delegate: "userSurfaceSeen", pk: ["userId", "surface"], exact: [], dates: ["seenAt"], cache: [] },

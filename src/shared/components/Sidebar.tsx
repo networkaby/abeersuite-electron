@@ -39,6 +39,7 @@ import {
 import { canViewModuleChild } from "@/utils/module-access";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
+import CounterPinButton from "@/shared/components/CounterPinButton";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type SidebarUser = {
@@ -950,6 +951,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             </span>
                         )}
                     </Button>
+
+                    {/* Counter PIN — the standing offer, never a popup. Desktop app only;
+                        the component takes itself off the web build. */}
+                    <CounterPinButton collapsed={collapsed} />
 
                     {/* Sign out */}
                     <Button

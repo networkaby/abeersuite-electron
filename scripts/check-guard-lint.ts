@@ -17,6 +17,10 @@ const PUBLIC_ALLOWLIST = new Set([
 // Explicit exceptions for unauthenticated system endpoints
 const EXCLUDED_OFFICE_ROUTES = new Set([
     "src/app/api/health/route.ts",
+    // Asked by the counter's sign-in shell BEFORE anyone is signed in — there is no
+    // session to require. It is gated instead by `thisCounterId()`: off a counter it
+    // answers "no PIN" and nothing else, so it does not exist on the web deployment.
+    "src/app/api/counter-pin/status/route.ts",
 ]);
 
 const GUARD_PATTERNS = [
