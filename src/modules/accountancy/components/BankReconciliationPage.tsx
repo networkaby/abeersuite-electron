@@ -22,7 +22,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { CheckCircle2, Landmark, Link2, Loader2, Lock, RefreshCw, Sparkles, Trash2, Unlink, Upload, Wand2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Link2, Loader2, Lock, RefreshCw, Sparkles, Trash2, Unlink, Upload, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
@@ -93,6 +93,17 @@ export function BankReconciliationPage() {
         try { const v = localStorage.getItem("recon.view"); if (v === "split" || v === "merged") setView(v); } catch { /* private mode */ }
     }, []);
     const changeView = (v: ViewMode) => { setView(v); try { localStorage.setItem("recon.view", v); } catch { /* private mode */ } };
+    const [showStats, setShowStats] = useState(true);
+    useEffect(() => {
+        try { if (localStorage.getItem("recon.stats") === "off") setShowStats(false); } catch { /* private mode */ }
+    }, []);
+    // Plain handler, not a state updater — an updater must stay pure, and React
+    // runs it twice in development.
+    const toggleStats = () => {
+        const next = !showStats;
+        setShowStats(next);
+        try { localStorage.setItem("recon.stats", next ? "on" : "off"); } catch { /* private mode */ }
+    };
     const [selSt, setSelSt] = useState<Set<number>>(new Set());
     const [selGl, setSelGl] = useState<Set<number>>(new Set());
     const [busy, setBusy] = useState<string | null>(null);
@@ -261,12 +272,8 @@ export function BankReconciliationPage() {
 
     return (
         <div className="flex h-full min-h-0 flex-col">
-            {/* Header */}
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b bg-card px-6 py-3">
-                <div>
-                    <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><Landmark size={22} /> Bank Reconciliation</h1>
-                    <p className="mt-0.5 text-sm text-muted-foreground">The bank&apos;s statement against the bank ledger. The bank is the truth: every statement line ends up matched or booked.</p>
-                </div>
+            {/* Header — no title here, the breadcrumb already names the screen */}
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b bg-card px-6 py-2">
                 <div className="flex flex-wrap items-end gap-2">
                     <div className="space-y-1">
                         <Label htmlFor="recon-ledger">Bank ledger</Label>
@@ -292,6 +299,9 @@ export function BankReconciliationPage() {
                     <Button variant="outline" onClick={() => reload()} disabled={!url || refreshing}>
                         <RefreshCw size={14} className={cn("mr-1", refreshing && "animate-spin")} /> Refresh
                     </Button>
+                    <Button variant="outline" onClick={toggleStats} title={showStats ? "Hide the reconciliation summary and give the table its room" : "Show the reconciliation summary"} aria-expanded={showStats}>
+                        {showStats ? <ChevronUp size={14} className="mr-1" /> : <ChevronDown size={14} className="mr-1" />} Summary
+                    </Button>
                 </div>
             </div>
 
@@ -299,8 +309,8 @@ export function BankReconciliationPage() {
 
             {data && s && (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    {/* Reconciliation statement */}
-                    <div className="border-b bg-card px-6 py-3">
+                    {/* Reconciliation statement — hidden on demand, the table takes the space */}
+                    <div className={cn("border-b bg-card px-6 py-3", !showStats && "hidden")}>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-6">
                                 <Stat label="Balance as per books" value={s.booksBalance} />
