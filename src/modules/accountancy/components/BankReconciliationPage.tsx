@@ -26,6 +26,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, Link2, Loader2, Lock, RefreshCw, 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
+import { clampNumber, parseDigitsInput } from "@/shared/lib/format";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
@@ -172,11 +173,10 @@ export function BankReconciliationPage() {
             ...stRows.map((r): MergedRow => ({ kind: "st", key: `s${r.id}`, date: r.date, delta: (r.deposit ?? 0) - (r.withdrawal ?? 0), st: r })),
             ...glRows.map((r): MergedRow => ({ kind: "gl", key: `g${r.id}`, date: r.date, delta: (r.debit ?? 0) - (r.credit ?? 0), gl: r })),
         ];
-        rows.sort((a, b) => a.date.localeCompare(b.date) || a.delta - b.delta || (a.kind === b.kind ? 0 : a.kind === "st" ? -1 : 1));
-
         // Same date, same signed amount, still open, and both sides present —
         // that is a pair worth pointing at. Direction has to agree too, so a
-        // deposit never pairs with a payment of the same size.
+        // deposit never pairs with a payment of the same size. Worked out
+        // before the sort, because being in a group decides where a row goes.
         const bucket = new Map<string, MergedRow[]>();
         for (const r of rows) {
             if (!isOpen(r) || r.delta === 0) continue;
@@ -189,8 +189,19 @@ export function BankReconciliationPage() {
             if (stIds.length === 0 || glIds.length === 0) continue;
             for (const r of group) r.sug = { key, first: false, last: false, stIds, glIds, size: group.length };
         }
-        // first / last off the final order, so a matched row sitting in the
-        // middle does not leave a bracket hanging open.
+
+        // Date, then amount — which already puts a group's rows together. Then
+        // group members ahead of anything else carrying that same date and
+        // amount, so a matched or locked row can never sit inside a group and
+        // break it in two. Bank above, books below, always.
+        rows.sort((a, b) =>
+            a.date.localeCompare(b.date)
+            || a.delta - b.delta
+            || (a.sug ? 0 : 1) - (b.sug ? 0 : 1)
+            || (a.kind === b.kind ? 0 : a.kind === "st" ? -1 : 1));
+
+        // first / last off the final order — cheap now that a group is known to
+        // be contiguous, and still right if that ever stops being true.
         rows.forEach((r, i) => {
             if (!r.sug) return;
             r.sug = { ...r.sug, first: rows[i - 1]?.sug?.key !== r.sug.key, last: rows[i + 1]?.sug?.key !== r.sug.key };
@@ -375,7 +386,7 @@ export function BankReconciliationPage() {
                         </Button>
                         <label className="flex items-center gap-1 text-xs text-muted-foreground" htmlFor="recon-window">
                             within
-                            <input id="recon-window" type="number" min={0} max={90} value={windowDays} onChange={(e) => setWindowDays(Math.max(0, Math.min(90, Number(e.target.value) || 0)))} className="h-7 w-14 rounded-md border bg-background px-1.5 text-center text-xs" />
+                            <input id="recon-window" type="text" inputMode="numeric" value={windowDays} onChange={(e) => setWindowDays(clampNumber(Number(parseDigitsInput(e.target.value)) || 0, 0, 90))} className="h-7 w-14 rounded-md border bg-background px-1.5 text-center text-xs" />
                             days
                         </label>
                         <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5 text-xs">
@@ -589,17 +600,19 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
         : [];
     const sug = row.sug;
     // One background, chosen — not three bg-* utilities stacked, where which one
-    // wins is down to the order Tailwind happens to emit them in.
+    // wins is down to the order Tailwind happens to emit them in. Hover deepens
+    // the row's own colour rather than washing it with a neutral, which read as
+    // the bank tint and made a hovered Books row look like a Bank row.
     const background = selected
-        ? "bg-primary/20"
+        ? "bg-primary/20 hover:bg-primary/30"
         : matched
-            ? "bg-green-100/70 dark:bg-green-900/25"
+            ? "bg-green-100/70 hover:bg-green-200/80 dark:bg-green-900/25 dark:hover:bg-green-900/45"
             : isSt
-                ? "bg-sky-100/60 dark:bg-sky-950/40"
-                : "bg-violet-100/60 dark:bg-violet-950/40";
+                ? "bg-sky-100/60 hover:bg-sky-200/90 dark:bg-sky-950/40 dark:hover:bg-sky-900/50"
+                : "bg-violet-100/60 hover:bg-violet-200/90 dark:bg-violet-950/40 dark:hover:bg-violet-900/50";
     return (
         <tr className={cn(
-            "border-l-[3px] hover:bg-muted/50",
+            "border-l-[3px]",
             isSt ? "border-l-sky-500" : "border-l-violet-500",
             background,
             r.locked && "opacity-60",
