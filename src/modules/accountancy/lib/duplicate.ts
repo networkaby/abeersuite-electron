@@ -77,6 +77,23 @@ export function consumeDuplicate(expectedKind: string): DuplicatePayload | null 
     }
 }
 
+/** Is there a stash waiting for this kind? Reads WITHOUT removing, so it is
+ *  safe to call during render — which is the point: a form has to know it was
+ *  opened from Duplicate / Book it BEFORE its own start-up steps run, or one
+ *  of them overwrites the prefill. `consumeDuplicate` cannot answer that,
+ *  because by the time it has answered the stash is gone. */
+export function peekDuplicate(expectedKind: string): DuplicatePayload | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = sessionStorage.getItem(KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as DuplicatePayload;
+        return parsed.kind === expectedKind ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
 /** Today's YYYY-MM-DD in the user's local timezone, for stash producers. */
 export function todayLocalISO(): string {
     const d = new Date();

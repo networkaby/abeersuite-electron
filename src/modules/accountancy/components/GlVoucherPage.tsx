@@ -30,7 +30,7 @@ import { ACCOUNT_GROUPS, PAYMENT_INSTRUMENTS, type PaymentInstrument } from "@/s
 import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
-import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
+import { consumeDuplicate, peekDuplicate } from "@/modules/accountancy/lib/duplicate";
 import {
     isMoneyGroupName,
     isBankLikeGroupName,
@@ -502,11 +502,25 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         }
     }, [isPayRec, rows]);
 
+    // Was this form opened from ⋮ Duplicate / the reconciliation's "Book it"?
+    // Answered DURING RENDER, before any of the start-up effects below run, and
+    // read without consuming — the hydration effect itself cannot tell us,
+    // because it deletes the stash as it reads it, so on React's second dev
+    // pass it looks exactly like an ordinary blank voucher. Anything that fills
+    // a field by itself has to stand down when the answer is yes.
+    // useState's lazy initialiser, not useRef: a ref's argument is recomputed on
+    // every render, and this form re-renders on every keystroke — the peek would
+    // be a sessionStorage read plus a JSON.parse each time. This runs once.
+    const [openedFromStash] = useState(() => !isEditing && peekDuplicate(kind) != null);
+
     // Remember the last Cash/Bank ledger used per kind so the daily receipt is
     // just party + amount. Read once the accounts are in (create mode only).
+    // Never over a prefill: Book it puts the statement's own bank here, and
+    // this used to write the last-used cash ledger straight over it.
     const lastTopKey = `glvoucher:lastTop:${kind}`;
     useEffect(() => {
-        if (!isPayRec || isEditing || topLedgerId != null || accounts.length === 0) return;
+        if (!isPayRec || isEditing || openedFromStash) return;
+        if (topLedgerId != null || accounts.length === 0) return;
         try {
             const saved = Number(window.localStorage.getItem(lastTopKey));
             if (saved && accounts.some((a) => a.id === saved && copy.topFilter(a))) setTopLedgerId(saved);
