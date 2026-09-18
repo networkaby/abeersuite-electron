@@ -555,9 +555,23 @@ function daysBetween(a: string, b: string): number {
 
 /**
  * Pure pairing: for each statement line, the one book entry that fits — same
- * direction, same amount, inside the date window — with a shared reference
- * token deciding between candidates, then the nearest date. A tie on both is
- * left alone: guessing wrong is worse than leaving it for a person.
+ * direction, same amount, and then ONE of these two, never anything looser:
+ *
+ *   • the SAME DAY. The overwhelming majority of a bank's lines are the same
+ *     day as the entry that explains them.
+ *   • a DIFFERENT day inside the window, but only when the two sides share a
+ *     reference token — a UTR, a UPI id, a cheque number, an IMPS ref. That
+ *     token is what makes a late-clearing cheque or transfer provable rather
+ *     than guessed.
+ *
+ * A different day with nothing in common is NOT a match, however lonely the
+ * candidate. It used to be: the reference was only a tie-breaker, so a ₹100
+ * debit sitting by itself in the window was taken 28 days away from a payment
+ * it had nothing to do with. Measured on the live SBI ledger, 96 of 97 auto
+ * matches were same-day and the single cross-day one was that mistake.
+ *
+ * A tie on both reference and distance is still left alone: guessing wrong is
+ * worse than leaving it for a person.
  */
 export function planAutoMatch(statement: StCandidate[], gl: GlCandidate[], windowDays: number): Array<[number, number]> {
     const claimed = new Set<number>();
@@ -573,6 +587,8 @@ export function planAutoMatch(statement: StCandidate[], gl: GlCandidate[], windo
                 const ref = s.tokens.some((t) => g.tokens.has(t) || g.text.includes(t.toLowerCase())) ? 1 : 0;
                 return { g, ref, dist: daysBetween(g.date, s.date) };
             })
+            // Off a shared reference, the date has to agree exactly.
+            .filter((c) => c.dist === 0 || c.ref === 1)
             .sort((a, b) => b.ref - a.ref || a.dist - b.dist);
         if (cands.length === 0) continue;
         if (cands.length > 1 && cands[0].ref === cands[1].ref && cands[0].dist === cands[1].dist) continue;

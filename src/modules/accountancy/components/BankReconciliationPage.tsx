@@ -487,10 +487,18 @@ export function BankReconciliationPage() {
                         <Button size="sm" variant="outline" onClick={() => void autoMatch()} disabled={busy != null}>
                             {busy === "Auto-match" ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Wand2 size={14} className="mr-1" />} Auto-match
                         </Button>
-                        <label className="flex items-center gap-1 text-xs text-muted-foreground" htmlFor="recon-window">
-                            within
+                        {/* The window governs REFERENCE-matched pairs only — a
+                            different day with nothing in common is never taken,
+                            whatever this says. Hence the wording: it is how late
+                            a proven pair may clear, not how loose a guess may be. */}
+                        <label
+                            className="flex items-center gap-1 text-xs text-muted-foreground"
+                            htmlFor="recon-window"
+                            title="Same-day lines match on amount alone. A different day is matched only when the bank's reference (UTR / UPI / cheque no) also appears on the entry — this is how many days late such a pair may clear."
+                        >
+                            same day, or up to
                             <input id="recon-window" type="text" inputMode="numeric" value={windowDays} onChange={(e) => setWindowDays(clampNumber(Number(parseDigitsInput(e.target.value)) || 0, 0, 300))} className="h-7 w-14 rounded-md border bg-background px-1.5 text-center text-xs" />
-                            days
+                            days on a matching reference
                         </label>
                         <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5 text-xs">
                             {(["unmatched", "matched", "all"] as Filter[]).map((f) => (
@@ -717,6 +725,21 @@ function Stat({ label, value, hint, sub, emphasis, warn }: { label: string; valu
     );
 }
 
+/** How far the furthest book entry in this match sits from the statement line.
+ *  Auto-match crosses days only on a shared reference now, and a match by hand
+ *  can span anything at all — either way a stretched pair is worth seeing on
+ *  the row rather than having to open both sides to notice it. */
+function matchGapDays(stDate: string, glLineIds: number[], glById: GlLineView[]): number {
+    const day = (d: string) => new Date(d.slice(0, 10)).getTime() / 86_400_000;
+    let gap = 0;
+    for (const id of glLineIds) {
+        const g = glById.find((x) => x.id === id);
+        if (!g) continue;
+        gap = Math.max(gap, Math.abs(day(g.date) - day(stDate)));
+    }
+    return Math.round(gap);
+}
+
 // One row of the merged table. Bank lines and book entries share the columns —
 // a withdrawal sits under the credit that explains it, a deposit under its
 // debit — so an equal pair reads straight down the page. The colour band and
@@ -732,6 +755,7 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
     const partners = isSt && matched
         ? row.st.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`)
         : [];
+    const matchGap = isSt && matched ? matchGapDays(row.st.date, row.st.match!.glLineIds, glById) : 0;
     const sug = row.sug;
     const run = row.run;
     // One background, chosen — not three bg-* utilities stacked, where which one
@@ -806,7 +830,12 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                 <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground">
                     {r.reference && <span className="font-mono">{r.reference}</span>}
                     {!isSt && row.gl.narration && row.gl.narration !== row.gl.description && <span className="truncate">{row.gl.narration}</span>}
-                    {matched && isSt && <span className="text-green-700 dark:text-green-400">↔ {partners.join(", ")}{row.st.match!.auto ? " · auto" : ""}</span>}
+                    {matched && isSt && (
+                        <span className="text-green-700 dark:text-green-400">
+                            ↔ {partners.join(", ")}{row.st.match!.auto ? " · auto" : ""}
+                            {matchGap > 0 && <span className="text-amber-600"> · {matchGap} day{matchGap === 1 ? "" : "s"} apart</span>}
+                        </span>
+                    )}
                     {matched && !isSt && <span className="text-green-700 dark:text-green-400">↔ {row.gl.match!.statementLineIds.length} statement line(s){row.gl.match!.auto ? " · auto" : ""}</span>}
                     {isSt && row.st.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
                 </div>
@@ -836,6 +865,7 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
 }) {
     const matched = r.match != null && !r.match.stale;
     const partners = matched ? r.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`) : [];
+    const matchGap = matched ? matchGapDays(r.date, r.match!.glLineIds, glById) : 0;
     return (
         <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60")}>
             <td className="px-2 py-1.5 align-top">
@@ -850,7 +880,12 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
                 <div className="line-clamp-2 break-words" title={r.narration}>{r.narration}</div>
                 <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground">
                     {r.reference && <span className="font-mono">{r.reference}</span>}
-                    {matched && <span className="text-green-700 dark:text-green-400">↔ {partners.join(", ")}{r.match!.auto ? " · auto" : ""}</span>}
+                    {matched && (
+                        <span className="text-green-700 dark:text-green-400">
+                            ↔ {partners.join(", ")}{r.match!.auto ? " · auto" : ""}
+                            {matchGap > 0 && <span className="text-amber-600"> · {matchGap} day{matchGap === 1 ? "" : "s"} apart</span>}
+                        </span>
+                    )}
                     {r.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
                 </div>
             </td>
