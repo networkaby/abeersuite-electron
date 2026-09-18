@@ -13,7 +13,7 @@ Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) an
 
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
-- **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". Everything else in this repo still stops at the commit.
+- **Release is the one exception to "never push".** Steps 5, 7, 8 and 9 are pushes the owner asked for by saying the word "release". Everything else in this repo still stops at the commit.
 - **A `-` in the version makes it a test build.** `1.3.1-pre.1` publishes to `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease. A version with no `-` publishes to **every** repo. The gate is in `scripts/release-electron.ts` and needs nothing set by hand — do not reach for `RELEASE_ONLY_REPO` to get this, that is the retry path.
   - Repo 1 is what the tills update from (`GITHUB_DOWNLOAD_UPDATE_REPO` → `electron/updateManager.ts`). Publishing there reaches real counters.
   - Repo 2 is the test channel. Counters never poll it, and `allowPrerelease` is off, so a test build cannot reach a till by accident.
@@ -32,7 +32,7 @@ git status --porcelain && git branch --show-current && git log --oneline -1
 - `.env` present with `GITHUB_UPDATE_REPO_1` + `GH_TOKEN_1` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
 - **Ask the owner to confirm the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. Do not guess.
 
-## The nine steps
+## The ten steps
 
 ### 1. Get on `main` with the release content
 
@@ -139,12 +139,62 @@ git checkout dev && git merge --ff-only main && git push origin dev
 
 So the next day's work starts from the released tree.
 
-### 9. Report
+### 9. Deploy the office side — `d_office`
+
+**`d_office` is the deploy branch.** Vercel is connected to it on `origin`, so a push
+to `d_office` — and nothing else — is what puts the office site and its migration
+live. `main` moving does not deploy anything. Neither does `dev`. `production` has
+no `d_office` at all.
+
+Check where it stands before proposing anything:
+
+```bash
+git rev-parse d_office main && git log --oneline d_office..main
+```
+
+Then **show the owner what the push would carry and ask** — the commit count, and
+whether it reaches back past earlier release commits, which means the site has been
+running behind. Never push `d_office` unprompted: it is a production deploy, and the
+agent's own permission layer will refuse it anyway.
+
+On a yes:
+
+```bash
+git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main
+```
+
+Not fast-forwardable → stop and report. `d_office` carrying something `main` does not
+means the site is running code no release contains, and merging over it hides that.
+
+**A schema release deploys only after the counters have the build** (AGENTS.md §3).
+The migration runs inside `vercel-build`, so this push is the moment live's schema
+changes. Before proposing it on a schema release, check what is actually pending:
+
+```bash
+pnpm db:migrate:status
+```
+
+"Database schema is up to date!" means the migration already reached live and the
+deploy is code-only — say so, it changes the risk completely. Anything pending means
+the ordering rule is live and the counters come first.
+
+Judge the drift risk on **what physically changes**, not on the word "migration".
+`schemaGuard` only compares tables a counter already has in its registry, so a brand
+new table is invisible to an old till and cannot halt it. A new **column on a table
+counters already sync** is the shape that stops shops. Prisma relation fields are not
+columns — read the migration SQL, not the schema diff.
+
+If the owner asks for a deploy some other way — `vercel --prod`, the dashboard — say
+plainly that `d_office` is the trigger and offer this instead. Do not go looking for
+Vercel credentials.
+
+### 10. Report
 
 Done means, and say each one plainly:
 
 - `main` and `v<version>` are on **both** remotes.
 - `dev` is level with `main`.
+- Whether `d_office` was pushed — and if it was not, say so plainly, because the office site is then still on the old code.
 - **Every** release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes — or, for a `-pre` version, **repo 2 shows them and repo 1 was deliberately left alone**. Say which, and say that counters will not see a test build.
 - Which urgency tier went out, and therefore how counters will take it.
 
@@ -157,12 +207,13 @@ Handing a step back is **not** stopping the release: do everything either side o
 | **The notes and the tier** | Always, before step 4. Show the drafted `RELEASE_NOTES.md`. |
 | **The smoke test** | Always, after the pack succeeds. You cannot run the packaged exe meaningfully. |
 | **The variant** | Always, at preflight — `APP_MODE`, `LANDING_PAGE`. |
+| **The `d_office` deploy** | Always, at step 9. Show what the push carries; it is a production deploy and goes only on a clear yes. |
 | **A push they would rather run** | Whenever they say so — offer the exact command instead of running it. |
 | **Anything that would be a guess** | A version number that is not an obvious bump; a schema release's publish-then-migrate ordering; a repo that failed to publish. |
 
 ## Stop and ask — failures
 
-- **Non-fast-forward merge** (step 1 or 8) → stop, report what diverged. Never force.
+- **Non-fast-forward merge** (step 1, 8 or 9) → stop, report what diverged. Never force.
 - **`verify:package` fails** → stop. The gate exists because these failures reach a counter, not the build machine. Read the named failure, fix the cause, re-run the whole `pnpm electron:release`.
 - **Publish fails for one repo after another succeeded** → retry that repo alone:
 
