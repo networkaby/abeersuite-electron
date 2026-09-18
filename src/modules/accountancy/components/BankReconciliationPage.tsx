@@ -126,7 +126,7 @@ export function BankReconciliationPage() {
     const [busy, setBusy] = useState<string | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [bookKind, setBookKind] = useState<GlDialogKind | null>(null);
-    const [bookingLine, setBookingLine] = useState<StatementLineView | null>(null);
+    const [bookingLines, setBookingLines] = useState<StatementLineView[]>([]);
 
     // Bank ledgers — one Trial Balance read, the same source Bank Book uses.
     const ledgersQ = useApiResource<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`);
@@ -337,41 +337,81 @@ export function BankReconciliationPage() {
 
     // "Book it": open the real voucher form with the bank leg, amount, date and
     // narration already in, then match the saved voucher to this line.
-    const bookIt = (line: StatementLineView, kind: "PAYMENT" | "RECEIPT" | "CONTRA") => {
-        if (!data) return;
+    // Book one statement line, or several at once. The bank takes a single leg
+    // for the total and every line becomes its own particulars row, carrying
+    // its narration as that row's description — a subscription and the charges
+    // deducted alongside it end up in one voucher, still itemised.
+    const bookIt = (lines: StatementLineView[], kind: "PAYMENT" | "RECEIPT" | "CONTRA") => {
+        if (!data || lines.length === 0) return;
         const bankId = data.account.id;
-        const amount = line.deposit ?? line.withdrawal ?? 0;
-        const isDeposit = line.deposit != null;
-        const bankType = isDeposit ? "DEBIT" : "CREDIT";
-        const otherType = isDeposit ? "CREDIT" : "DEBIT";
+        const deposits = lines.every((l) => l.deposit != null);
+        const withdrawals = lines.every((l) => l.withdrawal != null);
+        if (!deposits && !withdrawals) {
+            toast.error("Those lines go both ways — book the money in and the money out separately.");
+            return;
+        }
+        const amountOf = (l: StatementLineView) => l.deposit ?? l.withdrawal ?? 0;
+        const total = Math.round(lines.reduce((n, l) => n + amountOf(l), 0) * 100) / 100;
+        // Annotated: inside the map below the inferred literal union widens to
+        // string, which DuplicateLine will not take.
+        const bankType: "DEBIT" | "CREDIT" = deposits ? "DEBIT" : "CREDIT";
+        const otherType: "DEBIT" | "CREDIT" = deposits ? "CREDIT" : "DEBIT";
+        const date = lines.reduce((d, l) => (l.date < d ? l.date : d), lines[0].date);
+        const oneDate = lines.every((l) => l.date === date);
         stashDuplicate({
             kind,
-            date: line.date,
-            narration: line.narration.slice(0, 250),
+            date,
+            narration: lines.length === 1
+                ? lines[0].narration.slice(0, 250)
+                : `Bank statement · ${oneDate ? `${formatDate(date)} · ` : ""}${lines.length} lines`,
             lines: [
-                { accountId: bankId, type: bankType, amount },
-                { accountId: null, type: otherType, amount, reference: line.reference ?? undefined },
+                { accountId: bankId, type: bankType, amount: total },
+                ...lines.map((l) => ({
+                    accountId: null,
+                    type: otherType,
+                    amount: amountOf(l),
+                    description: l.narration.slice(0, 250),
+                    reference: l.reference ?? undefined,
+                })),
             ],
-            extras: { toast: `From the bank statement: ${formatDate(line.date)} · ${fmt(amount)}. Pick the other ledger and save.`, bankStatementLineId: line.id },
+            extras: {
+                toast: lines.length === 1
+                    ? `From the bank statement: ${formatDate(date)} · ${fmt(total)}. Pick the other ledger and save.`
+                    : `From the bank statement: ${lines.length} lines · ${fmt(total)}. Pick a ledger on each row and save.`,
+                bankStatementLineIds: lines.map((l) => l.id),
+            },
         });
-        setBookingLine(line);
+        setBookingLines(lines);
         setBookKind(kind);
     };
 
+    // The ticked bank lines, in the order the table shows them.
+    const selectedStLines = useMemo(
+        () => (data?.statementLines ?? []).filter((l) => selSt.has(l.id)),
+        [data, selSt],
+    );
+    const selKind: "RECEIPT" | "PAYMENT" | null = selectedStLines.length === 0
+        ? null
+        : selectedStLines.every((l) => l.deposit != null) ? "RECEIPT"
+            : selectedStLines.every((l) => l.withdrawal != null) ? "PAYMENT" : null;
+
     const afterBooked = async (voucherId: number, posted: boolean) => {
-        const line = bookingLine;
-        setBookKind(null); setBookingLine(null);
-        if (!line || !selectedId) { reload(); return; }
-        if (!posted) { toast("Saved as draft — post it, then match it to the statement line."); reload(); return; }
+        const lines = bookingLines;
+        setBookKind(null); setBookingLines([]);
+        if (lines.length === 0 || !selectedId) { reload(); return; }
+        const many = lines.length > 1;
+        if (!posted) { toast(`Saved as draft — post it, then match it to the statement line${many ? "s" : ""}.`); reload(); return; }
         await run("Match new voucher", async () => {
             // The user may have moved the date in the form — look two months
             // either side of the statement line for the voucher's bank leg.
-            const around = (days: number) => formatDateInput(new Date(new Date(`${line.date}T00:00:00`).getTime() + days * 86400000));
+            const first = lines.reduce((d, l) => (l.date < d ? l.date : d), lines[0].date);
+            const around = (days: number) => formatDateInput(new Date(new Date(`${first}T00:00:00`).getTime() + days * 86400000));
             const fresh = await axios.get<ReconPayload>(`/api/accountancy/bank-reconciliation/${selectedId}?from=${around(-60)}&to=${around(60)}`);
             const leg = fresh.data.glLines.find((g) => g.voucherId === voucherId && g.match == null);
             if (!leg) { toast.error("Voucher saved, but its bank leg was not found on this ledger — match it by hand."); reload(); return; }
-            await axios.post(`/api/accountancy/bank-reconciliation/${selectedId}/match`, { statementLineIds: [line.id], glLineIds: [leg.id] });
-            toast.success(`Booked and matched: ${leg.voucherNo}`);
+            await axios.post(`/api/accountancy/bank-reconciliation/${selectedId}/match`, { statementLineIds: lines.map((l) => l.id), glLineIds: [leg.id] });
+            setSelSt(new Set());
+            toast.success(`Booked and matched: ${leg.voucherNo}${many ? ` · ${lines.length} lines` : ""}`);
             reload();
         });
     };
@@ -462,6 +502,26 @@ export function BankReconciliationPage() {
                                 <button key={v} type="button" onClick={() => changeView(v)} className={cn("rounded px-2 py-1 capitalize", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>{v}</button>
                             ))}
                         </div>
+                        {selectedStLines.length > 0 && selGl.size === 0 && (
+                            <>
+                                <Button
+                                    size="sm" variant="outline" disabled={busy != null || selKind == null}
+                                    onClick={() => selKind && bookIt(selectedStLines, selKind)}
+                                    title={selKind == null
+                                        ? "Those lines go both ways — book the money in and the money out separately"
+                                        : `One voucher, ${selectedStLines.length} row(s), each carrying its own narration`}
+                                >
+                                    <Sparkles size={14} className="mr-1" /> {selKind === "RECEIPT" ? "Receipt" : "Payment"} {selectedStLines.length}
+                                </Button>
+                                <Button
+                                    size="sm" variant="outline" disabled={busy != null || selKind == null}
+                                    onClick={() => selKind && bookIt(selectedStLines, "CONTRA")}
+                                    title="Book the ticked lines as one contra voucher"
+                                >
+                                    Contra {selectedStLines.length}
+                                </Button>
+                            </>
+                        )}
                         <Button size="sm" onClick={() => void match()} disabled={!canMatch || busy != null} title={selSt.size && selGl.size && !canMatch ? `Sides differ: statement ${fmt(stTotal)} vs books ${fmt(glTotal)}` : undefined}>
                             <Link2 size={14} className="mr-1" /> Match {selSt.size ? `${selSt.size} ↔ ${selGl.size}` : ""}
                         </Button>
@@ -517,7 +577,7 @@ export function BankReconciliationPage() {
                                                     ? setSelSt((s0) => toggle(s0, row.st.id))
                                                     : setSelGl((s0) => toggle(s0, row.gl.id))}
                                                 onUnmatch={() => void unmatch(row.kind === "st" ? row.st.match!.groupId : row.gl.match!.groupId)}
-                                                onBook={(k) => { if (row.kind === "st") bookIt(row.st, k); }}
+                                                onBook={(k) => { if (row.kind === "st") bookIt([row.st], k); }}
                                                 onSelectGroup={selectGroup}
                                                 busy={busy != null}
                                                 glById={data.glLines}
@@ -570,7 +630,7 @@ export function BankReconciliationPage() {
                                                 {data.statementLines.length === 0 ? "No statement lines in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
                                             </td></tr>
                                         )}
-                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt(r, k)} busy={busy != null} glById={data.glLines} />)}
+                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt([r], k)} busy={busy != null} glById={data.glLines} />)}
                                     </tbody>
                                 </table>
                             </div>
@@ -642,7 +702,7 @@ export function BankReconciliationPage() {
                     onImported={() => reload()}
                 />
             )}
-            <GlVoucherDialog kind={bookKind} onClose={() => { setBookKind(null); setBookingLine(null); reload(); }} onSaved={(id, posted) => void afterBooked(id, posted)} />
+            <GlVoucherDialog kind={bookKind} onClose={() => { setBookKind(null); setBookingLines([]); reload(); }} onSaved={(id, posted) => void afterBooked(id, posted)} />
         </div>
     );
 }
