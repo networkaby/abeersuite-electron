@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { clampNumber, parseDigitsInput } from "@/shared/lib/format";
 
 // The Service Shipping Label — a packet address label, NOT a voucher, and NOT a
 // one-card-fits-all: each paper size has its OWN bespoke layout (deliberately
@@ -393,8 +394,8 @@ export default function ShippingLabel({
                         <button type="button" className={isTl ? "on" : ""} onClick={() => setSize("TL100x50")} title="100×50mm die-cut direct-thermal courier label roll">TL 100×50</button>
                     </div>
                     <label>Qty
-                        <input type="number" min={1} max={200} value={qty}
-                            onChange={(e) => setQty(Math.max(1, Math.min(Number(e.target.value) || 1, 200)))} />
+                        <input type="text" inputMode="numeric" value={qty}
+                            onChange={(e) => setQty(clampNumber(Number(parseDigitsInput(e.target.value)) || 1, 1, 200))} />
                     </label>
                     <label title="Also print the reverse label (service centre → shop) so the centre can paste it on the device's return packet">
                         <input type="checkbox" checked={withReturn} onChange={(e) => setWithReturn(e.target.checked)} />

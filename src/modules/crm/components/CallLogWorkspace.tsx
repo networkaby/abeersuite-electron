@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -332,9 +333,9 @@ export default function CallLogWorkspace() {
                 ] as const).map(([label, apply]) => (
                     <Button key={label} variant="outline" size="sm" className="h-8" onClick={apply}>{label}</Button>
                 ))}
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-38" aria-label="From date" />
+                <TallyDateInput value={dateFrom} onValueChange={setDateFrom} className="h-8 w-38" aria-label="From date" />
                 <span className="text-muted-foreground">to</span>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-38" aria-label="To date" />
+                <TallyDateInput value={dateTo} onValueChange={setDateTo} monthMode="end" className="h-8 w-38" aria-label="To date" />
                 {(dateFrom || dateTo) && (
                     <Button variant="ghost" size="sm" className="h-8" onClick={() => setRange(null)}>Clear</Button>
                 )}

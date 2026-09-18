@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { clampNumber, parseDigitsInput } from "@/shared/lib/format";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 
 // The Parcel Shipping Label — for shop orders shipped by OUR couriers (local
@@ -234,8 +235,8 @@ export default function OrderParcelLabel({
                         <button type="button" className={size === "THERMAL" ? "on" : ""} onClick={() => setSize("THERMAL")} title="80mm roll — quick local runs from the counter printer">Thermal · roll</button>
                     </div>
                     <label>Qty
-                        <input type="number" min={1} max={100} value={qty}
-                            onChange={(e) => setQty(Math.max(1, Math.min(Number(e.target.value) || 1, 100)))} />
+                        <input type="text" inputMode="numeric" value={qty}
+                            onChange={(e) => setQty(clampNumber(Number(parseDigitsInput(e.target.value)) || 1, 1, 100))} />
                     </label>
                     <span style={{ fontSize: 12, color: "#666" }}>
                         {size === "THERMAL"

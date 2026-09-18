@@ -7,6 +7,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { toDateTimeLocalInput, rupeesToPaise, paiseToRupees } from "@/shared/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -204,13 +205,12 @@ export default function RecurringTaskFormDialog({
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="rec-amount">Amount (₹)</Label>
-                                <Input
+                                <NumericInput
                                     id="rec-amount"
-                                    type="number"
+                                    mode="decimal"
                                     min={0}
-                                    step="0.01"
                                     value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
+                                    onValueChange={setAmount}
                                     placeholder="Optional"
                                 />
                             </div>
@@ -235,14 +235,13 @@ export default function RecurringTaskFormDialog({
                         <div className="space-y-2">
                             <Label htmlFor="rec-every">Repeat every</Label>
                             <div className="flex gap-2">
-                                <Input
+                                <NumericInput
                                     id="rec-every"
-                                    type="number"
                                     min={1}
                                     className="w-16"
                                     value={every}
                                     disabled={scheduleLocked}
-                                    onChange={(e) => setEvery(e.target.value)}
+                                    onValueChange={setEvery}
                                 />
                                 <Select
                                     value={unit}
@@ -263,12 +262,11 @@ export default function RecurringTaskFormDialog({
 
                         <div className="space-y-2">
                             <Label htmlFor="rec-count">Occurrences</Label>
-                            <Input
+                            <NumericInput
                                 id="rec-count"
-                                type="number"
                                 min={1}
                                 value={totalCount}
-                                onChange={(e) => setTotalCount(e.target.value)}
+                                onValueChange={setTotalCount}
                                 placeholder="Blank = no end"
                             />
                         </div>
@@ -289,13 +287,12 @@ export default function RecurringTaskFormDialog({
                         <div className="space-y-2">
                             <Label htmlFor="rec-lead">Create in advance</Label>
                             <div className="flex items-center gap-2">
-                                <Input
+                                <NumericInput
                                     id="rec-lead"
-                                    type="number"
                                     min={0}
                                     className="w-16"
                                     value={leadDays}
-                                    onChange={(e) => setLeadDays(e.target.value)}
+                                    onValueChange={setLeadDays}
                                 />
                                 <span className="text-sm text-muted-foreground">days before</span>
                             </div>

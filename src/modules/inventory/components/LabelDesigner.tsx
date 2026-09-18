@@ -27,6 +27,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Select,
@@ -546,12 +547,11 @@ export function LabelDesigner({
                                     </TableCell>
                                     <TableCell className="text-right font-mono text-xs">{it.stock ?? "—"}</TableCell>
                                     <TableCell className="text-center">
-                                        <Input
-                                            type="number"
+                                        <NumericInput
                                             min={1}
                                             max={999}
                                             value={it.copies}
-                                            onChange={(e) => onCopiesChange(it.id, clampCopies(parseInt(e.target.value, 10)))}
+                                            onValueChange={(v) => onCopiesChange(it.id, clampCopies(parseInt(v, 10)))}
                                             className="mx-auto h-7 w-16 text-center text-xs font-mono"
                                             aria-label={`Copies of ${it.name}`}
                                         />

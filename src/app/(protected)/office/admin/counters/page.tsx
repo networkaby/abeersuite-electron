@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Badge } from "@/components/ui/badge";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -379,12 +380,9 @@ export default function CountersAdminPage() {
                                         {branchPrefix}
                                     </span>
                                 )}
-                                <Input
-                                    type="number"
-                                    min={1}
+                                <NumericInput
                                     value={form.counterNumber}
-                                    onChange={(e) => {
-                                        const suffix = e.target.value;
+                                    onValueChange={(suffix) => {
                                         const combined = branchPrefix ? `${branchPrefix}${suffix}` : suffix;
                                         setForm((f) => ({
                                             ...f,
@@ -449,11 +447,9 @@ export default function CountersAdminPage() {
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                     <div>
                                                         <label className="text-xs font-medium text-muted-foreground">Counter Number *</label>
-                                                        <Input
-                                                            type="number"
-                                                            min={1}
+                                                        <NumericInput
                                                             value={editForm.counterNumber}
-                                                            onChange={(e) => setEditForm((f) => ({ ...f, counterNumber: e.target.value }))}
+                                                            onValueChange={(v) => setEditForm((f) => ({ ...f, counterNumber: v }))}
                                                             placeholder="1"
                                                             className="mt-1"
                                                         />

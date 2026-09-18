@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -356,18 +357,17 @@ function SectionRow({
                         <div className="grid grid-cols-2 gap-2 sm:w-64">
                             <div className="grid gap-1">
                                 <Label className="text-xs font-normal">Show from</Label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     value={inst.startAt ?? ""}
-                                    onChange={(e) => onUpdate({ startAt: e.target.value || undefined })}
+                                    onValueChange={(iso) => onUpdate({ startAt: iso || undefined })}
                                 />
                             </div>
                             <div className="grid gap-1">
                                 <Label className="text-xs font-normal">Show until</Label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
+                                    monthMode="end"
                                     value={inst.endAt ?? ""}
-                                    onChange={(e) => onUpdate({ endAt: e.target.value || undefined })}
+                                    onValueChange={(iso) => onUpdate({ endAt: iso || undefined })}
                                 />
                             </div>
                         </div>

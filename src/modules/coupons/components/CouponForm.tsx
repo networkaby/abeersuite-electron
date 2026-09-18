@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dices, Gift, IndianRupee, Percent, Plus, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -73,7 +74,7 @@ export interface Coupon {
 const str = (v: string | number | null | undefined): string => (v == null ? "" : String(v));
 const optNum = (s: string): number | null => (s.trim() === "" ? null : Number(s));
 const optInt = (s: string): number | null => (s.trim() === "" ? null : parseInt(s, 10));
-// <input type="date"> needs YYYY-MM-DD; the API stores a full timestamp.
+// TallyDateInput binds YYYY-MM-DD; the API stores a full timestamp.
 const fromDateInput = (d: string): string | null => (d.trim() === "" ? null : new Date(d + "T00:00:00").toISOString());
 
 const CHANNEL_LABEL: Record<Coupon["channels"], string> = { BOTH: "POS + Shop", POS: "POS only", SHOP: "Shop only" };
@@ -435,10 +436,10 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
         <Section title="Validity & limits" tone="validity">
             <div className="grid gap-2 sm:grid-cols-2">
                 <Field label="Valid from">
-                    <Input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={fullPage ? "h-9" : "h-10"} />
+                    <TallyDateInput value={startsAt} onValueChange={setStartsAt} className={fullPage ? "h-9" : "h-10"} />
                 </Field>
                 <Field label="Valid until">
-                    <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={fullPage ? "h-9" : "h-10"} />
+                    <TallyDateInput value={endsAt} onValueChange={setEndsAt} monthMode="end" className={fullPage ? "h-9" : "h-10"} />
                 </Field>
                 <Field label="Min bill ₹">
                     <RupeeInput compact={fullPage} value={minBillValue} onChange={(v) => setMinBillValue(parseDecimalInput(v))} placeholder="1000" />

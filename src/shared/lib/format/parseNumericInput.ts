@@ -14,3 +14,9 @@ export const parseDigitsInput = (s: string): string => s.replace(/[^\d]/g, "");
 /** Keep digits + a single leading minus. */
 export const parseSignedInput = (s: string): string =>
     s.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "");
+
+/** Clamp `n` into [min, max], ignoring bounds that weren't given. Pairs with
+ *  the sanitisers above: they decide what may be typed, this decides what the
+ *  value settles to once the user leaves the field. */
+export const clampNumber = (n: number, min?: number, max?: number): number =>
+    Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, n));

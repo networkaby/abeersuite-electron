@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
@@ -141,9 +142,9 @@ function DayWindow({ from, setFrom, to, setTo }: { from: string; setFrom: (v: st
     return (
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <span>in last</span>
-            <Input type="number" min={0} value={from} onChange={(e) => setFrom(e.target.value)} placeholder="all" className="h-8 w-14" />
+            <NumericInput min={0} value={from} onValueChange={setFrom} placeholder="all" className="h-8 w-14" />
             <span>to</span>
-            <Input type="number" min={0} value={to} onChange={(e) => setTo(e.target.value)} placeholder="0" className="h-8 w-14" />
+            <NumericInput min={0} value={to} onValueChange={setTo} placeholder="0" className="h-8 w-14" />
             <span>days ago</span>
         </div>
     );
@@ -183,9 +184,9 @@ function MoneyRange({
     return (
         <>
             <div className="flex items-center gap-1.5">
-                <Input type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} placeholder="min ₹" className="h-8" />
+                <NumericInput mode="decimal" min={0} value={min} onValueChange={setMin} placeholder="min ₹" className="h-8" />
                 <span className="text-xs text-muted-foreground">–</span>
-                <Input type="number" min={0} value={max} onChange={(e) => setMax(e.target.value)} placeholder="max ₹" className="h-8" />
+                <NumericInput mode="decimal" min={0} value={max} onValueChange={setMax} placeholder="max ₹" className="h-8" />
             </div>
             <DayWindow from={fromDays} setFrom={setFromDays} to={toDays} setTo={setToDays} />
         </>
@@ -738,7 +739,7 @@ export default function ReconnectWorkspace({
                     <FilterRow label="Warranty ending" checked={enabled.warranty} onToggle={toggle("warranty")} summary={warrantyDays.trim() ? `≤${warrantyDays.trim()}d` : ""}>
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs text-muted-foreground">within</span>
-                            <Input type="number" min={0} value={warrantyDays} onChange={(e) => setWarrantyDays(e.target.value)} placeholder="e.g. 30" className="h-8" />
+                            <NumericInput min={0} value={warrantyDays} onValueChange={setWarrantyDays} placeholder="e.g. 30" className="h-8" />
                             <span className="text-xs text-muted-foreground">days</span>
                         </div>
                         {warrantyTerms.length > 0 && (

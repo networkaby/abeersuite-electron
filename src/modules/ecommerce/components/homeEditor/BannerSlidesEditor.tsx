@@ -3,6 +3,7 @@
 import { Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShopImageField from "@/modules/ecommerce/components/ShopImageField";
@@ -232,18 +233,17 @@ export default function BannerSlidesEditor({
                         )}
                         <div className="grid gap-1">
                             <Label className="text-xs font-normal">Show from</Label>
-                            <Input
-                                type="date"
+                            <TallyDateInput
                                 value={slide.startAt ?? ""}
-                                onChange={(e) => update(i, { startAt: e.target.value || undefined })}
+                                onValueChange={(iso) => update(i, { startAt: iso || undefined })}
                             />
                         </div>
                         <div className="grid gap-1">
                             <Label className="text-xs font-normal">Show until</Label>
-                            <Input
-                                type="date"
+                            <TallyDateInput
+                                monthMode="end"
                                 value={slide.endAt ?? ""}
-                                onChange={(e) => update(i, { endAt: e.target.value || undefined })}
+                                onValueChange={(iso) => update(i, { endAt: iso || undefined })}
                             />
                         </div>
                     </div>

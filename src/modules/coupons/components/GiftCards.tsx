@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, CreditCard, Share2, Printer, Trash2, BadgeIndianRupee, MessageCircle, Mail, Copy, Clock, Search, Sparkles, Image as ImageIcon, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -281,7 +282,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
                         </div>
                         <div className="w-40 space-y-1">
                             <Label className="text-[11px] text-muted-foreground">Expires (optional)</Label>
-                            <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="h-9" />
+                            <TallyDateInput value={expiresAt} onValueChange={setExpiresAt} monthMode="end" className="h-9" />
                         </div>
                         <Button size="sm" className="h-9" onClick={generate} disabled={generating}>
                             <Plus size={14} className="mr-1" /> Generate draft

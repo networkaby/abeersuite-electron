@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, X, Check, Building2, MapPin, Phone, ToggleLeft, ToggleRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,7 +35,7 @@ interface Branch {
 
 interface FormState {
     id:           string;
-    number:       number | "";
+    number:       number | string;
     name:         string;
     address:      string;
     phone:        string;
@@ -303,12 +304,9 @@ function BranchForm({ form, set, onSave, onCancel, saving, title, isCreate, rena
                 <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-3">
                         <Field label="Number *" hint="Unique positive integer (e.g. 1, 2)">
-                            <Input
-                                type="number"
-                                min={1}
-                                step={1}
+                            <NumericInput
                                 value={form.number}
-                                onChange={(e) => set("number", e.target.value === "" ? "" : parseInt(e.target.value, 10) || "")}
+                                onValueChange={(v) => set("number", v)}
                                 className="font-mono"
                                 placeholder="1"
                             />
