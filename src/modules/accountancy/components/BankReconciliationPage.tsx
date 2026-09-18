@@ -104,7 +104,7 @@ export function BankReconciliationPage() {
     const [from, setFrom] = useState(formatDateInput(indianFiscalYearStart()));
     const [to, setTo] = useState(today);
     const [windowDays, setWindowDays] = useState(7);
-    const [filter, setFilter] = useState<Filter>("unmatched");
+    const [filter, setFilter] = useState<Filter>("all");
     const [view, setView] = useState<ViewMode>("merged");
     useEffect(() => {
         try { const v = localStorage.getItem("recon.view"); if (v === "split" || v === "merged") setView(v); } catch { /* private mode */ }
@@ -241,7 +241,39 @@ export function BankReconciliationPage() {
     }, [stRows, glRows]);
 
     const selectGroup = (sug: Suggestion) => { setSelSt(new Set(sug.stIds)); setSelGl(new Set(sug.glIds)); };
-    const mergedPage = useClientPagination(mergedRows, 100);
+
+    // Pages that never cut a group in half. Rows are taken block by block — a
+    // run whole, a loose row on its own — and a block that would overflow the
+    // page starts the next one instead, so a page can come up a row or two
+    // short. A group longer than a page gets a page to itself.
+    const [mPage, setMPage] = useState(1);
+    const [mPageSize, setMPageSize] = useState(100);
+    const mPages = useMemo(() => {
+        const out: MergedRow[][] = [];
+        let cur: MergedRow[] = [];
+        for (let i = 0; i < mergedRows.length;) {
+            let j = i;
+            while (j + 1 < mergedRows.length && mergedRows[j].run && !mergedRows[j].run!.last) j++;
+            const block = mergedRows.slice(i, j + 1);
+            if (cur.length > 0 && cur.length + block.length > mPageSize) { out.push(cur); cur = []; }
+            cur.push(...block);
+            i = j + 1;
+        }
+        if (cur.length > 0) out.push(cur);
+        return out;
+    }, [mergedRows, mPageSize]);
+
+    // Same trick as useClientPagination: correct an out-of-range page during
+    // render, so filtering while deep in the list never shows an empty table.
+    const mPageCount = Math.max(1, mPages.length);
+    const [lastMPageCount, setLastMPageCount] = useState(mPageCount);
+    if (lastMPageCount !== mPageCount) {
+        setLastMPageCount(mPageCount);
+        if (mPage > mPageCount) setMPage(mPageCount);
+    }
+    const mCurrent = Math.min(Math.max(1, mPage), mPageCount);
+    const mPageRows = mPages[mCurrent - 1] ?? [];
+    const mFrom = mPages.slice(0, mCurrent - 1).reduce((n, p) => n + p.length, 0) + 1;
 
     const stTotal = useMemo(() => {
         let s = 0;
@@ -417,7 +449,7 @@ export function BankReconciliationPage() {
                         </Button>
                         <label className="flex items-center gap-1 text-xs text-muted-foreground" htmlFor="recon-window">
                             within
-                            <input id="recon-window" type="text" inputMode="numeric" value={windowDays} onChange={(e) => setWindowDays(clampNumber(Number(parseDigitsInput(e.target.value)) || 0, 0, 90))} className="h-7 w-14 rounded-md border bg-background px-1.5 text-center text-xs" />
+                            <input id="recon-window" type="text" inputMode="numeric" value={windowDays} onChange={(e) => setWindowDays(clampNumber(Number(parseDigitsInput(e.target.value)) || 0, 0, 300))} className="h-7 w-14 rounded-md border bg-background px-1.5 text-center text-xs" />
                             days
                         </label>
                         <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5 text-xs">
@@ -471,12 +503,12 @@ export function BankReconciliationPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {mergedPage.pageRows.length === 0 && (
+                                        {mPageRows.length === 0 && (
                                             <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                                                 {data.statementLines.length === 0 && data.glLines.length === 0 ? "Nothing in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
                                             </td></tr>
                                         )}
-                                        {mergedPage.pageRows.map((row) => (
+                                        {mPageRows.map((row) => (
                                             <MergedRowView
                                                 key={row.key}
                                                 row={row}
@@ -494,7 +526,18 @@ export function BankReconciliationPage() {
                                     </tbody>
                                 </table>
                             </div>
-                            <PaginationBar total={mergedPage.total} page={mergedPage.page} pageSize={mergedPage.pageSize} onPageChange={mergedPage.setPage} onPageSizeChange={mergedPage.setPageSize} unitLabel="row" className="border-t px-3" />
+                            <PaginationBar
+                                total={mergedRows.length}
+                                page={mCurrent}
+                                pageSize={mPageSize}
+                                pageCount={mPageCount}
+                                rangeFrom={mPageRows.length === 0 ? 0 : mFrom}
+                                rangeTo={mPageRows.length === 0 ? 0 : mFrom + mPageRows.length - 1}
+                                onPageChange={setMPage}
+                                onPageSizeChange={(n) => { setMPageSize(n); setMPage(1); }}
+                                unitLabel="row"
+                                className="border-t px-3"
+                            />
                         </div>
                     )}
 

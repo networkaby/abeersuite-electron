@@ -34,6 +34,14 @@ export interface PaginationBarProps {
     onPageSizeChange?: (pageSize: number) => void;
     /** Choices for the rows-per-page select. */
     pageSizeOptions?: number[];
+    /**
+     * Optional — for a parent whose pages are NOT uniform slices of `pageSize`,
+     * such as a table that keeps a group whole and lets a page run short. Give
+     * all three together: the real page count and the range actually on screen.
+     */
+    pageCount?: number;
+    rangeFrom?: number;
+    rangeTo?: number;
     /** Singular noun for the count label (default "item"). */
     unitLabel?: string;
     className?: string;
@@ -46,13 +54,16 @@ export function PaginationBar({
     onPageChange,
     onPageSizeChange,
     pageSizeOptions = [25, 50, 100, 200],
+    pageCount: pageCountProp,
+    rangeFrom,
+    rangeTo,
     unitLabel = "item",
     className,
 }: PaginationBarProps) {
-    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const pageCount = Math.max(1, pageCountProp ?? Math.ceil(total / pageSize));
     const current = Math.min(Math.max(1, page), pageCount);
-    const from = total === 0 ? 0 : (current - 1) * pageSize + 1;
-    const to = Math.min(current * pageSize, total);
+    const from = total === 0 ? 0 : rangeFrom ?? (current - 1) * pageSize + 1;
+    const to = total === 0 ? 0 : rangeTo ?? Math.min(current * pageSize, total);
     const atFirst = current <= 1;
     const atLast = current >= pageCount;
 

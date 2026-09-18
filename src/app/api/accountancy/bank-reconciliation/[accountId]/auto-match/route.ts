@@ -11,7 +11,7 @@ const schema = z.object({
     from: iso,
     to: iso,
     /** How far apart the bank's date and the book date may sit. */
-    windowDays: z.number().int().min(0).max(90).default(7),
+    windowDays: z.number().int().min(0).max(300).default(7),
 });
 
 // POST /api/accountancy/bank-reconciliation/[accountId]/auto-match
