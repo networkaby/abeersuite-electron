@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { startOfDayUtc, toDateOnlyUtc, todayIso } from "@/shared/lib/format/formatDate";
+import { BankReconError, assertLockAllowed } from "@/modules/accountancy/lib/bankReconciliation";
 
 // POST /api/accountancy/ledgers/[id]/reconcile
 //
@@ -40,6 +41,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const exists = await prisma.account.findUnique({ where: { id }, select: { id: true } });
     if (!exists) return NextResponse.json({ error: "Ledger not found" }, { status: 404 });
+
+    // The bank is the truth: a bank ledger's lock may not pass a statement line
+    // nobody has matched or booked. Ledgers with no statement on file are
+    // unaffected (nothing to be inconsistent with).
+    if (data.reconciledThrough) {
+        try {
+            await assertLockAllowed(id, data.reconciledThrough);
+        } catch (e) {
+            if (e instanceof BankReconError) return NextResponse.json({ error: e.message }, { status: e.status });
+            throw e;
+        }
+    }
 
     try {
         const account = await prisma.account.update({

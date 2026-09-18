@@ -329,10 +329,14 @@ function DenomPanel({ title, denomList, value, onChange }: {
  * click) and every close path (Back, Cancel, Esc, after save) calls it
  * instead of navigating the tab.
  */
-export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, settleBill = null }: {
+export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty = null, settleBill = null }: {
     kind: MoneyFlowKind;
     voucherId?: number;
     onClose?: () => void;
+    /** Create mode only: told the new voucher's id once it is saved (and whether
+     *  it was posted), for a host that has something to tie it to — the bank
+     *  reconciliation screen matches the statement line to it. */
+    onSaved?: (voucherId: number, posted: boolean) => void;
     /** Create mode only: a party to start with (the open customer profile).
      *  Payment / Receipt → first particulars row; CN / DN → the top party. */
     initialParty?: PickedParty | null;
@@ -714,7 +718,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, s
                 reference: l.reference ?? "",
             })));
         }
-        toast.success("Duplicated — review and Save to create a new voucher");
+        // A producer that is not the Duplicate menu (the bank reconciliation's
+        // "Book it") says what it did in its own words.
+        const customToast = typeof dup.extras?.toast === "string" ? dup.extras.toast : null;
+        toast.success(customToast ?? "Duplicated — review and Save to create a new voucher");
         // Run once on mount; intentionally not in deps.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -1004,6 +1011,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, initialParty = null, s
                 toast.success(`${copy.title} ${shownNo} saved as draft`);
             }
             if (print) openReceipt(created.data.id);
+            onSaved?.(created.data.id, postAfterSave);
             // Reset for the next voucher instead of navigating away — same as the
             // Sale form: the user can punch in the next entry without leaving.
             // Cancel / Close X are the explicit exits to the register.

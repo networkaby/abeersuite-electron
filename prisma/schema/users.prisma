@@ -64,6 +64,8 @@ model User {
   giftCardTxnsCreated              GiftCardTxn[]              @relation("GiftCardTxnCreatedBy")
   additionalCostAllocationsCreated AdditionalCostAllocation[] @relation("AdditionalCostAllocationCreatedBy")
   ledgersReconciled                Account[]                  @relation("AccountReconciledBy")
+  bankStatementImports             BankStatementImport[]      @relation("BankStatementImportedBy")
+  bankStatementMatches             BankStatementMatch[]       @relation("BankStatementMatchCreatedBy")
   surfacesSeen                     UserSurfaceSeen[]
 }
 

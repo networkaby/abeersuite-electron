@@ -5,6 +5,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
+import { collapseEditReversals } from "@/modules/accountancy/lib/collapseEditReversals";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { availableBalance } from "@/modules/accountancy/lib/facilityLimit";
 import { handleApiError } from "@/shared/lib/api";
@@ -84,30 +85,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             : [];
         const branchNameById = new Map(branchRows.map((b) => [b.id, b.name]));
 
-        // Hide edit-reversal noise: when a voucher is edited, the original JE
-        // stays POSTED and a counter-entry JE is posted ("EDIT (reverse): X").
-        // Together they net to zero on the account, so we collapse the pair
-        // away and only surface the new posting. Match by identical
-        // description, earliest unmatched original wins (handles repeated
-        // edits where each pair nets independently).
-        const excludeIds = new Set<number>();
-        const REV_PREFIX = "EDIT (reverse): ";
-        for (const l of lines) {
-            const desc = l.universalVoucher.description ?? "";
-            if (!desc.startsWith(REV_PREFIX)) continue;
-            if (excludeIds.has(l.universalVoucher.id)) continue;
-            const origDesc = desc.slice(REV_PREFIX.length);
-            const orig = lines.find((o) =>
-                o.universalVoucher.id !== l.universalVoucher.id
-                && !excludeIds.has(o.universalVoucher.id)
-                && (o.universalVoucher.description ?? "") === origDesc,
-            );
-            if (orig) {
-                excludeIds.add(orig.universalVoucher.id);
-                excludeIds.add(l.universalVoucher.id);
-            }
-        }
-        const visibleLines = lines.filter((l) => !excludeIds.has(l.universalVoucher.id));
+        // Hide edit-reversal noise (the original + its "EDIT (reverse)" twin net
+        // to zero) — shared with the bank reconciliation read so both screens
+        // list the same rows for the same ledger.
+        const visibleLines = collapseEditReversals(lines);
 
         // Resolve source documents in bulk — keyed by the spine voucher id (G5).
         const uvIds = [...new Set(visibleLines.map((l) => l.universalVoucher.id))];

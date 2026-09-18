@@ -1375,6 +1375,94 @@ ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAM
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "updatedById" INTEGER;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "BankStatementImport" (
+    "id" SERIAL NOT NULL,
+    "accountId" INTEGER NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "fileHash" VARCHAR(40) NOT NULL,
+    "profile" TEXT NOT NULL,
+    "bankAccountNumber" TEXT,
+    "ifsc" TEXT,
+    "fromDate" DATE,
+    "toDate" DATE,
+    "openingBalance" DECIMAL(14,2),
+    "closingBalance" DECIMAL(14,2),
+    "lineCount" INTEGER NOT NULL,
+    "skippedCount" INTEGER NOT NULL DEFAULT 0,
+    "beforeLock" INTEGER NOT NULL DEFAULT 0,
+    "importedById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BankStatementImport_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "accountId" INTEGER NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "fileName" TEXT NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "fileHash" VARCHAR(40) NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "profile" TEXT NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "bankAccountNumber" TEXT;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "ifsc" TEXT;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "fromDate" DATE;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "toDate" DATE;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "openingBalance" DECIMAL(14,2);
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "closingBalance" DECIMAL(14,2);
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "lineCount" INTEGER NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "skippedCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "beforeLock" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "importedById" INTEGER NOT NULL;
+ALTER TABLE "BankStatementImport" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "BankStatementLine" (
+    "id" SERIAL NOT NULL,
+    "importId" INTEGER NOT NULL,
+    "accountId" INTEGER NOT NULL,
+    "seq" INTEGER NOT NULL,
+    "date" DATE NOT NULL,
+    "narration" TEXT NOT NULL,
+    "reference" TEXT,
+    "withdrawal" DECIMAL(14,2),
+    "deposit" DECIMAL(14,2),
+    "balance" DECIMAL(14,2),
+    "fingerprint" VARCHAR(40) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BankStatementLine_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "importId" INTEGER NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "accountId" INTEGER NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "seq" INTEGER NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "date" DATE NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "narration" TEXT NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "reference" TEXT;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "withdrawal" DECIMAL(14,2);
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "deposit" DECIMAL(14,2);
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "balance" DECIMAL(14,2);
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "fingerprint" VARCHAR(40) NOT NULL;
+ALTER TABLE "BankStatementLine" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "BankStatementMatch" (
+    "id" SERIAL NOT NULL,
+    "groupId" TEXT NOT NULL,
+    "statementLineId" INTEGER NOT NULL,
+    "glLineId" INTEGER NOT NULL,
+    "auto" BOOLEAN NOT NULL DEFAULT false,
+    "createdById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BankStatementMatch_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "groupId" TEXT NOT NULL;
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "statementLineId" INTEGER NOT NULL;
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "glLineId" INTEGER NOT NULL;
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "auto" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "ChatRoom" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -3797,6 +3885,27 @@ CREATE INDEX IF NOT EXISTS "VoucherAllocation_method_idx" ON "VoucherAllocation"
 CREATE UNIQUE INDEX IF NOT EXISTS "VoucherAllocation_targetType_targetId_sourceType_sourceId_key" ON "VoucherAllocation"("targetType", "targetId", "sourceType", "sourceId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "BankStatementImport_accountId_createdAt_idx" ON "BankStatementImport"("accountId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "BankStatementLine_accountId_date_idx" ON "BankStatementLine"("accountId", "date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "BankStatementLine_importId_idx" ON "BankStatementLine"("importId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementLine_accountId_fingerprint_key" ON "BankStatementLine"("accountId", "fingerprint");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "BankStatementMatch_glLineId_idx" ON "BankStatementMatch"("glLineId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "BankStatementMatch_groupId_idx" ON "BankStatementMatch"("groupId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementMatch_statementLineId_glLineId_key" ON "BankStatementMatch"("statementLineId", "glLineId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
 
 -- CreateIndex
@@ -4592,6 +4701,34 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "VoucherSeriesCounter" ADD CONSTRAINT "VoucherSeriesCounter_kind_fkey" FOREIGN KEY ("kind") REFERENCES "VoucherSeries"("kind") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "BankStatementImport" ADD CONSTRAINT "BankStatementImport_importedById_fkey" FOREIGN KEY ("importedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "BankStatementLine" ADD CONSTRAINT "BankStatementLine_importId_fkey" FOREIGN KEY ("importId") REFERENCES "BankStatementImport"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "BankStatementMatch" ADD CONSTRAINT "BankStatementMatch_statementLineId_fkey" FOREIGN KEY ("statementLineId") REFERENCES "BankStatementLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "BankStatementMatch" ADD CONSTRAINT "BankStatementMatch_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -5916,6 +6053,27 @@ DO $$ BEGIN
     IF to_regclass('public."BackupConfig"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "BackupConfig";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BackupConfig"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BankStatementImport"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BankStatementImport";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BankStatementImport"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BankStatementLine"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BankStatementLine";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BankStatementLine"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."BankStatementMatch"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BankStatementMatch";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BankStatementMatch"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

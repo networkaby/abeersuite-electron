@@ -12,7 +12,28 @@ export interface ParsedCsv {
     rows: string[][];
 }
 
-export function parseCsv(text: string): ParsedCsv {
+/**
+ * Which separator a delimited text file uses, decided from its first lines.
+ * Bank exports are the reason this exists: SBI hands out a tab-separated file
+ * with a `.xls` name, and a comma-parse of it yields one column per row.
+ */
+export function sniffDelimiter(text: string): "," | "\t" | "|" | ";" {
+    const head = text.slice(0, 4000).split(/\r?\n/).filter((l) => l.trim() !== "").slice(0, 12);
+    const candidates: Array<"," | "\t" | "|" | ";"> = [",", "\t", "|", ";"];
+    let best: "," | "\t" | "|" | ";" = ",";
+    let bestScore = -1;
+    for (const d of candidates) {
+        const counts = head.map((l) => l.split(d).length - 1);
+        const linesWithIt = counts.filter((c) => c > 0).length;
+        const total = counts.reduce((a, b) => a + b, 0);
+        // Prefer the separator that appears on the most lines, then the most often.
+        const score = linesWithIt * 1000 + total;
+        if (score > bestScore) { bestScore = score; best = d; }
+    }
+    return best;
+}
+
+export function parseCsv(text: string, delimiter: string = ","): ParsedCsv {
     const records: string[][] = [];
     let field = "";
     let row: string[] = [];
@@ -44,7 +65,7 @@ export function parseCsv(text: string): ParsedCsv {
             i++;
             continue;
         }
-        if (ch === ",") {
+        if (ch === delimiter) {
             row.push(field);
             field = "";
             i++;

@@ -27,9 +27,11 @@ export const GL_DIALOG_KIND_BY_ACTION: Record<string, GlDialogKind> = {
  * Esc and outside clicks are left to the form: it owns the "discard unsaved
  * changes?" prompt, and Radix closing underneath it would lose that.
  */
-export default function GlVoucherDialog({ kind, onClose, initialParty = null, settleBill = null }: {
+export default function GlVoucherDialog({ kind, onClose, onSaved, initialParty = null, settleBill = null }: {
     kind: GlDialogKind | null;
     onClose: () => void;
+    /** The new voucher's id once saved — for a host with something to tie it to. */
+    onSaved?: (voucherId: number, posted: boolean) => void;
     /** The open customer profile, if any — lands in the form's party slot. */
     initialParty?: ActiveParty | null;
     /** A bill this voucher is being made to settle (the outstandings reports) —
@@ -48,7 +50,7 @@ export default function GlVoucherDialog({ kind, onClose, initialParty = null, se
                 <DialogDescription className="sr-only">Fill in the voucher and save, or close to discard.</DialogDescription>
                 {kind === "JOURNAL"
                     ? <JournalVoucherPage key="JOURNAL" onClose={onClose} />
-                    : kind && <GlVoucherPage key={kind} kind={kind} onClose={onClose} initialParty={initialParty} settleBill={settleBill} />}
+                    : kind && <GlVoucherPage key={kind} kind={kind} onClose={onClose} onSaved={onSaved} initialParty={initialParty} settleBill={settleBill} />}
             </DialogContent>
         </Dialog>
     );

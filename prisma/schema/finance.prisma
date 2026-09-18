@@ -515,3 +515,100 @@ model VoucherPrintTemplate {
   updatedAt   DateTime @updatedAt
   updatedById Int?
 }
+
+// ── Bank reconciliation — the bank's statement, kept ─────────────────────────
+// Three satellite tables; the posting spine is untouched. A match points at a
+// VoucherGlLine by a LOOSE id (no FK), the same way VoucherAllocation and
+// VoucherLink point at their targets: the ledger never carries a constraint from
+// a disposable workflow table, and a voucher edited (lines rewritten) or removed
+// simply leaves a match that the read path reports as `stale` and auto-match
+// clears. The statement is stored rather than consumed — that is what makes a
+// re-download harmless (row fingerprints), a missing row visible (running-balance
+// walk) and "not in books" lines stay on screen until they are booked.
+
+/// One upload of one bank ledger's statement.
+model BankStatementImport {
+  id                Int       @id @default(autoincrement())
+  /// The bank ledger (Account under Bank Accounts / Bank OD A/c). Loose id.
+  accountId         Int
+  fileName          String
+  /// sha1 of the file bytes — the same file uploaded twice is refused whole.
+  fileHash          String    @db.VarChar(40)
+  /// Which parser understood the file: "sbi-tsv" | "generic" | …
+  profile           String
+  /// Read from the statement's own header when the bank prints them; checked
+  /// against the ledger's bankJson before anything is saved.
+  bankAccountNumber String?
+  ifsc              String?
+  fromDate          DateTime? @db.Date
+  toDate            DateTime? @db.Date
+  openingBalance    Decimal?  @db.Decimal(14, 2)
+  closingBalance    Decimal?  @db.Decimal(14, 2)
+  /// Rows saved from this file.
+  lineCount         Int
+  /// Rows the file carried that were already saved by an earlier upload.
+  skippedCount      Int       @default(0)
+  /// Rows refused because they were dated before the ledger's reconciled lock.
+  beforeLock        Int       @default(0)
+  importedById      Int
+  importedBy        User      @relation("BankStatementImportedBy", fields: [importedById], references: [id])
+  createdAt         DateTime  @default(now())
+  lines             BankStatementLine[]
+
+  @@index([accountId, createdAt])
+}
+
+/// One line of a bank statement, normalised: every bank's layout lands here in
+/// the same shape. `withdrawal` = money out of the bank (our CREDIT leg),
+/// `deposit` = money in (our DEBIT leg).
+model BankStatementLine {
+  id          Int                 @id @default(autoincrement())
+  importId    Int
+  import      BankStatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  /// Denormalised from the import so the reconcile read can filter by ledger and date alone.
+  accountId   Int
+  /// Row order inside the file.
+  seq         Int
+  date        DateTime            @db.Date
+  narration   String
+  /// Cheque no / UTR / UPI ref / IMPS no — the bank's own column when it has one,
+  /// else the token pulled out of the narration.
+  reference   String?
+  withdrawal  Decimal?            @db.Decimal(14, 2)
+  deposit     Decimal?            @db.Decimal(14, 2)
+  /// Running balance after this line, when the bank prints it.
+  balance     Decimal?            @db.Decimal(14, 2)
+  /// sha1(accountId|date|withdrawal|deposit|balance|narration|nth) — nth is the
+  /// line's index among identical rows in the same file, so two genuinely equal
+  /// entries on one day survive while a re-upload of the same period is skipped.
+  fingerprint String              @db.VarChar(40)
+  createdAt   DateTime            @default(now())
+  matches     BankStatementMatch[]
+
+  @@unique([accountId, fingerprint])
+  @@index([accountId, date])
+  @@index([importId])
+}
+
+/// A statement line tied to a book entry. Many-to-many: one gateway settlement
+/// can cover several receipts, one receipt can arrive as two transfers. Every
+/// row written by one Match action shares a `groupId`, and both sides of a group
+/// total the same — enforced by the writer, and how Unmatch undoes the whole
+/// group at once.
+model BankStatementMatch {
+  id              Int               @id @default(autoincrement())
+  groupId         String
+  statementLineId Int
+  statementLine   BankStatementLine @relation(fields: [statementLineId], references: [id], onDelete: Cascade)
+  /// VoucherGlLine.id — loose, no FK (see the header note).
+  glLineId        Int
+  /// Written by auto-match rather than a person.
+  auto            Boolean           @default(false)
+  createdById     Int
+  createdBy       User              @relation("BankStatementMatchCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime          @default(now())
+
+  @@unique([statementLineId, glLineId])
+  @@index([glLineId])
+  @@index([groupId])
+}
