@@ -6,13 +6,37 @@
  * per keystroke — parent owns the accounts list (preloaded once).
  *
  * Modeled after `InvProductCombobox` (same UX rules: inline, keyboard nav,
- * clear button, dropdown widens to fit row).
+ * clear button, dropdown widens to fit row) — including its masters-on-the-fly
+ * keys, so the two pickers behave alike:
+ *
+ *   Alt+C       make a new ledger without leaving the voucher; whatever is
+ *               typed becomes its name. Enter on a no-match does the same.
+ *   Ctrl+Enter  alter the ledger under the cursor (highlighted row, else the
+ *               one already picked). With nothing to alter the key falls
+ *               through to the form's own Save shortcut, untouched.
  */
 
 import { useEffect, useState, useCallback, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
+import { Plus } from "lucide-react";
 import { useComboboxNav } from "@/shared/hooks";
+import { loadGlAccounts } from "@/shared/hooks/useGlAccounts";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
+import type { EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
+
+// Loaded only when somebody actually makes or alters a ledger. This picker is
+// on every voucher AND on the POS expenditure screen; the two master dialogs
+// drag in the group picker, the particulars blocks and the opening-bills
+// dialog behind them, and none of that belongs in a till's first paint.
+const CreateLedgerDialog = dynamic(
+    () => import("@/modules/accountancy/components/CreateLedgerDialog").then((m) => m.CreateLedgerDialog),
+    { ssr: false },
+);
+const EditLedgerDialog = dynamic(
+    () => import("@/modules/accountancy/components/EditLedgerDialog").then((m) => m.EditLedgerDialog),
+    { ssr: false },
+);
 
 export interface GlAccount {
     id: number;
@@ -29,6 +53,17 @@ export interface GlAccount {
     // Bank OD A/c / Credit Card ledgers — see facilityLimit.ts.
     bankJson?: unknown;
     creditCardJson?: unknown;
+    // The rest of the Account row, as /api/accountancy/gl-accounts already
+    // returns it. Nothing reads these for display — they are here so Ctrl+Enter
+    // can hand EditLedgerDialog a COMPLETE ledger. Handing it a partial one
+    // would post the missing particulars back as null and quietly wipe them.
+    groupId?: number | null;
+    loanJson?: unknown;
+    bnplJson?: unknown;
+    walletJson?: unknown;
+    gatewayJson?: unknown;
+    openingBalance?: number | string | null;
+    openingBalanceType?: "DEBIT" | "CREDIT" | null;
 }
 
 type Props = {
@@ -45,6 +80,14 @@ type Props = {
      *  opens on focus — right for a short Cash/Bank picker; a particulars
      *  row with thousands of party ledgers passes 1. */
     minChars?: number;
+    /** Alt+C / Enter-on-no-match opens the new-ledger dialog. Default on. */
+    allowCreate?: boolean;
+    /** Ctrl+Enter opens the edit-ledger dialog. Default on. */
+    allowEdit?: boolean;
+    /** Re-read the caller's own account list after a ledger is made or
+     *  changed. Left out, the shared chart of accounts is refreshed instead —
+     *  which is what every voucher page reads. */
+    onMastersChanged?: () => void;
 };
 
 /** Typing pause before the list is filtered and drawn. */
@@ -59,8 +102,25 @@ export function GlAccountCombobox({
     className = "",
     autoFocus = false,
     minChars = 0,
+    allowCreate = true,
+    allowEdit = true,
+    onMastersChanged,
 }: Props) {
     const [query, setQuery] = useState("");
+    const [createOpen, setCreateOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<EditableLedger | null>(null);
+    // A ledger made from this box shows up INSTANTLY, before the shared chart
+    // of accounts has re-read. It also stays reachable when the caller's list
+    // is a filtered slice (Payment's expense-only rows) that would never
+    // carry it — the user asked for it in this row, so this row keeps it.
+    const [justCreated, setJustCreated] = useState<GlAccount[]>([]);
+    const pool = useMemo(
+        () => (justCreated.length === 0
+            ? accounts
+            : [...accounts, ...justCreated.filter((j) => !accounts.some((a) => a.id === j.id))]),
+        [accounts, justCreated],
+    );
     // The list filters on this, which trails `query` by DEBOUNCE_MS while the
     // user is still typing; the input itself always shows `query` at once.
     const [debounced, setDebounced] = useState("");
@@ -70,7 +130,7 @@ export function GlAccountCombobox({
     }, [query]);
 
     // Sync display text when external value changes.
-    const selectedAccount = accounts.find((a) => a.id === value);
+    const selectedAccount = pool.find((a) => a.id === value);
     const selectedLabel = selectedAccount ? selectedAccount.name : "";
 
     const syncQuery = useCallback(() => {
@@ -88,15 +148,15 @@ export function GlAccountCombobox({
     const filtered = useMemo(() => {
         if (belowMin) return [];
         const all = q && q !== selectedLabel.toLowerCase()
-            ? accounts.filter((a) =>
+            ? pool.filter((a) =>
                 a.name.toLowerCase().includes(q) ||
                 aliasMatches(a.aliases, q) ||
                 (qDigits.length >= 3 && (a.phones ?? []).some(
                     (p) => p.replace(/\D/g, "").includes(qDigits),
                 )))
-            : accounts;
+            : pool;
         return all.length > MAX_ROWS ? all.slice(0, MAX_ROWS) : all;
-    }, [accounts, q, qDigits, selectedLabel, belowMin]);
+    }, [pool, q, qDigits, selectedLabel, belowMin]);
     const truncated = !belowMin && filtered.length === MAX_ROWS;
 
     const [focused, setFocused] = useState(false);
@@ -135,6 +195,9 @@ export function GlAccountCombobox({
     // scroll inside the cap and never spill past the viewport.
     const DROPDOWN_MAX_H = 288;        // hard cap (~9 rows of two-line items)
     const VIEWPORT_MARGIN = 12;        // breathing room from viewport edges
+    // The CTA row and the shortcut hint sit outside the scroller, so the list
+    // inside it gets that much less room — otherwise the box overflows its cap.
+    const chromeH = (allowCreate ? 33 : 0) + (allowEdit ? 20 : 0);
     const [pos, setPos] = useState<{
         top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
     } | null>(null);
@@ -178,9 +241,67 @@ export function GlAccountCombobox({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
+    // A master was made or changed: re-read whichever list this box is showing.
+    const refreshMasters = () => {
+        if (onMastersChanged) { onMastersChanged(); return; }
+        // Every voucher page reads the shared chart of accounts. The realtime
+        // "ledger" topic would fetch it eventually anyway; this just makes the
+        // new name and its group visible at once.
+        void loadGlAccounts().catch(() => { /* the next nudge picks it up */ });
+    };
+
+    const startCreate = () => { cb.setOpen(false); setCreateOpen(true); };
+    // What the new ledger gets called. Blank when the box is only showing the
+    // ledger already picked — otherwise Alt+C on a filled row would offer to
+    // make a second ledger with that same name.
+    const typedName = query.trim().toLowerCase() === selectedLabel.trim().toLowerCase()
+        ? "" : query.trim();
+
+    // Ctrl+Enter alters the row under the cursor; with the list shut, the
+    // ledger already sitting in this box. The full Account row is handed over
+    // — a partial one would post the untouched particulars back as null.
+    const editCandidate: GlAccount | undefined =
+        (cb.open ? filtered[cb.highlighted] : undefined) ?? selectedAccount;
+    const startEdit = (a: GlAccount) => {
+        cb.setOpen(false);
+        setEditTarget({
+            id: a.id,
+            name: a.name,
+            aliases: a.aliases,
+            groupId: a.groupId ?? a.group?.id ?? null,
+            bankJson: a.bankJson,
+            loanJson: a.loanJson,
+            creditCardJson: a.creditCardJson,
+            bnplJson: a.bnplJson,
+            walletJson: a.walletJson,
+            gatewayJson: a.gatewayJson,
+            // Prisma sends Decimal as a string; the dialog wants a number.
+            openingBalance: a.openingBalance == null ? null : Number(a.openingBalance),
+            openingBalanceType: a.openingBalanceType ?? null,
+        });
+        setEditOpen(true);
+    };
+
     // Wrap handleKeyDown to add Tab commit-on-exit (the generic hook intentionally
-    // leaves Tab to consumers since the behaviour varies).
+    // leaves Tab to consumers since the behaviour varies), plus the two Tally
+    // masters-on-the-fly keys.
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        // Alt+C → new ledger, named from whatever is typed. `e.code` as well as
+        // `e.key` because Alt+C reports "ç" on a Mac keyboard layout.
+        if (allowCreate && e.altKey && (e.key.toLowerCase() === "c" || e.code === "KeyC")) {
+            e.preventDefault();
+            startCreate();
+            return;
+        }
+        // Ctrl+Enter → alter that ledger. The voucher form binds Ctrl+Enter to
+        // Save, so the event is stopped ONLY when there is really a ledger to
+        // alter; otherwise Save still happens and nothing is taken away.
+        if (allowEdit && (e.ctrlKey || e.metaKey) && e.key === "Enter" && editCandidate) {
+            e.preventDefault();
+            e.stopPropagation();
+            startEdit(editCandidate);
+            return;
+        }
         if (cb.open && e.key === "Tab") {
             const normalizedQuery = query.trim().toLowerCase();
             const normalizedSelected = selectedLabel.trim().toLowerCase();
@@ -194,6 +315,15 @@ export function GlAccountCombobox({
             } else {
                 cb.setOpen(false);
             }
+            return;
+        }
+        // Nothing matched what was typed → Enter makes it, same as Alt+C.
+        // Mirrors InvProductCombobox so a no-result is never a dead end.
+        if (cb.open && e.key === "Enter" && !e.ctrlKey && !e.metaKey
+            && allowCreate && filtered.length === 0 && query.trim().length > 0) {
+            e.preventDefault();
+            e.stopPropagation();   // don't let the form's Enter walk focus away
+            startCreate();
             return;
         }
         cb.handleKeyDown(e);
@@ -245,6 +375,24 @@ export function GlAccountCombobox({
                     // Prevent the click landing on the underlying dialog backdrop
                     onMouseDown={(e) => e.stopPropagation()}
                 >
+                    {/* New-ledger CTA at the TOP — closest to the cursor, and
+                        the only thing on screen when nothing matched.
+                        onMouseDown (not onClick) so it beats the input's blur,
+                        which would otherwise shut the dropdown first. */}
+                    {allowCreate && (
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); startCreate(); }}
+                            className="flex w-full items-center gap-1.5 border-b border-border bg-muted/40 px-3 py-2 text-left text-xs font-medium text-primary hover:bg-muted"
+                        >
+                            <Plus size={12} />
+                            <span className="truncate">
+                                New ledger{typedName ? `: ${typedName}` : ""}
+                            </span>
+                            <span className="ml-auto shrink-0 font-normal text-muted-foreground">Alt+C</span>
+                        </button>
+                    )}
+
                     {filtered.length === 0 ? (
                         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
                             No accounts match <span className="font-mono">{query}</span>
@@ -253,7 +401,7 @@ export function GlAccountCombobox({
                         // Native overflow on a sized div — shadcn ScrollArea's
                         // viewport doesn't honour a max-height parent reliably,
                         // so its scrollbar wouldn't appear with long lists.
-                        <div className="overflow-y-auto" style={{ maxHeight: pos.maxHeight }}>
+                        <div className="overflow-y-auto" style={{ maxHeight: pos.maxHeight - chromeH }}>
                             <ul ref={cb.listRef} className="divide-y divide-border">
                                 {filtered.map((a, i) => (
                                     <li
@@ -295,6 +443,12 @@ export function GlAccountCombobox({
                             )}
                         </div>
                     )}
+
+                    {allowEdit && filtered.length > 0 && (
+                        <div className="border-t border-border bg-muted/40 px-3 py-1 text-[10px] text-muted-foreground">
+                            Ctrl+Enter — edit the highlighted ledger
+                        </div>
+                    )}
                 </div>,
                 portalTarget,
             )}
@@ -309,6 +463,43 @@ export function GlAccountCombobox({
                 >
                     ×
                 </button>
+            )}
+
+            {/* Masters on the fly. Both dialogs fetch the group tree once per
+                tab (loadGroupOptions) — opening them from a voucher row must
+                not mean another read of it for every ledger anybody makes. */}
+            {allowCreate && createOpen && (
+                <CreateLedgerDialog
+                    open={createOpen}
+                    onOpenChange={setCreateOpen}
+                    defaultName={typedName}
+                    onCreated={(acc) => {
+                        const made: GlAccount = { id: acc.id, name: acc.name, groupId: acc.groupId };
+                        setJustCreated((xs) => [...xs.filter((x) => x.id !== made.id), made]);
+                        setQuery(made.name);
+                        onChange(made);
+                        refreshMasters();
+                    }}
+                />
+            )}
+            {allowEdit && editOpen && (
+                <EditLedgerDialog
+                    open={editOpen}
+                    onOpenChange={setEditOpen}
+                    ledger={editTarget}
+                    onSaved={(updated) => {
+                        // Normally the box re-labels itself from the refreshed
+                        // list. A ledger made here that the caller's filtered
+                        // list never carries has no such row, so carry the new
+                        // name across by hand.
+                        if (updated) {
+                            setJustCreated((xs) => xs.map((x) =>
+                                (x.id === updated.id ? { ...x, name: updated.name } : x)));
+                            if (value === updated.id) setQuery(updated.name);
+                        }
+                        refreshMasters();
+                    }}
+                />
             )}
         </div>
     );

@@ -28,7 +28,7 @@ import {
     emptyParticulars, particularsPayload, type ParticularsState,
 } from "@/modules/accountancy/lib/ledgerParticulars";
 import {
-    flattenGroups, inheritedNormalBalance, type GroupNode, type GroupOption,
+    loadGroupOptions, inheritedNormalBalance, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
 import { parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
 
@@ -44,6 +44,7 @@ export function CreateLedgerDialog({
     onCreated,
     groups: groupsProp,
     defaultGroupId = null,
+    defaultName = "",
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
@@ -52,6 +53,8 @@ export function CreateLedgerDialog({
     groups?: GroupOption[];
     /** Pre-select this group when the dialog opens. */
     defaultGroupId?: number | null;
+    /** Pre-fill the name — what the user had already typed in the picker. */
+    defaultName?: string;
 }) {
     const [fetchedGroups, setFetchedGroups] = useState<GroupOption[]>([]);
     const groups = groupsProp ?? fetchedGroups;
@@ -77,7 +80,7 @@ export function CreateLedgerDialog({
     useEffect(() => {
         if (!open) return;
         setForm({
-            name: "",
+            name: defaultName,
             aliases: "",
             groupId: defaultGroupId ?? null,
             description: "",
@@ -85,13 +88,13 @@ export function CreateLedgerDialog({
             openingBalanceType: "DEBIT",
         });
         setParticulars(emptyParticulars());
-    }, [open, defaultGroupId]);
+    }, [open, defaultGroupId, defaultName]);
 
     // Only fetch the group list when the caller didn't hand one over.
     useEffect(() => {
         if (!open || groupsProp) return;
-        axios.get<GroupNode[]>("/api/accountancy/account-groups")
-            .then((r) => setFetchedGroups(flattenGroups(r.data)))
+        loadGroupOptions()
+            .then(setFetchedGroups)
             .catch(() => { /* group list is optional */ });
     }, [open, groupsProp]);
 

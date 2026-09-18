@@ -2,6 +2,8 @@
 // the flat, depth-tagged list GroupCombobox renders. Was copy-pasted in both
 // the create and the edit ledger dialog; kept here so they share one copy.
 
+import axios from "axios";
+
 export type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
 export interface GroupNode {
@@ -32,4 +34,30 @@ export function flattenGroups(nodes: GroupNode[], depth = 0, out: GroupOption[] 
 /** A ledger's normal balance is inherited from its group's accounting nature. */
 export function inheritedNormalBalance(type: GroupType): "Debit" | "Credit" {
     return type === "ASSET" || type === "EXPENSE" ? "Debit" : "Credit";
+}
+
+// ── Cached group list ────────────────────────────────────────────────────────
+// CreateLedgerDialog / EditLedgerDialog fetch the group tree when the caller
+// hands them none. That was once per Masters visit; now that both dialogs open
+// straight from a voucher's particulars box (Alt+C / Ctrl+Enter), the same tree
+// would be re-read for every ledger anybody makes mid-entry. The tree changes
+// perhaps a few times a year, so it is read ONCE per tab and kept here.
+// Writers call `invalidateGroupOptions()` so the next open re-reads.
+
+let cached: GroupOption[] | null = null;
+let inFlight: Promise<GroupOption[]> | null = null;
+
+/** Flat group list, fetched once per tab. Concurrent callers share one request. */
+export function loadGroupOptions(): Promise<GroupOption[]> {
+    if (cached) return Promise.resolve(cached);
+    if (inFlight) return inFlight;
+    inFlight = axios.get<GroupNode[]>("/api/accountancy/account-groups")
+        .then((r) => { cached = flattenGroups(r.data); return cached; })
+        .finally(() => { inFlight = null; });
+    return inFlight;
+}
+
+/** Call after creating / renaming / deleting a group. */
+export function invalidateGroupOptions(): void {
+    cached = null;
 }

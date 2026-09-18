@@ -29,7 +29,7 @@ import {
     type ParticularsState,
 } from "@/modules/accountancy/lib/ledgerParticulars";
 import {
-    flattenGroups, type GroupNode, type GroupOption,
+    loadGroupOptions, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
 import { formatAliasInput, parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
 
@@ -62,7 +62,10 @@ export function EditLedgerDialog({
     ledger: EditableLedger | null;
     /** Group list to pick from. Fetched here when the caller has none. */
     groups?: GroupOption[];
-    onSaved: () => void;
+    /** Fired after a successful save. The new name comes along so a caller
+     *  holding its own copy of the row (a voucher picker) can re-label it
+     *  without waiting for its list to re-read. */
+    onSaved: (updated?: { id: number; name: string }) => void;
 }) {
     const [fetchedGroups, setFetchedGroups] = useState<GroupOption[]>([]);
     const groups = groupsProp ?? fetchedGroups;
@@ -90,8 +93,8 @@ export function EditLedgerDialog({
     // Only fetch the group list when the caller didn't hand one over.
     useEffect(() => {
         if (!open || groupsProp) return;
-        axios.get<GroupNode[]>("/api/accountancy/account-groups")
-            .then((r) => setFetchedGroups(flattenGroups(r.data)))
+        loadGroupOptions()
+            .then(setFetchedGroups)
             .catch(() => { /* group list is optional */ });
     }, [open, groupsProp]);
 
@@ -125,7 +128,7 @@ export function EditLedgerDialog({
             await axios.patch(`/api/accountancy/ledgers/${ledger.id}`, payload);
             toast.success("Ledger updated");
             onOpenChange(false);
-            onSaved();
+            onSaved({ id: ledger.id, name: name.trim() });
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Failed to update ledger"));
         } finally {

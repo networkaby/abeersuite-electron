@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
+import { invalidateGroupOptions } from "@/modules/accountancy/lib/groupOptions";
 import { Loader2 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -75,6 +76,7 @@ export function CreateGroupDialog({
                 parentId: parent !== "none" ? Number(parent) : null,
                 sortOrder: Number(sortOrder) || 0,
             });
+            invalidateGroupOptions();   // ledger dialogs cache the group list
             toast.success("Group created");
             onOpenChange(false);
             onCreated();

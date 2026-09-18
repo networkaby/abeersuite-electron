@@ -11,6 +11,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { CreateGroupDialog } from "@/modules/accountancy/components/CreateGroupDialog";
+import { invalidateGroupOptions } from "@/modules/accountancy/lib/groupOptions";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
@@ -126,6 +127,7 @@ export default function AccountGroupsPage() {
                 parentId:  editParent !== "none" ? Number(editParent) : null,
                 sortOrder: Number(editSort) || 0,
             });
+            invalidateGroupOptions();
             toast.success("Updated");
             setEditId(null);
             load();
@@ -141,6 +143,7 @@ export default function AccountGroupsPage() {
         if (!(await confirmAction({ title: `Delete group "${name}"?`, confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/accountancy/account-groups/${id}`);
+            invalidateGroupOptions();
             toast.success("Deleted");
             load();
         } catch (err: unknown) {
