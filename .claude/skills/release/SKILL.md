@@ -1,6 +1,6 @@
 ---
 name: release
-description: Carry out a full AbeerSuite release end to end — merge dev into main, bump the version, craft RELEASE_NOTES.md, commit, push to both remotes, build and publish with `pnpm electron:release` (tag + GitHub release upload), push the tag to production, and bring dev level again. Use when the owner says "do a release", "release", "publish a version", "ship 5.0.4", "make a new build for the counters", or asks for a tag + GitHub release of this app.
+description: Carry out a full AbeerSuite release end to end — merge dev into main, bump the version, craft RELEASE_NOTES.md, commit, push to both remotes, build and publish with `pnpm electron:release` (tag + GitHub release upload), push the tag to production, and bring both dev and d_office level again — the d_office push being what deploys the office site to Vercel. Use when the owner says "do a release", "release", "publish a version", "ship 5.0.4", "make a new build for the counters", or asks for a tag + GitHub release of this app.
 ---
 
 # Do a release
@@ -139,25 +139,16 @@ git checkout dev && git merge --ff-only main && git push origin dev
 
 So the next day's work starts from the released tree.
 
-### 9. Deploy the office side — `d_office`
+### 9. Bring `d_office` level too — that is the office deploy
 
-**`d_office` is the deploy branch.** Vercel is connected to it on `origin`, so a push
-to `d_office` — and nothing else — is what puts the office site and its migration
-live. `main` moving does not deploy anything. Neither does `dev`. `production` has
-no `d_office` at all.
+**`d_office` ends every release on the released commit, exactly like `dev`.** It is
+not a branch that catches up now and then: `main`, `dev` and `d_office` all sit on
+the same commit when a release is done, and the report in step 10 says so.
 
-Check where it stands before proposing anything:
-
-```bash
-git rev-parse d_office main && git log --oneline d_office..main
-```
-
-Then **show the owner what the push would carry and ask** — the commit count, and
-whether it reaches back past earlier release commits, which means the site has been
-running behind. Never push `d_office` unprompted: it is a production deploy, and the
-agent's own permission layer will refuse it anyway.
-
-On a yes:
+It is the deploy branch. Vercel is connected to it on `origin`, so the push that
+levels it is also what puts the office site live and runs `prisma migrate deploy`
+through `vercel-build`. Pushing `main` deploys nothing. Neither does `dev`.
+`production` has no `d_office` at all.
 
 ```bash
 git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main
@@ -166,9 +157,20 @@ git checkout d_office && git merge --ff-only main && git push origin d_office &&
 Not fast-forwardable → stop and report. `d_office` carrying something `main` does not
 means the site is running code no release contains, and merging over it hides that.
 
-**A schema release deploys only after the counters have the build** (AGENTS.md §3).
-The migration runs inside `vercel-build`, so this push is the moment live's schema
-changes. Before proposing it on a schema release, check what is actually pending:
+**The push is the one thing to ask for**, every time — it is a production deploy, and
+the agent's own permission layer refuses it unprompted anyway. The question is *when
+to press it*, never *whether* `d_office` should be level. Show what it carries and
+wait for a yes; on a no, do the local fast-forward anyway and hand over the push
+command, so only one step is left outstanding.
+
+**If `d_office` is many commits behind, say so loudly.** That means earlier releases
+never deployed and the office site has been running behind — it happened at v1.5.0,
+where `d_office` sat 15 commits back, past both the v1.4.0 and v1.4.1 release
+commits. Levelling it every time is what stops that.
+
+**On a schema release, the counters get the build first** (AGENTS.md §3) — this push
+is the moment live's schema changes. Check what is actually pending before proposing
+it:
 
 ```bash
 pnpm db:migrate:status
@@ -193,8 +195,8 @@ Vercel credentials.
 Done means, and say each one plainly:
 
 - `main` and `v<version>` are on **both** remotes.
-- `dev` is level with `main`.
-- Whether `d_office` was pushed — and if it was not, say so plainly, because the office site is then still on the old code.
+- `main`, `dev` and `d_office` are all on the released commit.
+- `d_office` is level with `main` **and pushed** — the office site is live on the released commit. If the push is still outstanding, say so plainly: the site is then running the old code.
 - **Every** release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes — or, for a `-pre` version, **repo 2 shows them and repo 1 was deliberately left alone**. Say which, and say that counters will not see a test build.
 - Which urgency tier went out, and therefore how counters will take it.
 
@@ -207,7 +209,7 @@ Handing a step back is **not** stopping the release: do everything either side o
 | **The notes and the tier** | Always, before step 4. Show the drafted `RELEASE_NOTES.md`. |
 | **The smoke test** | Always, after the pack succeeds. You cannot run the packaged exe meaningfully. |
 | **The variant** | Always, at preflight — `APP_MODE`, `LANDING_PAGE`. |
-| **The `d_office` deploy** | Always, at step 9. Show what the push carries; it is a production deploy and goes only on a clear yes. |
+| **The `d_office` push** | Always, at step 9. `d_office` ending level is not optional; only the timing of the push is. Show what it carries and wait for a yes. |
 | **A push they would rather run** | Whenever they say so — offer the exact command instead of running it. |
 | **Anything that would be a guess** | A version number that is not an obvious bump; a schema release's publish-then-migrate ordering; a repo that failed to publish. |
 
