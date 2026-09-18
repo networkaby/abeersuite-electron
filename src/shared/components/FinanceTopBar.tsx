@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
+import { getActiveModule } from "@/utils/active-module";
+import { moduleColor } from "@/shared/lib/format/moduleTheme";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench, HandCoins } from "lucide-react";
 import { toast } from "sonner";
@@ -211,6 +213,11 @@ export default function FinanceTopBar({
 
     const { sidebarMode, barMode, toggleSidebarVisible, toggleBarVisible } = usePanelStore();
 
+    // Which module the frame is currently sitting over. Null on the office shell
+    // (home, welcome, the Workspace inboxes, a profile) — those are not modules,
+    // so the chip renders nothing rather than inventing a name for them.
+    const activeModule = getActiveModule(usePathname());
+
     return (
         <div className="dark chrome-surface flex h-9 shrink-0 items-center gap-0.5 border-b border-border-strong bg-surface-frame px-3 text-foreground">
 
@@ -225,6 +232,23 @@ export default function FinanceTopBar({
                     ? <SquareChevronDown size={15} />
                     : <SquareChevronUp size={15} />}
             </button>
+
+            {/* Where you are. This earns its place because of the toggle just to its
+                left: with the sidebar hidden there is otherwise nothing on screen
+                naming the module, and 49 office pages have no breadcrumb either.
+                Icon carries the hue, label stays neutral — the same division the
+                sidebar rail already uses, so twelve modules never shout at once.
+                The money pills keep their own colours: those mean cash/bank/
+                receivable, and a module hue must never compete with data. */}
+            {activeModule && (
+                <>
+                    <span className="mr-1 flex shrink-0 items-center gap-1.5 text-xs font-medium" title={activeModule.label}>
+                        <activeModule.icon size={13} style={{ color: moduleColor(activeModule.key) }} />
+                        <span className="hidden truncate md:inline">{activeModule.label}</span>
+                    </span>
+                    <span className="mr-1 text-border">|</span>
+                </>
+            )}
 
             {/* Metrics — only when permitted */}
             {canView && data ? (
