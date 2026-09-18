@@ -876,7 +876,7 @@ export async function loadSettlements(
     // the OPPOSITE side; otherwise the popup opens empty. Asked for the whole
     // page in one batched read, and only for the parties that still have an open
     // row — a page of fully settled rows pays nothing for this.
-    // A caller that is only sifting rows — the Day Book's unpaid scan — asks for
+    // A caller that is only sifting rows — the Day Book's unsettled scan — asks for
     // the state alone and measures linkability once, on the page it settles on.
     if (opts.linkability === false) return out;
 

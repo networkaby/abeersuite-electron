@@ -47,13 +47,13 @@ export default function DayBookPage() {
     });
 
     // Bill-wise quick filter. Settlement is not a stored column, so the server
-    // scans forward for it — see the route's unpaid scan.
-    const [unpaidOnly, setUnpaidOnly] = useState(() => {
-        try { return localStorage.getItem("daybook:unpaid") === "1"; }
+    // scans forward for it — see the route's unsettled scan.
+    const [unsettledOnly, setUnsettledOnly] = useState(() => {
+        try { return localStorage.getItem("daybook:unsettled") === "1"; }
         catch { return false; }
     });
 
-    useEffect(() => { try { localStorage.setItem("daybook:unpaid", unpaidOnly ? "1" : "0"); } catch {} }, [unpaidOnly]);
+    useEffect(() => { try { localStorage.setItem("daybook:unsettled", unsettledOnly ? "1" : "0"); } catch {} }, [unsettledOnly]);
     useEffect(() => { try { localStorage.setItem("daybook:kind",     kind);     } catch {} }, [kind]);
     useEffect(() => { try { localStorage.setItem("daybook:category", category); } catch {} }, [category]);
 
@@ -65,9 +65,9 @@ export default function DayBookPage() {
         statuses,
         branchId: filters.branchFilter,
         category,
-        unpaidOnly,
+        unsettledOnly,
         search:   filters.search,
-    }), [filters.from, filters.to, kind, statuses, filters.branchFilter, category, unpaidOnly, filters.search]);
+    }), [filters.from, filters.to, kind, statuses, filters.branchFilter, category, unsettledOnly, filters.search]);
 
     // Live updates come with the data source now — `useDayBook` subscribes to
     // `ledger` itself, so every consumer of it follows the floor, not just this page.
@@ -111,7 +111,7 @@ export default function DayBookPage() {
         filters.clearFilters();
         setKind("__all__");
         setCategory("");
-        setUnpaidOnly(false);
+        setUnsettledOnly(false);
     };
 
     // ── Render ────────────────────────────────────────────────────────────
@@ -302,12 +302,12 @@ export default function DayBookPage() {
                     <span className="text-xs font-medium text-muted-foreground">Bill</span>
                     <div className="flex items-center gap-1.5 h-8">
                         <Checkbox
-                            id="unpaid-only"
-                            checked={unpaidOnly}
-                            onCheckedChange={(v) => setUnpaidOnly(Boolean(v))}
+                            id="unsettled-only"
+                            checked={unsettledOnly}
+                            onCheckedChange={(v) => setUnsettledOnly(Boolean(v))}
                         />
-                        <Label htmlFor="unpaid-only" className="text-xs cursor-pointer" title="Only bills that still owe something — due or part-paid">
-                            Unpaid only
+                        <Label htmlFor="unsettled-only" className="text-xs cursor-pointer" title="Only vouchers with money still unmatched — due or part-settled. A receipt or payment sitting on no bill counts too.">
+                            Unsettled only
                         </Label>
                     </div>
                 </div>

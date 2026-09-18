@@ -49,15 +49,15 @@ const MAX_SEARCH_ACCOUNTS = 500;
 const VALID_STATUSES = ["DRAFT", "POSTED", "CANCELLED"] as const;
 type VoucherStatusFilter = (typeof VALID_STATUSES)[number];
 
-// ── Unpaid-only ("due / partial") ───────────────────────────────────────────
+// ── Unsettled-only ("due / partial") ────────────────────────────────────────
 // Settlement is NOT a stored column — it is movement-minus-linked, worked out
 // per page (see `loadSettlements`). So `?settlement=open` cannot be a `where`
 // clause; the walk stays exactly the same and the route simply scans forward in
 // chunks, keeping only the rows that still owe something, until it has a page or
 // runs out. The chunk cap keeps one request bounded: hitting it returns a short
 // page with a cursor, and the client's normal scroll pulls the rest.
-const UNPAID_SCAN_CHUNK = 500;
-const MAX_UNPAID_SCAN_CHUNKS = 6;
+const UNSETTLED_SCAN_CHUNK = 500;
+const MAX_UNSETTLED_SCAN_CHUNKS = 6;
 const OPEN_STATES = new Set(["DUE", "PARTIAL"]);
 
 /** AuditLog.entityType → the CombinedRow source prefix its `originalId` keys. */
@@ -123,8 +123,10 @@ export async function GET(req: Request) {
     const branchId = searchParams.get("branchId");
     const refsSince = parseSince(searchParams.get("refsSince"));
     const since = parseSince(searchParams.get("since"));
-    /** Only bills that still owe something — "due" or "partial". */
-    const unpaidOnly = searchParams.get("settlement") === "open";
+    /** Only vouchers with money still unmatched — "due" or "partial". Every
+     *  voucher carrying a party qualifies, a receipt or payment included: money
+     *  sitting on no bill is unsettled exactly as an unpaid bill is. */
+    const unsettledOnly = searchParams.get("settlement") === "open";
     const statuses = (searchParams.get("statuses") ?? "")
         .split(",")
         .map((s) => s.trim())
@@ -186,7 +188,7 @@ export async function GET(req: Request) {
             // so in SQL keeps the scan below off rows it would only throw away.
             // The kind exclusion goes through `NOT` because `type` is already
             // spoken for above by the kind dropdown.
-            ...(unpaidOnly ? {
+            ...(unsettledOnly ? {
                 partyAccountId: { not: null },
                 status: "POSTED" as const,
                 NOT: { type: { in: [...NON_REGULAR_KINDS] } },
@@ -275,7 +277,7 @@ export async function GET(req: Request) {
                     .filter((t) => TOMBSTONE_SOURCE[t.entityType])
                     .map((t) => `${TOMBSTONE_SOURCE[t.entityType]}-${t.originalId}`);
             }
-        } else if (unpaidOnly) {
+        } else if (unsettledOnly) {
             // Scan forward in chunks, keeping only what still owes. The cursor is
             // always an id we have actually looked at, so the walk stays gap-free
             // whether we stop because the page filled or because the cap was hit.
@@ -283,11 +285,11 @@ export async function GET(req: Request) {
             let scanCursor = cursor ?? null;
             let exhausted = false;
 
-            for (let chunk = 0; chunk < MAX_UNPAID_SCAN_CHUNKS && kept.length <= take; chunk++) {
+            for (let chunk = 0; chunk < MAX_UNSETTLED_SCAN_CHUNKS && kept.length <= take; chunk++) {
                 const batch = await prisma.universalVoucher.findMany({
                     where,
                     orderBy,
-                    take: UNPAID_SCAN_CHUNK,
+                    take: UNSETTLED_SCAN_CHUNK,
                     ...(scanCursor ? { cursor: { id: scanCursor }, skip: 1 } : {}),
                     select,
                 });
@@ -300,7 +302,7 @@ export async function GET(req: Request) {
                 for (const v of batch) {
                     if (OPEN_STATES.has(settlements[v.id]?.state ?? "")) kept.push(v);
                 }
-                if (batch.length < UNPAID_SCAN_CHUNK) { exhausted = true; break; }
+                if (batch.length < UNSETTLED_SCAN_CHUNK) { exhausted = true; break; }
             }
 
             if (kept.length > take) {
@@ -345,11 +347,11 @@ export async function GET(req: Request) {
         // leg on the same spine (`role:"TENDER"`), so a sale and a receipt are
         // measured by exactly the same rule; a bill taken in full at the counter
         // leaves no leg at all, and that reads as Settled.
-        // The unpaid scan above already measured its rows; anything not measured
+        // The unsettled scan above already measured its rows; anything not measured
         // yet (the ordinary page, or a delta) is worked out here in one go.
-        // The unpaid scan measured state only, so the rows it settled on are
+        // The unsettled scan measured state only, so the rows it settled on are
         // re-measured here in full; every other path is measured from scratch.
-        const unmeasured = unpaidOnly
+        const unmeasured = unsettledOnly
             ? found
             : found.filter((v) => settlements[v.id] === undefined);
         if (unmeasured.length > 0) Object.assign(settlements, await settlementsFor(unmeasured));
@@ -409,9 +411,9 @@ export async function GET(req: Request) {
         });
 
         // A delta cannot simply omit a row that has just been paid off — the
-        // client still holds it. Under "unpaid only" a newly settled voucher is
+        // client still holds it. Under "unsettled only" a newly settled voucher is
         // therefore reported as a removal, which is what makes it leave the list.
-        if (unpaidOnly && since) {
+        if (unsettledOnly && since) {
             deleted = [
                 ...deleted,
                 ...rows.filter((r) => !OPEN_STATES.has(r.settlement ?? "")).map((r) => r.id),
