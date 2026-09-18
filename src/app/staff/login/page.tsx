@@ -4,7 +4,6 @@ import { signIn, signOut, getSession } from "next-auth/react";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-import { OPEN_COUNTER_PIN_KEY } from "@/shared/lib/auth/counterPinIntent";
 import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -132,6 +131,9 @@ async function hasCounterPin(email: string): Promise<boolean> {
     }
 }
 
+/** A PIN box takes digits and nothing else — six of them. */
+const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 6);
+
 function StaffLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -141,10 +143,26 @@ function StaffLoginForm() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    // Asked for on the way in, acted on once they are in — a PIN cannot be set by
-    // somebody who has not proved who they are yet. See OPEN_COUNTER_PIN_KEY.
+    // Asked for on the way in, acted on the moment they are in — a PIN cannot be set
+    // by somebody who has not proved who they are yet.
     const [wantsPin, setWantsPin] = useState(false);
     const isDesktop = isElectronEnvironment();
+
+    // ── The PIN step ────────────────────────────────────────────────────────
+    // Setting a PIN happens HERE, on the sign-in card, before the app opens —
+    // outside the office, before anyone enters the house. It is the right place for
+    // two reasons beyond looks: the password is still in hand, so nothing has to be
+    // asked twice, and a cashier never has to go hunting through a settled app for
+    // something they only ever want on their way in.
+    //
+    // `pending` holds the finished sign-in until the step is done with — the session
+    // is real from this moment, only the navigation waits.
+    const [pending, setPending] = useState<{ dest: string; password: string; hasPin: boolean } | null>(null);
+    const [pin, setPin] = useState("");
+    const [pinAgain, setPinAgain] = useState("");
+    const [pinBusy, setPinBusy] = useState(false);
+    const [pinError, setPinError] = useState("");
+    const [counterNumber, setCounterNumber] = useState<number | null>(null);
 
     const spotlight = useRotation(LOGIN_SPOTLIGHTS.length, LOGIN_ROTATE_SECONDS);
     const tip = useRotation(LOGIN_TIPS.length, LOGIN_ROTATE_SECONDS);
@@ -255,16 +273,61 @@ function StaffLoginForm() {
                 }).catch(() => { /* a missing face costs nothing */ });
             }
 
-            // Asked for a PIN on the sign-in screen: leave a one-shot note for the
-            // panel, which lives behind the sidebar and is the only place that can
-            // actually set one. sessionStorage because it must not survive the day.
-            if (setPin) {
-                try { sessionStorage.setItem(OPEN_COUNTER_PIN_KEY, "1"); } catch { /* private mode */ }
+            // Asked for a PIN: stop here rather than navigating. They are signed in —
+            // the session is real — but the app waits behind this card until they have
+            // chosen their six digits or said no. Only ever reached from the password
+            // path, which is the only one that can prove who they are again.
+            if (setPin && kind === "password") {
+                setCounterNumber((await getLocalCounterSetup())?.counterNumber ?? null);
+                setPending({ dest, password: secret, hasPin: await hasCounterPin(emailValue) });
+                setLoading(false);
+                return;
             }
 
             router.push(dest);
         }
     }, [callbackUrl, router]);
+
+    /** Save the six digits, then let the app open. */
+    const savePin = async () => {
+        if (!pending) return;
+        if (pin !== pinAgain) { setPinError("The two PINs are not the same."); return; }
+        setPinBusy(true);
+        setPinError("");
+        try {
+            const res = await fetch("/api/me/counter-pin", {
+                method: "PUT",
+                headers: { "content-type": "application/json" },
+                // The password they typed a moment ago. The route asks for it because a
+                // PIN is a second key to this account, and an unattended till with a
+                // session open must not be enough to cut one.
+                body: JSON.stringify({ pin, password: pending.password }),
+            });
+            const out = await res.json().catch(() => ({})) as { error?: string };
+            if (!res.ok) { setPinError(out.error || "Could not save your PIN."); return; }
+            router.push(pending.dest);
+        } catch {
+            setPinError("Could not reach the office. A PIN can only be saved with the line up.");
+        } finally {
+            setPinBusy(false);
+        }
+    };
+
+    const removePin = async (scope: "counter" | "all") => {
+        if (!pending) return;
+        setPinBusy(true);
+        setPinError("");
+        try {
+            const res = await fetch(`/api/me/counter-pin?scope=${scope}`, { method: "DELETE" });
+            const out = await res.json().catch(() => ({})) as { error?: string };
+            if (!res.ok) { setPinError(out.error || "Could not remove your PIN."); return; }
+            router.push(pending.dest);
+        } catch {
+            setPinError("Could not reach the office. A PIN can only be removed with the line up.");
+        } finally {
+            setPinBusy(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -334,6 +397,72 @@ function StaffLoginForm() {
                     </div>
                 </section>
 
+                {pending ? (
+                    <section className={styles.card}>
+                        <h1 className={styles.greet}>
+                            {pending.hasPin ? "Change your PIN" : "Choose your PIN"}
+                        </h1>
+                        <p className={styles.clock}>
+                            Six digits{counterNumber !== null ? `, for counter ${counterNumber} only` : ""}.
+                            Tomorrow you just tap your photo.
+                        </p>
+
+                        <div className={styles.field}>
+                            <label htmlFor="pin">{pending.hasPin ? "New PIN" : "PIN"}</label>
+                            <input
+                                id="pin" type="password" inputMode="numeric" autoComplete="off"
+                                placeholder="6 digits" autoFocus
+                                value={pin}
+                                onChange={(e) => { setPin(digitsOnly(e.target.value)); setPinError(""); }}
+                            />
+                        </div>
+
+                        <div className={styles.field}>
+                            <label htmlFor="pin2">Type it again</label>
+                            <input
+                                id="pin2" type="password" inputMode="numeric" autoComplete="off"
+                                placeholder="6 digits"
+                                value={pinAgain}
+                                onChange={(e) => { setPinAgain(digitsOnly(e.target.value)); setPinError(""); }}
+                                onKeyDown={(e) => { if (e.key === "Enter" && pin.length === 6) void savePin(); }}
+                            />
+                        </div>
+
+                        <button
+                            className={styles.go} type="button"
+                            disabled={pinBusy || pin.length !== 6 || pinAgain.length !== 6}
+                            onClick={() => void savePin()}
+                        >
+                            {pinBusy ? "Saving…" : "Save and open"}
+                        </button>
+                        {pinError && <p className={styles.err}>{pinError}</p>}
+
+                        {/* Removing is the same errand, so it lives on the same card —
+                            there is nowhere else to do it now, and nowhere else needed. */}
+                        {pending.hasPin && (
+                            <div className={styles.pinrow}>
+                                <button type="button" className={styles.pinlink} disabled={pinBusy}
+                                    onClick={() => void removePin("counter")}>
+                                    Remove from this counter
+                                </button>
+                                <button type="button" className={styles.pinlink} disabled={pinBusy}
+                                    onClick={() => void removePin("all")}>
+                                    Remove from all
+                                </button>
+                            </div>
+                        )}
+
+                        <button type="button" className={styles.pinlink} disabled={pinBusy}
+                            onClick={() => router.push(pending.dest)}>
+                            Skip for now
+                        </button>
+
+                        <p className={styles.pinnote}>
+                            The line must be up to save a PIN. Using one later works offline, and your
+                            password is still asked for every few days.
+                        </p>
+                    </section>
+                ) : (
                 <form className={styles.card} onSubmit={handleSubmit} autoComplete="on">
                     {/* Plain <img>: a single-path vector has nothing for the optimizer to
                         re-encode, and the shell shows the same mark inlined. */}
@@ -408,6 +537,7 @@ function StaffLoginForm() {
                         Customer? <Link href="/login">Sign in here</Link>
                     </p>
                 </form>
+                )}
 
             </div>
 

@@ -228,6 +228,18 @@
 }
 .pinlink:hover { text-decoration: underline }
 
+/* The PIN step's own two rows — the remove pair sits side by side, and the note
+   under everything stays quiet. */
+.pinrow { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px }
+.pinrow .pinlink { margin: 0 }
+.pinlink:disabled { opacity: .5; cursor: default; text-decoration: none }
+.pinnote {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-dim, #94a3b8);
+  line-height: 1.5;
+}
+
 /* ── Foot of the card ────────────────────────────────────────────────────────
    Where the shell shows its boot progress. Here the server is already up, so the
    same space carries the tip and the shop line instead — nothing pretends to be
