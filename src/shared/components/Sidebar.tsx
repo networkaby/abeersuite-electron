@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
 import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
@@ -18,7 +18,18 @@ import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
 import { useInboxUnread, useNavCounts, refreshNavCounts } from "@/shared/hooks/useNavCounts";
 import { NAV_SURFACE, WORK_INBOX_SURFACE } from "@/shared/lib/nav/navSurfaces";
-import { moduleActiveStyle, moduleIconStyle } from "@/shared/lib/format/moduleTheme";
+import { moduleActiveStyle, moduleColor, moduleIconStyle } from "@/shared/lib/format/moduleTheme";
+
+/// The guide line down an expanded group's children.
+///
+/// It carries the module hue so an open group reads as one block rather than as
+/// a run of indented rows — but held well back, because a twenty-child module
+/// like Accountancy must look grouped, not like twenty coloured rows. The rail
+/// is a `chrome-surface`, so the hue token resolved here is already the light
+/// rail-tuned variant, not the page one.
+const groupGuideStyle = (key?: string | null): CSSProperties => ({
+    borderColor: `color-mix(in oklab, ${moduleColor(key)} 55%, transparent)`,
+});
 
 /// Top-level surfaces that own a module hue. Anything not listed falls back to
 /// the theme primary — Inbox and Work Flow span every module, so no single
@@ -314,7 +325,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             </Button>
 
                             {hasSubChildren && isOpen && (
-                                <div className="ml-3 space-y-0.5 border-l border-border pl-3">
+                                <div className="ml-3 space-y-0.5 border-l border-border pl-3" style={groupGuideStyle(modKey)}>
                                     {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey, modKey)}
                                 </div>
                             )}
@@ -417,7 +428,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         )}
 
                         {hasSubChildren && isOpen && (
-                            <div className="ml-3 space-y-0.5 border-l border-border pl-3">
+                            <div className="ml-3 space-y-0.5 border-l border-border pl-3" style={groupGuideStyle(modKey)}>
                                 {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey, modKey)}
                             </div>
                         )}
@@ -674,7 +685,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             </Button>
 
                                             {isOpen && (
-                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3" style={groupGuideStyle(surfaceModule(item.href))}>
                                                     {visibleChildren.map((child) => {
                                                         return (
                                                             <Link
@@ -829,7 +840,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                     )}
 
                                                     {isOpen && (
-                                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3" style={groupGuideStyle(mod.key)}>
                                                             {renderModuleChildren(mod.children, 0, "root", mod.key)}
                                                         </div>
                                                     )}
@@ -869,7 +880,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         </Button>
 
                                         {adminOpen && !collapsed && (
-                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3" style={groupGuideStyle("administration")}>
                                                 {visibleAdmin.map(({ label, href, icon: Icon }) => (
                                                     <Link key={href} href={href} className={linkClass(href)} style={navStyle(href, "administration")}>
                                                         <Icon size={15} className="shrink-0" style={navIconStyle(href, "administration")} />
@@ -905,7 +916,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         </Button>
 
                                         {settingsOpen && !collapsed && (
-                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3" style={groupGuideStyle("settings")}>
                                                 {visibleSettings.map(({ label, href, icon: Icon }) => (
                                                     <Link key={href} href={href} className={linkClass(href)} style={navStyle(href, "settings")}>
                                                         <Icon size={15} className="shrink-0" style={navIconStyle(href, "settings")} />
