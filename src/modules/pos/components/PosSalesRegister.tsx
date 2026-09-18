@@ -10,7 +10,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import {
-    Search, Loader2, Monitor, RotateCcw, ExternalLink, Printer, Plus,
+    Search, Loader2, Monitor, RotateCcw, ExternalLink, Printer, Plus, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { todayIso } from "@/shared/lib/format";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { EscapeBack } from "@/shared/components/EscapeBack";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -307,8 +308,12 @@ export function PosSalesRegister() {
             />
 
             {/* ── Header ── */}
+            <EscapeBack />
             <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="flex items-center gap-2">
+                    <Link href="/office" className="text-muted-foreground hover:text-foreground" title="Back to office">
+                        <ArrowLeft size={18} />
+                    </Link>
                     <h1 className="text-xl font-semibold flex items-center gap-2">
                         <Monitor size={18} className="text-primary" />
                         POS Sales  -  {total} {tab === "returns" ? `return${total !== 1 ? "s" : ""}` : `sale${total !== 1 ? "s" : ""}`} recorded
