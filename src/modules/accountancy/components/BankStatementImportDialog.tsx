@@ -169,7 +169,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
-            <DialogContent className="flex max-h-[92vh] w-[96vw] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+            <DialogContent className="flex max-h-[92vh] w-[90vw] max-w-none flex-col sm:max-w-[90vw] gap-0 overflow-hidden p-0">
                 <div className="border-b px-5 py-3">
                     <DialogTitle className="text-base font-semibold">Upload bank statement — {accountName}</DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground">

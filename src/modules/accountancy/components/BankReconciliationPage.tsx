@@ -2,8 +2,11 @@
 
 // Bank Reconciliation — the bank's statement against the bank ledger.
 //
-// Left: what the bank says (statement lines, uploaded). Right: what the books
-// say (this ledger's posted GL legs). Auto-match pairs the obvious ones; ticking
+// Two views of the same two sides. Merged (the default) puts the bank's
+// statement lines and the books' GL legs in one wide table, sorted by date then
+// by signed amount so an equal pair sits on consecutive rows, each row banded by
+// colour and tagged Bank or Books. Split keeps the old two panes — bank left,
+// books right. Auto-match pairs the obvious ones; ticking
 // lines on both sides and pressing Match ties the rest, many-to-many, as long
 // as the two sides total the same. A statement line nobody can explain is
 // booked right here ("Book it" opens the real voucher form pre-filled, and the
@@ -61,6 +64,14 @@ function flatten(node: GroupNode): LedgerNode[] {
 }
 
 type Filter = "unmatched" | "matched" | "all";
+type ViewMode = "merged" | "split";
+
+// One row of the merged table. Both sides share a signed delta — money into the
+// bank is positive — so a statement line and the book entry that explains it
+// carry the same number and sort next to each other.
+type MergedRow =
+    | { kind: "st"; key: string; date: string; delta: number; st: StatementLineView }
+    | { kind: "gl"; key: string; date: string; delta: number; gl: GlLineView };
 
 function money(n: number | null | undefined) {
     return n == null || n === 0 ? <span className="text-muted-foreground/60">—</span> : fmt(n);
@@ -77,6 +88,11 @@ export function BankReconciliationPage() {
     const [to, setTo] = useState(today);
     const [windowDays, setWindowDays] = useState(7);
     const [filter, setFilter] = useState<Filter>("unmatched");
+    const [view, setView] = useState<ViewMode>("merged");
+    useEffect(() => {
+        try { const v = localStorage.getItem("recon.view"); if (v === "split" || v === "merged") setView(v); } catch { /* private mode */ }
+    }, []);
+    const changeView = (v: ViewMode) => { setView(v); try { localStorage.setItem("recon.view", v); } catch { /* private mode */ } };
     const [selSt, setSelSt] = useState<Set<number>>(new Set());
     const [selGl, setSelGl] = useState<Set<number>>(new Set());
     const [busy, setBusy] = useState<string | null>(null);
@@ -126,6 +142,18 @@ export function BankReconciliationPage() {
     }, [data, filter]);
     const stPage = useClientPagination(stRows, 50);
     const glPage = useClientPagination(glRows, 50);
+
+    // Merged: both sides in one list, date first, then the signed amount, so an
+    // equal pair lands on consecutive rows. Bank before books on a tie.
+    const mergedRows = useMemo<MergedRow[]>(() => {
+        const rows: MergedRow[] = [
+            ...stRows.map((r): MergedRow => ({ kind: "st", key: `s${r.id}`, date: r.date, delta: (r.deposit ?? 0) - (r.withdrawal ?? 0), st: r })),
+            ...glRows.map((r): MergedRow => ({ kind: "gl", key: `g${r.id}`, date: r.date, delta: (r.debit ?? 0) - (r.credit ?? 0), gl: r })),
+        ];
+        rows.sort((a, b) => a.date.localeCompare(b.date) || a.delta - b.delta || (a.kind === b.kind ? 0 : a.kind === "st" ? -1 : 1));
+        return rows;
+    }, [stRows, glRows]);
+    const mergedPage = useClientPagination(mergedRows, 100);
 
     const stTotal = useMemo(() => {
         let s = 0;
@@ -310,6 +338,11 @@ export function BankReconciliationPage() {
                                 <button key={f} type="button" onClick={() => setFilter(f)} className={cn("rounded px-2 py-1 capitalize", filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>{f}</button>
                             ))}
                         </div>
+                        <div className="flex items-center gap-1 rounded-md border p-0.5 text-xs" title="One table with both sides, or the two panes side by side">
+                            {(["merged", "split"] as ViewMode[]).map((v) => (
+                                <button key={v} type="button" onClick={() => changeView(v)} className={cn("rounded px-2 py-1 capitalize", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>{v}</button>
+                            ))}
+                        </div>
                         <Button size="sm" onClick={() => void match()} disabled={!canMatch || busy != null} title={selSt.size && selGl.size && !canMatch ? `Sides differ: statement ${fmt(stTotal)} vs books ${fmt(glTotal)}` : undefined}>
                             <Link2 size={14} className="mr-1" /> Match {selSt.size ? `${selSt.size} ↔ ${selGl.size}` : ""}
                         </Button>
@@ -320,8 +353,63 @@ export function BankReconciliationPage() {
                         )}
                     </div>
 
+                    {/* Merged — both sides in one table, told apart by colour and a tag */}
+                    {view === "merged" && (
+                        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            <div className="flex items-center justify-between border-b px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                <span className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-sky-400" /> Bank statement · {stRows.length}</span>
+                                    <span className="text-muted-foreground/40">|</span>
+                                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" /> Books · {data.account.name} · {glRows.length}</span>
+                                </span>
+                                <span className="flex items-center gap-3 font-normal normal-case">
+                                    <span>{data.imports.length} upload(s)</span>
+                                    <Link href={accountLedgerUrl(data.account.id, { from, to })} className="text-primary hover:underline">open ledger</Link>
+                                </span>
+                            </div>
+                            <div className="min-h-0 flex-1 overflow-auto">
+                                <table className="w-full text-xs">
+                                    <thead className="sticky top-0 z-10 text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
+                                        <tr>
+                                            <th className="w-6 px-2 py-1.5" />
+                                            <th className="w-16 px-2 py-1.5 text-left font-medium">Side</th>
+                                            <th className="w-24 px-2 py-1.5 text-left font-medium">Date</th>
+                                            <th className="px-2 py-1.5 text-left font-medium">Particulars</th>
+                                            <th className="w-32 px-2 py-1.5 text-right font-medium">Withdrawal<span className="block text-[10px] font-normal normal-case">books: credit</span></th>
+                                            <th className="w-32 px-2 py-1.5 text-right font-medium">Deposit<span className="block text-[10px] font-normal normal-case">books: debit</span></th>
+                                            <th className="w-28 px-2 py-1.5 text-right font-medium">Balance</th>
+                                            <th className="w-36 px-2 py-1.5" />
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {mergedPage.pageRows.length === 0 && (
+                                            <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                                                {data.statementLines.length === 0 && data.glLines.length === 0 ? "Nothing in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
+                                            </td></tr>
+                                        )}
+                                        {mergedPage.pageRows.map((row) => (
+                                            <MergedRowView
+                                                key={row.key}
+                                                row={row}
+                                                selected={row.kind === "st" ? selSt.has(row.st.id) : selGl.has(row.gl.id)}
+                                                onToggle={() => row.kind === "st"
+                                                    ? setSelSt((s0) => toggle(s0, row.st.id))
+                                                    : setSelGl((s0) => toggle(s0, row.gl.id))}
+                                                onUnmatch={() => void unmatch(row.kind === "st" ? row.st.match!.groupId : row.gl.match!.groupId)}
+                                                onBook={(k) => { if (row.kind === "st") bookIt(row.st, k); }}
+                                                busy={busy != null}
+                                                glById={data.glLines}
+                                            />
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <PaginationBar total={mergedPage.total} page={mergedPage.page} pageSize={mergedPage.pageSize} onPageChange={mergedPage.setPage} onPageSizeChange={mergedPage.setPageSize} unitLabel="row" className="border-t px-3" />
+                        </div>
+                    )}
+
                     {/* Two panes */}
-                    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
+                    <div className={cn("min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2", view === "split" ? "grid" : "hidden")}>
                         {/* Bank side */}
                         <div className="flex min-h-0 flex-col border-r">
                             <div className="flex items-center justify-between border-b px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -430,6 +518,81 @@ function Stat({ label, value, hint, sub, emphasis, warn }: { label: string; valu
             <div className={cn("font-mono", emphasis && "font-semibold", warn && "text-amber-600")}>{value == null ? "—" : fmt(value)}</div>
             {(sub ?? hint) && <div className={cn("truncate text-[10px]", warn ? "text-amber-600" : "text-muted-foreground")}>{sub ?? hint}</div>}
         </div>
+    );
+}
+
+// One row of the merged table. Bank lines and book entries share the columns —
+// a withdrawal sits under the credit that explains it, a deposit under its
+// debit — so an equal pair reads straight down the page. The colour band and
+// the Side tag say which book a row comes from; colour is never the only clue.
+function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, busy, glById }: {
+    row: MergedRow; selected: boolean; onToggle: () => void; onUnmatch: () => void;
+    onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; busy: boolean; glById: GlLineView[];
+}) {
+    const isSt = row.kind === "st";
+    const r = isSt ? row.st : row.gl;
+    const matched = isSt ? (row.st.match != null && !row.st.match.stale) : row.gl.match != null;
+    const partners = isSt && matched
+        ? row.st.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`)
+        : [];
+    return (
+        <tr className={cn(
+            "border-l-2 hover:bg-muted/40",
+            isSt ? "border-l-sky-400 bg-sky-50/50 dark:bg-sky-950/20" : "border-l-violet-400 bg-violet-50/50 dark:bg-violet-950/20",
+            matched && "bg-green-50/60 dark:bg-green-900/15",
+            r.locked && "opacity-60",
+            selected && "bg-primary/15",
+        )}>
+            <td className="px-2 py-1.5 align-top">
+                {!matched && !r.locked && (
+                    <input type="checkbox" checked={selected} onChange={onToggle} aria-label={isSt ? `Select statement line ${formatDate(r.date)} ${row.st.narration}` : `Select book entry ${row.gl.voucherNo}`} />
+                )}
+                {matched && <CheckCircle2 size={13} className="text-green-600" />}
+                {r.locked && <Lock size={11} className="text-muted-foreground" />}
+            </td>
+            <td className="px-2 py-1.5 align-top">
+                <span className={cn(
+                    "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                    isSt ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200" : "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200",
+                )}>{isSt ? "Bank" : "Books"}</span>
+            </td>
+            <td className="whitespace-nowrap px-2 py-1.5 align-top">{formatDate(r.date)}</td>
+            <td className="px-2 py-1.5 align-top">
+                {isSt ? (
+                    <div className="line-clamp-2 break-words" title={row.st.narration}>{row.st.narration}</div>
+                ) : (
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                        {row.gl.source
+                            ? <Link href={row.gl.source.url} className="font-medium text-primary hover:underline">{row.gl.voucherNo}</Link>
+                            : <span className="font-medium">{row.gl.voucherNo}</span>}
+                        <span className="text-[10px] uppercase text-muted-foreground">{row.gl.voucherType}</span>
+                        <span className="line-clamp-2 break-words" title={row.gl.description}>{row.gl.description}</span>
+                    </div>
+                )}
+                <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground">
+                    {r.reference && <span className="font-mono">{r.reference}</span>}
+                    {!isSt && row.gl.narration && row.gl.narration !== row.gl.description && <span className="truncate">{row.gl.narration}</span>}
+                    {matched && isSt && <span className="text-green-700 dark:text-green-400">↔ {partners.join(", ")}{row.st.match!.auto ? " · auto" : ""}</span>}
+                    {matched && !isSt && <span className="text-green-700 dark:text-green-400">↔ {row.gl.match!.statementLineIds.length} statement line(s){row.gl.match!.auto ? " · auto" : ""}</span>}
+                    {isSt && row.st.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
+                </div>
+            </td>
+            <td className="px-2 py-1.5 text-right align-top font-mono">{money(isSt ? row.st.withdrawal : row.gl.credit)}</td>
+            <td className="px-2 py-1.5 text-right align-top font-mono">{money(isSt ? row.st.deposit : row.gl.debit)}</td>
+            <td className="px-2 py-1.5 text-right align-top font-mono text-muted-foreground">{isSt && row.st.balance != null ? fmt(row.st.balance) : ""}</td>
+            <td className="whitespace-nowrap px-2 py-1.5 text-right align-top">
+                {matched && !r.locked && (
+                    <button type="button" className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-red-600" disabled={busy} onClick={onUnmatch} title="Unmatch"><Unlink size={12} /></button>
+                )}
+                {isSt && !matched && !r.locked && (
+                    <span className="inline-flex items-center gap-0.5">
+                        <Sparkles size={11} className="text-muted-foreground" />
+                        <button type="button" className="rounded px-1 text-[11px] text-primary hover:underline" disabled={busy} onClick={() => onBook(row.st.deposit != null ? "RECEIPT" : "PAYMENT")}>{row.st.deposit != null ? "Receipt" : "Payment"}</button>
+                        <button type="button" className="rounded px-1 text-[11px] text-primary hover:underline" disabled={busy} onClick={() => onBook("CONTRA")}>Contra</button>
+                    </span>
+                )}
+            </td>
+        </tr>
     );
 }
 
