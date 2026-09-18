@@ -1,17 +1,22 @@
-# v1.5.1
+# v1.6.0
 
-A counter and office fix release. The PIN sign-in screen from the last version had a broken corner or two — this puts it back the way it was meant to work, with the photo showing properly and no dead ends. The Day Book report also gets a more useful filter. No database change — safe to install in any order.
+The big addition this version is Bank Reconciliation — bring in your bank's own statement and match it against the books, right there in the accountancy menu. Also new: make or edit a ledger without leaving whatever voucher you're filling, and the counter card now shows every position a person holds, not just one. The new bank-statement tables only add — nothing existing changes — so counters and office can update in any order.
 
-## Sign-in screen at the counter, put back together
+## Bank Reconciliation — new
+- Upload your bank's statement (CSV / Excel) against a ledger. The file is checked before anything is saved — wrong account, duplicate lines, and anything before the reconciled date are caught up front.
+- Auto-match ties a bank line to a book entry when they fall on the same day, or on a different day when they share a reference (UTR, UPI id, cheque number, IMPS ref) — the window for this was widened from 90 days to 300.
+- A same-amount pair on a different day, with nothing else in common, is no longer silently skipped — it's shown as a "possible match" you can tick yourself.
+- Tick several bank lines together and the toolbar offers one itemised Payment / Receipt / Contra for the whole group, instead of booking each line on its own.
+- Bank and books now sit in one merged table, sorted so a bank line and the book entry explaining it land next to each other; switch back to the old two-pane view any time.
+- "Book it" now always puts the statement's own bank in the voucher — it used to sometimes pick whichever cash or bank ledger was last used instead.
 
-- Fixed a few dead ends on the sign-in screen: tapping a face with no PIN set, choosing "Someone else" with nobody enrolled, and tapping the keypad before the app had finished starting could all leave the screen stuck with no way back to the photos. Every path now has a way out.
-- The screen used to show your photo only right after a fresh start of the counter PC. Signing out, a PIN attempt timing out, or the app being reopened would drop you on a plain email box instead — even though your photo was sitting right there the whole time. It now shows your photo in every one of these cases.
-- Your cached photo now appears instantly instead of after a delay — the live copy from the office quietly replaces it a moment later if it has changed. A photo changed in the office still reaches the till the same day, it just no longer makes the cashier wait to see a face at all.
-- Fixed your position (Role-Admin, Counter Operator, etc.) sometimes showing blank under your name.
-- Setting a PIN for the first time is confirmed to actually work now — a bug meant it silently could not save on a counter till before this fix.
-- The two links that lead back to the photo screen ("Back to photos" / "Login with PIN") now read the same wording in both places.
+## Ledgers
+- Create a new ledger right from any voucher's account box — type the name and press Alt+C, or just Enter when nothing matches. Ctrl+Enter opens the ledger under your cursor to edit. Same keys as Tally.
 
-## Day Book: "Unsettled only" is clearer and faster
+## Counter
+- The line under your name on the counter card now lists every position you hold, with its branch — not just one role.
+- The sales register screen now has a working back arrow and Esc to return to office.
 
-- The filter on the Day Book report is renamed from "Unpaid only" to **"Unsettled only"** — it was never about unpaid bills specifically, it keeps every voucher that still has money open against a party, receipts and payments included.
-- The filter itself is more useful now: it used to keep every Due/Partial row even when there was nothing on the party's other side to match it against, which was not actionable from this screen. It now keeps only the rows a staff member can actually do something with, and runs noticeably faster while doing it.
+## Small polish
+- Number fields no longer show the browser's up/down spinner arrows.
+- Every date field uses the same Tally-style date box; typing a month name (e.g. "feb") in a From/To pair now fills the whole month.
