@@ -259,6 +259,30 @@ export async function loadPartyUnallocated(
 }
 
 /**
+ * The party accounts that have link work waiting RIGHT NOW — open money on both
+ * sides, so something can actually be matched against something else. A party
+ * with bills and no unplaced money has nothing to do, however overdue it is.
+ *
+ * Two bounded reads for the whole book, and the answer is small: on live it is a
+ * dozen parties out of a couple of hundred. That makes it a pre-filter worth
+ * asking for — a list that wants only linkable rows can name these accounts in
+ * SQL instead of measuring every voucher and throwing most of them away.
+ */
+export async function loadLinkWorkParties(db: Prisma.TransactionClient): Promise<number[]> {
+    const parties = await db.universalVoucher.groupBy({
+        by:    ["partyAccountId"],
+        where: { status: "POSTED", deletedAt: null, partyAccountId: { not: null } },
+    });
+    const ids = parties.map((p) => p.partyAccountId).filter((id): id is number => id != null);
+    if (ids.length === 0) return [];
+
+    const unallocated = await loadPartyUnallocated(db, ids);
+    return [...unallocated.entries()]
+        .filter(([, v]) => v.dr > EPS && v.cr > EPS)
+        .map(([accountId]) => accountId);
+}
+
+/**
  * Every voucher of this party that still has something open — bills, receipts,
  * payments, credit/debit notes, journals alike — oldest first, so the list is
  * already in FIFO order for the popup's Auto button.

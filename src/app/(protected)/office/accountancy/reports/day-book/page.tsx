@@ -46,8 +46,9 @@ export default function DayBookPage() {
         catch { return ""; }
     });
 
-    // Bill-wise quick filter. Settlement is not a stored column, so the server
-    // scans forward for it — see the route's unsettled scan.
+    // Bill-wise quick filter — the rows carrying the chain icon, i.e. still owed
+    // AND with something on the party's other side to match. Settlement is not a
+    // stored column, so the server scans for it; see the route's unsettled scan.
     const [unsettledOnly, setUnsettledOnly] = useState(() => {
         try { return localStorage.getItem("daybook:unsettled") === "1"; }
         catch { return false; }
@@ -306,7 +307,7 @@ export default function DayBookPage() {
                             checked={unsettledOnly}
                             onCheckedChange={(v) => setUnsettledOnly(Boolean(v))}
                         />
-                        <Label htmlFor="unsettled-only" className="text-xs cursor-pointer" title="Only vouchers with money still unmatched — due or part-settled. A receipt or payment sitting on no bill counts too.">
+                        <Label htmlFor="unsettled-only" className="text-xs cursor-pointer" title="Only rows that can be matched right now — the ones carrying the chain icon. A bill whose party has no unplaced money is left out: nothing can be pointed at it yet.">
                             Unsettled only
                         </Label>
                     </div>

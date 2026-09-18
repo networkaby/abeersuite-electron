@@ -6,7 +6,7 @@ import { handleApiError, parseCursor, deltaSlice, pageSlice } from "@/shared/lib
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
-import { loadSettlements, type Settlement, type SettlementState } from "@/modules/accountancy/lib/billLink";
+import { loadSettlements, loadLinkWorkParties, type Settlement, type SettlementState } from "@/modules/accountancy/lib/billLink";
 import { kindsForFilter, kindsForCategory, NON_REGULAR_KINDS } from "@/modules/accountancy/lib/voucherKinds";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 
@@ -49,16 +49,23 @@ const MAX_SEARCH_ACCOUNTS = 500;
 const VALID_STATUSES = ["DRAFT", "POSTED", "CANCELLED"] as const;
 type VoucherStatusFilter = (typeof VALID_STATUSES)[number];
 
-// ── Unsettled-only ("due / partial") ────────────────────────────────────────
+// ── Unsettled-only: the rows that carry the chain ───────────────────────────
 // Settlement is NOT a stored column — it is movement-minus-linked, worked out
 // per page (see `loadSettlements`). So `?settlement=open` cannot be a `where`
-// clause; the walk stays exactly the same and the route simply scans forward in
-// chunks, keeping only the rows that still owe something, until it has a page or
-// runs out. The chunk cap keeps one request bounded: hitting it returns a short
-// page with a cursor, and the client's normal scroll pulls the rest.
+// clause; the route scans forward in chunks and keeps what matches, until it has
+// a page or runs out. The chunk cap keeps one request bounded: hitting it returns
+// a short page with a cursor, and the client's normal scroll pulls the rest.
+//
+// "Matches" means what the chip's chain icon means: still owing something AND
+// having something on the party's other side to match it against. A due bill on a
+// party with no unplaced money is real, but nobody can act on it from this screen,
+// so it is not link work.
+//
+// That reading also makes the scan cheap. `loadLinkWorkParties` names the parties
+// with money on both sides — a dozen out of a couple of hundred on live — and the
+// scan is narrowed to their vouchers in SQL before a settlement is measured.
 const UNSETTLED_SCAN_CHUNK = 500;
 const MAX_UNSETTLED_SCAN_CHUNKS = 6;
-const OPEN_STATES = new Set(["DUE", "PARTIAL"]);
 
 /** AuditLog.entityType → the CombinedRow source prefix its `originalId` keys. */
 const TOMBSTONE_SOURCE: Record<string, string> = {
@@ -153,6 +160,19 @@ export async function GET(req: Request) {
         // next delta rather than falling into the gap between the two.
         const computedAt = new Date();
 
+        // The parties with link work waiting. Asked once, up front, because it is
+        // what narrows the scan below; an empty answer means the whole book has
+        // nothing to match, so the page is empty by definition.
+        const linkWorkParties = unsettledOnly ? await loadLinkWorkParties(prisma) : [];
+        if (unsettledOnly && linkWorkParties.length === 0) {
+            return NextResponse.json({
+                mode: since ? "delta" : "page",
+                rows: [], deleted: [], nextCursor: null, overflow: false,
+                refs: { branches: [], users: [], accounts: [] },
+                computedAt: computedAt.toISOString(),
+            });
+        }
+
         // Party search can't run as a plain column filter — inventory rows freeze
         // the party into partyJson and the spine holds only a scalar
         // partyAccountId (there is no relation to filter through). Resolving the
@@ -180,16 +200,13 @@ export async function GET(req: Request) {
                     ...(to ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
                 },
             } : {}),
-            // A voucher with no party, not posted, or of a documentary kind can
-            // never carry a bill — `loadSettlements` skips exactly these. Saying
-            // so in SQL keeps the scan below off rows it would only throw away.
-            // A voucher with no party, not posted, or of a documentary kind can
-            // never carry a bill — `loadSettlements` skips exactly these. Saying
-            // so in SQL keeps the scan below off rows it would only throw away.
-            // The kind exclusion goes through `NOT` because `type` is already
-            // spoken for above by the kind dropdown.
+            // Only the parties that have something to match, and only vouchers
+            // that can carry a bill at all: posted, with a party, not documentary.
+            // `loadSettlements` skips exactly these, so saying it in SQL keeps the
+            // scan off rows it would only throw away. The kind exclusion goes
+            // through `NOT` because `type` is already spoken for by the dropdown.
             ...(unsettledOnly ? {
-                partyAccountId: { not: null },
+                partyAccountId: { in: linkWorkParties },
                 status: "POSTED" as const,
                 NOT: { type: { in: [...NON_REGULAR_KINDS] } },
             } : {}),
@@ -295,12 +312,12 @@ export async function GET(req: Request) {
                 });
                 if (batch.length === 0) { exhausted = true; break; }
                 scanCursor = batch[batch.length - 1].id;
-                // While sifting, the state is all that matters — whether a row
-                // has anything to link against is asked once, below, about the
-                // page we actually settle on.
-                Object.assign(settlements, await settlementsFor(batch, { linkability: false }));
+                // Linkability is measured with the state here rather than left
+                // for the end: it IS the filter. It costs little now that a batch
+                // can only hold vouchers of the link-work parties.
+                Object.assign(settlements, await settlementsFor(batch));
                 for (const v of batch) {
-                    if (OPEN_STATES.has(settlements[v.id]?.state ?? "")) kept.push(v);
+                    if (settlements[v.id]?.canLink) kept.push(v);
                 }
                 if (batch.length < UNSETTLED_SCAN_CHUNK) { exhausted = true; break; }
             }
@@ -349,11 +366,9 @@ export async function GET(req: Request) {
         // leaves no leg at all, and that reads as Settled.
         // The unsettled scan above already measured its rows; anything not measured
         // yet (the ordinary page, or a delta) is worked out here in one go.
-        // The unsettled scan measured state only, so the rows it settled on are
-        // re-measured here in full; every other path is measured from scratch.
-        const unmeasured = unsettledOnly
-            ? found
-            : found.filter((v) => settlements[v.id] === undefined);
+        // The scan already measured its rows in full; a delta, and the ordinary
+        // page, are measured here.
+        const unmeasured = found.filter((v) => settlements[v.id] === undefined);
         if (unmeasured.length > 0) Object.assign(settlements, await settlementsFor(unmeasured));
 
         let rows = found.map((v) => {
@@ -410,15 +425,13 @@ export async function GET(req: Request) {
             };
         });
 
-        // A delta cannot simply omit a row that has just been paid off — the
-        // client still holds it. Under "unsettled only" a newly settled voucher is
-        // therefore reported as a removal, which is what makes it leave the list.
+        // A delta cannot simply omit a row that has just been matched off — the
+        // client still holds it. Under "unsettled only" a row that has lost its
+        // link work is therefore reported as a removal, which is what makes it
+        // leave the list.
         if (unsettledOnly && since) {
-            deleted = [
-                ...deleted,
-                ...rows.filter((r) => !OPEN_STATES.has(r.settlement ?? "")).map((r) => r.id),
-            ];
-            rows = rows.filter((r) => OPEN_STATES.has(r.settlement ?? ""));
+            deleted = [...deleted, ...rows.filter((r) => !r.canLink).map((r) => r.id)];
+            rows = rows.filter((r) => r.canLink);
         }
 
         // ── refs ────────────────────────────────────────────────────────────
