@@ -25,7 +25,7 @@ Project is nearly complete. Prefer **simple, maintainable, DRY code**; remove du
 - Schema changes ship as **committed migrations**, and **Vercel applies them**: the `vercel-build` script runs `prisma migrate deploy` before the build, so a deploy brings the live DB's tables, columns and carried data with it. `pnpm db:migrate` by hand is now only for demo, counters and recovery. Vercel must have `DIRECT_URL` set — `prisma.config.ts` prefers it, and the pooled `DATABASE_URL` (port 6543, pgbouncer) cannot run migrations.
 - **One migration per release, not one per change.** While a migration file has not been applied to _any_ database, keep folding further schema edits into that same file and re-run it locally. Start a new file only once it has been deployed, or when Postgres forces it — an enum `ADD VALUE` cannot be used in the transaction that adds it (see the `ADVANCE_FOR` pair).
 - **An applied migration is frozen.** Its checksum is recorded in `_prisma_migrations`; editing it makes `migrate deploy` refuse to run at all. Never edit `0_init`. Every pre-2026-09-13 database needs `pnpm db:migrate:baseline` once.
-- **Counter release goes out before the Vercel deploy** that carries the migration. The server getting ahead of a replica halts every table on that till (`schemaGuard.js`, exit 4), not just the changed one.
+- **Counter release goes out before the Vercel deploy** that carries the migration — the deploy being the `d_office` push, §9 step 9. The server getting ahead of a replica halts every table on that till (`schemaGuard.js`, exit 4), not just the changed one.
 - How, in full: `docs/migrations.md`.
 
 ## 4. Reuse First
@@ -60,7 +60,7 @@ Priority: **UX → DB → Server**.
 
 - Worktree work **starts from** `main` (`git merge --ff-only main` before editing) and **merges back into** `main`. If the checkout is currently on `dev`, merge it into `dev` as well — `dev` is not a substitute for `main`.
 - **Releases go out from** `main` **only** — never `dev`, `d_office`, or a detached HEAD; the tag points at `HEAD`.
-- **Never push.** Release is the one exception — §9 steps 5, 7 and 8 are pushes the owner asked for by saying "release". Everything else stops at the commit.
+- **Never push.** Release is the one exception — §9 steps 5, 7, 8 and 9 are pushes the owner asked for by saying "release". Everything else stops at the commit.
 
 ## 9. Release — the agent carries it out
 
@@ -74,8 +74,9 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push tag to `origin`, publish. **A** `-` **in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
 7. `git push production main --tags`.
 8. `git checkout dev && git merge --ff-only main && git push origin dev`.
-9. Report: both remotes level, and installer + blockmap + `latest.yml` + notes present on every release repo.
+9. `git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main` — **`d_office` ends level with `main`, exactly like `dev`.** It is the deploy branch: Vercel is connected to it on `origin`, so this push is what puts the office site live and runs `prisma migrate deploy` through `vercel-build`. Pushing `main` deploys nothing, nor does `dev`, and `production` has no `d_office`. **Ask before pushing** — a production deploy needs the owner's word — but only the timing is a question, never whether `d_office` should be level; on a no, fast-forward locally and hand over the push command. On a schema release the counters take the build first (§3), and `pnpm db:migrate:status` says whether the migration is still pending or already reached live.
+10. Report: `main`, `dev` and `d_office` all on the released commit, both remotes level, and installer + blockmap + `latest.yml` + notes present on every release repo. Say plainly if the `d_office` push is still outstanding — the office site is running old code until it lands.
 
-**Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier, the smoke test (you cannot run the packaged exe), the `.env` variant (`APP_MODE`, `LANDING_PAGE`), a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
+**Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier, the smoke test (you cannot run the packaged exe), the `.env` variant (`APP_MODE`, `LANDING_PAGE`), the `d_office` push that deploys the office site, a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
 
 **Stop and ask** on a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).

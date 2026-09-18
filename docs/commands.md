@@ -57,6 +57,22 @@ git push production main --tags
 git checkout dev && git merge --ff-only main && git push origin dev
 ```
 
+12. **Bring `d_office` level too — that is the office deploy.** `d_office` ends every
+release on the released commit, exactly like `dev`. It is also the deploy branch:
+Vercel is connected to it on `origin`, so this push is what puts the office site live
+and runs `prisma migrate deploy` through `vercel-build`. Pushing `main` deploys
+nothing, nor does `dev`, and `production` has no `d_office` at all.
+
+```bash
+git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main
+```
+
+**Ask before this push** — it is a production deploy. Only the timing is a question,
+never whether `d_office` should be level; on a no, fast-forward locally and hand over
+the push command. On a schema release the counters take the build first (§9), and
+`pnpm db:migrate:status` tells you whether the migration is still pending or has
+already reached live.
+
 **Never, for any reason:**
 
 - release from any branch other than `main`
@@ -332,7 +348,7 @@ For a colour change, a label fix, a spacing tweak, a copy edit — **no schema, 
 7. `git push origin main && git push production main`
 8. `pnpm electron:release`
 9. Check the installer, blockmap and `latest.yml` on every release repo
-10. `git push production main --tags`, then `git checkout dev && git merge --ff-only main && git push origin dev` (§0)
+10. `git push production main --tags`, then level `dev` **and** `d_office` with `main` — the `d_office` push is the office deploy, so ask first (§0)
 
 **What is skipped, and why it is safe:**
 
