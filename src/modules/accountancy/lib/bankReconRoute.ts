@@ -15,5 +15,11 @@ export function accountIdOf(p: { accountId: string }): { id: number; error?: und
 
 export function reconError(e: unknown, fallback: string): NextResponse {
     if (e instanceof BankReconError) return NextResponse.json({ error: e.message }, { status: e.status });
+    // In development the real message rides along, so a failure on this screen
+    // can be read off the response without a hand on the server console.
+    if (process.env.NODE_ENV === "development" && e instanceof Error) {
+        console.error("[api]", e);
+        return NextResponse.json({ error: fallback, detail: e.message }, { status: 500 });
+    }
     return handleApiError(e, fallback);
 }
