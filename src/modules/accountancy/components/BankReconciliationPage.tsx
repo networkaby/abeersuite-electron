@@ -66,12 +66,23 @@ function flatten(node: GroupNode): LedgerNode[] {
 type Filter = "unmatched" | "matched" | "all";
 type ViewMode = "merged" | "split";
 
+// A suggested match group: open rows from both sides sharing a date and an
+// exact signed amount. The bracket down the left ties them together; Select
+// ticks the whole group so Match is one press away.
+type Suggestion = { key: string; first: boolean; last: boolean; stIds: number[]; glIds: number[]; size: number };
+
 // One row of the merged table. Both sides share a signed delta — money into the
 // bank is positive — so a statement line and the book entry that explains it
 // carry the same number and sort next to each other.
+type MergedRowBase = { key: string; date: string; delta: number; sug?: Suggestion };
 type MergedRow =
-    | { kind: "st"; key: string; date: string; delta: number; st: StatementLineView }
-    | { kind: "gl"; key: string; date: string; delta: number; gl: GlLineView };
+    | (MergedRowBase & { kind: "st"; st: StatementLineView })
+    | (MergedRowBase & { kind: "gl"; gl: GlLineView });
+
+// A row nobody has tied yet — the only kind worth suggesting.
+function isOpen(r: MergedRow) {
+    return r.kind === "st" ? (r.st.match == null || r.st.match.stale) && !r.st.locked : r.gl.match == null && !r.gl.locked;
+}
 
 function money(n: number | null | undefined) {
     return n == null || n === 0 ? <span className="text-muted-foreground/60">—</span> : fmt(n);
@@ -162,8 +173,32 @@ export function BankReconciliationPage() {
             ...glRows.map((r): MergedRow => ({ kind: "gl", key: `g${r.id}`, date: r.date, delta: (r.debit ?? 0) - (r.credit ?? 0), gl: r })),
         ];
         rows.sort((a, b) => a.date.localeCompare(b.date) || a.delta - b.delta || (a.kind === b.kind ? 0 : a.kind === "st" ? -1 : 1));
+
+        // Same date, same signed amount, still open, and both sides present —
+        // that is a pair worth pointing at. Direction has to agree too, so a
+        // deposit never pairs with a payment of the same size.
+        const bucket = new Map<string, MergedRow[]>();
+        for (const r of rows) {
+            if (!isOpen(r) || r.delta === 0) continue;
+            const k = `${r.date}|${r.delta.toFixed(2)}`;
+            const b = bucket.get(k); if (b) b.push(r); else bucket.set(k, [r]);
+        }
+        for (const [key, group] of bucket) {
+            const stIds = group.flatMap((r) => (r.kind === "st" ? [r.st.id] : []));
+            const glIds = group.flatMap((r) => (r.kind === "gl" ? [r.gl.id] : []));
+            if (stIds.length === 0 || glIds.length === 0) continue;
+            for (const r of group) r.sug = { key, first: false, last: false, stIds, glIds, size: group.length };
+        }
+        // first / last off the final order, so a matched row sitting in the
+        // middle does not leave a bracket hanging open.
+        rows.forEach((r, i) => {
+            if (!r.sug) return;
+            r.sug = { ...r.sug, first: rows[i - 1]?.sug?.key !== r.sug.key, last: rows[i + 1]?.sug?.key !== r.sug.key };
+        });
         return rows;
     }, [stRows, glRows]);
+
+    const selectGroup = (sug: Suggestion) => { setSelSt(new Set(sug.stIds)); setSelGl(new Set(sug.glIds)); };
     const mergedPage = useClientPagination(mergedRows, 100);
 
     const stTotal = useMemo(() => {
@@ -368,9 +403,11 @@ export function BankReconciliationPage() {
                         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                             <div className="flex items-center justify-between border-b px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 <span className="flex items-center gap-2">
-                                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-sky-400" /> Bank statement · {stRows.length}</span>
+                                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> Bank statement · {stRows.length}</span>
                                     <span className="text-muted-foreground/40">|</span>
-                                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" /> Books · {data.account.name} · {glRows.length}</span>
+                                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-500" /> Books · {data.account.name} · {glRows.length}</span>
+                                    <span className="text-muted-foreground/40">|</span>
+                                    <span className="inline-flex items-center gap-1 font-normal normal-case"><span className="h-3.5 w-[3px] rounded-full bg-amber-400" /> same date, same amount</span>
                                 </span>
                                 <span className="flex items-center gap-3 font-normal normal-case">
                                     <span>{data.imports.length} upload(s)</span>
@@ -407,6 +444,7 @@ export function BankReconciliationPage() {
                                                     : setSelGl((s0) => toggle(s0, row.gl.id))}
                                                 onUnmatch={() => void unmatch(row.kind === "st" ? row.st.match!.groupId : row.gl.match!.groupId)}
                                                 onBook={(k) => { if (row.kind === "st") bookIt(row.st, k); }}
+                                                onSelectGroup={selectGroup}
                                                 busy={busy != null}
                                                 glById={data.glLines}
                                             />
@@ -418,8 +456,10 @@ export function BankReconciliationPage() {
                         </div>
                     )}
 
-                    {/* Two panes */}
-                    <div className={cn("min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2", view === "split" ? "grid" : "hidden")}>
+                    {/* Two panes — rendered only when chosen, so the other view's
+                        rows are not sitting in the DOM doing nothing */}
+                    {view === "split" && (
+                    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
                         {/* Bank side */}
                         <div className="flex min-h-0 flex-col border-r">
                             <div className="flex items-center justify-between border-b px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -482,6 +522,7 @@ export function BankReconciliationPage() {
                             <PaginationBar total={glPage.total} page={glPage.page} pageSize={glPage.pageSize} onPageChange={glPage.setPage} onPageSizeChange={glPage.setPageSize} unitLabel="entry" className="border-t px-3" />
                         </div>
                     </div>
+                    )}
 
                     {/* Uploads */}
                     {data.imports.length > 0 && (
@@ -535,9 +576,10 @@ function Stat({ label, value, hint, sub, emphasis, warn }: { label: string; valu
 // a withdrawal sits under the credit that explains it, a deposit under its
 // debit — so an equal pair reads straight down the page. The colour band and
 // the Side tag say which book a row comes from; colour is never the only clue.
-function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, busy, glById }: {
+function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGroup, busy, glById }: {
     row: MergedRow; selected: boolean; onToggle: () => void; onUnmatch: () => void;
-    onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; busy: boolean; glById: GlLineView[];
+    onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; onSelectGroup: (sug: Suggestion) => void;
+    busy: boolean; glById: GlLineView[];
 }) {
     const isSt = row.kind === "st";
     const r = isSt ? row.st : row.gl;
@@ -545,15 +587,34 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, busy, glByI
     const partners = isSt && matched
         ? row.st.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`)
         : [];
+    const sug = row.sug;
+    // One background, chosen — not three bg-* utilities stacked, where which one
+    // wins is down to the order Tailwind happens to emit them in.
+    const background = selected
+        ? "bg-primary/20"
+        : matched
+            ? "bg-green-100/70 dark:bg-green-900/25"
+            : isSt
+                ? "bg-sky-100/60 dark:bg-sky-950/40"
+                : "bg-violet-100/60 dark:bg-violet-950/40";
     return (
         <tr className={cn(
-            "border-l-2 hover:bg-muted/40",
-            isSt ? "border-l-sky-400 bg-sky-50/50 dark:bg-sky-950/20" : "border-l-violet-400 bg-violet-50/50 dark:bg-violet-950/20",
-            matched && "bg-green-50/60 dark:bg-green-900/15",
+            "border-l-[3px] hover:bg-muted/50",
+            isSt ? "border-l-sky-500" : "border-l-violet-500",
+            background,
             r.locked && "opacity-60",
-            selected && "bg-primary/15",
         )}>
-            <td className="px-2 py-1.5 align-top">
+            <td className="relative px-2 py-1.5 align-top">
+                {sug && (
+                    <span
+                        aria-hidden
+                        className={cn(
+                            "absolute left-0 w-[3px] bg-amber-400",
+                            sug.first ? "top-1.5 rounded-t-full" : "top-0",
+                            sug.last ? "bottom-1.5 rounded-b-full" : "bottom-0",
+                        )}
+                    />
+                )}
                 {!matched && !r.locked && (
                     <input type="checkbox" checked={selected} onChange={onToggle} aria-label={isSt ? `Select statement line ${formatDate(r.date)} ${row.st.narration}` : `Select book entry ${row.gl.voucherNo}`} />
                 )}
@@ -563,8 +624,19 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, busy, glByI
             <td className="px-2 py-1.5 align-top">
                 <span className={cn(
                     "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
-                    isSt ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200" : "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200",
+                    isSt ? "bg-sky-200 text-sky-900 dark:bg-sky-900/60 dark:text-sky-100" : "bg-violet-200 text-violet-900 dark:bg-violet-900/60 dark:text-violet-100",
                 )}>{isSt ? "Bank" : "Books"}</span>
+                {sug?.first && (
+                    <button
+                        type="button"
+                        onClick={() => onSelectGroup(sug)}
+                        disabled={busy}
+                        title={`Same date, same amount — tick these ${sug.size} rows ready to match`}
+                        className="mt-0.5 block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900"
+                    >
+                        Select {sug.size}
+                    </button>
+                )}
             </td>
             <td className="whitespace-nowrap px-2 py-1.5 align-top">{formatDate(r.date)}</td>
             <td className="px-2 py-1.5 align-top">
@@ -613,7 +685,7 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
     const matched = r.match != null && !r.match.stale;
     const partners = matched ? r.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`) : [];
     return (
-        <tr className={cn("hover:bg-muted/40", matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60", selected && "bg-primary/10")}>
+        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60")}>
             <td className="px-2 py-1.5 align-top">
                 {!matched && !r.locked && (
                     <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select statement line ${formatDate(r.date)} ${r.narration}`} />
@@ -652,7 +724,7 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
 function GlRowView({ r, selected, onToggle, onUnmatch, busy }: { r: GlLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void; busy: boolean }) {
     const matched = r.match != null;
     return (
-        <tr className={cn("hover:bg-muted/40", matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60", selected && "bg-primary/10")}>
+        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60")}>
             <td className="px-2 py-1.5 align-top">
                 {!matched && !r.locked && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select book entry ${r.voucherNo}`} />}
                 {matched && <CheckCircle2 size={13} className="text-green-600" />}
