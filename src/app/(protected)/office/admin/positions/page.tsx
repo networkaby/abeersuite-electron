@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import axios from "axios";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
@@ -313,9 +314,7 @@ function PositionRow({
     });
     const [saving, setSaving] = useState(false);
 
-    const scopeLabel = position.branch
-        ? (position.department ? `${position.branch.name} / ${position.department.name}` : position.branch.name)
-        : "Executive Council";
+    const scopeLabel = positionScopeLabel(position, { withDepartment: true });
 
     // Always sync form with latest position data when opening edit mode
     const openEdit = () => {

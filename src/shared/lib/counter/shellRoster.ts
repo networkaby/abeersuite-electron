@@ -14,8 +14,11 @@
 export interface ShellRosterEntry {
     email: string;
     name: string;
-    /** Their position, shown under the name. */
+    /** A manually typed designation. When set it wins over the seats below. */
     title?: string;
+    /** Every Position they hold, senior first: what they are called, and where it sits
+     *  ("Branch Manager" / "Head Office", "Executive" / "Executive Council"). */
+    seats?: { title: string; scope: string }[];
     /** Where the photo came from — only used to notice when it changes. */
     avatarUrl?: string;
     /** A `file://` URL to this PC's cached copy, ready for an `<img src>`. */

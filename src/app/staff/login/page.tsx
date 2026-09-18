@@ -297,16 +297,17 @@ function StaffLoginForm() {
             const remember = window.electronAPI?.rememberShellUser;
             if (remember && session?.user) {
                 const u = session.user as {
-                    name?: string | null; title?: string; roleLabel?: string; avatarUrl?: string;
+                    name?: string | null; title?: string; avatarUrl?: string;
+                    seats?: { title: string; scope: string }[];
                 };
                 void remember({
                     email: emailValue.trim().toLowerCase(),
                     name: u.name || emailValue,
                     // `User.title` is free text and is null for every person in the real
-                    // books — the designation people actually hold is their ROLE, which
-                    // `authorizeStaff` already resolves to a label ("Counter Operator",
-                    // "Branch Manager"). Title first, since somebody may yet type one in.
-                    title: u.title || u.roleLabel,
+                    // books, so the seats below are what actually print. It still wins
+                    // when somebody types one in.
+                    title: u.title,
+                    seats: u.seats,
                     avatarUrl: u.avatarUrl,
                     // Signed in BY a PIN is proof of one. Otherwise ask the server, so a
                     // PIN set yesterday still puts a keypad up tomorrow.

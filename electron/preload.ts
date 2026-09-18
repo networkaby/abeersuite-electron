@@ -18,6 +18,8 @@ export interface ShellRosterEntry {
     email: string;
     name: string;
     title?: string;
+    /** Every Position held, senior first — mirrors shared/lib/counter/shellRoster.ts. */
+    seats?: { title: string; scope: string }[];
     avatarUrl?: string;
     /** A `file://` URL when it comes FROM main; left off when handing an entry TO it. */
     avatarFile?: string;

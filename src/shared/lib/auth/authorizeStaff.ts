@@ -4,7 +4,11 @@ import { randomBytes, timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
 import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
+import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
+
+/** One seat a person holds: what they are called, and where it sits. */
+export type StaffSeat = { title: string; scope: string };
 
 export type StaffAuthUser = {
     id: string;
@@ -22,6 +26,9 @@ export type StaffAuthUser = {
     departmentIds: string[];
     branchIds: string[];
     title?: string;
+    /** Every Position they hold, senior first. The counter's sign-in card prints these
+     *  under the name; `title` above still wins when somebody has typed one in. */
+    seats: StaffSeat[];
     avatarUrl?: string;
     kind: "staff";
 };
@@ -58,6 +65,7 @@ function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | nu
         roleColor: "#7c3aed",
         departmentIds: [],
         branchIds: [],
+        seats: [],
         kind: "staff",
     };
 }
@@ -131,6 +139,8 @@ async function findStaffUser(prisma: PrismaClient, email: string) {
                 include: {
                     position: {
                         include: {
+                            // For the sign-in card's scope line — see positionScope.ts.
+                            branch: { select: { name: true } },
                             roleTemplates: {
                                 include: {
                                     role: {
@@ -220,6 +230,20 @@ async function buildStaffAuthUser(prisma: PrismaClient, user: StaffUserRow): Pro
         }
     }
 
+    // ── Every seat, senior first ────────────────────────────────────────────
+    // A person can hold more than one Position — a Branch Manager who also sits on the
+    // Executive Council — and the counter's card shows them all, because "which one is
+    // he here?" is exactly what a face on a till has to answer. Ordered by the rank of
+    // the roles the seat carries, so the senior one reads first.
+    const seats = [...user.userPositions]
+        .map((up) => ({
+            title: up.position.title,
+            scope: positionScopeLabel(up.position),
+            rank: up.position.roleTemplates.reduce((top, row) => Math.max(top, row.role.rank), 0),
+        }))
+        .sort((a, b) => b.rank - a.rank)
+        .map(({ title, scope }) => ({ title, scope }));
+
     // Surface metadata for the highest-rank source for UI badges.
     let roleLabel: string | undefined = user.userRole?.label;
     let roleColor: string | undefined = user.userRole?.color;
@@ -298,6 +322,7 @@ async function buildStaffAuthUser(prisma: PrismaClient, user: StaffUserRow): Pro
         departmentIds,
         branchIds,
         title: user.title ?? undefined,
+        seats,
         avatarUrl: user.avatarUrl ?? undefined,
         kind: "staff",
     };

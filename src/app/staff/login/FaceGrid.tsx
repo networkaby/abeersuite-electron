@@ -65,6 +65,37 @@ export function Face({ entry, size }: { entry: ShellRosterEntry; size?: number }
     );
 }
 
+/**
+ * What somebody is, under their name: every seat they hold and where it sits.
+ *
+ * A person can hold more than one Position — a Branch Manager who also sits on the
+ * Executive Council — and both print, senior first, because "which one is he here?"
+ * is what a face on a till has to answer. The scope is the branch, or the words this
+ * business uses for a seat with no branch (see positionScope.ts).
+ *
+ * A typed `title` wins outright: somebody who has filled one in means it.
+ */
+export function Seats({ entry }: { entry: ShellRosterEntry }) {
+    if (entry.title) return <p className={styles.post}>{entry.title}</p>;
+
+    const seats = entry.seats ?? [];
+    // No seat and no PIN: say what tapping the card will ask for, rather than nothing.
+    if (seats.length === 0) {
+        return <p className={styles.post}>{entry.hasPin ? "" : "Password"}</p>;
+    }
+
+    return (
+        <>
+            {seats.map((seat) => (
+                <div key={seat.title + seat.scope}>
+                    <p className={styles.post}>{seat.title}</p>
+                    <p className={styles.scope}>{seat.scope}</p>
+                </div>
+            ))}
+        </>
+    );
+}
+
 export default function FaceGrid({
     roster, editing, onChoose, onForget, onOther, onEdit,
 }: {
@@ -83,10 +114,7 @@ export default function FaceGrid({
                         onClick={() => onChoose(entry)}>
                         <Face entry={entry} />
                         <p className={styles.who}>{entry.name}</p>
-                        {/* Somebody with no PIN still shows — their card asks for the
-                            password instead. A card that quietly disappeared would be the
-                            most confusing thing on this screen. */}
-                        <p className={styles.post}>{entry.title || (entry.hasPin ? "" : "Password")}</p>
+                        <Seats entry={entry} />
                         <span
                             role="button" tabIndex={0} className={styles.drop}
                             aria-label={`Forget ${entry.name} on this PC`}

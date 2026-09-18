@@ -756,6 +756,7 @@ ipcMain.handle("shell:roster", (): ShellRosterEntry[] => readRoster().map((entry
 
 ipcMain.handle("shell:remember-user", async (_, who: {
     email?: unknown; name?: unknown; title?: unknown; avatarUrl?: unknown; hasPin?: unknown;
+    seats?: unknown;
 }) => {
     if (typeof who?.email !== "string" || typeof who?.name !== "string") return false;
     const email = who.email.trim().toLowerCase();
@@ -779,6 +780,11 @@ ipcMain.handle("shell:remember-user", async (_, who: {
         email,
         name: who.name,
         title: typeof who.title === "string" ? who.title : undefined,
+        seats: Array.isArray(who.seats)
+            ? (who.seats as { title?: unknown; scope?: unknown }[])
+                .filter((seat) => typeof seat?.title === "string" && typeof seat?.scope === "string")
+                .map((seat) => ({ title: String(seat.title), scope: String(seat.scope) }))
+            : undefined,
         avatarUrl,
         avatarFile,
         hasPin: who.hasPin === true,
@@ -1244,6 +1250,8 @@ type ShellRosterEntry = {
     email: string;
     name: string;
     title?: string;
+    /** Every Position held, senior first. Shape mirrored in electron/preload.ts. */
+    seats?: { title: string; scope: string }[];
     /** The profile photo's source URL — kept only to notice when it changes. */
     avatarUrl?: string;
     /** File name under faces/, or (over IPC) the file:// URL the shell can use. */

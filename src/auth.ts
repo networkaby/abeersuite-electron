@@ -59,6 +59,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.branchIds =
                     "branchIds" in user && Array.isArray(user.branchIds) ? (user.branchIds as string[]) : [];
                 token.title = "title" in user ? (user.title as string | undefined) : undefined;
+                // Every Position they hold, for the counter's sign-in card. Two short
+                // strings per seat, and almost everyone holds one.
+                token.seats = "seats" in user && Array.isArray(user.seats) ? user.seats : [];
                 token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | undefined) : undefined;
                 token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
                 token.customerId =
@@ -126,6 +129,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     departmentIds: string[];
                     branchIds: string[];
                     title?: string;
+                    seats: { title: string; scope: string }[];
                     avatarUrl?: string;
                     kind?: "staff" | "customer";
                     customerId?: string;
@@ -145,6 +149,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     : [];
                 sessionUser.branchIds = Array.isArray(token.branchIds) ? (token.branchIds as string[]) : [];
                 sessionUser.title = typeof token.title === "string" ? token.title : undefined;
+                sessionUser.seats = Array.isArray(token.seats)
+                    ? (token.seats as { title: string; scope: string }[])
+                    : [];
                 sessionUser.avatarUrl = typeof token.avatarUrl === "string" ? token.avatarUrl : undefined;
                 sessionUser.kind = token.kind === "customer" ? "customer" : "staff";
                 sessionUser.customerId =

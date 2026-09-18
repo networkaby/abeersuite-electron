@@ -167,7 +167,10 @@
   }
   .pic img{width:100%;height:100%;object-fit:cover}
   .who{font-size:13.5px;font-weight:600;margin:0;line-height:1.3}
-  .post{font-size:11.5px;color:var(--ink-dim);margin:2px 0 0;line-height:1.3}
+  .post{font-size:11.5px;color:var(--ink-dim);margin:4px 0 0;line-height:1.3}
+  /* Where a seat sits — quieter than the seat itself, so a card with two positions
+     still reads as a name with detail under it rather than four equal lines. */
+  .scope{font-size:10.5px;color:#64748b;margin:0;line-height:1.3}
   .drop{
     position:absolute;top:5px;right:5px;width:22px;height:22px;display:none;
     align-items:center;justify-content:center;border-radius:50%;
@@ -758,6 +761,14 @@
     }
   }
 
+  /** One small line of text under a name. */
+  function line(cls, text) {
+    var p = document.createElement("p");
+    p.className = cls;
+    p.textContent = text;
+    return p;
+  }
+
   function drawFaces() {
     elGrid.textContent = "";
     roster.forEach(function (entry) {
@@ -776,12 +787,20 @@
       who.textContent = entry.name;
       card.appendChild(who);
 
-      var post = document.createElement("p");
-      post.className = "post";
-      // Somebody with no PIN still shows. A card that quietly disappeared would be the
-      // most confusing thing on this screen.
-      post.textContent = entry.title || (entry.hasPin ? "" : "Password");
-      card.appendChild(post);
+      // What they are, under the name: every seat they hold and where it sits. A typed
+      // `title` wins outright; somebody who has filled one in means it. Twin of the
+      // Seats component in src/app/staff/login/FaceGrid.tsx — keep the two in step.
+      if (entry.title) {
+        card.appendChild(line("post", entry.title));
+      } else if (entry.seats && entry.seats.length) {
+        entry.seats.forEach(function (seat) {
+          card.appendChild(line("post", seat.title));
+          card.appendChild(line("scope", seat.scope));
+        });
+      } else if (!entry.hasPin) {
+        // No seat and no PIN: say what tapping this card will ask for, not nothing.
+        card.appendChild(line("post", "Password"));
+      }
 
       var drop = document.createElement("button");
       drop.type = "button";
