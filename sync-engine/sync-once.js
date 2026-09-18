@@ -331,6 +331,45 @@ async function main() {
         };
 
         /**
+         * A table this build knows about that the OFFICE has not deployed yet.
+         *
+         * The release order in AGENTS.md sends the counter build out BEFORE the deploy
+         * that carries its migration — deliberately, because a source ahead of a
+         * replica halts every table on the till. But that same order means a till can
+         * boot holding a registry entry for a table Supabase does not have yet, and
+         * "never synced" is what the readiness gate counts: one absent table and the
+         * whole counter sits on "Preparing this counter" until the deploy lands. A
+         * feature nobody is using yet would stop the billing that pays for the shop.
+         *
+         * So: `42P01` (undefined_table) FROM THE SOURCE, on a table that has never
+         * synced even once, is read as "not deployed yet". It is recorded as a pass
+         * with no rows — there are none to have — and the till carries on.
+         *
+         * Narrow on purpose. A table that HAS synced before and then disappears is
+         * real drift and still fails, loudly, every cycle: that is a table being
+         * dropped under a running till, which is not the same event at all.
+         */
+        const notDeployedYet = async (err, entry, local) => {
+            if (!err || err.code !== "42P01") return false;
+            // The test is what this replica would LOSE, not what it has already
+            // recorded. "Has it ever synced" looked right and is not: the tolerated
+            // pass itself stamps last_ok_at, so from the next cycle onwards the same
+            // table would fail again and the till would brick anyway — one cycle
+            // later, which is worse than never working.
+            //
+            // Empty here and gone there is a table that has never carried a row on
+            // this counter: nothing to lose, so wait. Rows here and gone there is a
+            // table being dropped under a running till, which is real drift and still
+            // fails loudly on every cycle.
+            try {
+                const { rows } = await local.query(`SELECT 1 FROM "${entry.table}" LIMIT 1`);
+                return rows.length === 0;
+            } catch {
+                return false;   // Cannot even ask — treat it as the failure it is.
+            }
+        };
+
+        /**
          * Run one table on its own pair of connections. Lanes overlap; the bookkeeping
          * (`moved`, counters, `changedModels`) is plain JS state touched between awaits,
          * which is safe on one thread.
@@ -415,6 +454,12 @@ async function main() {
                     console.log(`  ${model.padEnd(28)} ${entry.strategy.padEnd(9)} ${res.pulled === -1 ? "(full)" : res.pulled}`);
                 }
             } catch (e) {
+                if (await notDeployedYet(e, entry, local)) {
+                    console.log(`  ${model.padEnd(28)} not on the source yet - waiting for the deploy`);
+                    moved.set(model, []);
+                    if (!DRY) await state.recordSuccess(local, entry, model, null).catch(() => {});
+                    return;
+                }
                 failed++;
                 console.error(`  ${model.padEnd(28)} FAILED: ${e.message}`);
                 if (!DRY) await state.recordFailure(local, entry, model, e).catch(() => {});
@@ -457,6 +502,12 @@ async function main() {
                         console.log(`  ${model.padEnd(28)} child     ${res.pulled} (for ${parentIds.length} parent(s))`);
                     }
                 } catch (e) {
+                    if (await notDeployedYet(e, entry, local)) {
+                        console.log(`  ${model.padEnd(28)} not on the source yet - waiting for the deploy`);
+                        moved.set(model, []);
+                        if (!DRY) await state.recordSuccess(local, entry, model, null).catch(() => {});
+                        return;
+                    }
                     failed++;
                     console.error(`  ${model.padEnd(28)} FAILED: ${e.message}`);
                     if (!DRY) await state.recordFailure(local, entry, model, e).catch(() => {});
@@ -573,6 +624,9 @@ async function main() {
                         console.log(`  ${model.padEnd(28)} still differs after repair`);
                     }
                 } catch (e) {
+                    // Same story as the pulls above: nothing to reconcile against a
+                    // table that is not there yet, and it must not count as a failure.
+                    if (await notDeployedYet(e, entry, local)) continue;
                     failed++;
                     console.error(`  ${model.padEnd(28)} VERIFY FAILED: ${e.message}`);
                 }
