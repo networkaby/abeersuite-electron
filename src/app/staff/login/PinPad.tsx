@@ -55,7 +55,8 @@ export default function PinPad({
 
     return (
         <section className={`${styles.card} ${styles.padcard}`}>
-            <Face entry={entry} size={60} />
+            {/* Keyed so a different person starts the photo chain again. */}
+            <Face key={entry.email} entry={entry} size={60} />
             <p className={styles.who}>Welcome back, {entry.name.split(/\s+/)[0]}</p>
             <p className={styles.post}>{busy ? "Signing in…" : note}</p>
 

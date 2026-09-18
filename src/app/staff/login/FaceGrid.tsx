@@ -13,6 +13,7 @@
  * server-side one. A hand-edited roster buys nobody a permission.
  */
 
+import { useEffect, useState } from "react";
 import type { ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
 import styles from "./login.module.css";
 
@@ -23,19 +24,43 @@ export function initials(name: string): string {
     return out.toUpperCase() || "·";
 }
 
+/**
+ * This PC's cached copy at once, the live one over it when it arrives.
+ *
+ * Order matters and it is not the obvious one. Asking the web first is "correct" and
+ * reads as broken: the cashier watches initials for as long as the photograph takes,
+ * which on a shop line is long enough to look like a fault — the owner said exactly
+ * that, having mistaken the wait for a missing photo. The cached copy is on disk and
+ * paints instantly, so the card is never empty; the live one is fetched beside it and
+ * takes over the moment it decodes, so a photograph changed in the office still shows
+ * here today rather than at the next sign-in.
+ *
+ * With no cache there is nothing to show but initials until the web answers, and with
+ * no line the cached copy simply stays. Nothing ever waits on the network.
+ */
 export function Face({ entry, size }: { entry: ShellRosterEntry; size?: number }) {
     const px = size ?? 52;
-    // A plain <img>, not next/image: the source is a file:// path to this PC's own
-    // cached copy, which the optimiser can neither fetch nor serve.
-    // eslint-disable-next-line @next/next/no-img-element
-    const photo = entry.avatarFile ? <img src={entry.avatarFile} alt="" onError={(e) => {
-        // A cached face that will not load falls back to initials, never a hole.
-        e.currentTarget.replaceWith(document.createTextNode(initials(entry.name)));
-    }} /> : null;
+    const [live, setLive] = useState(false);
+
+    useEffect(() => {
+        if (!entry.avatarUrl) return;
+        let cancelled = false;
+        const probe = new Image();
+        probe.onload = () => { if (!cancelled) setLive(true); };
+        probe.src = entry.avatarUrl;
+        return () => { cancelled = true; };
+    }, [entry.avatarUrl]);
+
+    const src = live ? entry.avatarUrl : (entry.avatarFile ?? entry.avatarUrl);
 
     return (
         <div className={styles.pic} style={{ width: px, height: px }}>
-            {photo ?? initials(entry.name)}
+            {src
+                // A plain <img>, not next/image: one source is a data: URL of this PC's
+                // own cache, which the optimiser can neither fetch nor serve.
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={src} alt="" />
+                : initials(entry.name)}
         </div>
     );
 }

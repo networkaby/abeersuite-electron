@@ -726,17 +726,35 @@
     return out.toUpperCase() || "·";
   }
 
+  /**
+   * This PC's cached copy at once, the live one over it when it arrives.
+   *
+   * Order matters and it is not the obvious one. Asking the web first is "correct" and
+   * reads as broken: the cashier watches initials for as long as the photograph takes,
+   * which on a shop line is long enough to look like a fault. The cached copy is on
+   * disk and paints instantly, so the card is never empty; the live one is fetched
+   * beside it and takes over the moment it decodes, so a photograph changed in the
+   * office still shows here today rather than at the next sign-in.
+   *
+   * Nothing ever waits on the network — this screen is on before the server is.
+   */
   function pic(entry, into) {
     into.textContent = "";
-    if (entry.avatarFile) {
-      var img = new Image();
-      img.alt = "";
-      // A cached face that will not load falls back to initials, never a hole.
-      img.onerror = function () { into.textContent = initials(entry.name); };
-      img.src = entry.avatarFile;
-      into.appendChild(img);
-    } else {
-      into.textContent = initials(entry.name);
+    var first = entry.avatarFile || entry.avatarUrl;
+    if (!first) { into.textContent = initials(entry.name); return; }
+
+    var img = new Image();
+    img.alt = "";
+    img.onerror = function () { into.textContent = initials(entry.name); };  // clears the img with it
+    img.src = first;
+    into.appendChild(img);
+
+    // The live one, fetched beside it. It only ever replaces a picture that is already
+    // on screen, so a slow or dead line changes nothing.
+    if (entry.avatarUrl && first !== entry.avatarUrl) {
+      var probe = new Image();
+      probe.onload = function () { img.src = entry.avatarUrl; };
+      probe.src = entry.avatarUrl;
     }
   }
 
