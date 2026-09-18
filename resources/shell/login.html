@@ -295,7 +295,7 @@
   <!-- TWO controls, never one link doing both jobs. That was the bug: a person with no
        PIN saw only "Set PIN" and had no way back to the photographs at all. -->
   <div class="rowlinks">
-    <button class="link" id="backfaces" type="button" hidden>Back to photos</button>
+    <button class="link" id="backfaces" type="button" hidden>Login with PIN</button>
     <button class="link quiet" id="setpin" type="button">Set PIN</button>
   </div>
 </form>
@@ -668,7 +668,7 @@
   //
   //   faces ──tap a face with a PIN──→ keypad ──6 digits──→ signed in
   //     ↑                                │ Back / Escape
-  //     │ Back to photos                 └──────→ faces
+  //     │ Login with PIN                 └──────→ faces
   //     │
   //   password ──sign in──→ signed in ──(if Set PIN was pressed)──→ choosePin
   //

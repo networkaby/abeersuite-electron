@@ -166,7 +166,7 @@ function StaffLoginForm() {
     //
     //   faces ──tap a face with a PIN──→ keypad ──6 digits──→ signed in
     //     ↑                                │ Back / Escape
-    //     │ Back to photos                 └──────→ faces
+    //     │ Login with PIN                 └──────→ faces
     //     │
     //   password ──sign in──→ signed in ──(if Set PIN was pressed)──→ choosePin
     //
@@ -658,13 +658,13 @@ function StaffLoginForm() {
                         before signing in, so all it can do is ask; the panel opens on
                         the other side. */}
                     {/* TWO controls, never one link doing both jobs — the same pair as
-                        the shell. "Back to photos" is offered whenever this PC has any,
+                        the shell. "Login with PIN" is offered whenever this PC has any,
                         never conditional on who holds a PIN: that condition is what made
                         this a dead end. */}
                     <div className={styles.rowlinks}>
                         {roster.length > 0 ? (
                             <button type="button" className={styles.pinlink} onClick={backToFaces}>
-                                Back to photos
+                                Login with PIN
                             </button>
                         ) : <span />}
                         {isDesktop && (
