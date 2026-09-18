@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { getLocalCounterSetup } from "@/shared/lib/counter/setupGate";
+import { OPEN_COUNTER_PIN_KEY } from "@/shared/lib/auth/counterPinIntent";
 
 export default function CounterPinButton({ collapsed }: { collapsed: boolean }) {
     const isDesktop = useIsDesktopApp();
@@ -61,6 +62,21 @@ export default function CounterPinButton({ collapsed }: { collapsed: boolean }) 
     }, [email]);
 
     useEffect(() => { if (isDesktop) void refresh(); }, [isDesktop, refresh]);
+
+    // "Set PIN" was pressed on the sign-in screen, where nobody was signed in yet and
+    // so nothing could be set. This is the other side of that: open the panel once,
+    // and clear the note so it never opens twice.
+    useEffect(() => {
+        if (!isDesktop) return;
+        try {
+            if (sessionStorage.getItem(OPEN_COUNTER_PIN_KEY) !== "1") return;
+            sessionStorage.removeItem(OPEN_COUNTER_PIN_KEY);
+        } catch {
+            return;   // Private mode or blocked storage — the sidebar line still works.
+        }
+        setOpen(true);
+        void refresh();
+    }, [isDesktop, refresh]);
 
     if (!isDesktop) return null;
 

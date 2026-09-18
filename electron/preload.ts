@@ -91,10 +91,10 @@ export interface ElectronAPI {
      * all of it. So the shell saves the typing, and the real page still does the work.
      */
     onServerReady: (callback: () => void) => void;
-    shellSignIn: (credentials: { email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+    shellSignIn: (credentials: { email: string; password: string; setPin?: boolean }) => Promise<{ ok: boolean; error?: string }>;
     /** Read-once: returns the parked credentials and clears them in main. Exactly one
      *  of `password` / `pin` is set — `/staff/login` picks its provider from that. */
-    takeShellCredentials: () => Promise<{ email: string; password?: string; pin?: string } | null>;
+    takeShellCredentials: () => Promise<{ email: string; password?: string; pin?: string; setPin?: boolean } | null>;
     /** Same handoff as `shellSignIn`, with six digits instead of a password. */
     shellSignInPin: (credentials: { email: string; pin: string }) => Promise<{ ok: boolean; error?: string }>;
     /**

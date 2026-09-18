@@ -4,6 +4,7 @@ import { signIn, signOut, getSession } from "next-auth/react";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { OPEN_COUNTER_PIN_KEY } from "@/shared/lib/auth/counterPinIntent";
 import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -140,6 +141,10 @@ function StaffLoginForm() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    // Asked for on the way in, acted on once they are in — a PIN cannot be set by
+    // somebody who has not proved who they are yet. See OPEN_COUNTER_PIN_KEY.
+    const [wantsPin, setWantsPin] = useState(false);
+    const isDesktop = isElectronEnvironment();
 
     const spotlight = useRotation(LOGIN_SPOTLIGHTS.length, LOGIN_ROTATE_SECONDS);
     const tip = useRotation(LOGIN_TIPS.length, LOGIN_ROTATE_SECONDS);
@@ -158,6 +163,7 @@ function StaffLoginForm() {
         emailValue: string,
         secret: string,
         kind: "password" | "pin" = "password",
+        setPin = false,
     ) => {
         setLoading(true);
         setError("");
@@ -249,13 +255,20 @@ function StaffLoginForm() {
                 }).catch(() => { /* a missing face costs nothing */ });
             }
 
+            // Asked for a PIN on the sign-in screen: leave a one-shot note for the
+            // panel, which lives behind the sidebar and is the only place that can
+            // actually set one. sessionStorage because it must not survive the day.
+            if (setPin) {
+                try { sessionStorage.setItem(OPEN_COUNTER_PIN_KEY, "1"); } catch { /* private mode */ }
+            }
+
             router.push(dest);
         }
     }, [callbackUrl, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await doSignIn(email, password);
+        await doSignIn(email, password, "password", wantsPin);
     };
 
     // ── Credentials typed on the counter's sign-in shell ────────────────────────
@@ -284,7 +297,7 @@ function StaffLoginForm() {
                 void doSignIn(held.email, held.pin, "pin");
             } else if (held.password) {
                 setPassword(held.password);
-                void doSignIn(held.email, held.password);
+                void doSignIn(held.email, held.password, "password", held.setPin === true);
             }
         }).catch(() => { /* nothing parked, or an older build — the form just waits */ });
         return () => { cancelled = true; };
@@ -370,6 +383,19 @@ function StaffLoginForm() {
                         {loading ? "Signing in…" : "Sign in"}
                     </button>
                     {error && <p className={styles.err}>{error}</p>}
+
+                    {/* Desktop only — six digits mean nothing on the website. Pressed
+                        before signing in, so all it can do is ask; the panel opens on
+                        the other side. */}
+                    {isDesktop && (
+                        <button
+                            type="button"
+                            className={styles.pinlink}
+                            onClick={() => setWantsPin((on) => !on)}
+                        >
+                            {wantsPin ? "Set PIN after signing in ✓" : "Set PIN"}
+                        </button>
+                    )}
 
                     <div className={styles.status}>
                         <p className={`${styles.tip} ${tip.fading ? "" : styles.tipIn}`}>

@@ -212,6 +212,22 @@
 
 .err { margin: 12px 0 0; font-size: 12.5px; color: #fca5a5; line-height: 1.5 }
 
+/* The standing PIN offer under the button. Quiet on purpose — it is an offer, not a
+   step, and a cashier who wants nothing to do with it should be able to ignore it
+   every morning without it ever getting louder. */
+.pinlink {
+  display: block;
+  margin: 12px auto 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--accent, #38bdf8);
+  cursor: pointer;
+}
+.pinlink:hover { text-decoration: underline }
+
 /* ── Foot of the card ────────────────────────────────────────────────────────
    Where the shell shows its boot progress. Here the server is already up, so the
    same space carries the tip and the shop line instead — nothing pretends to be

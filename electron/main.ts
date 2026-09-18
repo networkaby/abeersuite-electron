@@ -697,7 +697,7 @@ ipcMain.handle("counter:start-sync", (): boolean => {
 // ── The sign-in shell ───────────────────────────────────────────────────────
 // See shellPath() for what this screen is and why main does not sign in itself.
 
-ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password: string }) => {
+ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password: string; setPin?: boolean }) => {
     if (!credentials || typeof credentials.email !== "string" || typeof credentials.password !== "string") {
         return { ok: false, error: "Enter your email and password." };
     }
@@ -706,7 +706,14 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
         // a race — the cashier hitting Enter in the same tick readiness arrived.
         return { ok: false, error: "Still starting. Try again in a moment." };
     }
-    parkedCredentials = { email: credentials.email, password: credentials.password };
+    parkedCredentials = {
+        email: credentials.email,
+        password: credentials.password,
+        // "Set PIN" on the sign-in screen: a PIN cannot be set before anyone is signed
+        // in, so the intent travels with the credentials and the app opens the panel on
+        // the other side. Just an intent — it grants nothing.
+        setPin: credentials.setPin === true,
+    };
     // From here the real /staff/login takes over: it collects these through
     // shell:take-credentials, submits them, and does the counter reconciliation the
     // shell has no business doing.
@@ -1317,7 +1324,7 @@ function shellQuery(): Record<string, string> {
  * password field for six digits would let an older shell paired with a newer page
  * submit a PIN as a password — refused, but refused confusingly.
  */
-let parkedCredentials: { email: string; password?: string; pin?: string } | null = null;
+let parkedCredentials: { email: string; password?: string; pin?: string; setPin?: boolean } | null = null;
 
 /** Tells the shell its button may go live. */
 function notifyServerReady(): void {

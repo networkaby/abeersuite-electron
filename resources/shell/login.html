@@ -280,15 +280,15 @@
 
   <button class="go" id="go" type="submit" disabled>Starting&hellip;</button>
   <p class="err" id="err"></p>
-  <button class="link" id="backfaces" type="button" hidden>Back to the photos</button>
+  <button class="link" id="pinlink" type="button" hidden></button>
 
   <div class="status">
     <div class="bar"><span id="barfill"></span></div>
     <div class="srow"><i class="dot" id="dot"></i><span class="smsg" id="smsg">Starting&hellip;</span></div>
     <p class="tip" id="tip"></p>
     <p class="shopmsg" id="shopmsg"></p>
-    <p class="hint">Tired of typing this? Sign in, then set a PIN from your own name at the
-      top of the screen — tomorrow you just tap your photo.</p>
+    <p class="hint">Tired of typing this? Press <b>Set PIN</b> above, sign in, and choose six
+      digits — tomorrow you just tap your photo.</p>
   </div>
 </form>
 
@@ -623,7 +623,7 @@
       elGo.textContent = "Sign in";
       return;
     }
-    api.shellSignIn({ email: elEmail.value.trim(), password: elPass.value })
+    api.shellSignIn({ email: elEmail.value.trim(), password: elPass.value, setPin: wantsPin })
       .then(function (res) {
         if (res && res.ok) return;               // main navigates the window away
         elErr.textContent = (res && res.error) || "Could not sign in. Check the email and password.";
@@ -660,6 +660,10 @@
   // clears it. The real lock is the server's, and the real wall is that a PIN works
   // on this counter alone.
   var missed   = {};
+  // Who the password form is standing in for, when it was reached from a card, and
+  // whether they asked for a PIN on the way through.
+  var formFor  = null;
+  var wantsPin = false;
 
   function initials(name) {
     var parts = String(name || "").trim().split(/\s+/), out = "";
@@ -728,10 +732,7 @@
   function showForm() {
     elFaces.classList.remove("on");
     elForm.style.display = "";
-    // Someone who lands here by mistake — a stray "Someone else", or three wrong
-    // PINs — must be able to get back to their own photograph without restarting
-    // the till.
-    document.getElementById("backfaces").hidden = roster.length === 0;
+    nameTheLink();
     if (ready) { if (!elEmail.value) elEmail.focus(); else elPass.focus(); }
   }
 
@@ -746,6 +747,7 @@
   // their address already in — and is told why, so a refused PIN never reads as a
   // broken till.
   function toPassword(entry, why) {
+    formFor = entry;
     showForm();
     elEmail.value = entry.email;
     elErr.textContent = why || "";
@@ -847,11 +849,43 @@
     });
   })();
 
-  document.getElementById("backfaces").addEventListener("click", function () {
+  /**
+   * One link under the password box, and which of its two jobs it does depends on
+   * whether the person in front of it HAS a PIN.
+   *
+   *  • They have one, and are on this form by accident or because the password fell
+   *    due → "PIN login", straight back to the photographs.
+   *  • They have none → "Set PIN". A PIN cannot be set before signing in, so this
+   *    only remembers the intent; the app opens the panel the moment they are in.
+   *
+   * Always offered, including on a PC that has never seen anybody: a first cashier
+   * on a fresh till is exactly who this feature is for.
+   */
+  function nameTheLink() {
+    var link = document.getElementById("pinlink");
+    var known = formFor || null;
+    var hasPin = known ? !!known.hasPin : roster.some(function (r) { return r.hasPin; });
+    link.hidden = false;
+    link.textContent = hasPin ? "PIN login" : "Set PIN";
+    link.dataset.mode = hasPin ? "back" : "set";
+  }
+
+  document.getElementById("pinlink").addEventListener("click", function () {
+    if (this.dataset.mode === "back") {
+      elErr.textContent = "";
+      showFaces();
+      return;
+    }
+    // "Set PIN" before a sign-in: take the intent, and let the ordinary sign-in
+    // carry it. Nothing is unlocked by asking, and asking again takes it back.
+    wantsPin = !wantsPin;
+    this.textContent = wantsPin ? "Set PIN after signing in ✓" : "Set PIN";
     elErr.textContent = "";
-    showFaces();
+    if (ready) { if (!elEmail.value.trim()) elEmail.focus(); else elPass.focus(); }
   });
+
   document.getElementById("other").addEventListener("click", function () {
+    formFor = null;
     elEmail.value = ""; elErr.textContent = ""; showForm();
   });
   document.getElementById("edit").addEventListener("click", function () {
@@ -872,11 +906,13 @@
   // form is what is already on screen, and none of the above ever runs.
   if (api && api.shellRoster) {
     api.shellRoster().then(function (list) {
-      if (!list || !list.length) return;
+      if (!list || !list.length) { nameTheLink(); return; }
       roster = list;
       drawFaces();
       showFaces();
-    }).catch(function () { /* the form stays */ });
+    }).catch(function () { nameTheLink(); });
+  } else {
+    nameTheLink();
   }
 })();
 </script>
