@@ -296,11 +296,17 @@ function StaffLoginForm() {
             // convenience only — see electron/main.ts's roster helpers.
             const remember = window.electronAPI?.rememberShellUser;
             if (remember && session?.user) {
-                const u = session.user as { name?: string | null; title?: string; avatarUrl?: string };
+                const u = session.user as {
+                    name?: string | null; title?: string; roleLabel?: string; avatarUrl?: string;
+                };
                 void remember({
                     email: emailValue.trim().toLowerCase(),
                     name: u.name || emailValue,
-                    title: u.title,
+                    // `User.title` is free text and is null for every person in the real
+                    // books — the designation people actually hold is their ROLE, which
+                    // `authorizeStaff` already resolves to a label ("Counter Operator",
+                    // "Branch Manager"). Title first, since somebody may yet type one in.
+                    title: u.title || u.roleLabel,
                     avatarUrl: u.avatarUrl,
                     // Signed in BY a PIN is proof of one. Otherwise ask the server, so a
                     // PIN set yesterday still puts a keypad up tomorrow.
@@ -393,14 +399,18 @@ function StaffLoginForm() {
     // every tap on a face — and without this guard the effect ran again, re-read the
     // roster and threw the screen straight back to the photographs. The credentials are
     // read-once on main's side anyway, so a second run could never do anything useful.
+    //
+    // No cancellation flag alongside it, deliberately. React runs an effect twice in
+    // development — mount, clean up, mount — and a guard that blocks the second run
+    // while the first run's cleanup cancels its own work leaves NOTHING running at all:
+    // the photographs simply never appeared. A late setState on an unmounted component
+    // is harmless here; an effect that silently does nothing is not.
     const handedOver = useRef(false);
     useEffect(() => {
         if (handedOver.current) return;
         handedOver.current = true;
-        let cancelled = false;
         void (async () => {
             const held = await window.electronAPI?.takeShellCredentials?.().catch(() => null);
-            if (cancelled) return;
 
             if (held) {
                 setEmail(held.email);
@@ -422,11 +432,10 @@ function StaffLoginForm() {
             // Nobody was handed over — a sign-out, an expiry, a release, a bounce. This
             // is where the photographs matter most, and where there were none before.
             const list = await readShellRoster();
-            if (cancelled || list.length === 0) return;
+            if (list.length === 0) return;
             setRoster(list);
             setStage("faces");
         })();
-        return () => { cancelled = true; };
     }, [doSignIn]);
 
     // ── The keypad's own sign-in ────────────────────────────────────────────

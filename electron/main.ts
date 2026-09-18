@@ -751,11 +751,7 @@ ipcMain.handle("shell:sign-in-pin", async (_, credentials: { email: string; pin:
 
 ipcMain.handle("shell:roster", (): ShellRosterEntry[] => readRoster().map((entry) => ({
     ...entry,
-    // Handed to CSS by the shell, so it needs a URL, not a path — same reasoning as
-    // the background at shellQuery().
-    avatarFile: entry.avatarFile && fs.existsSync(faceFile(entry.avatarFile))
-        ? pathToFileURL(faceFile(entry.avatarFile)).href
-        : undefined,
+    avatarFile: faceDataUrl(entry.avatarFile),
 })));
 
 ipcMain.handle("shell:remember-user", async (_, who: {
@@ -1303,13 +1299,45 @@ async function cacheFace(email: string, url: string): Promise<string | null> {
         if (!res.ok) return null;
         if (!(res.headers.get("content-type") || "").startsWith("image/")) return null;
         const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.byteLength > 8 * 1024 * 1024) return null;
+        // Tighter than the login background's 8MB: a 52px circle never needs more, and
+        // every face is carried to the screen as base64 now, so the cap bounds what the
+        // roster costs to hand over as well as what it costs on disk.
+        if (buf.byteLength > 1024 * 1024) return null;
         fs.mkdirSync(path.dirname(faceFile(name)), { recursive: true });
         fs.writeFileSync(faceFile(name), buf);
         return name;
     } catch (err) {
         console.warn("[Shell] Could not cache a profile photo:", (err as Error).message);
         return null;
+    }
+}
+
+/**
+ * The cached photograph, as a `data:` URL.
+ *
+ * NOT a `file://` path, which is what this used to hand over and why the app's own
+ * sign-in page showed initials where the shell showed faces: the shell is a `file://`
+ * document and could load one, but the page is served over http, and Chromium refuses a
+ * `file://` subresource from an http document. A data URL is the one form BOTH screens
+ * can display, so there is one shape to reason about instead of two.
+ *
+ * The type is read off the first bytes rather than stored, so the photographs already
+ * cached on every till keep working without being re-fetched.
+ */
+function faceDataUrl(name: string | undefined): string | undefined {
+    if (!name) return undefined;
+    try {
+        const buf = fs.readFileSync(faceFile(name));
+        const type =
+            buf[0] === 0x89 && buf[1] === 0x50 ? "image/png"
+                : buf[0] === 0xff && buf[1] === 0xd8 ? "image/jpeg"
+                    : buf[0] === 0x47 && buf[1] === 0x49 ? "image/gif"
+                        : buf.subarray(8, 12).toString("ascii") === "WEBP" ? "image/webp"
+                            : null;
+        if (!type) return undefined;   // Not an image we can name — initials instead.
+        return `data:${type};base64,${buf.toString("base64")}`;
+    } catch {
+        return undefined;              // Missing or unreadable: initials, never a hole.
     }
 }
 
