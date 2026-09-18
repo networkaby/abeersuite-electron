@@ -72,6 +72,13 @@ type ViewMode = "merged" | "split";
 // ticks the whole group so Match is one press away.
 type Suggestion = { key: string; first: boolean; last: boolean; stIds: number[]; glIds: number[]; size: number };
 
+// The near miss auto-match now refuses to take: an open book entry for the same
+// money on the same side, but a DIFFERENT day with no reference in common. It is
+// only ever pointed at, never matched — the whole reason it is refused is that
+// the amount alone does not prove anything, so a person has to look. Clicking it
+// ticks both rows; nothing is saved until Match is pressed.
+type CrossDateHint = { glId: number; voucherNo: string; date: string; gap: number; more: number; what: string };
+
 // A run of neighbouring rows that belong together — an existing match, or a
 // suggestion. Only a run of two or more is a group: it gets the bracket and a
 // rule above and below. A row belonging to nobody keeps the hairline divider.
@@ -170,6 +177,56 @@ export function BankReconciliationPage() {
     }, [data, filter]);
     const stPage = useClientPagination(stRows, 50);
     const glPage = useClientPagination(glRows, 50);
+
+    // Near misses, worked out over the WHOLE period on screen rather than the
+    // auto-match window: the window governs what may be CREATED, and the case
+    // worth pointing at is exactly the one sitting outside it. Built from
+    // `data`, not the filtered rows, so switching to Matched does not blind it.
+    // Bank side only — hinting both sides would advertise every pair twice.
+    const hints = useMemo(() => {
+        const out = new Map<number, CrossDateHint>();
+        if (!data) return out;
+        const day = (d: string) => new Date(d.slice(0, 10)).getTime() / 86_400_000;
+        // Open book entries by signed amount. Same sign as the statement's own
+        // delta, so a deposit never looks at a payment of the same size.
+        const byDelta = new Map<string, GlLineView[]>();
+        for (const g of data.glLines) {
+            if (g.match != null || g.locked) continue;
+            const delta = (g.debit ?? 0) - (g.credit ?? 0);
+            if (delta === 0) continue;
+            const k = delta.toFixed(2);
+            const b = byDelta.get(k); if (b) b.push(g); else byDelta.set(k, [g]);
+        }
+        for (const st of data.statementLines) {
+            if ((st.match != null && !st.match.stale) || st.locked) continue;
+            const delta = (st.deposit ?? 0) - (st.withdrawal ?? 0);
+            if (delta === 0) continue;
+            const all = byDelta.get(delta.toFixed(2)) ?? [];
+            // A same-day entry is a better answer and already gets the amber
+            // bracket — this is only for the ones on another day.
+            const other = all.filter((g) => g.date.slice(0, 10) !== st.date.slice(0, 10));
+            if (other.length === 0 || other.length < all.length) continue;
+            const near = other.reduce((a, b) =>
+                (Math.abs(day(b.date) - day(st.date)) < Math.abs(day(a.date) - day(st.date)) ? b : a));
+            out.set(st.id, {
+                glId: near.id,
+                voucherNo: near.voucherNo,
+                date: near.date,
+                gap: Math.round(Math.abs(day(near.date) - day(st.date))),
+                more: other.length - 1,
+                // Carried so the hover can say WHAT the entry is. Days apart, it
+                // is almost never on the same page — without this the only way
+                // to judge the suggestion would be to go and hunt for it.
+                what: [near.voucherType, near.description, near.narration]
+                    .filter(Boolean).join(" · "),
+            });
+        }
+        return out;
+    }, [data]);
+    const selectHint = (stId: number, h: CrossDateHint) => {
+        setSelSt(new Set([stId]));
+        setSelGl(new Set([h.glId]));
+    };
 
     // Merged: both sides in one list, date first, then the signed amount, so an
     // equal pair lands on consecutive rows. Bank before books on a tie.
@@ -299,7 +356,15 @@ export function BankReconciliationPage() {
         const r = await axios.post<{ matched: number; staleCleared: number; statementOpen: number }>(
             `/api/accountancy/bank-reconciliation/${selectedId}/auto-match`, { from, to, windowDays },
         );
-        toast.success(`${r.data.matched} matched${r.data.staleCleared ? `, ${r.data.staleCleared} stale cleared` : ""}; ${r.data.statementOpen} statement line(s) still open.`);
+        // `hints` is this render's — computed before the reload lands — so it
+        // counts what auto-match declined to take on THIS pass, which is
+        // exactly the set the user is being sent to look at.
+        const near = hints.size;
+        toast.success(
+            `${r.data.matched} matched${r.data.staleCleared ? `, ${r.data.staleCleared} stale cleared` : ""}; `
+            + `${r.data.statementOpen} statement line(s) still open.`
+            + (near ? ` ${near} have the same amount on another date — shown in amber, check before matching.` : ""),
+        );
         reload();
     });
 
@@ -589,6 +654,12 @@ export function BankReconciliationPage() {
                                                 onSelectGroup={selectGroup}
                                                 busy={busy != null}
                                                 glById={data.glLines}
+                                                hint={row.kind === "st" ? hints.get(row.st.id) : undefined}
+                                                onSelectHint={() => {
+                                                    if (row.kind !== "st") return;
+                                                    const h = hints.get(row.st.id);
+                                                    if (h) selectHint(row.st.id, h);
+                                                }}
                                             />
                                         ))}
                                     </tbody>
@@ -638,7 +709,7 @@ export function BankReconciliationPage() {
                                                 {data.statementLines.length === 0 ? "No statement lines in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
                                             </td></tr>
                                         )}
-                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt([r], k)} busy={busy != null} glById={data.glLines} />)}
+                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt([r], k)} busy={busy != null} glById={data.glLines} hint={hints.get(r.id)} onSelectHint={() => { const h = hints.get(r.id); if (h) selectHint(r.id, h); }} />)}
                                     </tbody>
                                 </table>
                             </div>
@@ -744,10 +815,10 @@ function matchGapDays(stDate: string, glLineIds: number[], glById: GlLineView[])
 // a withdrawal sits under the credit that explains it, a deposit under its
 // debit — so an equal pair reads straight down the page. The colour band and
 // the Side tag say which book a row comes from; colour is never the only clue.
-function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGroup, busy, glById }: {
+function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGroup, busy, glById, hint, onSelectHint }: {
     row: MergedRow; selected: boolean; onToggle: () => void; onUnmatch: () => void;
     onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; onSelectGroup: (sug: Suggestion) => void;
-    busy: boolean; glById: GlLineView[];
+    busy: boolean; glById: GlLineView[]; hint?: CrossDateHint; onSelectHint: () => void;
 }) {
     const isSt = row.kind === "st";
     const r = isSt ? row.st : row.gl;
@@ -837,6 +908,18 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                         </span>
                     )}
                     {matched && !isSt && <span className="text-green-700 dark:text-green-400">↔ {row.gl.match!.statementLineIds.length} statement line(s){row.gl.match!.auto ? " · auto" : ""}</span>}
+                    {hint && (
+                        <button
+                            type="button"
+                            onClick={onSelectHint}
+                            title={`${hint.voucherNo} — ${hint.what}
+
+Same amount, same side, but ${hint.gap} day(s) away with no reference in common, so auto-match will not take it. This ticks both; look, then press Match — or untick.`}
+                            className="rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-900 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900"
+                        >
+                            possible: {hint.voucherNo} · {formatDate(hint.date)} · {hint.gap} day{hint.gap === 1 ? "" : "s"} away{hint.more ? ` (+${hint.more} more)` : ""} — check
+                        </button>
+                    )}
                     {isSt && row.st.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
                 </div>
             </td>
@@ -859,9 +942,10 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
     );
 }
 
-function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glById }: {
+function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glById, hint, onSelectHint }: {
     r: StatementLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void;
     onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; busy: boolean; glById: GlLineView[];
+    hint?: CrossDateHint; onSelectHint: () => void;
 }) {
     const matched = r.match != null && !r.match.stale;
     const partners = matched ? r.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`) : [];
@@ -885,6 +969,18 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
                             ↔ {partners.join(", ")}{r.match!.auto ? " · auto" : ""}
                             {matchGap > 0 && <span className="text-amber-600"> · {matchGap} day{matchGap === 1 ? "" : "s"} apart</span>}
                         </span>
+                    )}
+                    {hint && (
+                        <button
+                            type="button"
+                            onClick={onSelectHint}
+                            title={`${hint.voucherNo} — ${hint.what}
+
+Same amount, same side, but ${hint.gap} day(s) away with no reference in common, so auto-match will not take it. This ticks both; look, then press Match — or untick.`}
+                            className="rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-900 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900"
+                        >
+                            possible: {hint.voucherNo} · {formatDate(hint.date)} · {hint.gap} day{hint.gap === 1 ? "" : "s"} away{hint.more ? ` (+${hint.more} more)` : ""} — check
+                        </button>
                     )}
                     {r.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
                 </div>
