@@ -3,10 +3,32 @@
 The days and times are edited in Settings → Backup & Restore and take effect on the
 next tick. No commit, no redeploy.
 
-This replaces an earlier design built on Vercel Cron. That is gone: Hobby crons run
-once a day at an approximate time, which cannot honour an hour the shop picks.
-GitHub schedules are free, unlimited, and — the deciding argument — keep working when
-the deployment does not.
+The hours the shop picks are honoured by GitHub, not by Vercel: a Hobby cron runs
+once a day at an approximate time, which cannot hit an hour somebody chose. GitHub
+schedules are free, unlimited, and — the deciding argument — keep working when the
+deployment does not.
+
+But GitHub only *promises* hourly; it does not deliver hourly. Measured over two
+weeks in September 2026, the tick arrived about **6 times a day, not 24**, at random
+minutes. A chosen hour is therefore hit roughly one time in four, and 1 AM and 4 AM
+were missed night after night. GitHub says as much itself — scheduled runs are
+best-effort and dropped when the shared queue is busy.
+
+So Vercel Cron is back, in the one role it is actually good at: **a nightly floor.**
+`vercel.json` runs `/api/cron/backup` at `30 16 * * *` — 16:30 UTC, 10:00 PM IST, and
+on Hobby anywhere in 9:30–10:30 PM IST. It takes no gate and no vote:
+
+- It does **not** ask `/api/cron/backup-due`. It dumps every night, full stop.
+- It **ignores the Settings on/off switch.** Switching automatic backup off in
+  Settings stops the GitHub hours; it does not stop this. That is deliberate — the
+  floor exists precisely so that a wrong tap, a broken config row or a dead gate
+  cannot leave the business with no backup at all.
+- It needs a **production deploy** to change. Unlike the GitHub hours, this schedule
+  lives in the repo, so editing it means a commit and a `d_office` push.
+
+Read the whole thing as three layers: Vercel guarantees one dump a night, GitHub
+adds the hours the shop asked for when its tick shows up, and the Sunday safety net
+below covers the app being dead.
 
 ## How it works
 
@@ -83,6 +105,7 @@ comparing in UTC would put a Monday backup on Sunday.
 | On/off switch | `src/app/api/settings/backup/workflow/route.ts` — GitHub's enable/disable API |
 | The card | `src/modules/settings/components/BackupScheduleCard.tsx` |
 | The tick and the safety net | `.github/workflows/backup-scheduled.yml` |
+| The nightly floor | `vercel.json` → `crons`, calling `src/app/api/cron/backup/route.ts` |
 | The work | `.github/workflows/backup.yml` |
 
 ## Known rough edges

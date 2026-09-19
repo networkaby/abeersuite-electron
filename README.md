@@ -157,17 +157,26 @@ smx-backup-office.networkservice.in-gphtzbejvpijcfmvqpqo-manual-2026-09-02-00004
 
 ### Where backups come from
 
-`vercel.json` ships with no `crons`, so Vercel starts nothing. Automatic backups run
-from GitHub Actions, which is free, unlimited in schedule count, and — the deciding
-argument — keeps working when the deployment does not.
+Backups come from two places, and they are not doing the same job.
 
-Vercel Cron is still wired up (`/api/cron/backup`) if you ever want a backup
-triggered *through* the app, so that it uses the deployment's own `DIRECT_URL`
-rather than the repo secret. It is not needed for ordinary scheduled backups, and on
-the free plan it is a poor fit anyway: Hobby allows 2 cron jobs, once a day each,
-fired at an approximate time within the hour. To use it, add a `crons` array to
-`vercel.json` with a UTC schedule and deploy. Cron has no timezone, so subtract 5:30
-from the IST time you want:
+**Vercel Cron is the floor.** `vercel.json` runs `/api/cron/backup` at
+`30 16 * * *` — 16:30 UTC, 10:00 PM IST. One full dump a night, every night. It does
+not consult the schedule gate and it ignores the Settings on/off switch, so nothing
+inside the app can accidentally leave the business with no backup. Hobby fires a
+daily cron at an approximate time within the hour, so expect it anywhere between
+9:30 and 10:30 PM IST. Being app-triggered, it also uses the deployment's own
+`DIRECT_URL` rather than the repo secret.
+
+**GitHub Actions adds the hours you pick.** Free, unlimited in schedule count, and
+it keeps working when the deployment does not. It is the only one that can honour a
+specific hour — but it is best-effort: measured in September 2026 the "hourly" tick
+actually arrived about 6 times a day at random minutes, so a chosen hour lands
+roughly one time in four. Treat the picked hours as a bonus on top of the nightly
+floor, never as the guarantee.
+
+Changing the Vercel schedule needs a commit and a production (`d_office`) deploy —
+unlike the GitHub hours, it lives in the repo. Cron has no timezone, so subtract
+5:30 from the IST time you want:
 
 | Wanted (IST) | UTC | `schedule` |
 |---|---|---|
