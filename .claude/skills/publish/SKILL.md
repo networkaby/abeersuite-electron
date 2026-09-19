@@ -55,6 +55,17 @@ The pack may be reused **only if all six pass**:
 
 Also **read and report the variant** — `APP_MODE` and `LANDING_PAGE`, which `verify:package` prints from `resources/counter.env`. Do not ask the owner; the build already decided. Say it plainly in the report so a wrong-variant installer is caught before it reaches the release repos.
 
+**Stop anything that can lock a rung-A/B rebuild first** — same reason as `release`'s Preflight: a leftover `AbeerSuite.exe` or `electron.exe` (from a smoke test or a `pnpm dev` / `pnpm electron:dev` session) holds the very files `electron-builder` needs to rename, and a dev server on port `3000`/`786` can clash with a fresh `.next` output. Run this before rung A or B, whichever the gate calls for:
+
+```powershell
+Get-NetTCPConnection -LocalPort 3000,786 -State Listen -ErrorAction SilentlyContinue |
+  Select-Object -ExpandProperty OwningProcess -Unique |
+  ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+Get-Process -Name AbeerSuite, electron -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+
+Say so in the report if it closed a window the owner had open.
+
 ## Step 1 — Build only what the gate demands
 
 Cheapest rung that fixes the failure. Never more.
