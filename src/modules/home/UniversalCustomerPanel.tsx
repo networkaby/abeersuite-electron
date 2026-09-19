@@ -18,6 +18,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
 import { scoreProductSearch } from "@/shared/lib/inventory";
@@ -256,10 +257,16 @@ function RepairStatusLookup() {
         }
     }, []);
 
+    // Bumped by the change signal so the search re-runs with the query the user
+    // already typed — a ticket raised for this customer at another desk should
+    // appear in the results they are looking at.
+    const [reloadKey, setReloadKey] = useState(0);
+    useRealtimeTopics(["tickets", "parties"], () => { setReloadKey((n) => n + 1); });
+
     useEffect(() => {
         const id = setTimeout(() => search(query), 450);
         return () => clearTimeout(id);
-    }, [query, search]);
+    }, [query, search, reloadKey]);
 
     function clear() {
         setQuery("");

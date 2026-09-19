@@ -23,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { fmt } from "@/utils/constants";
 import { extractApiError } from "@/shared/lib/api";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import {
     planLinks, autoLinkOrder, OPENING_SCALAR_ID, EPS,
@@ -114,6 +115,18 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
             .catch((e) => { if (!cancelled) setResult({ key, error: extractApiError(e, "Could not load open bills") }); });
         return () => { cancelled = true; };
     }, [accountId, key]);
+
+    // A bill settled at another desk while this voucher is being written must
+    // leave this list, or the user allocates against something already paid.
+    // The TTL cache is dropped for this party first — otherwise the refetch
+    // above would look at the cache and decide it had nothing to do. The ticks
+    // are the parent's state and are untouched.
+    useRealtimeTopics(["ledger"], () => {
+        cache.delete(key);
+        fetchOpenBills(key, accountId)
+            .then((data) => setResult({ key, data }))
+            .catch(() => { /* the panel keeps the list it has */ });
+    });
 
     // Fresh answer for this key wins; otherwise a cached one (even if stale, while
     // the refresh is on its way); otherwise loading.

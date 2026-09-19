@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Loader2, X, Link2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,12 @@ export function ParentVoucherPicker({
             .finally(() => setLoading(false));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, parentType]);
+
+    // The candidate list is fetched once per open and then kept. A voucher
+    // posted elsewhere would never appear in it, so the rows are dropped on the
+    // signal and the effect above refetches — while CLOSED, so the list never
+    // changes under a user who is picking from it.
+    useRealtimeTopics(["ledger", "stock"], () => { setRows([]); }, !open);
 
     // Close on outside click.
     useEffect(() => {

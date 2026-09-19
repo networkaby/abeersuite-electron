@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Users } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,15 @@ export default function CustomerGroupCard({ party, initialGroupId, onSaved }: Pr
             .then((res) => setGroups(res.data.filter((g) => g.isActive || g.id === initialGroupId)))
             .catch(() => toast.error("Could not load customer groups"));
     }, [initialGroupId]);
+
+    // The dropdown is reference data — a group added under Settings should be
+    // pickable here without reopening the customer. The current selection is
+    // separate state and is not touched.
+    useRealtimeTopics(["settings", "parties"], () => {
+        axios.get<GroupOpt[]>("/api/settings/customer-groups")
+            .then((res) => setGroups(res.data.filter((g) => g.isActive || g.id === initialGroupId)))
+            .catch(() => { /* keep the options already loaded */ });
+    });
 
     const save = async (next: number | null) => {
         const prev = groupId;

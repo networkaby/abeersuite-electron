@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { invalidateOrgDefaultsCache } from "@/shared/lib/orgDefaults";
@@ -102,7 +103,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
+    const load = useCallback((silent = false) => {
         Promise.all([
             axios.get<OrgDefaults>("/api/settings/org-defaults"),
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates"),
@@ -124,9 +125,11 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 setDraft(od);
                 setGstRates(ratesRes.data);
             })
-            .catch(() => toast.error("Failed to load org defaults"))
+            .catch(() => { if (!silent) toast.error("Failed to load org defaults"); })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => { load(); }, [load]);
 
     function set<K extends keyof OrgDefaults>(key: K, value: OrgDefaults[K]) {
         setDraft((d) => d && { ...d, [key]: value });
@@ -203,6 +206,11 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
     }
 
     const dirty = JSON.stringify(draft) !== JSON.stringify(data);
+
+    // Org defaults reach every screen and every printout, so a change made on
+    // another machine matters here. Held back while this form is dirty: the
+    // reload replaces `draft` wholesale and there is a lot on this page to lose.
+    useRealtimeTopics(["settings", "catalogue"], () => { load(true); }, !dirty && !saving);
 
     if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
     if (!draft) return <p className="text-sm text-destructive">Failed to load settings.</p>;

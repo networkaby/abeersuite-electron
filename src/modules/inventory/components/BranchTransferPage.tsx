@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -129,6 +130,13 @@ export function BranchTransferPage() {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     }, [closeForm]);
 
+    // A branch added, renamed or deactivated in Admin announces `settings`; the
+    // picker re-runs with the same RBAC filter. Both selections are preserved by
+    // the setters below when they are still valid, so a transfer being written
+    // is not disturbed.
+    const [branchesKey, setBranchesKey] = useState(0);
+    useRealtimeTopics(["settings"], () => { setBranchesKey((n) => n + 1); });
+
     // Load branches with the same RBAC filter as the global BranchSwitcher.
     useEffect(() => {
         let cancelled = false;
@@ -157,7 +165,7 @@ export function BranchTransferPage() {
             } catch { /* picker stays empty */ }
         })();
         return () => { cancelled = true; };
-    }, [activeBranchId]);
+    }, [activeBranchId, branchesKey]);
 
     // Edit-mode prefill
     useEffect(() => {

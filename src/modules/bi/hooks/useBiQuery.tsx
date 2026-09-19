@@ -4,6 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+
+/**
+ * How long a BI report waits before acting on a change signal — and, because a
+ * pending read swallows further signals, the most often it will ever recompute.
+ * Thirty seconds: slow enough that a busy till cannot drive the reports, fast
+ * enough that a figure quoted off one of these screens is a figure from today.
+ */
+const BI_SETTLE_MS = 30_000;
 
 /**
  * Shared fetch loop for the twenty BI report pages.
@@ -65,6 +74,18 @@ export function useBiQuery<T>(url: string): {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
+
+    // Every BI report reads the books and the stock ledger, and parties for the
+    // customer-shaped ones — so all four topics, for all twenty pages, from the
+    // one hook they share.
+    //
+    // The wide settle window is the whole reason this is affordable. A BI report
+    // recomputes for seconds, and the default 600 ms would put one recompute
+    // behind every bill a counter rings up. `schedule` ignores a signal while a
+    // read is already pending, so BI_SETTLE_MS is a rate limit as much as a
+    // delay: an afternoon of selling costs one recompute per window, and the
+    // reader keeps the previous figures on screen throughout (Pattern B above).
+    useRealtimeTopics(["ledger", "stock", "parties", "catalogue"], load, true, undefined, BI_SETTLE_MS);
 
     const status = (
         <QueryStateBlock

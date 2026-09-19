@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { ShieldCheck, Lock, Sparkles } from "lucide-react";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
@@ -74,6 +75,10 @@ export default function AccountCreditLimitCard({ accountId, initialLimit, canEdi
     }, [accountId]);
 
     useEffect(() => { void loadBreakup(); }, [loadBreakup]);
+
+    // Outstanding moves with every bill and receipt — a credit card showing a
+    // stale figure is how a customer gets served past their limit.
+    useRealtimeTopics(["ledger"], () => { void loadBreakup(); });
 
     const save = async () => {
         // Empty or zero → null (cash-only). A positive number grants that headroom.

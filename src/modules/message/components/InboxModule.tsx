@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import Link from "next/link";
@@ -181,6 +182,11 @@ export default function InboxModule({
     }, []);
 
     useEffect(() => { loadRooms(); loadTeamUsers(); }, [loadRooms, loadTeamUsers]);
+
+    // A new DM room, or being added to a group, announces `chat`. Individual
+    // messages do NOT come this way — they ride their own room broadcast — so
+    // this is a cheap, rare re-read of the room list and the team roster.
+    useRealtimeTopics(["chat", "settings"], () => { loadRooms(); loadTeamUsers(); });
 
     useEffect(() => {
         if (rooms.length === 0 || activeRoomId) return;

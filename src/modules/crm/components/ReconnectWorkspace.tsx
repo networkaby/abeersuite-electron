@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import {
     Search, Phone, StickyNote, CalendarCheck, CheckSquare, Send, ShoppingCart, CreditCard,
@@ -396,6 +397,10 @@ export default function ReconnectWorkspace({
         } catch { /* non-fatal — the bar just shows empty */ }
     }, []);
     useEffect(() => { loadSaved(); }, [loadSaved]);
+
+    // A call logged or a customer contacted from another desk changes who is
+    // still worth reconnecting with — and the saved lists this works from.
+    useRealtimeTopics(["parties", "tickets"], () => { loadSaved(); loadList(); });
 
     const saveNew = async () => {
         if (!newName.trim()) return;

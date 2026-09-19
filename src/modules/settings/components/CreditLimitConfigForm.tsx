@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
@@ -35,12 +36,14 @@ export function CreditLimitConfigForm() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
+    const load = useCallback((silent = false) => {
         axios.get<CreditLimitConfig>("/api/settings/credit-limit")
             .then((res) => { setData(res.data); setDraft(res.data); })
-            .catch(() => toast.error("Failed to load credit-limit config"))
+            .catch(() => { if (!silent) toast.error("Failed to load credit-limit config"); })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => { load(); }, [load]);
 
     function set<K extends keyof CreditLimitConfig>(key: K, value: CreditLimitConfig[K]) {
         setDraft((d) => d && { ...d, [key]: value });
@@ -72,6 +75,11 @@ export function CreditLimitConfigForm() {
     }
 
     const dirty = JSON.stringify(draft) !== JSON.stringify(data);
+
+    // Credit policy is one shared setting — two admins on it at once should not
+    // silently overwrite each other. Held back while this form is dirty, since
+    // the reload replaces `draft` and would take the unsaved edit with it.
+    useRealtimeTopics(["settings", "ledger"], () => { load(true); }, !dirty && !saving);
 
     if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
     if (!draft) return <p className="text-sm text-destructive">Failed to load settings.</p>;

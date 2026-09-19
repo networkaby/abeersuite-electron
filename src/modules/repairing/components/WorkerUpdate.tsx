@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ArrowRight } from "lucide-react";
@@ -46,6 +47,11 @@ export default function WorkerUpdate({ ticket, onClose }: Props) {
     // eslint-disable-next-line react-hooks/incompatible-library
     const selectedId = watch("workerId");
 
+    // A worker added to this stage elsewhere should be pickable straight away;
+    // the selection itself is react-hook-form state and is not disturbed.
+    const [optionsKey, setOptionsKey] = useState(0);
+    useRealtimeTopics(["tickets"], () => { setOptionsKey((n) => n + 1); });
+
     useEffect(() => {
         Promise.all([
             axios.get(`/api/workers?statusId=${ticket.status}`),
@@ -58,7 +64,7 @@ export default function WorkerUpdate({ ticket, onClose }: Props) {
         }).catch(() => {
             toast.error("Failed to load workers");
         }).finally(() => setLoading(false));
-    }, [ticket.status]);
+    }, [ticket.status, optionsKey]);
 
     const grouped = workers.reduce<Record<string, Worker[]>>((acc, ss) => {
         const key = ss.workId ?? "__none__";

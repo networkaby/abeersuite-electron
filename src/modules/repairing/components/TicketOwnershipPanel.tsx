@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { UserCheck, Users, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,18 @@ export default function TicketOwnershipPanel({
                 .catch(() => {});
         }
     }, [showReassign, showAddParticipant]);
+
+    // Only while a picker is open, and only the user list it offers — a person
+    // added or deactivated in Admin should be assignable straight away.
+    useRealtimeTopics(
+        ["settings"],
+        () => {
+            axios.get<{ id: number; name: string; role: string }[]>("/api/users")
+                .then(r => setAllUsers(r.data))
+                .catch(() => {});
+        },
+        showReassign || showAddParticipant,
+    );
 
     const handleReassign = async () => {
         if (!selectedUserId) { toast.error("Select a user"); return; }

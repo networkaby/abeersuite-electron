@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Download, Upload, AlertTriangle, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,11 @@ export function BackupRestorePanel() {
         void loadBackups();
         void loadSchedule();
     }, [loadBackups, loadSchedule]);
+
+    // A backup taken from another machine lands in the same Dropbox folder, and
+    // the workflow switch is one shared setting — both belong on this list
+    // without waiting for a reload.
+    useRealtimeTopics(["settings"], () => { void loadBackups(); void loadSchedule(); });
 
     // Optimistic until the status arrives: a transient network error must not label a
     // properly configured machine "counter-only". If it really is one, the routes still

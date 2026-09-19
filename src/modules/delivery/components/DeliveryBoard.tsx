@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { Loader2, RefreshCw, Truck, Pencil, HandCoins } from "lucide-react";
@@ -111,6 +112,10 @@ export function DeliveryBoard() {
             .finally(() => setLoading(false));
     }, []);
     useEffect(() => { load(); }, [load]);
+
+    // Deliveries move as the courier desk works them — a board left open on a
+    // wall screen has to follow along on its own.
+    useRealtimeTopics(["tickets", "ledger"], load);
 
     async function move(d: DeliveryCard, statusId: string) {
         if (d.statusId === statusId) return;

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import Link from "next/link";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
@@ -27,8 +28,7 @@ export default function NotificationBell() {
     // actually opened, instead of every 30 s into a closed dropdown.
     const unread = useNotificationUnread();
 
-    useEffect(() => {
-        if (!open) return;
+    const loadNotifications = useCallback(() => {
         void (async () => {
             try {
                 const res = await axios.get("/api/notifications");
@@ -37,7 +37,17 @@ export default function NotificationBell() {
                 // silent
             }
         })();
-    }, [open]);
+    }, []);
+
+    useEffect(() => {
+        if (!open) return;
+        loadNotifications();
+    }, [open, loadNotifications]);
+
+    // While the panel is OPEN, a notification raised elsewhere is added to the
+    // list under the reader. Closed, this stays silent — the badge is the shared
+    // sidebar count and needs no second fetch of 25 rows of message text.
+    useRealtimeTopics(["tasks"], loadNotifications, open);
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {

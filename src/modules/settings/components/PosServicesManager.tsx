@@ -10,8 +10,9 @@
 // direction from the voucher type. So the ledger reads as what the work earned
 // NET — sold minus bought — and no second "expense" ledger is configured here.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,7 @@ export function PosServicesManager() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [default18]);
 
-    useEffect(() => {
+    const load = useCallback((silent = false) => {
         Promise.all([
             axios.get<ServiceRow[]>("/api/settings/pos-services"),
             axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false&type=INCOME"),
@@ -72,9 +73,15 @@ export function PosServicesManager() {
                 setIncomeAccounts(accts.data);
                 setGstRates(rates.data.filter((r) => r.isActive));
             })
-            .catch(() => toast.error("Could not load POS services"))
+            .catch(() => { if (!silent) toast.error("Could not load POS services"); })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    // Services, their income ledgers and the GST rates behind them are all
+    // shared config. The draft row being typed above is separate state.
+    useRealtimeTopics(["catalogue", "ledger"], () => { load(true); });
 
     const addService = async () => {
         const name = draftName.trim();

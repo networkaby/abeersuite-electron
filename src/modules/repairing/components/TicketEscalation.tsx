@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -29,6 +30,11 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
     const expectedReturn = useWatch({ control, name: "expectedReturn" });
 
     useEffect(() => { axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)); }, []);
+
+    // Service centres are master data — one added under Settings appears here.
+    useRealtimeTopics(["settings"], () => {
+        axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)).catch(() => {});
+    });
 
     const onSubmit = async (data: EscalationFormData) => {
         try {

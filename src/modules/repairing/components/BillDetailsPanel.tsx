@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Receipt, Plus, Trash2, ShoppingCart, Check, Loader2, AlertCircle } from "lucide-react";
@@ -103,6 +104,14 @@ export default function BillDetailsPanel({ ticketId, customerAccountId, canGener
             .then((r) => setCatalogue(r.data))
             .catch(() => setCatalogue([]));
     }, []);
+
+    // The service catalogue is reference data for the picker; the bill lines
+    // being typed are separate state and are not touched.
+    useRealtimeTopics(["catalogue"], () => {
+        axios.get<PosServiceOption[]>("/api/pos/services")
+            .then((r) => setCatalogue(r.data))
+            .catch(() => { /* keep what is loaded */ });
+    });
 
     const setProd = (key: string, patch: Partial<BillProduct>) =>
         setProds((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));

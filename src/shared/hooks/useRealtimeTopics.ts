@@ -65,11 +65,12 @@ export function subscribeRealtimeTopics(
     topics: readonly Topic[],
     fn: () => void,
     models?: readonly string[],
+    settleMs?: number,
 ): () => void {
     const wanted = new Set(topics);
     if (wanted.size === 0) return () => {};
 
-    const reader = createSettledReader(fn);
+    const reader = createSettledReader(fn, settleMs);
 
     // Whether this window can hear the worker at all. Checked here because the
     // Supabase handler below has to know: with no bridge there is nothing better
@@ -101,15 +102,32 @@ export function subscribeRealtimeTopics(
  * a surface whose re-read is genuinely expensive (a BI report that recomputes for
  * seconds); not worth it anywhere else, because a surface that names too few tables
  * goes quietly stale and that is the fault this path exists to cure.
+ *
+ * `settleMs` widens the burst window for a surface whose re-read is genuinely
+ * expensive — a BI report that recomputes for seconds. It is also a rate limit,
+ * not only a delay: `schedule` is ignored while a read is already pending, so a
+ * till selling all afternoon costs one recompute per window rather than one per
+ * bill. Leave it out everywhere else; 600 ms is what makes a screen feel live.
+ *
+ * It is read through a ref rather than listed as a dependency, and that is
+ * deliberate twice over. A caller that passes a computed value would otherwise
+ * rebuild the subscription on every render; and the effect's dependency array
+ * keeps the arity it has always had, which matters because React compares that
+ * array ACROSS renders — a page holding one component compiled against the old
+ * four-argument hook and another against this one would otherwise throw
+ * "the final argument changed size between renders" and stop re-subscribing.
  */
 export function useRealtimeTopics(
     topics: readonly Topic[],
     fn: () => void,
     enabled = true,
     models?: readonly string[],
+    settleMs?: number,
 ) {
     const fnRef = useRef(fn);
     useEffect(() => { fnRef.current = fn; });
+    const settleRef = useRef(settleMs);
+    useEffect(() => { settleRef.current = settleMs; });
 
     // Identity-stable keys so re-rendering with a fresh array literal — which
     // every caller does — does not tear the subscription down and build it again.
@@ -122,6 +140,7 @@ export function useRealtimeTopics(
             key.split(",") as Topic[],
             () => fnRef.current(),
             modelKey === "" ? undefined : modelKey.split(","),
+            settleRef.current,
         );
     }, [key, modelKey, enabled]);
 }

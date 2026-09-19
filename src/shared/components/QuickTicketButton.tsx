@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserPlus, ArrowRight, ShieldCheck, Wrench, Building2, User } from "lucide-react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,6 +131,12 @@ export default function QuickTicketButton() {
         load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
+
+    // `dataLoaded` is a once-per-session latch, so a pipeline or priority added
+    // today would never be offered again in this window. Dropping the latch on
+    // the signal makes the NEXT open refetch — deliberately not a refetch now,
+    // which would swap the option lists under a ticket being filled in.
+    useRealtimeTopics(["tickets"], () => { setDataLoaded(false); }, !open);
 
     useEffect(() => {
         if (!identity) return;

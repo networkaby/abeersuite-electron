@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Plus, X, Ticket } from "lucide-react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,11 +16,18 @@ export default function UniversalCreateMenu() {
     const menuRef = useRef<HTMLDivElement>(null);
     const { setOpen: openTicketModal, setInitialPipelineId } = useQuickTicketStore();
 
-    useEffect(() => {
+    const loadPipelines = useCallback(() => {
         axios.get<PipelineOption[]>("/api/pipelines")
             .then((r) => setPipelines(r.data.filter((p) => p.isActive)))
             .catch(() => {});
     }, []);
+
+    useEffect(() => { loadPipelines(); }, [loadPipelines]);
+
+    // This menu sits in the chrome and is never remounted, so without a
+    // subscription a pipeline added today stays missing from it until the app
+    // is restarted.
+    useRealtimeTopics(["tickets"], loadPipelines);
 
     useEffect(() => {
         if (!menuOpen) return;

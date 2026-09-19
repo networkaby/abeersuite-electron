@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { navigateInApp } from "@/modules/repairing/lib/clientNav";
@@ -71,6 +72,9 @@ export default function StatusNav({
     }, [statusId, workerId, isWarranty]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Stage counts change as other desks move tickets through the pipeline.
+    useRealtimeTopics(["tickets"], () => { load(); });
 
     const close = () => { setPending(null); setCtxPending(null); setPrivateNote(""); setPublicNote(""); setPublicEnabled(false); setEntryValues({}); };
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -107,12 +108,14 @@ export function OfflinePoliciesForm() {
     const [search, setSearch] = useState("");
     const counter = useCounterMode();
 
-    useEffect(() => {
+    const load = useCallback((silent = false) => {
         axios.get<PolicyResponse>("/api/settings/offline-policies")
             .then((res) => { setSaved(res.data.policies); setPolicies(res.data.policies); })
-            .catch((err) => toast.error(extractApiError(err, "Failed to load offline policies")))
+            .catch((err) => { if (!silent) toast.error(extractApiError(err, "Failed to load offline policies")); })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => { load(); }, [load]);
 
     const updateField = (field: keyof OfflinePolicies, value: boolean) => {
         setPolicies((prev) => ({ ...prev, [field]: value }));
@@ -171,6 +174,11 @@ export function OfflinePoliciesForm() {
     };
 
     const dirty = JSON.stringify(policies) !== JSON.stringify(saved);
+
+    // What a till may do while offline is decided centrally; a counter left on
+    // this screen should show the policy that is actually in force. Held back
+    // while unsaved toggles are pending.
+    useRealtimeTopics(["settings"], () => { load(true); }, !dirty && !saving);
 
     const filteredItems = useMemo(() => {
         if (!search.trim()) return POLICY_ITEMS;

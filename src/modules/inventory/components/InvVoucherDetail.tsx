@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import Link from "next/link";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -94,14 +95,20 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
 
-    const load = () => {
-        setLoading(true);
+    const load = (silent = false) => {
+        if (!silent) setLoading(true);
         axios.get<Voucher>(`/api/inventory/vouchers/${id}`)
             .then((r) => setVoucher(r.data))
-            .catch(() => toast.error("Failed to load"))
-            .finally(() => setLoading(false));
+            .catch(() => { if (!silent) toast.error("Failed to load"); })
+            .finally(() => { if (!silent) setLoading(false); });
     };
-    useEffect(load, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => load(), [id]);
+
+    // This voucher can be posted, cancelled or deleted from another screen while
+    // it is open here — and the Post button acts on what is on screen. Silent:
+    // no spinner over a document the user is reading.
+    useRealtimeTopics(["ledger", "stock"], () => { load(true); });
 
     const post = async () => {
         setPosting(true);

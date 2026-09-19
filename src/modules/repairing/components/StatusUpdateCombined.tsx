@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { toast } from "sonner";
 import { X, ChevronRight, Lock, Eye } from "lucide-react";
@@ -56,6 +57,12 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     const selectedSub = nextWorkers.find((ss) => ss.id === selectedSubId);
     const selectedMain = nextMainStatuses.find((s) => s.id === selectedMainId);
 
+    // Workflow config edited elsewhere changes which stages and workers this
+    // ticket may move to. Bumped rather than called directly so the effect
+    // below stays the single place that builds the query.
+    const [optionsKey, setOptionsKey] = useState(0);
+    useRealtimeTopics(["tickets"], () => { setOptionsKey((n) => n + 1); });
+
     useEffect(() => {
         const currentSubId = ticket.workerId ?? null;
         const params = new URLSearchParams({ statusId: ticket.status });
@@ -77,7 +84,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
             .catch(() => toast.error("Failed to load statuses"))
             .finally(() => setLoadingWorkers(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ticket.status, ticket.workerId]);
+    }, [ticket.status, ticket.workerId, optionsKey]);
 
     const onSubmit = async (data: FormData) => {
         try {

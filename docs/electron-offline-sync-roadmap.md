@@ -211,7 +211,8 @@ and reconcile run regardless), it only makes things happen sooner.
    cycle (four tables at a time, schema guard trusted from the last full check). When a
    cycle actually wrote rows it prints `__SYNC_APPLIED__`, which `syncManager.ts` forwards
    to every window as `sync:applied`.
-5. **Screens** — `useRealtimeTopics(topics, reload)` re-reads after a 600 ms settle. On a
+5. **Screens** — `useRealtimeTopics(topics, reload)` re-reads after a 600 ms settle, and
+   re-reads on its own every five minutes if no signal arrives at all (the heartbeat below). On a
    counter that reads its replica (`READ_MODE` local/shadow) the hook ignores the early
    Supabase signal and waits for `sync:applied`, so it refetches once, after the rows have
    landed, never a stale read first. A server-rendered page uses
@@ -248,15 +249,42 @@ and reconcile run regardless), it only makes things happen sooner.
      Beware `onClick={load}` — React passes the MouseEvent as that first parameter, which
      is what silently disabled Refresh on twelve reports in 2026-08-22. Write
      `onClick={() => load()}`.
-   - **Editors do not subscribe.** A voucher detail/new screen, the opening-balance sheet,
-     the GST classification grid and the storefront layout designer all hold input the user
-     is part-way through; refetching under the cursor would discard it. These stay
-     fetch-once on purpose, as do Settings, Admin, BI and Pricing-strategy by owner
-     decision (BI pages are heavy aggregates), and the customer-facing shop/portal, which
-     is server-rendered.
+   - **An editor subscribes for its REFERENCE data, never for its input.** This was
+     "editors do not subscribe" until 2026-09-19, when the owner asked for every screen to
+     follow changes. The rule that replaced it is narrower and does the same job: the lists
+     an editor offers — ledgers, parties, services, branches, statuses, workers — are read
+     again on the signal, while the fields being typed into are never touched. Where the
+     two cannot be separated because one load fills both, the subscription is held back
+     while the form is dirty (`enabled` false) — the Role Matrix, Year Ending, Org
+     Defaults, Credit Limit and Offline Policies all work that way. Where there was no
+     dirty flag to hold it back, the load itself was split instead: Pricing Strategies
+     refreshes its masters and product rows and leaves the point fields alone.
 
-   As of 2026-09-04, 120 of 258 routes are live. The rest are the deliberate exclusions
-   above plus print-once pages (receipts, shipping labels, slips) and static menus.
+     Three cases still deliberately do not follow: a once-per-open option latch is dropped
+     rather than refetched while the dialog is open (`QuickTicketButton`,
+     `ParentVoucherPicker`), a POS or voucher edit prefill never re-runs because it would
+     discard the cart, and the label/neighbourhood designers hold a whole layout with no
+     dirty flag to guard.
+
+   **Underneath all of it, a heartbeat.** Everything above is event-driven, and an event
+   can fail to arrive — the channel dropped and reconnected, the leader tab's timers were
+   throttled. Since 2026-09-19 `createSettledReader` re-reads on its own every
+   `HEARTBEAT_MS` (5 minutes, ±20% jitter so a page's several subscribers do not wake
+   together). It is a floor, not the mechanism: a signal still reads in 600 ms, a hidden
+   window still costs nothing, and any read pushes the deadline out, so a screen kept
+   fresh by signals never fires it. The replica has a verify sweep for exactly this
+   reason; this is the UI's.
+
+   **A heavy surface widens its window.** `useRealtimeTopics` takes an optional
+   `settleMs`, which is a rate limit as much as a delay — `schedule` ignores a signal
+   while a read is already pending. The twenty BI reports share one subscription in
+   `useBiQuery` at 30 s, so a till selling all afternoon costs one recompute per window
+   rather than one per bill.
+
+   As of 2026-09-19, 127 files carry a subscription, 58 of them pages. What is left is
+   print-once pages (receipts, shipping labels, slips), static menus, the debounced
+   searches that are fresh on every keystroke anyway, and the customer-facing shop/portal,
+   which is server-rendered.
 
 ### 4.2 Table strategies — actual registry contents
 

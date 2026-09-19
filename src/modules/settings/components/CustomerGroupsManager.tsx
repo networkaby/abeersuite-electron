@@ -4,8 +4,9 @@
 // Lawyer …). Groups are assigned on the customer profile and used for product
 // targeting. Internal-only — the customer never sees their group.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,12 +28,18 @@ export function CustomerGroupsManager() {
     const [saving, setSaving] = useState(false);
     const [draftName, setDraftName] = useState("");
 
-    useEffect(() => {
+    const load = useCallback((silent = false) => {
         axios.get<GroupRow[]>("/api/settings/customer-groups")
             .then((res) => setRows(res.data))
-            .catch(() => toast.error("Could not load customer groups"))
+            .catch(() => { if (!silent) toast.error("Could not load customer groups"); })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    // The row list only — `draftName` is what the user is typing into the add
+    // box and is never replaced by a background read.
+    useRealtimeTopics(["settings", "parties"], () => { load(true); });
 
     const addGroup = async () => {
         const name = draftName.trim();

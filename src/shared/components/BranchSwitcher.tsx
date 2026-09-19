@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Building2 } from "lucide-react";
 import {
     Select,
@@ -37,6 +38,12 @@ export function BranchSwitcher() {
         return () => { cancelled = true; };
     }, []);
 
+    // A branch added or deactivated in Admin announces `settings`. This lives in
+    // the chrome and is never remounted, so without this it shows the branch
+    // list from whenever the window was opened.
+    const [branchesKey, setBranchesKey] = useState(0);
+    useRealtimeTopics(["settings"], () => { setBranchesKey((n) => n + 1); });
+
     useEffect(() => {
         let cancelled = false;
         async function load() {
@@ -65,7 +72,7 @@ export function BranchSwitcher() {
         }
         load();
         return () => { cancelled = true; };
-    }, [user, isAdmin, userBranchIds, hydrate]);
+    }, [user, isAdmin, userBranchIds, hydrate, branchesKey]);
 
     if (!user) return null;
 

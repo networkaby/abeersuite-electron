@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,11 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
     }, [pipelineId]);
 
     useEffect(() => { load(); }, [load]);
+
+    // The status and worker option lists are workflow config; a stage added
+    // elsewhere should be selectable here without a reload. The two selects
+    // below hold the user's pick and are left alone.
+    useRealtimeTopics(["tickets"], () => { load(); });
     // Re-sync the selects when the ticket reloads after an apply.
     useEffect(() => { setStatusId(currentStatusId); }, [currentStatusId]);
     useEffect(() => { setWorkerId(currentWorkerId ?? NONE); }, [currentWorkerId]);

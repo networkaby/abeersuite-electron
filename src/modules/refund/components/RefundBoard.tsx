@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { Loader2, RefreshCw, Undo2 } from "lucide-react";
@@ -25,6 +26,9 @@ export function RefundBoard() {
             .finally(() => setLoading(false));
     }, []);
     useEffect(() => { load(); }, [load]);
+
+    // A refund raised or approved elsewhere belongs on this board at once.
+    useRealtimeTopics(["ledger"], load);
 
     async function move(d: RefundCard, statusId: string) {
         if (d.statusId === statusId) return;

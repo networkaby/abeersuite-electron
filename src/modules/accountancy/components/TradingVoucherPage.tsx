@@ -34,6 +34,7 @@
 import { Fragment, useState, useCallback, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { toast } from "sonner";
@@ -809,6 +810,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // current account for money movement).
     // In edit mode the default is skipped — a separate effect matches the
     // voucher's saved paymentAccountId once both fetches resolve.
+    // The two REFERENCE lists on this page — money ledgers and the service
+    // catalogue — follow the books; a ledger created at another desk should be
+    // selectable here without abandoning a half-written voucher. Only these two
+    // re-read: the lines, party and totals being entered are never touched, and
+    // the edit-mode prefill is keyed separately so it cannot re-run.
+    const [refDataKey, setRefDataKey] = useState(0);
+    useRealtimeTopics(["ledger", "catalogue"], () => { setRefDataKey((n) => n + 1); });
+
     useEffect(() => {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
             .then((r) => {
@@ -835,7 +844,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             })
             .catch(() => { setCashBankAccounts([]); setChargeAccounts([]); });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [refDataKey]);
 
     // Service catalogue — the same active-rows read the POS cart uses, so the
     // counter and the office always offer the identical list.
@@ -845,7 +854,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .then((r) => setAllServices(r.data))
             .catch(() => setAllServices([]));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [refDataKey]);
 
     // Edit-mode payment-account resolver: when both the loaded voucher's
     // paymentAccountId and the cash/bank list are available, pick the match.

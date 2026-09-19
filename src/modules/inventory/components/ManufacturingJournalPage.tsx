@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api";
 import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
@@ -150,11 +151,17 @@ export function ManufacturingJournalPage() {
     });
 
     // Preload chart of accounts so the GlAccountCombobox is instant.
-    useEffect(() => {
+    const loadAccounts = useCallback(() => {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts")
             .then((r) => setAccounts(r.data))
             .catch(() => setAccounts([]));
     }, []);
+
+    useEffect(() => { loadAccounts(); }, [loadAccounts]);
+
+    // Reference data only — a ledger created while this journal is being written
+    // becomes selectable. The journal's own lines are untouched.
+    useRealtimeTopics(["ledger"], loadAccounts);
 
 
     // Edit-mode prefill
