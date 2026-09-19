@@ -529,7 +529,7 @@ export function PosScreenShell({
                                             return (
                                                 // Opens UPWARD: the button sits at the bottom of the cart, so a
                                                 // downward list of thirty services falls off the window.
-                                                <div className="absolute bottom-full left-4 z-20 mb-1 flex w-96 flex-col overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                                                <div className="absolute bottom-full left-4 z-20 mb-1 flex w-[26.4rem] flex-col overflow-hidden rounded-md border border-border bg-popover shadow-lg">
                                                     <div className="border-b border-border p-1.5">
                                                         <Input
                                                             autoFocus
