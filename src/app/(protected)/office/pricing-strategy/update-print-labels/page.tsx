@@ -32,6 +32,7 @@
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { gridRowClass } from "@/shared/lib/format";
@@ -731,6 +732,10 @@ export default function GeneratePage() {
         }
     }, []);
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Product rows, brands and categories behind the label picker are catalogue
+    // data; a new SKU should be printable without reloading the screen.
+    useRealtimeTopics(["catalogue", "stock"], () => { loadData(); });
 
     // Persist an editable field to InvProduct via the items PATCH. Local-only
     // rows (negative ids) are skipped. `reload` re-pulls the engine values when a

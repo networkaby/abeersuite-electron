@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { normalizeBarcodeBands, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
@@ -59,6 +60,15 @@ export default function PrintLabelsPage() {
             .finally(() => { if (alive) setLoading(false); });
         return () => { alive = false; };
     }, []);
+
+    // The label queue holds product IDS; the catalogue rows behind them are
+    // re-read on `catalogue` / `stock`, so a price or name corrected elsewhere
+    // prints correctly without reopening the screen. The queue is untouched.
+    useRealtimeTopics(["catalogue", "stock"], () => {
+        axios.get<PricingItem[]>("/api/pricing-strategy/items")
+            .then((r) => setItems(r.data))
+            .catch(() => { /* keep the rows already loaded */ });
+    });
 
     const itemById = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
 

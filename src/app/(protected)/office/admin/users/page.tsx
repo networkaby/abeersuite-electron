@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2, AlertTriangle, Globe2 } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/shared/components/UserForm";
@@ -244,6 +245,11 @@ export default function UsersPage() {
     };
 
     useEffect(() => { fetchUsers(); }, []);
+
+    // A user added, deactivated or re-roled elsewhere announces `settings`.
+    // The list is separate state from the open UserForm, so a refresh mid-edit
+    // does not disturb what is being typed.
+    useRealtimeTopics(["settings"], () => { fetchUsers(); });
 
     const handleDelete = async (id: number) => {
         if (!(await confirmAction({ title: "Delete this user?", confirmLabel: "Delete" }))) return;

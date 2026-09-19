@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Pencil, Truck, PackageCheck, MapPin, SlidersHorizontal, ChevronDown, Store, Gift } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -104,6 +105,10 @@ export default function CouriersSettingsPage() {
         }
     }, []);
     useEffect(() => { void load(); }, [load]);
+
+    // Courier setup is shared config — a rate or a service added elsewhere
+    // announces `settings`.
+    useRealtimeTopics(["settings"], () => { void load(); });
 
     const openEdit = (m: Method) => {
         const c = m.configJson ?? {};

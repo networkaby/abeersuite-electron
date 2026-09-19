@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { invalidatePositionPicker } from "@/shared/hooks";
@@ -461,6 +462,10 @@ export default function PositionsPage() {
     };
 
     useEffect(() => { loadAll(); }, []);
+
+    // Positions, their holders and the reporting lines all move under
+    // `settings` — an appointment made from the Org Chart shows here at once.
+    useRealtimeTopics(["settings"], () => { loadAll(); });
 
     /**
      * Reload this screen AND drop the cached picker list, so the six filter

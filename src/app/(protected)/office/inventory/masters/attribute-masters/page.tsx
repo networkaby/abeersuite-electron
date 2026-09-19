@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,12 +58,18 @@ export default function AttributeMastersPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => {
-        Promise.all([
-            axios.get<Category[]>("/api/inventory/categories").then((r) => setCategories(r.data)),
-        ]).catch(() => {});
-        load();
+    const loadCategories = useCallback(() => {
+        axios.get<Category[]>("/api/inventory/categories")
+            .then((r) => setCategories(r.data))
+            .catch(() => {});
     }, []);
+
+    useEffect(() => { loadCategories(); load(); }, [loadCategories]);
+
+    // Attribute masters and the categories they hang off are catalogue config —
+    // a master added on another machine should appear here without a reload.
+    // The row editor keeps its own `form` state, so it is untouched.
+    useRealtimeTopics(["catalogue"], () => { loadCategories(); load(); });
 
     const cancel = () => {
         setAdding(false);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, X, Check, Layers, Save, ShieldCheck, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,11 @@ export default function DepartmentsPage() {
     };
 
     useEffect(() => { fetchAll(); }, []);
+
+    // Departments, their branches and the permission pools all move under
+    // `settings`. The refetch keeps the current selection, so an admin halfway
+    // through ticking permissions is not thrown back to the first department.
+    useRealtimeTopics(["settings"], () => { fetchAll(); });
 
     // Load the selected department's pool whenever the selection changes.
     useEffect(() => {

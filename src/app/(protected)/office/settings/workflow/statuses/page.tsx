@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, ArrowUpDown, GitMerge, Briefcase, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -159,6 +160,10 @@ export default function StatusesPage() {
     };
 
     useEffect(() => { fetchData(activePipelineId); }, [activePipelineId]);
+
+    // Silent so the list does not blink: a status edited elsewhere announces
+    // `tickets` and this pipeline's rows are re-read in place.
+    useRealtimeTopics(["tickets"], () => { fetchData(activePipelineId, { silent: true }); });
 
     const switchPipeline = (id: string) => {
         setActivePipelineId(id);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import Link from "next/link";
 import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -134,8 +135,8 @@ export default function PrinterSettingsPage() {
 
     // Which counter is this PC bound to? Match this PC's identity against the
     // server's counter locks so the Forget card knows what it's releasing.
-    useEffect(() => {
-        if (!identity?.machineId) { setBoundCounter(null); return; }
+    const loadBoundCounter = useCallback(() => {
+        if (!identity?.machineId) { setBoundCounter(null); return () => {}; }
         let cancelled = false;
         fetch(`/api/pos/counters`)
             .then((r) => r.ok ? r.json() : [])
@@ -147,6 +148,13 @@ export default function PrinterSettingsPage() {
             .catch(() => { /* ignore — card just won't show */ });
         return () => { cancelled = true; };
     }, [identity]);
+
+    useEffect(() => loadBoundCounter(), [loadBoundCounter]);
+
+    // An admin releasing this PC's counter lock from /office/admin/counters
+    // announces `settings`. Without this the Forget card kept offering to
+    // release a binding that was already gone.
+    useRealtimeTopics(["settings"], () => { loadBoundCounter(); });
 
     const fetchWinPrinters = async () => {
         setPortsLoading(true);

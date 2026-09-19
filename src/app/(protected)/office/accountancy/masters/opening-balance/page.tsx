@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Loader2, AlertTriangle, CheckCircle, Plus, Search, ListTree, FileStack } from "lucide-react";
 import { OpeningBillsDialog } from "@/modules/accountancy/components/OpeningBillsDialog";
@@ -137,6 +138,11 @@ export default function OpeningBalancePage() {
     useEffect(load, [load]);
 
     useEffect(() => { loadAccounts(); }, [loadAccounts]);
+
+    // Opening balances move when a ledger is created or a party's opening bills
+    // are entered on another machine — both announce `ledger`. The summary and
+    // the picker list are read-only here; row dialogs keep their own state.
+    useRealtimeTopics(["ledger"], () => { load(); loadAccounts(); });
 
     if (loading) {
         return (

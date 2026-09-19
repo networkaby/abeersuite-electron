@@ -3,6 +3,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { AlertTriangle, Boxes, Plus, RotateCcw, Save, Search, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -139,6 +140,17 @@ export default function RolePage() {
         roleForm.rank !== activeRole.rank ||
         roleForm.departmentId !== (activeRole.department?.id ?? "")
         : false;
+
+    // A role, department, work or work-group edited elsewhere announces
+    // `settings`. Held back while THIS editor is dirty: reloading `roles` gives
+    // `activeRole` a new identity, and the effect above would then reset
+    // `selected` from the server — silently throwing away ticks not yet saved.
+    // A clean screen has nothing to lose, so it follows along.
+    useRealtimeTopics(
+        ["settings"],
+        () => { void loadData(activeRoleId); },
+        !hasPermissionChanges && !hasRoleChanges,
+    );
 
     const permissionById = useMemo(() => new Map(allPerms.map((permission) => [permission.id, permission])), [allPerms]);
 

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Pencil, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -154,7 +155,7 @@ export default function YearEndingPage() {
     const [resetKind, setResetKind] = useState<string | null>(null);
     const [resetting, setResetting] = useState(false);
 
-    useEffect(() => {
+    const load = useCallback(() => {
         Promise.all([
             axios.get<SeriesRow[]>("/api/accountancy/voucher-series"),
             axios.get<BooksConfig>("/api/accountancy/books-config"),
@@ -176,6 +177,8 @@ export default function YearEndingPage() {
             .finally(() => setLoading(false));
     }, []);
 
+    useEffect(() => { load(); }, [load]);
+
     const configDirty = Boolean(
         config && configDraft &&
         (config.restartMonth !== configDraft.restartMonth ||
@@ -184,6 +187,12 @@ export default function YearEndingPage() {
          // the prefill is that Save is there to accept it.
          isoDay(config.booksBeginningFrom) !== configDraft.booksBeginningFrom),
     );
+
+    // Voucher series and the books anchors are shared config — a series reset or
+    // a restart-day change made elsewhere announces `ledger`. Held back while
+    // this screen has an unsaved draft, because the reload rebuilds `configDraft`
+    // from the server and would wipe it.
+    useRealtimeTopics(["ledger"], load, !configDirty && editKind === null);
 
     async function saveConfig() {
         if (!configDraft) return;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, X, Check, Building2, MapPin, Phone, ToggleLeft, ToggleRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,10 @@ export default function BranchesPage() {
     };
 
     useEffect(() => { loadBranches(); }, []);
+
+    // A branch renamed, added or deactivated elsewhere announces `settings`.
+    // Only the list is re-read; the open editor's `form` is separate state.
+    useRealtimeTopics(["settings"], () => { loadBranches(); });
 
     const startAdd = () => {
         const nextNum = branches.length > 0 ? Math.max(...branches.map(b => b.number || 0)) + 1 : 1;

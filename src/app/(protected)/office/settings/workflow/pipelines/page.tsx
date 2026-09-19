@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,10 @@ export default function PipelinesPage() {
     };
 
     useEffect(() => { load(); }, []);
+
+    // Workflow config is shared — a status, work or worker changed on another
+    // machine announces `tickets`. Row editors hold their own draft state.
+    useRealtimeTopics(["tickets"], () => { load(); });
 
     const handleCreate = async () => {
         if (!createForm.name.trim() || !createForm.label.trim()) {

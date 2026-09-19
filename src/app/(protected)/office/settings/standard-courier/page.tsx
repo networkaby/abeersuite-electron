@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Trash2, Calculator, Truck, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -194,6 +195,10 @@ export default function StandardCourierPage() {
         }
     }, []);
     useEffect(() => { void load(); }, [load]);
+
+    // Courier setup is shared config — a rate or a service added elsewhere
+    // announces `settings`.
+    useRealtimeTopics(["settings"], () => { void load(); });
 
     const save = async () => {
         if (!method) return;

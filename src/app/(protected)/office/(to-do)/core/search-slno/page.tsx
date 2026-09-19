@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Loader2, Search, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { badgeColor } from "@/shared/lib/format/entityColor";
@@ -60,6 +61,11 @@ export default function SearchSlNoPage() {
     const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
     const [detail, setDetail] = useState<DeviceTicketPayload | null>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
+    // Bumped by the change signal to re-run the search below without touching
+    // the query the user typed. A serial number is looked up while the repair
+    // desk is still moving the ticket, so a list read once goes stale fast.
+    const [reloadKey, setReloadKey] = useState(0);
+    useRealtimeTopics(["tickets", "stock"], () => { setReloadKey((n) => n + 1); });
 
     useEffect(() => {
         const controller = new AbortController();
@@ -86,7 +92,7 @@ export default function SearchSlNoPage() {
             controller.abort();
             clearTimeout(timeout);
         };
-    }, [query]);
+    }, [query, reloadKey]);
 
     useEffect(() => {
         if (!selectedDeviceId) {

@@ -17,8 +17,9 @@
 // edited here yet.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
@@ -409,6 +410,41 @@ export default function PricingStrategiesPage() {
         })();
         return () => { alive = false; };
     }, []);
+
+    // Only the REFERENCE half is refreshed live — masters and the product rows
+    // with their resolved costs. The point fields below are an unsaved editor;
+    // re-reading them from the server on a background signal would throw away
+    // whatever margin the user is halfway through typing, so they stay loaded
+    // once and are replaced only by an explicit Save.
+    const reloadCatalogue = useCallback(async () => {
+        try {
+            const [b, c, g, items] = await Promise.all([
+                axios.get<Master[]>("/api/inventory/brands"),
+                axios.get<Master[]>("/api/inventory/categories"),
+                axios.get<Master[]>("/api/inventory/product-groups"),
+                axios.get<PricingItem[]>("/api/pricing-strategy/items"),
+            ]);
+            setBrands(b.data.map((m) => ({ id: m.id, name: m.name })));
+            setCategories(c.data.map((m) => ({ id: m.id, name: m.name, parentId: m.parentId ?? null })));
+            setGroups(g.data.map((m) => ({ id: m.id, name: m.name, parentId: m.parentId ?? null })));
+            setProducts(
+                items.data.map((it) => ({
+                    id: it.id,
+                    name: it.name,
+                    sku: it.sku,
+                    brandId: it.brandId,
+                    categoryId: it.categoryId,
+                    groupId: it.groupId,
+                    costPaise: it.resolvedCostPaise,
+                    gstPct: it.gstRatePct ?? 0,
+                    stock: it.stock,
+                })),
+            );
+        } catch {
+            /* the screen keeps the rows it already has */
+        }
+    }, []);
+    useRealtimeTopics(["catalogue", "stock"], () => { void reloadCatalogue(); });
 
     const baseN = num(base);
 

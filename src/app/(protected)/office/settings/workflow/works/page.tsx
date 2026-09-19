@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -415,6 +416,10 @@ export default function WorksPage() {
     };
 
     useEffect(() => { load(); }, []);
+
+    // Workflow config is shared — a status, work or worker changed on another
+    // machine announces `tickets`. Row editors hold their own draft state.
+    useRealtimeTopics(["tickets"], () => { load(); });
 
     const payload = (form: WorkFormValues) => ({
         label: form.label,

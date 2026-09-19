@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { RefreshCw, Settings, AlertTriangle, PackagePlus, XCircle, ChevronRight, RotateCcw, ChevronUp, ChevronDown, ChevronsUpDown, Clock, ListChecks, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -139,6 +140,11 @@ export default function CostingPage() {
     }, [refresh]);
 
     useEffect(() => { loadAll(); }, [loadAll]);
+
+    // The additional-cost pool and its draws move whenever a purchase is posted
+    // or allocated elsewhere — `ledger` for the voucher, `catalogue` for the
+    // price effect. Cheap reads, and a stale pool invites double allocation.
+    useRealtimeTopics(["ledger", "catalogue"], loadAll);
 
     // Group draws into voucher-like documents: one row per (payment entry +
     // source inventory voucher + kind). Draws arrive newest-first.

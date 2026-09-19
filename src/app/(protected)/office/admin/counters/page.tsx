@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import {
     Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight, Lock, Unlock, Phone,
@@ -153,6 +154,12 @@ export default function CountersAdminPage() {
         }
     };
     useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); void loadGateways(); }, []);
+
+    // Another admin claiming a counter, releasing a lock or adding a payment row
+    // announces `settings`; a new gateway under Settings → Payment Methods does
+    // too. Re-read the LIST only — `form` / `editForm` are separate state, so an
+    // editor that is open keeps whatever is being typed into it.
+    useRealtimeTopics(["settings"], () => { void load(); void loadGateways(); });
 
     const getNextCounterSuffix = (branchId: string, bList = branches, cList = counters) => {
         const branch = bList.find((b) => b.id === branchId);

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Eye, Loader2, Search, X } from "lucide-react";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
@@ -74,13 +75,20 @@ export default function TicketsPage() {
     const [dateTo, setDateTo] = useState("");
     const [warrantyFilter, setWarrantyFilter] = useState("");
 
-    useEffect(() => {
+    const loadFilterOptions = useCallback(() => {
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
         axios.get("/api/pipelines").then((r) => {
             const repair = r.data.find((p: { name: string }) => p.name === REPAIR_PIPELINE_NAME);
             setRepairPipelineId(repair?.id ?? null);
         });
     }, []);
+
+    useEffect(() => { loadFilterOptions(); }, [loadFilterOptions]);
+
+    // The ticket ROWS are already live (useTicketsDelta listens on `tickets`);
+    // these filter dropdowns were not. A priority or pipeline added under
+    // Settings → Workflow now reaches the filters too, on the same signal.
+    useRealtimeTopics(["tickets"], loadFilterOptions);
 
     useEffect(() => {
         if (!repairPipelineId) {

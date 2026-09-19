@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Briefcase, Link as LinkIcon, Sparkles, Network, Landmark, Move } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,10 @@ export default function OrgChartPage() {
     }, []);
 
     useEffect(() => { loadStructure(); }, [loadStructure]);
+
+    // An appointment, transfer or a new position redraws the whole chart, and
+    // those all happen on someone else's screen — announced as `settings`.
+    useRealtimeTopics(["settings"], loadStructure);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
         { id: "structure", label: "Structure Chart",  icon: Briefcase },

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Check, ChevronRight, Copy, CornerUpLeft, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -758,6 +759,9 @@ export default function WorkersPage() {
     };
 
     useEffect(() => { loadAll(activePipelineId); }, [activePipelineId]);
+
+    // A worker assigned or removed on another machine announces `tickets`.
+    useRealtimeTopics(["tickets"], () => { loadAll(activePipelineId); });
 
     const workerPayload = (form: FormValues) => ({
         label: form.label,

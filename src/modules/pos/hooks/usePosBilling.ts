@@ -225,13 +225,27 @@ export function usePosBilling(opts: {
         })();
     });
 
-    // Load the active POS services once — added via the "+ Add service charge"
-    // button in the cart (not the product search — services have no barcode).
-    useEffect(() => {
+    // The counter's own configuration — payment accounts (the checkout's UPI /
+    // Card rows), allowed expense ledgers, till account, EPBX — rides in on the
+    // shift payload, which was read ONCE at mount. A save under
+    // /office/admin/counters announces `settings`; without this the till kept
+    // showing yesterday's payment rows until someone reloaded the screen, and a
+    // freshly added UPI was invisible to the cashier with the office insisting
+    // it was configured. The shift itself is cheap to re-read and the refresh
+    // touches no cart state.
+    useRealtimeTopics(["settings"], () => { refreshActiveShift(); });
+
+    // Load the active POS services — added via the "+ Add service charge" button
+    // in the cart (not the product search — services have no barcode). Re-read on
+    // `catalogue` for the same reason the product list is: a service added or
+    // retired in the office should reach the till without a reload.
+    const loadServices = useCallback(() => {
         axios.get<PosServiceOption[]>("/api/pos/services")
             .then((r) => setAllServices(r.data))
             .catch(() => { /* page is still useful without them */ });
     }, []);
+    useEffect(() => { loadServices(); }, [loadServices]);
+    useRealtimeTopics(["catalogue"], loadServices);
 
     // Ctrl/Cmd+Enter from anywhere → the screen's confirm action (skip when
     // modals are already open). The dispatch lives in a ref so the listener

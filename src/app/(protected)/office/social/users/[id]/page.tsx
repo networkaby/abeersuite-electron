@@ -7,6 +7,7 @@ import Image from "next/image";
 import { imageLoaderFor } from "@/shared/lib/cloudinaryImage";
 import Link from "next/link";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1401,6 +1402,15 @@ export default function UserProfilePage() {
 
         void loadProfileAndWall();
     }, [id]);
+
+    // Someone else posting on this wall announces `tasks`. Only the wall is
+    // re-read — rerunning the block above would reset the open tab and flash
+    // the whole profile through its loading state for a single new post.
+    useRealtimeTopics(["tasks"], () => {
+        axios.get<WallPost[]>(`/api/users/${id}/wall`)
+            .then((r) => setWallPosts(r.data))
+            .catch(() => { /* keep the posts already shown */ });
+    });
 
     useEffect(() => {
         const loadActivity = async () => {
