@@ -90,7 +90,11 @@ export function PosScreenShell({
     // Router for the help-page fallback when the browser blocks the new tab.
     const router = useRouter();
     // "+ Add service charge" dropdown (Sale mode) — pick a catalogue service.
+    // With thirty-odd services in the catalogue the list is typed into, not
+    // scrolled: a search box filters it and up/down + Enter picks a row.
     const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
+    const [serviceQuery, setServiceQuery] = useState("");
+    const [serviceHighlight, setServiceHighlight] = useState(0);
     // Upsell & Cross-sell drawer — opened from the customer panel's offer box;
     // slides left over the cart with live offers + add-on suggestions.
     const [upsellOpen, setUpsellOpen] = useState(false);
@@ -506,7 +510,7 @@ export function PosScreenShell({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => setServiceMenuOpen((o) => !o)}
+                                    onClick={() => { setServiceQuery(""); setServiceHighlight(0); setServiceMenuOpen((o) => !o); }}
                                     className="h-6 gap-1 border border-sky-300/50 bg-sky-50/50 px-1.5 text-xs text-sky-700 hover:bg-sky-100/70 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
                                 >
                                     <Wrench size={12} /> Add service
@@ -515,30 +519,65 @@ export function PosScreenShell({
                                     <>
                                         {/* click-away backdrop */}
                                         <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
-                                        <ul className="absolute left-4 top-full z-20 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                                            {b.allServices.length === 0 ? (
-                                                <li className="px-3 py-2 text-xs text-muted-foreground">
-                                                    No services yet — add them in Settings → Services.
-                                                </li>
-                                            ) : (
-                                                b.allServices.map((s) => (
-                                                    <li key={s.id}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => { b.addServiceToCart(s); setServiceMenuOpen(false); }}
-                                                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
-                                                        >
-                                                            <Wrench size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
-                                                            <span className="flex-1 truncate">{s.name}</span>
-                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.taxRate > 0 ? `GST ${s.taxRate}%` : "No tax"}</span>
-                                                            <span className="w-14 text-right text-xs text-muted-foreground">
-                                                                {s.defaultPricePaise != null ? `₹${(s.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
-                                                            </span>
-                                                        </button>
-                                                    </li>
-                                                ))
-                                            )}
-                                        </ul>
+                                        {(() => {
+                                            const q = serviceQuery.trim().toLowerCase();
+                                            const list = q
+                                                ? b.allServices.filter((s) => s.name.toLowerCase().includes(q))
+                                                : b.allServices;
+                                            const hi = list.length ? Math.min(serviceHighlight, list.length - 1) : 0;
+                                            const pick = (s: (typeof list)[number]) => { b.addServiceToCart(s); setServiceMenuOpen(false); };
+                                            return (
+                                                // Opens UPWARD: the button sits at the bottom of the cart, so a
+                                                // downward list of thirty services falls off the window.
+                                                <div className="absolute bottom-full left-4 z-20 mb-1 flex w-96 flex-col overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                                                    <div className="border-b border-border p-1.5">
+                                                        <Input
+                                                            autoFocus
+                                                            value={serviceQuery}
+                                                            onChange={(e) => { setServiceQuery(e.target.value); setServiceHighlight(0); }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "ArrowDown") { e.preventDefault(); setServiceHighlight((i) => Math.min(i + 1, list.length - 1)); }
+                                                                else if (e.key === "ArrowUp") { e.preventDefault(); setServiceHighlight((i) => Math.max(i - 1, 0)); }
+                                                                else if (e.key === "Enter") { e.preventDefault(); if (list[hi]) pick(list[hi]); }
+                                                                else if (e.key === "Escape") { e.preventDefault(); setServiceMenuOpen(false); }
+                                                            }}
+                                                            placeholder="Type to find a service…"
+                                                            className="h-7 text-xs"
+                                                        />
+                                                    </div>
+                                                    <ul className="max-h-[22rem] overflow-y-auto">
+                                                        {b.allServices.length === 0 ? (
+                                                            <li className="px-3 py-2 text-xs text-muted-foreground">
+                                                                No services yet — add them in Settings → Services.
+                                                            </li>
+                                                        ) : list.length === 0 ? (
+                                                            <li className="px-3 py-2 text-xs text-muted-foreground">
+                                                                No service matches “{serviceQuery.trim()}”.
+                                                            </li>
+                                                        ) : (
+                                                            list.map((s, i) => (
+                                                                <li key={s.id}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => pick(s)}
+                                                                        onMouseEnter={() => setServiceHighlight(i)}
+                                                                        ref={i === hi ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                                                                        className={`flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm ${i === hi ? "bg-muted" : ""}`}
+                                                                    >
+                                                                        <Wrench size={12} className="mt-1 shrink-0 text-sky-600 dark:text-sky-400" />
+                                                                        <span className="min-w-0 flex-1 leading-snug">{s.name}</span>
+                                                                        <span className="mt-0.5 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{s.taxRate > 0 ? `GST ${s.taxRate}%` : "No tax"}</span>
+                                                                        <span className="w-14 shrink-0 text-right text-xs text-muted-foreground">
+                                                                            {s.defaultPricePaise != null ? `₹${(s.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
+                                                                        </span>
+                                                                    </button>
+                                                                </li>
+                                                            ))
+                                                        )}
+                                                    </ul>
+                                                </div>
+                                            );
+                                        })()}
                                     </>
                                 )}
                             </div>
