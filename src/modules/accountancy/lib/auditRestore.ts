@@ -66,12 +66,24 @@ async function loadColumns(tx: Tx): Promise<Map<string, Set<string>>> {
     return map;
 }
 
-/** Keep only real columns of `table`, minus `id` and any explicit drops. */
+/**
+ * Keep only real columns of `table`, minus `id`, `updatedAt` and any explicit drops.
+ *
+ * `updatedAt` is never carried over from the snapshot. It is the watermark every
+ * incremental reader arbitrates on — the Day Book's `updatedAt > since` delta, and
+ * sync's last-write-wins in `shared/lib/sync/push.ts` — so a restored row that
+ * re-enters the books wearing the timestamp it had at delete time looks OLDER than
+ * what those readers already hold. The screen that was told to drop the row on
+ * delete never hears that it came back (it stays missing until a full reload), and
+ * a counter rejects the push outright. Letting Prisma stamp `@updatedAt` with now()
+ * says the true thing: this row changed today. `createdAt` IS carried over — that
+ * is genuine history, and nothing windows on it.
+ */
 function scalarsOf(cols: Map<string, Set<string>>, row: Row, table: TableName, drop: string[] = []): Row {
     const allowed = cols.get(table)!;
     const out: Row = {};
     for (const [k, v] of Object.entries(row)) {
-        if (k === "id" || drop.includes(k) || !allowed.has(k)) continue;
+        if (k === "id" || k === "updatedAt" || drop.includes(k) || !allowed.has(k)) continue;
         out[k] = v;
     }
     return out;
