@@ -8,16 +8,24 @@
 // Clicking a row opens that person's pay heads, the same gesture as the
 // Generate tab and as VoucherRegisterTable. A posted run keeps the breakup it
 // was posted with, because the lines were frozen when it was generated.
+//
+// Two ways out, and they are not the same thing. A DRAFT is deleted — it never
+// reached the books. A POSTED run is CANCELLED: its journal is reversed and the
+// days it claimed are freed, so the period can be generated again once whatever
+// was wrong is fixed. A posted run is never edited in place.
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, Search, Trash2, WalletMinimal } from "lucide-react";
+import { AlertTriangle, Ban, BookOpen, ChevronDown, ChevronRight, Search, Trash2, WalletMinimal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -40,6 +48,8 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
     const [q, setQ] = useState("");
     const [busy, setBusy] = useState(false);
     const [open, setOpen] = useState<Set<number>>(new Set());
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState("");
 
     const toggleOpen = (id: number) => setOpen((prev) => {
         const next = new Set(prev);
@@ -92,6 +102,22 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
         }
     };
 
+    /** Take a posted run back out of the books; the days become free again. */
+    const cancelRun = async () => {
+        setBusy(true);
+        try {
+            await axios.post(`${url}/cancel`, { reason: cancelReason.trim() });
+            toast.success("Run cancelled and its journal reversed");
+            setCancelOpen(false);
+            setCancelReason("");
+            reload();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not cancel the run"));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const discard = async () => {
         if (!data) return;
         const ok = await confirmAction({
@@ -130,6 +156,18 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                     <Link href={`/vouchers/journal-entries/${data.voucherId}`}>
                                         <BookOpen size={14} /> {data.voucherRef}
                                     </Link>
+                                </Button>
+                            )}
+                            {canRun && data.status === "POSTED" && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                                    onClick={() => setCancelOpen(true)}
+                                    disabled={busy}
+                                >
+                                    <Ban size={14} /> Cancel run
                                 </Button>
                             )}
                             {editable && (
@@ -275,6 +313,44 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                     </>
                 )}
             </div>
+
+            {/* The reason is required and kept: a cancelled run has to say why,
+                the same as cancelling any other voucher in this app. */}
+            <Dialog open={cancelOpen} onOpenChange={(o) => { if (!o) setCancelOpen(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>
+                            Cancel {data ? formatPeriod(data.periodFrom, data.periodTo) : "this run"}?
+                        </DialogTitle>
+                        <DialogDescription>
+                            {data?.voucherRef ?? "The journal"} is reversed and struck through — it stays visible
+                            for audit but counts for nothing. These days become free, so the period can be
+                            generated again.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="payroll-cancel-reason">Reason</Label>
+                        <Textarea
+                            id="payroll-cancel-reason"
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            rows={3}
+                            placeholder="Why is this run being cancelled?"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setCancelOpen(false)}>Back</Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={!cancelReason.trim() || busy}
+                            onClick={cancelRun}
+                        >
+                            Cancel the run
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </ScrollArea>
     );
 }
