@@ -16,7 +16,7 @@ import {
     ArrowLeft, Mail, Phone, Cake, Building2, Users,
     Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose, Home,
-    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity, IdCard, Receipt,
+    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity, IdCard, Receipt, CreditCard,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/pe
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import StaffPersonalForm from "@/modules/hr/components/StaffPersonalForm";
 import StaffPayslips from "@/modules/hr/components/StaffPayslips";
+import StaffIdCardTab from "@/modules/hr/components/StaffIdCardTab";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1356,8 +1357,12 @@ const TABS = [
     // profile: pay is the person's own business and HR's, so the API refuses
     // anyone else even if this tab were somehow reached.
     { id: 9 as const, label: "Salary Slips", icon: Receipt, access: "selfOrAdmin" },
+    // The printable staff identity card. Open to everyone who can see the
+    // profile, exactly like the HR staff profile's own "Identity" tab — it
+    // carries nothing the About tab does not already show.
+    { id: 10 as const, label: "ID Card", icon: CreditCard, access: "all" },
 ];
-type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -1602,6 +1607,7 @@ export default function UserProfilePage() {
                         />
                     )}
                     {activeTab === 9 && (isSelf || isAdmin) && <StaffPayslips userId={profile.id} />}
+                    {activeTab === 10 && <StaffIdCardTab userId={profile.id} />}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}

@@ -29,9 +29,10 @@ import StaffAccessTab from "./StaffAccessTab";
 import StaffPersonalForm from "./StaffPersonalForm";
 import StaffPayTab from "./StaffPayTab";
 import StaffMoneyTab from "./StaffMoneyTab";
+import StaffIdCardTab from "./StaffIdCardTab";
 import AppointStaffDialog from "./AppointStaffDialog";
 
-const TABS = ["job", "access", "personal", "pay", "money"] as const;
+const TABS = ["job", "access", "personal", "pay", "money", "identity"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions }: {
@@ -88,6 +89,8 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
                             {tab === "personal" && <StaffPersonalForm userId={userId} canEdit={canEdit} />}
                             {tab === "pay" && <StaffPayTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />}
                             {tab === "money" && <StaffMoneyTab detail={data} />}
+                            {/* The printable staff ID card — same card the person sees on their own profile. */}
+                            {tab === "identity" && <StaffIdCardTab userId={userId} />}
                         </div>
                     </>
                 )}
