@@ -180,7 +180,12 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                         </div>
 
                         <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
-                            <Table className="min-w-max">
+                            {/* No `min-w-max`: this sits inside a ScrollArea whose viewport hides
+                                horizontal overflow, so a table sized to its own content pushes the
+                                page wider than the visible area and the excess is simply clipped —
+                                63px of the Staff Directory was unreachable that way. The wrapper's
+                                own overflow-x-auto is what scrolls if the columns ever need it. */}
+                            <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-10">{editable ? "Pay" : ""}</TableHead>

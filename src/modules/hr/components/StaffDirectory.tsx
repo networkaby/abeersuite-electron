@@ -32,7 +32,9 @@ type Status = "active" | "left" | "all";
 
 export default function StaffDirectory({ canEdit }: { canEdit: boolean }) {
     const router = useRouter();
-    const { data, loading, refreshing, error, reload } = useApiResource<StaffRow[]>("/api/hr/staff?includeLeft=1");
+    // No `loading`: the table is always mounted and says "Reading…" in its own
+    // body, so there is no first-paint spinner to gate on.
+    const { data, refreshing, error, reload } = useApiResource<StaffRow[]>("/api/hr/staff?includeLeft=1");
     // A profile saved or a user added elsewhere announces `settings`.
     useRealtimeTopics(["settings"], reload);
 
@@ -81,7 +83,11 @@ export default function StaffDirectory({ canEdit }: { canEdit: boolean }) {
             <div className="px-6 pt-3 pb-6">
                 <DataPageHeader
                     title="Staff Directory"
-                    subtitle={data ? `${rows.length - leftCount} on the staff${leftCount ? `, ${leftCount} left` : ""}${refreshing ? " · refreshing…" : ""}` : undefined}
+                    // Never undefined: a subtitle that arrives with the data pushes
+                    // everything below it down once the fetch lands.
+                    subtitle={data
+                        ? `${rows.length - leftCount} on the staff${leftCount ? `, ${leftCount} left` : ""}${refreshing ? " · refreshing…" : ""}`
+                        : "Reading the staff…"}
                     icon={<Contact size={20} />}
                     actions={canEdit ? (
                         <Button type="button" onClick={() => setShowForm(true)}>
@@ -146,11 +152,18 @@ export default function StaffDirectory({ canEdit }: { canEdit: boolean }) {
                     </div>
                 </div>
 
-                <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
+                {/* Errors only. Swapping a centred spinner for the whole table is
+                    the biggest jump on the page, so the table below is always
+                    mounted and carries its own "Reading…" row instead. */}
+                {error && <QueryStateBlock loading={false} error={error} hasData={!!data} onRetry={reload} />}
 
-                {data && (
-                    <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
-                        <Table className="min-w-max">
+                <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
+                        {/* No `min-w-max`: this sits inside a ScrollArea whose viewport hides
+                            horizontal overflow, so a table sized to its own content pushes the
+                            page wider than the visible area and the excess is simply clipped —
+                            63px of the Staff Directory was unreachable that way. The wrapper's
+                            own overflow-x-auto is what scrolls if the columns ever need it. */}
+                        <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Name</TableHead>
@@ -164,9 +177,17 @@ export default function StaffDirectory({ canEdit }: { canEdit: boolean }) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {pageRows.length === 0 ? (
+                                {!data && (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                                            Reading…
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                {data && pageRows.length === 0 && (
                                     <TableEmptyRow colSpan={8} message={rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."} />
-                                ) : pageRows.map((r) => {
+                                )}
+                                {pageRows.map((r) => {
                                     const left = staffHasLeft(r.staffProfile);
                                     const type = r.staffProfile?.employmentType as EmploymentType | undefined;
                                     return (
@@ -222,11 +243,10 @@ export default function StaffDirectory({ canEdit }: { canEdit: boolean }) {
                             pageSize={pageSize}
                             onPageChange={setPage}
                             onPageSizeChange={setPageSize}
-                            unitLabel="person"
-                            className="border-t border-border px-3 py-2"
-                        />
-                    </div>
-                )}
+                        unitLabel="person"
+                        className="border-t border-border px-3 py-2"
+                    />
+                </div>
             </div>
         </ScrollArea>
     );
