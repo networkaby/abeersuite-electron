@@ -23,7 +23,16 @@ export interface PositionChipPosition {
     roleTemplates: { id: string; label: string; color: string }[];
 }
 
-export function PositionChip({ position }: { position: PositionChipPosition }) {
+export function PositionChip({ position, compact }: {
+    position: PositionChipPosition;
+    /**
+     * Title only, with the branch / department / roles moved into the tooltip.
+     * For a dense list where several seats sit side by side and the full chip
+     * would wrap every row onto two lines. The default is unchanged, so Admin →
+     * Users keeps reading exactly as it did.
+     */
+    compact?: boolean;
+}) {
     const primaryRole = position.roleTemplates[0];
     const dotColor = primaryRole?.color
         ? primaryRole.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground/40"
@@ -31,6 +40,20 @@ export function PositionChip({ position }: { position: PositionChipPosition }) {
     const roleTitle = position.roleTemplates.map((r) => r.label).join(", ");
 
     const isOrgWide = position.branch === null;
+    const where = [isOrgWide ? "Org-wide" : position.branch!.name, position.department?.name]
+        .filter(Boolean).join(" · ");
+
+    if (compact) {
+        return (
+            <div
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5 text-xs"
+                title={[`${position.title} · ${where}`, roleTitle && `Roles: ${roleTitle}`].filter(Boolean).join("\n")}
+            >
+                <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
+                <span className="font-medium text-foreground">{position.title}</span>
+            </div>
+        );
+    }
 
     return (
         <div

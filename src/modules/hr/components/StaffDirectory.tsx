@@ -166,62 +166,78 @@ export default function StaffDirectory({ canEdit }: { canEdit: boolean }) {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Staff ID</TableHead>
+                                    <TableHead>Person</TableHead>
                                     <TableHead>Seats</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Joined</TableHead>
-                                    <TableHead>Phone</TableHead>
+                                    <TableHead>Employment</TableHead>
                                     <TableHead className="text-right">Net salary</TableHead>
-                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Status</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!data && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                                             Reading…
                                         </TableCell>
                                     </TableRow>
                                 )}
                                 {data && pageRows.length === 0 && (
-                                    <TableEmptyRow colSpan={8} message={rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."} />
+                                    <TableEmptyRow colSpan={5} message={rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."} />
                                 )}
                                 {pageRows.map((r) => {
                                     const left = staffHasLeft(r.staffProfile);
                                     const type = r.staffProfile?.employmentType as EmploymentType | undefined;
                                     return (
                                         <TableRow key={r.id} className={left ? "opacity-60" : undefined}>
-                                            <TableCell>
+                                            {/* Person carries what used to be three thin columns: the
+                                                staff ID beside the name, the phone beside the email.
+                                                Neither earned a column of its own — both were empty
+                                                for most of the staff. */}
+                                            <TableCell className="py-2.5">
                                                 <Link href={`/office/hr/staff/${r.id}`} className="group flex items-center gap-2.5">
                                                     <UserAvatar avatarUrl={r.avatarUrl} name={r.name} role={r.role} sizePx={32} className="shrink-0" />
                                                     <div className="min-w-0">
-                                                        <div className="font-medium transition-colors group-hover:text-primary">{r.name}</div>
-                                                        <div className="truncate text-xs text-muted-foreground">{r.email}</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium transition-colors group-hover:text-primary">{r.name}</span>
+                                                            {r.staffProfile?.staffCode && (
+                                                                <span className="rounded bg-muted px-1.5 py-px font-mono text-[11px] text-muted-foreground">
+                                                                    {r.staffProfile.staffCode}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="truncate text-xs text-muted-foreground">
+                                                            {[r.email, r.phone].filter(Boolean).join("  ·  ")}
+                                                        </div>
                                                     </div>
                                                 </Link>
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground">{r.staffProfile?.staffCode ?? "—"}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="py-2.5">
                                                 {r.positions.length > 0 ? (
-                                                    <div className="flex max-w-md flex-wrap gap-1.5">
-                                                        {r.positions.map((p) => <PositionChip key={p.id} position={p} />)}
+                                                    <div className="flex max-w-xs flex-wrap gap-1.5">
+                                                        {/* Title only — branch, department and roles ride
+                                                            the tooltip, so one seat stays one line. */}
+                                                        {r.positions.map((p) => <PositionChip key={p.id} position={p} compact />)}
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs text-muted-foreground">No seat</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground">
-                                                {type ? EMPLOYMENT_TYPE_LABELS[type] ?? type : "—"}
+                                            <TableCell className="py-2.5 text-sm">
+                                                {type || r.staffProfile?.joinedOn ? (
+                                                    <>
+                                                        <div>{type ? EMPLOYMENT_TYPE_LABELS[type] ?? type : "—"}</div>
+                                                        {r.staffProfile?.joinedOn && (
+                                                            <div className="text-xs text-muted-foreground">
+                                                                since {formatDate(r.staffProfile.joinedOn)}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                ) : <span className="text-muted-foreground">—</span>}
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground">
-                                                {r.staffProfile?.joinedOn ? formatDate(r.staffProfile.joinedOn) : "—"}
+                                            <TableCell className="py-2.5 text-right font-medium tabular-nums">
+                                                {r.currentSalary ? formatRupeesFromPaise(r.currentSalary.netPaise) : <span className="font-normal text-muted-foreground">—</span>}
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground">{r.phone ?? "—"}</TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                                {r.currentSalary ? formatRupeesFromPaise(r.currentSalary.netPaise) : <span className="text-muted-foreground">—</span>}
-                                            </TableCell>
-                                            <TableCell>
+                                            <TableCell className="py-2.5 text-right">
                                                 {left ? (
                                                     <Badge variant="outline" className="text-muted-foreground">
                                                         Left {r.staffProfile?.leftOn ? formatDate(r.staffProfile.leftOn) : ""}
