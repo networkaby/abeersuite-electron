@@ -172,13 +172,26 @@ export function computeBalance(
  * Throws if the VoucherSeries row is missing — visit Settings → Year Ending.
  */
 /**
- * Which counter this save numbers under.
+ * Which counter this save numbers under — THE one rule, for every voucher kind.
  *
- * An explicit context wins (nothing on the POS path passes one any more — since
- * 2026-09-07 every voucher saved at the office, a relayed one included, numbers in
- * the common series). Otherwise a counter PC numbers under the counter it is set up
- * as, and the office — no counter at all — numbers as counter 1. Same fallback `assembleReference` renders, so the
- * printed reference and the series row it came from always agree.
+ * The MACHINE THAT WRITES decides, never the voucher:
+ *   • a till writing to its own replica numbers under its own counter;
+ *   • the office numbers as counter 1 — a relayed sale included, because under
+ *     `WRITE_MODE=v_live` the route code really is running on the office machine.
+ *
+ * So no voucher path passes a context any more. Since 2026-09-20 that includes
+ * Sale Invoices, which used to be numbered from the voucher's `sourceCounterId`
+ * and so took `SV-93…` from a till's private run while the same till's POS sale,
+ * in the same minute, took `POS-1…` from the office run. `sourceCounterId` is
+ * still stamped on every row — it is the provenance the Day Book and the counter
+ * reports read — it is just not an input to NUMBERING.
+ *
+ * The `ctx` parameter survives for the one caller that legitimately asks about a
+ * counter other than its own: /api/accountancy/vouchers/next-ref, previewing what
+ * a given till's next number would be.
+ *
+ * Same fallback `assembleReference` renders, so the printed reference and the
+ * series row it came from always agree.
  */
 export function resolveCounterNumber(ctx?: import("./voucherRef").ReferenceContext): number {
     const explicit = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;

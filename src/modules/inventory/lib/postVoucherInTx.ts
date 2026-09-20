@@ -21,7 +21,6 @@ import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { allocateSpineNumber, engineCreateSpine, enginePost } from "@/modules/accountancy/lib/transactionEngine";
-import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { checkSaleCreditLimit } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -205,9 +204,8 @@ export async function postVoucherInTx(
     let allocatedNo: string | null = null;
     if (creating) {
         allocatedNo = await allocateSpineNumber(tx, {
-            type:            voucher.type,
-            date:            voucher.universalVoucher!.date,
-            sourceCounterId: await sourceCounterId(tx),
+            type: voucher.type,
+            date: voucher.universalVoucher!.date,
         });
         // Only a fixed-direction voucher WITH ledger lines can have its spine minted
         // by the engine (spine + GL lines in a single statement, which is the whole

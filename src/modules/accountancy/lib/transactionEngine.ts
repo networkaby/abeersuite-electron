@@ -258,7 +258,7 @@ export async function engineGlArm(
         // a pre-existing draft being renumbered when it is finally posted.
         const spine = await tx.universalVoucher.findUnique({
             where:  { id },
-            select: { date: true, type: true, voucherNo: true, sourceCounterId: true },
+            select: { date: true, type: true, voucherNo: true },
         });
         const allocated = spine && !spine.voucherNo && !voucherNoArg
             ? await allocateSpineNumber(tx, { ...spine, type: args.type ?? spine.type, date })
@@ -526,18 +526,6 @@ export interface CreateGlVoucherSpec {
     /** Posting timestamp when `post` is true. Defaults to now. */
     postedAt?:        Date;
     /**
-     * POS counter the voucher was raised at — becomes the counter part of the
-     * reference (`assembleReference`). Omit for office / back-office vouchers
-     * that belong to no counter; the series then defaults to counter 1.
-     *
-     * Until 2026-09-04 this slot was fed `spec.userId` — a leftover from when
-     * the reference carried a USER number (the `"user"` token in `partOrder` is
-     * still an alias for `"counter"`). That stamped the creator's row id into
-     * every GL voucher reference, so the same series read `30012` or `70013`
-     * depending on who happened to save it.
-     */
-    counterNumber?:   number | null;
-    /**
      * POS shift the voucher is raised on. Omit (the office, and every caller that
      * does not know) and the engine resolves it from the source counter; the POS
      * routes pass it because the shift is named in their URL. See sourceShift.ts.
@@ -595,7 +583,7 @@ export async function enginePostSpine(
     // moves no balances, so posting is the moment the window turns dirty.
     const spine = await tx.universalVoucher.findUnique({
         where:  { id: spineId },
-        select: { date: true, type: true, voucherNo: true, sourceCounterId: true },
+        select: { date: true, type: true, voucherNo: true },
     });
     if (spine) await retreatReconciliation(tx, ids, spine.date);
 
@@ -614,39 +602,36 @@ export async function enginePostSpine(
 }
 
 /**
- * Take a number for a spine that has none, from its OWN type's series.
- *
- * Two things travel with it, and both are read off the spine rather than the
- * machine doing the posting:
- *   • its DATE, so a March-dated voucher posted in April does not roll the series
- *     into the new financial year (see nextRefFromSeries);
- *   • the counter it was RAISED on (`sourceCounterId`), so the counter segment of
- *     the printed reference names the till that billed it — not whichever PC
- *     happened to post it. The office posting a counter's draft must not renumber
- *     it into the office's own run.
- */
-/**
  * Allocate the user-facing voucher number for a spine.
  *
  * Exported because a voucher created POSTED needs its number BEFORE the row is
- * written, and it must be the same allocator the attach path uses. The date
- * matters: it is the VOUCHER's date, not today's, so a 28-March voucher posted on
- * 2 April does not roll the series into the new financial year.
+ * written, and it must be the same allocator the attach path uses.
+ *
+ * ── Which counter's run it numbers in ──────────────────────────────────
+ * The MACHINE THAT WRITES decides — never the voucher's `sourceCounterId`. That is
+ * `resolveCounterNumber`'s job and it is the only rule in the app: a till writing
+ * to its own replica numbers under itself, and the office numbers as counter 1,
+ * a relayed sale included. So this passes NO counter context and lets it answer.
+ *
+ * It used to read `sourceCounterId` and number under the till that raised the
+ * voucher. That looked like provenance but it split the books: the same till,
+ * billing live through the office, took `POS-1…` from the office run for a POS sale
+ * and `SV-93…` from its own run for a Sale Invoice, in the same minute. The counter
+ * segment on a relayed voucher read as "billed offline at 93" when nothing was
+ * offline. Provenance lives in `sourceCounterId` itself, which is still stamped on
+ * every row and is what the Day Book and the counter reports read; it is simply not
+ * an input to numbering any more.
+ *
+ * The DATE still travels off the spine, not the wall clock: it is the VOUCHER's
+ * date, so a 28-March voucher posted on 2 April does not roll the series into the
+ * new financial year (see `nextRefFromSeries`).
  */
 export async function allocateSpineNumber(
     tx: Prisma.TransactionClient,
-    spine: { type: string; date: Date; sourceCounterId: number | null },
+    spine: { type: string; date: Date },
 ): Promise<string | null> {
-    let counterNumber: number | null = null;
-    if (spine.sourceCounterId != null) {
-        const counter = await tx.posCounter.findUnique({
-            where:  { id: spine.sourceCounterId },
-            select: { counterNumber: true },
-        });
-        counterNumber = counter?.counterNumber ?? null;
-    }
     try {
-        return await nextRefFromSeries(tx, spine.type, { counterNumber }, { date: spine.date });
+        return await nextRefFromSeries(tx, spine.type, undefined, { date: spine.date });
     } catch {
         // No VoucherSeries row for this kind (a type that has never been numbered,
         // a half-seeded install). The voucher still posts — the spine id IS the
@@ -704,7 +689,7 @@ export async function engineCreateVoucher(
     const seriesKind = spec.referenceSeries ?? spec.type;
     const numberNow = spec.post || seriesKind !== spec.type;
     const reference = numberNow
-        ? await nextRefFromSeries(tx, seriesKind, { counterNumber: spec.counterNumber ?? null }, { date: spec.date })
+        ? await nextRefFromSeries(tx, seriesKind, undefined, { date: spec.date })
         : null;
 
     const spineId = await engineCreateSpine(tx, {

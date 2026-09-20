@@ -53,9 +53,6 @@ export type PostReceiptVoucherArgs = {
     narration?:        string;
     /** The branch this receipt belongs to — REQUIRED, like every voucher. */
     branchId:          string;
-    /** POS counter the receipt was taken at — the counter part of the reference.
-     *  Omit for office / online receipts that belong to no counter. */
-    counterNumber?:    number | null;
     /**
      * POS shift the receipt was taken on — stamped onto the voucher's
      * `sourceShiftId`, which is how the counter's Payment/Receipt tab and the
@@ -140,7 +137,6 @@ export async function postSettlementVoucher(
         ],
         post:          true,
         branchId:      args.branchId,
-        counterNumber: args.counterNumber ?? null,
         shiftId:       args.shiftId,
     });
     const voucherRef = voucher.reference;
