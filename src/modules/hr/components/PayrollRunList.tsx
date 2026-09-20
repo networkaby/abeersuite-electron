@@ -39,9 +39,12 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
             <div className="px-6 pt-3 pb-6">
                 <DataPageHeader
                     title="Payroll"
+                    // Never undefined: a subtitle that arrives with the data
+                    // pushes the whole page down by its own height once the
+                    // fetch lands. It says "…" until it can say a number.
                     subtitle={data
                         ? `${rows.length} run${rows.length === 1 ? "" : "s"}, ${posted} posted${refreshing ? " · refreshing…" : ""}`
-                        : undefined}
+                        : "Reading the runs…"}
                     icon={<WalletMinimal size={20} />}
                 />
 

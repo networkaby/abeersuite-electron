@@ -114,9 +114,11 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
             <div className="px-6 pt-3 pb-6">
                 <DataPageHeader
                     title={data ? `Payroll — ${formatPeriod(data.periodFrom, data.periodTo)}` : "Payroll"}
+                    // Never undefined — see PayrollRunList: a subtitle that
+                    // appears with the data shifts the page under the pointer.
                     subtitle={data
                         ? `${data.headcount} staff · dated ${formatDate(data.postingDate)}${refreshing ? " · refreshing…" : ""}`
-                        : undefined}
+                        : "Reading the run…"}
                     icon={<WalletMinimal size={20} />}
                     actions={data ? (
                         <div className="flex items-center gap-2">

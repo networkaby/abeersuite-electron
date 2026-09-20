@@ -16,6 +16,15 @@
 //
 // Nothing here writes until Generate is pressed; the dates can be moved as
 // often as you like.
+//
+// The whole skeleton is on screen from the first paint — toolbar, the line
+// that says what is being paid, the totals, the search and the table — and
+// only the VALUES arrive later. Nothing is mounted or unmounted by the fetch,
+// so the page cannot jump under the pointer while you are reaching for a
+// date field. That is also why neither date carries a `hint`: a hint under
+// one field and not the other makes the two inputs sit at different heights,
+// and a hint that appears only once the server answers moves them again.
+// Where the From date came from is said in the sentence below instead.
 
 import { Fragment, useMemo, useState } from "react";
 import axios from "axios";
@@ -91,14 +100,20 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
 
     const blocked = !!data?.overlapRunId;
 
+    // Said in one always-present line rather than as a hint under the From
+    // field, so the toolbar is the same height before and after the fetch.
+    const startedNote = data?.startedFrom === "after-last-run"
+        ? "From is the day after the last payroll."
+        : data?.startedFrom === "first-joining"
+            ? "No payroll has been run before, so From is the earliest joining date."
+            : "";
+
+    const money = (paise: number | undefined) => (data ? formatRupeesFromPaise(paise ?? 0) : "—");
+
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
-                <Field label="From" hint={
-                    data?.startedFrom === "after-last-run" ? "The day after the last payroll."
-                        : data?.startedFrom === "first-joining" ? "No payroll has been run before — the earliest joining date."
-                            : undefined
-                }>
+                <Field label="From">
                     {(id) => (
                         <TallyDateInput
                             id={id}
@@ -108,7 +123,7 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                         />
                     )}
                 </Field>
-                <Field label="Till" hint="Usually today.">
+                <Field label="Till">
                     {(id) => (
                         <TallyDateInput
                             id={id}
@@ -118,25 +133,35 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                         />
                     )}
                 </Field>
-                <Button type="button" variant="outline" size="sm" onClick={reload} disabled={refreshing}>
+                {/* Fixed width, so "Reading…" does not make the button breathe. */}
+                <Button type="button" variant="outline" size="sm" className="w-24" onClick={reload} disabled={refreshing}>
                     {refreshing ? "Reading…" : "Refresh"}
                 </Button>
-                <div className="ml-auto flex items-end gap-2">
-                    {canRun && (
-                        <Button type="button" onClick={generate} disabled={saving || loading || blocked || !data?.headcount}>
-                            {saving ? "Generating…" : "Generate this run"}
-                        </Button>
-                    )}
-                </div>
+                {canRun && (
+                    <Button
+                        type="button"
+                        className="ml-auto w-44"
+                        onClick={generate}
+                        disabled={saving || loading || blocked || !data?.headcount}
+                    >
+                        {saving ? "Generating…" : "Generate this run"}
+                    </Button>
+                )}
             </div>
 
-            {data && (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CalendarRange size={15} />
-                    Paying <strong className="text-foreground">{formatPeriod(data.periodFrom, data.periodTo)}</strong>
-                    {" — "}every day since the last payroll, proportioned to the days each person was on the staff.
-                </p>
-            )}
+            {/* Always on screen — two lines' worth of room, held whether or not
+                there is anything to say yet. */}
+            <p className="flex min-h-10 items-start gap-2 text-sm text-muted-foreground">
+                <CalendarRange size={15} className="mt-0.5 shrink-0" />
+                <span>
+                    {data ? (
+                        <>
+                            Paying <strong className="text-foreground">{formatPeriod(data.periodFrom, data.periodTo)}</strong>
+                            {" — "}proportioned to the days each person was on the staff.{startedNote && ` ${startedNote}`}
+                        </>
+                    ) : "Reading what is owed since the last payroll…"}
+                </span>
+            </p>
 
             {blocked && (
                 <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
@@ -145,34 +170,33 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                 </p>
             )}
 
-            <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
+            {/* Errors only. The spinner is deliberately not used here: swapping a
+                centred spinner for the table is the biggest jump on the page. */}
+            {error && <QueryStateBlock loading={false} error={error} hasData={!!data} onRetry={reload} />}
 
-            {data && (
-                <>
-                    <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
-                        <Stat label="Staff" value={String(data.headcount)} />
-                        <Stat label="Gross" value={formatRupeesFromPaise(data.grossPaise)} />
-                        <Stat label="Deductions" value={formatRupeesFromPaise(data.deductionsPaise)} />
-                        <Stat label="Net payable" value={formatRupeesFromPaise(data.netPaise)} strong />
-                        {!!data.skippedCount && (
-                            <Stat label="Not included" value={String(data.skippedCount)} />
-                        )}
-                    </div>
+            <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <Stat label="Staff" value={data ? String(data.headcount) : "—"} />
+                <Stat label="Gross" value={money(data?.grossPaise)} />
+                <Stat label="Deductions" value={money(data?.deductionsPaise)} />
+                <Stat label="Net payable" value={money(data?.netPaise)} strong />
+                <Stat label="Not included" value={data ? String(data.skippedCount) : "—"} />
+            </div>
 
-                    <div className="relative">
-                        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                        <Input
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder="Search staff"
-                            aria-label="Search staff on this run"
-                            className="h-9 w-72 pl-8 text-sm"
-                        />
-                    </div>
+            <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Search staff"
+                    aria-label="Search staff on this run"
+                    disabled={!data}
+                    className="h-9 w-72 pl-8 text-sm"
+                />
+            </div>
 
-                    <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
-                        <Table className="min-w-max">
-                            <TableHeader>
+            <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
+                <Table className="min-w-max">
+                    <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-8" />
                                     <TableHead>Staff</TableHead>
@@ -184,7 +208,16 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {!rows.length && <TableEmptyRow colSpan={7} message="Nobody was on the staff in this period." />}
+                                {!data && (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                                            Reading…
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                {data && !rows.length && (
+                                    <TableEmptyRow colSpan={7} message="Nobody was on the staff in this period." />
+                                )}
                                 {rows.map((l) => (
                                     <Fragment key={l.id}>
                                         <TableRow
@@ -215,11 +248,9 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                         {open.has(l.id) && <Breakup line={l} />}
                                     </Fragment>
                                 ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </>
-            )}
+                    </TableBody>
+                </Table>
+            </div>
         </div>
     );
 }
