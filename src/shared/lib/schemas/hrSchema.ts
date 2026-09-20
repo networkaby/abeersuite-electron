@@ -74,3 +74,29 @@ export const staffSalaryCreateSchema = z.object({
 });
 
 export type StaffSalaryCreate = z.infer<typeof staffSalaryCreateSchema>;
+
+// ── Payroll ───────────────────────────────────────────────────────────────────
+
+const isoMonth = z.string().regex(/^\d{4}-\d{2}$/, "Expected YYYY-MM");
+
+/** Generate the run for a month. The posting date defaults to the month end. */
+export const payrollRunCreateSchema = z.object({
+    periodMonth: isoMonth,
+    postingDate: isoDate.optional(),
+    note:        optText(300),
+    /** Generate AND post in one go. Without it the run lands as a draft. */
+    postImmediately: z.boolean().default(false),
+});
+
+export type PayrollRunCreate = z.infer<typeof payrollRunCreateSchema>;
+
+/** Editing a draft run: hold someone back, or change the date / note. */
+export const payrollRunPatchSchema = z.object({
+    postingDate: isoDate.optional(),
+    note:        optText(300),
+    /** Line ids to include / exclude. Only lines the generator could pay may be included. */
+    include:     z.array(z.number().int().positive()).optional(),
+    exclude:     z.array(z.number().int().positive()).optional(),
+});
+
+export type PayrollRunPatch = z.infer<typeof payrollRunPatchSchema>;

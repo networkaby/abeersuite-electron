@@ -189,6 +189,10 @@ export const PERMISSIONS = {
     // salary revisions and "mark as left". A person may always save their OWN
     // personal / bank details (the self rule of PUT /api/users/[id]).
     HR_STAFF_EDIT: "hr:staff:edit",
+    // Payroll — generating a month's run is a separate, heavier act than editing
+    // one person's record, so it has its own key. Posting the run to the books
+    // ALSO needs the journal-voucher post gate, checked by the post route.
+    HR_PAYROLL_RUN: "hr:payroll:run",
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

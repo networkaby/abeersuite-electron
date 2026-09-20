@@ -88,6 +88,8 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "OfflinePolicy": { model: "OfflinePolicy", delegate: "offlinePolicy", pk: ["id"], exact: [], dates: ["updatedAt"], cache: [] },
     "OrgDefaults": { model: "OrgDefaults", delegate: "orgDefaults", pk: ["id"], exact: ["clearanceMarginCutoffPct"], dates: ["updatedAt"], cache: [] },
     "payment_gateways": { model: "PaymentGateway", delegate: "paymentGateway", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
+    "payroll_runs": { model: "PayrollRun", delegate: "payrollRun", pk: ["id"], exact: [], dates: ["createdAt", "periodMonth", "postedAt", "postingDate", "updatedAt"], cache: [] },
+    "payroll_run_lines": { model: "PayrollRunLine", delegate: "payrollRunLine", pk: ["id"], exact: [], dates: ["effectiveFrom"], cache: [] },
     "Permission": { model: "Permission", delegate: "permission", pk: ["id"], exact: [], dates: [], cache: [] },
     "Person": { model: "Person", delegate: "person", pk: ["id"], exact: [], dates: ["agreedAt", "convertedAt", "createdAt", "mergedAt", "updatedAt"], cache: [] },
     "PersonCompany": { model: "PersonCompany", delegate: "personCompany", pk: ["id"], exact: [], dates: ["linkedAt", "unlinkedAt", "updatedAt"], cache: [] },

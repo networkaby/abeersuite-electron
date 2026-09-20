@@ -100,3 +100,89 @@ model StaffSalary {
   @@index([updatedAt])
   @@map("staff_salaries")
 }
+
+// ── Payroll ───────────────────────────────────────────────────────────────────
+// One run per month, so a month cannot be accrued twice. Creating a run reads
+// every current staff member's salary revision in force on the posting date and
+// writes one line per person — the amounts are FROZEN here, so a salary revised
+// in October can never change what September posted.
+//
+// Posting turns the run into ONE journal voucher: a credit to each person's own
+// ledger (their net), and debits to the salary expense ledgers, grouped — the
+// P&L should read "Salary & Wages 12,40,000", not three hundred lines.
+
+model PayrollRun {
+  id Int @id @default(autoincrement())
+
+  /// First day of the month being paid (2026-09-01). Unique — one run a month.
+  periodMonth DateTime @unique @db.Date
+  /// The date the journal carries. Last day of the month unless changed.
+  postingDate DateTime @db.Date
+  /// DRAFT | POSTED | CANCELLED. A plain string for the same reason as
+  /// StaffProfile.employmentType — a new state must not need an enum migration.
+  status      String   @default("DRAFT")
+
+  /// The journal voucher this run posted. Scalar snapshot, no FK (like
+  /// StaffSalary.createdById): cancelling the voucher must not cascade to the
+  /// run's history. `voucherRef` is the JV-… number, so the list needs no join.
+  voucherId  Int?
+  voucherRef String?
+
+  note String?
+
+  // Denormalised totals of the INCLUDED lines, in paise.
+  grossPaise      Int @default(0)
+  deductionsPaise Int @default(0)
+  netPaise        Int @default(0)
+  /// How many people the run actually pays (included lines).
+  headcount       Int @default(0)
+
+  createdById Int
+  postedById  Int?
+  postedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  lines PayrollRunLine[]
+
+  @@index([status])
+  @@index([updatedAt])
+  @@map("payroll_runs")
+}
+
+// One person's salary for one month, as it stood when the run was generated.
+model PayrollRunLine {
+  id    Int        @id @default(autoincrement())
+  runId Int
+  run   PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  userId Int
+  /// The name at the time of the run — a person can be renamed afterwards.
+  staffName String
+
+  /// The revision the amounts came from. Scalar snapshot, no FK: deleting a
+  /// revision must never rewrite a posted month.
+  salaryId      Int?
+  effectiveFrom DateTime? @db.Date
+  /// The salary lines, copied whole — the payslip reads from here, not from
+  /// StaffSalary, so it prints the same thing in ten years.
+  linesJson     Json
+
+  grossPaise      Int @default(0)
+  deductionsPaise Int @default(0)
+  netPaise        Int @default(0)
+
+  /// The two ledgers as resolved at generation time. Null only on a line that
+  /// is not included (no ledger is exactly why it cannot be).
+  ledgerAccountId  Int?
+  expenseAccountId Int?
+
+  /// Only included lines reach the journal. Untick a person to hold their
+  /// salary back; `skipReason` is set by the generator when it cannot pay them.
+  included   Boolean @default(true)
+  skipReason String?
+
+  @@unique([runId, userId])
+  @@index([userId])
+  @@map("payroll_run_lines")
+}

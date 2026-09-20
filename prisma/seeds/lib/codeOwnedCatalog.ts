@@ -80,6 +80,10 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // bank), salary revisions, and "mark as left". Self-edits of personal / bank
     // details on one's own profile page need no grant.
     { id: "hr:staff:edit", label: "Edit staff records", module: "hr", description: "Edit any staff member's HR profile (staff code, joining date, personal and bank details, salary structure) and mark them as left." },
+    // Payroll — generate a month's run and post it as one journal voucher.
+    // Separate from hr:staff:edit: a clerk may keep records without ever being
+    // able to accrue a lakh of salary. Posting also needs the JOURNAL post gate.
+    { id: "hr:payroll:run", label: "Run payroll", module: "hr", description: "Generate the monthly payroll run from every staff member's salary structure, and post it to the books as one journal voucher." },
 
     // finance — per-kind GL voucher gates (finance:voucher:<action>:<kind>). The
     // routes accept the per-kind key OR the generic key above. CANCEL covers

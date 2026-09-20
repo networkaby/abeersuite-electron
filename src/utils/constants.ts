@@ -138,6 +138,7 @@ import {
     UsersRound,
     Voicemail,
     Wallet,
+    WalletMinimal,
     Wand2,
     Warehouse,
     Waves,
@@ -628,6 +629,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         pathPrefixes: ["/office/hr"],
         children: [
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
+            { label: "Payroll", icon: WalletMinimal, href: "/office/hr/payroll", sidebarKey: "payroll" },
         ],
     },
 

@@ -1539,6 +1539,78 @@ ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) N
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "payroll_runs" (
+    "id" SERIAL NOT NULL,
+    "periodMonth" DATE NOT NULL,
+    "postingDate" DATE NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "voucherId" INTEGER,
+    "voucherRef" TEXT,
+    "note" TEXT,
+    "grossPaise" INTEGER NOT NULL DEFAULT 0,
+    "deductionsPaise" INTEGER NOT NULL DEFAULT 0,
+    "netPaise" INTEGER NOT NULL DEFAULT 0,
+    "headcount" INTEGER NOT NULL DEFAULT 0,
+    "createdById" INTEGER NOT NULL,
+    "postedById" INTEGER,
+    "postedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "payroll_runs_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "periodMonth" DATE NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "postingDate" DATE NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "voucherId" INTEGER;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "voucherRef" TEXT;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "grossPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "deductionsPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "headcount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "postedById" INTEGER;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "postedAt" TIMESTAMP(3);
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "payroll_run_lines" (
+    "id" SERIAL NOT NULL,
+    "runId" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "staffName" TEXT NOT NULL,
+    "salaryId" INTEGER,
+    "effectiveFrom" DATE,
+    "linesJson" JSONB NOT NULL,
+    "grossPaise" INTEGER NOT NULL DEFAULT 0,
+    "deductionsPaise" INTEGER NOT NULL DEFAULT 0,
+    "netPaise" INTEGER NOT NULL DEFAULT 0,
+    "ledgerAccountId" INTEGER,
+    "expenseAccountId" INTEGER,
+    "included" BOOLEAN NOT NULL DEFAULT true,
+    "skipReason" TEXT,
+
+    CONSTRAINT "payroll_run_lines_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "runId" INTEGER NOT NULL;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "staffName" TEXT NOT NULL;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "salaryId" INTEGER;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "effectiveFrom" DATE;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "linesJson" JSONB NOT NULL;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "grossPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "deductionsPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "included" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "skipReason" TEXT;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "ChatRoom" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -4003,6 +4075,21 @@ CREATE INDEX IF NOT EXISTS "staff_salaries_updatedAt_idx" ON "staff_salaries"("u
 CREATE UNIQUE INDEX IF NOT EXISTS "staff_salaries_userId_effectiveFrom_key" ON "staff_salaries"("userId", "effectiveFrom");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "payroll_runs_periodMonth_key" ON "payroll_runs"("periodMonth");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "payroll_runs_status_idx" ON "payroll_runs"("status");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "payroll_runs_updatedAt_idx" ON "payroll_runs"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "payroll_run_lines_userId_idx" ON "payroll_run_lines"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "payroll_run_lines_runId_userId_key" ON "payroll_run_lines"("runId", "userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
 
 -- CreateIndex
@@ -4854,6 +4941,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "staff_salaries" ADD CONSTRAINT "staff_salaries_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "payroll_run_lines" ADD CONSTRAINT "payroll_run_lines_runId_fkey" FOREIGN KEY ("runId") REFERENCES "payroll_runs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6547,6 +6641,20 @@ DO $$ BEGIN
     IF to_regclass('public."payment_gateways"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "payment_gateways";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "payment_gateways"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."payroll_runs"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "payroll_runs";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "payroll_runs"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."payroll_run_lines"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "payroll_run_lines";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "payroll_run_lines"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
