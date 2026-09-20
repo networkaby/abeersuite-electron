@@ -99,3 +99,20 @@ export const payrollRunPatchSchema = z.object({
 });
 
 export type PayrollRunPatch = z.infer<typeof payrollRunPatchSchema>;
+
+/**
+ * Pay several staff at once. Amounts are paise and people are named by USER id,
+ * never by account id — the route resolves each person's own ledger itself, so
+ * a crafted request cannot debit some other account.
+ */
+export const payrollPaySchema = z.object({
+    sourceAccountId: z.number().int().positive(),
+    date:            isoDate,
+    note:            optText(300),
+    lines: z.array(z.object({
+        userId:      z.number().int().positive(),
+        amountPaise: z.number().int().positive(),
+    })).min(1, "Pick at least one person"),
+});
+
+export type PayrollPay = z.infer<typeof payrollPaySchema>;

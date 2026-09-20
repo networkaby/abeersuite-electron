@@ -21,8 +21,9 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { PAYROLL_STATUS_LABELS, formatPeriod, type PayrollRunRow } from "../lib/payrollTypes";
 import PayrollGenerateTab from "./PayrollGenerateTab";
+import PayrollPayTab from "./PayrollPayTab";
 
-const TABS = ["generate", "history"] as const;
+const TABS = ["generate", "pay", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function PayrollRunList({ canRun }: { canRun: boolean }) {
@@ -58,6 +59,11 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
                             onGenerated={(id) => { setTab("history"); reload(); router.push(`/office/hr/payroll/${id}`); }}
                         />
                     )}
+
+                    {/* Settling what the runs accrued. Its own tab because paying
+                        is a different act from generating, and happens on a
+                        different day. */}
+                    {tab === "pay" && <PayrollPayTab canPay={canRun} onPaid={reload} />}
 
                     {tab === "history" && (
                         <>

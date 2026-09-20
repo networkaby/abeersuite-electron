@@ -78,6 +78,21 @@ export interface PayslipDto {
     effectiveFrom: string | null;
 }
 
+/**
+ * One person on the "who is owed" list. `balance` comes off their salary
+ * ledger, which is CREDIT-normal: positive is owed to them, negative is an
+ * advance they are still holding.
+ */
+export interface PayableStaffDto {
+    userId: number;
+    name: string;
+    staffCode: string | null;
+    hasLeft: boolean;
+    leftOn: string | null;
+    ledger: { id: number; name: string };
+    balance: number;
+}
+
 /** The run workspace's payload. */
 export interface PayrollRunDetail extends PayrollRunRow {
     lines: PayrollLineDto[];
