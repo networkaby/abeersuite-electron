@@ -7,6 +7,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelect";
 
 // Identity-only user creation. Role, branch, department, and reporting line
 // are NOT accepted — they all flow from Position appointments on
@@ -19,37 +20,8 @@ const createUserSchema = z.object({
     password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-const USER_SELECT = {
-    id:          true,
-    name:        true,
-    email:       true,
-    role:        true,
-    title:       true,
-    scope:       true,
-    createdAt:   true,
-    managerId:   true,
-    avatarUrl:   true,
-    userRole:    { select: { id: true, label: true, color: true, rank: true } },
-    manager:     { select: { id: true, name: true } },
-    userPositions: {
-        select: {
-            position: {
-                select: {
-                    id:           true,
-                    title:        true,
-                    branch:       { select: { id: true, name: true } },
-                    department:   { select: { id: true, name: true } },
-                    roleTemplates: {
-                        orderBy: { roleId: "asc" as const },
-                        include: {
-                            role: { select: { id: true, label: true, color: true } },
-                        },
-                    },
-                },
-            },
-        },
-    },
-} as const;
+// The row shape and the flattening live in src/shared/lib/users/staffSelect.ts,
+// shared with /api/hr/staff so both lists describe a person the same way.
 
 export async function GET() {
     const { response } = await requireAuth();
@@ -57,35 +29,9 @@ export async function GET() {
     try {
         const users = await prisma.user.findMany({
             orderBy: { createdAt: "desc" },
-            select: USER_SELECT,
+            select: STAFF_USER_SELECT,
         });
-        // Flatten the UserPosition junction so the client gets `positions: [...]`
-        // directly (cleaner than `userPositions: [{ position: {...} }]`).
-        // Derive `branches`/`departments` from the user's positions so callers
-        // that used to read these arrays off User keep working.
-        const shaped = users.map((u) => {
-            const { userPositions, ...rest } = u;
-            const positions = userPositions.map((up) => {
-                const { roleTemplates, ...pos } = up.position;
-                return {
-                    ...pos,
-                    roleTemplates: roleTemplates.map((row) => row.role),
-                };
-            });
-            const branchMap = new Map<string, { id: string; name: string }>();
-            const deptMap   = new Map<string, { id: string; name: string }>();
-            for (const p of positions) {
-                if (p.branch)     branchMap.set(p.branch.id, p.branch);
-                if (p.department) deptMap.set(p.department.id, p.department);
-            }
-            return {
-                ...rest,
-                positions,
-                branches:    [...branchMap.values()],
-                departments: [...deptMap.values()],
-            };
-        });
-        return NextResponse.json(shaped);
+        return NextResponse.json(users.map(shapeStaffUser));
     } catch (e) {
         return handleApiError(e, "Failed to fetch users");
     }
@@ -119,10 +65,10 @@ export async function POST(req: Request) {
                 role:     null,
                 scope:    "OWN",
             },
-            select: USER_SELECT,
+            select: STAFF_USER_SELECT,
         });
 
-        return NextResponse.json(user);
+        return NextResponse.json(shapeStaffUser(user));
     } catch (e) {
         return handleApiError(e, "Failed to create user");
     }

@@ -1463,6 +1463,82 @@ ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "createdById" INTEGER 
 ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "staff_profiles" (
+    "userId" INTEGER NOT NULL,
+    "staffCode" TEXT,
+    "joinedOn" DATE,
+    "leftOn" DATE,
+    "leftReason" TEXT,
+    "employmentType" TEXT NOT NULL DEFAULT 'FULL_TIME',
+    "weeklyOff" INTEGER[] DEFAULT ARRAY[0]::INTEGER[],
+    "fatherName" TEXT,
+    "address" TEXT,
+    "bloodGroup" TEXT,
+    "emergencyName" TEXT,
+    "emergencyPhone" TEXT,
+    "aadhaarLast4" VARCHAR(4),
+    "panNumber" VARCHAR(10),
+    "uanNumber" VARCHAR(12),
+    "esiNumber" VARCHAR(17),
+    "bankJson" JSONB,
+    "notes" TEXT,
+    "ledgerAccountId" INTEGER,
+    "expenseAccountId" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "staff_profiles_pkey" PRIMARY KEY ("userId")
+);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "staffCode" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "joinedOn" DATE;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "leftOn" DATE;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "leftReason" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "employmentType" TEXT NOT NULL DEFAULT 'FULL_TIME';
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "weeklyOff" INTEGER[] DEFAULT ARRAY[0]::INTEGER[];
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "address" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bloodGroup" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "emergencyName" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "emergencyPhone" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "aadhaarLast4" VARCHAR(4);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "panNumber" VARCHAR(10);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "uanNumber" VARCHAR(12);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "esiNumber" VARCHAR(17);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bankJson" JSONB;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "staff_salaries" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "effectiveFrom" DATE NOT NULL,
+    "linesJson" JSONB NOT NULL,
+    "grossPaise" INTEGER NOT NULL,
+    "netPaise" INTEGER NOT NULL,
+    "note" TEXT,
+    "createdById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "staff_salaries_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "effectiveFrom" DATE NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "linesJson" JSONB NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "grossPaise" INTEGER NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "ChatRoom" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -3906,6 +3982,27 @@ CREATE INDEX IF NOT EXISTS "BankStatementMatch_groupId_idx" ON "BankStatementMat
 CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementMatch_statementLineId_glLineId_key" ON "BankStatementMatch"("statementLineId", "glLineId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "staff_profiles_staffCode_key" ON "staff_profiles"("staffCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "staff_profiles_ledgerAccountId_key" ON "staff_profiles"("ledgerAccountId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "staff_profiles_leftOn_idx" ON "staff_profiles"("leftOn");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "staff_profiles_expenseAccountId_idx" ON "staff_profiles"("expenseAccountId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "staff_profiles_updatedAt_idx" ON "staff_profiles"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "staff_salaries_updatedAt_idx" ON "staff_salaries"("updatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "staff_salaries_userId_effectiveFrom_key" ON "staff_salaries"("userId", "effectiveFrom");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
 
 -- CreateIndex
@@ -4729,6 +4826,34 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "BankStatementMatch" ADD CONSTRAINT "BankStatementMatch_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "staff_profiles" ADD CONSTRAINT "staff_profiles_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "staff_profiles" ADD CONSTRAINT "staff_profiles_ledgerAccountId_fkey" FOREIGN KEY ("ledgerAccountId") REFERENCES "Account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "staff_profiles" ADD CONSTRAINT "staff_profiles_expenseAccountId_fkey" FOREIGN KEY ("expenseAccountId") REFERENCES "Account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "staff_salaries" ADD CONSTRAINT "staff_salaries_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6572,6 +6697,20 @@ DO $$ BEGIN
     IF to_regclass('public."SocialConnection"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "SocialConnection";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "SocialConnection"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."staff_profiles"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "staff_profiles";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "staff_profiles"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('userId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."staff_salaries"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "staff_salaries";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "staff_salaries"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

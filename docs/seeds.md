@@ -444,6 +444,7 @@ the script, and add the row above.
 | Hard-clean must remove a new non-bootstrap table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
 | Data moves into bootstrap | **remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES`** in `hard-clean.ts` — bootstrap data must survive a hard-clean |
 | Add a config table (settings / master / org / RBAC / workflow / POS) | add it to `lib/personalSnapshot.ts` (`exportPersonal` + `importPersonal`) so the personal snapshot stays complete |
+| HR & People (`StaffProfile`, `StaffSalary`) | captured in full as `staffProfiles` / `staffSalaries` (user by email, ledgers by name) — the owner's 2026-09-20 call is no exclusions; a snapshot older than version 3 simply carries none and seeds none |
 
 > **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` in the same commit. It is now the single seed that describes the schema — if it drifts, a new install is broken and nobody finds out until go-live.
 

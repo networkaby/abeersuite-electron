@@ -26,6 +26,10 @@ export const ACCOUNT_GROUPS = {
     // See isStockEligibleAccount() for the rule and exceptions.
     SALES_ACCOUNTS:    "Sales Accounts",
     PURCHASE_ACCOUNTS: "Purchase Accounts",
+    // HR & People — every staff member's own ledger lives here (LIABILITY under
+    // Current Liabilities). Salary accrues INTO it, advances and payments go
+    // OUT of it, so its balance reads "owed to them" or "advance outstanding".
+    SALARY_PAYABLE:    "Salary Payable",
 } as const;
 
 export type AccountGroupName = (typeof ACCOUNT_GROUPS)[keyof typeof ACCOUNT_GROUPS];
@@ -39,8 +43,11 @@ export type AccountGroupName = (typeof ACCOUNT_GROUPS)[keyof typeof ACCOUNT_GROU
  * also hit an operator-created till that merely mentions the word.
  */
 export const ACCOUNT_LEDGERS = {
-    PETTY_CASH: "Petty Cash",
-    WALK_IN:    "Walk-in Cash Customer",
+    PETTY_CASH:   "Petty Cash",
+    WALK_IN:      "Walk-in Cash Customer",
+    // The default Dr side of a payroll journal when a staff profile names no
+    // expense ledger of its own (StaffProfile.expenseAccountId).
+    SALARY_WAGES: "Salary & Wages",
 } as const;
 
 /**

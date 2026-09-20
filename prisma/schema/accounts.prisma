@@ -131,6 +131,10 @@ model Account {
   taskRecurrences          TaskRecurrence[]           @relation("TaskRecurrenceAccount")
   // Phase 5 5D-4: InvVoucher.accountId dropped — the party lives on the spine
   // (UniversalVoucher.partyAccountId), so no InvVoucher back-relation here.
+  // HR & People — a staff member's own ledger under "Salary Payable", and the
+  // salary expense ledger their payroll debits (hr.prisma).
+  staffLedgerOf            StaffProfile?              @relation("StaffLedger")
+  staffSalaryExpenseOf     StaffProfile[]             @relation("StaffSalaryExpense")
   // POS reverse rels
   branchVaults             Branch[]                   @relation("BranchVaultAccount")
   counterTills             PosCounter[]               @relation("CounterTill")

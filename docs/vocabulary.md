@@ -113,6 +113,24 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
+## Staff
+
+**Definition:** A person who works here. Staff = `User` + HR rows — there is no separate employee record. The person who signs in, holds a seat and opens a shift is the person HR & People keeps a record of (`StaffProfile`, `StaffSalary`). A helper who never logs in still gets a User row.
+
+---
+
+## Seat
+
+**Definition:** A `Position` in the org chart — a named slot a person is appointed to (`UserPosition`). "Every seat under the name, with where it sits" is the line on the counter sign-in card and on the HR profile header.
+
+---
+
+## Staff ledger · Salary Payable
+
+**Definition:** Every staff member's own ledger, under the **Salary Payable** group (LIABILITY, Current Liabilities), opened the first time their HR profile is saved. Salary accrues INTO it (a later payroll journal), advances and salary payments go OUT of it (ordinary Payment vouchers), so its balance always reads "owed to them" (Cr) or "advance outstanding" (Dr). Not to be confused with the person's **salary expense ledger** (`Salary & Wages`, or a per-person one like `Naba Salary`) — that is the Dr side, chosen on the Job tab.
+
+---
+
 ### Data Flow Terms
 
 ## Worker Context

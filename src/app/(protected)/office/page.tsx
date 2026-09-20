@@ -58,7 +58,7 @@ export default async function OfficePage() {
     const showShowroom = can("pos:shift:open");
     const showFinance  = hasModuleNavAccess(user.permissions, "accountancy");
     const showDespatch = hasModuleNavAccess(user.permissions, "inventory");
-    const showHr       = can("users:edit");
+    const showHr       = hasModuleNavAccess(user.permissions, "hr") || can("users:edit");
 
     const anyCard = showAdmin || showRepair || showShowroom || showFinance || showDespatch || showHr;
 

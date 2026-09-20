@@ -46,7 +46,7 @@ import type { PrismaClient } from "../../../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { aliasRows } from "../../../src/modules/accountancy/lib/accountAlias";
 
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 // Staff password hashes are NEVER exported (would leak into git). A user
 // CREATED by an overlay gets this default; existing users keep their password
@@ -82,6 +82,9 @@ export interface PersonalSnapshot {
     users: Row[];
     userPositions: Row[];
     userPermissions: Row[];
+    /** HR & People — the staff record per user (by email) and its salary revisions. */
+    staffProfiles: Row[];
+    staffSalaries: Row[];
     paymentGateways: Row[];
     deliveryMethods: Row[];
     /** Customer Quality marketing-group master (Settings → Customer Groups). */
@@ -356,6 +359,14 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const userPositions = (await prisma.userPosition.findMany()).map((up) => externalize(omit(up, ["createdAt"]), { userId: "user" }, idx));
     const userPermissions = (await prisma.userPermission.findMany()).map((up) => externalize(omit(up, ["id", "createdAt"]), { userId: "user" }, idx));
 
+    // ── HR & People (staff record + salary revisions; user by email, ledgers by name) ──
+    // The staff ledgers are plain GL accounts (no personId), so the `accounts`
+    // export above already carries them and the import re-resolves them by name.
+    const staffProfiles = (await prisma.staffProfile.findMany()).map((p) =>
+        externalize(omit(p, ["createdAt", "updatedAt"]), { userId: "user", ledgerAccountId: "account", expenseAccountId: "account" }, idx));
+    const staffSalaries = (await prisma.staffSalary.findMany()).map((s) =>
+        externalize(omit(s, ["id", "createdAt", "updatedAt", "createdById"]), { userId: "user" }, idx));
+
     // ── Delivery methods (courier options offered at checkout — config only) ──
     const deliveryMethods = (await prisma.deliveryMethod.findMany()).map((m) => omit(m, ["id", "createdAt", "updatedAt"]));
 
@@ -392,6 +403,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         tierPeriods,
         branches, departments,
         roles, rolePermissions, departmentPermissions, positions, positionRoles, users, userPositions, userPermissions,
+        staffProfiles, staffSalaries,
         paymentGateways, deliveryMethods, customerGroups, posCounters, posPaymentAccounts, posServices,
         pipelines, workGroups, works, workGroupWorks, ticketStatuses, ticketWorkers, statusTransitions, workerTransitions,
     };
@@ -632,6 +644,39 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
             .filter((up: Row) => up.userId != null && permIds.has(up.permissionId));
         await prisma.userPermission.createMany({ data: rows as any, skipDuplicates: true });
         count("userPermissions", rows.length);
+    }
+
+    // ── Phase 5b: HR & People (needs users + accounts) ──
+    // Snapshots captured before version 3 carry no staff keys — an old file
+    // simply seeds no profiles rather than failing here.
+    {
+        let n = 0;
+        for (const p of snap.staffProfiles ?? []) {
+            const row = internalize(p, { userId: "user", ledgerAccountId: "account", expenseAccountId: "account" }, idx);
+            if (row.userId == null) continue;
+            const { userId, ...data } = row;
+            await prisma.staffProfile.upsert({ where: { userId }, update: data as any, create: { userId, ...data } as any });
+            n++;
+        }
+        count("staffProfiles", n);
+    }
+    {
+        let n = 0;
+        for (const s of snap.staffSalaries ?? []) {
+            const userId = idx.user.toId(s.userId);
+            if (userId == null) continue;
+            const { userId: _u, ...data } = s;
+            const effectiveFrom = new Date(data.effectiveFrom);
+            // The author of a seeded revision is unknowable — seeds run as nobody.
+            const payload = { ...data, effectiveFrom, createdById: 0 };
+            await prisma.staffSalary.upsert({
+                where: { userId_effectiveFrom: { userId, effectiveFrom } },
+                update: payload as any,
+                create: { userId, ...payload } as any,
+            });
+            n++;
+        }
+        count("staffSalaries", n);
     }
 
     // ── Phase 6: spend-tier ladders ──

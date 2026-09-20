@@ -26,10 +26,15 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
 import { pinClocksExpired, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 
 const schema = z.object({ email: z.string().email() });
 
-export type CounterPinState = "none" | "ready" | "password-due";
+/** `left` — HR marked this person as left; no sign-in of any kind, and the shell
+ *  drops the face card. The one answer that says something about the person,
+ *  and deliberately so: a card that keeps failing in silence reads as a broken
+ *  till, and the fact itself is one every colleague on the floor already knows. */
+export type CounterPinState = "none" | "ready" | "password-due" | "left";
 
 export async function POST(req: Request) {
     const counterId = thisCounterId();
@@ -50,9 +55,10 @@ export async function POST(req: Request) {
     try {
         const row = await prisma.userCounterPin.findFirst({
             where: { counterId, user: { email } },
-            select: { lastPasswordAt: true, lastLoginAt: true },
+            select: { lastPasswordAt: true, lastLoginAt: true, user: { select: { staffProfile: { select: { leftOn: true } } } } },
         });
         if (!row) return NextResponse.json({ state: "none" satisfies CounterPinState });
+        if (staffHasLeft(row.user.staffProfile)) return NextResponse.json({ state: "left" satisfies CounterPinState });
         return NextResponse.json({
             state: (pinClocksExpired(row) ? "password-due" : "ready") satisfies CounterPinState,
         });

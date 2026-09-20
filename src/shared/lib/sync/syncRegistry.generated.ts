@@ -110,6 +110,8 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "SavedFilter": { model: "SavedFilter", delegate: "savedFilter", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "ServiceCenter": { model: "ServiceCenter", delegate: "serviceCenter", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "SocialConnection": { model: "SocialConnection", delegate: "socialConnection", pk: ["id"], exact: [], dates: ["createdAt", "respondedAt"], cache: [] },
+    "staff_profiles": { model: "StaffProfile", delegate: "staffProfile", pk: ["userId"], exact: [], dates: ["createdAt", "joinedOn", "leftOn", "updatedAt"], cache: [] },
+    "staff_salaries": { model: "StaffSalary", delegate: "staffSalary", pk: ["id"], exact: [], dates: ["createdAt", "effectiveFrom", "updatedAt"], cache: [] },
     "StatusTransition": { model: "StatusTransition", delegate: "statusTransition", pk: ["id"], exact: [], dates: [], cache: [] },
     "stock_reservations": { model: "StockReservation", delegate: "stockReservation", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "strategy_points": { model: "StrategyPoint", delegate: "strategyPoint", pk: ["id"], exact: ["points"], dates: ["updatedAt"], cache: [] },

@@ -1,0 +1,102 @@
+// ── HR & People ───────────────────────────────────────────────────────────────
+// Staff = User + HR rows (decided 2026-09-18). There is no separate employee
+// entity: the person who signs in, holds a seat and opens a shift IS the person
+// HR keeps a record of. A helper who never logs in still gets a User row.
+//
+//   StaffProfile — the HR side of a User: employment dates, personal / KYC,
+//                  bank, and the two ledger links. One row per User, created the
+//                  first time HR saves anything about them.
+//   StaffSalary  — dated salary revisions. The structure in force on a date is
+//                  the latest row with effectiveFrom <= date, so a later payroll
+//                  run can compute any past month exactly.
+//
+// Both replicate to every counter like every other table (owner, 2026-09-20:
+// no extra restriction — the app is to be secured as a whole later). The one
+// sync note: StaffProfile is pinned to `watermark` in prisma/sync-tables.json,
+// because its only cascade parent is User and a child would be pulled only when
+// the User row moved — an edit to `leftOn` never touches User.updatedAt, and a
+// counter must refuse a left person promptly, line down or not.
+
+model StaffProfile {
+  userId Int  @id
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Free text ("EMP-001"); unique when set. No series — a staff id is typed once.
+  staffCode      String?   @unique
+  joinedOn       DateTime? @db.Date
+  /// No sign-in from this date (inclusive). Null = current staff. Set through the
+  /// HR profile's "Mark as left", which also vacates the seats and signs out every
+  /// open session; the User row itself is never deleted by HR.
+  leftOn         DateTime? @db.Date
+  leftReason     String?
+  /// FULL_TIME | PART_TIME | HELPER | CONTRACT — a plain string, validated by zod.
+  /// Not an enum: a new kind would need its own migration file (ADD VALUE cannot
+  /// be used in the transaction that adds it).
+  employmentType String    @default("FULL_TIME")
+  /// 0 = Sunday … 6 = Saturday, the BackupConfig.weekdays convention. The
+  /// attendance phase reads it; nothing in phase 1 does.
+  weeklyOff      Int[]     @default([0])
+
+  // Personal / KYC — edited on the person's own profile page (self or admin).
+  fatherName     String?
+  address        String?
+  bloodGroup     String?
+  emergencyName  String?
+  emergencyPhone String?
+  /// Only the last four digits are ever stored.
+  aadhaarLast4   String? @db.VarChar(4)
+  panNumber      String? @db.VarChar(10)
+  uanNumber      String? @db.VarChar(12)
+  esiNumber      String? @db.VarChar(17)
+  /// The same six-field bag as Person.bankJson — how WE pay THEM. Shape in
+  /// src/shared/lib/parties/partyBank.ts.
+  bankJson       Json?
+  notes          String?
+
+  // Books. `ledgerAccount` is this person's own ledger under "Salary Payable"
+  // (LIABILITY, under Current Liabilities): the Cr side of a future payroll
+  // journal, and the account every advance and salary payment goes through, so
+  // its balance always reads "owed to them" (Cr) or "advance outstanding" (Dr).
+  // Created with the profile, on the first save. `expenseAccount` is the Dr side
+  // of that journal; null means the org's "Salary & Wages" ledger, and the four
+  // people who already have a "<Name> Salary" expense ledger simply pick it here.
+  ledgerAccountId  Int?     @unique
+  ledgerAccount    Account? @relation("StaffLedger", fields: [ledgerAccountId], references: [id], onDelete: SetNull)
+  expenseAccountId Int?
+  expenseAccount   Account? @relation("StaffSalaryExpense", fields: [expenseAccountId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
+  salaries  StaffSalary[]
+
+  @@index([leftOn])
+  @@index([expenseAccountId])
+  @@index([updatedAt])
+  @@map("staff_profiles")
+}
+
+// One salary revision. Money is paise (Int), exact in JSON — the GL is rupees
+// and the conversion happens once, when a payroll run posts.
+model StaffSalary {
+  id      Int          @id @default(autoincrement())
+  userId  Int
+  profile StaffProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  /// First day this structure applies. Two revisions cannot start on the same day.
+  effectiveFrom DateTime @db.Date
+  /// [{ name, kind: "EARNING" | "DEDUCTION", amountPaise }] — read whole, never queried.
+  linesJson     Json
+  /// Sum of EARNING lines, denormalised so the directory never parses JSON.
+  grossPaise    Int
+  /// gross − DEDUCTION lines.
+  netPaise      Int
+  note          String?
+  /// Scalar snapshot, no FK — like UniversalVoucher.createdById.
+  createdById   Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@unique([userId, effectiveFrom])
+  @@index([updatedAt])
+  @@map("staff_salaries")
+}

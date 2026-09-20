@@ -1,0 +1,87 @@
+import "server-only";
+
+import type { Prisma } from "@/generated/prisma/client";
+import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
+import { createStaffLedger } from "./staffLedger";
+import { parseSalaryLines } from "./salaryLines";
+import type { StaffProfileDto, StaffSalaryDto } from "./staffTypes";
+
+/** Everything the profile workspace reads off a StaffProfile row. */
+export const STAFF_PROFILE_INCLUDE = {
+    ledgerAccount:  { select: { id: true, name: true, balance: true, normalBalance: true } },
+    expenseAccount: { select: { id: true, name: true } },
+    salaries:       { orderBy: { effectiveFrom: "desc" as const } },
+} satisfies Prisma.StaffProfileInclude;
+
+export type StaffProfileWithRels = Prisma.StaffProfileGetPayload<{ include: typeof STAFF_PROFILE_INCLUDE }>;
+
+/**
+ * The profile row for a user, created bare if HR has never saved one — with its
+ * ledger, because a profile without a ledger has nowhere for salary to go.
+ * A ledger deleted from the chart (the FK is SET NULL) is made again here.
+ */
+export async function ensureStaffProfile(
+    tx: Prisma.TransactionClient,
+    user: { id: number; name: string },
+): Promise<{ userId: number; ledgerAccountId: number | null; leftOn: Date | null }> {
+    const existing = await tx.staffProfile.findUnique({
+        where: { userId: user.id },
+        select: { userId: true, ledgerAccountId: true, leftOn: true },
+    });
+    if (existing?.ledgerAccountId) return existing;
+
+    const ledgerAccountId = await createStaffLedger(tx, user);
+    if (existing) {
+        await tx.staffProfile.update({ where: { userId: user.id }, data: { ledgerAccountId } });
+        return { ...existing, ledgerAccountId };
+    }
+    const created = await tx.staffProfile.create({
+        data: { userId: user.id, ledgerAccountId },
+        select: { userId: true, ledgerAccountId: true, leftOn: true },
+    });
+    return created;
+}
+
+const iso = (d: Date | null | undefined): string | null => (d ? toDateOnlyUtc(d) : null);
+
+export function toStaffProfileDto(p: StaffProfileWithRels): StaffProfileDto {
+    return {
+        staffCode: p.staffCode,
+        joinedOn: iso(p.joinedOn),
+        leftOn: iso(p.leftOn),
+        leftReason: p.leftReason,
+        employmentType: p.employmentType,
+        weeklyOff: p.weeklyOff,
+        fatherName: p.fatherName,
+        address: p.address,
+        bloodGroup: p.bloodGroup,
+        emergencyName: p.emergencyName,
+        emergencyPhone: p.emergencyPhone,
+        aadhaarLast4: p.aadhaarLast4,
+        panNumber: p.panNumber,
+        uanNumber: p.uanNumber,
+        esiNumber: p.esiNumber,
+        bankJson: p.bankJson,
+        notes: p.notes,
+        ledgerAccountId: p.ledgerAccountId,
+        expenseAccountId: p.expenseAccountId,
+    };
+}
+
+export function toStaffSalaryDto(s: StaffProfileWithRels["salaries"][number]): StaffSalaryDto {
+    return {
+        id: s.id,
+        effectiveFrom: toDateOnlyUtc(s.effectiveFrom),
+        lines: parseSalaryLines(s.linesJson),
+        grossPaise: s.grossPaise,
+        netPaise: s.netPaise,
+        note: s.note,
+        createdAt: s.createdAt.toISOString(),
+    };
+}
+
+/** A DATE column wants UTC midnight of the calendar day — never local midnight,
+ *  which in IST is the previous evening in UTC and lands on the day before. */
+export function dateOnlyFromIso(isoDate: string): Date {
+    return new Date(`${isoDate}T00:00:00.000Z`);
+}

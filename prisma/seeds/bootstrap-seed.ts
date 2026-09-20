@@ -970,6 +970,10 @@ async function main() {
     await upsertGroup("Unsecured Loans", "LIABILITY", 30, loansLiabilityId);
     await upsertGroup("Duties & Taxes", "LIABILITY", 10, currentLiabilitiesId);
     await upsertGroup("Provisions", "LIABILITY", 20, currentLiabilitiesId);
+    // HR & People — one ledger per staff member is created under this group the
+    // first time their HR profile is saved (see src/modules/hr/lib/staffLedger.ts).
+    // Salary accrues into it, advances and payments go out of it.
+    await upsertGroup("Salary Payable", "LIABILITY", 25, currentLiabilitiesId);
     await upsertGroup("Sundry Creditors", "LIABILITY", 30, currentLiabilitiesId);
     await upsertGroup("Stock-in-Hand", "ASSET", 10, currentAssetsId);
     await upsertGroup("Deposits (Asset)", "ASSET", 20, currentAssetsId);

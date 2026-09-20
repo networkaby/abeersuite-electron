@@ -61,6 +61,7 @@ const MODULE_VAR: Record<string, string> = {
     bi: "--m-bi",
     crm: "--m-crm",
     administration: "--m-administration",
+    hr: "--m-hr",
     settings: "--m-settings",
 };
 

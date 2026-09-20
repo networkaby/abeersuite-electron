@@ -75,6 +75,12 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "roles:edit", label: "Edit roles", module: "admin", description: "Edit role definitions and grants." },
     { id: "roles:delete", label: "Delete roles", module: "admin", description: "Delete custom role definitions." },
 
+    // hr — the staff record (HR & People → Staff Directory). View rides the HR
+    // sidebar link; this one key gates every write: the profile (job, personal,
+    // bank), salary revisions, and "mark as left". Self-edits of personal / bank
+    // details on one's own profile page need no grant.
+    { id: "hr:staff:edit", label: "Edit staff records", module: "hr", description: "Edit any staff member's HR profile (staff code, joining date, personal and bank details, salary structure) and mark them as left." },
+
     // finance — per-kind GL voucher gates (finance:voucher:<action>:<kind>). The
     // routes accept the per-kind key OR the generic key above. CANCEL covers
     // cancel + edit + convert-to-draft; DELETE is the single removal (soft-delete

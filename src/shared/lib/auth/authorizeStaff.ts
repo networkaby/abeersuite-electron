@@ -6,6 +6,7 @@ import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared
 import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 
 /** One seat a person holds: what they are called, and where it sits. */
 export type StaffSeat = { title: string; scope: string };
@@ -135,6 +136,9 @@ async function findStaffUser(prisma: PrismaClient, email: string) {
                     permissions: { include: { permission: true } },
                 },
             },
+            // HR & People — a person marked as left is refused below, on both
+            // sign-in paths, from the date on their record.
+            staffProfile: { select: { leftOn: true } },
             userPositions: {
                 include: {
                     position: {
@@ -356,6 +360,13 @@ export async function authorizeStaffCredentials(
         return null;
     }
 
+    // Marked as left by HR — the same "Invalid email or password" as a wrong
+    // password, so the screen says nothing about whether the account exists.
+    if (staffHasLeft(user.staffProfile)) {
+        recordLoginFailure(email);
+        return null;
+    }
+
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
         recordLoginFailure(email);
@@ -401,6 +412,13 @@ export async function authorizeStaffPin(
 
     const user = await findStaffUser(prisma, email);
     if (!user) {
+        recordLoginFailure(throttleKey);
+        return null;
+    }
+
+    // Left staff are refused here too, off the replica's own copy of the record —
+    // /api/counter-pin/status says why, and the shell drops the face.
+    if (staffHasLeft(user.staffProfile)) {
         recordLoginFailure(throttleKey);
         return null;
     }

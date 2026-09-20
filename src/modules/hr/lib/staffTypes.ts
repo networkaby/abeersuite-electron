@@ -1,0 +1,81 @@
+// Wire shapes of HR & People — what /api/hr/staff hands the screens.
+// Dates travel as ISO yyyy-mm-dd strings; money as paise.
+
+import type { PositionChipPosition } from "@/shared/components/PositionChip";
+import type { SalaryLine } from "./salaryLines";
+
+export type { SalaryLine };
+
+export interface StaffProfileDto {
+    staffCode: string | null;
+    joinedOn: string | null;
+    leftOn: string | null;
+    leftReason: string | null;
+    employmentType: string;
+    weeklyOff: number[];
+    fatherName: string | null;
+    address: string | null;
+    bloodGroup: string | null;
+    emergencyName: string | null;
+    emergencyPhone: string | null;
+    aadhaarLast4: string | null;
+    panNumber: string | null;
+    uanNumber: string | null;
+    esiNumber: string | null;
+    bankJson: unknown;
+    notes: string | null;
+    ledgerAccountId: number | null;
+    expenseAccountId: number | null;
+}
+
+export interface StaffSalaryDto {
+    id: number;
+    effectiveFrom: string;
+    lines: SalaryLine[];
+    grossPaise: number;
+    netPaise: number;
+    note: string | null;
+    createdAt: string;
+}
+
+/** One row of the Staff Directory. */
+export interface StaffRow {
+    id: number;
+    name: string;
+    email: string;
+    title: string | null;
+    role: string | null;
+    avatarUrl: string | null;
+    phone: string | null;
+    createdAt: string;
+    positions: PositionChipPosition[];
+    branches: { id: string; name: string }[];
+    departments: { id: string; name: string }[];
+    staffProfile: {
+        staffCode: string | null;
+        joinedOn: string | null;
+        leftOn: string | null;
+        employmentType: string;
+        ledgerAccountId: number | null;
+    } | null;
+    /** The revision in force today — null until one is entered. */
+    currentSalary: { effectiveFrom: string; grossPaise: number; netPaise: number } | null;
+}
+
+/** The profile workspace's payload. */
+export interface StaffDetail {
+    user: {
+        id: number;
+        name: string;
+        email: string;
+        title: string | null;
+        role: string | null;
+        avatarUrl: string | null;
+        phone: string | null;
+        positions: PositionChipPosition[];
+    };
+    profile: StaffProfileDto | null;
+    salaries: StaffSalaryDto[];
+    ledger: { id: number; name: string; balance: number; normalBalance: "DEBIT" | "CREDIT" | null } | null;
+    expenseAccount: { id: number; name: string } | null;
+}

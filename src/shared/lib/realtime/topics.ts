@@ -95,6 +95,8 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
 
     // ── Configuration ────────────────────────────────────────────────────────
     [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart|service-centers)/, ["settings"]],
+    // HR & People — the staff record is org config like users and positions.
+    [/^\/api\/hr\//,                                 ["settings"]],
     [/^\/api\/pos\/counters/,                       ["settings"]],
 
     // ── Chat room discovery ──────────────────────────────────────────────────
@@ -160,7 +162,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "RolePermission", "Permission", "Position", "User", "UserPermission", "UserPosition",
         "PosCounter", "PaymentGateway", "AccountGroup", "OfflinePolicy", "BackupConfig",
         "VoucherPrintTemplate", "VoucherSeries", "ServiceCenter", "Device", "CustomerGroup",
-        "CreditLimitConfig",
+        "CreditLimitConfig", "StaffProfile", "StaffSalary",
     ],
     chat: ["ChatRoom", "ChatRoomMember"],
 };

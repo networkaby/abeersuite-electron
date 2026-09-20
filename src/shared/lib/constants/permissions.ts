@@ -183,6 +183,12 @@ export const PERMISSIONS = {
     USERS_CREATE: "users:create",
     USERS_EDIT: "users:edit",
     USERS_DELETE: "users:delete",
+
+    // HR & People — one write gate for the staff record. View rides the HR
+    // sidebar link (ui:sidebar:hr:staff); this key covers the profile, the
+    // salary revisions and "mark as left". A person may always save their OWN
+    // personal / bank details (the self rule of PUT /api/users/[id]).
+    HR_STAFF_EDIT: "hr:staff:edit",
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

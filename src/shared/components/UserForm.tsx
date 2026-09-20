@@ -38,9 +38,12 @@ interface Props {
         email: string;
     };
     onClose: () => void;
+    /** Told the saved row (create or update) before `onClose` — the Staff
+     *  Directory uses it to open the new person's HR profile straight away. */
+    onSaved?: (user: { id: number; name: string; email: string }) => void;
 }
 
-export default function UserForm({ user, onClose }: Props) {
+export default function UserForm({ user, onClose, onSaved }: Props) {
     const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
         useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: "", email: "", password: "" } });
 
@@ -58,11 +61,13 @@ export default function UserForm({ user, onClose }: Props) {
                 ...(data.password ? { password: data.password } : {}),
             };
             if (user) {
-                await axios.put(`/api/users/${user.id}`, payload);
+                const { data: saved } = await axios.put<{ id: number; name: string; email: string }>(`/api/users/${user.id}`, payload);
                 toast.success("User updated");
+                onSaved?.(saved);
             } else {
-                await axios.post("/api/users", payload);
+                const { data: saved } = await axios.post<{ id: number; name: string; email: string }>("/api/users", payload);
                 toast.success("User created — assign a Post to grant access");
+                onSaved?.(saved);
             }
             onClose();
         } catch (e: unknown) {

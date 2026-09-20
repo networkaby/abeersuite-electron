@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2, AlertTriangle, Globe2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2, AlertTriangle, IdCard } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/shared/components/UserForm";
 import UserAvatar from "@/shared/components/UserAvatar";
+import { PositionChip } from "@/shared/components/PositionChip";
 import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { Badge } from "@/components/ui/badge";
@@ -49,51 +50,6 @@ interface User {
     managerId: number | null;
     avatarUrl: string | null;
     positions: Position[];
-}
-
-/**
- * Compact chip showing a single position assignment.
- *   ⬤ Branch Manager · Delhi · Sales
- *   🌐 CEO · Org-wide
- *
- * - Left dot is coloured by the position's Role (falls back to neutral when null).
- * - Branch label uses Globe2 + "Org-wide" when the position is org-wide
- *   (branchId == null); otherwise the branch name.
- * - Department appears when set; suppressed when null (dept-agnostic).
- */
-function PositionChip({ position }: { position: Position }) {
-    const primaryRole = position.roleTemplates[0];
-    const dotColor = primaryRole?.color
-        ? primaryRole.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground/40"
-        : "bg-muted-foreground/40";
-    const roleTitle = position.roleTemplates.map((r) => r.label).join(", ");
-
-    const isOrgWide = position.branch === null;
-
-    return (
-        <div
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5 text-xs"
-            title={roleTitle ? `Roles: ${roleTitle}` : undefined}
-        >
-            <span className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
-            <span className="font-medium text-foreground">{position.title}</span>
-            <span className="text-muted-foreground">·</span>
-            {isOrgWide ? (
-                <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-                    <Globe2 size={10} />
-                    Org-wide
-                </span>
-            ) : (
-                <span className="text-muted-foreground">{position.branch!.name}</span>
-            )}
-            {position.department && (
-                <>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="text-muted-foreground">{position.department.name}</span>
-                </>
-            )}
-        </div>
-    );
 }
 
 interface PermRow {
@@ -252,7 +208,7 @@ export default function UsersPage() {
     useRealtimeTopics(["settings"], () => { fetchUsers(); });
 
     const handleDelete = async (id: number) => {
-        if (!(await confirmAction({ title: "Delete this user?", confirmLabel: "Delete" }))) return;
+        if (!(await confirmAction({ title: "Delete this user?", body: "Their login, seats, HR profile and salary history go with them. To keep the record, mark them as left on their HR profile instead.", confirmLabel: "Delete" }))) return;
         try {
             await axios.delete(`/api/users/${id}`);
             toast.success("User deleted");
@@ -329,6 +285,11 @@ export default function UsersPage() {
                                     <TableCell className="text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">
+                                            <Button asChild variant="outline" size="icon-sm" title="HR profile">
+                                                <Link href={`/office/hr/staff/${u.id}`} aria-label={`HR profile of ${u.name}`}>
+                                                    <IdCard size={14} />
+                                                </Link>
+                                            </Button>
                                             <Button
                                                 type="button"
                                                 variant="outline"

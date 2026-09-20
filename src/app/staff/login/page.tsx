@@ -463,6 +463,16 @@ function StaffLoginForm() {
                 setError("Password time — it has been a few days. Your PIN keeps working after this.");
             } else if (out?.state === "none") {
                 setStage("password");
+            } else if (out?.state === "left") {
+                // HR marked this person as left. The card goes (same as the shell's
+                // Forget — a cache, nothing more), and the screen says so once
+                // rather than refusing a correct PIN in silence.
+                void window.electronAPI?.forgetShellUser?.(entry.email).catch(() => { });
+                setRoster((was) => was.filter((r) => r.email !== entry.email));
+                setChosen(null);
+                setEmail("");
+                setStage("faces");
+                setError(`${entry.name} is no longer on the staff list.`);
             }
         } catch {
             /* offline or not a counter — the sign-in itself is the real check */

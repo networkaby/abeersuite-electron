@@ -268,6 +268,20 @@ export const MATRIX_ROWS: {
                 deleteOwn: "tasks:delete", deleteBranch: "tasks:delete", deleteOrg: "tasks:delete",
             },
         },
+        // HR & People — the staff record. One write key covers the profile, the
+        // salary revisions and "mark as left"; view rides the HR sidebar link. No
+        // branch radius, so every cell resolves to the same id.
+        {
+            key: "hr-staff",
+            label: "Staff records",
+            module: "hr",
+            cells: {
+                viewOwn: "hr:staff:edit", viewBranch: "hr:staff:edit", viewOrg: "hr:staff:edit",
+                create: "hr:staff:edit",
+                editOwn: "hr:staff:edit", editBranch: "hr:staff:edit", editOrg: "hr:staff:edit",
+                deleteOwn: "hr:staff:edit", deleteBranch: "hr:staff:edit", deleteOrg: "hr:staff:edit",
+            },
+        },
         {
             key: "users",
             label: "Users",

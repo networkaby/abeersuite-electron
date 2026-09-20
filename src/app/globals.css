@@ -59,6 +59,7 @@
   --m-bi: oklch(0.88 0.12 260);
   --m-crm: oklch(0.88 0.12 290);
   --m-administration: oklch(0.88 0.12 320);
+  --m-hr: oklch(0.88 0.12 335);
   --m-settings: oklch(0.885 0.12 350);
 }
 
@@ -198,6 +199,9 @@
   --m-bi: oklch(0.55 0.19 260);
   --m-crm: oklch(0.55 0.19 290);
   --m-administration: oklch(0.55 0.18 320);
+  /* HR & People sits between Administration and Settings — people
+     administration, the way Retention sits beside Customers. */
+  --m-hr: oklch(0.55 0.18 335);
   --m-settings: oklch(0.55 0.17 350);
 
   --radius: 0.625rem;
@@ -270,6 +274,7 @@
   --m-bi: oklch(0.75 0.15 260);
   --m-crm: oklch(0.75 0.15 290);
   --m-administration: oklch(0.75 0.15 320);
+  --m-hr: oklch(0.75 0.15 335);
   --m-settings: oklch(0.76 0.15 350);
 
   --sidebar: var(--surface-rail);

@@ -279,7 +279,7 @@ export function HrBriefing() {
             color="bg-pink-50 text-pink-800"
         >
             <div className="grid grid-cols-2 gap-2">
-                <QuickLink href="/office/admin/users" icon={<Users size={14} />} label="Staff Members" />
+                <QuickLink href="/office/hr/staff" icon={<Users size={14} />} label="Staff Directory" />
                 <QuickLink href="/office/admin/org-chart" icon={<Settings2 size={14} />} label="Org Chart" />
             </div>
         </BriefingCard>

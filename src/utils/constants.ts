@@ -38,6 +38,7 @@ import {
     Clock,
     Coins,
     ConciergeBell,
+    Contact,
     CreditCard,
     Crown,
     Database,
@@ -66,6 +67,7 @@ import {
     HeartPulse,
     HelpCircle,
     Hourglass,
+    IdCard,
     Inbox,
     Kanban,
     Landmark,
@@ -614,21 +616,20 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     },
 
 
-    // HRM
-    // {
-    //     label: "HRM",
-    //     icon: UserCog,
-    //     key: "hrm",
-    //     dashboardHref: "/office/roadmap/hrm",
-    //     pathPrefixes: ["/office/roadmap/hrm"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/hrm" },
-    //         { label: "Staff directory", icon: Users, href: "/office/roadmap/hrm/directory" },
-    //         { label: "Attendance", icon: Clock, href: "/office/roadmap/hrm/attendance" },
-    //         { label: "Leave", icon: Calendar, href: "/office/roadmap/hrm/leave" },
-    //         { label: "Payroll", icon: Wallet, href: "/office/roadmap/hrm/payroll" },
-    //     ],
-    // },
+    // HR & People — the staff record. Staff = User + an HR profile (no separate
+    // employee table); attendance, leave and payroll join this section in later
+    // releases. `sidebarKey` pins the permission id (ui:sidebar:hr:staff) so a
+    // relabel never drops a grant.
+    {
+        label: "HR & People",
+        icon: IdCard,
+        key: "hr",
+        dashboardHref: "/office/hr/staff",
+        pathPrefixes: ["/office/hr"],
+        children: [
+            { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
+        ],
+    },
 
     // Delivery
     // {

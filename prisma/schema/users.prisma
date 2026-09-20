@@ -67,6 +67,8 @@ model User {
   bankStatementImports             BankStatementImport[]      @relation("BankStatementImportedBy")
   bankStatementMatches             BankStatementMatch[]       @relation("BankStatementMatchCreatedBy")
   surfacesSeen                     UserSurfaceSeen[]
+  // HR & People — the employment record of this staff member (hr.prisma).
+  staffProfile                     StaffProfile?
 }
 
 // ── UserSurfaceSeen — per-user "I have looked at this list" markers ───────────

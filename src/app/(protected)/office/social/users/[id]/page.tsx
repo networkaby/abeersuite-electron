@@ -16,7 +16,7 @@ import {
     ArrowLeft, Mail, Phone, Cake, Building2, Users,
     Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose, Home,
-    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity,
+    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity, IdCard,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ import type { OrgStructure } from "@/shared/types/orgChart";
 import StructureTree from "@/modules/admin/components/StructureTree";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { uploadImageToCloudinary as uploadToCloudinary } from "@/shared/lib/uploadToCloudinary";
+import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import StaffPersonalForm from "@/modules/hr/components/StaffPersonalForm";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1346,8 +1349,10 @@ const TABS = [
     // { id: 6 as const, label: "Permissions", icon: Shield, access: "selfOrAdmin" },
     { id: 6 as const, label: "Org Position", icon: GitBranch, access: "all" },
     { id: 7 as const, label: "Friends", icon: Users, access: "all" },
+    // HR & People — the details HR keeps on file that the person knows best.
+    { id: 8 as const, label: "Personal & Bank", icon: IdCard, access: "selfOrAdmin" },
 ];
-type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -1372,6 +1377,11 @@ export default function UserProfilePage() {
         (session?.user as { permissions?: string[] })?.permissions?.includes("users:edit") ||
         (session?.user as { permissions?: string[] })?.permissions?.includes("admin:bypass")
     );
+    // HR & People: who may change the personal / bank section (self, or the HR
+    // grant), and who may follow the link into the HR profile (the HR sidebar link).
+    const sessionPermissions = (session?.user as { permissions?: string[] })?.permissions ?? [];
+    const canEditHr = hasPermissionWithScope(sessionPermissions, PERMISSIONS.HR_STAFF_EDIT);
+    const canOpenHr = hasModuleNavAccess(sessionPermissions, "hr");
 
     useEffect(() => {
         const loadProfileAndWall = async () => {
@@ -1579,6 +1589,13 @@ export default function UserProfilePage() {
                     {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
                     {activeTab === 6 && <OrgPositionTab />}
                     {activeTab === 7 && <FriendsTab userId={profile.id} />}
+                    {activeTab === 8 && (isSelf || isAdmin) && (
+                        <StaffPersonalForm
+                            userId={profile.id}
+                            canEdit={isSelf || canEditHr}
+                            hrHref={canOpenHr ? `/office/hr/staff/${profile.id}` : null}
+                        />
+                    )}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}

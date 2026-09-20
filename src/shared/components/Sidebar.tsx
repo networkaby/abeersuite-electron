@@ -185,7 +185,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         "e-commerce": pathname.startsWith("/office/ecommerce"),
         tally: pathname.startsWith("/office/finance"),
         inventory: pathname.startsWith("/office/inventory"),
-        hrm: pathname.startsWith("/office/roadmap/hrm"),
+        hr: pathname.startsWith("/office/hr"),
         delivery: pathname.startsWith("/office/roadmap/delivery"),
         "field-service": pathname.startsWith("/office/roadmap/field-service"),
         helpdesk: pathname.startsWith("/office/roadmap/helpdesk"),
