@@ -6,7 +6,7 @@ import { nextRefFromSeries, resolveCounterNumber } from "@/modules/accountancy/l
 // Inventory-voucher types that have a configurable VoucherSeries row managed
 // from /office/settings/year-ending (FY rollover, padding, separators, type code).
 // Anything not listed here falls through to the legacy calendar-year scheme.
-const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
+export const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     SALE: "SALE",
     POS: "POS",
     PURCHASE: "PURCHASE",

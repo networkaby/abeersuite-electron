@@ -3,7 +3,8 @@
 // The hard-delete routes snapshot the WHOLE graph into one AuditLog row (voucher +
 // lines/charges/tenders/stock-ledger + its JournalEntry + JournalLines). This module
 // rebuilds it: re-insert every row with fresh ids but the ORIGINAL reference number
-// (the series counter never reuses a deleted number, so it's free), re-link the
+// (the series counter never reuses the number of a voucher whose snapshot still
+// exists, so it's free — only PURGING the snapshot can release it back), re-link the
 // voucher → its new JE, and re-apply the denormalised caches (Account.balance,
 // InvProduct.stock / InvProductBranch.stock) ONLY when the restored entity is live
 // (POSTED, not cancelled / soft-deleted) — a cancelled/deleted entity's caches were

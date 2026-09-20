@@ -109,8 +109,12 @@ export function RecycleBin() {
     const purge = async (row: AuditRow) => {
         setBusyId(row.id);
         try {
-            await axios.delete(`/api/audit/${row.id}`);
-            toast.success(`${row.originalRef} deleted permanently`);
+            const { data } = await axios.delete<{ releasedRef?: string | null }>(`/api/audit/${row.id}`);
+            // The number comes back only when this voucher held the tip of its series;
+            // say so, because the next bill will then carry the very same number.
+            toast.success(data?.releasedRef
+                ? `${row.originalRef} deleted permanently — number released for re-use`
+                : `${row.originalRef} deleted permanently`);
             setConfirmPurgeId(null);
             // Drop the row immediately — it is gone for good, so there is nothing to
             // re-fetch it back. Revalidate quietly to catch anything else that changed.
