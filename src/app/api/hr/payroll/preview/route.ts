@@ -2,42 +2,68 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { businessTodayIso } from "@/shared/lib/format/formatDate";
-import { buildPayrollCandidates, candidateTotals, dateOnly, monthBounds } from "@/modules/hr/lib/payrollServer";
-import type { PayrollPreview, PayrollRunStatus } from "@/modules/hr/lib/payrollTypes";
+import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
+import {
+    buildPayrollCandidates, candidateTotals, earliestJoinedOn, nextPeriodStart, overlappingRun,
+} from "@/modules/hr/lib/payrollServer";
+import { formatPeriod, type PayrollPreview } from "@/modules/hr/lib/payrollTypes";
 
-// GET /api/hr/payroll/preview?month=2026-09
+// GET /api/hr/payroll/preview?from=2026-09-01&to=2026-09-20
 //
-// What the month WOULD look like. Writes nothing — this is what the "New run"
-// dialog shows before anyone commits, and it is also how you check a month you
-// have not generated yet. If a run already exists it says so, so the screen can
-// send you to it rather than offering a second one.
+// What the period WOULD pay, per head. Writes nothing — this is the Generate
+// tab itself, not a confirmation step, so it is read as often as the dates are
+// touched. With no dates it answers the question the screen opens on: what is
+// owed from the day after the last payroll up to today.
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
-    const month = searchParams.get("month") ?? businessTodayIso().slice(0, 7);
-    if (!/^\d{4}-\d{2}$/.test(month)) {
-        return NextResponse.json({ error: "month must look like 2026-09" }, { status: 400 });
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    if ((fromParam && !ISO.test(fromParam)) || (toParam && !ISO.test(toParam))) {
+        return NextResponse.json({ error: "from / to must look like 2026-09-01" }, { status: 400 });
     }
 
     try {
-        const { firstIso, lastIso } = monthBounds(month);
-        const existing = await prisma.payrollRun.findUnique({
-            where: { periodMonth: dateOnly(firstIso) },
-            select: { id: true, status: true },
-        });
+        const today = businessTodayIso();
+        const periodTo = toParam ?? today;
 
-        const candidates = await buildPayrollCandidates(prisma, lastIso);
+        // Where the period starts when nobody said: after the last run, or —
+        // for the very first run, which has no predecessor — the day the
+        // earliest staff member joined.
+        let startedFrom: PayrollPreview["startedFrom"] = "given";
+        let periodFrom = fromParam;
+        if (!periodFrom) {
+            const afterLast = await nextPeriodStart(prisma);
+            if (afterLast) {
+                periodFrom = afterLast;
+                startedFrom = "after-last-run";
+            } else {
+                periodFrom = (await earliestJoinedOn(prisma)) ?? `${periodTo.slice(0, 7)}-01`;
+                startedFrom = "first-joining";
+            }
+        }
+
+        if (periodTo < periodFrom) {
+            return NextResponse.json({ error: "The period ends before it starts" }, { status: 422 });
+        }
+
+        const clash = await overlappingRun(prisma, periodFrom, periodTo);
+        const candidates = await buildPayrollCandidates(prisma, periodFrom, periodTo);
         const totals = candidateTotals(candidates);
 
         const payload: PayrollPreview = {
-            periodMonth:    firstIso,
-            postingDate:    lastIso,
-            existingRunId:  existing?.id ?? null,
-            existingStatus: (existing?.status as PayrollRunStatus | undefined) ?? null,
+            periodFrom,
+            periodTo,
+            startedFrom,
+            overlapRunId: clash?.id ?? null,
+            overlapLabel: clash
+                ? formatPeriod(toDateOnlyUtc(clash.periodFrom), toDateOnlyUtc(clash.periodTo))
+                : null,
             lines: candidates.map((c, i) => ({
                 // A preview has no stored rows; the index is a stable key for
                 // the table only, never sent back.
@@ -47,9 +73,12 @@ export async function GET(req: Request) {
                 staffCode:       c.staffCode,
                 effectiveFrom:   c.effectiveFrom,
                 lines:           c.lines,
+                monthlyNetPaise: c.monthlyNetPaise,
                 grossPaise:      c.grossPaise,
                 deductionsPaise: c.deductionsPaise,
                 netPaise:        c.netPaise,
+                paidDays:        c.paidDays,
+                periodDays:      c.periodDays,
                 ledger:          c.ledger,
                 expenseAccount:  c.expenseAccount,
                 included:        c.included,

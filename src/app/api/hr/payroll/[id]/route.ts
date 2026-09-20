@@ -8,9 +8,9 @@ import {
     PAYROLL_RUN_INCLUDE,
     candidateTotals,
     dateOnly,
-    monthBounds,
     toRunDetail,
 } from "@/modules/hr/lib/payrollServer";
+import { formatPeriod } from "@/modules/hr/lib/payrollTypes";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 // GET    /api/hr/payroll/[id] — the run and every line on it.
@@ -78,19 +78,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const run = await prisma.payrollRun.findUnique({
             where: { id },
-            select: { id: true, status: true, periodMonth: true },
+            select: { id: true, status: true, periodFrom: true, periodTo: true },
         });
         if (!run) return NextResponse.json({ error: "Payroll run not found" }, { status: 404 });
         if (run.status !== "DRAFT") {
             return NextResponse.json({ error: "Only a draft run can be changed" }, { status: 422 });
         }
 
-        const periodMonthIso = toDateOnlyUtc(run.periodMonth);
         if (body.postingDate) {
-            const { firstIso, lastIso } = monthBounds(periodMonthIso);
-            if (body.postingDate < firstIso || body.postingDate > lastIso) {
+            const fromIso = toDateOnlyUtc(run.periodFrom);
+            const toIso = toDateOnlyUtc(run.periodTo);
+            if (body.postingDate < fromIso || body.postingDate > toIso) {
                 return NextResponse.json(
-                    { error: `The posting date must fall inside ${firstIso.slice(0, 7)}` },
+                    { error: `The posting date must fall inside ${formatPeriod(fromIso, toIso)}` },
                     { status: 422 },
                 );
             }

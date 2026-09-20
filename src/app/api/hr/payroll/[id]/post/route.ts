@@ -10,15 +10,15 @@ import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { buildJournalLines } from "@/modules/hr/lib/payrollServer";
-import { formatPeriodMonth } from "@/modules/hr/lib/payrollTypes";
+import { formatPeriod } from "@/modules/hr/lib/payrollTypes";
 
-// POST /api/hr/payroll/[id]/post — turn a draft run into the month's journal.
+// POST /api/hr/payroll/[id]/post — turn a draft run into the period's journal.
 //
 // ONE journal voucher: a credit to each included person's own ledger for their
 // net, and a debit per expense ledger for the total behind it. The run is
 // stamped POSTED with the JV's id and number inside the same transaction, so a
-// run can never claim a voucher that was rolled back — and the unique
-// periodMonth plus this status check mean a month cannot be accrued twice.
+// run can never claim a voucher that was rolled back — and the overlap check at
+// generation plus this status check mean a day cannot be accrued twice.
 //
 // Two gates: hr:payroll:run to run payroll at all, and the ordinary JOURNAL
 // post gate, because this writes to the general ledger like any other voucher.
@@ -61,9 +61,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return NextResponse.json({ error: `A ${run.status.toLowerCase()} run cannot be posted` }, { status: 422 });
         }
 
-        const periodMonthIso = toDateOnlyUtc(run.periodMonth);
-        const period = formatPeriodMonth(periodMonthIso);
-        const glLines = buildJournalLines(run.lines, periodMonthIso);
+        const fromIso = toDateOnlyUtc(run.periodFrom);
+        const toIso = toDateOnlyUtc(run.periodTo);
+        const period = formatPeriod(fromIso, toIso);
+        const glLines = buildJournalLines(run.lines, fromIso, toIso);
 
         if (glLines.length < 2) {
             return NextResponse.json(
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 date:            run.postingDate,
                 userId:          caller!.id,
                 lines:           glLines,
-                narration:       `Salary payable for ${period} — ${headcount} staff`,
+                narration:       `Salary payable ${period} — ${headcount} staff`,
                 referenceSeries: "JOURNAL",
                 post:            true,
                 branchId,

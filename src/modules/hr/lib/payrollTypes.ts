@@ -1,21 +1,31 @@
 // Wire shapes of HR → Payroll. Dates are ISO yyyy-mm-dd; money is paise.
+//
+// A run pays a date RANGE — "from the last payroll to till day" — not a
+// calendar month, so every shape here carries periodFrom / periodTo and the
+// day counts the proportion was worked out from.
 
 import type { SalaryLine } from "./salaryLines";
 
 export type PayrollRunStatus = "DRAFT" | "POSTED" | "CANCELLED";
 
-/** One person on a run — their salary for that month, frozen at generation. */
+/** One person on a run — their pay for that period, frozen at generation. */
 export interface PayrollLineDto {
     id: number;
     userId: number;
     staffName: string;
     staffCode: string | null;
-    /** The revision the amounts came from; null when the person has none. */
+    /** The latest revision behind the figure; null when they have none. */
     effectiveFrom: string | null;
+    /** The pay heads, already proportioned to the period. */
     lines: SalaryLine[];
+    /** Their full monthly net, for "₹16,000 a month". 0 on a stored run. */
+    monthlyNetPaise: number;
     grossPaise: number;
     deductionsPaise: number;
     netPaise: number;
+    /** Days of the period they were employed, and the period's own length. */
+    paidDays: number;
+    periodDays: number;
     ledger: { id: number; name: string } | null;
     expenseAccount: { id: number; name: string } | null;
     included: boolean;
@@ -23,11 +33,11 @@ export interface PayrollLineDto {
     skipReason: string | null;
 }
 
-/** A row of the runs list — everything the list shows, no join needed. */
+/** A row of the history list — everything it shows, no join needed. */
 export interface PayrollRunRow {
     id: number;
-    /** First day of the month paid, e.g. "2026-09-01". */
-    periodMonth: string;
+    periodFrom: string;
+    periodTo: string;
     postingDate: string;
     status: PayrollRunStatus;
     voucherId: number | null;
@@ -48,13 +58,15 @@ export interface PayrollRunDetail extends PayrollRunRow {
     lines: PayrollLineDto[];
 }
 
-/** What a month would look like, before any run exists. Nothing is written. */
+/** What a period would pay, before any run exists. Nothing is written. */
 export interface PayrollPreview {
-    periodMonth: string;
-    postingDate: string;
-    /** The run already generated for this month, if there is one. */
-    existingRunId: number | null;
-    existingStatus: PayrollRunStatus | null;
+    periodFrom: string;
+    periodTo: string;
+    /** Where the suggested start came from, so the screen can explain itself. */
+    startedFrom: "after-last-run" | "first-joining" | "given";
+    /** A run already covering part of this period — generation is refused. */
+    overlapRunId: number | null;
+    overlapLabel: string | null;
     lines: PayrollLineDto[];
     grossPaise: number;
     deductionsPaise: number;
@@ -63,12 +75,17 @@ export interface PayrollPreview {
     skippedCount: number;
 }
 
-/** "2026-09-01" → "September 2026". */
-export function formatPeriodMonth(iso: string): string {
-    const [y, m] = iso.split("-");
-    const names = ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"];
-    return `${names[Number(m) - 1] ?? m} ${y}`;
+/** "2026-09-01".."2026-09-20" → "1–20 Sep 2026", collapsing what is shared. */
+export function formatPeriod(fromIso: string, toIso: string): string {
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const [fy, fm, fd] = fromIso.split("-");
+    const [ty, tm, td] = toIso.split("-");
+    const f = { y: fy, m: MONTHS[Number(fm) - 1] ?? fm, d: String(Number(fd)) };
+    const t = { y: ty, m: MONTHS[Number(tm) - 1] ?? tm, d: String(Number(td)) };
+    if (fromIso === toIso) return `${f.d} ${f.m} ${f.y}`;
+    if (fy === ty && fm === tm) return `${f.d}–${t.d} ${t.m} ${t.y}`;
+    if (fy === ty) return `${f.d} ${f.m} – ${t.d} ${t.m} ${t.y}`;
+    return `${f.d} ${f.m} ${f.y} – ${t.d} ${t.m} ${t.y}`;
 }
 
 export const PAYROLL_STATUS_LABELS: Record<PayrollRunStatus, string> = {

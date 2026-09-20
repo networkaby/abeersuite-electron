@@ -1,16 +1,20 @@
 "use client";
 
 // One payroll run, staff-wise. A draft can be trimmed — untick anyone whose
-// salary you are holding back this month — and then posted as a single journal
+// salary you are holding back this period — and then posted as a single journal
 // voucher. Once posted the sheet is read-only: the books own it from then on,
 // and a correction is a journal in Accountancy, not an edit here.
+//
+// Clicking a row opens that person's pay heads, the same gesture as the
+// Generate tab and as VoucherRegisterTable. A posted run keeps the breakup it
+// was posted with, because the lines were frozen when it was generated.
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, BookOpen, HandCoins, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, Search, Trash2, WalletMinimal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,7 +29,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { PAYROLL_STATUS_LABELS, formatPeriodMonth, type PayrollRunDetail } from "../lib/payrollTypes";
+import { PAYROLL_STATUS_LABELS, formatPeriod, type PayrollRunDetail } from "../lib/payrollTypes";
 
 export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; canRun: boolean }) {
     const router = useRouter();
@@ -35,6 +39,13 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
 
     const [q, setQ] = useState("");
     const [busy, setBusy] = useState(false);
+    const [open, setOpen] = useState<Set<number>>(new Set());
+
+    const toggleOpen = (id: number) => setOpen((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
 
     const isDraft = data?.status === "DRAFT";
     const editable = canRun && isDraft;
@@ -64,7 +75,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
     const post = async () => {
         if (!data) return;
         const ok = await confirmAction({
-            title: `Post ${formatPeriodMonth(data.periodMonth)} to the books?`,
+            title: `Post ${formatPeriod(data.periodFrom, data.periodTo)} to the books?`,
             body: `One journal voucher dated ${formatDate(data.postingDate)}: ${formatRupeesFromPaise(data.netPaise)} credited across ${data.headcount} staff ledgers, and the same amount debited to salary expense. A posted run cannot be edited here.`,
             confirmLabel: "Post the journal",
         });
@@ -84,8 +95,8 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
     const discard = async () => {
         if (!data) return;
         const ok = await confirmAction({
-            title: `Delete the draft for ${formatPeriodMonth(data.periodMonth)}?`,
-            body: "Nothing has been posted, so nothing in the books changes. You can generate the month again afterwards.",
+            title: `Delete the draft for ${formatPeriod(data.periodFrom, data.periodTo)}?`,
+            body: "Nothing has been posted, so nothing in the books changes. Those days become free to run again.",
             confirmLabel: "Delete draft",
         });
         if (!ok) return;
@@ -102,11 +113,11 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
         <ScrollArea className="h-full" type="always">
             <div className="px-6 pt-3 pb-6">
                 <DataPageHeader
-                    title={data ? `Payroll — ${formatPeriodMonth(data.periodMonth)}` : "Payroll"}
+                    title={data ? `Payroll — ${formatPeriod(data.periodFrom, data.periodTo)}` : "Payroll"}
                     subtitle={data
                         ? `${data.headcount} staff · dated ${formatDate(data.postingDate)}${refreshing ? " · refreshing…" : ""}`
                         : undefined}
-                    icon={<HandCoins size={20} />}
+                    icon={<WalletMinimal size={20} />}
                     actions={data ? (
                         <div className="flex items-center gap-2">
                             <Badge variant={data.status === "POSTED" ? "default" : data.status === "CANCELLED" ? "destructive" : "secondary"}>
@@ -171,8 +182,9 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-10">{editable ? "Pay" : ""}</TableHead>
+                                        <TableHead className="w-8" />
                                         <TableHead>Staff</TableHead>
-                                        <TableHead>Structure from</TableHead>
+                                        <TableHead>Days paid</TableHead>
                                         <TableHead className="text-right">Gross</TableHead>
                                         <TableHead className="text-right">Deductions</TableHead>
                                         <TableHead className="text-right">Net</TableHead>
@@ -181,16 +193,24 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {!rows.length && <TableEmptyRow colSpan={8} message="Nobody matches that search." />}
+                                    {!rows.length && <TableEmptyRow colSpan={9} message="Nobody matches that search." />}
                                     {rows.map((l) => (
-                                        <TableRow key={l.id} className={l.included ? "" : "opacity-55"}>
+                                        <Fragment key={l.id}>
+                                        <TableRow className={l.included ? "" : "opacity-55"}>
                                             <TableCell>
                                                 <Checkbox
                                                     checked={l.included}
                                                     disabled={!editable || busy || !!l.skipReason}
                                                     onCheckedChange={(v) => toggle(l.id, v === true)}
-                                                    aria-label={`Pay ${l.staffName} this month`}
+                                                    aria-label={`Pay ${l.staffName} for this period`}
                                                 />
+                                            </TableCell>
+                                            <TableCell
+                                                className="cursor-pointer text-muted-foreground"
+                                                title="Click to expand the pay heads"
+                                                onClick={() => toggleOpen(l.id)}
+                                            >
+                                                {open.has(l.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                             </TableCell>
                                             <TableCell>
                                                 <Link href={`/office/hr/staff/${l.userId}`} className="font-medium hover:underline">
@@ -199,8 +219,8 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                                 {l.staffCode && <span className="ml-2 text-xs text-muted-foreground">{l.staffCode}</span>}
                                                 {l.skipReason && <p className="text-xs text-amber-600">{l.skipReason}</p>}
                                             </TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">
-                                                {l.effectiveFrom ? formatDate(l.effectiveFrom) : "—"}
+                                            <TableCell className="text-sm text-muted-foreground tabular-nums">
+                                                {l.paidDays} of {l.periodDays}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">{formatRupeesFromPaise(l.grossPaise)}</TableCell>
                                             <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -210,6 +230,39 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                             <TableCell className="text-sm text-muted-foreground">{l.ledger?.name ?? "—"}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{l.expenseAccount?.name ?? "—"}</TableCell>
                                         </TableRow>
+                                        {open.has(l.id) && (
+                                            <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                <TableCell colSpan={2} />
+                                                <TableCell colSpan={7} className="py-3">
+                                                    {!l.lines.length ? (
+                                                        <p className="text-sm text-muted-foreground">{l.skipReason ?? "Nothing to break up."}</p>
+                                                    ) : (
+                                                        <div className="max-w-xl space-y-1.5">
+                                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                                Pay heads for {l.paidDays} of {l.periodDays} days
+                                                                {l.effectiveFrom && ` \u00b7 structure from ${formatDate(l.effectiveFrom)}`}
+                                                            </p>
+                                                            {l.lines.map((h) => (
+                                                                <div
+                                                                    key={`${h.kind}-${h.name}`}
+                                                                    className={`flex justify-between text-sm ${h.kind === "DEDUCTION" ? "text-muted-foreground" : ""}`}
+                                                                >
+                                                                    <span>{h.name}</span>
+                                                                    <span className="tabular-nums">
+                                                                        {formatRupeesFromPaise(h.kind === "DEDUCTION" ? -h.amountPaise : h.amountPaise)}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                            <div className="flex justify-between border-t border-border pt-1.5 text-sm font-medium">
+                                                                <span>Net for this period</span>
+                                                                <span className="tabular-nums">{formatRupeesFromPaise(l.netPaise)}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        </Fragment>
                                     ))}
                                 </TableBody>
                             </Table>

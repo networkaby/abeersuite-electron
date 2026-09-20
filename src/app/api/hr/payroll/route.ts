@@ -5,28 +5,28 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { payrollRunCreateSchema } from "@/shared/lib/schemas/hrSchema";
+import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import {
     buildPayrollCandidates,
     candidateTotals,
     dateOnly,
-    monthBounds,
+    overlappingRun,
     toRunRow,
 } from "@/modules/hr/lib/payrollServer";
-import type { PayrollRunRow } from "@/modules/hr/lib/payrollTypes";
+import { formatPeriod, type PayrollRunRow } from "@/modules/hr/lib/payrollTypes";
 
-// GET  /api/hr/payroll — the runs list, newest month first.
-// POST /api/hr/payroll — generate the run for a month.
+// GET  /api/hr/payroll — the history list, newest period first.
+// POST /api/hr/payroll — generate the run for a period.
 //
-// Generating writes a DRAFT with one line per staff member, amounts frozen from
-// the salary structure in force on the posting date. It does NOT touch the
-// books; posting is a separate call (POST /api/hr/payroll/[id]/post), which the
-// create route will chain for you when `postImmediately` is set.
+// Generating writes a DRAFT with one line per person, each amount proportioned
+// to the days they were employed inside the period and then FROZEN. It does not
+// touch the books; posting is a separate call (POST /api/hr/payroll/[id]/post).
 
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const runs = await prisma.payrollRun.findMany({ orderBy: { periodMonth: "desc" } });
+        const runs = await prisma.payrollRun.findMany({ orderBy: { periodTo: "desc" } });
 
         const ids = [...new Set(runs.flatMap((r) => [r.createdById, r.postedById].filter((v): v is number => v != null)))];
         const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
@@ -46,43 +46,46 @@ export async function POST(req: Request) {
     const { data: body, error } = await validateRequest(req, payrollRunCreateSchema);
     if (error) return error;
 
-    const { firstIso, lastIso } = monthBounds(body.periodMonth);
-    const postingDateIso = body.postingDate ?? lastIso;
+    const { periodFrom, periodTo } = body;
+    if (periodTo < periodFrom) {
+        return NextResponse.json({ error: "The period ends before it starts" }, { status: 422 });
+    }
 
-    // The journal must fall inside the month it accrues, or the P&L for that
-    // month is short and the next one is long.
-    if (postingDateIso < firstIso || postingDateIso > lastIso) {
+    // The journal has to fall inside the period it pays, or the P&L for one
+    // stretch is short and the next is long.
+    const postingDate = body.postingDate ?? periodTo;
+    if (postingDate < periodFrom || postingDate > periodTo) {
         return NextResponse.json(
-            { error: `The posting date must fall inside ${body.periodMonth} (${firstIso} to ${lastIso})` },
+            { error: `The posting date must fall inside ${formatPeriod(periodFrom, periodTo)}` },
             { status: 422 },
         );
     }
 
     try {
-        const existing = await prisma.payrollRun.findUnique({
-            where: { periodMonth: dateOnly(firstIso) },
-            select: { id: true, status: true },
-        });
-        if (existing) {
+        // No day may be paid twice. A range cannot be made unique by the
+        // database the way a month could, so this check is the guard.
+        const clash = await overlappingRun(prisma, periodFrom, periodTo);
+        if (clash) {
             return NextResponse.json(
                 {
-                    error: `${body.periodMonth} already has a ${existing.status.toLowerCase()} run. Open it instead of generating a second one.`,
-                    runId: existing.id,
+                    error: `${formatPeriod(toDateOnlyUtc(clash.periodFrom), toDateOnlyUtc(clash.periodTo))} is already covered by a ${clash.status.toLowerCase()} run. Start this one the day after it ends.`,
+                    runId: clash.id,
                 },
                 { status: 409 },
             );
         }
 
-        const candidates = await buildPayrollCandidates(prisma, postingDateIso);
+        const candidates = await buildPayrollCandidates(prisma, periodFrom, periodTo);
         if (!candidates.length) {
-            return NextResponse.json({ error: "No staff were on the payroll in that month" }, { status: 422 });
+            return NextResponse.json({ error: "Nobody was on the staff during that period" }, { status: 422 });
         }
         const totals = candidateTotals(candidates);
 
         const run = await prisma.payrollRun.create({
             data: {
-                periodMonth: dateOnly(firstIso),
-                postingDate: dateOnly(postingDateIso),
+                periodFrom:  dateOnly(periodFrom),
+                periodTo:    dateOnly(periodTo),
+                postingDate: dateOnly(postingDate),
                 status:      "DRAFT",
                 note:        body.note ?? null,
                 createdById: caller!.id,
@@ -99,6 +102,8 @@ export async function POST(req: Request) {
                         grossPaise:       c.grossPaise,
                         deductionsPaise:  c.deductionsPaise,
                         netPaise:         c.netPaise,
+                        paidDays:         c.paidDays,
+                        periodDays:       c.periodDays,
                         ledgerAccountId:  c.ledger?.id ?? null,
                         expenseAccountId: c.expenseAccount?.id ?? null,
                         included:         c.included,
@@ -109,7 +114,7 @@ export async function POST(req: Request) {
             select: { id: true },
         });
 
-        return NextResponse.json({ id: run.id, ...totals, postImmediately: body.postImmediately }, { status: 201 });
+        return NextResponse.json({ id: run.id, ...totals }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to generate the payroll run");
     }

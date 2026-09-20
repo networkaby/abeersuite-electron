@@ -76,16 +76,16 @@ export const staffSalaryCreateSchema = z.object({
 export type StaffSalaryCreate = z.infer<typeof staffSalaryCreateSchema>;
 
 // ── Payroll ───────────────────────────────────────────────────────────────────
+//
+// A run pays a date RANGE — from the day after the last run ended, up to the
+// day you are standing on — so there is no month here to validate.
 
-const isoMonth = z.string().regex(/^\d{4}-\d{2}$/, "Expected YYYY-MM");
-
-/** Generate the run for a month. The posting date defaults to the month end. */
+/** Generate the run for a period. The posting date defaults to `periodTo`. */
 export const payrollRunCreateSchema = z.object({
-    periodMonth: isoMonth,
+    periodFrom:  isoDate,
+    periodTo:    isoDate,
     postingDate: isoDate.optional(),
     note:        optText(300),
-    /** Generate AND post in one go. Without it the run lands as a draft. */
-    postImmediately: z.boolean().default(false),
 });
 
 export type PayrollRunCreate = z.infer<typeof payrollRunCreateSchema>;

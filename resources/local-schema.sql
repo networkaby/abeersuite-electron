@@ -1541,7 +1541,8 @@ ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) N
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "payroll_runs" (
     "id" SERIAL NOT NULL,
-    "periodMonth" DATE NOT NULL,
+    "periodFrom" DATE NOT NULL,
+    "periodTo" DATE NOT NULL,
     "postingDate" DATE NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "voucherId" INTEGER,
@@ -1560,7 +1561,8 @@ CREATE TABLE IF NOT EXISTS "payroll_runs" (
     CONSTRAINT "payroll_runs_pkey" PRIMARY KEY ("id")
 );
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "periodMonth" DATE NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "periodFrom" DATE NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "periodTo" DATE NOT NULL;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "postingDate" DATE NOT NULL;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "voucherId" INTEGER;
@@ -1588,6 +1590,8 @@ CREATE TABLE IF NOT EXISTS "payroll_run_lines" (
     "grossPaise" INTEGER NOT NULL DEFAULT 0,
     "deductionsPaise" INTEGER NOT NULL DEFAULT 0,
     "netPaise" INTEGER NOT NULL DEFAULT 0,
+    "paidDays" INTEGER NOT NULL DEFAULT 0,
+    "periodDays" INTEGER NOT NULL DEFAULT 0,
     "ledgerAccountId" INTEGER,
     "expenseAccountId" INTEGER,
     "included" BOOLEAN NOT NULL DEFAULT true,
@@ -1605,6 +1609,8 @@ ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "linesJson" JSONB NOT N
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "grossPaise" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "deductionsPaise" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "paidDays" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "periodDays" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "included" BOOLEAN NOT NULL DEFAULT true;
@@ -4075,10 +4081,13 @@ CREATE INDEX IF NOT EXISTS "staff_salaries_updatedAt_idx" ON "staff_salaries"("u
 CREATE UNIQUE INDEX IF NOT EXISTS "staff_salaries_userId_effectiveFrom_key" ON "staff_salaries"("userId", "effectiveFrom");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "payroll_runs_periodMonth_key" ON "payroll_runs"("periodMonth");
+CREATE INDEX IF NOT EXISTS "payroll_runs_status_idx" ON "payroll_runs"("status");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "payroll_runs_status_idx" ON "payroll_runs"("status");
+CREATE INDEX IF NOT EXISTS "payroll_runs_periodFrom_idx" ON "payroll_runs"("periodFrom");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "payroll_runs_periodTo_idx" ON "payroll_runs"("periodTo");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "payroll_runs_updatedAt_idx" ON "payroll_runs"("updatedAt");

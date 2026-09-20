@@ -102,10 +102,16 @@ model StaffSalary {
 }
 
 // ── Payroll ───────────────────────────────────────────────────────────────────
-// One run per month, so a month cannot be accrued twice. Creating a run reads
-// every current staff member's salary revision in force on the posting date and
-// writes one line per person — the amounts are FROZEN here, so a salary revised
-// in October can never change what September posted.
+// A run covers a DATE RANGE, not a calendar month (owner, 2026-09-20: "the total
+// from last payroll to till day"). The next run starts the day after the last
+// one ended, so the periods form an unbroken chain and no day is ever paid
+// twice — the overlap check in payrollServer.ts is what enforces that, since a
+// range cannot be made unique by the database the way a month could.
+//
+// Amounts are proportioned by DAYS: a monthly structure is worth
+// amount / days-in-that-month for each day the person was employed inside the
+// period. That needs only dates, no attendance. Creating a run FREEZES the
+// result, so a salary revised later can never change what was already paid.
 //
 // Posting turns the run into ONE journal voucher: a credit to each person's own
 // ledger (their net), and debits to the salary expense ledgers, grouped — the
@@ -114,9 +120,11 @@ model StaffSalary {
 model PayrollRun {
   id Int @id @default(autoincrement())
 
-  /// First day of the month being paid (2026-09-01). Unique — one run a month.
-  periodMonth DateTime @unique @db.Date
-  /// The date the journal carries. Last day of the month unless changed.
+  /// First day this run pays for — the day after the previous run ended.
+  periodFrom DateTime @db.Date
+  /// Last day this run pays for, inclusive. "Till day" — usually today.
+  periodTo   DateTime @db.Date
+  /// The date the journal carries. `periodTo` unless changed.
   postingDate DateTime @db.Date
   /// DRAFT | POSTED | CANCELLED. A plain string for the same reason as
   /// StaffProfile.employmentType — a new state must not need an enum migration.
@@ -146,6 +154,8 @@ model PayrollRun {
   lines PayrollRunLine[]
 
   @@index([status])
+  @@index([periodFrom])
+  @@index([periodTo])
   @@index([updatedAt])
   @@map("payroll_runs")
 }
@@ -171,6 +181,11 @@ model PayrollRunLine {
   grossPaise      Int @default(0)
   deductionsPaise Int @default(0)
   netPaise        Int @default(0)
+
+  /// How the proportion was arrived at, kept so the sheet and a payslip can
+  /// show "18 of 30 days" without recomputing it from dates that may have moved.
+  paidDays   Int @default(0)
+  periodDays Int @default(0)
 
   /// The two ledgers as resolved at generation time. Null only on a line that
   /// is not included (no ledger is exactly why it cannot be).
