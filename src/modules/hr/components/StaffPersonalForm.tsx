@@ -48,7 +48,35 @@ export default function StaffPersonalForm({ userId, canEdit, hrHref }: {
     const url = `/api/hr/staff/${userId}`;
     const { data, loading, error, reload } = useApiResource<StaffDetail>(url);
     const { save, stateOf } = useFieldSave();
-    const patch = (body: Record<string, unknown>) => axios.patch(url, body);
+
+    // What the server holds right now, field by field.
+    //
+    // `data` is fetched once and is NOT refetched after a blur-save, so using it
+    // as each field's "before" froze every comparison at page-load. Clearing a
+    // box you had just filled then did nothing at all: the empty box matched the
+    // stale original, so useFieldSave's rule 1 ("a tab-through is not an edit")
+    // skipped the write and the old value stayed in the database, with no tick
+    // and no toast to say so. The PATCH hands the whole record back, so moving
+    // the baseline on with every save costs no extra GET. It is tagged with the
+    // fetch it was saved over, so a reload (the bank block does one) hands the
+    // baseline straight back to the fresh server copy.
+    const [saved, setSaved] = useState<{ from: StaffDetail; profile: StaffProfileDto | null } | null>(null);
+    const profile = (saved && saved.from === data ? saved.profile : data?.profile) ?? null;
+
+    // `box` is the input the value came from. The server normalises some fields
+    // (a PAN comes back upper-cased), so the box is put in step with what was
+    // actually stored — otherwise the next tab-through would look like an edit
+    // and write again. Skipped if the user has already clicked back in, so a
+    // slow save can never overwrite what they are typing now.
+    const patch = async (body: Record<string, unknown>, box?: HTMLInputElement | HTMLTextAreaElement) => {
+        const res = await axios.patch<StaffDetail>(url, body);
+        if (data) setSaved({ from: data, profile: res.data.profile });
+        if (box && document.activeElement !== box) {
+            const key = Object.keys(body)[0] as TextKey;
+            box.value = res.data.profile?.[key] ?? "";
+        }
+        return res;
+    };
 
     return (
         <div className="max-w-2xl space-y-6">
@@ -71,14 +99,14 @@ export default function StaffPersonalForm({ userId, canEdit, hrHref }: {
                                             {f.multiline ? (
                                                 <Textarea
                                                     id={id}
-                                                    defaultValue={data.profile?.[f.key] ?? ""}
+                                                    defaultValue={profile?.[f.key] ?? ""}
                                                     rows={2}
                                                     className="text-sm"
                                                     onBlur={(e) => void save({
                                                         key: f.key,
-                                                        original: data.profile?.[f.key] ?? "",
+                                                        original: profile?.[f.key] ?? "",
                                                         next: e.target.value.trim(),
-                                                        write: (v) => patch({ [f.key]: v || null }),
+                                                        write: (v) => patch({ [f.key]: v || null }, e.target),
                                                         revert: (v) => { e.target.value = v; },
                                                         label: f.label,
                                                     })}
@@ -86,14 +114,14 @@ export default function StaffPersonalForm({ userId, canEdit, hrHref }: {
                                             ) : (
                                                 <Input
                                                     id={id}
-                                                    defaultValue={data.profile?.[f.key] ?? ""}
+                                                    defaultValue={profile?.[f.key] ?? ""}
                                                     placeholder={f.placeholder}
                                                     className="h-9 text-sm"
                                                     onBlur={(e) => void save({
                                                         key: f.key,
-                                                        original: data.profile?.[f.key] ?? "",
+                                                        original: profile?.[f.key] ?? "",
                                                         next: e.target.value.trim(),
-                                                        write: (v) => patch({ [f.key]: v || null }),
+                                                        write: (v) => patch({ [f.key]: v || null }, e.target),
                                                         revert: (v) => { e.target.value = v; },
                                                         label: f.label,
                                                     })}
@@ -107,7 +135,7 @@ export default function StaffPersonalForm({ userId, canEdit, hrHref }: {
                         ))}
                     </fieldset>
 
-                    <BankBlock profile={data.profile} canEdit={canEdit} onSave={(bank) => patch({ bankJson: bank })} onSaved={reload} />
+                    <BankBlock profile={profile} canEdit={canEdit} onSave={(bank) => patch({ bankJson: bank })} onSaved={reload} />
 
                     {!canEdit && (
                         <p className="text-xs text-muted-foreground">These details can be changed by the person themselves or by HR.</p>
