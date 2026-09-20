@@ -184,7 +184,7 @@ export default function DepartmentsPage() {
             const { strippedGrants } = res.data;
             toast.success(
                 strippedGrants > 0
-                    ? `Pool saved · removed ${strippedGrants} grant${strippedGrants === 1 ? "" : "s"} from roles in this department`
+                    ? `Pool saved · removed ${strippedGrants} grant${strippedGrants === 1 ? "" : "s"} from roles in this department · holders signed out`
                     : "Permission pool saved",
             );
             setPoolOriginal(new Set(poolSelected));

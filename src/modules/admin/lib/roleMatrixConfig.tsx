@@ -693,6 +693,27 @@ export const MODULE_EXTRA_TOGGLE: Record<string, {
     },
 };
 
+/**
+ * Every permission id a set of sidebar links unlocks beyond the links themselves:
+ * the granular create/edit/delete ids behind each link, the link's extra toggles,
+ * and module toggles shown once any of their trigger links is present. The
+ * role-permissions save uses this to ALLOW them; the department pool save uses
+ * it to STRIP them when the links go — so a module removed from a department is
+ * a clean removal, not a page hidden with its actions still granted.
+ */
+export function idsUnlockedByLinks(linkIds: Iterable<string>): Set<string> {
+    const links = new Set(linkIds);
+    const out = new Set<string>();
+    for (const linkId of links) {
+        for (const id of SIDEBAR_LINK_GRANULAR_IDS[linkId] ?? []) out.add(id);
+        for (const t of extraTogglesFor(linkId)) out.add(t.id);
+    }
+    for (const t of Object.values(MODULE_EXTRA_TOGGLE)) {
+        if (t.showWhenAnyLinkId.some((id) => links.has(id))) out.add(t.id);
+    }
+    return out;
+}
+
 export function roleToForm(role: Role): RoleForm {
     return {
         label: role.label,

@@ -7,6 +7,9 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
 import { ensureCatalogPermissions } from "@/shared/lib/auth/ensurePermissions";
+import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
+import { expandSidebarModules } from "@/shared/lib/auth/departmentPool";
+import { idsUnlockedByLinks } from "@/modules/admin/lib/roleMatrixConfig";
 
 // GET — the department's permission pool (the Role Matrix authoring lens).
 // For an all-access department, `isAllAccess: true` and `permissionIds: null`
@@ -30,9 +33,12 @@ const putSchema = z.object({
 
 // PUT — full-replace the department's pool. Removing a permission cascade-strips
 // it from the roles homed in this department (keeps the invariant "a role never
-// grants outside its department pool"), and the response reports how many grants
-// changed so the action is never silent. All-access pools are auto-managed and
-// reject edits.
+// grants outside its department pool"). A CLEAN removal: the action permissions a
+// removed link had unlocked (create/edit/delete, extra toggles, module toggles)
+// go with it unless a link still in the pool unlocks them too, and every affected
+// role's sessions are revoked so holders lose the module on their next request,
+// not at some later login. The response reports how many grants changed so the
+// action is never silent. All-access pools are auto-managed and reject edits.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAnyPermission(PERMISSIONS.DEPARTMENTS_EDIT);
     if (response) return response;
@@ -64,8 +70,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             }
         }
 
-        const currentIds = new Set(dept.permissionPool.map(p => p.permissionId));
-        const removed    = [...currentIds].filter(p => !nextIds.includes(p));
+        // Compare module-expanded sets, the same view the UI ticks against, so a
+        // module ticked off strips every current link of it — not only the ones
+        // that happened to be stored.
+        const currentIds = new Set(expandSidebarModules(dept.permissionPool.map(p => p.permissionId)));
+        const nextSet    = new Set(expandSidebarModules(nextIds));
+        const removed    = [...currentIds].filter(p => !nextSet.has(p));
+        // Action ids unlocked ONLY by the removed links (a link still pooled keeps
+        // what it unlocks — e.g. a module toggle shared by two links).
+        const stillUnlocked = idsUnlockedByLinks(nextSet);
+        const dependents    = [...idsUnlockedByLinks(removed)].filter(id => !stillUnlocked.has(id));
+        const toStrip       = [...new Set([...removed, ...dependents])];
         const roleIds    = dept.roles.map(r => r.id);
 
         const result = await prisma.$transaction(async (tx) => {
@@ -78,19 +93,25 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             }
             // Cascade-strip removed permissions from roles homed in this department.
             let strippedGrants = 0;
-            if (removed.length && roleIds.length) {
+            if (toStrip.length && roleIds.length) {
                 const del = await tx.rolePermission.deleteMany({
-                    where: { roleId: { in: roleIds }, permissionId: { in: removed } },
+                    where: { roleId: { in: roleIds }, permissionId: { in: toStrip } },
                 });
                 strippedGrants = del.count;
             }
             return { strippedGrants };
         });
+        // Permissions ride the JWT — without this, holders keep the removed
+        // module until they next sign in.
+        if (result.strippedGrants > 0) {
+            for (const roleId of roleIds) await revokeRoleSessions(roleId);
+        }
 
         return NextResponse.json({
             success:        true,
             poolSize:       nextIds.length,
             removed:        removed.length,
+            strippedDependents: dependents.length,
             strippedGrants: result.strippedGrants,
             affectedRoles:  roleIds.length,
         });
