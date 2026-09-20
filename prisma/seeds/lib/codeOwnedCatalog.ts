@@ -80,6 +80,8 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // bank), salary revisions, and "mark as left". Self-edits of personal / bank
     // details on one's own profile page need no grant.
     { id: "hr:staff:edit", label: "Edit staff records", module: "hr", description: "Edit any staff member's HR profile (staff code, joining date, personal and bank details, salary structure) and mark them as left." },
+    { id: "hr:attendance:edit", label: "Mark attendance", module: "hr", description: "Mark days on the attendance register from the office (the till marks its own sign-ins) and keep the holiday list." },
+    { id: "hr:leave:approve", label: "Approve leave", module: "hr", description: "Approve or reject leave requests, and file leave on someone else's behalf. Anyone may file their own." },
     // Payroll — generate a month's run and post it as one journal voucher.
     // Separate from hr:staff:edit: a clerk may keep records without ever being
     // able to accrue a lakh of salary. Posting also needs the JOURNAL post gate.

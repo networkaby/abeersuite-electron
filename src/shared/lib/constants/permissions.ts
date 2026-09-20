@@ -189,6 +189,10 @@ export const PERMISSIONS = {
     // salary revisions and "mark as left". A person may always save their OWN
     // personal / bank details (the self rule of PUT /api/users/[id]).
     HR_STAFF_EDIT: "hr:staff:edit",
+    // Attendance register + holiday list (marking a day, adding a holiday), and
+    // deciding leave. Filing one's own leave needs no grant.
+    HR_ATTENDANCE_EDIT: "hr:attendance:edit",
+    HR_LEAVE_APPROVE: "hr:leave:approve",
     // Payroll — generating a month's run is a separate, heavier act than editing
     // one person's record, so it has its own key. Posting the run to the books
     // ALSO needs the journal-voucher post gate, checked by the post route.

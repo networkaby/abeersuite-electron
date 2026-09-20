@@ -48,6 +48,7 @@ import { computeExpectedCash, computeVariance, sumPaise, tillBalancePaise, build
 import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
+import { stampAttendanceOut } from "@/shared/lib/hr/attendanceStamp";
 
 const closeSchema = z.object({
     declaredCashPaise:  z.number().int().min(0),
@@ -283,6 +284,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 },
             });
         });
+
+        // HR & People: the close is the cashier's out time for the day. Best-effort.
+        await stampAttendanceOut(prisma, shift.userId, closedAt);
 
         // Per-method tally of everything collected this shift (cash + digital),
         // for the closing report. Uses the real closedAt window.

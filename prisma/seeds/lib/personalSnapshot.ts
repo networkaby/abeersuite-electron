@@ -85,6 +85,8 @@ export interface PersonalSnapshot {
     /** HR & People — the staff record per user (by email) and its salary revisions. */
     staffProfiles: Row[];
     staffSalaries: Row[];
+    /** HR & People — the shop holiday list (attendance / leave rows are transactions, never captured). */
+    holidays: Row[];
     paymentGateways: Row[];
     deliveryMethods: Row[];
     /** Customer Quality marketing-group master (Settings → Customer Groups). */
@@ -366,6 +368,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         externalize(omit(p, ["createdAt", "updatedAt"]), { userId: "user", ledgerAccountId: "account", expenseAccountId: "account" }, idx));
     const staffSalaries = (await prisma.staffSalary.findMany()).map((s) =>
         externalize(omit(s, ["id", "createdAt", "updatedAt", "createdById"]), { userId: "user" }, idx));
+    const holidays = (await prisma.holiday.findMany()).map((h) => omit(h, ["id", "createdAt", "updatedAt"]));
 
     // ── Delivery methods (courier options offered at checkout — config only) ──
     const deliveryMethods = (await prisma.deliveryMethod.findMany()).map((m) => omit(m, ["id", "createdAt", "updatedAt"]));
@@ -403,7 +406,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         tierPeriods,
         branches, departments,
         roles, rolePermissions, departmentPermissions, positions, positionRoles, users, userPositions, userPermissions,
-        staffProfiles, staffSalaries,
+        staffProfiles, staffSalaries, holidays,
         paymentGateways, deliveryMethods, customerGroups, posCounters, posPaymentAccounts, posServices,
         pipelines, workGroups, works, workGroupWorks, ticketStatuses, ticketWorkers, statusTransitions, workerTransitions,
     };
@@ -677,6 +680,16 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
             n++;
         }
         count("staffSalaries", n);
+    }
+
+    {
+        let n = 0;
+        for (const h of snap.holidays ?? []) {
+            const date = new Date(h.date);
+            await prisma.holiday.upsert({ where: { date_name: { date, name: h.name } }, update: { branchId: h.branchId ?? null }, create: { date, name: h.name, branchId: h.branchId ?? null } });
+            n++;
+        }
+        count("holidays", n);
     }
 
     // ── Phase 6: spend-tier ladders ──

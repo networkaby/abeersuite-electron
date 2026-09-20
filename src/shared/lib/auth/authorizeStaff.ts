@@ -7,6 +7,7 @@ import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/c
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
+import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
 
 /** One seat a person holds: what they are called, and where it sits. */
 export type StaffSeat = { title: string; scope: string };
@@ -378,6 +379,8 @@ export async function authorizeStaffCredentials(
     // go back to zero, and the PIN this person set on this counter keeps working.
     // A no-op for anyone who has no PIN, and off a counter entirely.
     await stampCounterPinLogin(prisma, user.id, "password");
+    // The first sign-in on a till marks the business day PRESENT (HR & People).
+    { const counterId = thisCounterId(); if (counterId) await stampAttendanceIn(prisma, user.id, counterId); }
 
     return buildStaffAuthUser(prisma, user);
 }
@@ -441,5 +444,6 @@ export async function authorizeStaffPin(
     clearLoginFailures(throttleKey);
 
     await stampCounterPinLogin(prisma, user.id, "pin");
+    await stampAttendanceIn(prisma, user.id, counterId);
     return buildStaffAuthUser(prisma, user);
 }

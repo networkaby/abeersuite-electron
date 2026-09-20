@@ -1463,6 +1463,86 @@ ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "createdById" INTEGER 
 ALTER TABLE "BankStatementMatch" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "attendance_days" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "date" DATE NOT NULL,
+    "status" TEXT NOT NULL,
+    "source" TEXT NOT NULL DEFAULT 'OFFICE',
+    "firstInAt" TIMESTAMP(3),
+    "lastOutAt" TIMESTAMP(3),
+    "counterId" INTEGER,
+    "note" TEXT,
+    "markedById" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "attendance_days_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "date" DATE NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'OFFICE';
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "firstInAt" TIMESTAMP(3);
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "lastOutAt" TIMESTAMP(3);
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "counterId" INTEGER;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "markedById" INTEGER;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "holidays" (
+    "id" SERIAL NOT NULL,
+    "date" DATE NOT NULL,
+    "name" TEXT NOT NULL,
+    "branchId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "holidays_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "holidays" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "holidays" ADD COLUMN IF NOT EXISTS "date" DATE NOT NULL;
+ALTER TABLE "holidays" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "holidays" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
+ALTER TABLE "holidays" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "holidays" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "leave_requests" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "fromDate" DATE NOT NULL,
+    "toDate" DATE NOT NULL,
+    "kind" TEXT NOT NULL DEFAULT 'CASUAL',
+    "reason" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "decidedById" INTEGER,
+    "decidedAt" TIMESTAMP(3),
+    "decisionNote" TEXT,
+    "createdById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "leave_requests_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "fromDate" DATE NOT NULL;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "toDate" DATE NOT NULL;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'CASUAL';
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "reason" TEXT;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'PENDING';
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "decidedById" INTEGER;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "decidedAt" TIMESTAMP(3);
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "decisionNote" TEXT;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "userId" INTEGER NOT NULL,
     "staffCode" TEXT,
@@ -4058,6 +4138,33 @@ CREATE INDEX IF NOT EXISTS "BankStatementMatch_groupId_idx" ON "BankStatementMat
 CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementMatch_statementLineId_glLineId_key" ON "BankStatementMatch"("statementLineId", "glLineId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "attendance_days_date_idx" ON "attendance_days"("date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "attendance_days_updatedAt_idx" ON "attendance_days"("updatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "attendance_days_userId_date_key" ON "attendance_days"("userId", "date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "holidays_date_idx" ON "holidays"("date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "holidays_updatedAt_idx" ON "holidays"("updatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "holidays_date_name_key" ON "holidays"("date", "name");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "leave_requests_userId_fromDate_idx" ON "leave_requests"("userId", "fromDate");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "leave_requests_status_idx" ON "leave_requests"("status");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "leave_requests_updatedAt_idx" ON "leave_requests"("updatedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "staff_profiles_staffCode_key" ON "staff_profiles"("staffCode");
 
 -- CreateIndex
@@ -4920,6 +5027,20 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "BankStatementMatch" ADD CONSTRAINT "BankStatementMatch_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "attendance_days" ADD CONSTRAINT "attendance_days_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "leave_requests" ADD CONSTRAINT "leave_requests_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6269,6 +6390,13 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
+    IF to_regclass('public."attendance_days"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "attendance_days";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "attendance_days"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
     IF to_regclass('public."AuditLog"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "AuditLog";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "AuditLog"
@@ -6491,6 +6619,13 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
+    IF to_regclass('public."holidays"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "holidays";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "holidays"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
     IF to_regclass('public."InvAttributeMaster"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvAttributeMaster";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvAttributeMaster"
@@ -6578,6 +6713,13 @@ DO $$ BEGIN
     IF to_regclass('public."InvWarrantyTerm"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvWarrantyTerm";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvWarrantyTerm"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."leave_requests"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "leave_requests";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "leave_requests"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

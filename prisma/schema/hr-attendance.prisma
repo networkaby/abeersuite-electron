@@ -1,0 +1,80 @@
+// ── HR & People — attendance, holidays, leave ────────────────────────────────
+// Owner, 2026-09-18: attendance is AUTO from the counter sign-in, plus an office
+// register for everyone else and for corrections. So a day is written by two
+// hands: the till (first sign-in of the business day = PRESENT with the in
+// time; the shift close stamps the out time) and HR (the register, click to
+// mark). A stored row is the truth for that day; a day with no row is READ off
+// the calendar — weekly off (StaffProfile.weeklyOff), a Holiday, an approved
+// leave, or simply unmarked.
+//
+// All three tables replicate like everything else. AttendanceDay is written ON
+// the till at sign-in, so it has to ride the outbox up — it does, by default.
+
+model AttendanceDay {
+  id     Int @id @default(autoincrement())
+  userId Int
+  user   User @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  /// The business day (shop calendar), never the server's UTC day.
+  date DateTime @db.Date
+  /// PRESENT | HALF_DAY | ABSENT | LEAVE | WEEKLY_OFF | HOLIDAY — a plain string,
+  /// validated by zod. Stored only when someone or something marked it; the
+  /// calendar answers for the rest.
+  status String
+  /// COUNTER — the till wrote it at sign-in. OFFICE — the register or a leave approval.
+  source String @default("OFFICE")
+  /// First sign-in on a counter that day; last shift close. Informational.
+  firstInAt DateTime?
+  lastOutAt DateTime?
+  counterId Int?
+  note      String?
+  /// Who marked it from the office; null when the till did.
+  markedById Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([updatedAt])
+  @@map("attendance_days")
+}
+
+// A shop holiday. `branchId` null = every branch.
+model Holiday {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @db.Date
+  name      String
+  branchId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([date, name])
+  @@index([date])
+  @@index([updatedAt])
+  @@map("holidays")
+}
+
+// A leave request. Approval writes LEAVE onto every day in the range (the
+// register then shows it); rejection or cancellation clears those days again.
+model LeaveRequest {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation("LeaveUser", fields: [userId], references: [id], onDelete: Cascade)
+  fromDate DateTime @db.Date
+  toDate   DateTime @db.Date
+  /// CASUAL | SICK | EARNED | UNPAID — plain string, validated by zod.
+  kind   String @default("CASUAL")
+  reason String?
+  /// PENDING | APPROVED | REJECTED | CANCELLED
+  status      String    @default("PENDING")
+  decidedById Int?
+  decidedAt   DateTime?
+  decisionNote String?
+  createdById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([userId, fromDate])
+  @@index([status])
+  @@index([updatedAt])
+  @@map("leave_requests")
+}
