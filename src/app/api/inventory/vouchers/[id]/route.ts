@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { PRE_EDIT_ACTION } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
@@ -406,6 +407,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         originalId:  existing.id,
                         originalRef: existing.universalVoucher?.voucherNo ?? "",
                         reason:      `Edit (in-place) of ${existing.universalVoucher?.voucherNo ?? ""}`,
+                        action:      PRE_EDIT_ACTION,
                         snapshot:    { ...oldSnap, journalEntry: origJe },
                         actorId:     userId,
                     }),

@@ -1,4 +1,5 @@
 import { PAYMENT_INSTRUMENT_VALUES } from "@/shared/lib/constants/accounting";
+import { PRE_EDIT_ACTION } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
@@ -129,6 +130,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         originalId:  existing.id,
                         originalRef: (existing.voucherNo ?? formatUvNo(existing.id)),
                         reason:      `Edit (in-place) of ${(existing.voucherNo ?? formatUvNo(existing.id))}`,
+                        action:      PRE_EDIT_ACTION,
                         snapshot:    { ...existing },
                         actorId:     user!.id,
                     }),

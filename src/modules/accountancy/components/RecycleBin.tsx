@@ -8,17 +8,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Loader2, Undo2, RefreshCw, Trash2, ShieldAlert } from "lucide-react";
+import { Loader2, Undo2, RefreshCw, Trash2, ShieldAlert, FileClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { extractApiError } from "@/shared/lib/api";
+import { auditSnapshotKind } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface AuditRow {
     id: number;
     entityType: "INV_VOUCHER" | "GL_VOUCHER" | "JOURNAL_ENTRY";
+    /** The voucher this row is a copy OF — one voucher can have several rows here. */
+    originalId: number;
     subtype: string | null;
     originalRef: string;
     action: string;
@@ -104,21 +107,29 @@ export function RecycleBin() {
         }
     };
 
-    // Destroys the snapshot — the last surviving copy of the voucher. Two clicks
-    // (the row arms itself, then "Delete forever") so it can't go on a mis-click.
+    // Destroys copies for good. How far it reaches depends on which kind the row is:
+    // a DELETE copy is the voucher's last one, so the server takes every other copy of
+    // that voucher with it; an EDIT copy is just an older picture of a voucher that is
+    // still alive, so only that row goes. Two clicks (the row arms itself, then the
+    // red button) so it can't go on a mis-click.
     const purge = async (row: AuditRow) => {
         setBusyId(row.id);
+        const kind = auditSnapshotKind(row);
         try {
-            const { data } = await axios.delete<{ releasedRef?: string | null }>(`/api/audit/${row.id}`);
+            const { data } = await axios.delete<{ releasedRef?: string | null; removed?: number }>(`/api/audit/${row.id}`);
+            const ref = row.originalRef || "Voucher";
             // The number comes back only when this voucher held the tip of its series;
-            // say so, because the next bill will then carry the very same number.
-            toast.success(data?.releasedRef
-                ? `${row.originalRef} deleted permanently — number released for re-use`
-                : `${row.originalRef} deleted permanently`);
+            // say so, because the next voucher will then carry the very same number.
+            toast.success(kind === "EDIT"
+                ? `Pre-edit copy of ${ref} destroyed — ${ref} itself is untouched`
+                : `${ref} deleted completely${(data?.removed ?? 1) > 1 ? ` (${data!.removed} copies)` : ""}`
+                  + (data?.releasedRef ? " — number released for re-use" : ""));
             setConfirmPurgeId(null);
-            // Drop the row immediately — it is gone for good, so there is nothing to
-            // re-fetch it back. Revalidate quietly to catch anything else that changed.
-            setRows((rs) => rs.filter((r) => r.id !== row.id));
+            // Drop what is gone immediately — it cannot be fetched back. A DELETE copy
+            // took the voucher's other copies with it, so they leave the table too.
+            setRows((rs) => rs.filter((r) => kind === "DELETE"
+                ? !(r.entityType === row.entityType && r.originalId === row.originalId)
+                : r.id !== row.id));
             load({ silent: true });
         } catch (e: unknown) {
             toast.error(extractApiError(e, "Permanent delete failed"));
@@ -164,10 +175,27 @@ export function RecycleBin() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {rows.map((row) => (
+                            {rows.map((row) => {
+                            const kind = auditSnapshotKind(row);
+                            return (
                                 <tr key={row.id} className="hover:bg-muted/40">
-                                    <td className="px-4 py-2.5 font-mono text-xs font-medium">{row.originalRef}</td>
-                                    <td className="px-4 py-2.5"><Badge variant="secondary" className="text-xs">{voucherTypeLabel(row.subtype) ?? TYPE_LABEL[row.entityType]}</Badge></td>
+                                    <td className="px-4 py-2.5 font-mono text-xs font-medium">{row.originalRef || <span className="text-muted-foreground">—</span>}</td>
+                                    <td className="px-4 py-2.5">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <Badge variant="secondary" className="text-xs">{voucherTypeLabel(row.subtype) ?? TYPE_LABEL[row.entityType]}</Badge>
+                                            {/* Which copy this is. A deleted voucher's row is its last one; an
+                                                edit copy is only an older picture of a voucher still on the books. */}
+                                            {kind === "EDIT" ? (
+                                                <Badge variant="outline" className="border-amber-500/40 text-[10px] font-normal text-amber-700 dark:text-amber-400" title="An older version of a voucher that is still on the books. Deleting this copy only gives up going back to it.">
+                                                    <FileClock size={10} className="mr-1" /> Pre-edit copy
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="border-destructive/40 text-[10px] font-normal text-destructive" title="The voucher was removed from the books. This is its last surviving copy.">
+                                                    <Trash2 size={10} className="mr-1" /> Deleted voucher
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-xs truncate">{row.reason ?? "—"}</td>
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground">{row.actor?.name ?? "—"}</td>
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(row.createdAt)}</td>
@@ -184,7 +212,8 @@ export function RecycleBin() {
                                                 confirmPurgeId === row.id ? (
                                                     <div className="flex items-center gap-1">
                                                         <Button size="sm" variant="destructive" className="h-7" disabled={busyId === row.id} onClick={() => purge(row)}>
-                                                            {busyId === row.id ? <Loader2 size={13} className="animate-spin" /> : <ShieldAlert size={13} className="mr-1" />} Delete forever
+                                                            {busyId === row.id ? <Loader2 size={13} className="animate-spin" /> : <ShieldAlert size={13} className="mr-1" />}
+                                                            {kind === "EDIT" ? "Delete this copy" : "Delete voucher completely"}
                                                         </Button>
                                                         <Button size="sm" variant="ghost" className="h-7" onClick={() => setConfirmPurgeId(null)}>Cancel</Button>
                                                     </div>
@@ -193,7 +222,9 @@ export function RecycleBin() {
                                                         size="sm"
                                                         variant="ghost"
                                                         className="h-7 text-destructive hover:text-destructive"
-                                                        title="Permanently destroy this snapshot — the voucher becomes unrecoverable"
+                                                        title={kind === "EDIT"
+                                                            ? "Destroy this pre-edit copy — the voucher stays on the books, you only give up going back to this older version"
+                                                            : "Delete this voucher completely — every copy of it goes, and it can never be recovered"}
                                                         onClick={() => setConfirmPurgeId(row.id)}
                                                     >
                                                         <Trash2 size={13} />
@@ -203,14 +234,15 @@ export function RecycleBin() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            );
+                            })}
                         </tbody>
                     </table>
                 )}
             </div>
             <div className="border-t px-6 py-2 text-[11px] text-muted-foreground">
                 Note: links to orders, tickets and deals are not reconnected on restore.
-                {isSuperAdmin && " Delete forever destroys the snapshot — that voucher can never be recovered."}
+                {isSuperAdmin && " A pre-edit copy can be destroyed on its own; deleting a deleted voucher removes every copy of it and frees its number if it was the last one issued."}
             </div>
         </div>
     );

@@ -28,6 +28,9 @@ export async function GET(req: Request) {
             take: 200,
             select: {
                 id: true, entityType: true, subtype: true, originalRef: true, action: true, reason: true,
+                // The voucher a row is a copy OF — the Recycle Bin groups by it, since a
+                // permanent delete of the DELETE copy takes the voucher's other copies too.
+                originalId: true,
                 createdAt: true, restoredAt: true,
                 actor: { select: { id: true, name: true } },
                 restoredBy: { select: { id: true, name: true } },
