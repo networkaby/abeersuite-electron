@@ -54,6 +54,30 @@ export interface PayrollRunRow {
     postedBy: string | null;
 }
 
+/**
+ * One salary slip, as a person sees it on their own profile. Every figure is
+ * read straight off the run's frozen line — never recomputed — so a slip says
+ * the same thing in ten years as it did the day it was posted.
+ */
+export interface PayslipDto {
+    id: number;
+    runId: number;
+    periodFrom: string;
+    periodTo: string;
+    postingDate: string;
+    postedAt: string | null;
+    voucherId: number | null;
+    voucherRef: string | null;
+    lines: SalaryLine[];
+    grossPaise: number;
+    deductionsPaise: number;
+    netPaise: number;
+    paidDays: number;
+    periodDays: number;
+    /** The salary revision the figures came from. */
+    effectiveFrom: string | null;
+}
+
 /** The run workspace's payload. */
 export interface PayrollRunDetail extends PayrollRunRow {
     lines: PayrollLineDto[];

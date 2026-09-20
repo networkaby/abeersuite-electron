@@ -16,7 +16,7 @@ import {
     ArrowLeft, Mail, Phone, Cake, Building2, Users,
     Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose, Home,
-    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity, IdCard,
+    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity, IdCard, Receipt,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { uploadImageToCloudinary as uploadToCloudinary } from "@/shared/lib/uplo
 import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import StaffPersonalForm from "@/modules/hr/components/StaffPersonalForm";
+import StaffPayslips from "@/modules/hr/components/StaffPayslips";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1351,8 +1352,12 @@ const TABS = [
     { id: 7 as const, label: "Friends", icon: Users, access: "all" },
     // HR & People — the details HR keeps on file that the person knows best.
     { id: 8 as const, label: "Personal & Bank", icon: IdCard, access: "selfOrAdmin" },
+    // What they were paid, per period. Not default-open like the rest of the
+    // profile: pay is the person's own business and HR's, so the API refuses
+    // anyone else even if this tab were somehow reached.
+    { id: 9 as const, label: "Salary Slips", icon: Receipt, access: "selfOrAdmin" },
 ];
-type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -1596,6 +1601,7 @@ export default function UserProfilePage() {
                             hrHref={canOpenHr ? `/office/hr/staff/${profile.id}` : null}
                         />
                     )}
+                    {activeTab === 9 && (isSelf || isAdmin) && <StaffPayslips userId={profile.id} />}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}
