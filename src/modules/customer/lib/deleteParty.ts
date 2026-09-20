@@ -9,28 +9,21 @@
 // device must never be silently erased.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 
 export type DeletePartyResult =
     | { outcome: "deleted" }
     | { outcome: "deactivated" }
     | { outcome: "blocked"; reason: string };
 
-const ACCOUNT_SELECT = {
-    id: true,
-    balance: true,
-    normalBalance: true,
-    openingBalance: true,
-    openingBalanceType: true,
-    openingBalanceDate: true,
-    group: { select: { type: true } },
-} as const;
-
 async function hasClearLedger(accountId: number): Promise<boolean> {
     const lineCount = await prisma.voucherGlLine.count({ where: { accountId } });
     if (lineCount > 0) return false;
-    const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId }, select: ACCOUNT_SELECT });
-    return effectiveAccountBalance(account) === 0;
+    // Summed from the ledger, not from `Account.balance`. This decides whether a
+    // party row is erased for good, so it must not be able to read zero off a
+    // drifted cache while the books still carry an opening balance for them.
+    const closing = (await closingForAccounts(null, [accountId])).get(accountId) ?? 0;
+    return closing === 0;
 }
 
 export async function deleteOrDeactivatePerson(id: number): Promise<DeletePartyResult> {

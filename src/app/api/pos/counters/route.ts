@@ -239,7 +239,8 @@ export async function POST(req: NextRequest) {
             // Reuse existing GL account if one with the same name already exists; else create.
             let till = await tx.account.findFirst({
                 where: { name: { equals: tillName, mode: "insensitive" }, personId: null, companyId: null },
-                select: { id: true, name: true, balance: true },
+                // No cached `balance` — the response below sums the ledger.
+                select: { id: true, name: true },
             });
             if (!till) {
                 till = await tx.account.create({
@@ -249,7 +250,7 @@ export async function POST(req: NextRequest) {
                         normalBalance: "DEBIT",
                         isActive: true,
                     },
-                    select: { id: true, name: true, balance: true },
+                    select: { id: true, name: true },
                 });
             }
 

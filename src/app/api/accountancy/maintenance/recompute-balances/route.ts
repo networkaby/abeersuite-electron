@@ -9,10 +9,15 @@ import { handleApiError } from "@/shared/lib/api";
 // POST /api/accountancy/maintenance/recompute-balances
 // Recomputes Account.balance from the JournalLine source of truth and
 // writes back any drift. Account.balance is a running cache maintained by
-// post helpers; if any helper drops a delta, the cache drifts. Display
-// surfaces no longer read this cache (they go straight to JournalLine via
-// aggregateClosingAsOf), but voucher-entry quick reads still use it — so
-// keeping the cache in sync is occasionally useful. Dry-run with `?dryRun=1`.
+// post helpers; if any helper drops a delta, the cache drifts.
+//
+// What still depends on it, and therefore what this repair is for: the ledgers
+// list and the finance top bar (`closingFromCache`) — the two surfaces that want
+// EVERY account at once, where summing the GL would be a full-ledger scan.
+// Nothing that decides anything reads it any more: the credit gate, the POS
+// customer panel, the party lists, the till figures and the party-delete guard
+// all sum their own accounts' lines (`closingForAccounts`). So drift here is now
+// a display matter, not a money matter. Dry-run with `?dryRun=1`.
 export async function POST(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;

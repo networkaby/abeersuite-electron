@@ -5,7 +5,7 @@ import { z } from "zod";
 import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { effectiveAccountBalance } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { loadPartyUnallocated } from "@/modules/accountancy/lib/billLink";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
@@ -94,11 +94,10 @@ export async function GET(req: Request) {
                 account: {
                     select: {
                         id: true,
-                        balance: true,
+                        // No `balance` / `openingBalance*`: the figure this page
+                        // shows is summed from the GL lines below, so reading the
+                        // cached column here would only invite the two to disagree.
                         normalBalance: true,
-                        openingBalance: true,
-                        openingBalanceType: true,
-                        openingBalanceDate: true,
                         // `name` + `aliases` cost nothing extra here — same relation
                         // already joined for `type` — but let a search HIT on this
                         // page double as a fill for the till's party cache (see
@@ -111,12 +110,19 @@ export async function GET(req: Request) {
             },
         });
 
-        const unallocated = withLinkHint
-            ? await loadPartyUnallocated(
-                prisma,
-                persons.map(p => p.account?.id).filter((id): id is number => id != null),
-            )
-            : null;
+        // Balances come from the GL lines of just these parties, not from the
+        // `Account.balance` cache. Each counter holds a full local replica, so
+        // one narrowed aggregate over the accounts already on this page is a
+        // cheap indexed read — and unlike the cache it cannot drift away from
+        // the ledger the party's own statement is printed from.
+        //
+        // No date ceiling: this column means "what stands on the account", the
+        // same total the cache carried, not a position as of today.
+        const accountIds = persons.map(p => p.account?.id).filter((id): id is number => id != null);
+        const [closing, unallocated] = await Promise.all([
+            closingForAccounts(null, accountIds),
+            withLinkHint ? loadPartyUnallocated(prisma, accountIds) : Promise.resolve(null),
+        ]);
 
         const normalised = persons.map(p => ({
             ...p,
@@ -128,7 +134,7 @@ export async function GET(req: Request) {
             },
             account: p.account ? {
                 id: p.account.id,
-                balance: effectiveAccountBalance(p.account),
+                balance: closing.get(p.account.id) ?? 0,
                 normalBalance: p.account.normalBalance
                     ?? (p.account.group?.type ? defaultNormalBalanceForGroupType(p.account.group.type) : "DEBIT"),
                 ...(unallocated ? { toLink: unallocated.get(p.account.id)?.toLink ?? 0 } : {}),

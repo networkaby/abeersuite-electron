@@ -95,6 +95,33 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 > Words for the Work / Work Inbox / ticket-workflow layer.
 
+## Cached balance · Computed balance
+
+**Definition:** Two ways to answer "what is this account's balance", and the rule for choosing.
+
+| Term | What it is | Read it with |
+| --- | --- | --- |
+| **Cached balance** | `Account.balance` — a running total kept by increments on every post / cancel. Movements only; the master `openingBalance` is folded in at read time. | `effectiveAccountBalance`, `closingFromCache` |
+| **Computed balance** | Summed from the account's own `VoucherGlLine` rows, plus its master opening. The ledger is the truth; this is that truth. | `closingForAccounts` (bounded), `aggregateClosingAsOf` (all) |
+
+**The rule — bounded set of accounts → compute; the whole chart at once → cache.**
+
+Every counter carries a full local replica, so summing a known handful of accounts is an indexed local read. Measured on the 2026-09-20 copy (3,835 accounts, 13,974 GL lines): one account 2ms, a 50-party page 3ms, every party account 46ms, the whole ledger 86ms. At those numbers a figure that *cannot drift* beats a figure that is marginally cheaper, so anything that shows or decides money computes:
+
+- the sale's credit gate (`checkCreditLimit`)
+- the POS customer panel (`account-snapshot`)
+- the Contacts party lists (`/api/person`, `/api/companies`)
+- the party-delete guard (`deleteParty`)
+- every till figure (`tillBalancesPaise`, which got there first)
+
+What still reads the cache is the two surfaces that want **every** account in one request — the ledgers list and the finance top bar — where computing means a full-ledger scan on every poll.
+
+**Consequence:** drift in `Account.balance` is now a display matter, not a money matter. The Accountancy maintenance "recompute balances" button repairs it; `pnpm recompute:caches` reports and repairs all four running totals (`Account.balance`, `InvProduct.stock`, `InvProductBranch.stock`, `GiftCard.balance`).
+
+**Not covered by this rule:** stock and gift-card totals stay cached. They are read per keystroke on POS and per row on product lists, where computing would be a query-per-item.
+
+---
+
 ## Technician
 
 **Definition:** The person who handles the repair ticket, moves it through stages, and hands work off to others. Works from the ticket page (`/office/repairing/tickets/[id]`).
@@ -435,4 +462,4 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ---
 
-_Last updated: 2026-06-28 — Added + IMPLEMENTED "Voucher No · Universal Voucher No (UVNo)": every voucher holds the per-kind **Voucher No** (`voucherNo`, e.g. SV-/PMT-/POS-, renamed from friendlyRef) and the global **Universal Voucher No** = the spine's `id` (label `UV-<id>` via formatUvNo; the old `reference` string was dropped — the id already identifies the row, and `GL-` wrongly implied GL-only). `reference` the word is now free for a future cross-reference column. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
+_Last updated: 2026-09-21 — Added "Cached balance · Computed balance": the bounded-set-computes / whole-chart-caches rule, and the surfaces that moved off `Account.balance`. Prior: 2026-06-28 — Added + IMPLEMENTED "Voucher No · Universal Voucher No (UVNo)": every voucher holds the per-kind **Voucher No** (`voucherNo`, e.g. SV-/PMT-/POS-, renamed from friendlyRef) and the global **Universal Voucher No** = the spine's `id` (label `UV-<id>` via formatUvNo; the old `reference` string was dropped — the id already identifies the row, and `GL-` wrongly implied GL-only). `reference` the word is now free for a future cross-reference column. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._

@@ -15,6 +15,14 @@ import { ledgerStatusFilterUv } from "./ledgerStatus";
 export { ledgerStatusFilterUv } from "./ledgerStatus";
 export type { LedgerMode } from "./ledgerStatus";
 
+/**
+ * Anything that can run these reads: the module client, or an open transaction.
+ * Threaded through the narrowed helpers so a gate that must see its own
+ * in-flight writes (`checkCreditLimit`, inside the sale's tx) reads the ledger
+ * on the same connection instead of settling for a cached column.
+ */
+export type LedgerReadClient = Prisma.TransactionClient;
+
 export type AccountAggregate = {
     accountId: number;
     opening:   number;
@@ -23,9 +31,17 @@ export type AccountAggregate = {
     closing:   number;
 };
 
-/** Map (accountId → "DEBIT" | "CREDIT") with fallback inferred from group type. */
-export async function loadNormalBalanceMap(): Promise<Map<number, "DEBIT" | "CREDIT">> {
-    const accounts = await prisma.account.findMany({
+/**
+ * Map (accountId → "DEBIT" | "CREDIT") with fallback inferred from group type.
+ * `accountIds` narrows it to the accounts the caller needs; omit for all.
+ */
+export async function loadNormalBalanceMap(
+    accountIds?: number[],
+    db: LedgerReadClient = prisma,
+): Promise<Map<number, "DEBIT" | "CREDIT">> {
+    if (accountIds && accountIds.length === 0) return new Map();
+    const accounts = await db.account.findMany({
+        ...(accountIds ? { where: { id: { in: accountIds } } } : {}),
         select: {
             id: true,
             normalBalance: true,
@@ -99,16 +115,21 @@ export async function recomputeAccountBalances(
  *  when on the account's normal side). Only accounts whose openingBalanceDate is null or
  *  <= the given as-of date are included. */
 export async function loadMasterOpeningBalances(
-    asOf: Date,
+    asOf: Date | null,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
+    accountIds?: number[],
+    db: LedgerReadClient = prisma,
 ): Promise<Map<number, number>> {
-    const accounts = await prisma.account.findMany({
-        where: { openingBalance: { not: null } },
+    const accounts = await db.account.findMany({
+        where: {
+            openingBalance: { not: null },
+            ...(accountIds ? { id: { in: accountIds } } : {}),
+        },
         select: { id: true, openingBalance: true, openingBalanceType: true, openingBalanceDate: true },
     });
     const out = new Map<number, number>();
     for (const a of accounts) {
-        if (a.openingBalanceDate && a.openingBalanceDate > asOf) continue;
+        if (asOf && a.openingBalanceDate && a.openingBalanceDate > asOf) continue;
         const nb = nbMap.get(a.id);
         if (!nb || !a.openingBalanceType) continue;
         // Treat the opening figure as a single signed entry on the recorded side.
@@ -146,18 +167,43 @@ export async function isUnchangedSince(sinceParam: string | null, now: Date): Pr
     return row === null;
 }
 
-/** Closing balances of every account as of a date.  Map<accountId, closing> in rupees. */
+/**
+ * Closing balances as of a date, summed from the GL lines themselves.
+ * Map<accountId, closing> in rupees. This is the truth read.
+ *
+ * `accountIds` narrows the scan to the accounts the caller actually shows. Pass
+ * it whenever the caller knows its set — a paginated party list, a credit-limit
+ * check, a till's own accounts. With a local replica that turns the truth read
+ * into an indexed lookup over a handful of accounts, which is why those surfaces
+ * no longer settle for the `Account.balance` cache. Omit it only when genuinely
+ * every account is wanted (trial balance, the top bar's whole-book figures).
+ *
+ * An empty array means "no accounts", not "all": the caller had nothing to show,
+ * so the answer is an empty map with no query at all.
+ *
+ * `asOf = null` drops the date ceiling: every posted line counts, whatever its
+ * date. That is what the `Account.balance` cache always held, and it is what a
+ * credit gate wants — a sale dated next week is still money the customer owes,
+ * and excluding it would hand out credit against an understated balance. Any
+ * surface that reports a position "as of" a date must pass a real date.
+ */
 export async function aggregateClosingAsOf(
-    asOf: Date,
+    asOf: Date | null,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
+    accountIds?: number[],
+    db: LedgerReadClient = prisma,
 ): Promise<Map<number, number>> {
+    if (accountIds && accountIds.length === 0) return new Map();
     const [sums, masterOpening] = await Promise.all([
-        prisma.voucherGlLine.groupBy({
+        db.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { lte: asOf } } },
+            where: {
+                ...(accountIds ? { accountId: { in: accountIds } } : {}),
+                universalVoucher: { ...ledgerStatusFilterUv(), ...(asOf ? { date: { lte: asOf } } : {}) },
+            },
         }),
-        loadMasterOpeningBalances(asOf, nbMap),
+        loadMasterOpeningBalances(asOf, nbMap, accountIds, db),
     ]);
     const buckets = new Map<number, { d: number; c: number }>();
     for (const r of sums) {
@@ -179,6 +225,33 @@ export async function aggregateClosingAsOf(
         if (!closing.has(accId)) closing.set(accId, openVal);
     }
     return closing;
+}
+
+/**
+ * Closing balance, from the ledger, for a known handful of accounts.
+ *
+ * The one entry point for every surface that used to read the `Account.balance`
+ * cache because re-summing "felt expensive": a paginated party list, a
+ * credit-limit check, a till's own accounts. Since each counter holds a full
+ * local replica, summing a few accounts' GL lines is an indexed local query —
+ * cheap enough that there is no reason to show a figure that can drift.
+ *
+ * Returns rupees, keyed by account id. Accounts with neither movement nor a
+ * master opening are simply absent — read a miss as ₹0. Pass `asOf = null` for
+ * "everything posted, whatever its date" — the figure the cache used to hold.
+ *
+ * Do NOT reach for this with the whole chart of accounts. That is a full-ledger
+ * scan; `closingFromCache` exists for exactly that case.
+ */
+export async function closingForAccounts(
+    asOf: Date | null,
+    accountIds: number[],
+    db: LedgerReadClient = prisma,
+): Promise<Map<number, number>> {
+    const ids = [...new Set(accountIds)];
+    if (ids.length === 0) return new Map();
+    const nbMap = await loadNormalBalanceMap(ids, db);
+    return aggregateClosingAsOf(asOf, nbMap, ids, db);
 }
 
 /**

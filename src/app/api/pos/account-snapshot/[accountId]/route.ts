@@ -8,7 +8,7 @@ import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 import { resolveTierForAccount, TIER_SPEND_VOUCHER_TYPES } from "@/shared/lib/pricing";
 import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimit";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { latestRating, parseQualityLog } from "@/modules/customer/lib/customerQuality";
 
 // GET /api/pos/account-snapshot/[accountId]
@@ -54,7 +54,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             select: {
                 id: true,
                 creditLimit: true,
-                ...EFFECTIVE_BALANCE_SELECT_FIELDS,
+                // `openingBalance` is shown as its own line on the panel. The
+                // BALANCE below is summed from the GL instead of read from the
+                // cached column — this panel is what the cashier looks at before
+                // letting goods go on credit, so it must match `checkCreditLimit`,
+                // which now sums the same lines.
+                openingBalance: true,
                 person: {
                     select: {
                         id: true,
@@ -192,10 +197,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         //   > 0  = hard cap; enforced at sale APIs and the POS checkout dialog
         const manualLimit = account.creditLimit !== null ? Number(account.creditLimit) : 0;
         const { effective: creditLimit } = await resolveEffectiveCreditLimit(prisma, accountId, manualLimit);
-        // Ledger balance (positive = customer owes) — cached GL movements PLUS the
-        // master opening balance, so the panel agrees with the Persons list, the
-        // ledger report and the trial balance instead of showing a phantom advance.
-        const balance    = effectiveAccountBalance(account);
+        // Ledger balance (positive = customer owes), summed from this account's
+        // own GL lines plus its master opening — the same read the sale's credit
+        // gate performs, so the headroom shown here is the headroom the server
+        // will actually grant. No date ceiling, matching that gate.
+        const balance    = (await closingForAccounts(null, [accountId])).get(accountId) ?? 0;
         const balanceDue = Math.max(0, balance);
         const overdueDue = ledgerOutstanding?.bills
             .filter((b) => b.daysOverdue > 0)

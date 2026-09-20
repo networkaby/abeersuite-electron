@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { resolveEffectiveCreditLimit } from "./creditLimit";
-import { effectiveAccountBalance, EFFECTIVE_BALANCE_SELECT_FIELDS } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 
 // ── CreditLimitError ─────────────────────────────────────────────────────────
 // Thrown by checkCreditLimit when a sale would breach the account's credit
@@ -70,7 +70,7 @@ export async function checkCreditLimit(
 
     const account = await tx.account.findUnique({
         where:  { id: accountId },
-        select: { creditLimit: true, personId: true, companyId: true, ...EFFECTIVE_BALANCE_SELECT_FIELDS },
+        select: { creditLimit: true, personId: true, companyId: true },
     });
 
     // Unknown account — let the FK constraint handle it.
@@ -94,10 +94,20 @@ export async function checkCreditLimit(
     // config switches it on. Both 0 → no credit (deny-by-default).
     const manual  = account.creditLimit === null ? 0 : Number(account.creditLimit);
     const { effective: limit } = await resolveEffectiveCreditLimit(tx, accountId, manual);
-    // Effective balance — cached GL movements PLUS the master opening balance,
-    // the same figure the Persons list / ledger report / trial balance show. A
-    // bare `Account.balance` misses an opening-balance-only customer entirely.
-    const current = effectiveAccountBalance(account);    // positive = customer owes us
+    // What the customer owes, summed from this one account's GL lines plus its
+    // master opening — not the `Account.balance` cache. This is the gate that
+    // decides whether goods leave the counter unpaid, so it reads the ledger
+    // itself: a cache that has drifted low silently extends credit nobody
+    // approved. One account, indexed, on the counter's own replica — the read
+    // is cheap enough that there is no case for the cached column here.
+    //
+    // Runs on `tx` before the sale writes anything, so the figure is the
+    // customer's pre-sale position, exactly as `additionalDebit` assumes.
+    //
+    // No date ceiling (`asOf = null`): a sale dated next week is still money
+    // owed, and the cache this replaces counted it too. Excluding it would
+    // understate the balance and widen the limit.
+    const current = (await closingForAccounts(null, [accountId], tx)).get(accountId) ?? 0;
 
     const detail: CreditLimitDetail = {
         accountId,

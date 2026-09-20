@@ -28,6 +28,7 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 
 export async function GET() {
     const { user, response } = await requireAuth();
@@ -39,7 +40,9 @@ export async function GET() {
             include: {
                 counter: {
                     include: {
-                        tillAccount:         { select: { id: true, name: true, balance: true } },
+                        // No cached `balance` — the till figure is summed from the
+                        // GL below, the same way every other till surface reads it.
+                        tillAccount:         { select: { id: true, name: true } },
                         // The counter's payment accounts (UPI/Card/gateway…) — drive
                         // the checkout payment rows. Each carries its bank ledger
                         // (accountId) + optional VPA for the Share QR.
@@ -82,8 +85,20 @@ export async function GET() {
             // DB unreachable — trust the replica and keep the cashier billing.
         }
 
+        // The till's book balance from the ledger, never the cached column: this
+        // is the cashier's carry-over, and it has to agree with the cash in the
+        // drawer. One indexed groupBy on the counter's own replica.
+        const tillPaise = await tillBalancePaise(prisma, shift.counter.tillAccountId);
+
         return NextResponse.json({
             ...shift,
+            counter: {
+                ...shift.counter,
+                tillAccount: {
+                    ...shift.counter.tillAccount,
+                    balance: String(Number(tillPaise) / 100),
+                },
+            },
             openingFloatPaise:   shift.openingFloatPaise.toString(),
             carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
             vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),
