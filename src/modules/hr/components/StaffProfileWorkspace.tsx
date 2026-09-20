@@ -1,13 +1,17 @@
 "use client";
 
-// One staff member's HR profile — Job / Pay / Money. Personal and bank details
-// stay on the person's own profile page (they keep those current themselves);
-// this workspace is the HR side: the job, what they are paid, and what the
-// books say is owed to them.
+// One staff member's HR profile — Job / Access / Personal / Pay / Money.
+//
+// Owner, 2026-09-20: HR does not send you to Administration. The seat, the role
+// and the initial personal / bank details are all filled in here; Administration
+// remains where roles, permissions and positions are DEFINED, and this workspace
+// is where a person is given them. The person keeps their own personal and bank
+// details current on their profile page — the same form is shown here so HR can
+// put the first copy on file at hiring.
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, IdCard, KeyRound, UserCircle } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,17 +24,30 @@ import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import type { StaffDetail } from "../lib/staffTypes";
 import StaffJobTab from "./StaffJobTab";
+import StaffSeatsCard from "./StaffSeatsCard";
+import StaffAccessTab from "./StaffAccessTab";
+import StaffPersonalForm from "./StaffPersonalForm";
 import StaffPayTab from "./StaffPayTab";
 import StaffMoneyTab from "./StaffMoneyTab";
+import AppointStaffDialog from "./AppointStaffDialog";
 
-const TABS = ["job", "pay", "money"] as const;
+const TABS = ["job", "access", "personal", "pay", "money"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function StaffProfileWorkspace({ userId, canEdit }: { userId: number; canEdit: boolean }) {
+export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions }: {
+    userId: number;
+    /** hr:staff:edit — the HR record itself. */
+    canEdit: boolean;
+    /** users:edit — the role, scope, manager and password on the Access tab. */
+    canEditUsers: boolean;
+    /** positions:edit — appointing to and vacating a seat. */
+    canEditPositions: boolean;
+}) {
     const url = `/api/hr/staff/${userId}`;
     const { data, loading, error, reload } = useApiResource<StaffDetail>(url);
     useRealtimeTopics(["settings"], reload);
     const [tab, setTab] = useState<Tab>("job");
+    const [appointing, setAppointing] = useState(false);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -43,10 +60,32 @@ export default function StaffProfileWorkspace({ userId, canEdit }: { userId: num
 
                 {data && (
                     <>
-                        <Header detail={data} />
+                        <Header
+                            detail={data}
+                            canAppoint={canEdit}
+                            onAppoint={() => setAppointing(true)}
+                        />
+
+                        {appointing && (
+                            <AppointStaffDialog
+                                detail={data}
+                                canAppointSeat={canEditPositions}
+                                onClose={() => setAppointing(false)}
+                                onDone={() => { setAppointing(false); reload(); }}
+                            />
+                        )}
                         <ModuleTabs module="hr" tabs={TABS} active={tab} onChange={setTab} className="mt-4 rounded-t-lg border border-b-0" />
                         <div className="rounded-b-lg border border-border bg-card p-5">
-                            {tab === "job" && <StaffJobTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />}
+                            {tab === "job" && (
+                                <div className="space-y-6">
+                                    <StaffJobTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />
+                                    <StaffSeatsCard detail={data} canEdit={canEditPositions} onChanged={reload} />
+                                </div>
+                            )}
+                            {tab === "access" && <StaffAccessTab detail={data} canEdit={canEditUsers} onChanged={reload} />}
+                            {/* The same form the person sees on their own profile page —
+                                HR puts the first copy on file, they keep it current. */}
+                            {tab === "personal" && <StaffPersonalForm userId={userId} canEdit={canEdit} />}
                             {tab === "pay" && <StaffPayTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />}
                             {tab === "money" && <StaffMoneyTab detail={data} />}
                         </div>
@@ -57,7 +96,11 @@ export default function StaffProfileWorkspace({ userId, canEdit }: { userId: num
     );
 }
 
-function Header({ detail }: { detail: StaffDetail }) {
+function Header({ detail, canAppoint, onAppoint }: {
+    detail: StaffDetail;
+    canAppoint: boolean;
+    onAppoint: () => void;
+}) {
     const { user, profile } = detail;
     const left = staffHasLeft(profile);
     return (
@@ -92,17 +135,13 @@ function Header({ detail }: { detail: StaffDetail }) {
                     <p className="mt-1 text-xs text-muted-foreground">Joined {formatDate(profile.joinedOn)}</p>
                 )}
             </div>
-            <div className="flex flex-col gap-1.5 text-sm">
-                <Button asChild variant="outline" size="sm">
-                    <Link href={`/office/social/users/${user.id}`}><UserCircle size={14} /> Personal &amp; bank <ExternalLink size={12} className="text-muted-foreground" /></Link>
+            {/* One action only. Everything that used to link out to Administration
+                now lives on the tabs below. */}
+            {canAppoint && !left && (
+                <Button type="button" variant="outline" size="sm" onClick={onAppoint}>
+                    <UserPlus size={14} /> {profile?.joinedOn ? "Re-appoint" : "Appoint"}
                 </Button>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/office/admin/users"><KeyRound size={14} /> Login &amp; permissions</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/office/admin/positions"><IdCard size={14} /> Seats</Link>
-                </Button>
-            </div>
+            )}
         </div>
     );
 }

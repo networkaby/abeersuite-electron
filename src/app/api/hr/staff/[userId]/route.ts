@@ -42,6 +42,8 @@ function toDetail(user: { staffProfile: StaffProfileWithRels | null } & Paramete
             id: shaped.id, name: shaped.name, email: shaped.email, title: shaped.title,
             role: shaped.role, avatarUrl: shaped.avatarUrl, phone: shaped.phone,
             positions: shaped.positions,
+            scope: shaped.scope, managerId: shaped.managerId,
+            manager: shaped.manager, userRole: shaped.userRole,
         },
         profile: p ? toStaffProfileDto(p) : null,
         salaries: p ? p.salaries.map(toStaffSalaryDto) : [],

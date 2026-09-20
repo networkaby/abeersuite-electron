@@ -73,6 +73,12 @@ export interface StaffDetail {
         avatarUrl: string | null;
         phone: string | null;
         positions: PositionChipPosition[];
+        /** Access, read by the Access tab. Roles are DEFINED in Administration;
+         *  HR only chooses one, so this is the current choice, never a catalog. */
+        scope: string | null;
+        managerId: number | null;
+        manager: { id: number; name: string } | null;
+        userRole: { id: string; label: string; color: string; rank: number } | null;
     };
     profile: StaffProfileDto | null;
     salaries: StaffSalaryDto[];
