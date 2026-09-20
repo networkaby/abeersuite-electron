@@ -48,7 +48,9 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
     const expenseOptions = useMemo(
         () => accounts
             .filter((a) => a.group?.type === "EXPENSE")
-            .map((a) => ({ value: a.id, label: a.name, leaf: a.group?.name ?? undefined })),
+            // `leaf` is what the closed trigger shows, so it must be the ledger, not its
+            // group; the group rides in the label so the open list can tell them apart.
+            .map((a) => ({ value: a.id, label: a.group?.name ? `${a.name} — ${a.group.name}` : a.name, leaf: a.name, searchText: a.name })),
         [accounts],
     );
 
