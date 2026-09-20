@@ -18,11 +18,25 @@ const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 export async function stampAttendanceIn(db: Db, userId: number, counterId: number, at = new Date()): Promise<void> {
     try {
         const date = dayOf(businessTodayIso(at));
+
+        // FIRST in, and it has to stay the first: a plain upsert overwrote
+        // `firstInAt` on every sign-in, so a re-login after lunch rewrote the
+        // morning arrival and the field became "last seen" under a name that
+        // says the opposite. The conditional update only fills a blank clock;
+        // when a time is already there today, the arrival stands.
+        const filled = await db.attendanceDay.updateMany({
+            where: { userId, date, firstInAt: null },
+            data:  { firstInAt: at, counterId },
+        });
+        if (filled.count > 0) return;
+
+        // Either today has no row yet, or it already carries an arrival time.
+        // An office mark made earlier today stands either way — `update: {}`
+        // deliberately changes nothing.
         await db.attendanceDay.upsert({
-            where: { userId_date: { userId, date } },
+            where:  { userId_date: { userId, date } },
             create: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, counterId },
-            // An office mark already made today stands; only the clock is filled in.
-            update: { firstInAt: at, counterId },
+            update: {},
         }).catch(() => undefined);
     } catch { /* never fail the sign-in */ }
 }
