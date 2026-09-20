@@ -13,7 +13,9 @@ import type { InvVoucherType } from "@/generated/prisma/client";
 // friends, which count their own surviving rows and therefore re-use a freed number
 // by themselves — are excluded by construction. A GL voucher type IS its series kind.
 function seriesKindOf(entityType: string, subtype: string | null): string | null {
-    if (!subtype) return null;
+    // Legacy JOURNAL_ENTRY rows carry no subtype — the entity type WAS the kind back
+    // then, and every one of them is a journal voucher.
+    if (!subtype) return entityType === "JOURNAL_ENTRY" ? "JOURNAL" : null;
     if (entityType === "INV_VOUCHER") return SERIES_KINDS[subtype as InvVoucherType] ?? null;
     return subtype;
 }

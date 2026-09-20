@@ -16,7 +16,7 @@ import {
     ArrowLeft, Mail, Phone, Cake, Building2, Users,
     Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose, Home,
-    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity, IdCard, Receipt, CreditCard,
+    Send, UserCircle, Printer, Activity, IdCard, Receipt, CreditCard,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1378,7 +1378,6 @@ export default function UserProfilePage() {
     const [activityPeriod, setActivityPeriod] = useState<"today" | "7d" | "30d">("today");
     const [activeTab, setActiveTab] = useState<TabId>(1);
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [tabBarOpen, setTabBarOpen] = useState(true);
     const [focusWall, setFocusWall] = useState(false);
 
     const sessionUserId = session?.user ? Number((session.user as { id?: string }).id) : undefined;
@@ -1452,7 +1451,7 @@ export default function UserProfilePage() {
     }, [id, activityPeriod]);
 
     function handleWriteOnWall() {
-        setActiveTab(1); setTabBarOpen(true);
+        setActiveTab(1);
         setFocusWall(true); setTimeout(() => setFocusWall(false), 300);
     }
 
@@ -1462,8 +1461,6 @@ export default function UserProfilePage() {
         if (t.access === "selfOrAdmin") return isSelf || isAdmin;
         return false;
     });
-
-    const currentTab = visibleTabs.find(t => t.id === activeTab) ?? visibleTabs[0];
 
     if (loading) return <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">Loading profile…</div>;
     if (!profile) return (
@@ -1489,86 +1486,49 @@ export default function UserProfilePage() {
             <ProfileHeader
                 profile={profile} isSelf={isSelf} wallPostCount={wallPosts.length}
                 onWriteOnWall={handleWriteOnWall}
-                onEditProfile={() => { setActiveTab(4); setTabBarOpen(true); }}
+                onEditProfile={() => setActiveTab(4)}
             />
 
             {/* Tab bar */}
             <div className="print:hidden">
-                {tabBarOpen ? (
-                    <div className="mb-5 flex items-stretch border-b border-border">
-                        {/* Scrollable tab list */}
-                        <div className="flex flex-1 overflow-x-auto scrollbar-none">
-                            {sessionUserId !== undefined && !isSelf && (
-                                <Button asChild variant="ghost"
-                                    className="h-auto flex items-center gap-1.5 rounded-none px-3 py-3 text-sm font-medium border-b-2 -mb-0.5 border-transparent text-muted-foreground hover:text-foreground hover:border-border whitespace-nowrap shrink-0"
-                                    title="My profile">
-                                    <Link href={`/office/social/users/${sessionUserId}`}>
-                                        <Home size={13} />
-                                        <span className="hidden xs:inline sm:inline">Home</span>
-                                    </Link>
-                                </Button>
-                            )}
-                            {visibleTabs.map(tab => {
-                                const Icon = tab.icon;
-                                const active = activeTab === tab.id;
-                                return (
-                                    <Button key={tab.id} onClick={() => setActiveTab(tab.id)} variant="ghost"
-                                        className={[
-                                            "h-auto flex items-center gap-1.5 rounded-none px-3 py-3 text-sm font-medium border-b-2 -mb-0.5 transition-colors whitespace-nowrap shrink-0",
-                                            active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-                                        ].join(" ")}>
-                                        <Icon size={13} />
-                                        <span className="hidden xs:inline sm:inline">{tab.label}</span>
-                                    </Button>
-                                );
-                            })}
-                        </div>
-                        {/* Controls */}
-                        <div className="flex items-stretch shrink-0 border-l border-border">
-                            <Button onClick={() => setTabBarOpen(false)} variant="ghost"
-                                className="h-auto rounded-none px-3 py-3 text-xs text-muted-foreground hover:text-foreground"
-                                title="Collapse tabs">
-                                <ChevronUp size={14} />
-                                <span className="hidden sm:inline">Collapse</span>
-                            </Button>
-                            <Button onClick={() => setSidebarOpen(prev => !prev)} variant="ghost"
-                                className="h-auto rounded-none border-l border-border px-3 py-3 text-xs text-muted-foreground hover:text-foreground"
-                                title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
-                                {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-                                <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Info"}</span>
-                            </Button>
-                        </div>
-                    </div>
-                ) : (
-                    /* Collapsed tab bar — shows current tab name + expand button */
-                    <div className="mb-5 flex items-center gap-3 border-b border-border px-1">
+                <div className="mb-5 flex items-start border-b border-border">
+                    {/* Wrapping tab list — every tab stays visible, no sideways scroll */}
+                    <div className="flex flex-1 flex-wrap">
                         {sessionUserId !== undefined && !isSelf && (
                             <Button asChild variant="ghost"
-                                className="h-auto px-1 py-2.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                                className="h-auto flex items-center gap-1.5 rounded-none px-2.5 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border whitespace-nowrap shrink-0"
                                 title="My profile">
                                 <Link href={`/office/social/users/${sessionUserId}`}>
-                                    <Home size={14} />
-                                    <span className="hidden sm:inline ml-1">Home</span>
+                                    <Home size={13} />
+                                    <span>Home</span>
                                 </Link>
                             </Button>
                         )}
-                        <Button onClick={() => setTabBarOpen(true)} variant="ghost"
-                            className="h-auto px-0 py-2.5 text-xs text-muted-foreground hover:text-foreground"
-                            title="Expand tabs">
-                            <ChevronDown size={14} />
-                            <span className="hidden sm:inline">Tabs</span>
-                        </Button>
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                            {currentTab && <currentTab.icon size={13} />}
-                            {currentTab?.label}
-                        </div>
+                        {visibleTabs.map(tab => {
+                            const Icon = tab.icon;
+                            const active = activeTab === tab.id;
+                            return (
+                                <Button key={tab.id} onClick={() => setActiveTab(tab.id)} variant="ghost"
+                                    className={[
+                                        "h-auto flex items-center gap-1.5 rounded-none px-2.5 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0",
+                                        active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
+                                    ].join(" ")}>
+                                    <Icon size={13} />
+                                    <span>{tab.label}</span>
+                                </Button>
+                            );
+                        })}
+                    </div>
+                    {/* Sidebar toggle */}
+                    <div className="flex items-stretch shrink-0 self-start border-l border-border">
                         <Button onClick={() => setSidebarOpen(prev => !prev)} variant="ghost"
-                            className="ml-auto h-auto py-2.5 text-xs text-muted-foreground hover:text-foreground">
+                            className="h-auto rounded-none px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground"
+                            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
                             {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
                             <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Info"}</span>
                         </Button>
                     </div>
-                )}
+                </div>
             </div>
 
             {/* Main layout */}

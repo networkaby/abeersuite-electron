@@ -46,9 +46,19 @@ export async function releaseSeriesNumber(
     if (!series) return null;
 
     // A number still printed on a living voucher is not free, whatever the counter
-    // says. Cheap insurance against releasing into a collision.
+    // says. This is what stops an EDIT snapshot from releasing a number: an in-place
+    // edit writes its pre-edit copy to the Recycle Bin while the voucher carries on
+    // living under the very same reference.
     const stillInUse = await tx.universalVoucher.count({ where: { voucherNo: reference } });
     if (stillInUse > 0) return null;
+
+    // Another snapshot of the SAME reference can still be restored, and restore puts
+    // the voucher back under its original number. One reference commonly has several
+    // rows in the bin — every in-place edit leaves one, and the final delete leaves
+    // one more — so purging any single row is not the end of that number's life.
+    // Release only when the row just destroyed was the LAST copy of it.
+    const otherCopies = await tx.auditLog.count({ where: { originalRef: reference } });
+    if (otherCopies > 0) return null;
 
     const rows = await tx.voucherSeriesCounter.findMany({ where: { kind: seriesKind } });
 
