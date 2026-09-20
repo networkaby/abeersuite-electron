@@ -828,17 +828,39 @@ function printShippingSlipMiddle(printer, body) {
 }
 
 // Shift close report — cash reconciliation, declared physical count, variance,
-// tender breakdown, collections breakdown, safe drops, and linked vouchers.
-// Mirrors ShiftCloseBody (thermal). Data rides in payload's `body` (ShiftCloseBodyData).
+// tender breakdown, collections breakdown and linked vouchers.
+// Mirrors ShiftCloseBody (thermal). Data rides in payload's `body`, which is the
+// SAME ShiftCloseBodyData the browser slip renders — every money field is a
+// paise string/number, so each one goes through rupees() before printing.
 function printShiftCloseMiddle(printer, body) {
     const b = body || {};
+    const rupees = (paise) => (paise == null ? 0 : (Number(paise) || 0) / 100);
     const fmt = (n) =>
         Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const signed = (n) => {
-        const val = Number(n || 0);
+    const money = (paise) => `Rs. ${fmt(rupees(paise))}`;
+    const signed = (paise) => {
+        const val = rupees(paise);
         if (val > 0) return `+Rs. ${fmt(val)}`;
         if (val < 0) return `-Rs. ${fmt(Math.abs(val))}`;
         return `Rs. ${fmt(0)}`;
+    };
+    // openedAt / closedAt ride as ISO strings — show them the way the slip does.
+    const stamp = (iso) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString("en-IN", {
+            day: "2-digit", month: "short", year: "numeric",
+            hour: "2-digit", minute: "2-digit",
+        });
+    };
+    // Closed At sits beside the opened date in the header, so the time alone fits
+    // the 48-column roll without wrapping onto a second line.
+    const clock = (iso) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     };
     const row = (label, val) => printer.tableCustom([
         { text: String(label),      align: "LEFT",  width: 0.55 },
@@ -851,66 +873,62 @@ function printShiftCloseMiddle(printer, body) {
 
     printer.alignCenter();
     printer.bold(true);
-    printer.println(`Shift #${b.id || ""} (${b.status || "CLOSED"})`);
+    printer.println(`Shift #${b.shiftId || ""} (${b.status || "CLOSED"})`);
     printer.bold(false);
-    if (b.openedAt) printer.println(String(b.openedAt));
+    if (b.openedAt) printer.println(stamp(b.openedAt));
     printer.drawLine();
 
     printer.alignLeft();
     row("Counter", b.counterName || "-");
     row("Cashier", b.cashierName || "-");
-    if (b.duration) row("Duration", b.duration);
-    if (b.closedAt) row("Closed At", b.closedAt);
+    if (b.durationStr) row("Duration", b.durationStr);
+    if (b.closedAt) row("Closed At", clock(b.closedAt));
     printer.drawLine();
 
     printer.bold(true); printer.println("CASH RECONCILIATION"); printer.bold(false);
-    row("Counter Opening Cash", `Rs. ${fmt(b.openingFloat)}`);
-    if (b.carryOverFloat != null || b.vaultTopUp != null) {
-        if (b.carryOverFloat != null) subRow("Start Float", `Rs. ${fmt(b.carryOverFloat)}`);
-        if (b.vaultTopUp != null)     subRow("Top-up", `Rs. ${fmt(b.vaultTopUp)}`);
-    }
+    row("Counter Opening Cash", money(b.openingFloatPaise));
 
-    row("Counter Cash Flow", signed(b.tillMovement));
+    row("Counter Cash Flow", signed(b.tillMovementPaise));
     if (b.movementBreakdown) {
         const m = b.movementBreakdown;
-        if (Number(m.cashSales || 0) > 0)    subRow("Cash Sales", `+Rs. ${fmt(m.cashSales)}`);
-        if (Number(m.receipts || 0) > 0)     subRow("Customer Receipts", `+Rs. ${fmt(m.receipts)}`);
-        if (Number(m.expenditures || 0) > 0) subRow("Expenses", `-Rs. ${fmt(m.expenditures)}`);
-        if (Number(m.refunds || 0) > 0)      subRow("Refunds", `-Rs. ${fmt(m.refunds)}`);
-        if (Number(m.other || 0) !== 0)      subRow("Other Adjustments", signed(m.other));
+        if (Number(m.cashSalesPaise || 0) > 0)    subRow("Cash Sales", `+${money(m.cashSalesPaise)}`);
+        if (Number(m.receiptsPaise || 0) > 0)     subRow("Customer Receipts", `+${money(m.receiptsPaise)}`);
+        if (Number(m.expendituresPaise || 0) > 0) subRow("Expenses", `-${money(m.expendituresPaise)}`);
+        if (Number(m.refundsPaise || 0) > 0)      subRow("Refunds", `-${money(m.refundsPaise)}`);
+        if (Number(m.otherPaise || 0) !== 0)      subRow("Other Adjustments", signed(m.otherPaise));
     }
 
-    if (Number(b.drops || 0) > 0) {
-        row("Dropped to Safe", `-Rs. ${fmt(b.drops)}`);
+    if (Number(b.dropsPaise || 0) > 0) {
+        row("Dropped to Safe", `-${money(b.dropsPaise)}`);
     }
 
     printer.bold(true);
-    row("Expected in Drawer", `Rs. ${fmt(b.expectedCash)}`);
-    if (b.declaredCash != null) {
-        row("Physical Count (Declared)", `Rs. ${fmt(b.declaredCash)}`);
-        const v = Number(b.variance || 0);
+    row("Expected in Drawer", money(b.expectedCashPaise));
+    if (b.declaredCashPaise != null) {
+        row("Physical Count (Declared)", money(b.declaredCashPaise));
+        const v = rupees(b.variancePaise);
         const varText = v === 0 ? "Rs. 0.00 (Balanced)" : (v > 0 ? `+Rs. ${fmt(v)} (Over)` : `-Rs. ${fmt(Math.abs(v))} (Short)`);
         row("Variance", varText);
     }
     printer.bold(false);
 
-    if (b.carryOverNext != null || b.toVault != null) {
+    if (b.carryOverNextPaise != null || b.toVaultPaise != null) {
         printer.drawLine();
         printer.bold(true); printer.println("CLOSING DISTRIBUTION"); printer.bold(false);
-        if (b.carryOverNext != null) row("Kept in Counter", `Rs. ${fmt(b.carryOverNext)}`);
-        if (b.toVault != null)       row("Swept to Vault", `Rs. ${fmt(b.toVault)}`);
+        if (b.carryOverNextPaise != null) row("Kept in Counter", money(b.carryOverNextPaise));
+        if (b.toVaultPaise != null)       row("Swept to Vault", money(b.toVaultPaise));
     }
 
     if (Array.isArray(b.tenderBreakdown) && b.tenderBreakdown.length > 0) {
         printer.drawLine();
         printer.bold(true); printer.println("PAYMENTS COLLECTED"); printer.bold(false);
-        let total = 0;
+        let totalPaise = 0;
         for (const t of b.tenderBreakdown) {
-            total += Number(t.amount || 0);
-            row(t.label || t.method, `Rs. ${fmt(t.amount)}`);
+            totalPaise += Number(t.amountPaise || 0);
+            row(t.label, money(t.amountPaise));
         }
         printer.bold(true);
-        row("Total Collected", `Rs. ${fmt(total)}`);
+        row("Total Collected", money(totalPaise));
         printer.bold(false);
     }
 
@@ -918,32 +936,19 @@ function printShiftCloseMiddle(printer, body) {
         printer.drawLine();
         printer.bold(true); printer.println("COLLECTIONS BY ACTIVITY"); printer.bold(false);
         const cb = b.collectionsBreakdown;
-        row(`POS Sales (${cb.salesCount || 0})`, `+Rs. ${fmt(cb.salesAmount)}`);
-        if (cb.receiptsCount > 0) row(`Receipts (${cb.receiptsCount})`, `+Rs. ${fmt(cb.receiptsAmount)}`);
-        if (cb.refundsCount > 0)  row(`Refunds (${cb.refundsCount})`, `-Rs. ${fmt(cb.refundsAmount)}`);
+        row(`POS Sales (${cb.salesCount || 0})`, `+${money(cb.salesPaise)}`);
+        if (cb.receiptsCount > 0) row(`Receipts (${cb.receiptsCount})`, `+${money(cb.receiptsPaise)}`);
+        if (cb.refundsCount > 0)  row(`Refunds (${cb.refundsCount})`, `-${money(cb.refundsPaise)}`);
         printer.bold(true);
-        row("Net Total", `Rs. ${fmt(cb.netCollected)}`);
+        row("Net Total", money(cb.netCollectedPaise));
         printer.bold(false);
     }
 
-    if (Array.isArray(b.dropsList) && b.dropsList.length > 0) {
-        printer.drawLine();
-        printer.bold(true); printer.println(`CASH DROPS TO SAFE (${b.dropsList.length})`); printer.bold(false);
-        for (const d of b.dropsList) {
-            printer.tableCustom([
-                { text: `${d.droppedAt || ""} (${d.droppedBy || ""})`, align: "LEFT",  width: 0.6 },
-                { text: `Rs. ${fmt(d.amount)}`,                        align: "RIGHT", width: 0.4 },
-            ]);
-            if (d.notes) printer.println(`  ${d.notes}`);
-        }
-    }
-
-    if (Array.isArray(b.vouchers) && b.vouchers.length > 0) {
+    if (b.closingContraVoucher || b.varianceJournalEntry) {
         printer.drawLine();
         printer.bold(true); printer.println("LINKED VOUCHERS"); printer.bold(false);
-        for (const v of b.vouchers) {
-            row(v.type, v.reference);
-        }
+        if (b.closingContraVoucher) row("Closing Contra", b.closingContraVoucher.reference);
+        if (b.varianceJournalEntry) row("Variance JE", b.varianceJournalEntry.reference);
     }
 
     if (b.notes) {

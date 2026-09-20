@@ -184,6 +184,9 @@ test("generic invoice via print/voucher: Customer/Supplier row, no narration, re
 });
 
 test("SHIFT_CLOSE via print/voucher: mirrors ShiftCloseBody with reconciliation, cash flow, and tenders", async () => {
+    // `body` is the real ShiftCloseBodyData the /receipt/shift/[id] page posts —
+    // every money field a paise string. Keep it that way: a rupee-named payload
+    // here printed a green test while the counter printed Rs. 0.00 everywhere.
     const payload = {
         kind: "SHIFT_CLOSE",
         title: "Shift #42 Closing Report",
@@ -201,52 +204,45 @@ test("SHIFT_CLOSE via print/voucher: mirrors ShiftCloseBody with reconciliation,
             lines: [],
         },
         body: {
-            id: 42,
+            shiftId: 42,
             status: "CLOSED",
-            openedAt: "14 Sep 2026, 09:00 AM",
-            closedAt: "14 Sep 2026, 06:30 PM",
-            duration: "9 hrs 30 mins",
+            openedAt: "2026-09-14T03:30:00.000Z",
+            closedAt: "2026-09-14T13:00:00.000Z",
+            durationStr: "9h 30m",
             cashierName: "Rahul Sharma",
             counterName: "POS Counter 1",
+            tillAccountName: "Counter 1 Cash",
             branchName: "Main Branch",
-            openingFloat: 2000,
-            carryOverFloat: 1500,
-            vaultTopUp: 500,
-            tillMovement: 12500,
-            drops: 10000,
-            expectedCash: 4500,
-            declaredCash: 4500,
-            variance: 0,
-            carryOverNext: 2000,
-            toVault: 2500,
+            openingFloatPaise: "200000",
+            tillMovementPaise: "1250000",
+            dropsPaise: "1000000",
+            expectedCashPaise: "450000",
+            declaredCashPaise: "450000",
+            variancePaise: "0",
+            carryOverNextPaise: "200000",
+            toVaultPaise: "250000",
             movementBreakdown: {
-                cashSales: 13000,
-                receipts: 500,
-                expenditures: 800,
-                refunds: 200,
-                other: 0,
-                netMovement: 12500,
+                cashSalesPaise:    "1300000",
+                receiptsPaise:     "50000",
+                expendituresPaise: "80000",
+                refundsPaise:      "20000",
+                otherPaise:        "0",
             },
             tenderBreakdown: [
-                { method: "CASH", label: "Cash", amount: 13000 },
-                { method: "UPI", label: "UPI / QR", amount: 8500 },
+                { label: "Cash",    amountPaise: "1300000" },
+                { label: "UPI / QR", amountPaise: "850000" },
             ],
             collectionsBreakdown: {
-                salesAmount: 21500,
-                salesCount: 45,
-                receiptsAmount: 500,
-                receiptsCount: 2,
-                refundsAmount: 200,
-                refundsCount: 1,
-                netCollected: 21800,
+                salesPaise:        "2150000",
+                salesCount:        45,
+                receiptsPaise:     "50000",
+                receiptsCount:     2,
+                refundsPaise:      "20000",
+                refundsCount:      1,
+                netCollectedPaise: "2180000",
             },
-            dropsList: [
-                { amount: 10000, droppedAt: "02:15 PM", droppedBy: "Rahul", notes: "Midday safe drop" },
-            ],
-            vouchers: [
-                { type: "Opening Float", reference: "CON-001" },
-                { type: "Closing Sweep", reference: "CON-002" },
-            ],
+            closingContraVoucher: { reference: "CON-002" },
+            varianceJournalEntry: { reference: "JV-0007" },
             notes: "End of shift handover completed.",
         },
     };
@@ -254,9 +250,15 @@ test("SHIFT_CLOSE via print/voucher: mirrors ShiftCloseBody with reconciliation,
     assert.ok(out.includes("Shift #42 (CLOSED)"));
     assert.ok(out.includes("POS Counter 1"));
     assert.ok(out.includes("Rahul Sharma"));
+    assert.ok(out.includes("9h 30m"));
     assert.ok(out.includes("CASH RECONCILIATION"));
     assert.ok(out.includes("Counter Opening Cash"));
-    assert.ok(out.includes("2,000.00"));
+    assert.ok(out.includes("2,000.00"), "opening float prints rupees, not paise or zero");
+    assert.ok(out.includes("12,500.00"), "counter cash flow prints rupees");
+    assert.ok(out.includes("Cash Sales"));
+    assert.ok(out.includes("13,000.00"));
+    assert.ok(out.includes("Dropped to Safe"));
+    assert.ok(out.includes("10,000.00"));
     assert.ok(out.includes("Expected in Drawer"));
     assert.ok(out.includes("4,500.00"));
     assert.ok(out.includes("Physical Count (Declared)"));
@@ -264,15 +266,25 @@ test("SHIFT_CLOSE via print/voucher: mirrors ShiftCloseBody with reconciliation,
     assert.ok(out.includes("CLOSING DISTRIBUTION"));
     assert.ok(out.includes("Kept in Counter"));
     assert.ok(out.includes("Swept to Vault"));
+    assert.ok(out.includes("2,500.00"));
     assert.ok(out.includes("PAYMENTS COLLECTED"));
-    assert.ok(out.includes("Cash"));
     assert.ok(out.includes("UPI / QR"));
+    assert.ok(out.includes("8,500.00"));
+    assert.ok(out.includes("Total Collected"));
+    assert.ok(out.includes("21,500.00"), "tender total prints rupees");
     assert.ok(out.includes("COLLECTIONS BY ACTIVITY"));
-    assert.ok(out.includes("CASH DROPS TO SAFE (1)"));
-    assert.ok(out.includes("Midday safe drop"));
+    assert.ok(out.includes("POS Sales (45)"));
+    assert.ok(out.includes("21,800.00"));
     assert.ok(out.includes("LINKED VOUCHERS"));
-    assert.ok(out.includes("CON-001"));
+    assert.ok(out.includes("CON-002"));
+    assert.ok(out.includes("JV-0007"));
     assert.ok(out.includes("End of shift handover completed."));
+    // The only legitimate zero is a balanced variance; anything else means the
+    // paise fields were not read and the slip fell back to zero.
+    assert.ok(
+        !out.replace(/Rs\. 0\.00 \(Balanced\)/g, "").includes("Rs. 0.00"),
+        "no money line falls back to zero",
+    );
 });
 
 test("SHIFT_CLOSE signature obeys the template toggle", async () => {
@@ -285,7 +297,7 @@ test("SHIFT_CLOSE signature obeys the template toggle", async () => {
             showSignature,
         },
         sample: { reference: "Shift #42", date: "2026-09-14", lines: [] },
-        body: { id: 42, status: "CLOSED", openingFloat: 1000, expectedCash: 1000, tillMovement: 0 },
+        body: { shiftId: 42, status: "CLOSED", openingFloatPaise: "100000", expectedCashPaise: "100000", tillMovementPaise: "0" },
     });
 
     const off = text(await buildVoucherBuffer(makePayload(false)));
