@@ -19,7 +19,7 @@ prisma/seeds/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
 │  ├─ assertNotCounter.ts SHARED — refuse to run a destructive seed against a counter machine
 │  ├─ positionSeedSync.ts SHARED — upsert a position + its role-template links
-│  ├─ codeOwnedCatalog.ts SHARED — code-owned data both bootstraps use: the permission catalog, XOR CHECK constraints, voucher series. ADD NEW PERMISSIONS HERE.
+│  ├─ codeOwnedCatalog.ts SHARED — code-owned data both bootstraps use: XOR CHECK constraints, voucher series, and a re-export of the permission catalog. ADD NEW PERMISSIONS in src/shared/lib/auth/permissionCatalog.ts (the app reads it too).
 │  ├─ personalSnapshot.ts SHARED — export/import engine for the personal snapshot
 │  └─ personalSnapshotPath.ts SHARED — on-disk path of the snapshot (git-tracked in this private repo)
 └─ data/
@@ -95,7 +95,7 @@ a re-run never overwrites tuned settings. It seeds:
 The personal bootstrap does **not** run the generic installer. It stands up a
 working install from two sources and nothing else:
 
-1. **Code-owned catalog** (`lib/codeOwnedCatalog.ts`) — the permission catalog
+1. **Code-owned catalog** (`lib/codeOwnedCatalog.ts`, permission list in `src/shared/lib/auth/permissionCatalog.ts`) — the permission catalog
    (upsert + prune of retired ids), the Phone/Email XOR CHECK constraints, the
    voucher numbering series, and the **existence** of the `BackupConfig` row.
    The things the snapshot deliberately never carries because they belong to
@@ -145,7 +145,7 @@ demo clutter. Reset staff passwords after (new users get `changeme123`).
 | Chart of accounts — `AccountGroup` + `Account` (+ its `AccountAlias` rows) **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
 | Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |
 | Org structure — `Branch`, `Department` | `Coupon` / `GiftCard` / `LoyaltyEarnRule` / `LoyaltyMilestone` (entangle products + customers — only the **config singletons** above are kept) |
-| RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned — `lib/codeOwnedCatalog.ts`) | |
+| RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned — `src/shared/lib/auth/permissionCatalog.ts`) | |
 | POS setup — `PaymentGateway`, `PosCounter`, `PosCounterPaymentAccount`, `PosService` | |
 | Repair pipeline — `Pipeline`, `WorkGroup`, `Work`, `TicketStatus`, `TicketWorker`, status + worker transitions | |
 
@@ -250,14 +250,14 @@ These do just the one job.
 
 There is **no `apply-permissions` script any more.** It existed to write a handful of
 rows without a full seed, but every row it wrote was already in
-`lib/codeOwnedCatalog.ts`, and **both** seeds apply that catalog in full with the
+`src/shared/lib/auth/permissionCatalog.ts` (re-exported by `lib/codeOwnedCatalog.ts`), and **both** seeds apply that catalog in full with the
 identical upsert (`bootstrap-seed.ts` line ~865, and `applyCodeOwnedCatalog()` for
 `pnpm prisma db seed`). Its `ADDITIONS` list had become a third copy of the same
 data, guarded by nothing, and all 12 entries were finished work.
 
 The flow is now:
 
-1. Add the permission to `lib/codeOwnedCatalog.ts` **and** mirror the constant in
+1. Add the permission to `src/shared/lib/auth/permissionCatalog.ts` **and** mirror the constant in
    `src/shared/lib/constants/permissions.ts` (`pnpm seed:check-docs` enforces that
    these two agree).
 2. `pnpm prisma db seed`.
@@ -271,13 +271,17 @@ The flow is now:
 
 **Some permissions are never typed by hand.** Adding a nav entry to `SETTINGS_NAV` /
 `MODULE_SECTIONS` makes `sidebarModules.ts` derive a new `ui:sidebar:<module>:<link>` id,
-which `codeOwnedCatalog.ts` folds into the catalog automatically. The row is then real in
-code and absent from every database — and the Role page will show its chip but **silently
-drop the grant on save** (`api/roles/[id]/permissions/route.ts` returns it as
-`dropped.unseeded`). So a new nav link IS a permission change, even though nothing was
-added to the catalog by hand.
+which `permissionCatalog.ts` folds into the catalog automatically. The row is then real in
+code and absent from every database. **Since 2026-09-20 that is fine on its own:** the
+Departments pool save and the Role save both call `ensureCatalogPermissions()`
+(`src/shared/lib/auth/ensurePermissions.ts`) first, which creates any code-known row the DB
+lacks. And a department pools a sidebar module as a **whole** — `getDepartmentPool()` expands
+"any link of the module stored" to every current link from code — so a page added to a
+module the department already has is offered on the Role page straight away, with the
+module chip still ticked. Nothing to run after adding a nav link; just tick it per role.
 
-When you want that row without the R1 top-up above, use the targeted applier:
+When you want the row created ahead of any save, or granted to roles in bulk, the
+targeted applier is still there:
 
 ```bash
 pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --roles R1          # preview
@@ -436,7 +440,7 @@ the script, and add the row above.
 | Change | Update |
 |---|---|
 | Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` — same commit as the schema change |
-| Add a new **permission** | `lib/codeOwnedCatalog.ts` (definition — both seeds import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply with `pnpm prisma db seed` — see "Shipping a permission" above, including what the R1 top-up does. |
+| Add a new **permission** | `src/shared/lib/auth/permissionCatalog.ts` (definition — both seeds and the app import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply with `pnpm prisma db seed` — see "Shipping a permission" above, including what the R1 top-up does. |
 | Add a new role / pipeline / status / worker | `bootstrap-seed.ts` (generic) + `data/personal.local.json` (our config) |
 | Add a new account group or default GL ledger | `bootstrap-seed.ts` |
 | Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |

@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
+import { ensureCatalogPermissions } from "@/shared/lib/auth/ensurePermissions";
 import { revokeRoleSessions } from "@/shared/lib/auth/revokeSessions";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
 import { SIDEBAR_LINK_GRANULAR_IDS, SIDEBAR_LINK_EXTRA_TOGGLE, extraTogglesFor, MODULE_EXTRA_TOGGLE, POOL_EXEMPT_PERMISSION_IDS } from "@/modules/admin/lib/roleMatrixConfig";
@@ -109,11 +110,13 @@ export async function PUT(
                 || unlockedExtra!.has(id) || unlockedModuleExtra!.has(id))
             : data.permissionIds;
 
-        // Drop ids with no Permission row. The editor's checkboxes are built from
-        // CODE (SIDEBAR_MODULES / the matrix config), so a nav link added — or a
-        // label renamed without a pinned `sidebarKey` — mints an id the DB has not
-        // been seeded with yet. Sending it would fail the createMany on a foreign
-        // key, which (before the transaction below) left the role with NO grants.
+        // The editor's checkboxes are built from CODE (SIDEBAR_MODULES / the matrix
+        // config), so a nav link added mints an id the DB has not been seeded with
+        // yet. Create such code-known rows now, so the tick is kept, not dropped.
+        await ensureCatalogPermissions(pooledIds);
+        // Drop ids with no Permission row even after that (unknown to code too —
+        // e.g. a label renamed without a pinned `sidebarKey`). Sending one would
+        // fail the createMany on a foreign key.
         const known = await prisma.permission.findMany({
             where: { id: { in: pooledIds } },
             select: { id: true },
@@ -122,8 +125,7 @@ export async function PUT(
         const permissionIds = pooledIds.filter((id) => knownIds.has(id));
         // Tell the editor what was NOT persisted, so it can warn instead of
         // toasting "saved" while a tick silently vanishes on reload. Two buckets:
-        // unseeded (no Permission row — run `pnpm seed:apply-permissions`) and
-        // outside the department pool.
+        // unseeded (no Permission row in DB or code) and outside the department pool.
         const unseeded = pooledIds.filter((id) => !knownIds.has(id));
         const outsidePool = data.permissionIds.filter((id) => !pooledIds.includes(id));
 

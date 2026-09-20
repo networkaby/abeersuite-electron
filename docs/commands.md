@@ -248,8 +248,8 @@ Work in `pnpm electron:dev` so the desktop shell exercises the change, not only 
 **Step 2 — same-commit companions** (this is the step people forget)
 
 - Schema change → `pnpm sync:tables` and `pnpm db:local-schema`
-- Permission change → add it to `lib/codeOwnedCatalog.ts` + `permissions.ts`, then `pnpm prisma db seed` (note: that also runs the R1 top-up — see `docs/seeds.md`)
-- Config / master-data change → `pnpm seed:personal:capture`, and update `lib/codeOwnedCatalog.ts` / `personal.local.json`
+- Permission change → add it to `src/shared/lib/auth/permissionCatalog.ts` + `permissions.ts`, then `pnpm prisma db seed` (note: that also runs the R1 top-up — see `docs/seeds.md`)
+- Config / master-data change → `pnpm seed:personal:capture`, and update `permissionCatalog.ts` / `codeOwnedCatalog.ts` / `personal.local.json`
 - Behaviour / route / API change → update `PROJECT_BRAIN.md`, then `/sync-docs-with-code`
 
 **Step 3 — check the DB actually applies**

@@ -3,10 +3,14 @@
 //
 // WHY THIS EXISTS. Some permissions are not typed by hand at all: adding a nav
 // entry to SETTINGS_NAV / MODULE_SECTIONS makes `sidebarModules.ts` derive a new
-// `ui:sidebar:<module>:<link>` id, which `codeOwnedCatalog.ts` folds into the
-// catalog. The row is then real in code and absent from every database, and the
-// Role page will show its chip but SILENTLY DROP the grant on save
-// (`api/roles/[id]/permissions/route.ts` returns it as `dropped.unseeded`).
+// `ui:sidebar:<module>:<link>` id, which `permissionCatalog.ts` folds into the
+// catalog. The row is then real in code and absent from every database.
+//
+// SINCE 2026-09-20 the app creates such rows itself: the Departments pool save
+// and the Role save call `ensureCatalogPermissions()` first, so a new nav link
+// needs no script at all. This script remains for creating rows ahead of any
+// save, for granting / revoking one id across roles in bulk, and as the
+// catalog ↔ DB diff report.
 //
 // The documented cure is `pnpm prisma db seed`, and for one new nav link that is
 // far too big a hammer: Step 3 of personal-bootstrap tops R1 up with every

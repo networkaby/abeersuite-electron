@@ -57,12 +57,12 @@ let mechanicalDrift = 0;   // strict mode fails on these
 let narrativeDrift = 0;    // strict mode allows these
 
 // ─── 1. Permission key parity ───────────────────────────────────────────────
-header("1. Permission keys: permissions.ts ↔ codeOwnedCatalog.ts");
+header("1. Permission keys: permissions.ts ↔ permissionCatalog.ts");
 
 const constantsRel = "src/shared/lib/constants/permissions.ts";
-// The permission catalog moved out of bootstrap-seed.ts into the shared
-// code-owned module (both bootstraps import it) — parse the catalog there.
-const seedRel = "prisma/seeds/lib/codeOwnedCatalog.ts";
+// The permission catalog lives in src/shared (the app creates rows from it on
+// first use; both bootstraps re-import it via codeOwnedCatalog.ts) — parse it there.
+const seedRel = "src/shared/lib/auth/permissionCatalog.ts";
 let constantsSrc = read(constantsRel);
 const seedSrc = read(seedRel);
 
@@ -87,7 +87,7 @@ if (inConstantsOnly.length === 0 && inSeedOnly.length === 0) {
     ok(`${constantsKeys.size} permission keys match across both files.`);
 } else {
     if (inConstantsOnly.length > 0) {
-        warn(`${inConstantsOnly.length} keys in permissions.ts but NOT in codeOwnedCatalog.ts:`);
+        warn(`${inConstantsOnly.length} keys in permissions.ts but NOT in permissionCatalog.ts:`);
         inConstantsOnly.forEach((k) => console.log(`     - ${k}`));
         mechanicalDrift += inConstantsOnly.length;
     }
@@ -113,7 +113,7 @@ if (inConstantsOnly.length === 0 && inSeedOnly.length === 0) {
                 mechanicalDrift += inSeedOnly.length;
             }
         } else {
-            warn(`${inSeedOnly.length} keys in codeOwnedCatalog.ts but NOT in permissions.ts:`);
+            warn(`${inSeedOnly.length} keys in permissionCatalog.ts but NOT in permissions.ts:`);
             inSeedOnly.forEach((k) => console.log(`     - ${k}`));
             console.log(`     ${ANSI.dim}(run with --fix to add them to permissions.ts)${ANSI.reset}`);
             mechanicalDrift += inSeedOnly.length;

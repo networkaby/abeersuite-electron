@@ -111,7 +111,7 @@ const ROLES = [
 ] as const;
 
 // The permission catalog is CODE-OWNED and shared with personal-bootstrap —
-// single source: ./lib/codeOwnedCatalog.ts. Add new permissions THERE.
+// single source: src/shared/lib/auth/permissionCatalog.ts (re-exported by ./lib/codeOwnedCatalog.ts). Add new permissions THERE.
 const PERMISSIONS = PERMISSION_CATALOG;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {

@@ -387,9 +387,11 @@ function PoolEditor({
     const q = search.trim().toLowerCase();
     // Sidebar top-level modules (Contacts, Inventory, CRM…) — the dept declares
     // which modules it can see; child links are gated per role on the Role page.
+    // A module is "in" when ANY of its links is pooled (the chip only ever toggles
+    // the whole module, and the pool API expands a pooled module to every current
+    // link) — so a page added to the sidebar later never unticks the chip.
     // Skip modules with no links (e.g. Delivery, still a placeholder): they pool
-    // nothing, so their checkbox — `[].every(...)` is true — would stick ticked
-    // and toggle nothing. They reappear here automatically once they gain a link.
+    // nothing and could never be ticked. They reappear once they gain a link.
     const sidebarRows = SIDEBAR_MODULES.filter(
         m => m.pooled && m.childPermissionIds.length > 0
             && (!q || m.label.toLowerCase().includes(q) || m.key.includes(q) || "sidebar module".includes(q)),
@@ -430,7 +432,7 @@ function PoolEditor({
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                             {sidebarRows.map(m => {
-                                const on = m.childPermissionIds.every(id => selected.has(id));
+                                const on = m.childPermissionIds.some(id => selected.has(id));
                                 return (
                                     <PermChip
                                         key={m.key}

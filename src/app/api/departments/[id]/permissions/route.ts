@@ -6,6 +6,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDepartmentPool } from "@/shared/lib/auth/departmentPool";
+import { ensureCatalogPermissions } from "@/shared/lib/auth/ensurePermissions";
 
 // GET — the department's permission pool (the Role Matrix authoring lens).
 // For an all-access department, `isAllAccess: true` and `permissionIds: null`
@@ -50,7 +51,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         }
 
         const nextIds = [...new Set(data.permissionIds)];
-        // Reject unknown permission ids so we 400 cleanly instead of hitting an FK error.
+        // A nav link added to the sidebar mints an id the DB may not have yet —
+        // create such code-known rows now, so the save never trips on them.
+        await ensureCatalogPermissions(nextIds);
+        // Reject ids unknown to both code and DB so we 400 cleanly instead of hitting an FK error.
         if (nextIds.length) {
             const found = await prisma.permission.findMany({ where: { id: { in: nextIds } }, select: { id: true } });
             if (found.length !== nextIds.length) {
