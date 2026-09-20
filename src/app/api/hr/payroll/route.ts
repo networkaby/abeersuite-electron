@@ -13,6 +13,7 @@ import {
     overlappingRun,
     toRunRow,
 } from "@/modules/hr/lib/payrollServer";
+import { ensureSalaryExpenseAccount } from "@/modules/hr/lib/staffLedger";
 import { formatPeriod, type PayrollRunRow } from "@/modules/hr/lib/payrollTypes";
 
 // GET  /api/hr/payroll — the history list, newest period first.
@@ -26,7 +27,10 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const runs = await prisma.payrollRun.findMany({ orderBy: { periodTo: "desc" } });
+        const runs = await prisma.payrollRun.findMany({
+            orderBy: { periodTo: "desc" },
+            include: { expenseAccount: { select: { id: true, name: true } } },
+        });
 
         const ids = [...new Set(runs.flatMap((r) => [r.createdById, r.postedById].filter((v): v is number => v != null)))];
         const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
@@ -81,6 +85,9 @@ export async function POST(req: Request) {
         }
         const totals = candidateTotals(candidates);
 
+        // One ledger for the whole run, resolved now and frozen with it.
+        const expenseAccountId = await prisma.$transaction((tx) => ensureSalaryExpenseAccount(tx));
+
         const run = await prisma.payrollRun.create({
             data: {
                 periodFrom:  dateOnly(periodFrom),
@@ -89,6 +96,7 @@ export async function POST(req: Request) {
                 status:      "DRAFT",
                 note:        body.note ?? null,
                 createdById: caller!.id,
+                expenseAccountId,
                 ...totals,
                 lines: {
                     create: candidates.map((c) => ({
@@ -105,7 +113,6 @@ export async function POST(req: Request) {
                         paidDays:         c.paidDays,
                         periodDays:       c.periodDays,
                         ledgerAccountId:  c.ledger?.id ?? null,
-                        expenseAccountId: c.expenseAccount?.id ?? null,
                         included:         c.included,
                         skipReason:       c.skipReason,
                     })),

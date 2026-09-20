@@ -132,9 +132,11 @@ model Account {
   // Phase 5 5D-4: InvVoucher.accountId dropped — the party lives on the spine
   // (UniversalVoucher.partyAccountId), so no InvVoucher back-relation here.
   // HR & People — a staff member's own ledger under "Salary Payable", and the
-  // salary expense ledger their payroll debits (hr.prisma).
+  // ONE salary expense ledger a payroll run debits (hr.prisma). The expense is
+  // an org-wide cost, never a per-person account: 300 staff would otherwise mean
+  // 300 lines in the P&L.
   staffLedgerOf            StaffProfile?              @relation("StaffLedger")
-  staffSalaryExpenseOf     StaffProfile[]             @relation("StaffSalaryExpense")
+  payrollExpenseOf         PayrollRun[]               @relation("PayrollExpense")
   // POS reverse rels
   branchVaults             Branch[]                   @relation("BranchVaultAccount")
   counterTills             PosCounter[]               @relation("CounterTill")

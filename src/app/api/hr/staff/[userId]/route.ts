@@ -50,7 +50,6 @@ function toDetail(user: { staffProfile: StaffProfileWithRels | null } & Paramete
         ledger: p?.ledgerAccount
             ? { id: p.ledgerAccount.id, name: p.ledgerAccount.name, balance: moneyNumber(p.ledgerAccount.balance), normalBalance: p.ledgerAccount.normalBalance }
             : null,
-        expenseAccount: p?.expenseAccount ?? null,
     };
 }
 
@@ -93,17 +92,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
         const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-        // The expense ledger must be one — a salary posted to a bank would be silent nonsense.
-        if (body.expenseAccountId != null) {
-            const acc = await prisma.account.findUnique({
-                where: { id: body.expenseAccountId },
-                select: { group: { select: { type: true } } },
-            });
-            if (!acc || acc.group?.type !== "EXPENSE") {
-                return NextResponse.json({ error: "Pick an expense ledger for the salary" }, { status: 400 });
-            }
-        }
-
         let bankJson: Prisma.InputJsonValue | typeof Prisma.DbNull | undefined;
         if (body.bankJson !== undefined) {
             const r = resolvePartyBank(body.bankJson);
@@ -119,7 +107,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
             leftReason:       body.leftReason,
             employmentType:   body.employmentType,
             weeklyOff:        body.weeklyOff ? [...new Set(body.weeklyOff)].sort((a, b) => a - b) : undefined,
-            expenseAccountId: body.expenseAccountId,
             fatherName:       body.fatherName,
             address:          body.address,
             bloodGroup:       body.bloodGroup,

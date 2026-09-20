@@ -196,11 +196,10 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                         <TableHead className="text-right">Deductions</TableHead>
                                         <TableHead className="text-right">Net</TableHead>
                                         <TableHead>Credited to</TableHead>
-                                        <TableHead>Salary expense</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {!rows.length && <TableEmptyRow colSpan={9} message="Nobody matches that search." />}
+                                    {!rows.length && <TableEmptyRow colSpan={8} message="Nobody matches that search." />}
                                     {rows.map((l) => (
                                         <Fragment key={l.id}>
                                         <TableRow className={l.included ? "" : "opacity-55"}>
@@ -235,12 +234,11 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                             </TableCell>
                                             <TableCell className="text-right font-medium tabular-nums">{formatRupeesFromPaise(l.netPaise)}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">{l.ledger?.name ?? "—"}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">{l.expenseAccount?.name ?? "—"}</TableCell>
                                         </TableRow>
                                         {open.has(l.id) && (
                                             <TableRow className="bg-muted/30 hover:bg-muted/30">
                                                 <TableCell colSpan={2} />
-                                                <TableCell colSpan={7} className="py-3">
+                                                <TableCell colSpan={6} className="py-3">
                                                     {!l.lines.length ? (
                                                         <p className="text-sm text-muted-foreground">{l.skipReason ?? "Nothing to break up."}</p>
                                                     ) : (

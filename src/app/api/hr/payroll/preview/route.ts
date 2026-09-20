@@ -80,7 +80,6 @@ export async function GET(req: Request) {
                 paidDays:        c.paidDays,
                 periodDays:      c.periodDays,
                 ledger:          c.ledger,
-                expenseAccount:  c.expenseAccount,
                 included:        c.included,
                 skipReason:      c.skipReason,
             })),

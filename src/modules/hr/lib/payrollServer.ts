@@ -2,7 +2,6 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
-import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 import { paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { parseSalaryLines } from "./salaryLines";
 import { prorate, inclusiveDays } from "./payrollProrate";
@@ -100,7 +99,6 @@ export interface PayrollCandidate {
     paidDays: number;
     periodDays: number;
     ledger: { id: number; name: string } | null;
-    expenseAccount: { id: number; name: string } | null;
     included: boolean;
     skipReason: string | null;
 }
@@ -118,13 +116,6 @@ export async function buildPayrollCandidates(
     fromIso: string,
     toIso: string,
 ): Promise<PayrollCandidate[]> {
-    // The org-wide fallback Dr ledger. Matched by exact name (ACCOUNT_LEDGERS
-    // is documented as safe to match by equality, never by substring).
-    const fallbackExpense = await db.account.findFirst({
-        where: { name: ACCOUNT_LEDGERS.SALARY_WAGES },
-        select: { id: true, name: true },
-    });
-
     const users = await db.user.findMany({
         orderBy: { name: "asc" },
         select: {
@@ -136,7 +127,6 @@ export async function buildPayrollCandidates(
                     joinedOn: true,
                     leftOn: true,
                     ledgerAccount: { select: { id: true, name: true } },
-                    expenseAccount: { select: { id: true, name: true } },
                     // Every revision starting on or before the period's last
                     // day: one that lands mid-period has to be honoured for the
                     // days after it, which is why this is not `take: 1`.
@@ -171,14 +161,12 @@ export async function buildPayrollCandidates(
 
         const r = prorate({ fromIso, toIso, joinedOn, leftOn, revisions });
         const ledger = p?.ledgerAccount ?? null;
-        const expense = p?.expenseAccount ?? fallbackExpense;
 
         let skipReason: string | null = null;
         if (!revisions.length) skipReason = "No salary structure entered";
         else if (r.paidDays === 0) skipReason = "Not on the staff during this period";
         else if (r.netPaise <= 0) skipReason = "Comes to nothing for this period";
         else if (!ledger) skipReason = "No ledger — open the staff profile and save it once";
-        else if (!expense) skipReason = `No expense ledger — pick one on the Job tab, or create "${ACCOUNT_LEDGERS.SALARY_WAGES}"`;
 
         out.push({
             userId: u.id,
@@ -194,7 +182,6 @@ export async function buildPayrollCandidates(
             paidDays: r.paidDays,
             periodDays: r.periodDays || periodDays,
             ledger,
-            expenseAccount: expense,
             included: skipReason === null,
             skipReason,
         });
@@ -221,12 +208,13 @@ export function candidateTotals(
 
 export const PAYROLL_RUN_INCLUDE = {
     lines: { orderBy: { staffName: "asc" as const } },
+    expenseAccount: { select: { id: true, name: true } },
 } satisfies Prisma.PayrollRunInclude;
 
 export type PayrollRunWithLines = Prisma.PayrollRunGetPayload<{ include: typeof PAYROLL_RUN_INCLUDE }>;
 
 export function toRunRow(
-    r: Omit<PayrollRunWithLines, "lines">,
+    r: Omit<PayrollRunWithLines, "lines"> & { expenseAccount?: { id: number; name: string } | null },
     names: Map<number, string>,
 ): PayrollRunRow {
     return {
@@ -237,6 +225,7 @@ export function toRunRow(
         status: r.status as PayrollRunStatus,
         voucherId: r.voucherId,
         voucherRef: r.voucherRef,
+        expenseAccount: r.expenseAccount ?? null,
         grossPaise: r.grossPaise,
         deductionsPaise: r.deductionsPaise,
         netPaise: r.netPaise,
@@ -269,7 +258,6 @@ export function toRunDetail(
         paidDays: l.paidDays,
         periodDays: l.periodDays,
         ledger: l.ledgerAccountId ? { id: l.ledgerAccountId, name: accounts.get(l.ledgerAccountId) ?? "—" } : null,
-        expenseAccount: l.expenseAccountId ? { id: l.expenseAccountId, name: accounts.get(l.expenseAccountId) ?? "—" } : null,
         included: l.included,
         skipReason: l.skipReason,
     });
@@ -299,17 +287,17 @@ export function buildJournalLines(
         staffName: string;
         netPaise: number;
         ledgerAccountId: number | null;
-        expenseAccountId: number | null;
     }[],
+    expenseAccountId: number,
     periodFromIso: string,
     periodToIso: string,
 ): JournalLineInput[] {
     const period = formatPeriod(periodFromIso, periodToIso);
     const credits: JournalLineInput[] = [];
-    const debitByAccount = new Map<number, number>();
+    let total = 0;
 
     for (const r of rows) {
-        if (!r.included || !r.ledgerAccountId || !r.expenseAccountId || r.netPaise <= 0) continue;
+        if (!r.included || !r.ledgerAccountId || r.netPaise <= 0) continue;
         const rupees = paiseToRupees(r.netPaise);
         credits.push({
             accountId:   r.ledgerAccountId,
@@ -317,16 +305,20 @@ export function buildJournalLines(
             amount:      rupees,
             description: `Salary ${period} — ${r.staffName}`,
         });
-        debitByAccount.set(r.expenseAccountId, (debitByAccount.get(r.expenseAccountId) ?? 0) + rupees);
+        total += rupees;
     }
+    if (!credits.length) return [];
 
-    const debits: JournalLineInput[] = [...debitByAccount.entries()].map(([accountId, amount]) => ({
-        accountId,
-        type:        "DEBIT" as const,
-        amount,
+    // ONE debit for the whole run. Salary expense is an org-wide cost — "what
+    // did labour cost the business" is a P&L question, and three hundred staff
+    // must not become three hundred lines in it.
+    const debit: JournalLineInput = {
+        accountId:   expenseAccountId,
+        type:        "DEBIT",
+        amount:      total,
         description: `Salary ${period}`,
-    }));
+    };
 
-    // Debits first — the Dr side reads at the top of a Tally-style journal.
-    return [...debits, ...credits];
+    // Debit first — the Dr side reads at the top of a Tally-style journal.
+    return [debit, ...credits];
 }

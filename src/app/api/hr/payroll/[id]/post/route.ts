@@ -10,6 +10,7 @@ import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { buildJournalLines } from "@/modules/hr/lib/payrollServer";
+import { ensureSalaryExpenseAccount } from "@/modules/hr/lib/staffLedger";
 import { formatPeriod } from "@/modules/hr/lib/payrollTypes";
 
 // POST /api/hr/payroll/[id]/post — turn a draft run into the period's journal.
@@ -64,7 +65,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const fromIso = toDateOnlyUtc(run.periodFrom);
         const toIso = toDateOnlyUtc(run.periodTo);
         const period = formatPeriod(fromIso, toIso);
-        const glLines = buildJournalLines(run.lines, fromIso, toIso);
+
+        // The Dr side: the one ledger frozen onto the run when it was generated.
+        const expenseAccountId = run.expenseAccountId
+            ?? await prisma.$transaction((tx) => ensureSalaryExpenseAccount(tx));
+
+        const glLines = buildJournalLines(run.lines, expenseAccountId, fromIso, toIso);
 
         if (glLines.length < 2) {
             return NextResponse.json(

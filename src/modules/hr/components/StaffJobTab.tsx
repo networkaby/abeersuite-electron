@@ -1,10 +1,11 @@
 "use client";
 
-// Job tab — staff ID, joining date, employment type, weekly off, the expense
-// ledger their salary hits, and leaving. Every field saves on blur (Pattern D):
+// Job tab — staff ID, joining date, employment type, weekly off, their own
+// salary ledger, and leaving. Every field saves on blur (Pattern D):
 // the PATCH is partial, so each box is its own write and its own tick.
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { LogOut, Undo2 } from "lucide-react";
@@ -14,10 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field } from "@/shared/components/Field";
 import { FieldSaveMark } from "@/shared/components/FieldSaveMark";
-import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { useFieldSave, useGlAccounts } from "@/shared/hooks";
+import { useFieldSave } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -41,18 +42,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
     const [joinedOn, setJoinedOn] = useState(profile?.joinedOn ?? "");
     const [employmentType, setEmploymentType] = useState(profile?.employmentType ?? "FULL_TIME");
     const [weeklyOff, setWeeklyOff] = useState<number[]>(profile?.weeklyOff ?? [0]);
-    const [expenseAccountId, setExpenseAccountId] = useState<number | null>(profile?.expenseAccountId ?? null);
     const [leaveOpen, setLeaveOpen] = useState(false);
-
-    const { accounts } = useGlAccounts();
-    const expenseOptions = useMemo(
-        () => accounts
-            .filter((a) => a.group?.type === "EXPENSE")
-            // `leaf` is what the closed trigger shows, so it must be the ledger, not its
-            // group; the group rides in the label so the open list can tell them apart.
-            .map((a) => ({ value: a.id, label: a.group?.name ? `${a.name} — ${a.group.name}` : a.name, leaf: a.name, searchText: a.name })),
-        [accounts],
-    );
 
     const left = staffHasLeft(profile);
     const disabled = !canEdit;
@@ -163,33 +153,35 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                     )}
                 </Field>
 
-                <Field label="Salary expense ledger" hint="Where their salary is booked as an expense. Blank = the org's Salary & Wages.">
+                {/* Their own ledger, shown rather than chosen. It is a LIABILITY — what
+                    the shop owes them — and HR opens it with the profile, so there is
+                    nothing to pick. Salary EXPENSE is one org-wide ledger held on the
+                    payroll run (owner, 2026-09-20: "exp account is common to all"),
+                    which is why no expense field belongs on a person's page. */}
+                <Field label="Their salary ledger" hint="Salary accrues into this account; advances and payments go out of it.">
                     {(id) => (
-                        <div className="flex items-center gap-1">
-                            <div className="min-w-0 flex-1">
-                                <SearchableSelect
-                                    value={expenseAccountId}
-                                    options={expenseOptions}
-                                    placeholder="Salary & Wages (default)"
-                                    ariaLabel="Salary expense ledger"
-                                    triggerClassName="h-9 w-full text-sm"
-                                    onChange={(v) => {
-                                        const original = expenseAccountId;
-                                        setExpenseAccountId(v);
-                                        void save({
-                                            key: "expenseAccountId",
-                                            original: original == null ? "" : String(original),
-                                            next: v == null ? "" : String(v),
-                                            write: (val) => patch({ expenseAccountId: val ? Number(val) : null }),
-                                            revert: (val) => setExpenseAccountId(val ? Number(val) : null),
-                                            label: "Salary expense ledger",
-                                            onSaved: onChanged,
-                                        });
-                                    }}
-                                />
-                            </div>
-                            <FieldSaveMark state={stateOf("expenseAccountId")} className="sr-only" />
-                            <span id={id} className="sr-only">Salary expense ledger</span>
+                        <div id={id} className="flex h-9 items-center gap-2 text-sm">
+                            {detail.ledger ? (
+                                <>
+                                    <Link
+                                        href={`/office/accountancy/masters/ledgers/${detail.ledger.id}`}
+                                        className="font-medium text-primary underline-offset-2 hover:underline"
+                                    >
+                                        {detail.ledger.name}
+                                    </Link>
+                                    <span className="text-muted-foreground">
+                                        {detail.ledger.balance === 0
+                                            ? "— nothing outstanding"
+                                            : detail.ledger.balance > 0
+                                                ? `— ${formatInr(detail.ledger.balance)} owed to them`
+                                                : `— ${formatInr(Math.abs(detail.ledger.balance))} advance held`}
+                                    </span>
+                                </>
+                            ) : (
+                                <span className="text-muted-foreground">
+                                    Opens the first time anything here is saved.
+                                </span>
+                            )}
                         </div>
                     )}
                 </Field>

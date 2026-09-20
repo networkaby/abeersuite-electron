@@ -51,7 +51,6 @@ export const STAFF_USER_SELECT = {
             employmentType:   true,
             weeklyOff:        true,
             ledgerAccountId:  true,
-            expenseAccountId: true,
         },
     },
 } satisfies Prisma.UserSelect;

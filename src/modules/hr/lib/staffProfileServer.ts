@@ -9,7 +9,6 @@ import type { StaffProfileDto, StaffSalaryDto } from "./staffTypes";
 /** Everything the profile workspace reads off a StaffProfile row. */
 export const STAFF_PROFILE_INCLUDE = {
     ledgerAccount:  { select: { id: true, name: true, balance: true, normalBalance: true } },
-    expenseAccount: { select: { id: true, name: true } },
     salaries:       { orderBy: { effectiveFrom: "desc" as const } },
 } satisfies Prisma.StaffProfileInclude;
 
@@ -64,7 +63,6 @@ export function toStaffProfileDto(p: StaffProfileWithRels): StaffProfileDto {
         bankJson: p.bankJson,
         notes: p.notes,
         ledgerAccountId: p.ledgerAccountId,
-        expenseAccountId: p.expenseAccountId,
     };
 }
 

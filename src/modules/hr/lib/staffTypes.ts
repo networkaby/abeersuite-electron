@@ -25,7 +25,6 @@ export interface StaffProfileDto {
     bankJson: unknown;
     notes: string | null;
     ledgerAccountId: number | null;
-    expenseAccountId: number | null;
 }
 
 export interface StaffSalaryDto {
@@ -82,6 +81,11 @@ export interface StaffDetail {
     };
     profile: StaffProfileDto | null;
     salaries: StaffSalaryDto[];
+    /**
+     * Their own account under "Salary Payable". A LIABILITY: a credit balance is
+     * salary owed to them, a debit balance is an advance they still hold. There
+     * is no expense account here on purpose — salary expense is one org-wide
+     * ledger held on the payroll run, not a per-person setting.
+     */
     ledger: { id: number; name: string; balance: number; normalBalance: "DEBIT" | "CREDIT" | null } | null;
-    expenseAccount: { id: number; name: string } | null;
 }

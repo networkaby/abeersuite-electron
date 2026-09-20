@@ -1483,7 +1483,6 @@ CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "bankJson" JSONB,
     "notes" TEXT,
     "ledgerAccountId" INTEGER,
-    "expenseAccountId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1508,7 +1507,6 @@ ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "esiNumber" VARCHAR(17);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bankJson" JSONB;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "notes" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
-ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
@@ -1544,6 +1542,7 @@ CREATE TABLE IF NOT EXISTS "payroll_runs" (
     "periodFrom" DATE NOT NULL,
     "periodTo" DATE NOT NULL,
     "postingDate" DATE NOT NULL,
+    "expenseAccountId" INTEGER,
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "voucherId" INTEGER,
     "voucherRef" TEXT,
@@ -1564,6 +1563,7 @@ ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "periodFrom" DATE NOT NULL;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "periodTo" DATE NOT NULL;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "postingDate" DATE NOT NULL;
+ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "voucherId" INTEGER;
 ALTER TABLE "payroll_runs" ADD COLUMN IF NOT EXISTS "voucherRef" TEXT;
@@ -1593,7 +1593,6 @@ CREATE TABLE IF NOT EXISTS "payroll_run_lines" (
     "paidDays" INTEGER NOT NULL DEFAULT 0,
     "periodDays" INTEGER NOT NULL DEFAULT 0,
     "ledgerAccountId" INTEGER,
-    "expenseAccountId" INTEGER,
     "included" BOOLEAN NOT NULL DEFAULT true,
     "skipReason" TEXT,
 
@@ -1612,7 +1611,6 @@ ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT 
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "paidDays" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "periodDays" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
-ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "expenseAccountId" INTEGER;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "included" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "skipReason" TEXT;
 
@@ -4069,9 +4067,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "staff_profiles_ledgerAccountId_key" ON "staff
 CREATE INDEX IF NOT EXISTS "staff_profiles_leftOn_idx" ON "staff_profiles"("leftOn");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "staff_profiles_expenseAccountId_idx" ON "staff_profiles"("expenseAccountId");
-
--- CreateIndex
 CREATE INDEX IF NOT EXISTS "staff_profiles_updatedAt_idx" ON "staff_profiles"("updatedAt");
 
 -- CreateIndex
@@ -4082,6 +4077,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "staff_salaries_userId_effectiveFrom_key" ON "
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "payroll_runs_status_idx" ON "payroll_runs"("status");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "payroll_runs_expenseAccountId_idx" ON "payroll_runs"("expenseAccountId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "payroll_runs_periodFrom_idx" ON "payroll_runs"("periodFrom");
@@ -4942,14 +4940,14 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "staff_profiles" ADD CONSTRAINT "staff_profiles_expenseAccountId_fkey" FOREIGN KEY ("expenseAccountId") REFERENCES "Account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    ALTER TABLE "staff_salaries" ADD CONSTRAINT "staff_salaries_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "staff_salaries" ADD CONSTRAINT "staff_salaries_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE "payroll_runs" ADD CONSTRAINT "payroll_runs_expenseAccountId_fkey" FOREIGN KEY ("expenseAccountId") REFERENCES "Account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

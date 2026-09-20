@@ -53,24 +53,25 @@ model StaffProfile {
   bankJson       Json?
   notes          String?
 
-  // Books. `ledgerAccount` is this person's own ledger under "Salary Payable"
-  // (LIABILITY, under Current Liabilities): the Cr side of a future payroll
-  // journal, and the account every advance and salary payment goes through, so
-  // its balance always reads "owed to them" (Cr) or "advance outstanding" (Dr).
-  // Created with the profile, on the first save. `expenseAccount` is the Dr side
-  // of that journal; null means the org's "Salary & Wages" ledger, and the four
-  // people who already have a "<Name> Salary" expense ledger simply pick it here.
+  // Books. One ledger per person, and it is a LIABILITY: their own account under
+  // "Salary Payable" (under Current Liabilities). Salary accrues INTO it, every
+  // advance and payment goes OUT of it, so its balance always reads "owed to
+  // them" (Cr) or "advance outstanding" (Dr). Created with the profile, on the
+  // first save.
+  //
+  // There is deliberately NO per-person expense account (owner, 2026-09-20:
+  // "exp account is common to all"). The Dr side of a payroll journal is one
+  // org-wide salary expense ledger, held on PayrollRun, because "what did labour
+  // cost the business" is a P&L question and 300 staff must not become 300 lines
+  // in it.
   ledgerAccountId  Int?     @unique
   ledgerAccount    Account? @relation("StaffLedger", fields: [ledgerAccountId], references: [id], onDelete: SetNull)
-  expenseAccountId Int?
-  expenseAccount   Account? @relation("StaffSalaryExpense", fields: [expenseAccountId], references: [id], onDelete: SetNull)
 
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt
   salaries  StaffSalary[]
 
   @@index([leftOn])
-  @@index([expenseAccountId])
   @@index([updatedAt])
   @@map("staff_profiles")
 }
@@ -126,6 +127,12 @@ model PayrollRun {
   periodTo   DateTime @db.Date
   /// The date the journal carries. `periodTo` unless changed.
   postingDate DateTime @db.Date
+
+  /// The ONE ledger this run's salary is booked against — the Dr side of the
+  /// whole journal. Resolved when the run is generated and frozen with it, so a
+  /// later change of the org's salary ledger cannot rewrite what was posted.
+  expenseAccountId Int?
+  expenseAccount   Account? @relation("PayrollExpense", fields: [expenseAccountId], references: [id], onDelete: SetNull)
   /// DRAFT | POSTED | CANCELLED. A plain string for the same reason as
   /// StaffProfile.employmentType — a new state must not need an enum migration.
   status      String   @default("DRAFT")
@@ -154,6 +161,7 @@ model PayrollRun {
   lines PayrollRunLine[]
 
   @@index([status])
+  @@index([expenseAccountId])
   @@index([periodFrom])
   @@index([periodTo])
   @@index([updatedAt])
@@ -187,10 +195,11 @@ model PayrollRunLine {
   paidDays   Int @default(0)
   periodDays Int @default(0)
 
-  /// The two ledgers as resolved at generation time. Null only on a line that
-  /// is not included (no ledger is exactly why it cannot be).
-  ledgerAccountId  Int?
-  expenseAccountId Int?
+  /// The person's own liability ledger, as resolved at generation time. Null
+  /// only on a line that is not included — having no ledger is exactly why it
+  /// cannot be. The expense side is not here: it is one ledger for the whole
+  /// run, on PayrollRun.
+  ledgerAccountId Int?
 
   /// Only included lines reach the journal. Untick a person to hold their
   /// salary back; `skipReason` is set by the generator when it cannot pay them.

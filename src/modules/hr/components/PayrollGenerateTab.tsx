@@ -291,7 +291,6 @@ function Breakup({ line }: { line: PayrollLineDto }) {
                         {line.ledger && (
                             <p className="pt-1 text-xs text-muted-foreground">
                                 Credited to {line.ledger.name}
-                                {line.expenseAccount && ` · booked against ${line.expenseAccount.name}`}
                             </p>
                         )}
                     </div>

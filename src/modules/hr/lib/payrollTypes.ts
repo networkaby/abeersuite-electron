@@ -27,7 +27,6 @@ export interface PayrollLineDto {
     paidDays: number;
     periodDays: number;
     ledger: { id: number; name: string } | null;
-    expenseAccount: { id: number; name: string } | null;
     included: boolean;
     /** Why the generator could not pay them. Null on a normal line. */
     skipReason: string | null;
@@ -42,6 +41,8 @@ export interface PayrollRunRow {
     status: PayrollRunStatus;
     voucherId: number | null;
     voucherRef: string | null;
+    /** The one ledger the whole run is booked against. */
+    expenseAccount: { id: number; name: string } | null;
     grossPaise: number;
     deductionsPaise: number;
     netPaise: number;

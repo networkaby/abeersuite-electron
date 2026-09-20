@@ -32,8 +32,9 @@ async function loadDetail(id: number) {
         run.createdById,
         ...(run.postedById ? [run.postedById] : []),
     ])];
-    const accountIds = [...new Set(run.lines.flatMap((l) =>
-        [l.ledgerAccountId, l.expenseAccountId].filter((v): v is number => v != null)))];
+    const accountIds = [...new Set(run.lines
+        .map((l) => l.ledgerAccountId)
+        .filter((v): v is number => v != null))];
 
     const [users, accounts, profiles] = await Promise.all([
         prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
