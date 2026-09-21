@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, pickDefined, prismaUniqueError, validateRequest } from "@/shared/lib/api";
 import { staffProfilePatchSchema, STAFF_JOB_KEYS } from "@/shared/lib/schemas/hrSchema";
 import { resolvePartyBank } from "@/shared/lib/schemas/partyBankSchema";
-import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelect";
+import { STAFF_USER_SELECT, excludingSuperAdmin, shapeStaffUser } from "@/shared/lib/users/staffSelect";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { moneyNumber } from "@/shared/lib/format/moneyInr";
 import {
@@ -59,7 +59,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ userId: st
     try {
         const userId = parseUserId((await params).userId);
         if (userId == null) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: DETAIL_SELECT });
+        const user = await prisma.user.findFirst({ where: { id: userId, ...excludingSuperAdmin() }, select: DETAIL_SELECT });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
         return NextResponse.json(toDetail(user));
     } catch (e) {
@@ -89,7 +89,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
     }
 
     try {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
+        const user = await prisma.user.findFirst({ where: { id: userId, ...excludingSuperAdmin() }, select: { id: true, name: true } });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
         let bankJson: Prisma.InputJsonValue | typeof Prisma.DbNull | undefined;

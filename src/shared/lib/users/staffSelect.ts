@@ -12,6 +12,18 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 
+/**
+ * The env-based super admin (`SUPER_ADMIN_EMAIL` in `authorizeStaff.ts`) gets
+ * anchored to a real `User` row so audit/FK references have somewhere to
+ * point, but it is a bypass account, not a person on the payroll — HR module
+ * lists (Staff Directory, Payroll, Attendance) exclude it with this filter.
+ * Undefined (env unset) means nothing to exclude, so the filter is a no-op.
+ */
+export function excludingSuperAdmin(): Prisma.UserWhereInput {
+    const envEmail = process.env.SUPER_ADMIN_EMAIL?.trim();
+    return envEmail ? { email: { not: envEmail } } : {};
+}
+
 export const STAFF_USER_SELECT = {
     id:          true,
     name:        true,

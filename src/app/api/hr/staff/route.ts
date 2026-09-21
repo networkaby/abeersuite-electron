@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelect";
+import { STAFF_USER_SELECT, excludingSuperAdmin, shapeStaffUser } from "@/shared/lib/users/staffSelect";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { dateOnlyFromIso } from "@/modules/hr/lib/staffProfileServer";
@@ -23,6 +23,7 @@ export async function GET(req: Request) {
         const todayIso = businessTodayIso();
 
         const users = await prisma.user.findMany({
+            where: excludingSuperAdmin(),
             orderBy: { name: "asc" },
             select: {
                 ...STAFF_USER_SELECT,

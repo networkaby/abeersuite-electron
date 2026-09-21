@@ -2,12 +2,17 @@
 
 // Access tab — the login side of a staff member, without leaving HR.
 //
-// Roles, their permissions and the data scopes are DEFINED in Administration.
-// Nothing here creates or edits one: this tab only chooses which existing role
-// the person holds, how far their data reach goes, who they report to, and
-// (when they are locked out) sets a new password. Every write goes through the
-// same `PUT /api/users/[id]` the Admin → Users screen uses, so the two can
-// never disagree about what a role change means.
+// Roles and their permissions are DEFINED in Administration. Nothing here
+// creates or edits one: this tab only chooses which existing role the person
+// holds, who they report to, and (when they are locked out) sets a new
+// password. Every write goes through the same `PUT /api/users/[id]` the
+// Admin → Users screen uses, so the two can never disagree about what a role
+// change means.
+//
+// "Data scope" (Own/Team/Department/…) used to be editable here too. It's
+// hidden for now — the `scope` column and session plumbing still exist, but
+// no API route reads it to restrict what a user sees. Bring the field back
+// once something actually enforces it.
 
 import { useMemo, useState } from "react";
 import axios from "axios";
@@ -20,16 +25,6 @@ import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { useApiResource } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import type { StaffDetail, StaffRow } from "../lib/staffTypes";
-
-/** The reach of a person's data, in the order Administration presents them. */
-const SCOPES = [
-    { value: "OWN",        label: "Own — only what they created" },
-    { value: "TEAM",       label: "Team — their team's records" },
-    { value: "DEPARTMENT", label: "Department" },
-    { value: "BRANCH",     label: "Branch" },
-    { value: "REGION",     label: "Region" },
-    { value: "ORG",        label: "Whole organisation" },
-] as const;
 
 interface RoleRow {
     id: string;
@@ -119,20 +114,6 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
                             placeholder="Pick a role"
                             clearable={false}
                             ariaLabel="Role"
-                            triggerClassName="h-9 text-sm"
-                        />
-                    )}
-                </Field>
-
-                <Field label="Data scope" hint="How far their records reach.">
-                    {() => (
-                        <SearchableSelect
-                            value={user.scope ?? null}
-                            options={SCOPES.map((s) => ({ value: s.value, label: s.label }))}
-                            onChange={(v) => v && put({ scope: v }, "Scope changed")}
-                            placeholder="Pick a scope"
-                            clearable={false}
-                            ariaLabel="Data scope"
                             triggerClassName="h-9 text-sm"
                         />
                     )}
