@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, Ban, BookOpen, ChevronDown, ChevronRight, Search, Trash2, WalletMinimal } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, BookOpen, ChevronDown, ChevronRight, Search, Trash2, WalletMinimal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -145,7 +145,21 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                     subtitle={data
                         ? `${data.headcount} staff · dated ${formatDate(data.postingDate)}${refreshing ? " · refreshing…" : ""}`
                         : "Reading the run…"}
-                    icon={<WalletMinimal size={20} />}
+                    // Back first, then the wallet: this page is only ever
+                    // reached from the run list, and there is no other way out.
+                    icon={(
+                        <div className="flex items-center gap-2">
+                            <Link
+                                href="/office/hr/payroll"
+                                aria-label="Back to payroll"
+                                title="Back to payroll"
+                                className="hover:text-foreground"
+                            >
+                                <ArrowLeft size={18} />
+                            </Link>
+                            <WalletMinimal size={20} />
+                        </div>
+                    )}
                     actions={data ? (
                         <div className="flex items-center gap-2">
                             <Badge variant={data.status === "POSTED" ? "default" : data.status === "CANCELLED" ? "destructive" : "secondary"}>

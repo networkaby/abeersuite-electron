@@ -52,6 +52,10 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     // where the last run finished, and the screen does not.
     const [from, setFrom] = useState<string | null>(null);
     const [to, setTo] = useState<string | null>(null);
+    // Payroll is normally run for a whole calendar month, so that is the
+    // default way to pick the period; "Custom" reveals the two date boxes for
+    // the odd run that does not line up with a month.
+    const [mode, setMode] = useState<"month" | "custom">("month");
     const [q, setQ] = useState("");
     const [open, setOpen] = useState<Set<number>>(new Set());
     const [saving, setSaving] = useState(false);
@@ -67,6 +71,22 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     // The server's answer is the truth about the period until the user edits it.
     const periodFrom = from ?? data?.periodFrom ?? "";
     const periodTo = to ?? data?.periodTo ?? "";
+
+    // yyyy-mm for the month box, taken from whatever the period currently is.
+    const month = periodFrom.slice(0, 7);
+
+    // Picking a month pays the whole of it — except a month still running,
+    // which is paid up to today, the same day the server would have stopped at.
+    const pickMonth = (ym: string) => {
+        if (!/^\d{4}-\d{2}$/.test(ym)) return;
+        const [y, m] = ym.split("-").map(Number);
+        const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const today = new Date();
+        const last = new Date(y, m, 0);
+        setFrom(`${ym}-01`);
+        setTo(iso(last > today ? today : last));
+        setOpen(new Set());
+    };
 
     const rows = useMemo(() => {
         const needle = q.trim().toLowerCase();
@@ -113,26 +133,52 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
-                <Field label="From">
-                    {(id) => (
-                        <TallyDateInput
-                            id={id}
-                            value={periodFrom}
-                            onValueChange={(v) => { setFrom(v); setOpen(new Set()); }}
-                            className="h-9 w-36 text-sm"
-                        />
-                    )}
-                </Field>
-                <Field label="Till">
-                    {(id) => (
-                        <TallyDateInput
-                            id={id}
-                            value={periodTo}
-                            onValueChange={(v) => { setTo(v); setOpen(new Set()); }}
-                            className="h-9 w-36 text-sm"
-                        />
-                    )}
-                </Field>
+                {mode === "month" ? (
+                    <Field label="Month">
+                        {(id) => (
+                            <Input
+                                id={id}
+                                type="month"
+                                value={month}
+                                onChange={(e) => pickMonth(e.target.value)}
+                                className="h-9 w-40 text-sm"
+                            />
+                        )}
+                    </Field>
+                ) : (
+                    <>
+                        <Field label="From">
+                            {(id) => (
+                                <TallyDateInput
+                                    id={id}
+                                    value={periodFrom}
+                                    onValueChange={(v) => { setFrom(v); setOpen(new Set()); }}
+                                    className="h-9 w-36 text-sm"
+                                />
+                            )}
+                        </Field>
+                        <Field label="Till">
+                            {(id) => (
+                                <TallyDateInput
+                                    id={id}
+                                    value={periodTo}
+                                    onValueChange={(v) => { setTo(v); setOpen(new Set()); }}
+                                    monthMode="end"
+                                    className="h-9 w-36 text-sm"
+                                />
+                            )}
+                        </Field>
+                    </>
+                )}
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9"
+                    onClick={() => setMode((m) => (m === "month" ? "custom" : "month"))}
+                >
+                    {mode === "month" ? "Custom dates" : "By month"}
+                </Button>
                 {/* Fixed width, so "Reading…" does not make the button breathe. */}
                 <Button type="button" variant="outline" size="sm" className="w-24" onClick={reload} disabled={refreshing}>
                     {refreshing ? "Reading…" : "Refresh"}
