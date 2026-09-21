@@ -8,8 +8,11 @@
 // the same source every other printed document falls back to.
 //
 // Its layout is its own (house rule: print formats never share layout code).
-// Both the on-screen preview and the print sheet render THIS component, so the
-// preview cannot drift from the paper.
+// The tab preview, the enlarge dialog and the print sheet all render THIS
+// component, so none of the three can drift from the paper. The PVC press
+// artwork at `/api/hr/staff/[userId]/id-card-image` is the one exception and is
+// drawn separately, because Satori cannot read this stylesheet; it is written
+// in the same millimetres so the two stay one design.
 
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 
@@ -40,16 +43,26 @@ function initials(name: string) {
 export function staffIdCardCss(scope: string) {
     return `
 ${scope} { display: flex; flex-wrap: wrap; gap: 6mm; font-family: Arial, 'Helvetica Neue', sans-serif; color: #0f172a; }
+/* The card is a coloured object, not a page decoration. Without this a browser
+   drops every background when printing: the blue strip went white on paper and
+   the white lettering on it disappeared, so the printed card looked nothing
+   like the two previews of it. */
+${scope}, ${scope} * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 ${scope} .card {
     width: ${CARD_W}; height: ${CARD_H}; box-sizing: border-box;
     border: 0.3mm solid #cbd5e1; border-radius: 3mm; overflow: hidden;
     background: #fff; position: relative; display: flex; flex-direction: column;
 }
 ${scope} .strip { background: linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%); color: #fff;
-    padding: 1.6mm 3mm; display: flex; align-items: center; gap: 2mm; }
-${scope} .strip img { height: 5mm; width: auto; object-fit: contain; }
+    padding: 2mm 3mm; display: flex; align-items: center; gap: 2.4mm; }
+/* The wordmark is a single blue colour on a transparent ground, so straight on
+   the blue strip it was all but invisible. It sits on a white chip instead —
+   the same treatment the staff sign-in page gives it over its dark panel. */
+${scope} .mark { background: #fff; border-radius: 1.2mm; padding: 0.9mm 1.4mm; flex: none;
+    display: flex; align-items: center; }
+${scope} .mark img { height: 3.6mm; width: auto; display: block; object-fit: contain; }
 ${scope} .brand { font-size: 3.1mm; font-weight: 700; letter-spacing: 0.15mm; line-height: 1.1; }
-${scope} .tag { font-size: 2.1mm; opacity: 0.85; line-height: 1.1; }
+${scope} .tag { font-size: 2.1mm; opacity: 0.9; line-height: 1.2; min-width: 0; }
 ${scope} .face { flex: 1; display: flex; gap: 3mm; padding: 2.6mm 3mm; min-height: 0; }
 ${scope} .photo { width: 19mm; height: 24mm; flex: none; border: 0.25mm solid #cbd5e1; border-radius: 1.2mm;
     overflow: hidden; background: #f1f5f9; display: flex; align-items: center; justify-content: center; }
@@ -80,14 +93,19 @@ export function StaffIdCardFront({ data }: { data: StaffIdCardData }) {
     return (
         <div className="card">
             <div className="strip">
-                {org.logoUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element -- print document
-                    <img src={org.logoUrl} alt="" />
-                )}
-                <div>
+                {/* The wordmark already reads as the brand name, so it carries it in
+                    `alt` and the name is not set again in text beside it — the same
+                    rule the sign-in pages follow. Without a logo on file the name
+                    is spelled out instead, so the card is never unbranded. */}
+                {org.logoUrl ? (
+                    <span className="mark">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- print document */}
+                        <img src={org.logoUrl} alt={org.brandName} />
+                    </span>
+                ) : (
                     <div className="brand">{org.brandName}</div>
-                    {org.tagline && <div className="tag">{org.tagline}</div>}
-                </div>
+                )}
+                {org.tagline && <div className="tag">{org.tagline}</div>}
             </div>
             <div className="face">
                 <div className="photo">
