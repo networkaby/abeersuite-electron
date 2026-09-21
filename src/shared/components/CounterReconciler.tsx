@@ -54,6 +54,7 @@
 // "not-set-up" before ever fetching when there's no local cache to check).
 
 import { useEffect, useRef } from "react";
+import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import { reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
@@ -94,6 +95,8 @@ export default function CounterReconciler() {
                 "Sign in again, online, to set this PC up on an available counter.",
                 { duration: 15_000 },
             );
+            // The office released this PC — a deliberate end, not a cold session.
+            markDeliberateSignOut();
             await signOut({ redirect: false });
             // A full load, not router.push: the session cookie is gone and every
             // cached page in memory was rendered for a counter this machine no

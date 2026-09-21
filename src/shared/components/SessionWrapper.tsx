@@ -8,6 +8,8 @@ import { stampRequestContext } from "@/shared/lib/http";
 import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
+import { wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
+import { SESSION_IDLE_LABEL } from "@/shared/lib/auth/sessionAge";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -27,6 +29,8 @@ let redirecting = false;
 
 /** Long enough to read the line, short enough not to feel stuck. */
 const REVOKED_NOTICE_MS = 2_500;
+/** Same, for a session that simply went cold. */
+const DEAD_NOTICE_MS = 2_500;
 
 function goLogin(afterMs = 0) {
     if (redirecting || typeof window === "undefined") return;
@@ -42,7 +46,20 @@ function SessionGuard() {
     const prev = useRef(status);
 
     useEffect(() => {
-        if (prev.current === "authenticated" && status === "unauthenticated") goLogin();
+        if (prev.current === "authenticated" && status === "unauthenticated") {
+            // A session that was live a moment ago and is gone now is a DEAD session,
+            // not a visitor who never signed in — and the difference is the whole
+            // message. Left silent, a till that went cold overnight throws the cashier
+            // at the login screen with no word of why, which reads as the app having
+            // crashed. The one case that needs no explanation is the person who chose
+            // it: they know, and telling them their session expired would be nonsense.
+            if (!wasDeliberateSignOut() && !redirecting) {
+                toast.error(`Signed out after ${SESSION_IDLE_LABEL} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
+                goLogin(DEAD_NOTICE_MS);
+            } else {
+                goLogin();
+            }
+        }
         prev.current = status;
     }, [status]);
 

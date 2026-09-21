@@ -23,6 +23,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -249,7 +250,7 @@ function CounterSetupForm() {
                         variant="ghost"
                         className="w-full"
                         disabled={busy}
-                        onClick={() => signOut({ callbackUrl: "/staff/login" })}
+                        onClick={() => { markDeliberateSignOut(); void signOut({ callbackUrl: "/staff/login" }); }}
                     >
                         Sign out
                     </Button>

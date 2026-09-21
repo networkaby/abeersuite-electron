@@ -4,6 +4,7 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
+import { SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/auth/sessionAge";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -22,9 +23,6 @@ const SESSION_COOKIE_NAME = "authjs.session-token";
 const SECURE_COOKIES =
     !!process.env.VERCEL || /^https:/i.test(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "");
 
-/** Stay signed in this long since the last request — see the session block below. */
-const SESSION_IDLE_MAX_AGE_MS = 8 * 60 * 60 * 1000;
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     trustHost: true,
@@ -40,12 +38,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * for anyone who did not sign out. On live, user 38 last authenticated on 19 Sep
      * and was still validly signed in on the 21st.
      *
-     * 8 hours, measured since LAST USE (`updateAge: 0` re-issues the token on every
-     * request, re-signing it without reading the database). The number comes from
-     * the shop's own hours, not from a round figure: tills open 10:30–12:20 and
-     * close 20:30–22:18, so the shortest night is about 12 hours and the longest
-     * quiet spell inside a trading day is nothing like 8. It therefore lapses every
-     * night and never mid-shift. A cashier who somehow does idle 8 hours in a day
+     * 6 hours, measured since LAST USE (`updateAge: 0` re-issues the token on every
+     * request, re-signing it without reading the database). Checked against the
+     * shop's own hours rather than picked as a round figure: tills open 10:30–12:20
+     * and close 20:30–22:18, so the shortest night is about 12 hours — twice this —
+     * while nothing inside a trading day sits quiet for 6. It therefore lapses every
+     * night and never mid-shift. A cashier who somehow does idle 6 hours in a day
      * taps their photo and six digits again — the cheap way to be wrong.
      *
      * Do NOT tie this to PIN_PASSWORD_MAX_AGE_MS. They look like the same idea and
