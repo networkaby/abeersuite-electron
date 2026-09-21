@@ -21,6 +21,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
@@ -254,7 +255,7 @@ export default function BalanceSheetPage() {
         router.push(accountLedgerUrl(id, { asOf }));
     };
     const goGroup = (id: number) =>
-        router.push(`/office/accountancy/masters/groups/${id}?asOf=${asOf}`);
+        router.push(groupReportUrl(id, { asOf }));
 
     // Compute side totals + auto-balancing "Difference in opening balances".
     //

@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { ChevronRight, FolderTree, Loader2 } from "lucide-react";
@@ -35,6 +35,7 @@ import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { formatDateInput, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -137,14 +138,26 @@ function sided(value: number, normalSide: Side) {
 
 export function GroupReportExplorer() {
     const router = useRouter();
+    const urlParams = useSearchParams();
     const fyStart = indianFiscalYearStart();
 
-    const [from, setFrom] = useState(formatDateInput(fyStart));
-    const [to, setTo]     = useState(formatDateInput(new Date()));
+    // The period can arrive in the link — a drill-in from Balance Sheet carries
+    // `asOf` (a point in time, so it becomes the closing date), P&L and Trial
+    // Balance carry `from`/`to`. Read once; after that the date inputs own it.
+    const [from, setFrom] = useState(() => urlParams.get("from") ?? formatDateInput(fyStart));
+    const [to, setTo]     = useState(() => urlParams.get("to") ?? urlParams.get("asOf") ?? formatDateInput(new Date()));
     const [data, setData] = useState<TBData | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState("");
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+
+    // The selected group lives in the URL, not in state: that is what makes the
+    // screen linkable (every group drill-in lands here), and it gives back and
+    // forward the behaviour people expect for free.
+    const selectedId = Number(urlParams.get("group")) || null;
+    const select = useCallback(
+        (id: number | null) => { router.replace(groupReportUrl(id, { from, to })); },
+        [router, from, to],
+    );
 
     /** `silent` keeps the table on screen while it re-reads — a live update, and
      *  a change of dates, must not blank a report someone is reading. Only the
@@ -164,7 +177,7 @@ export function GroupReportExplorer() {
     useRealtimeTopics(["ledger"], () => { load(); });
 
     useEscape(() => {
-        if (selectedId) setSelectedId(null);
+        if (selectedId) select(null);
         else router.back();
     });
 
@@ -193,6 +206,11 @@ export function GroupReportExplorer() {
     );
 
     const selectedSide: Side = selected ? defaultNormalBalanceForGroupType(selected.type) : "DEBIT";
+
+    // Note: Stock-in-Hand needs no special case here. The old detail page had to
+    // bounce it to the stock summary because its API knew nothing about stock;
+    // the trial-balance read behind this screen synthesises Closing Stock (live),
+    // so the group shows its real figure like any other.
 
     // ── Selected group: its sub-groups as labelled blocks, then its own ledgers ──
     const renderDetailRows = (node: GroupNode, depth: number): React.ReactNode[] => {
@@ -272,7 +290,7 @@ export function GroupReportExplorer() {
                         <BreadcrumbItem>
                             {selected ? (
                                 <BreadcrumbLink asChild>
-                                    <button type="button" onClick={() => setSelectedId(null)} className="transition-colors hover:text-foreground">
+                                    <button type="button" onClick={() => select(null)} className="transition-colors hover:text-foreground">
                                         Group Report
                                     </button>
                                 </BreadcrumbLink>
@@ -298,7 +316,7 @@ export function GroupReportExplorer() {
                     search={search}
                     onSearchChange={setSearch}
                     searchPlaceholder="Search group or parent…"
-                    onTitleClick={selectedId ? () => setSelectedId(null) : undefined}
+                    onTitleClick={selectedId ? () => select(null) : undefined}
                     isEmpty={filtered.length === 0}
                     emptyMessage={search ? "No matches" : "No groups"}
                 >
@@ -310,7 +328,7 @@ export function GroupReportExplorer() {
                             <button
                                 key={g.id}
                                 type="button"
-                                onClick={() => setSelectedId(g.id)}
+                                onClick={() => select(g.id)}
                                 className={cn(
                                     "w-full border-b px-4 py-3 text-left transition-colors hover:bg-muted/50",
                                     selectedId === g.id
@@ -397,7 +415,7 @@ export function GroupReportExplorer() {
                                                         <tr
                                                             key={g.id}
                                                             className="cursor-pointer border-t hover:bg-muted/40"
-                                                            onClick={() => setSelectedId(g.id)}
+                                                            onClick={() => select(g.id)}
                                                         >
                                                             <td
                                                                 style={{ paddingLeft: 12 + g.depth * 14 }}

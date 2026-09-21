@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 
 export type DrillTarget =
     | { kind: "group";    id: number }
@@ -25,15 +26,10 @@ export function DrillRow({ target, period, children, className = "", onClick }: 
     const router = useRouter();
 
     const url = useMemo(() => {
-        const qs = new URLSearchParams();
-        if (period?.from) qs.set("from", period.from);
-        if (period?.to)   qs.set("to",   period.to);
-        if (period?.asOf) qs.set("asOf", period.asOf);
-        const q = qs.toString();
-        const tail = q ? `?${q}` : "";
-
+        // Group and ledger URLs are built by their own builders, which attach
+        // the period themselves — nothing to assemble here.
         switch (target.kind) {
-            case "group":   return `/office/accountancy/masters/groups/${target.id}${tail}`;
+            case "group":   return groupReportUrl(target.id, period);
             case "ledger":  return accountLedgerUrl(target.id, period);
             case "journal": return `/vouchers/journal-entries/${target.id}`;
             case "voucher": return target.url;

@@ -14,6 +14,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
@@ -295,7 +296,7 @@ export default function TrialBalancePage() {
         if (id <= 0) return;
         router.push(accountLedgerUrl(id, { from, to }));
     };
-    const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
+    const goGroup  = (id: number) => router.push(groupReportUrl(id, { from, to }));
 
     // Grand-total columns — balanced after folding the opening-difference plug
     // into both Opening and Closing on the deficient side.

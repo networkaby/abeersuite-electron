@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
@@ -205,7 +206,7 @@ export default function ProfitLossPage() {
         return next;
     });
     const goLedger = (id: number) => router.push(accountLedgerUrl(id, { from, to }));
-    const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
+    const goGroup  = (id: number) => router.push(groupReportUrl(id, { from, to }));
 
     const tradingDr = data
         ? data.trading.debit.openingStock + data.trading.debit.purchaseAccounts + data.trading.debit.directExpenses

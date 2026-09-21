@@ -41,6 +41,7 @@ import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
+import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,7 +441,7 @@ export function AccountLedgerExplorer({
                                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                                             {detail.account.groupName && (
                                                 <Link
-                                                    href={`/office/accountancy/masters/groups/${detail.account.groupId}`}
+                                                    href={groupReportUrl(detail.account.groupId)}
                                                     className="inline-block"
                                                 >
                                                     <Badge variant="secondary" className="text-xs hover:bg-secondary/80">
