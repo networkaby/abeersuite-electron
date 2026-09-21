@@ -139,10 +139,12 @@ function Header({ detail, canAppoint, onAppoint }: {
                 )}
             </div>
             {/* One action only. Everything that used to link out to Administration
-                now lives on the tabs below. */}
-            {canAppoint && !left && (
+                now lives on the tabs below. Hidden once an active staff member is
+                already appointed — Job/Pay tabs cover edits from there. Only a new
+                hire (no joinedOn) or a rejoin (left) needs this dialog. */}
+            {canAppoint && (left || !profile?.joinedOn) && (
                 <Button type="button" variant="outline" size="sm" onClick={onAppoint}>
-                    <UserPlus size={14} /> {profile?.joinedOn ? "Re-appoint" : "Appoint"}
+                    <UserPlus size={14} /> {left ? "Re-appoint" : "Appoint"}
                 </Button>
             )}
         </div>
