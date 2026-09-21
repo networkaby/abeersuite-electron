@@ -8,6 +8,7 @@ import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
+import { DEFAULT_IDLE_LIMIT_MINUTES, idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
 
 /** One seat a person holds: what they are called, and where it sits. */
 export type StaffSeat = { title: string; scope: string };
@@ -32,6 +33,9 @@ export type StaffAuthUser = {
      *  under the name; `title` above still wins when somebody has typed one in. */
     seats: StaffSeat[];
     avatarUrl?: string;
+    /** Minutes away before this person is signed out. Their own, or the default —
+     *  a counter manager and a technician cannot share one number. */
+    idleLimitMinutes: number;
     kind: "staff";
 };
 
@@ -68,6 +72,7 @@ function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | nu
         departmentIds: [],
         branchIds: [],
         seats: [],
+        idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES,   // the env bypass has no HR row
         kind: "staff",
     };
 }
@@ -139,7 +144,9 @@ async function findStaffUser(prisma: PrismaClient, email: string) {
             },
             // HR & People — a person marked as left is refused below, on both
             // sign-in paths, from the date on their record.
-            staffProfile: { select: { leftOn: true } },
+            // `idleLimitMinutes` rides the sign-in so the client's idle timer knows
+            // this person's own limit without a request of its own — see dutyTime.ts.
+            staffProfile: { select: { leftOn: true, idleLimitMinutes: true } },
             userPositions: {
                 include: {
                     position: {
@@ -329,6 +336,7 @@ async function buildStaffAuthUser(prisma: PrismaClient, user: StaffUserRow): Pro
         title: user.title ?? undefined,
         seats,
         avatarUrl: user.avatarUrl ?? undefined,
+        idleLimitMinutes: idleLimitMinutesFor(user.staffProfile?.idleLimitMinutes),
         kind: "staff",
     };
 }

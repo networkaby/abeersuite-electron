@@ -1558,6 +1558,7 @@ CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "dutyMinutes" INTEGER,
     "dutyStart" VARCHAR(5),
     "dutyEnd" VARCHAR(5),
+    "idleLimitMinutes" INTEGER,
     "fatherName" TEXT,
     "address" TEXT,
     "bloodGroup" TEXT,
@@ -1585,6 +1586,7 @@ ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "weeklyOff" INTEGER[] DEFA
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyMinutes" INTEGER;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyStart" VARCHAR(5);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyEnd" VARCHAR(5);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "idleLimitMinutes" INTEGER;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bloodGroup" TEXT;

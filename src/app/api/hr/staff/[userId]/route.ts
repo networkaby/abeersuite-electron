@@ -110,6 +110,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
             dutyMinutes:      body.dutyMinutes,
             dutyStart:        body.dutyStart,
             dutyEnd:          body.dutyEnd,
+            idleLimitMinutes: body.idleLimitMinutes,
             fatherName:       body.fatherName,
             address:          body.address,
             bloodGroup:       body.bloodGroup,

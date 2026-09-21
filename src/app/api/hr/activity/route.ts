@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { stampActivity } from "@/shared/lib/hr/attendanceStamp";
 import { thisCounterId } from "@/shared/lib/auth/counterPin";
+import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 
 /**
  * POST /api/hr/activity — "somebody is still here".
@@ -21,7 +22,12 @@ export async function POST() {
     const { user, response } = await requireAuth();
     if (response) return response;
     try {
-        const workedMinutes = await stampActivity(prisma, Number(user!.id), thisCounterId());
+        // The same limit the client is counting down, taken from the session rather
+        // than read again — the two must agree or a gap the client called work would
+        // be dropped here as idle.
+        const workedMinutes = await stampActivity(
+            prisma, Number(user!.id), thisCounterId(), new Date(), idleLimitMsFor(user!.idleLimitMinutes),
+        );
         return NextResponse.json({ workedMinutes });
     } catch (e) {
         return handleApiError(e);

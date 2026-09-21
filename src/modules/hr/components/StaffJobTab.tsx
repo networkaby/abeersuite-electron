@@ -21,7 +21,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
-import { DEFAULT_DUTY_END, DEFAULT_DUTY_START, dutyMinutesFor, formatWorked } from "@/shared/lib/hr/dutyTime";
+import { DEFAULT_DUTY_END, DEFAULT_DUTY_START, DEFAULT_IDLE_LIMIT_MINUTES, dutyMinutesFor, formatWorked } from "@/shared/lib/hr/dutyTime";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABELS } from "@/shared/lib/schemas/hrSchema";
 import type { StaffDetail } from "../lib/staffTypes";
@@ -259,6 +259,34 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                             />
                             <span className="text-sm text-muted-foreground">hours</span>
                             <FieldSaveMark state={stateOf("dutyMinutes")} />
+                        </div>
+                    )}
+                </Field>
+
+                <Field label="Signed out after" hint={`Minutes away from the app before this person is signed out — and the gap stops counting as duty. A counter hand needs a short one, a technician a long one. Blank = ${DEFAULT_IDLE_LIMIT_MINUTES}.`}>
+                    {(id) => (
+                        <div className="flex items-center gap-1">
+                            <Input
+                                id={id}
+                                type="number"
+                                step="5"
+                                min="5"
+                                max="360"
+                                placeholder={String(DEFAULT_IDLE_LIMIT_MINUTES)}
+                                defaultValue={profile?.idleLimitMinutes ?? ""}
+                                className="h-9 w-24 text-sm"
+                                onBlur={(e) => { const v = e.target.value.trim(); void save({
+                                    key: "idleLimitMinutes",
+                                    original: profile?.idleLimitMinutes ? String(profile.idleLimitMinutes) : "",
+                                    next: v,
+                                    write: (m) => patch({ idleLimitMinutes: m ? Number(m) : null }),
+                                    revert: (m) => { e.target.value = m; },
+                                    label: "Signed out after",
+                                    onSaved: onChanged,
+                                }); }}
+                            />
+                            <span className="text-sm text-muted-foreground">minutes idle</span>
+                            <FieldSaveMark state={stateOf("idleLimitMinutes")} />
                         </div>
                     )}
                 </Field>

@@ -18,6 +18,8 @@ export interface StaffProfileDto {
     /** Office hours "HH:MM" in shop time; null = the shop default. */
     dutyStart: string | null;
     dutyEnd: string | null;
+    /** Minutes away before sign-out; null = the default. */
+    idleLimitMinutes: number | null;
     fatherName: string | null;
     address: string | null;
     bloodGroup: string | null;

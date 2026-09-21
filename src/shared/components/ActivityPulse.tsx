@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
-import { IDLE_LIMIT_MS, IDLE_WARNING_MS } from "@/shared/lib/hr/dutyTime";
+import { IDLE_WARNING_MS, idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 
 /**
  * Two jobs, one listener: keep the day's worked minutes honest, and sign out a
@@ -33,6 +34,14 @@ const PULSE_EVERY_MS = 4 * 60 * 1000;
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "touchstart", "wheel"] as const;
 
 export default function ActivityPulse() {
+    // This person's own limit, carried on the session token so there is no request
+    // to make for it. A counter manager's twenty minutes and a technician's three
+    // hours are both right — for them. Falls back to the default until the session
+    // has resolved, which only matters for the first few seconds after a load.
+    const { data: session } = useSession();
+    const idleLimitMs = idleLimitMsFor(
+        (session?.user as { idleLimitMinutes?: number } | undefined)?.idleLimitMinutes,
+    );
     // Seeded in the effect, not here: reading the clock during render is impure
     // (react-hooks/purity) and on a re-render would quietly restart the idle timer.
     const lastInputAt = useRef(0);
@@ -58,13 +67,13 @@ export default function ActivityPulse() {
             const idleFor = now - lastInputAt.current;
 
             // ── Idle: warn, then end it ──────────────────────────────────────
-            if (idleFor >= IDLE_LIMIT_MS) {
+            if (idleFor >= idleLimitMs) {
                 markDeliberateSignOut();   // not a dead session — this one is explained here
                 toast.error("Signed out — the counter was left idle. Sign in again to carry on.");
                 void signOut({ redirect: false }).finally(() => window.location.assign("/staff/login"));
                 return;
             }
-            if (!warned.current && idleFor >= IDLE_LIMIT_MS - IDLE_WARNING_MS) {
+            if (!warned.current && idleFor >= idleLimitMs - IDLE_WARNING_MS) {
                 warned.current = true;
                 toast("Still there? You will be signed out shortly.", { duration: IDLE_WARNING_MS });
             }
@@ -83,7 +92,7 @@ export default function ActivityPulse() {
             for (const e of ACTIVITY_EVENTS) window.removeEventListener(e, onInput);
             clearInterval(tick);
         };
-    }, []);
+    }, [idleLimitMs]);
 
     return null;
 }

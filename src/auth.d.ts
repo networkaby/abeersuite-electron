@@ -6,6 +6,8 @@ declare module "next-auth" {
         role:          string;
         roles:         string[];
         permissions:   string[];
+        /** Minutes away before this person is signed out (dutyTime.ts). */
+        idleLimitMinutes: number;
         rank:          number;
         scope:         string;
         roleLabel?:    string;
@@ -26,6 +28,7 @@ declare module "next-auth" {
             role:           string;
             roles:          string[];
             permissions:    string[];
+            idleLimitMinutes: number;
             rank:           number;
             scope:          string;
             roleLabel?:     string;
@@ -55,6 +58,7 @@ declare module "next-auth/jwt" {
         role?:         string;
         roles?:        string[];
         permissions?:  string[];
+        idleLimitMinutes?: number;
         rank?:         number;
         scope?:        string;
         roleLabel?:     string;

@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
+import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
 import { canDoPosVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
@@ -19,6 +20,9 @@ export interface ResolvedUser {
     primaryRole:   string;
     roles:         string[];
     permissions:   string[];
+    /** Minutes away before this person is signed out — their own, or the default.
+     *  Carried here so a route can apply it without a second read (dutyTime.ts). */
+    idleLimitMinutes: number;
     rank:          number;
     scope:         string;
     departmentIds: string[];
@@ -30,6 +34,7 @@ type SessionUserShape = {
     role?:          string;
     roles?:         string[];
     permissions?:   string[];
+    idleLimitMinutes?: number;
     rank?:          number;
     scope?:         string;
     departmentIds?: string[];
@@ -42,6 +47,7 @@ function resolveFromSession(sessionUser: SessionUserShape): ResolvedUser {
         primaryRole:   sessionUser.role ?? "",
         roles:         sessionUser.roles ?? [sessionUser.role ?? ""],
         permissions:   sessionUser.permissions ?? [],
+        idleLimitMinutes: idleLimitMinutesFor(sessionUser.idleLimitMinutes),
         rank:          sessionUser.rank ?? 0,
         scope:         sessionUser.scope ?? "OWN",
         departmentIds: sessionUser.departmentIds ?? [],

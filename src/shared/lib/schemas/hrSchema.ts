@@ -22,7 +22,7 @@ const optText = (max: number) => z.string().trim().max(max).nullable().optional(
 
 /** The job-side fields — only HR (hr:staff:edit) may send these. */
 export const STAFF_JOB_KEYS = [
-    "staffCode", "joinedOn", "leftOn", "leftReason", "employmentType", "weeklyOff", "dutyMinutes", "dutyStart", "dutyEnd",
+    "staffCode", "joinedOn", "leftOn", "leftReason", "employmentType", "weeklyOff", "dutyMinutes", "dutyStart", "dutyEnd", "idleLimitMinutes",
 ] as const;
 
 /** The personal-side fields — a person may also send these about themselves. */
@@ -48,6 +48,9 @@ export const staffProfilePatchSchema = z.object({
         .or(z.literal("").transform(() => null)),
     dutyEnd:          z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 20:30").nullable().optional()
         .or(z.literal("").transform(() => null)),
+    /** Minutes away before this person is signed out. Capped at the session
+     *  backstop — a longer figure is a promise the session would break first. */
+    idleLimitMinutes: z.number().int().min(5).max(6 * 60).nullable().optional(),
     // personal
     fatherName:       optText(120),
     address:          optText(500),

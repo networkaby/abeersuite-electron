@@ -5,6 +5,7 @@ import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/auth/sessionAge";
+import { DEFAULT_IDLE_LIMIT_MINUTES } from "@/shared/lib/hr/dutyTime";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -76,6 +77,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         ? (user.permissions as string[])
                         : [];
                 token.rank = "rank" in user && typeof user.rank === "number" ? user.rank : 0;
+                // Carried on the token so the client's idle timer knows this person's
+                // own limit from the first render, with no request of its own.
+                token.idleLimitMinutes =
+                    "idleLimitMinutes" in user && typeof user.idleLimitMinutes === "number"
+                        ? user.idleLimitMinutes
+                        : DEFAULT_IDLE_LIMIT_MINUTES;
                 token.scope = "scope" in user && typeof user.scope === "string" ? user.scope : "OWN";
                 token.roleLabel =
                     "roleLabel" in user && typeof user.roleLabel === "string" ? user.roleLabel : undefined;
@@ -151,6 +158,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     role: string;
                     roles: string[];
                     permissions: string[];
+                    idleLimitMinutes: number;
                     rank: number;
                     scope: string;
                     roleLabel?: string;
@@ -170,6 +178,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 sessionUser.roles = Array.isArray(token.roles) ? (token.roles as string[]) : [sessionUser.role];
                 sessionUser.permissions = Array.isArray(token.permissions) ? (token.permissions as string[]) : [];
                 sessionUser.rank = typeof token.rank === "number" ? token.rank : 0;
+                sessionUser.idleLimitMinutes =
+                    typeof token.idleLimitMinutes === "number" ? token.idleLimitMinutes : DEFAULT_IDLE_LIMIT_MINUTES;
                 sessionUser.scope = typeof token.scope === "string" ? token.scope : "OWN";
                 sessionUser.roleLabel = typeof token.roleLabel === "string" ? token.roleLabel : undefined;
                 sessionUser.roleColor = typeof token.roleColor === "string" ? token.roleColor : undefined;

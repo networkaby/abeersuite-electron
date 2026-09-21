@@ -54,6 +54,7 @@ export function toStaffProfileDto(p: StaffProfileWithRels): StaffProfileDto {
         dutyMinutes: p.dutyMinutes,
         dutyStart: p.dutyStart,
         dutyEnd: p.dutyEnd,
+        idleLimitMinutes: p.idleLimitMinutes,
         fatherName: p.fatherName,
         address: p.address,
         bloodGroup: p.bloodGroup,

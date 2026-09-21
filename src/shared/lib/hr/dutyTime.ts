@@ -29,7 +29,42 @@
  * above any plausible gap between customers and below a tea break, and the person
  * is warned before it fires (see IDLE_WARNING_MS) so it never arrives as a shock.
  */
-export const IDLE_LIMIT_MS = 45 * 60 * 1000;
+export const DEFAULT_IDLE_LIMIT_MINUTES = 45;
+
+/** The default as milliseconds, for anyone with no personal limit set. */
+export const IDLE_LIMIT_MS = DEFAULT_IDLE_LIMIT_MINUTES * 60 * 1000;
+
+/**
+ * The longest a personal limit may be, in minutes.
+ *
+ * The session itself ends after SESSION_IDLE_MAX_AGE_MS (6 hours) no matter what
+ * — that backstop exists for a machine with the app shut, where no client-side
+ * timer is running at all. A personal limit above it would be a promise this code
+ * cannot keep: the session would go first and the person would be signed out
+ * earlier than their own setting said. So it is capped, and the cap is honest.
+ */
+export const MAX_IDLE_LIMIT_MINUTES = 6 * 60;
+
+/**
+ * How long THIS person may be away before they are signed out — and before the
+ * gap stops counting as duty.
+ *
+ * Owner, 2026-09-22: *"suppose counter manager need to be at counter every time
+ * but a technician not. it's not same for everyone."* A till manager away from
+ * the counter for twenty minutes is a real absence; a technician with his head in
+ * a machine, or out on a job, is working the whole time and must not be docked
+ * for it. One number could only ever be wrong for one of them.
+ */
+export function idleLimitMinutesFor(profileIdleLimitMinutes: number | null | undefined): number {
+    const m = profileIdleLimitMinutes;
+    if (!m || m <= 0) return DEFAULT_IDLE_LIMIT_MINUTES;
+    return Math.min(m, MAX_IDLE_LIMIT_MINUTES);
+}
+
+/** The same, in milliseconds. */
+export function idleLimitMsFor(profileIdleLimitMinutes: number | null | undefined): number {
+    return idleLimitMinutesFor(profileIdleLimitMinutes) * 60 * 1000;
+}
 
 /** Warn this long before the axe, with a way to stay signed in. */
 export const IDLE_WARNING_MS = 2 * 60 * 1000;
@@ -171,9 +206,9 @@ export function formatWorked(minutes: number): string {
  * "treat the idle time as absent", and it holds whether or not the auto-logout
  * actually fired: a machine left on all night simply contributes one ignored gap.
  */
-export function creditableMinutes(previousSeenAt: Date | null, now: Date): number {
+export function creditableMinutes(previousSeenAt: Date | null, now: Date, idleLimitMs = IDLE_LIMIT_MS): number {
     if (!previousSeenAt) return 0;
     const gapMs = now.getTime() - previousSeenAt.getTime();
-    if (gapMs <= 0 || gapMs > IDLE_LIMIT_MS) return 0;
+    if (gapMs <= 0 || gapMs > idleLimitMs) return 0;
     return Math.round(gapMs / 60000);
 }

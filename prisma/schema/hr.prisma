@@ -45,6 +45,11 @@ model StaffProfile {
   /// an unpaid break). Null = the shop's default, shared/lib/hr/dutyTime.ts.
   dutyStart      String? @db.VarChar(5)
   dutyEnd        String? @db.VarChar(5)
+  /// Minutes away from the app before this person is signed out — and before the
+  /// gap stops counting as duty. Null = the default (45). A counter manager needs
+  /// a short one, a technician a long one; one number cannot serve both. Capped
+  /// at the session backstop, shared/lib/hr/dutyTime.ts.
+  idleLimitMinutes Int?
 
   // Personal / KYC — edited on the person's own profile page (self or admin).
   fatherName     String?

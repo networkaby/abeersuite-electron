@@ -24,7 +24,7 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
-import { creditableMinutes } from "@/shared/lib/hr/dutyTime";
+import { IDLE_LIMIT_MS, creditableMinutes } from "@/shared/lib/hr/dutyTime";
 
 type Db = Pick<PrismaClient, "attendanceDay">;
 
@@ -124,7 +124,13 @@ export async function stampAttendanceOut(
  *
  * Returns the day's running total, so the screen can show it without a second read.
  */
-export async function stampActivity(db: Db, userId: number, counterId: number | null, at = new Date()): Promise<number> {
+export async function stampActivity(
+    db: Db,
+    userId: number,
+    counterId: number | null,
+    at = new Date(),
+    idleLimitMs = IDLE_LIMIT_MS,
+): Promise<number> {
     try {
         const date = dayOf(businessTodayIso(at));
         const row = await db.attendanceDay.findUnique({
@@ -141,7 +147,7 @@ export async function stampActivity(db: Db, userId: number, counterId: number | 
             return 0;
         }
 
-        const add = creditableMinutes(row.lastSeenAt, at);
+        const add = creditableMinutes(row.lastSeenAt, at, idleLimitMs);
         await db.attendanceDay.update({
             where: { userId_date: { userId, date } },
             data:  { lastSeenAt: at, workedMinutes: { increment: add } },
