@@ -69,7 +69,7 @@ export function RoleFields({
         <div className="space-y-2">
             <div>
                 <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                    Department <span className="font-normal">(authoring lens — which permissions this role can hold)</span>
+                    Department <span className="font-normal">(the basket — which modules this role can tick)</span>
                 </label>
                 <Select
                     value={form.departmentId || undefined}
@@ -88,7 +88,7 @@ export function RoleFields({
                 </Select>
                 {selectedDept && !selectedDept.isAllAccess && (
                     <p className="mt-1 text-[10px] text-muted-foreground">
-                        Only permissions in {selectedDept.name}&apos;s pool are offered. Moving a role to another department strips grants outside the new pool.
+                        Only the modules in {selectedDept.name}&apos;s basket are offered here — the basket decides what is shown, never what is saved. Moving a role to another department strips grants outside the new basket.
                     </p>
                 )}
             </div>

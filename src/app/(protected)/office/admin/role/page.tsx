@@ -448,7 +448,7 @@ export default function RolePage() {
                                                 <span className="text-foreground">
                                                     {"Lens: "}
                                                     <span className="font-semibold">{activeRole.department?.name ?? "—"}</span>
-                                                    {` department · showing ${lensSize} of ${totalCount} permissions in its pool. `}
+                                                    {` department · showing ${lensSize} of ${totalCount} permissions in its basket. `}
                                                     <span className="text-muted-foreground">Edit the pool on the Departments page.</span>
                                                 </span>
                                             )}
