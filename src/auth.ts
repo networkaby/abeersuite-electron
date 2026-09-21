@@ -4,7 +4,6 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
-import { PIN_PASSWORD_MAX_AGE_MS } from "@/shared/lib/auth/counterPin";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -23,31 +22,39 @@ const SESSION_COOKIE_NAME = "authjs.session-token";
 const SECURE_COOKIES =
     !!process.env.VERCEL || /^https:/i.test(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "");
 
+/** Stay signed in this long since the last request — see the session block below. */
+const SESSION_IDLE_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     trustHost: true,
     /**
-     * A session lasts exactly as long as a PIN may stand in for a password, and
-     * every request pushes that back.
+     * A session ends overnight, so every morning starts with the PIN screen.
      *
-     * The two clocks used to disagree, and the longer one won by default. The PIN
-     * rules (counterPin.ts) send a cashier back to their password after 10 days —
-     * but they are only read AT the sign-in screen, and Auth.js's own default kept
-     * a session 30 days and re-issued it on use. So anyone who never signed out
-     * never reached the screen, and the 10-day rule never ran for them at all. On
-     * live, user 38 last authenticated on 19 Sep and was still validly signed in on
-     * the 21st, which is how a worked day ended up with no arrival time recorded.
+     * Three clocks, and each one has its own job. The two in counterPin.ts govern
+     * how long the PIN itself may stand in for a password — 10 days of regular use,
+     * or 3 days idle. This one governs something else entirely: how long you stay
+     * signed in WITHOUT signing in. Left at Auth.js's default it was 30 days and
+     * rolling, which meant a till in daily use never reached the sign-in screen at
+     * all — so the PIN was never asked for, and the 10-day password rule never ran
+     * for anyone who did not sign out. On live, user 38 last authenticated on 19 Sep
+     * and was still validly signed in on the 21st.
      *
-     * Tying maxAge to PIN_PASSWORD_MAX_AGE_MS makes it one number instead of two:
-     * shorten the PIN rule and the session follows, and neither can drift past the
-     * other. `updateAge: 0` re-issues on every request, so the clock measures time
-     * SINCE LAST USE — a till worked every day is never interrupted mid-shift, and
-     * a machine left idle falls due on the same 10 days as the PIN it is standing
-     * in for. No DB read: the token is re-signed, nothing is looked up.
+     * 8 hours, measured since LAST USE (`updateAge: 0` re-issues the token on every
+     * request, re-signing it without reading the database). The number comes from
+     * the shop's own hours, not from a round figure: tills open 10:30–12:20 and
+     * close 20:30–22:18, so the shortest night is about 12 hours and the longest
+     * quiet spell inside a trading day is nothing like 8. It therefore lapses every
+     * night and never mid-shift. A cashier who somehow does idle 8 hours in a day
+     * taps their photo and six digits again — the cheap way to be wrong.
+     *
+     * Do NOT tie this to PIN_PASSWORD_MAX_AGE_MS. They look like the same idea and
+     * are opposites: that one is how long the PIN lasts, this is how soon the PIN is
+     * asked for. Making this the longer of the two is what hid the bug above.
      */
     session: {
         strategy:  "jwt",
-        maxAge:    PIN_PASSWORD_MAX_AGE_MS / 1000,   // seconds
+        maxAge:    SESSION_IDLE_MAX_AGE_MS / 1000,   // seconds
         updateAge: 0,                                 // refresh on every use
     },
     cookies: {
