@@ -47,6 +47,15 @@ export async function GET(req: NextRequest) {
     const branchParam = searchParams.get("branchId");
     const accountIdParam = searchParams.get("accountId");
     const ticketIdParam = searchParams.get("ticketId");
+    // Optional date window on the spine's `date` (yyyy-mm-dd, inclusive). Lets a
+    // picker ask for "the last N days" instead of pulling every voucher.
+    const isDay = (v: string | null): v is string => v != null && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    const dateWindow = {
+        ...(isDay(fromParam) ? { gte: new Date(`${fromParam}T00:00:00.000Z`) } : {}),
+        ...(isDay(toParam) ? { lte: new Date(`${toParam}T23:59:59.999Z`) } : {}),
+    };
     // Only rows RAISED at this counter — the POS register's "Only this counter".
     const counterIdRaw = Number(searchParams.get("counterId"));
     const counterId = Number.isInteger(counterIdRaw) && counterIdRaw > 0 ? counterIdRaw : null;
@@ -92,6 +101,7 @@ export async function GET(req: NextRequest) {
         ...(branchScopeId ? { branchId: branchScopeId } : {}),
         // "Only this counter" on the POS register (Orders / Estimates tabs).
         ...(counterId != null ? { sourceCounterId: counterId } : {}),
+        ...(Object.keys(dateWindow).length > 0 ? { date: dateWindow } : {}),
     };
     const vouchers = await prisma.voucherDetail.findMany({
         where: {

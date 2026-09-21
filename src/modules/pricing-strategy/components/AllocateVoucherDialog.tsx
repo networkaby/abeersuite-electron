@@ -19,6 +19,9 @@ import { parseRupeesToPaise } from "@/shared/lib/format";
 // The pool entry being allocated (subset of the Costing page's PoolEntry).
 export interface AllocEntry {
     glLineId: number;
+    /// The courier/freight entry's own date — the voucher window is counted
+    /// back from here, not from today, so the bills it paid for are in range.
+    date: string;
     ledgerName: string;
     reference: string;
     remainingPaise: number;
@@ -43,6 +46,15 @@ interface VoucherLine {
 }
 
 const rupee = (paise: number): string => `₹${(paise / 100).toFixed(2)}`;
+/// yyyy-mm-dd, `days` days back from (and including) `isoDate`.
+function daysBefore(isoDate: string, days: number): string {
+    // Work in UTC throughout: a local Date + toISOString() slides the day back
+    // by one in IST (00:00 IST is the previous day in UTC).
+    const d = new Date(`${isoDate.slice(0, 10)}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() - (days - 1));
+    return d.toISOString().slice(0, 10);
+}
+const DEFAULT_DAYS = 7;
 const paiseToStr = (paise: number): string => (paise / 100).toFixed(2);
 
 export function AllocateVoucherDialog({
@@ -51,6 +63,9 @@ export function AllocateVoucherDialog({
     const open = entry != null;
     const [vouchers, setVouchers] = useState<VoucherListItem[]>([]);
     const [vouchersLoaded, setVouchersLoaded] = useState(false);
+    // How far back from the entry's date to look for purchases/GRNs. Keeps the
+    // list short and the read small — the API filters by date, not the browser.
+    const [days, setDays] = useState(String(DEFAULT_DAYS));
     const [voucherId, setVoucherId] = useState<number | null>(null);
     // Phase 5 5B: the picked voucher's UniversalVoucher spine id — cost-pool draws
     // key by the spine now, while the line/detail fetch still uses the InvVoucher id.
@@ -71,13 +86,20 @@ export function AllocateVoucherDialog({
 
     function resetInputs() { setPerUnit({}); setLineAmt({}); }
 
-    // Load the purchase/GRN voucher list lazily on first open.
+    // Load the purchase/GRN voucher list — the window ends on the entry's own
+    // date and reaches `days` back. Refetches when the window changes.
+    const windowDays = Math.max(1, Math.min(365, Number(days) || DEFAULT_DAYS));
+    const to = entry ? entry.date.slice(0, 10) : null;
+    const from = to ? daysBefore(to, windowDays) : null;
     useEffect(() => {
-        if (!open || vouchersLoaded) return;
-        axios.get<VoucherListItem[]>("/api/inventory/vouchers?types=PURCHASE,GRN&status=POSTED")
+        if (!open || !from || !to) return;
+        setVouchersLoaded(false);
+        axios.get<VoucherListItem[]>(
+            `/api/inventory/vouchers?types=PURCHASE,GRN&status=POSTED&from=${from}&to=${to}`,
+        )
             .then((r) => { setVouchers(r.data); setVouchersLoaded(true); })
             .catch(() => toast.error("Failed to load vouchers"));
-    }, [open, vouchersLoaded]);
+    }, [open, from, to]);
 
     // Reset per-entry state each time a new entry opens.
     useEffect(() => {
@@ -89,6 +111,7 @@ export function AllocateVoucherDialog({
             resetInputs();
             setExisting({});
             setDistAmount((entry.remainingPaise / 100).toFixed(2));
+            setDays(String(DEFAULT_DAYS));
         }
     }, [open, entry]);
 
@@ -145,7 +168,12 @@ export function AllocateVoucherDialog({
     const voucherOptions = useMemo(
         () => vouchers.map((v) => ({
             value: v.id,
-            label: `${v.reference} · ${v.date.slice(0, 10)}${v.partyName ? " · " + v.partyName : ""} · ${v.lineCount ?? 0} item${v.lineCount === 1 ? "" : "s"}`,
+            // How many product lines the bill carries — that is what the courier
+            // cost gets spread across.
+            label: `${v.reference} · ${v.date.slice(0, 10)}${v.partyName ? " · " + v.partyName : ""} · ${(v.lineCount ?? 0) === 0
+                ? "no item"
+                : `${v.lineCount} item${v.lineCount === 1 ? "" : "s"}`
+                }`,
             searchText: `${v.reference} ${v.partyName ?? ""}`,
         })),
         [vouchers],
@@ -255,7 +283,21 @@ export function AllocateVoucherDialog({
 
                 <div className="flex min-h-0 flex-1 flex-col space-y-3">
                     <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">Purchase / GRN voucher</label>
+                        <div className="flex items-center justify-between gap-2">
+                            <label className="text-xs font-medium text-muted-foreground">Purchase / GRN voucher</label>
+                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                Last
+                                <Input
+                                    inputMode="numeric"
+                                    value={days}
+                                    onChange={(e) => setDays(e.target.value.replace(/[^0-9]/g, ""))}
+                                    onBlur={() => setDays(String(windowDays))}
+                                    className="h-7 w-14 text-center font-mono text-xs"
+                                    aria-label="How many days back to look for purchases"
+                                />
+                                days{from ? <span className="hidden sm:inline">· {from} → {to}</span> : null}
+                            </label>
+                        </div>
                         <SearchableSelect
                             value={voucherId}
                             onChange={pickVoucher}
