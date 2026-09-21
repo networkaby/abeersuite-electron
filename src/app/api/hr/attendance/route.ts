@@ -7,7 +7,7 @@ import { attendanceMarkSchema } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
 import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
-import { dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
+import { dutyHoursFor, dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import type { RegisterPayload, RegisterPerson, HolidayDto } from "@/modules/hr/lib/attendanceTypes";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
 
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
                 orderBy: { name: "asc" },
                 select: {
                     id: true, name: true, avatarUrl: true, role: true,
-                    staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true, dutyMinutes: true } },
+                    staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true, dutyMinutes: true, dutyStart: true, dutyEnd: true } },
                 },
             }),
             prisma.attendanceDay.findMany({
@@ -70,7 +70,9 @@ export async function GET(req: Request) {
                 joinedOn: u.staffProfile?.joinedOn ? toDateOnlyUtc(u.staffProfile.joinedOn) : null,
                 leftOn,
                 weeklyOff: u.staffProfile?.weeklyOff ?? [0],
-                dutyMinutes: dutyMinutesFor(u.staffProfile?.dutyMinutes),
+                dutyMinutes: dutyMinutesFor(u.staffProfile?.dutyMinutes, u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd),
+                dutyStart: dutyHoursFor(u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd).start,
+                dutyEnd:   dutyHoursFor(u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd).end,
                 marks: {}, leaveDays: {},
             });
         }

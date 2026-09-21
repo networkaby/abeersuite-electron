@@ -28,7 +28,7 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
     const from = new Date(`${fromIso}T00:00:00.000Z`);
     const to = new Date(`${toIso}T00:00:00.000Z`);
     const [profile, rows, unpaidLeaves] = await Promise.all([
-        prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true } }),
+        prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true, dutyStart: true, dutyEnd: true } }),
         // Every stored row, not only the three exception statuses: a COUNTER day
         // stored as PRESENT may still grade to HALF or ABSENT on its hours, and
         // filtering by status first would hide exactly those days from payroll.
@@ -41,7 +41,7 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
             select: { fromDate: true, toDate: true },
         }),
     ]);
-    const duty = dutyMinutesFor(profile?.dutyMinutes);
+    const duty = dutyMinutesFor(profile?.dutyMinutes, profile?.dutyStart, profile?.dutyEnd);
     const unpaid = new Set<string>();
     for (const l of unpaidLeaves) {
         const d = new Date(Math.max(l.fromDate.getTime(), from.getTime()));

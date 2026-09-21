@@ -22,7 +22,7 @@ const optText = (max: number) => z.string().trim().max(max).nullable().optional(
 
 /** The job-side fields — only HR (hr:staff:edit) may send these. */
 export const STAFF_JOB_KEYS = [
-    "staffCode", "joinedOn", "leftOn", "leftReason", "employmentType", "weeklyOff",
+    "staffCode", "joinedOn", "leftOn", "leftReason", "employmentType", "weeklyOff", "dutyMinutes", "dutyStart", "dutyEnd",
 ] as const;
 
 /** The personal-side fields — a person may also send these about themselves. */
@@ -39,6 +39,15 @@ export const staffProfilePatchSchema = z.object({
     leftReason:       optText(300),
     employmentType:   z.enum(EMPLOYMENT_TYPES).optional(),
     weeklyOff:        z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    /** A full day's duty in MINUTES. Null falls back to the org default. Capped at
+     *  24h because it is typed in hours and a slip of the finger must not grade a
+     *  whole month absent — every day would fall under the 40% half-day line. */
+    dutyMinutes:      z.number().int().min(30).max(24 * 60).nullable().optional(),
+    /** Office hours as "HH:MM" in shop time — a clock face, never an instant. */
+    dutyStart:        z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 10:30").nullable().optional()
+        .or(z.literal("").transform(() => null)),
+    dutyEnd:          z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 20:30").nullable().optional()
+        .or(z.literal("").transform(() => null)),
     // personal
     fatherName:       optText(120),
     address:          optText(500),

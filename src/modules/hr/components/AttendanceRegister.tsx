@@ -152,9 +152,11 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                 // question is worse than no grade at all, and this is the number
                                                 // the grade was worked out from.
                                                 const worked = r.kind === "marked" && r.workedMinutes ? formatWorked(r.workedMinutes) : "";
+                                                const lateBy = r.kind === "marked" ? (r.lateBy ?? 0) : 0;
                                                 const tip = [
                                                     status ? ATTENDANCE_STATUS_META[status].label : "Unmarked",
                                                     worked ? `${worked} worked${r.kind === "marked" && r.graded ? " (auto)" : ""}` : "",
+                                                    lateBy > 0 ? `late by ${formatWorked(lateBy)}` : "",
                                                     m?.source === "COUNTER" ? `till${m.firstInAt ? ` in ${fmtTime(m.firstInAt)}` : ""}${m.lastOutAt ? ` out ${fmtTime(m.lastOutAt)}` : ""}` : "",
                                                     m?.source === "OFFICE" ? "marked by office" : "",
                                                     m?.note ?? "",
@@ -167,9 +169,15 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                             aria-label={`${p.name}, ${iso}: ${tip}`}
                                                             disabled={!canEdit || iso > today}
                                                             onClick={() => void mark(p.id, iso, stored ? status : null)}
-                                                            className={`inline-flex h-6 w-6 items-center justify-center rounded text-[11px] font-semibold ${status ? CELL[status] : "border border-dashed border-border text-muted-foreground/60"} ${stored && m?.source === "COUNTER" ? "ring-1 ring-emerald-400/60" : ""} ${canEdit && iso <= today ? "cursor-pointer hover:ring-2 hover:ring-primary/40" : "cursor-default"}`}
+                                                            className={`relative inline-flex h-6 w-6 items-center justify-center rounded text-[11px] font-semibold ${status ? CELL[status] : "border border-dashed border-border text-muted-foreground/60"} ${stored && m?.source === "COUNTER" ? "ring-1 ring-emerald-400/60" : ""} ${canEdit && iso <= today ? "cursor-pointer hover:ring-2 hover:ring-primary/40" : "cursor-default"}`}
                                                         >
                                                             {status ? ATTENDANCE_STATUS_META[status].short : ""}
+                                                            {/* A late arrival is not a different STATUS — a full day worked
+                                                                late is still a full day — so it rides as a corner dot rather
+                                                                than changing the letter. */}
+                                                            {lateBy > 0 && (
+                                                                <span aria-hidden className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                            )}
                                                         </button>
                                                     </td>
                                                 );

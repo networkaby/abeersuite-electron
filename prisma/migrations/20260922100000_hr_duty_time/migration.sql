@@ -13,3 +13,10 @@ ALTER TABLE "attendance_days" ADD COLUMN "lastSeenAt" TIMESTAMP(3);
 ALTER TABLE "attendance_days" ADD COLUMN "workedMinutes" INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE "staff_profiles" ADD COLUMN "dutyMinutes" INTEGER;
+
+-- Office hours, "HH:MM" in shop time. They answer who is late, and their length
+-- is the duty day unless dutyMinutes overrides it for an unpaid break. Held as
+-- text, not time: it is a clock face on a wall, never an instant, and a `time`
+-- column invites somebody to compare it against a UTC timestamp directly.
+ALTER TABLE "staff_profiles" ADD COLUMN "dutyStart" VARCHAR(5);
+ALTER TABLE "staff_profiles" ADD COLUMN "dutyEnd" VARCHAR(5);

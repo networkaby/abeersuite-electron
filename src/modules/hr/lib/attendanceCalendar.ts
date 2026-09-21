@@ -3,7 +3,7 @@
 
 import type { AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { RegisterPerson } from "./attendanceTypes";
-import { gradeDay } from "@/shared/lib/hr/dutyTime";
+import { gradeDay, lateMinutes } from "@/shared/lib/hr/dutyTime";
 
 /** ISO dates from `from` to `to`, inclusive. */
 export function isoDaysBetween(from: string, to: string): string[] {
@@ -39,6 +39,8 @@ export type DayReading =
         workedMinutes?: number;
         /** True when the status was worked out from those minutes rather than typed. */
         graded?: boolean;
+        /** Minutes past the person's start time, grace already allowed. 0 = on time. */
+        lateBy?: number;
     };
 
 /**
@@ -58,6 +60,10 @@ export function readDay(person: RegisterPerson, iso: string, holidayDates: Reado
     if (person.leftOn && iso > person.leftOn) return { kind: "outside" };
     const mark = person.marks[iso];
     if (mark) {
+        // Lateness is judged on the arrival alone, so it stands whether or not the
+        // day was graded — a short day and a late start are two different failings
+        // and the register has to be able to say which one happened.
+        const lateBy = lateMinutes(mark.firstInAt, person.dutyStart) ?? undefined;
         if (mark.source === "COUNTER" && mark.workedMinutes > 0) {
             return {
                 kind: "marked",
@@ -66,9 +72,10 @@ export function readDay(person: RegisterPerson, iso: string, holidayDates: Reado
                 source: mark.source,
                 workedMinutes: mark.workedMinutes,
                 graded: true,
+                lateBy,
             };
         }
-        return { kind: "marked", status: mark.status, stored: true, source: mark.source, workedMinutes: mark.workedMinutes };
+        return { kind: "marked", status: mark.status, stored: true, source: mark.source, workedMinutes: mark.workedMinutes, lateBy };
     }
     if (holidayDates.has(iso)) return { kind: "marked", status: "HOLIDAY", stored: false };
     if (person.leaveDays[iso]) return { kind: "marked", status: "LEAVE", stored: false };

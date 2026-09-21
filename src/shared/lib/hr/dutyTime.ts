@@ -44,14 +44,96 @@ export const IDLE_WARNING_MS = 2 * 60 * 1000;
  */
 export const DEFAULT_DUTY_MINUTES = 9 * 60;
 
+/**
+ * The shop's own hours, as "HH:MM" in shop time — when duty starts and ends.
+ *
+ * Two jobs: they say who is LATE, and they give the length of a full day when
+ * nobody has typed one. Defaults read off the real shifts on live, which open
+ * 10:30–12:20 and close 20:30–22:18. Per person on StaffProfile.
+ */
+export const DEFAULT_DUTY_START = "10:30";
+export const DEFAULT_DUTY_END = "20:30";
+
+/**
+ * Arriving within this of the start is not late.
+ *
+ * Not indulgence — precision. A clock that calls 10:31 late makes the whole
+ * column noise, and a column of noise gets ignored, which is worse than not
+ * having it. Fifteen minutes marks the people who are actually late.
+ */
+export const LATE_GRACE_MINUTES = 15;
+
+/** "HH:MM" → minutes past midnight, or null if it is not a time. */
+export function parseHhMm(hhmm: string | null | undefined): number | null {
+    if (!hhmm) return null;
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+    if (!m) return null;
+    const h = Number(m[1]), min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h * 60 + min;
+}
+
+/** Minutes past midnight → "HH:MM". */
+export function formatHhMm(minutes: number): string {
+    const h = Math.floor(minutes / 60) % 24;
+    return `${String(h).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/** The person's office hours, falling back to the shop's. */
+export function dutyHoursFor(start: string | null | undefined, end: string | null | undefined): { start: string; end: string } {
+    return {
+        start: parseHhMm(start) !== null ? start!.trim() : DEFAULT_DUTY_START,
+        end:   parseHhMm(end) !== null ? end!.trim() : DEFAULT_DUTY_END,
+    };
+}
+
 /** At or above this share of duty, the day is full. */
 export const FULL_DAY_FRACTION = 0.75;
 /** At or above this share (but under full), the day is half. */
 export const HALF_DAY_FRACTION = 0.40;
 
-/** The person's duty for one day, in minutes. */
-export function dutyMinutesFor(profileDutyMinutes: number | null | undefined): number {
-    return profileDutyMinutes && profileDutyMinutes > 0 ? profileDutyMinutes : DEFAULT_DUTY_MINUTES;
+/**
+ * The person's duty for one day, in minutes.
+ *
+ * A typed figure wins — that is the override for a day with an unpaid break in
+ * it, where the office hours overstate what is owed. Otherwise it is simply the
+ * length of their office hours, so setting 10:30–20:30 sets a ten-hour day and
+ * there is no second number to keep in step. An end before the start is a night
+ * shift crossing midnight and wraps.
+ */
+export function dutyMinutesFor(
+    profileDutyMinutes: number | null | undefined,
+    start?: string | null,
+    end?: string | null,
+): number {
+    if (profileDutyMinutes && profileDutyMinutes > 0) return profileDutyMinutes;
+    const hours = dutyHoursFor(start, end);
+    const from = parseHhMm(hours.start), to = parseHhMm(hours.end);
+    if (from === null || to === null) return DEFAULT_DUTY_MINUTES;
+    const span = to > from ? to - from : 24 * 60 - from + to;
+    return span > 0 ? span : DEFAULT_DUTY_MINUTES;
+}
+
+/**
+ * How late the arrival was, in minutes — 0 when on time or inside the grace.
+ *
+ * Null when there is nothing to judge: no arrival recorded at all. The arrival is
+ * a UTC instant and the office hours are shop-clock, so the comparison is made in
+ * shop time; doing it in UTC would call everybody five and a half hours late.
+ */
+export function lateMinutes(firstInAt: Date | string | null, startHhMm: string, timeZone = "Asia/Kolkata"): number | null {
+    if (!firstInAt) return null;
+    const at = typeof firstInAt === "string" ? new Date(firstInAt) : firstInAt;
+    if (Number.isNaN(at.getTime())) return null;
+    const start = parseHhMm(startHhMm);
+    if (start === null) return null;
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(at);
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
+    const arrived = get("hour") * 60 + get("minute");
+    const late = arrived - start - LATE_GRACE_MINUTES;
+    return late > 0 ? late : 0;
 }
 
 export type DutyGrade = "PRESENT" | "HALF_DAY" | "ABSENT";

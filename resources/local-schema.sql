@@ -1556,6 +1556,8 @@ CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "employmentType" TEXT NOT NULL DEFAULT 'FULL_TIME',
     "weeklyOff" INTEGER[] DEFAULT ARRAY[0]::INTEGER[],
     "dutyMinutes" INTEGER,
+    "dutyStart" VARCHAR(5),
+    "dutyEnd" VARCHAR(5),
     "fatherName" TEXT,
     "address" TEXT,
     "bloodGroup" TEXT,
@@ -1581,6 +1583,8 @@ ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "leftReason" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "employmentType" TEXT NOT NULL DEFAULT 'FULL_TIME';
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "weeklyOff" INTEGER[] DEFAULT ARRAY[0]::INTEGER[];
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyMinutes" INTEGER;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyStart" VARCHAR(5);
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyEnd" VARCHAR(5);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bloodGroup" TEXT;

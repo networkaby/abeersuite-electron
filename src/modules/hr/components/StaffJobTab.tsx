@@ -21,6 +21,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
+import { DEFAULT_DUTY_END, DEFAULT_DUTY_START, dutyMinutesFor, formatWorked } from "@/shared/lib/hr/dutyTime";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABELS } from "@/shared/lib/schemas/hrSchema";
 import type { StaffDetail } from "../lib/staffTypes";
@@ -43,6 +44,12 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
     const [employmentType, setEmploymentType] = useState(profile?.employmentType ?? "FULL_TIME");
     const [weeklyOff, setWeeklyOff] = useState<number[]>(profile?.weeklyOff ?? [0]);
     const [leaveOpen, setLeaveOpen] = useState(false);
+    // Kept in state only so the "= a N-hour day" line under the boxes follows the
+    // typing. The boxes themselves stay uncontrolled, as the pattern prescribes.
+    const [dutyStart, setDutyStart] = useState(profile?.dutyStart ?? "");
+    const [dutyEnd, setDutyEnd] = useState(profile?.dutyEnd ?? "");
+    const [dutyMinutes, setDutyMinutes] = useState<number | null>(profile?.dutyMinutes ?? null);
+    const dutyDay = dutyMinutesFor(dutyMinutes, dutyStart, dutyEnd);
 
     const left = staffHasLeft(profile);
     const disabled = !canEdit;
@@ -185,6 +192,82 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                         </div>
                     )}
                 </Field>
+
+                <Field label="Office hours" hint={`When duty starts and ends. Arriving more than 15 minutes after the start counts as late. Blank = the shop's ${DEFAULT_DUTY_START}–${DEFAULT_DUTY_END}.`}>
+                    {(id) => (
+                        <div className="flex items-center gap-1">
+                            <Input
+                                id={id}
+                                type="time"
+                                defaultValue={profile?.dutyStart ?? ""}
+                                className="h-9 w-28 text-sm"
+                                onBlur={(e) => { setDutyStart(e.target.value); void save({
+                                    key: "dutyStart",
+                                    original: profile?.dutyStart ?? "",
+                                    next: e.target.value,
+                                    write: (v) => patch({ dutyStart: v || null }),
+                                    revert: (v) => { e.target.value = v; setDutyStart(v); },
+                                    label: "Start",
+                                    onSaved: onChanged,
+                                }); }}
+                            />
+                            <span className="text-sm text-muted-foreground">to</span>
+                            <Input
+                                type="time"
+                                aria-label="Office closing time"
+                                defaultValue={profile?.dutyEnd ?? ""}
+                                className="h-9 w-28 text-sm"
+                                onBlur={(e) => { setDutyEnd(e.target.value); void save({
+                                    key: "dutyEnd",
+                                    original: profile?.dutyEnd ?? "",
+                                    next: e.target.value,
+                                    write: (v) => patch({ dutyEnd: v || null }),
+                                    revert: (v) => { e.target.value = v; setDutyEnd(v); },
+                                    label: "Close",
+                                    onSaved: onChanged,
+                                }); }}
+                            />
+                            <FieldSaveMark state={stateOf("dutyStart")} />
+                            <FieldSaveMark state={stateOf("dutyEnd")} />
+                        </div>
+                    )}
+                </Field>
+
+                <Field label="Paid duty" hint="Leave blank and a full day is simply the office hours. Set it only when part of the day is an unpaid break.">
+                    {(id) => (
+                        <div className="flex items-center gap-1">
+                            <Input
+                                id={id}
+                                type="number"
+                                step="0.5"
+                                min="0.5"
+                                max="24"
+                                placeholder={String(+(dutyMinutesFor(null, dutyStart, dutyEnd) / 60).toFixed(2))}
+                                defaultValue={profile?.dutyMinutes ? String(+(profile.dutyMinutes / 60).toFixed(2)) : ""}
+                                className="h-9 w-24 text-sm"
+                                onBlur={(e) => { const v = e.target.value.trim(); void save({
+                                    key: "dutyMinutes",
+                                    original: profile?.dutyMinutes ? String(+(profile.dutyMinutes / 60).toFixed(2)) : "",
+                                    next: v,
+                                    // Typed in hours because nobody thinks in minutes; stored in
+                                    // minutes because a 7.5-hour day is not a whole number of them.
+                                    write: (h) => { const mins = h ? Math.round(Number(h) * 60) : null; setDutyMinutes(mins); return patch({ dutyMinutes: mins }); },
+                                    revert: (h) => { e.target.value = h; setDutyMinutes(h ? Math.round(Number(h) * 60) : null); },
+                                    label: "Paid duty",
+                                    onSaved: onChanged,
+                                }); }}
+                            />
+                            <span className="text-sm text-muted-foreground">hours</span>
+                            <FieldSaveMark state={stateOf("dutyMinutes")} />
+                        </div>
+                    )}
+                </Field>
+
+                <div className="sm:col-span-2 -mt-2 text-xs text-muted-foreground">
+                    A full day is <strong>{formatWorked(dutyDay)}</strong>. Below 75% of that the register
+                    calls the day half, and below 40% absent — counted from time actually worked, with idle
+                    stretches left out. A mark made here on the register always overrules it.
+                </div>
 
                 <div className="sm:col-span-2">
                     <Field label="Weekly off" hint="The attendance register (a later release) treats these days as paid days off.">

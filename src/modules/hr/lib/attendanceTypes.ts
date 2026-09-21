@@ -22,6 +22,9 @@ export interface RegisterPerson {
     weeklyOff: number[];
     /** A full day's duty for this person, in minutes (the org default when unset). */
     dutyMinutes: number;
+    /** Office hours "HH:MM" in shop time — the start decides who is late. */
+    dutyStart: string;
+    dutyEnd: string;
     /** Stored marks by ISO date. Days absent here are read off the calendar. */
     marks: Record<string, AttendanceMark>;
     /** Approved leave days inside the range, by ISO date → kind. */

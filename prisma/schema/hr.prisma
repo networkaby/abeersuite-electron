@@ -40,6 +40,11 @@ model StaffProfile {
   /// (shared/lib/hr/dutyTime.ts). A part-timer on a four-hour duty who works all
   /// four has done a full day, which a fixed hour rule would call a half.
   dutyMinutes    Int?
+  /// Office hours for THIS person, "HH:MM" in shop time. They say who is late,
+  /// and their length IS the duty day unless dutyMinutes above overrides it (for
+  /// an unpaid break). Null = the shop's default, shared/lib/hr/dutyTime.ts.
+  dutyStart      String? @db.VarChar(5)
+  dutyEnd        String? @db.VarChar(5)
 
   // Personal / KYC — edited on the person's own profile page (self or admin).
   fatherName     String?
