@@ -29,6 +29,21 @@
  * above any plausible gap between customers and below a tea break, and the person
  * is warned before it fires (see IDLE_WARNING_MS) so it never arrives as a shock.
  */
+/**
+ * Is duty time counted for people who are NOT on a counter PC?
+ *
+ * The activity pulse is mounted for every signed-in staff member, so the moment
+ * this is true an office hand working on the website starts accruing a measured,
+ * auto-graded day — and that day reaches payroll. Switching that on for everyone
+ * at once, on a feature that has not yet run for a single real day, is a large
+ * change to make silently.
+ *
+ * So it starts FALSE: tills only, where the shifts give a second independent
+ * record to check the minutes against. Turn it on once a counter has been watched
+ * for a day and the numbers look right — it is this one constant, nothing else.
+ */
+export const TRACK_OFF_COUNTER = false;
+
 export const DEFAULT_IDLE_LIMIT_MINUTES = 45;
 
 /** The default as milliseconds, for anyone with no personal limit set. */

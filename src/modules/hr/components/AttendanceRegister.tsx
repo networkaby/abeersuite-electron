@@ -157,7 +157,10 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                     status ? ATTENDANCE_STATUS_META[status].label : "Unmarked",
                                                     worked ? `${worked} worked${r.kind === "marked" && r.graded ? " (auto)" : ""}` : "",
                                                     lateBy > 0 ? `late by ${formatWorked(lateBy)}` : "",
-                                                    m?.source === "COUNTER" ? `till${m.firstInAt ? ` in ${fmtTime(m.firstInAt)}` : ""}${m.lastOutAt ? ` out ${fmtTime(m.lastOutAt)}` : ""}` : "",
+                                                    // "COUNTER" on the row means the MACHINE wrote it, not that a till
+                                                    // did — the pulse can write one from anywhere. So the times are
+                                                    // named plainly instead of claiming a counter nobody recorded.
+                                                    m?.source === "COUNTER" ? `${m.firstInAt ? `in ${fmtTime(m.firstInAt)}` : ""}${m.lastOutAt ? ` · out ${fmtTime(m.lastOutAt)}` : ""}`.trim() : "",
                                                     m?.source === "OFFICE" ? "marked by office" : "",
                                                     m?.note ?? "",
                                                 ].filter(Boolean).join(" · ");

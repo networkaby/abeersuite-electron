@@ -4,7 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { stampActivity } from "@/shared/lib/hr/attendanceStamp";
 import { thisCounterId } from "@/shared/lib/auth/counterPin";
-import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
+import { TRACK_OFF_COUNTER, idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 
 /**
  * POST /api/hr/activity — "somebody is still here".
@@ -22,11 +22,17 @@ export async function POST() {
     const { user, response } = await requireAuth();
     if (response) return response;
     try {
+        const counterId = thisCounterId();
+        // Off a counter, nothing is recorded yet — see TRACK_OFF_COUNTER. Answering
+        // 200 with no minutes keeps the client simple: it pulses either way and does
+        // not need to know where it is running.
+        if (counterId === null && !TRACK_OFF_COUNTER) return NextResponse.json({ workedMinutes: 0, tracked: false });
+
         // The same limit the client is counting down, taken from the session rather
         // than read again — the two must agree or a gap the client called work would
         // be dropped here as idle.
         const workedMinutes = await stampActivity(
-            prisma, Number(user!.id), thisCounterId(), new Date(), idleLimitMsFor(user!.idleLimitMinutes),
+            prisma, Number(user!.id), counterId, new Date(), idleLimitMsFor(user!.idleLimitMinutes),
         );
         return NextResponse.json({ workedMinutes });
     } catch (e) {
