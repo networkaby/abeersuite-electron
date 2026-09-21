@@ -291,7 +291,7 @@ export default function RolePage() {
 
         setSavingPerms(true);
         try {
-            const res = await axios.put<{ dropped?: { unseeded: string[]; outsidePool: string[] } }>(
+            const res = await axios.put<{ dropped?: { unseeded: string[] } }>(
                 `/api/roles/${activeRole.id}/permissions`,
                 {
                     // Persist only the highest CRUD rung per resource — ticked lowers
@@ -301,11 +301,12 @@ export default function RolePage() {
                 },
             );
             setOriginal(new Set(selected));
-            const { unseeded = [], outsidePool = [] } = res.data.dropped ?? {};
+            // The department pool is an authoring lens, not a save-time gate, so a
+            // ticked box is never refused for being "outside the pool". The only
+            // thing that can still fail to persist is an id with no Permission row.
+            const { unseeded = [] } = res.data.dropped ?? {};
             if (unseeded.length > 0) {
                 toast.warning(`Not saved — not seeded in DB (run pnpm prisma db seed): ${unseeded.join(", ")}`, { duration: 10000 });
-            } else if (outsidePool.length > 0) {
-                toast.warning(`Not saved — outside the department pool: ${outsidePool.join(", ")}`, { duration: 10000 });
             } else {
                 toast.success("Permissions saved");
             }

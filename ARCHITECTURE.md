@@ -55,7 +55,7 @@ Authorization is **liberal by default**. A restriction must be one of three thin
 
 Guard helpers live in `src/shared/lib/auth/` (`requireAuth`, `requirePermission`, `requireVoucherPermission`, `requirePosVoucher`, `requirePortalAuth`). Direction is permission-driven, never role-name checks.
 
-**Department permission pool** (`DepartmentPermission` / `Department.isAllAccess`) is an **authoring-time lens only** — it bounds which permissions a role *may be granted* in the Role editor; it never runs at request time (runtime resolves position → role → grants). See `departmentPool.ts`.
+**Department permission pool** (`DepartmentPermission` / `Department.isAllAccess`) is a **display lens only** — it decides which modules the Role editor *offers for ticking*. It is not a gate at either end: it never runs at request time (runtime resolves position → role → grants), and since 2026-09-21 the Role save no longer re-filters a submitted tick against it either — whatever the editor offered is persisted. A pool change still acts on grants in one place only: taking a module off a department cascade-strips it from that department's roles (`PUT /api/departments/[id]/permissions`). See `departmentPool.ts`.
 
 Sessions revoke instantly on grant changes: mutating routes bump `tokensValidFrom` (`revokeSessions.ts`) so affected users re-log with fresh JWTs.
 
