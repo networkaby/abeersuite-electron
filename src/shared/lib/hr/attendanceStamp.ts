@@ -7,13 +7,17 @@
  * shift close stamps the out time. Both swallow their own errors: a person who
  * cannot be marked present must still be able to sell.
  *
- * 2026-09-22: the sign-in is not the only arrival. It needs `COUNTER_MACHINE_ID`
- * AND the counter setup file, and when either is missing the stamp is skipped in
- * silence — on 21 Sep that left a real day (user 38, counter 1) with an out time
- * at 15:09 and no arrival at all, although their shift had opened at 05:02 and
- * said so. So the SHIFT now stamps too: it reads its counter from the database
- * and cannot be misconfigured away. Sign-in still wins when it fires, because it
- * is the earlier and truer arrival — everything below only ever fills a blank.
+ * 2026-09-22: the sign-in is the wrong event to hang a daily mark on. Sessions are
+ * JWT with no `maxAge` (src/auth.ts), so Auth.js keeps them 30 days: a cashier who
+ * never signs out authenticates once a month, and `authorizeStaffCredentials` — the
+ * only thing that stamped an arrival — simply does not run on the other days. On
+ * live, user 38 last signed in on 19 Sep and worked counter 1 on the 20th and 21st;
+ * the 21st was stored as an out time at 15:09 with no arrival at all, although the
+ * shift had opened at 05:02 and said so. (It is NOT a misconfigured till: the same
+ * `thisCounterId()` gate guards stampCounterPinLogin, and that machine's PIN row
+ * updated fine.) So the SHIFT stamps too — opening a till is a daily event and reads
+ * its counter from the database. Sign-in still wins when it fires, because it is the
+ * earlier and truer arrival; everything below only ever fills a blank.
  */
 
 import type { PrismaClient } from "@/generated/prisma/client";

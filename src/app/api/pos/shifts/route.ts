@@ -296,10 +296,10 @@ export async function POST(req: NextRequest) {
             });
         });
 
-        // HR & People: opening a till is an arrival. The sign-in stamp needs
-        // COUNTER_MACHINE_ID and the setup file and goes quiet when either is
-        // missing; the shift knows its counter from the database, so this one
-        // always fires. It only fills a blank — a real sign-in time stands.
+        // HR & People: opening a till is an arrival, and unlike a sign-in it happens
+        // every working day. A 30-day JWT session means the sign-in stamp can go a
+        // month without firing, so it cannot carry a daily mark on its own. This only
+        // fills a blank — a real sign-in time, being earlier, stands.
         await stampAttendanceIn(prisma, shift.userId, shift.counterId, shift.openedAt);
 
         // Explicit fields only — never spread the Prisma object; BigInt fields
