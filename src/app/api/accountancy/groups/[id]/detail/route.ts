@@ -3,13 +3,14 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import {
-    aggregateClosingAsOf, loadNormalBalanceMap,
+    aggregateClosingAsOf, aggregateRange, loadNormalBalanceMap,
 } from "@/modules/accountancy/lib/aggregateLedger";
-import { groupSign } from "@/modules/accountancy/lib/groupNature";
+import { groupSign, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { startOfDayUtc, endOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -59,10 +60,36 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             return out;
         }
 
-        // Truth-path closing per account from JournalLine, folding in master openings.
+        // Period, read off the same ?from=&to= the report you came from carries.
+        // `asOf` is accepted as a bare end date, the way the Balance Sheet links.
+        //
+        // Bounds are pinned to UTC, not local midnight — see `period.ts` for why
+        // a local bound reads one day early in IST against a `@db.Date` column.
+        const sp = new URL(req.url).searchParams;
+        const ISO = /^\d{4}-\d{2}-\d{2}$/;
+        const fromIso = sp.get("from");
+        const toIso = sp.get("to") ?? sp.get("asOf");
+        const from = fromIso && ISO.test(fromIso) ? startOfDayUtc(fromIso) : null;
+        const toDay = toIso && ISO.test(toIso) ? toIso : businessTodayIso();
+        const to = endOfDayUtc(toDay);
+
+        // Truth-path figures per account from JournalLine, folding in master openings.
         // Shared with the Balance Sheet — guaranteed to agree with the BS / Trial Balance.
+        //
+        // What a date range means depends on the account's nature, exactly as it
+        // does in Tally: an income or expense head shows what MOVED in the period,
+        // while an asset or liability shows where it STOOD at the end of it. With
+        // no `from`, everything is a closing position as of `to`.
         const nbMap = await loadNormalBalanceMap();
-        const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
+        const rangeMap = from ? await aggregateRange(from, to, nbMap) : null;
+        const closingMap = await aggregateClosingAsOf(to, nbMap);
+        const figure = (accountId: number, type: GroupTypeStr) => {
+            if (rangeMap && (type === "INCOME" || type === "EXPENSE")) {
+                const a = rangeMap.get(accountId);
+                return a ? a.closing - a.opening : 0;
+            }
+            return closingMap.get(accountId) ?? 0;
+        };
 
         // Index accounts by groupId for descendant rollups (one query, used twice below).
         const allAccounts = await prisma.account.findMany({
@@ -84,7 +111,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 const gt = typeOfGroup.get(id);
                 for (const a of accs) {
                     const sign = gt ? groupSign(gt, a.normalBalance) : 1;
-                    rolledUpBalance += sign * (closingMap.get(a.id) ?? 0);
+                    rolledUpBalance += sign * (gt ? figure(a.id, gt) : closingMap.get(a.id) ?? 0);
                 }
             }
             return {
@@ -111,7 +138,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             ...l,
             // Signed against the GROUP, so these add up to `totalBalance` and
             // agree with the same group's row on the Trial Balance.
-            balance: groupSign(group.type, l.normalBalance) * (closingMap.get(l.id) ?? 0),
+            balance: groupSign(group.type, l.normalBalance) * figure(l.id, group.type),
         }));
 
         // Total = own ledgers + sub-group rolled-up balances
@@ -132,6 +159,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 balance: l.balance,
             })),
             totalBalance,
+            periodFrom: fromIso && ISO.test(fromIso) ? fromIso : null,
+            periodTo: toDay,
         });
     } catch (e) {
         return handleApiError(e, "Failed to load group detail");
