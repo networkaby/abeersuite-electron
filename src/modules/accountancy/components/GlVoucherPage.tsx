@@ -1018,8 +1018,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     } catch (e) {
                         toast.error(extractApiError(e, "Saved and posted, but the bills could not be settled — use Link to bills."));
                     }
-                } else if (partyLedgerId != null) {
-                    setLinkTarget({ voucherId: created.data.id, accountId: partyLedgerId });
                 }
             } else {
                 toast.success(`${copy.title} ${shownNo} saved as draft`);
