@@ -7,6 +7,7 @@ import { attendanceMarkSchema } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
 import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
+import { dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import type { RegisterPayload, RegisterPerson, HolidayDto } from "@/modules/hr/lib/attendanceTypes";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
 
@@ -42,12 +43,12 @@ export async function GET(req: Request) {
                 orderBy: { name: "asc" },
                 select: {
                     id: true, name: true, avatarUrl: true, role: true,
-                    staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true } },
+                    staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true, dutyMinutes: true } },
                 },
             }),
             prisma.attendanceDay.findMany({
                 where: { date: { gte: dayOf(from), lte: dayOf(to) } },
-                select: { userId: true, date: true, status: true, source: true, firstInAt: true, lastOutAt: true, note: true },
+                select: { userId: true, date: true, status: true, source: true, firstInAt: true, lastOutAt: true, workedMinutes: true, note: true },
             }),
             prisma.leaveRequest.findMany({
                 where: { status: "APPROVED", fromDate: { lte: dayOf(to) }, toDate: { gte: dayOf(from) } },
@@ -69,6 +70,7 @@ export async function GET(req: Request) {
                 joinedOn: u.staffProfile?.joinedOn ? toDateOnlyUtc(u.staffProfile.joinedOn) : null,
                 leftOn,
                 weeklyOff: u.staffProfile?.weeklyOff ?? [0],
+                dutyMinutes: dutyMinutesFor(u.staffProfile?.dutyMinutes),
                 marks: {}, leaveDays: {},
             });
         }
@@ -80,6 +82,7 @@ export async function GET(req: Request) {
                 source: m.source === "COUNTER" ? "COUNTER" : "OFFICE",
                 firstInAt: m.firstInAt?.toISOString() ?? null,
                 lastOutAt: m.lastOutAt?.toISOString() ?? null,
+                workedMinutes: m.workedMinutes,
                 note: m.note,
             };
         }

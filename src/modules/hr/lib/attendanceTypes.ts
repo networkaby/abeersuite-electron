@@ -7,6 +7,8 @@ export interface AttendanceMark {
     source: "COUNTER" | "OFFICE";
     firstInAt: string | null;
     lastOutAt: string | null;
+    /** Minutes actually worked — idle stretches excluded. 0 on an office mark. */
+    workedMinutes: number;
     note: string | null;
 }
 
@@ -18,6 +20,8 @@ export interface RegisterPerson {
     joinedOn: string | null;
     leftOn: string | null;
     weeklyOff: number[];
+    /** A full day's duty for this person, in minutes (the org default when unset). */
+    dutyMinutes: number;
     /** Stored marks by ISO date. Days absent here are read off the calendar. */
     marks: Record<string, AttendanceMark>;
     /** Approved leave days inside the range, by ISO date → kind. */

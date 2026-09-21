@@ -25,6 +25,13 @@ model AttendanceDay {
   /// First sign-in on a counter that day; last shift close. Informational.
   firstInAt DateTime?
   lastOutAt DateTime?
+  /// The last sign of life on that day — a real click or keypress, not a poll.
+  /// The accumulator below measures against it; see shared/lib/hr/dutyTime.ts.
+  lastSeenAt DateTime?
+  /// Minutes ACTUALLY worked, added up span by span. Idle stretches longer than
+  /// the logout limit contribute nothing, so a forgotten sign-out costs nothing
+  /// and is not paid either. Drives the full / half grade and payroll's 0.5.
+  workedMinutes Int @default(0)
   counterId Int?
   note      String?
   /// Who marked it from the office; null when the till did.

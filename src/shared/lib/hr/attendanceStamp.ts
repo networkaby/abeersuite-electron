@@ -24,6 +24,7 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
+import { creditableMinutes } from "@/shared/lib/hr/dutyTime";
 
 type Db = Pick<PrismaClient, "attendanceDay">;
 
@@ -40,7 +41,7 @@ export async function stampAttendanceIn(db: Db, userId: number, counterId: numbe
         // when a time is already there today, the arrival stands.
         const filled = await db.attendanceDay.updateMany({
             where: { userId, date, firstInAt: null },
-            data:  { firstInAt: at, counterId },
+            data:  { firstInAt: at, counterId, lastSeenAt: at },
         });
         if (filled.count > 0) return;
 
@@ -49,7 +50,7 @@ export async function stampAttendanceIn(db: Db, userId: number, counterId: numbe
         // deliberately changes nothing.
         await db.attendanceDay.upsert({
             where:  { userId_date: { userId, date } },
-            create: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, counterId },
+            create: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, counterId, lastSeenAt: at },
             update: {},
         }).catch(() => undefined);
     } catch { /* never fail the sign-in */ }
@@ -82,6 +83,20 @@ export async function stampAttendanceOut(
             update: { lastOutAt: at },
         }).catch(() => undefined);
 
+        // Closing the till is itself a sign of life, so the stretch since the last
+        // one is worked time — otherwise a quiet last hour at the counter would be
+        // thrown away. Same rule as everywhere else: a gap longer than the idle
+        // limit means they were not there, and adds nothing.
+        const prior = await db.attendanceDay.findUnique({
+            where:  { userId_date: { userId, date } },
+            select: { lastSeenAt: true },
+        }).catch(() => null);
+        const add = creditableMinutes(prior?.lastSeenAt ?? null, at);
+        await db.attendanceDay.update({
+            where: { userId_date: { userId, date } },
+            data:  { lastSeenAt: at, workedMinutes: { increment: add } },
+        }).catch(() => undefined);
+
         // The row already existed but carries no arrival — the sign-in stamp was
         // skipped on this till. Fill it from the shift open, never over a real one.
         if (shift) {
@@ -91,4 +106,48 @@ export async function stampAttendanceOut(
             }).catch(() => undefined);
         }
     } catch { /* never fail the close */ }
+}
+
+/**
+ * A sign of life: somebody is actually using this machine right now.
+ *
+ * Called by the client every few minutes WHILE THERE IS REAL INPUT — never from a
+ * poll, or it would credit an empty counter. Each call adds the gap since the last
+ * sign of life, and `creditableMinutes` drops any gap longer than the idle limit,
+ * so a stretch where nobody was there adds nothing. That is the whole of "the idle
+ * time is treated as absent", and it does not depend on the auto-logout having
+ * fired: a PC left switched on overnight simply contributes one ignored gap.
+ *
+ * Read-then-write rather than a bare increment, because the amount to add depends
+ * on the value already stored. Two pings landing together can only over-credit by
+ * one interval, which is not worth a transaction on this hot a path.
+ *
+ * Returns the day's running total, so the screen can show it without a second read.
+ */
+export async function stampActivity(db: Db, userId: number, counterId: number | null, at = new Date()): Promise<number> {
+    try {
+        const date = dayOf(businessTodayIso(at));
+        const row = await db.attendanceDay.findUnique({
+            where:  { userId_date: { userId, date } },
+            select: { lastSeenAt: true, workedMinutes: true, source: true },
+        });
+
+        // Nothing yet today — the first sign of life IS the arrival. This is the
+        // path for anyone who works without opening a till at all.
+        if (!row) {
+            await db.attendanceDay.create({
+                data: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, lastSeenAt: at, counterId },
+            }).catch(() => undefined);
+            return 0;
+        }
+
+        const add = creditableMinutes(row.lastSeenAt, at);
+        await db.attendanceDay.update({
+            where: { userId_date: { userId, date } },
+            data:  { lastSeenAt: at, workedMinutes: { increment: add } },
+        });
+        return row.workedMinutes + add;
+    } catch {
+        return 0;   /* never fail a page over a clock */
+    }
 }

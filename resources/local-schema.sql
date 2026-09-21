@@ -1471,6 +1471,8 @@ CREATE TABLE IF NOT EXISTS "attendance_days" (
     "source" TEXT NOT NULL DEFAULT 'OFFICE',
     "firstInAt" TIMESTAMP(3),
     "lastOutAt" TIMESTAMP(3),
+    "lastSeenAt" TIMESTAMP(3),
+    "workedMinutes" INTEGER NOT NULL DEFAULT 0,
     "counterId" INTEGER,
     "note" TEXT,
     "markedById" INTEGER,
@@ -1486,6 +1488,8 @@ ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'OFFICE';
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "firstInAt" TIMESTAMP(3);
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "lastOutAt" TIMESTAMP(3);
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "lastSeenAt" TIMESTAMP(3);
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "workedMinutes" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "counterId" INTEGER;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "note" TEXT;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "markedById" INTEGER;
@@ -1551,6 +1555,7 @@ CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "leftReason" TEXT,
     "employmentType" TEXT NOT NULL DEFAULT 'FULL_TIME',
     "weeklyOff" INTEGER[] DEFAULT ARRAY[0]::INTEGER[],
+    "dutyMinutes" INTEGER,
     "fatherName" TEXT,
     "address" TEXT,
     "bloodGroup" TEXT,
@@ -1575,6 +1580,7 @@ ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "leftOn" DATE;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "leftReason" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "employmentType" TEXT NOT NULL DEFAULT 'FULL_TIME';
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "weeklyOff" INTEGER[] DEFAULT ARRAY[0]::INTEGER[];
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyMinutes" INTEGER;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bloodGroup" TEXT;

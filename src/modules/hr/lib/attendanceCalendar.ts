@@ -3,6 +3,7 @@
 
 import type { AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { RegisterPerson } from "./attendanceTypes";
+import { gradeDay } from "@/shared/lib/hr/dutyTime";
 
 /** ISO dates from `from` to `to`, inclusive. */
 export function isoDaysBetween(from: string, to: string): string[] {
@@ -29,18 +30,46 @@ export function monthBounds(year: number, month: number): { from: string; to: st
 export type DayReading =
     | { kind: "outside" }                                   // before joining / after leaving
     | { kind: "unmarked" }
-    | { kind: "marked"; status: AttendanceStatus; stored: boolean; source?: "COUNTER" | "OFFICE" };
+    | {
+        kind: "marked";
+        status: AttendanceStatus;
+        stored: boolean;
+        source?: "COUNTER" | "OFFICE";
+        /** Minutes worked, when the till measured them — for the cell's tooltip. */
+        workedMinutes?: number;
+        /** True when the status was worked out from those minutes rather than typed. */
+        graded?: boolean;
+    };
 
 /**
  * A stored mark wins. Otherwise the calendar answers: holiday, then approved
  * leave, then weekly off. Before the joining date or after the leaving date the
  * cell is simply outside the person's time here.
+ *
+ * A day the TILL wrote is graded from the minutes actually worked — full, half or
+ * absent — because "present" on its own says nothing about a person who touched
+ * the machine for twenty minutes. A day the OFFICE wrote is never re-graded: a
+ * manual mark is HR's decision and outranks the clock, which is the override the
+ * owner asked to keep. Graded at READ time, not frozen at close, so a cashier
+ * halfway through a shift is not stamped with a half day all afternoon.
  */
 export function readDay(person: RegisterPerson, iso: string, holidayDates: ReadonlySet<string>): DayReading {
     if (person.joinedOn && iso < person.joinedOn) return { kind: "outside" };
     if (person.leftOn && iso > person.leftOn) return { kind: "outside" };
     const mark = person.marks[iso];
-    if (mark) return { kind: "marked", status: mark.status, stored: true, source: mark.source };
+    if (mark) {
+        if (mark.source === "COUNTER" && mark.workedMinutes > 0) {
+            return {
+                kind: "marked",
+                status: gradeDay(mark.workedMinutes, person.dutyMinutes),
+                stored: true,
+                source: mark.source,
+                workedMinutes: mark.workedMinutes,
+                graded: true,
+            };
+        }
+        return { kind: "marked", status: mark.status, stored: true, source: mark.source, workedMinutes: mark.workedMinutes };
+    }
     if (holidayDates.has(iso)) return { kind: "marked", status: "HOLIDAY", stored: false };
     if (person.leaveDays[iso]) return { kind: "marked", status: "LEAVE", stored: false };
     if (person.weeklyOff.includes(weekdayOf(iso))) return { kind: "marked", status: "WEEKLY_OFF", stored: false };

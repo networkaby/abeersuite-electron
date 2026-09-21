@@ -19,6 +19,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { todayIso } from "@/shared/lib/format/formatDate";
 import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { isoDaysBetween, monthBounds, readDay, summarise, weekdayOf } from "../lib/attendanceCalendar";
+import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceMark, RegisterPayload } from "../lib/attendanceTypes";
 
 const CYCLE: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
@@ -67,7 +68,9 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
         const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
         const key = `${userId}|${iso}`;
         const before = overrides[key];
-        setOverrides((o) => ({ ...o, [key]: next ? { status: next, source: "OFFICE", firstInAt: null, lastOutAt: null, note: null } : null }));
+        // An office mark carries no worked minutes of its own — it is HR overruling
+        // the clock, and readDay() stops grading the day the moment source is OFFICE.
+        setOverrides((o) => ({ ...o, [key]: next ? { status: next, source: "OFFICE", firstInAt: null, lastOutAt: null, workedMinutes: 0, note: null } : null }));
         try {
             await axios.put("/api/hr/attendance", { userId, date: iso, status: next });
         } catch (e) {
@@ -145,9 +148,15 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                 const status = r.kind === "marked" ? r.status : null;
                                                 const stored = r.kind === "marked" && r.stored;
                                                 const m = p.marks[iso];
+                                                // The hours belong in the tooltip: a bare "½" that nobody can
+                                                // question is worse than no grade at all, and this is the number
+                                                // the grade was worked out from.
+                                                const worked = r.kind === "marked" && r.workedMinutes ? formatWorked(r.workedMinutes) : "";
                                                 const tip = [
                                                     status ? ATTENDANCE_STATUS_META[status].label : "Unmarked",
+                                                    worked ? `${worked} worked${r.kind === "marked" && r.graded ? " (auto)" : ""}` : "",
                                                     m?.source === "COUNTER" ? `till${m.firstInAt ? ` in ${fmtTime(m.firstInAt)}` : ""}${m.lastOutAt ? ` out ${fmtTime(m.lastOutAt)}` : ""}` : "",
+                                                    m?.source === "OFFICE" ? "marked by office" : "",
                                                     m?.note ?? "",
                                                 ].filter(Boolean).join(" · ");
                                                 return (

@@ -36,6 +36,10 @@ model StaffProfile {
   /// 0 = Sunday … 6 = Saturday, the BackupConfig.weekdays convention. The
   /// attendance phase reads it; nothing in phase 1 does.
   weeklyOff      Int[]     @default([0])
+  /// A full day's duty for THIS person, in minutes. Null = the org default
+  /// (shared/lib/hr/dutyTime.ts). A part-timer on a four-hour duty who works all
+  /// four has done a full day, which a fixed hour rule would call a half.
+  dutyMinutes    Int?
 
   // Personal / KYC — edited on the person's own profile page (self or admin).
   fatherName     String?

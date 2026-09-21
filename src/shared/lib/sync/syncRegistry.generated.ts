@@ -33,7 +33,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "AccountAlias": { model: "AccountAlias", delegate: "accountAlias", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "AccountGroup": { model: "AccountGroup", delegate: "accountGroup", pk: ["id"], exact: [], dates: [], cache: [] },
     "additional_cost_allocations": { model: "AdditionalCostAllocation", delegate: "additionalCostAllocation", pk: ["id"], exact: ["quantity"], dates: ["createdAt", "date"], cache: [] },
-    "attendance_days": { model: "AttendanceDay", delegate: "attendanceDay", pk: ["id"], exact: [], dates: ["createdAt", "date", "firstInAt", "lastOutAt", "updatedAt"], cache: [] },
+    "attendance_days": { model: "AttendanceDay", delegate: "attendanceDay", pk: ["id"], exact: [], dates: ["createdAt", "date", "firstInAt", "lastOutAt", "lastSeenAt", "updatedAt"], cache: [] },
     "AuditLog": { model: "AuditLog", delegate: "auditLog", pk: ["id"], exact: [], dates: ["createdAt", "restoredAt"], cache: [] },
     "BackupConfig": { model: "BackupConfig", delegate: "backupConfig", pk: ["id"], exact: [], dates: ["lastRunAt", "updatedAt"], cache: [] },
     "BankStatementImport": { model: "BankStatementImport", delegate: "bankStatementImport", pk: ["id"], exact: ["closingBalance", "openingBalance"], dates: ["createdAt", "fromDate", "toDate"], cache: [] },

@@ -10,6 +10,7 @@ import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineErr
 import { toast } from "sonner";
 import { wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { SESSION_IDLE_LABEL } from "@/shared/lib/auth/sessionAge";
+import ActivityPulse from "@/shared/components/ActivityPulse";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -121,6 +122,10 @@ export default function SessionWrapper({
     return (
         <SessionProvider session={session}>
             <SessionGuard />
+            {/* Mounted here rather than in each protected layout: one place, and
+                it can never be forgotten on a new area. Staff-only for the same
+                reason the guard is — the portal never mounts this wrapper. */}
+            <ActivityPulse />
             {children}
         </SessionProvider>
     );
