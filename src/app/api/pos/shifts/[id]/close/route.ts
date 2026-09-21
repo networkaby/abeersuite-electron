@@ -286,7 +286,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
         // HR & People: the close is the cashier's out time for the day. Best-effort.
-        await stampAttendanceOut(prisma, shift.userId, closedAt);
+        // The shift is also the fallback arrival: a till whose sign-in stamp never
+        // ran would otherwise leave the day present with no in-time at all.
+        await stampAttendanceOut(prisma, shift.userId, closedAt, { openedAt: shift.openedAt, counterId: shift.counterId });
 
         // Per-method tally of everything collected this shift (cash + digital),
         // for the closing report. Uses the real closedAt window.

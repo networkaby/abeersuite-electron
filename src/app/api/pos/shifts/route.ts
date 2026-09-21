@@ -17,6 +17,7 @@ import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
@@ -294,6 +295,12 @@ export async function POST(req: NextRequest) {
                 },
             });
         });
+
+        // HR & People: opening a till is an arrival. The sign-in stamp needs
+        // COUNTER_MACHINE_ID and the setup file and goes quiet when either is
+        // missing; the shift knows its counter from the database, so this one
+        // always fires. It only fills a blank — a real sign-in time stands.
+        await stampAttendanceIn(prisma, shift.userId, shift.counterId, shift.openedAt);
 
         // Explicit fields only — never spread the Prisma object; BigInt fields
         // (e.g. counter.defaultFloatPaise) would cause JSON.stringify to throw,
