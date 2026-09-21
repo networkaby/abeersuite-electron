@@ -32,7 +32,7 @@ interface VoucherListItem {
     date: string;
     type: string;
     partyName: string | null;
-    _count?: { lines: number };
+    lineCount?: number;
 }
 interface VoucherLine {
     productId: number;
@@ -145,7 +145,7 @@ export function AllocateVoucherDialog({
     const voucherOptions = useMemo(
         () => vouchers.map((v) => ({
             value: v.id,
-            label: `${v.reference} · ${v.date.slice(0, 10)}${v.partyName ? " · " + v.partyName : ""} · ${v._count?.lines ?? 0} items`,
+            label: `${v.reference} · ${v.date.slice(0, 10)}${v.partyName ? " · " + v.partyName : ""} · ${v.lineCount ?? 0} item${v.lineCount === 1 ? "" : "s"}`,
             searchText: `${v.reference} ${v.partyName ?? ""}`,
         })),
         [vouchers],

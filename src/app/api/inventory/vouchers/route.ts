@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
         ],   // 5D-10: date on spine
         include: {
             // 5D-2 creator + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-12 branch live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true, branch: { select: { id: true, name: true, number: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch
+            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true, branch: { select: { id: true, name: true, number: true } }, _count: { select: { inventoryLines: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch; _count.inventoryLines = how many goods lines the voucher carries (5C: lines hang off the spine)
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
@@ -236,7 +236,7 @@ export async function GET(req: NextRequest) {
             sourceCounterId: v.universalVoucher?.sourceCounterId ?? null,
         };
         if (v.partyId == null) {
-            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId), description: v.universalVoucher?.description ?? null, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId), description: v.universalVoucher?.description ?? null, lineCount: v.universalVoucher?._count?.inventoryLines ?? 0, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
         }
         // Same partyId may resolve as either a Person or a Company id depending
         // on which lookup matches. Person wins when both are set (shouldn't
@@ -261,6 +261,7 @@ export async function GET(req: NextRequest) {
             date:            v.universalVoucher?.date,   // 5D-10: date on spine
             reference:       voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),   // 5D-6
             description:     v.universalVoucher?.description ?? null,   // 5D-5: narration on spine
+            lineCount:       v.universalVoucher?._count?.inventoryLines ?? 0,   // how many goods lines this voucher carries
             ...spineLifecycle,   // 5D-8: status/deletedAt/cancelledAt/createdAt on spine
             ...partyDisplay,
             createdBy:       creatorName(v),
