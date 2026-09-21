@@ -4,6 +4,7 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
+import { PIN_PASSWORD_MAX_AGE_MS } from "@/shared/lib/auth/counterPin";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -25,7 +26,30 @@ const SECURE_COOKIES =
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     trustHost: true,
-    session: { strategy: "jwt" },
+    /**
+     * A session lasts exactly as long as a PIN may stand in for a password, and
+     * every request pushes that back.
+     *
+     * The two clocks used to disagree, and the longer one won by default. The PIN
+     * rules (counterPin.ts) send a cashier back to their password after 10 days —
+     * but they are only read AT the sign-in screen, and Auth.js's own default kept
+     * a session 30 days and re-issued it on use. So anyone who never signed out
+     * never reached the screen, and the 10-day rule never ran for them at all. On
+     * live, user 38 last authenticated on 19 Sep and was still validly signed in on
+     * the 21st, which is how a worked day ended up with no arrival time recorded.
+     *
+     * Tying maxAge to PIN_PASSWORD_MAX_AGE_MS makes it one number instead of two:
+     * shorten the PIN rule and the session follows, and neither can drift past the
+     * other. `updateAge: 0` re-issues on every request, so the clock measures time
+     * SINCE LAST USE — a till worked every day is never interrupted mid-shift, and
+     * a machine left idle falls due on the same 10 days as the PIN it is standing
+     * in for. No DB read: the token is re-signed, nothing is looked up.
+     */
+    session: {
+        strategy:  "jwt",
+        maxAge:    PIN_PASSWORD_MAX_AGE_MS / 1000,   // seconds
+        updateAge: 0,                                 // refresh on every use
+    },
     cookies: {
         sessionToken: {
             name: SESSION_COOKIE_NAME,

@@ -7,10 +7,12 @@
  * shift close stamps the out time. Both swallow their own errors: a person who
  * cannot be marked present must still be able to sell.
  *
- * 2026-09-22: the sign-in is the wrong event to hang a daily mark on. Sessions are
- * JWT with no `maxAge` (src/auth.ts), so Auth.js keeps them 30 days: a cashier who
- * never signs out authenticates once a month, and `authorizeStaffCredentials` — the
- * only thing that stamped an arrival — simply does not run on the other days. On
+ * 2026-09-22: the sign-in is the wrong event to hang a daily mark on. A session is
+ * kept for as long as a PIN may stand in for a password and is refreshed on every
+ * use (src/auth.ts) — so a till worked every day is never signed out, and
+ * `authorizeStaffCredentials`, the only thing that stamped an arrival, does not run
+ * on the other days. It was worse before that was tied down: Auth.js's own default
+ * kept a session 30 days, also rolling. On
  * live, user 38 last signed in on 19 Sep and worked counter 1 on the 20th and 21st;
  * the 21st was stored as an out time at 15:09 with no arrival at all, although the
  * shift had opened at 05:02 and said so. (It is NOT a misconfigured till: the same
