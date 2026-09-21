@@ -33,6 +33,7 @@ import {
     ChartArea,
     ChartColumn,
     ChartLine,
+    ChartBarStacked,
     ChartPie,
     CircleArrowUp,
     CircleDollarSign,
@@ -418,7 +419,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Loans Book", icon: Banknote, href: "/office/accountancy/loan-ledgers", permission: "finance:voucher:create" },
             // Same shape as Account Ledger / Cash Book above; `sidebarKey` only pins the
             // Role Matrix id (ui:sidebar:accountancy:group-report) against a label rename.
-            { label: "Group Report", icon: FolderTree, href: "/office/accountancy/group-report", sidebarKey: "group-report", permission: "finance:voucher:create" },
+            { label: "Group Report", icon: ChartBarStacked, href: "/office/accountancy/group-report", sidebarKey: "group-report", permission: "finance:voucher:create" },
             // Spending capacity = cash + bank + wallets, plus unused OD / card / BNPL
             // headroom. UI-only design preview for now (mock numbers, nothing wired).
             { label: "Usable Fund", icon: PiggyBank, href: "/office/accountancy/usable-fund", sidebarKey: "usable-fund" },
