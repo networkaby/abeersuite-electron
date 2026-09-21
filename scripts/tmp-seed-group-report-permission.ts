@@ -29,6 +29,11 @@
  *                       one — use when other links are missing too.
  *   … --live            reach past .env.local and write to the database in
  *                       .env (Supabase). Has to be typed on purpose.
+ *   … --grant-r1        also give R1 the link, instead of ticking it by hand on
+ *                       the Role Matrix. ONLY the sidebar rows in scope, and
+ *                       never a systemOnly permission — `admin:bypass` is not
+ *                       UI-assignable and this script will not grant it. No
+ *                       other role is touched.
  */
 
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -44,6 +49,7 @@ dotenv.config({ path: ".env" });
 const args = process.argv.slice(2);
 const COMMIT = args.includes("--commit");
 const ALL_SIDEBAR = args.includes("--all-sidebar");
+const GRANT_R1 = args.includes("--grant-r1");
 
 const TARGET_ID = "ui:sidebar:accountancy:group-report";
 
@@ -121,8 +127,48 @@ async function main() {
         `\n${COMMIT ? "Wrote" : "Would write"}: ${added} new, ${refreshed} already present ` +
         `(${wanted.length} row${wanted.length === 1 ? "" : "s"} in scope).`,
     );
-    if (!COMMIT) console.log("Nothing was written. Re-run with --commit to apply.");
-    else console.log("No grant was touched — tick the link on Admin → Role to give it to a role.");
+    if (GRANT_R1) {
+        // The grant list is narrower than the rows above, on purpose: only the
+        // `ui` sidebar rows in scope, and never a systemOnly permission —
+        // `admin:bypass` is not UI-assignable and R1 is deliberately without it,
+        // so it is filtered out here rather than trusted not to turn up.
+        const grantable = wanted.filter((p) => p.module === "ui" && p.id !== "admin:bypass");
+        const blocked = new Set(
+            (await prisma.permission.findMany({
+                where: { id: { in: grantable.map((p) => p.id) }, systemOnly: true },
+                select: { id: true },
+            })).map((p) => p.id),
+        );
+        const held = new Set(
+            (await prisma.rolePermission.findMany({
+                where: { roleId: "R1", permissionId: { in: grantable.map((p) => p.id) } },
+                select: { permissionId: true },
+            })).map((r) => r.permissionId),
+        );
+
+        let granted = 0;
+        console.log("");
+        for (const p of grantable) {
+            if (blocked.has(p.id)) { console.log(`  skipped (systemOnly)   ${p.id}`); continue; }
+            if (held.has(p.id))    { console.log(`  R1 already holds       ${p.id}`); continue; }
+            granted++;
+            console.log(`  ${COMMIT ? "GRANTED to R1         " : "would grant to R1     "} ${p.id}`);
+            if (COMMIT) {
+                await prisma.rolePermission.upsert({
+                    where:  { roleId_permissionId: { roleId: "R1", permissionId: p.id } },
+                    update: {},
+                    create: { roleId: "R1", permissionId: p.id },
+                });
+            }
+        }
+        console.log(
+            `${COMMIT ? "Granted" : "Would grant"} to R1: ${granted}. ` +
+            "No other role was touched, and admin:bypass was not granted.",
+        );
+    }
+
+    if (!COMMIT) console.log("\nNothing was written. Re-run with --commit to apply.");
+    else if (!GRANT_R1) console.log("No grant was touched — tick the link on Admin → Role to give it to a role.");
 }
 
 main()
