@@ -238,7 +238,7 @@ export function AllocateVoucherDialog({
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>Allocate shipping cost to a purchase</DialogTitle>
                     <DialogDescription>
@@ -253,7 +253,7 @@ export function AllocateVoucherDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-3">
+                <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Purchase / GRN voucher</label>
                         <SearchableSelect
@@ -281,7 +281,7 @@ export function AllocateVoucherDialog({
                                 </span>
                             </div>
 
-                            <TableScrollArea className="max-h-[42vh]">
+                            <TableScrollArea className="max-h-[60vh] min-h-0">
                                 <Table>
                                     <TableHeader className="bg-muted/40 sticky top-0 z-10">
                                         <TableRow>
