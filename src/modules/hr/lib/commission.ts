@@ -2,6 +2,8 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { SalaryLine } from "./salaryLines";
+import { commissionForUsers, toCommissionSchemeDto } from "./commissionServer";
+import type { CommissionSchemeDto } from "./commissionTypes";
 
 /**
  * Commission — the seam, not the sums.
@@ -16,12 +18,12 @@ import type { SalaryLine } from "./salaryLines";
  * will be created. This file is the single door between the two, and it is
  * deliberately the whole of the contract:
  *
- *   • `commissionForPeriod` is what payroll asks. Today it answers "nobody
- *     earned anything", because with no rules on file that is the only honest
- *     answer — a guess here would post money into the books.
- *   • When the Commission page lands, ONLY THE BODY of that function changes.
- *     Payroll, the payslip, the print template and the journal are already
- *     finished and need no edit, because of the second half below.
+ *   • `commissionForPeriod` is what payroll asks. It reads each person's dated
+ *     schemes (the Targets & Commission page, /office/hr/commission) and hands
+ *     back what the period earned; with no scheme on file the answer is the
+ *     honest one — nothing.
+ *   • Payroll, the payslip, the print template and the journal never changed
+ *     for it, because of the second half below.
  *
  * The second half is `commissionLine`. A commission is not a new kind of money:
  * it is an EARNING pay head like Basic or Overtime. Once it is one, every
@@ -57,22 +59,32 @@ export interface CommissionResult {
  * Returns a map keyed by userId; a person absent from the map earned nothing,
  * which is not the same as earning zero and is why the map is sparse.
  *
- * ── NOT IMPLEMENTED YET ──────────────────────────────────────────────────────
- * There are no commission rules on file, so nothing can be earned. This returns
- * an empty map, payroll adds no line, and every figure is exactly what it was
- * before commission existed. That is the point: the room is real, the money is
- * not invented.
- *
- * When the Commission page exists, this reads its schemes for the period and
- * returns the result. The arguments it will need are already here.
+ * The Commission page exists now (2026-09-22, /office/hr/commission): each
+ * person carries dated schemes, and `commissionForUsers` judges the period
+ * month by month against the scheme in force — see commissionServer.ts. What
+ * comes back is frozen onto the line by the caller and never recomputed.
  */
 export async function commissionForPeriod(
-    _db: Prisma.TransactionClient,
-    _userIds: readonly number[],
-    _fromIso: string,
-    _toIso: string,
+    db: Prisma.TransactionClient,
+    userIds: readonly number[],
+    fromIso: string,
+    toIso: string,
 ): Promise<Map<number, CommissionResult>> {
-    return new Map();
+    if (!userIds.length) return new Map();
+    const rows = await db.commissionScheme.findMany({
+        where: { userId: { in: [...userIds] }, effectiveFrom: { lte: new Date(`${toIso}T00:00:00.000Z`) } },
+        select: { id: true, userId: true, effectiveFrom: true, targetPaise: true, kind: true, rateBp: true, slabsJson: true, bonusPaise: true, note: true, createdAt: true },
+    });
+    const byUser = new Map<number, CommissionSchemeDto[]>();
+    for (const r of rows) {
+        const list = byUser.get(r.userId) ?? [];
+        list.push(toCommissionSchemeDto(r));
+        byUser.set(r.userId, list);
+    }
+    const earned = await commissionForUsers(db, [...byUser].map(([userId, schemes]) => ({ userId, schemes })), fromIso, toIso);
+    const out = new Map<number, CommissionResult>();
+    for (const [userId, e] of earned) out.set(userId, { userId, commissionPaise: e.commissionPaise, basis: e.basis });
+    return out;
 }
 
 /**

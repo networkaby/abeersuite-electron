@@ -16,6 +16,7 @@ const LANDING: [key: string, href: string][] = [
     ["leave", "/office/hr/leave"],
     ["holidays", "/office/hr/holidays"],
     ["payRules", "/office/hr/pay-rules"],
+    ["commission", "/office/hr/commission"],
     ["payroll", "/office/hr/payroll"],
 ];
 

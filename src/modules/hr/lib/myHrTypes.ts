@@ -7,6 +7,7 @@
 import type { MonthOvertime } from "@/shared/lib/hr/myDay";
 import type { HolidayDto, LeaveRequestDto, RegisterPerson } from "./attendanceTypes";
 import type { LeaveBalancePayload } from "./leaveTypes";
+import type { CommissionMonth } from "./commissionTypes";
 
 export interface MyHrPayload {
     /** The month being shown, YYYY-MM. */
@@ -27,4 +28,6 @@ export interface MyHrPayload {
     lostDays: number;
     /** How much leave of each kind is left, in the leave year this month sits in. */
     leaveBalance: LeaveBalancePayload;
+    /** My target and what my own sales have earned this month. */
+    commission: CommissionMonth;
 }

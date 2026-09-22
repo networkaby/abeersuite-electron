@@ -1295,6 +1295,8 @@ CREATE TABLE IF NOT EXISTS "VoucherPrintTemplate" (
     "showPreparedByThermal" BOOLEAN NOT NULL DEFAULT true,
     "showFindings" BOOLEAN NOT NULL DEFAULT true,
     "showFindingsThermal" BOOLEAN NOT NULL DEFAULT true,
+    "showAttendance" BOOLEAN NOT NULL DEFAULT true,
+    "showAttendanceThermal" BOOLEAN NOT NULL DEFAULT true,
     "termsText" TEXT NOT NULL DEFAULT '',
     "footerLine" TEXT NOT NULL DEFAULT 'Thank you · Visit again',
     "signatureLabel" TEXT NOT NULL DEFAULT 'Authorised Signatory',
@@ -1363,6 +1365,8 @@ ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showPreparedBy" BOO
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showPreparedByThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showFindings" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showFindingsThermal" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showAttendance" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showAttendanceThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "termsText" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "footerLine" TEXT NOT NULL DEFAULT 'Thank you · Visit again';
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "signatureLabel" TEXT NOT NULL DEFAULT 'Authorised Signatory';
@@ -1744,6 +1748,8 @@ CREATE TABLE IF NOT EXISTS "payroll_run_lines" (
     "periodDays" INTEGER NOT NULL DEFAULT 0,
     "payDays" INTEGER NOT NULL DEFAULT 26,
     "ledgerAccountId" INTEGER,
+    "commissionPaise" INTEGER NOT NULL DEFAULT 0,
+    "attendanceJson" JSONB,
     "included" BOOLEAN NOT NULL DEFAULT true,
     "skipReason" TEXT,
 
@@ -1763,8 +1769,40 @@ ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "paidDays" INTEGER NOT 
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "periodDays" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "payDays" INTEGER NOT NULL DEFAULT 26;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "commissionPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "attendanceJson" JSONB;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "included" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "skipReason" TEXT;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "commission_schemes" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "effectiveFrom" DATE NOT NULL,
+    "targetPaise" INTEGER NOT NULL DEFAULT 0,
+    "kind" TEXT NOT NULL DEFAULT 'NONE',
+    "rateBp" INTEGER NOT NULL DEFAULT 0,
+    "slabsJson" JSONB,
+    "bonusPaise" INTEGER NOT NULL DEFAULT 0,
+    "note" TEXT,
+    "createdById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "commission_schemes_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "effectiveFrom" DATE NOT NULL;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "targetPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'NONE';
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "rateBp" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "slabsJson" JSONB;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "bonusPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "ChatRoom" (
@@ -4304,6 +4342,12 @@ CREATE INDEX IF NOT EXISTS "payroll_run_lines_userId_idx" ON "payroll_run_lines"
 CREATE UNIQUE INDEX IF NOT EXISTS "payroll_run_lines_runId_userId_key" ON "payroll_run_lines"("runId", "userId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "commission_schemes_updatedAt_idx" ON "commission_schemes"("updatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "commission_schemes_userId_effectiveFrom_key" ON "commission_schemes"("userId", "effectiveFrom");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
 
 -- CreateIndex
@@ -5190,6 +5234,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "payroll_run_lines" ADD CONSTRAINT "payroll_run_lines_runId_fkey" FOREIGN KEY ("runId") REFERENCES "payroll_runs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "commission_schemes" ADD CONSTRAINT "commission_schemes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6612,6 +6663,13 @@ DO $$ BEGIN
     IF to_regclass('public."ChatRoomMember"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "ChatRoomMember";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ChatRoomMember"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."commission_schemes"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "commission_schemes";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "commission_schemes"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

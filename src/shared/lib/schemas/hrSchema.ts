@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { partyBankSchema } from "./partyBankSchema";
 import { hhMmSchema } from "./commonSchemas";
+import { COMMISSION_KINDS } from "../hr/commissionScheme";
 
 export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "HELPER", "CONTRACT"] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
@@ -88,6 +89,49 @@ export const staffSalaryCreateSchema = z.object({
 });
 
 export type StaffSalaryCreate = z.infer<typeof staffSalaryCreateSchema>;
+
+// ── Targets & Commission ──────────────────────────────────────────────────────
+// A dated scheme per person, revised like a salary. The arithmetic and the kind
+// list live in shared/lib/hr/commissionScheme.ts; this only checks the body.
+
+const paise = (max: number) => z.number().int().min(0).max(max);
+
+export const commissionSlabSchema = z.object({
+    fromPaise: paise(1_000_000_000_000),
+    rateBp:    z.number().int().min(0).max(10_000, "A rate cannot be above 100%"),
+});
+
+export const commissionSchemeCreateSchema = z.object({
+    userId:        z.number().int().positive(),
+    effectiveFrom: isoDate,
+    targetPaise:   paise(1_000_000_000_000),
+    kind:          z.enum(COMMISSION_KINDS),
+    rateBp:        z.number().int().min(0).max(10_000, "A rate cannot be above 100%"),
+    slabs:         z.array(commissionSlabSchema).max(10).default([]),
+    bonusPaise:    paise(100_000_000_000),
+    note:          optText(300),
+}).superRefine((v, ctx) => {
+    if ((v.kind === "PERCENT" || v.kind === "ABOVE_TARGET") && v.rateBp <= 0) {
+        ctx.addIssue({ code: "custom", path: ["rateBp"], message: "Enter the rate" });
+    }
+    if (v.kind === "ABOVE_TARGET" && v.targetPaise <= 0) {
+        ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "Sales above WHAT target — set one" });
+    }
+    if (v.kind === "SLABS") {
+        if (!v.slabs.length) ctx.addIssue({ code: "custom", path: ["slabs"], message: "Add at least one slab" });
+        for (let i = 1; i < v.slabs.length; i++) {
+            if (v.slabs[i].fromPaise <= v.slabs[i - 1].fromPaise) {
+                ctx.addIssue({ code: "custom", path: ["slabs", i, "fromPaise"], message: "Each slab must start above the one before" });
+                break;
+            }
+        }
+    }
+    if (v.bonusPaise > 0 && v.targetPaise <= 0) {
+        ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "A bonus needs a target to reach" });
+    }
+});
+
+export type CommissionSchemeCreate = z.infer<typeof commissionSchemeCreateSchema>;
 
 // ── Payroll ───────────────────────────────────────────────────────────────────
 //

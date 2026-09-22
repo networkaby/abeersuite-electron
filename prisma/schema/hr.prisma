@@ -84,6 +84,7 @@ model StaffProfile {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt
   salaries  StaffSalary[]
+  commissionSchemes CommissionScheme[]
 
   @@index([leftOn])
   @@index([updatedAt])
@@ -268,4 +269,47 @@ model PayrollRunLine {
   @@unique([runId, userId])
   @@index([userId])
   @@map("payroll_run_lines")
+}
+
+// ── Targets & Commission ──────────────────────────────────────────────────────
+// Owner, 2026-09-22: *"earnings, commission, target, etc. need a page to
+// set/edit. user need to see it to get motivated."* So one dated scheme per
+// person, revised like a salary: the row in force on a date is the latest with
+// effectiveFrom <= date. A scheme is a MONTHLY target plus a way of earning on
+// sales, and the sales it counts are the person's own posted sale vouchers
+// (UniversalVoucher.createdById) — the cashier who rang the bill earns on it.
+//
+// The arithmetic lives in ONE place, shared/lib/hr/commissionScheme.ts, so the
+// motivation card on My Info, the board and the payroll run cannot disagree
+// about what a month is worth. Payroll freezes the answer onto its line
+// (PayrollRunLine.commissionPaise + a "Commission" earning) — see
+// modules/hr/lib/commission.ts, which is the only door payroll uses.
+model CommissionScheme {
+  id      Int          @id @default(autoincrement())
+  userId  Int
+  profile StaffProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  /// First day this scheme applies. Two schemes cannot start on the same day.
+  effectiveFrom DateTime @db.Date
+  /// The month's sales target, paise. 0 = no target — the card shows sales only.
+  targetPaise   Int      @default(0)
+  /// PERCENT | ABOVE_TARGET | SLABS | NONE — how sales turn into commission. A
+  /// plain string, validated by zod, for the same reason as employmentType.
+  kind          String   @default("NONE")
+  /// Rate in basis points (100 = 1%) for PERCENT / ABOVE_TARGET.
+  rateBp        Int      @default(0)
+  /// SLABS only: [{ fromPaise, rateBp }] ascending — marginal, each slab's rate
+  /// on the sales inside it. Read whole, never queried.
+  slabsJson     Json?
+  /// A flat bonus, paise, paid on top when the month's sales reach the target.
+  bonusPaise    Int      @default(0)
+  note          String?
+  /// Scalar snapshot, no FK — like StaffSalary.createdById.
+  createdById   Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@unique([userId, effectiveFrom])
+  @@index([updatedAt])
+  @@map("commission_schemes")
 }

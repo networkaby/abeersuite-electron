@@ -13,7 +13,7 @@
 
 import { useMemo, useState } from "react";
 import {
-    Activity, CalendarDays, ChevronLeft, ChevronRight, Clock, IdCard, Palmtree, Plus, ReceiptIndianRupee, Timer,
+    Activity, CalendarDays, ChevronLeft, ChevronRight, Clock, IdCard, Palmtree, Plus, ReceiptIndianRupee, Target, Timer,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import type { MyHrPayload } from "../lib/myHrTypes";
 import { LeaveDialog } from "./LeaveBoard";
 import StaffPayslips from "./StaffPayslips";
 import AttendanceBreakup from "./AttendanceBreakup";
+import MyTargetCard, { monthLabel, shiftMonth } from "./MyTargetCard";
 
 const STATUS_BADGE: Record<LeaveStatus, string> = {
     PENDING:   "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300",
@@ -41,15 +42,6 @@ const STATUS_BADGE: Record<LeaveStatus, string> = {
 };
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const monthLabel = (month: string) =>
-    new Date(`${month}-01T00:00:00.000Z`).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
-
-/** Step a YYYY-MM string by whole months, in UTC so a timezone cannot slip a day. */
-function shiftMonth(month: string, by: number): string {
-    const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + by, 1));
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
 
 /* Owner, 2026-09-22: *"the date should be restricted as per minimum day need
    before the leave date"* — said while looking at this page as HR. So asking for
@@ -244,6 +236,11 @@ export default function MyHrPage({ userId }: { userId: number }) {
                                 the month nets to — the working behind the salary slip.
                             </p>
                             <AttendanceBreakup userId={userId} from={data.from} to={data.to} />
+                        </Section>
+
+                        {/* My target — the reason to ring one more bill. */}
+                        <Section title={data.isCurrentMonth ? "My target this month" : `My target in ${monthLabel(data.month)}`} icon={<Target size={15} />}>
+                            <MyTargetCard month={data.commission} isCurrentMonth={data.isCurrentMonth} />
                         </Section>
 
                         {/* My payslips — the same surface the staff profile shows. */}
