@@ -137,7 +137,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         // Party cell links correctly whether the party is a Person or a Company
         // — and keeps linking after a Person<->Company conversion, which leaves
         // the voucher's stored partyId pointing at the converted-away record.
-        const partyLinks = await resolvePartyLinks(prisma, lines.map((l) => l.voucher.partyId));
+    const partyLinks = await resolvePartyLinks(prisma, lines.map((l) => l.voucher));
         const transactions: TxRow[] = lines.map((line) => ({
             lineId: line.id,
             voucherId: line.voucher.id,
@@ -151,7 +151,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             rate: toNumber(line.rate),
             amount: toNumber(line.amount),
             unitCode: product.unit.code,
-            ...partyLinkFields(line.voucher.partyId != null ? partyLinks.get(line.voucher.partyId) : null),
+            ...partyLinkFields(partyLinks.for(line.voucher)),
         }));
 
         // Synthetic opening-balance row — always prepended when openingStock > 0

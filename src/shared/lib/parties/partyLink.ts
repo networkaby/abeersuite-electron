@@ -1,30 +1,35 @@
 /**
- * Where a party's profile lives, and what a resolved party link looks like.
+ * Where a party's profile lives, and how a voucher names the party it was
+ * raised against.
  *
- * A voucher only ever stores `partyId` — a bare number — plus a `partyType`
- * that says "customer" / "supplier" / "account". That type is about the ROLE
- * the party played on the document, not about what kind of record it is, so it
- * can never tell a Person from a Company. Screens that guessed
- * `?personId=${partyId}` from it were wrong twice: a supplier that was always a
- * Company got a dead link, and so did anybody put through a conversion (see
- * `resolvePartyLinks` in ./partyLinkServer).
+ * A voucher stores two things: `partyId`, a bare number, and `partyType`.
+ * Despite the name, `partyType` is not the role the party played — it is the
+ * KIND of record, written straight from the party picker, whose only two
+ * values are "customer" (a Person) and "company" (a Company). So the table is
+ * always known from the row itself and never has to be looked up.
  *
- * So the kind is decided on the server, once, and the page is handed
- * `partyKind` + `partyEntityId` and simply spells the URL. This file is the
- * shared shape of that answer plus the one spelling of the URL; the lookup
- * itself is server-only and lives next door.
+ * What the row cannot tell you is whether that record is still the live one.
+ * A conversion or a merge leaves the old id in place and forwards it (see
+ * `resolvePartyLinks` in ./partyLinkServer), and that is the one question worth
+ * a query.
  */
 
 /** Which table the party's live record sits in. */
 export type PartyLinkKind = "person" | "company";
 
-/** A party id resolved to a live record — what every register row carries. */
+/** How a voucher names its party — the stored id plus the kind that goes with it. */
+export type PartyRef = {
+    partyId:   number | null;
+    /** "customer" = Person, "company" = Company. Anything else has no profile. */
+    partyType: string | null;
+};
+
+/** A party reference resolved to the record that is live today. */
 export type ResolvedPartyLink = {
-    /** Person or Company, decided by lookup — never inferred from partyType. */
     kind: PartyLinkKind;
-    /** Id of the LIVE record. Differs from the stored partyId after a conversion. */
+    /** Id of the LIVE record — differs from the stored partyId after a conversion or merge. */
     entityId: number;
-    /** The party's ledger Account, which survives a conversion unchanged. */
+    /** The party's ledger Account. Only filled when the caller asked for it. */
     accountId: number | null;
 };
 
@@ -34,8 +39,21 @@ export type PartyLinkFields = {
     partyEntityId: number | null;
 };
 
-/** Empty link fields — a walk-in / account-type party with no profile to open. */
+/** Empty link fields — a walk-in, or a party with no profile to open. */
 export const NO_PARTY_LINK: PartyLinkFields = { partyKind: null, partyEntityId: null };
+
+/**
+ * The table behind a stored `partyType`.
+ *
+ * `null` for anything else — a walk-in (no party at all) or an "account"-type
+ * row, which names a plain ledger head rather than a party, and so has no
+ * customer profile to open.
+ */
+export function partyKindFromType(partyType: string | null | undefined): PartyLinkKind | null {
+    if (partyType === "customer") return "person";
+    if (partyType === "company")  return "company";
+    return null;
+}
 
 /** Spread a resolved link (or nothing) onto a row as `partyKind` / `partyEntityId`. */
 export function partyLinkFields(link: ResolvedPartyLink | null | undefined): PartyLinkFields {
@@ -43,9 +61,8 @@ export function partyLinkFields(link: ResolvedPartyLink | null | undefined): Par
 }
 
 /**
- * The party's profile page. `null` when there is nothing to open — a walk-in,
- * or a party whose record could not be resolved — so callers render plain text
- * instead of a link that goes nowhere.
+ * The party's profile page. `null` when there is nothing to open, so callers
+ * render plain text instead of a link that goes nowhere.
  */
 export function partyProfileHref(
     kind: PartyLinkKind | null | undefined,

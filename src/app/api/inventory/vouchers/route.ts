@@ -138,7 +138,8 @@ export async function GET(req: NextRequest) {
     // Person<->Company conversion that id no longer resolves on its own — the
     // shared resolver follows the conversion tombstone so the link still lands
     // on the party's live profile instead of going dead.
-    const partyLinks = await resolvePartyLinks(prisma, vouchers.map((v) => v.partyId));
+    // `withAccountId` because the settlement pass below keys off partyAccountId.
+    const partyLinks = await resolvePartyLinks(prisma, vouchers, { withAccountId: true });
     // 5D-2: resolve creator names from each row's spine (createdById on the spine).
     const creatorIds = [...new Set(vouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
     const creatorById = new Map(
@@ -176,7 +177,7 @@ export async function GET(req: NextRequest) {
         if (v.partyId == null) {
             return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId), description: v.universalVoucher?.description ?? null, lineCount: v.universalVoucher?._count?.inventoryLines ?? 0, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, ...NO_PARTY_LINK };
         }
-        const link = partyLinks.get(v.partyId);
+        const link = partyLinks.for(v);
         return {
             ...v,
             type:            v.universalVoucher?.type,   // 5D-11: type on spine

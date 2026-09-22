@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
 
     // One bounded pass resolves every party id to its live Person/Company —
     // following the conversion tombstone — so the Party cell never goes dead.
-    const partyLinks = await resolvePartyLinks(prisma, rows.map((v) => v.partyId));
+    const partyLinks = await resolvePartyLinks(prisma, rows);
 
     const today = businessToday();
     const shaped = rows.map((v) => {
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
             partyId:     v.partyId,
             partyType:   v.partyType,
             partyName:   readPartyName(v.partyJson),
-            ...partyLinkFields(v.partyId != null ? partyLinks.get(v.partyId) : null),
+            ...partyLinkFields(partyLinks.for(v)),
             description: v.universalVoucher?.description ?? "",
             totalAmount: Number(v.totalAmount),
             lineCount:   v.lines.length,

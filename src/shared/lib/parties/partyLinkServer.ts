@@ -1,113 +1,163 @@
 /**
- * Turn stored voucher `partyId`s into links that still open, including after a
- * party has been converted between a Person and a Company.
+ * Keep a voucher's party link pointing at a record that still opens, after the
+ * party has been converted between a Person and a Company, or merged into
+ * another party.
  *
- * WHY THIS IS NOT A PLAIN LOOKUP. A conversion (see
- * `src/modules/customer/lib/convertParty.ts`) creates the new record, moves the
- * ledger Account / phones / emails onto it, and then soft-deletes the old one
- * leaving a tombstone — `Person.convertedToCompanyId` or
- * `Company.convertedToPersonId`. It deliberately does NOT rewrite history: old
- * vouchers keep the party id they were raised with, because a document must
- * keep saying who it was actually raised against. The cost of that is that the
- * stored id stops resolving on its own, and the reader has to follow the
- * tombstone. Every screen that skipped this step showed a dead party link.
+ * WHAT COSTS A QUERY AND WHAT DOES NOT. The voucher already records which table
+ * its party lives in — `partyType` is written from the party picker, whose only
+ * values are "customer" (Person) and "company" (Company) — so person-vs-company
+ * is free, read off the row. The one thing the row cannot know is whether that
+ * record is still the live one.
  *
- * COST. Bounded — at most four queries for a whole page of rows, never one per
- * row, and the last three run only when something actually failed to resolve
- * (i.e. never, on a database with no conversions in it).
+ * It may not be. Both the converter (`src/modules/customer/lib/convertParty.ts`)
+ * and the merge tool move the ledger Account / phones / emails onto the surviving
+ * record, soft-delete the old one, and leave a forwarding note on it:
+ *
+ *   convertedToCompanyId / convertedToPersonId   a conversion, crosses tables
+ *   mergedIntoPersonId   / mergedIntoCompanyId   a merge, stays in one table
+ *
+ * Neither rewrites history: a document must keep saying who it was actually
+ * raised against, and `partyJson` holds the name and address frozen at that
+ * moment. The cost is that the stored id stops leading anywhere, and the reader
+ * has to follow the note. Every screen that skipped that step showed a party
+ * that would not open.
+ *
+ * COST. One query per table actually referenced, asking only "which of these
+ * ids were forwarded away" — on most pages, none, and the walk stops there. A
+ * further round only if a forwarding target was ITSELF forwarded (merge a
+ * party, then convert the survivor); the walk is capped so a cycle cannot spin.
+ * A second query at the end only when the caller needs the ledger Account id.
+ * Never a query per row.
  */
 
 import type { PrismaClient } from "@/generated/prisma/client";
-import type { PartyLinkKind, ResolvedPartyLink } from "./partyLink";
+import { partyKindFromType, type PartyLinkKind, type PartyRef, type ResolvedPartyLink } from "./partyLink";
 
 /** Anything that can run the queries — the client or a transaction client. */
 type Db = Pick<PrismaClient, "account" | "person" | "company">;
 
+/** Looks up the resolved link for a row. Rows with no party return `null`. */
+export type PartyLinkResolver = {
+    for(ref: PartyRef): ResolvedPartyLink | null;
+};
+
+type Target = { kind: PartyLinkKind; entityId: number };
+
+const key = (kind: PartyLinkKind, id: number) => `${kind}:${id}`;
+
+/** Chains longer than this are treated as unresolvable rather than walked forever. */
+const MAX_HOPS = 4;
+
 /**
- * Resolve each party id to the live record behind it.
+ * Resolve each row's party to the record that is live today.
  *
- * Ids that resolve to nothing at all — a party since hard-deleted, or an
- * "account"-type voucher whose partyId is not a party — are simply absent from
- * the map, and the caller renders them as plain text.
+ * Pass `withAccountId` only if you need the ledger account — it costs an extra
+ * query, and most callers only want the profile link.
  */
 export async function resolvePartyLinks(
     db: Db,
-    partyIds: readonly (number | null | undefined)[],
-): Promise<Map<number, ResolvedPartyLink>> {
-    const ids = [...new Set(partyIds.filter((id): id is number => id != null))];
-    const resolved = new Map<number, ResolvedPartyLink>();
-    if (ids.length === 0) return resolved;
-
-    // Pass one: the ids that still point at a live party. An Account row is the
-    // proof of life — it is what carries the party's money, and a conversion
-    // moves it rather than duplicating it.
-    const accounts = await db.account.findMany({
-        where: { OR: [{ personId: { in: ids } }, { companyId: { in: ids } }] },
-        select: { id: true, personId: true, companyId: true },
-    });
-    for (const a of accounts) {
-        // Person wins when both could match. Person.id and Company.id are
-        // independent sequences, so the same number can name one of each; the
-        // collision is rare and the voucher's partyType cannot settle it, so we
-        // pick one side deterministically rather than guess per row.
-        if (a.personId != null) {
-            resolved.set(a.personId, { kind: "person", entityId: a.personId, accountId: a.id });
-        }
-        if (a.companyId != null && !resolved.has(a.companyId)) {
-            resolved.set(a.companyId, { kind: "company", entityId: a.companyId, accountId: a.id });
-        }
+    refs: readonly PartyRef[],
+    opts: { withAccountId?: boolean } = {},
+): Promise<PartyLinkResolver> {
+    // Where each row points before any forwarding is followed.
+    const stored = new Map<string, Target>();
+    for (const ref of refs) {
+        const kind = partyKindFromType(ref.partyType);
+        if (kind == null || ref.partyId == null) continue;
+        stored.set(key(kind, ref.partyId), { kind, entityId: ref.partyId });
     }
+    if (stored.size === 0) return { for: () => null };
 
-    const unresolved = ids.filter((id) => !resolved.has(id));
-    if (unresolved.length === 0) return resolved;
-
-    // Pass two: follow the conversion tombstone on whatever is left.
-    const [convertedPersons, convertedCompanies] = await Promise.all([
-        db.person.findMany({
-            where: { id: { in: unresolved }, convertedToCompanyId: { not: null } },
-            select: { id: true, convertedToCompanyId: true },
-        }),
-        db.company.findMany({
-            where: { id: { in: unresolved }, convertedToPersonId: { not: null } },
-            select: { id: true, convertedToPersonId: true },
-        }),
-    ]);
-    const targetCompanyIds = convertedPersons.map((p) => p.convertedToCompanyId!);
-    const targetPersonIds  = convertedCompanies.map((c) => c.convertedToPersonId!);
-    if (targetCompanyIds.length === 0 && targetPersonIds.length === 0) return resolved;
-
-    // Pass three: the moved Account, so the row can still reach the ledger.
-    const targetAccounts = await db.account.findMany({
-        where: {
-            OR: [
-                { companyId: { in: targetCompanyIds } },
-                { personId:  { in: targetPersonIds } },
-            ],
-        },
-        select: { id: true, personId: true, companyId: true },
-    });
-    const accountByCompanyId = new Map(
-        targetAccounts.filter((a) => a.companyId != null).map((a) => [a.companyId!, a.id]),
-    );
-    const accountByPersonId = new Map(
-        targetAccounts.filter((a) => a.personId != null).map((a) => [a.personId!, a.id]),
-    );
-
-    const link = (
-        sourceId: number, kind: PartyLinkKind, entityId: number, accountId: number | undefined,
-    ) => {
-        // No Account on the target means the conversion left nothing to open —
-        // leave the id unresolved rather than link to a shell record.
-        if (accountId == null) return;
-        resolved.set(sourceId, { kind, entityId, accountId });
+    // One forwarding hop for a set of targets: which are dead, and where to.
+    const hop = async (targets: Target[]): Promise<Map<string, Target>> => {
+        const personIds  = targets.filter((t) => t.kind === "person").map((t) => t.entityId);
+        const companyIds = targets.filter((t) => t.kind === "company").map((t) => t.entityId);
+        const [persons, companies] = await Promise.all([
+            personIds.length === 0 ? [] : db.person.findMany({
+                where: {
+                    id: { in: personIds },
+                    OR: [{ convertedToCompanyId: { not: null } }, { mergedIntoPersonId: { not: null } }],
+                },
+                select: { id: true, convertedToCompanyId: true, mergedIntoPersonId: true },
+            }),
+            companyIds.length === 0 ? [] : db.company.findMany({
+                where: {
+                    id: { in: companyIds },
+                    OR: [{ convertedToPersonId: { not: null } }, { mergedIntoCompanyId: { not: null } }],
+                },
+                select: { id: true, convertedToPersonId: true, mergedIntoCompanyId: true },
+            }),
+        ]);
+        const out = new Map<string, Target>();
+        for (const p of persons) {
+            // A conversion crosses tables; a merge stays in this one.
+            const to: Target = p.convertedToCompanyId != null
+                ? { kind: "company", entityId: p.convertedToCompanyId }
+                : { kind: "person",  entityId: p.mergedIntoPersonId! };
+            out.set(key("person", p.id), to);
+        }
+        for (const c of companies) {
+            const to: Target = c.convertedToPersonId != null
+                ? { kind: "person",  entityId: c.convertedToPersonId }
+                : { kind: "company", entityId: c.mergedIntoCompanyId! };
+            out.set(key("company", c.id), to);
+        }
+        return out;
     };
-    for (const p of convertedPersons) {
-        const target = p.convertedToCompanyId!;
-        link(p.id, "company", target, accountByCompanyId.get(target));
+
+    // Walk the forwarding notes. Round one asks about the stored ids; a further
+    // round only happens if that round actually forwarded something somewhere
+    // we have not already asked about, so an unconverted book stops after one.
+    const forwarded = new Map<string, Target>();
+    const asked = new Set<string>();
+    let frontier = [...stored.values()];
+    for (let i = 0; i < MAX_HOPS && frontier.length > 0; i++) {
+        for (const t of frontier) asked.add(key(t.kind, t.entityId));
+        const found = await hop(frontier);
+        if (found.size === 0) break;
+        for (const [from, to] of found) forwarded.set(from, to);
+        frontier = [...found.values()].filter((t) => !asked.has(key(t.kind, t.entityId)));
     }
-    for (const c of convertedCompanies) {
-        const target = c.convertedToPersonId!;
-        link(c.id, "person", target, accountByPersonId.get(target));
+
+    /** Follow a stored id to where it lives now. `null` if the chain is broken. */
+    const live = (start: Target): Target | null => {
+        let at = start;
+        for (let i = 0; i <= MAX_HOPS; i++) {
+            const next = forwarded.get(key(at.kind, at.entityId));
+            if (next == null) return at;
+            at = next;
+        }
+        return null;   // longer than we walked — better no link than a wrong one
+    };
+
+    let accountByEntity = new Map<string, number>();
+    if (opts.withAccountId) {
+        const targets = [...stored.values()].map(live).filter((t): t is Target => t != null);
+        const accounts = await db.account.findMany({
+            where: {
+                OR: [
+                    { personId:  { in: targets.filter((t) => t.kind === "person").map((t) => t.entityId) } },
+                    { companyId: { in: targets.filter((t) => t.kind === "company").map((t) => t.entityId) } },
+                ],
+            },
+            select: { id: true, personId: true, companyId: true },
+        });
+        accountByEntity = new Map(accounts.flatMap((a) => [
+            ...(a.personId  != null ? [[key("person",  a.personId),  a.id] as const] : []),
+            ...(a.companyId != null ? [[key("company", a.companyId), a.id] as const] : []),
+        ]));
     }
-    return resolved;
+
+    return {
+        for(ref) {
+            const kind = partyKindFromType(ref.partyType);
+            if (kind == null || ref.partyId == null) return null;
+            const target = live({ kind, entityId: ref.partyId });
+            if (target == null) return null;
+            return {
+                ...target,
+                accountId: accountByEntity.get(key(target.kind, target.entityId)) ?? null,
+            };
+        },
+    };
 }
