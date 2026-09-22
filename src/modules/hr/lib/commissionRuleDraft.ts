@@ -31,8 +31,7 @@ export function parseRule(d: RuleDraft): { rule: CommissionRule; bad: string | n
     else if (d.kind === "BONUS" && bonus <= 0) bad = "Enter the bonus";
     const slabs: CommissionSlab[] = [];
     if (d.kind === "SLABS") {
-        // The ladder always starts at ₹0 — a first slab typed as "from ₹10,000"
-        // would leave the rupees below it earning nothing without saying so.
+        // The ladder always starts at ₹0, so every rupee lands in some slab.
         for (const [i, s] of d.slabs.entries()) {
             const fromPaise = i === 0 ? 0 : s.from.trim() === "" ? null : parseRupeesToPaise(s.from);
             const rateBp = s.rate.trim() === "" ? null : toBp(s.rate);
