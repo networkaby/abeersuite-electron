@@ -34,6 +34,8 @@ export interface CommissionBoardRow {
     userId: number;
     name: string;
     avatarUrl: string | null;
+    /** The user's role label — the "user kind" a head can be limited to. */
+    role: string | null;
     staffCode: string | null;
     mode: CommissionMode;
     /** The person's OWN scheme in force today (null when they have none, whatever the mode). */

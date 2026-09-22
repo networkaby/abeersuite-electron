@@ -41,7 +41,7 @@ export async function GET(req: Request) {
                 where: excludingSuperAdmin(),
                 orderBy: { name: "asc" },
                 select: {
-                    id: true, name: true, avatarUrl: true,
+                    id: true, name: true, avatarUrl: true, role: true, userRole: { select: { label: true } },
                     staffProfile: { select: { staffCode: true, leftOn: true, weeklyOff: true, ...COMMISSION_PROFILE_SELECT } },
                 },
             }),
@@ -60,6 +60,8 @@ export async function GET(req: Request) {
                 userId: u.id,
                 name: u.name,
                 avatarUrl: u.avatarUrl,
+                // The role's label, not its code — a head is for "Cashier", not "R3".
+                role: u.userRole?.label ?? u.role,
                 staffCode: u.staffProfile?.staffCode ?? null,
                 mode,
                 own: schemeInForce(history, today),

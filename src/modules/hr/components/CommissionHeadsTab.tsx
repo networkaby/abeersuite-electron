@@ -3,12 +3,14 @@
 // Set commission — a catalogue of commission / target HEADS, the way the
 // coupons page is a catalogue of offers. Owner, 2026-09-22: *"in set commission
 // page is like coupon page here we create different commission or target head
-// its not user specific. just do the tab only wiring later."*
+// its not user specific. just do the tab only wiring later."* Then: *"user kind
+// applicable"* — a head says which kinds of user (roles) it is for.
 //
 // A head is one named way of earning: "1% on every sale", "₹1,500 at ₹1 lakh",
-// a slab ladder. Heads are created here once; who is on which head is decided
-// elsewhere, later. UI ONLY for now — the list lives in component state with a
-// few sample heads so the screen can be judged; nothing is saved. The rule
+// a slab ladder. Heads are created here once; the Per person tab then shows
+// each person the heads that apply to their role, with a per-person override.
+// UI ONLY for now — the list lives in the board's component state with a few
+// sample heads so the screen can be judged; nothing is saved. The rule
 // arithmetic it previews is the real one (shared/lib/hr/commissionScheme.ts).
 
 import { useMemo, useState, type ReactNode } from "react";
@@ -29,32 +31,43 @@ import {
 } from "@/shared/lib/hr/commissionScheme";
 import { blankRule, parseRule, toDraft, type RuleDraft } from "./CommissionSchemeDialog";
 
-/** One head as the screen holds it — not yet a table row anywhere. */
-interface CommissionHead {
+/** One head as the screens hold it — not yet a table row anywhere. */
+export interface CommissionHead {
     id: number;
     name: string;
     description: string;
     rule: CommissionRule;
+    /** Globally on. An off head reaches nobody, whatever the overrides say. */
     active: boolean;
+    /** Role labels this head is for. Empty = everyone. */
+    appliesTo: string[];
 }
 
 const L = 100_000_00;
-const SAMPLE_HEADS: CommissionHead[] = [
-    { id: 1, name: "Counter commission", description: "On every bill the person rings.", rule: { kind: "PERCENT", targetPaise: 0, rateBp: 100, slabs: [], bonusPaise: 0 }, active: true },
-    { id: 2, name: "Monthly target bonus", description: "Flat bonus the month the target is crossed.", rule: { kind: "BONUS", targetPaise: L, rateBp: 0, slabs: [], bonusPaise: 1500_00 }, active: true },
-    { id: 3, name: "Star seller", description: "Extra share once past the stretch target.", rule: { kind: "ABOVE_TARGET", targetPaise: 2 * L, rateBp: 200, slabs: [], bonusPaise: 0 }, active: false },
+export const SAMPLE_HEADS: CommissionHead[] = [
+    { id: 1, name: "Counter commission", description: "On every bill the person rings.", rule: { kind: "PERCENT", targetPaise: 0, rateBp: 100, slabs: [], bonusPaise: 0 }, active: true, appliesTo: [] },
+    { id: 2, name: "Monthly target bonus", description: "Flat bonus the month the target is crossed.", rule: { kind: "BONUS", targetPaise: L, rateBp: 0, slabs: [], bonusPaise: 1500_00 }, active: true, appliesTo: [] },
+    { id: 3, name: "Star seller", description: "Extra share once past the stretch target.", rule: { kind: "ABOVE_TARGET", targetPaise: 2 * L, rateBp: 200, slabs: [], bonusPaise: 0 }, active: false, appliesTo: [] },
 ];
 
-const KIND_BADGE: Record<CommissionKind, string> = {
+/** Does this head reach a person of this role? */
+export const headAppliesTo = (h: CommissionHead, role: string | null) => h.appliesTo.length === 0 || (!!role && h.appliesTo.includes(role));
+
+export const KIND_BADGE: Record<CommissionKind, string> = {
     PERCENT:      "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-300",
     ABOVE_TARGET: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-300",
     SLABS:        "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
     BONUS:        "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300",
 };
-const KIND_SHORT: Record<CommissionKind, string> = { PERCENT: "Share of sales", ABOVE_TARGET: "Above target", SLABS: "Slabs", BONUS: "Target bonus" };
+export const KIND_SHORT: Record<CommissionKind, string> = { PERCENT: "Share of sales", ABOVE_TARGET: "Above target", SLABS: "Slabs", BONUS: "Target bonus" };
 
-export default function CommissionHeadsTab({ canEdit }: { canEdit: boolean }) {
-    const [heads, setHeads] = useState<CommissionHead[]>(SAMPLE_HEADS);
+export default function CommissionHeadsTab({ heads, setHeads, roles, canEdit }: {
+    heads: CommissionHead[];
+    setHeads: (fn: (hs: CommissionHead[]) => CommissionHead[]) => void;
+    /** Every role label the current staff carry — the "user kinds" a head can be limited to. */
+    roles: string[];
+    canEdit: boolean;
+}) {
     const [view, setView] = useState<"LIST" | "CREATE">("LIST");
     const [editing, setEditing] = useState<CommissionHead | null>(null);
     const [search, setSearch] = useState("");
@@ -98,11 +111,11 @@ export default function CommissionHeadsTab({ canEdit }: { canEdit: boolean }) {
             </div>
 
             <p className="text-xs text-muted-foreground">
-                A head is one way of earning — a share of sales, a bonus at a target, a slab ladder. Create the heads here once; who is on which head is decided separately. <span className="font-medium text-foreground">Preview only: nothing here is saved yet.</span>
+                A head is one way of earning — a share of sales, a bonus at a target, a slab ladder. Create the heads here once and say which kinds of user they are for; each person&apos;s own overrides live on the Per person tab. <span className="font-medium text-foreground">Preview only: nothing here is saved yet.</span>
             </p>
 
             {view === "CREATE" ? (
-                <HeadForm key={editing?.id ?? "new"} initial={editing} onCancel={() => { setEditing(null); setView("LIST"); }} onSave={save} />
+                <HeadForm key={editing?.id ?? "new"} initial={editing} roles={roles} onCancel={() => { setEditing(null); setView("LIST"); }} onSave={save} />
             ) : shown.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
                     {heads.length ? "No head matches." : "No heads yet — create the first one."}
@@ -115,7 +128,7 @@ export default function CommissionHeadsTab({ canEdit }: { canEdit: boolean }) {
                                 <TableHead>Head</TableHead>
                                 <TableHead className="w-32">Kind</TableHead>
                                 <TableHead>Terms</TableHead>
-                                <TableHead className="w-36">Target</TableHead>
+                                <TableHead className="w-40">Applies to</TableHead>
                                 <TableHead className="w-20">Active</TableHead>
                                 <TableHead className="w-24 text-right">Actions</TableHead>
                             </TableRow>
@@ -129,7 +142,10 @@ export default function CommissionHeadsTab({ canEdit }: { canEdit: boolean }) {
                                     </TableCell>
                                     <TableCell><Badge variant="outline" className={`px-1.5 text-[10px] ${KIND_BADGE[h.rule.kind]}`}>{KIND_SHORT[h.rule.kind]}</Badge></TableCell>
                                     <TableCell className="whitespace-normal text-sm">{describeRule(h.rule, formatRupeesFromPaise)}</TableCell>
-                                    <TableCell className="text-sm tabular-nums">{h.rule.targetPaise > 0 ? `${formatRupeesFromPaise(h.rule.targetPaise)} / month` : <span className="text-muted-foreground">—</span>}</TableCell>
+                                    <TableCell className="whitespace-normal text-xs">
+                                        {h.appliesTo.length === 0 ? <span className="text-muted-foreground">Everyone</span>
+                                            : <div className="flex flex-wrap gap-1">{h.appliesTo.map((r) => <Badge key={r} variant="outline" className="px-1.5 text-[10px]">{r}</Badge>)}</div>}
+                                    </TableCell>
                                     <TableCell>
                                         <Switch checked={h.active} disabled={!canEdit} aria-label={`${h.name} active`}
                                             onCheckedChange={(v) => setHeads((hs) => hs.map((x) => (x.id === h.id ? { ...x, active: v } : x)))} />
@@ -152,16 +168,20 @@ export default function CommissionHeadsTab({ canEdit }: { canEdit: boolean }) {
     );
 }
 
-/** The full-width editor for one head — name, kind, the kind's own boxes, and the sentence it comes to. */
-function HeadForm({ initial, onCancel, onSave }: { initial: CommissionHead | null; onCancel: () => void; onSave: (h: Omit<CommissionHead, "id">) => void }) {
+/** The full-width editor for one head — name, kind, the kind's own boxes, who it is for, and the sentence it comes to. */
+function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHead | null; roles: string[]; onCancel: () => void; onSave: (h: Omit<CommissionHead, "id">) => void }) {
     const [name, setName] = useState(initial?.name ?? "");
     const [description, setDescription] = useState(initial?.description ?? "");
     const [active, setActive] = useState(initial?.active ?? true);
+    const [appliesTo, setAppliesTo] = useState<string[]>(initial?.appliesTo ?? []);
     const [draft, setDraft] = useState<RuleDraft>(() => (initial ? toDraft(initial.rule) : blankRule()));
     const { rule, bad } = useMemo(() => parseRule(draft), [draft]);
     const canSave = !bad && name.trim().length > 0;
     const set = (patch: Partial<RuleDraft>) => setDraft((d) => ({ ...d, ...patch }));
     const setSlab = (k: number, patch: Partial<RuleDraft["slabs"][number]>) => setDraft((d) => ({ ...d, slabs: d.slabs.map((s, l) => (l === k ? { ...s, ...patch } : s)) }));
+    const toggleRole = (r: string) => setAppliesTo((rs) => (rs.includes(r) ? rs.filter((x) => x !== r) : [...rs, r]));
+    // A role from an earlier save that nobody carries today still shows, so it can be unticked.
+    const roleChips = useMemo(() => [...new Set([...roles, ...appliesTo])].sort(), [roles, appliesTo]);
 
     const example = useMemo(() => {
         const base = rule.targetPaise > 0 ? rule.targetPaise : L;
@@ -190,7 +210,7 @@ function HeadForm({ initial, onCancel, onSave }: { initial: CommissionHead | nul
                             </Field>
                         )}
                         {(draft.kind === "PERCENT" || draft.kind === "ABOVE_TARGET") && (
-                            <Field label="Rate (%)" required hint={draft.kind === "PERCENT" ? "On every rupee sold" : "Only on the rupees past the target"}>
+                            <Field label="Rate (%)" required hint={draft.kind === "PERCENT" ? "On every rupee sold — a person may be given their own rate on the Per person tab" : "Only on the rupees past the target"}>
                                 {(id) => <NumericInput id={id} mode="decimal" value={draft.rate} onValueChange={(v) => set({ rate: v })} placeholder="e.g. 1.5" />}
                             </Field>
                         )}
@@ -213,10 +233,24 @@ function HeadForm({ initial, onCancel, onSave }: { initial: CommissionHead | nul
                             <Button type="button" variant="outline" size="sm" disabled={draft.slabs.length >= 10} onClick={() => set({ slabs: [...draft.slabs, { from: "", rate: "" }] })}><Plus size={14} /> Add slab</Button>
                         </div>
                     )}
+
+                    {/* Who it is for — user kinds, i.e. roles. Nothing ticked = everyone. */}
+                    <div className="space-y-1">
+                        <div className="text-sm font-medium">Applies to</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            <Chip on={appliesTo.length === 0} onClick={() => setAppliesTo([])}>Everyone</Chip>
+                            {roleChips.map((r) => <Chip key={r} on={appliesTo.includes(r)} onClick={() => toggleRole(r)}>{r}</Chip>)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            {appliesTo.length === 0 ? "Every staff member gets this head." : `Only ${appliesTo.join(", ")} get this head; others never see it.`}
+                            {roleChips.length === 0 && " No roles found on current staff yet."}
+                        </div>
+                    </div>
+
                     <Field label="Description" hint="Shown under the head, and to the person on My Info">
                         {(id) => <Textarea id={id} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} rows={2} placeholder="What this head is for (optional)" />}
                     </Field>
-                    <label className="flex items-center gap-2 text-sm"><Switch checked={active} onCheckedChange={setActive} /> Active — can be put on people</label>
+                    <label className="flex items-center gap-2 text-sm"><Switch checked={active} onCheckedChange={setActive} /> Active — globally on; an off head reaches nobody</label>
                 </div>
 
                 <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
@@ -233,9 +267,18 @@ function HeadForm({ initial, onCancel, onSave }: { initial: CommissionHead | nul
             </div>
             <div className="mt-4 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-                <Button type="button" disabled={!canSave} onClick={() => onSave({ name: name.trim(), description: description.trim(), rule, active })}>{initial ? "Save head" : "Create head"}</Button>
+                <Button type="button" disabled={!canSave} onClick={() => onSave({ name: name.trim(), description: description.trim(), rule, active, appliesTo })}>{initial ? "Save head" : "Create head"}</Button>
             </div>
         </div>
+    );
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+    return (
+        <button type="button" onClick={onClick} aria-pressed={on}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground"}`}>
+            {children}
+        </button>
     );
 }
 
