@@ -25,7 +25,7 @@ import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
-import { LEAVE_KINDS, LEAVE_KIND_LABELS, type LeaveKind, type LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { LEAVE_KINDS, LEAVE_KIND_LABELS, earliestLeaveDate, leaveNoticeError, type LeaveKind, type LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { LeaveRequestDto } from "../lib/attendanceTypes";
 import type { StaffRow } from "../lib/staffTypes";
 
@@ -131,15 +131,33 @@ export default function LeaveBoard({ canEdit, selfId }: { canEdit: boolean; self
     );
 }
 
-export function LeaveDialog({ canPickPerson, onClose, onSaved }: { canPickPerson: boolean; onClose: () => void; onSaved: () => void }) {
+export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onClose, onSaved }: { canPickPerson: boolean; heldToNotice?: boolean; onClose: () => void; onSaved: () => void }) {
     const { data: staff } = useApiResource<StaffRow[]>(canPickPerson ? "/api/hr/staff" : null);
     const [userId, setUserId] = useState<number | null>(null);
-    const [fromDate, setFromDate] = useState(todayIso());
-    const [toDate, setToDate] = useState(todayIso());
     const [kind, setKind] = useState<LeaveKind>("CASUAL");
+    /* The notice rule only binds a person asking for his own leave. HR filing by
+       hand is outside it, so the dialog stops nagging the moment it can pick a
+       person. The server holds the same line — this is only to save the trip. */
+    const held = heldToNotice;
+    const earliest = earliestLeaveDate(kind, todayIso());
+    const [fromDate, setFromDate] = useState(held ? earliest : todayIso());
+    const [toDate, setToDate] = useState(held ? earliest : todayIso());
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
     const options = useMemo(() => (staff ?? []).map((s) => ({ value: s.id, label: s.name })), [staff]);
+    const notice = held ? leaveNoticeError(kind, fromDate, todayIso()) : null;
+
+    /* Switching Casual → Sick and back moves the earliest day, so a From that is
+       now too early is pushed forward rather than left sitting there invalid. */
+    const pickKind = (next: LeaveKind) => {
+        setKind(next);
+        if (!held) return;
+        const first = earliestLeaveDate(next, todayIso());
+        if (fromDate < first) {
+            setFromDate(first);
+            if (toDate < first) setToDate(first);
+        }
+    };
 
     const submit = async () => {
         setSaving(true);
@@ -171,19 +189,20 @@ export function LeaveDialog({ canPickPerson, onClose, onSaved }: { canPickPerson
                     </div>
                     <Field label="Kind">
                         {(id) => (
-                            <Select value={kind} onValueChange={(v) => setKind(v as LeaveKind)}>
+                            <Select value={kind} onValueChange={(v) => pickKind(v as LeaveKind)}>
                                 <SelectTrigger id={id} className="h-9 w-full text-sm"><SelectValue /></SelectTrigger>
                                 <SelectContent>{LEAVE_KINDS.map((k) => <SelectItem key={k} value={k}>{LEAVE_KIND_LABELS[k]}</SelectItem>)}</SelectContent>
                             </Select>
                         )}
                     </Field>
+                    {notice && <p className="text-xs text-destructive">{notice}</p>}
                     <Field label="Reason (optional)">
                         {(id) => <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} className="h-9 text-sm" />}
                     </Field>
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button type="button" disabled={saving || !fromDate || !toDate || toDate < fromDate} onClick={() => void submit()}>{saving ? "Saving…" : "Save"}</Button>
+                    <Button type="button" disabled={saving || !fromDate || !toDate || toDate < fromDate || !!notice} onClick={() => void submit()}>{saving ? "Saving…" : "Save"}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

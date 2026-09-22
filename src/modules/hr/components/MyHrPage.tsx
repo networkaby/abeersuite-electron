@@ -50,7 +50,10 @@ function shiftMonth(month: string, by: number): string {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-export default function MyHrPage({ userId }: { userId: number }) {
+/* `isHr` only decides whether the leave-notice rule binds this person in the
+   dialog — HR files by hand and is not held to it. The server decides the same
+   thing again on its own. */
+export default function MyHrPage({ userId, isHr }: { userId: number; isHr: boolean }) {
     const [month, setMonth] = useState(() => todayIso().slice(0, 7));
     const { data, loading, refreshing, error, reload } = useApiResource<MyHrPayload>(`/api/hr/me?month=${month}`);
     useRealtimeTopics(["settings"], reload);
@@ -233,6 +236,7 @@ export default function MyHrPage({ userId }: { userId: number }) {
                 {filing && (
                     <LeaveDialog
                         canPickPerson={false}
+                        heldToNotice={!isHr}
                         onClose={() => setFiling(false)}
                         onSaved={() => { setFiling(false); reload(); }}
                     />
