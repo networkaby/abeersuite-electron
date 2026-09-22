@@ -4,7 +4,7 @@
 // salary ledger, and leaving. Every field saves on blur (Pattern D):
 // the PATCH is partial, so each box is its own write and its own tick.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { useFieldSave } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatInr } from "@/shared/lib/format/moneyInr";
+import { clampNumber, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format/parseNumericInput";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { DEFAULT_IDLE_LIMIT_MINUTES, dutyHoursFor, dutyMinutesFor, formatWorked } from "@/shared/lib/hr/dutyTime";
@@ -29,6 +30,29 @@ import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABELS } from "@/shared/lib/schemas/h
 import type { StaffDetail } from "../lib/staffTypes";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// House rule: no `<input type="number">`. These two boxes save on blur and are
+// uncontrolled, so instead of the shared NumericInput they keep the browser out
+// the same way by hand — sanitise each keystroke, clamp once focus leaves.
+const numberBox = (mode: "digits" | "decimal", min: number, max: number) => ({
+    type: "text" as const,
+    inputMode: (mode === "digits" ? "numeric" : "decimal") as "numeric" | "decimal",
+    autoComplete: "off",
+    onChange: (e: ChangeEvent<HTMLInputElement>) => {
+        e.target.value = mode === "digits" ? parseDigitsInput(e.target.value) : parseDecimalInput(e.target.value);
+    },
+    /** The blur value, sanitised and pulled inside the bounds. "" stays "" —
+     *  blank means "use the default", not zero. */
+    settle: (raw: string) => {
+        const cleaned = (mode === "digits" ? parseDigitsInput(raw) : parseDecimalInput(raw)).replace(/\.$/, "");
+        if (!cleaned) return "";
+        const n = Number(cleaned);
+        return Number.isFinite(n) ? String(clampNumber(n, min, max)) : "";
+    },
+});
+
+const HOURS_BOX = numberBox("decimal", 0.5, 24);
+const IDLE_BOX = numberBox("digits", 5, 360);
 
 export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
     url: string;
@@ -251,19 +275,19 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                     )}
                 </Field>
 
-                <Field label="Paid duty" hint="Leave blank and a full day is simply the office hours. Set it only when part of the day is an unpaid break.">
+                <Field label="Standard office hours" hint="The duty a full day is counted against — work beyond it is overtime. Leave blank and a full day is simply the office hours. Set it only when part of the day is an unpaid break.">
                     {(id) => (
                         <div className="flex items-center gap-1">
                             <Input
                                 id={id}
-                                type="number"
-                                step="0.5"
-                                min="0.5"
-                                max="24"
+                                type={HOURS_BOX.type}
+                                inputMode={HOURS_BOX.inputMode}
+                                autoComplete={HOURS_BOX.autoComplete}
+                                onChange={HOURS_BOX.onChange}
                                 placeholder={String(+(dutyMinutesFor(null, effective.start, effective.end) / 60).toFixed(2))}
                                 defaultValue={profile?.dutyMinutes ? String(+(profile.dutyMinutes / 60).toFixed(2)) : ""}
                                 className="h-9 w-24 text-sm"
-                                onBlur={(e) => { const v = e.target.value.trim(); void save({
+                                onBlur={(e) => { const v = HOURS_BOX.settle(e.target.value); e.target.value = v; void save({
                                     key: "dutyMinutes",
                                     original: profile?.dutyMinutes ? String(+(profile.dutyMinutes / 60).toFixed(2)) : "",
                                     next: v,
@@ -271,7 +295,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                                     // minutes because a 7.5-hour day is not a whole number of them.
                                     write: (h) => { const mins = h ? Math.round(Number(h) * 60) : null; setDutyMinutes(mins); return patch({ dutyMinutes: mins }); },
                                     revert: (h) => { e.target.value = h; setDutyMinutes(h ? Math.round(Number(h) * 60) : null); },
-                                    label: "Paid duty",
+                                    label: "Standard office hours",
                                     onSaved: onChanged,
                                 }); }}
                             />
@@ -286,14 +310,14 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                         <div className="flex items-center gap-1">
                             <Input
                                 id={id}
-                                type="number"
-                                step="5"
-                                min="5"
-                                max="360"
+                                type={IDLE_BOX.type}
+                                inputMode={IDLE_BOX.inputMode}
+                                autoComplete={IDLE_BOX.autoComplete}
+                                onChange={IDLE_BOX.onChange}
                                 placeholder={String(DEFAULT_IDLE_LIMIT_MINUTES)}
                                 defaultValue={profile?.idleLimitMinutes ?? ""}
                                 className="h-9 w-24 text-sm"
-                                onBlur={(e) => { const v = e.target.value.trim(); void save({
+                                onBlur={(e) => { const v = IDLE_BOX.settle(e.target.value); e.target.value = v; void save({
                                     key: "idleLimitMinutes",
                                     original: profile?.idleLimitMinutes ? String(profile.idleLimitMinutes) : "",
                                     next: v,

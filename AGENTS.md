@@ -15,6 +15,13 @@ eye on bug during any work.
 
 Every printable document must be customizable through the print template.
 
+**Never `<input type="number">`.** The spinner steals the scroll wheel, paste
+breaks, and the browser silently blanks a value it dislikes instead of telling
+the user. Use `NumericInput` from `src/shared` (it binds a string and clamps on
+blur). A box that must stay uncontrolled uses `type="text"` with `inputMode`,
+sanitises each keystroke with `parseDigitsInput` / `parseDecimalInput`, and
+clamps in code on blur — never with `min` / `max` / `step` attributes.
+
 ## 3. Current Phase: Refactor & Simplify
 
 Project is nearly complete. Prefer **simple, maintainable, DRY code**; remove duplicate logic and abstractions. Before deleting or changing a table, field or relation, check **seeds, APIs and UI**.
