@@ -27,23 +27,23 @@ import {
 } from "@/shared/lib/hr/commissionScheme";
 import type { CommissionSchemeDto } from "../lib/commissionTypes";
 
-type SlabDraft = { from: string; rate: string };
-type RuleDraft = { kind: CommissionKind; target: string; rate: string; bonus: string; slabs: SlabDraft[] };
+export type SlabDraft = { from: string; rate: string };
+export type RuleDraft = { kind: CommissionKind; target: string; rate: string; bonus: string; slabs: SlabDraft[] };
 
 const rupees = (paise: number) => (paise ? String(paiseToRupees(paise)) : "");
 const pct = (bp: number) => (bp ? String(Number((bp / 100).toFixed(2))) : "");
 const toBp = (s: string) => { const n = Number(s); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null; };
 const toPaise = (s: string) => (s.trim() === "" ? 0 : parseRupeesToPaise(s));
 
-const blankRule = (kind: CommissionKind = "PERCENT"): RuleDraft => ({ kind, target: "", rate: "", bonus: "", slabs: [{ from: "0", rate: "" }, { from: "", rate: "" }] });
-const toDraft = (r: CommissionRule): RuleDraft => ({
+export const blankRule = (kind: CommissionKind = "PERCENT"): RuleDraft => ({ kind, target: "", rate: "", bonus: "", slabs: [{ from: "0", rate: "" }, { from: "", rate: "" }] });
+export const toDraft = (r: CommissionRule): RuleDraft => ({
     kind: r.kind, target: rupees(r.targetPaise), rate: pct(r.rateBp), bonus: rupees(r.bonusPaise),
     // A slab may honestly start at ₹0, so the from box is never blanked the way an unset target is.
     slabs: r.slabs.length ? r.slabs.map((s) => ({ from: String(paiseToRupees(s.fromPaise)), rate: pct(s.rateBp) })) : blankRule().slabs,
 });
 
 /** A draft rule → the rule, or the sentence that says why it is not one yet. */
-function parseRule(d: RuleDraft): { rule: CommissionRule; bad: string | null } {
+export function parseRule(d: RuleDraft): { rule: CommissionRule; bad: string | null } {
     const target = toPaise(d.target), bonus = toPaise(d.bonus), rate = d.rate.trim() === "" ? 0 : toBp(d.rate);
     let bad: string | null = null;
     if (target == null) bad = "The target is not a rupee figure";

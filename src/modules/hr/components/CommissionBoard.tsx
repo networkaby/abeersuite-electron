@@ -2,11 +2,10 @@
 
 // Targets & Commission — two tabs.
 //
-//   Set commission — where HR decides: the shop's scheme (everyone on "Shop
-//                    scheme" follows it), and per person the mode and their own
-//                    scheme with its history. No sales figures here; this is
-//                    the rule book. Owner, 2026-09-22: "first give a tab where
-//                    we set commission".
+//   Set commission — the catalogue of commission / target HEADS, like the
+//                    coupons page: named ways of earning, not tied to anyone.
+//                    CommissionHeadsTab — UI only for now, wiring later
+//                    (owner, 2026-09-22). Who is on which head comes after.
 //   This month      — the leaderboard: the scheme that applies, the month's own
 //                    sales against it, what that has earned.
 //
@@ -15,10 +14,9 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, History, Pencil, Settings2, Store, Target, Trash2, Trophy } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings2, Target, Trash2, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
@@ -30,9 +28,10 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
-import { COMMISSION_MODES, COMMISSION_MODE_LABELS, describeScheme, type CommissionMode } from "@/shared/lib/hr/commissionScheme";
+import { COMMISSION_MODE_LABELS, describeScheme } from "@/shared/lib/hr/commissionScheme";
 import type { CommissionBoardPayload, CommissionBoardRow, CommissionSchemeDto } from "../lib/commissionTypes";
 import CommissionSchemeDialog from "./CommissionSchemeDialog";
+import CommissionHeadsTab from "./CommissionHeadsTab";
 import { TargetProgress, monthLabel, shiftMonth } from "./MyTargetCard";
 
 type Editing = { userId: number | null; name: string; startFrom: CommissionSchemeDto | null };
@@ -42,8 +41,6 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
     const { data, loading, refreshing, error, reload } = useApiResource<CommissionBoardPayload>(`/api/hr/commission?month=${month}`);
     useRealtimeTopics(["settings", "ledger"], reload);
     const [editing, setEditing] = useState<Editing | null>(null);
-    const [historyFor, setHistoryFor] = useState<number | null>(null);
-    const [globalHistoryOpen, setGlobalHistoryOpen] = useState(false);
     const [tab, setTab] = useState<"set" | "month">("set");
 
     const isCurrent = data ? month === data.today.slice(0, 7) : true;
@@ -78,16 +75,6 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
         }
     };
 
-    const setMode = async (r: CommissionBoardRow, mode: CommissionMode) => {
-        try {
-            await axios.patch("/api/hr/commission/mode", { userId: r.userId, mode });
-            toast.success(`${r.name}: ${COMMISSION_MODE_LABELS[mode]}`);
-            reload();
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not change the mode"));
-        }
-    };
-
     return (
         <ScrollArea className="h-full" type="always">
             <div className="px-6 pt-3 pb-6">
@@ -115,96 +102,8 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
                             <TabsTrigger value="month"><Trophy size={14} /> This month</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="set" className="space-y-4">
-                        {/* The shop's scheme — what everyone on "Shop scheme" earns by. */}
-                        <div className="rounded-lg border border-border bg-card p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Store size={14} /> Shop scheme — everyone on &quot;Shop scheme&quot; follows it</div>
-                                    <div className="mt-1 text-sm font-medium">
-                                        {data.global ? describeScheme(data.global, formatRupeesFromPaise) : "No shop scheme set — people on “Shop scheme” earn nothing until one is."}
-                                    </div>
-                                    {data.global && <div className="text-xs text-muted-foreground">since {formatDate(data.global.effectiveFrom)}{data.global.note ? ` — ${data.global.note}` : ""}</div>}
-                                </div>
-                                <div className="flex gap-1">
-                                    {data.globalHistory.length > 0 && (
-                                        <Button type="button" variant="ghost" size="icon" aria-label="Shop scheme history" onClick={() => setGlobalHistoryOpen((o) => !o)}><History size={15} /></Button>
-                                    )}
-                                    {canEdit && (
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ userId: null, name: "Shop", startFrom: data.global })}>
-                                            <Pencil size={14} /> {data.global ? "Revise" : "Set"}
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                            {globalHistoryOpen && (
-                                <ul className="mt-3 space-y-1 border-t border-border pt-2 text-xs">
-                                    {data.globalHistory.map((s) => (
-                                        <li key={s.id} className="flex items-center justify-between gap-2">
-                                            <span><span className="text-muted-foreground">from {formatDate(s.effectiveFrom)} · </span>{describeScheme(s, formatRupeesFromPaise)}{s.note && <span className="text-muted-foreground"> — {s.note}</span>}</span>
-                                            {canEdit && <Button type="button" variant="ghost" size="icon" aria-label="Delete" onClick={() => remove(s, "the shop")}><Trash2 size={14} /></Button>}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-
-                        {/* Per person: the switch, and their own scheme. */}
-                        <div className="overflow-x-auto rounded-lg border border-border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Person</TableHead>
-                                        <TableHead className="w-40">Mode</TableHead>
-                                        <TableHead>Own scheme</TableHead>
-                                        <TableHead className="w-32" />
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {data.rows.length === 0 && <TableEmptyRow colSpan={4} message="No current staff." />}
-                                    {data.rows.map((r) => {
-                                        const open = historyFor === r.userId;
-                                        return (
-                                            <RowGroup key={r.userId} open={open} row={r} canEdit={canEdit} colSpan={2} onDelete={(s) => remove(s, `${r.name}'s`)}>
-                                                <TableRow>
-                                                    <TableCell>
-                                                        <div className="flex items-center gap-2">
-                                                            <UserAvatar avatarUrl={r.avatarUrl} name={r.name} sizePx={32} className="shrink-0" />
-                                                            <div className="min-w-0">
-                                                                <div className="truncate font-medium">{r.name}</div>
-                                                                {r.staffCode && <div className="text-xs text-muted-foreground">{r.staffCode}</div>}
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell><ModeSelect row={r} canEdit={canEdit} onChange={setMode} /></TableCell>
-                                                    <TableCell className="max-w-[24rem] text-sm">
-                                                        {r.own ? (
-                                                            <div className="whitespace-normal text-xs">
-                                                                {describeScheme(r.own, formatRupeesFromPaise)}
-                                                                <span className="text-muted-foreground"> · since {formatDate(r.own.effectiveFrom)}</span>
-                                                                {r.mode !== "OWN" && <span className="text-muted-foreground"> · not in use</span>}
-                                                            </div>
-                                                        ) : <span className="text-muted-foreground">{r.mode === "OWN" ? "None yet — set one" : "—"}</span>}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end gap-1">
-                                                            {r.history.length > 0 && (
-                                                                <Button type="button" variant="ghost" size="icon" aria-label="History" onClick={() => setHistoryFor(open ? null : r.userId)}><History size={15} /></Button>
-                                                            )}
-                                                            {canEdit && (
-                                                                <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ userId: r.userId, name: r.name, startFrom: r.own ?? data.global })}>
-                                                                    <Pencil size={14} /> {r.own ? "Revise" : "Set own"}
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            </RowGroup>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
-                        </div>
+                        <TabsContent value="set">
+                            <CommissionHeadsTab canEdit={canEdit} />
                         </TabsContent>
 
                         <TabsContent value="month">
@@ -224,9 +123,8 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
                                     {ranked.length === 0 && <TableEmptyRow colSpan={6} message="No current staff." />}
                                     {ranked.map((r, i) => {
                                         const m = r.thisMonth;
-                                        const open = historyFor === r.userId;
                                         return (
-                                            <RowGroup key={r.userId} open={open} row={r} canEdit={false} colSpan={4} onDelete={(s) => remove(s, `${r.name}'s`)}>
+                                            <RowGroup key={r.userId} open={false} row={r} canEdit={false} colSpan={4} onDelete={(s) => remove(s, `${r.name}'s`)}>
                                                 <TableRow className={m.outcome?.targetMet ? "bg-emerald-50/60 dark:bg-emerald-950/20" : undefined}>
                                                     <TableCell className="text-muted-foreground">
                                                         {m.outcome?.targetMet ? <Trophy size={16} className="text-amber-500" /> : i + 1}
@@ -272,18 +170,6 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
                 )}
             </div>
         </ScrollArea>
-    );
-}
-
-function ModeSelect({ row: r, canEdit, onChange }: { row: CommissionBoardRow; canEdit: boolean; onChange: (r: CommissionBoardRow, mode: CommissionMode) => void }) {
-    if (!canEdit) return <span className="text-sm">{COMMISSION_MODE_LABELS[r.mode]}</span>;
-    return (
-        <Select value={r.mode} onValueChange={(v) => onChange(r, v as CommissionMode)}>
-            <SelectTrigger className="h-8 w-full text-xs" aria-label={`${r.name} commission mode`}><SelectValue /></SelectTrigger>
-            <SelectContent>
-                {COMMISSION_MODES.map((k) => <SelectItem key={k} value={k}>{COMMISSION_MODE_LABELS[k]}</SelectItem>)}
-            </SelectContent>
-        </Select>
     );
 }
 
