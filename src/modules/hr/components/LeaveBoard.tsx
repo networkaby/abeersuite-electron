@@ -26,7 +26,9 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { LEAVE_KINDS, LEAVE_KIND_LABELS, earliestLeaveDate, leaveNoticeError, type LeaveKind, type LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { isoDaysBetween } from "../lib/attendanceCalendar";
 import type { LeaveRequestDto } from "../lib/attendanceTypes";
+import type { LeaveBalancePayload } from "../lib/leaveTypes";
 import type { StaffRow } from "../lib/staffTypes";
 
 const STATUS_BADGE: Record<LeaveStatus, string> = {
@@ -50,9 +52,28 @@ export default function LeaveBoard({ canEdit, selfId }: { canEdit: boolean; self
 
     const decide = async (r: LeaveRequestDto, status: "APPROVED" | "REJECTED" | "CANCELLED") => {
         const verb = status === "APPROVED" ? "Approve" : status === "REJECTED" ? "Reject" : "Cancel";
+        /* Approving is the decision that spends a quota, so the balance is fetched
+           for that moment rather than held for every row on the board: HR cannot
+           judge a request without knowing what the person has already used. */
+        let quotaLine = "";
+        if (status === "APPROVED") {
+            try {
+                const { data } = await axios.get<LeaveBalancePayload>(`/api/hr/leave/balance?userId=${r.userId}`);
+                const b = data.balances.find((x) => x.code === r.kind);
+                if (b && b.quota !== null) {
+                    const after = b.taken + r.days;
+                    quotaLine = after > b.quota
+                        ? ` ${b.name}: ${b.taken} of ${b.quota} used — this takes it to ${after}, so ${after - b.quota} day${after - b.quota === 1 ? "" : "s"} will be unpaid.`
+                        : ` ${b.name}: ${b.taken} of ${b.quota} used — this leaves ${b.quota - after}.`;
+                }
+            } catch {
+                /* The balance is a help, not a gate. If it cannot be read, HR still
+                   decides; the payroll run works the same figure out on its own. */
+            }
+        }
         const ok = await confirmAction({
             title: `${verb} ${r.userName}'s leave?`,
-            body: `${formatDate(r.fromDate)} to ${formatDate(r.toDate)} — ${r.days} day${r.days === 1 ? "" : "s"}, ${LEAVE_KIND_LABELS[r.kind].toLowerCase()}. ${status === "APPROVED" ? "Those days read as leave on the register." : r.status === "APPROVED" ? "Those days come back off the register." : ""}`,
+            body: `${formatDate(r.fromDate)} to ${formatDate(r.toDate)} — ${r.days} day${r.days === 1 ? "" : "s"}, ${LEAVE_KIND_LABELS[r.kind].toLowerCase()}. ${status === "APPROVED" ? "Those days read as leave on the register." : r.status === "APPROVED" ? "Those days come back off the register." : ""}${quotaLine}`,
             confirmLabel: verb,
             destructive: status !== "APPROVED",
         });
@@ -147,6 +168,18 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
     const options = useMemo(() => (staff ?? []).map((s) => ({ value: s.id, label: s.name })), [staff]);
     const notice = held ? leaveNoticeError(kind, fromDate, todayIso()) : null;
 
+    /* What this person has left of this kind. Read for whoever the leave is FOR —
+       HR filing on somebody's behalf needs that person's balance, not their own —
+       and re-read when the person changes, which the URL does on its own. */
+    const { data: balance } = useApiResource<LeaveBalancePayload>(
+        `/api/hr/leave/balance${userId ? `?userId=${userId}` : ""}`,
+    );
+    const mine = balance?.balances.find((b) => b.code === kind);
+    const asked = fromDate && toDate && toDate >= fromDate ? isoDaysBetween(fromDate, toDate).length : 0;
+    /* Going over never blocks — the owner's call. It warns, HR still decides, and
+       the days past the quota are the ones payroll leaves unpaid. */
+    const overBy = mine && mine.quota !== null ? Math.max(0, mine.taken + asked - mine.quota) : 0;
+
     /* Switching Casual → Sick and back moves the earliest day, so a From that is
        now too early is pushed forward rather than left sitting there invalid. */
     const pickKind = (next: LeaveKind) => {
@@ -196,6 +229,20 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
                         )}
                     </Field>
                     {notice && <p className="text-xs text-destructive">{notice}</p>}
+                    {mine && (
+                        <p className="text-xs text-muted-foreground">
+                            {mine.quota === null
+                                ? `${mine.name} leave has no limit. ${mine.taken} taken this year.`
+                                : `${mine.name}: ${mine.left} of ${mine.quota} left this year (${mine.taken} taken${mine.pending ? `, ${mine.pending} awaiting a decision` : ""}).`}
+                        </p>
+                    )}
+                    {overBy > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                            This is {overBy} day{overBy === 1 ? "" : "s"} more than the {mine!.name.toLowerCase()} leave
+                            allowed in a year. It can still be sent — HR decides — but {overBy === 1 ? "that day" : "those days"} will
+                            be unpaid if approved.
+                        </p>
+                    )}
                     <Field label="Reason (optional)">
                         {(id) => <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} className="h-9 text-sm" />}
                     </Field>

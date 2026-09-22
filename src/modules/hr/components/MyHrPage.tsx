@@ -170,7 +170,31 @@ export default function MyHrPage({ userId, isHr }: { userId: number; isHr: boole
                         </Section>
 
                         {/* My leave — own requests only; the board is HR's. */}
-                        <Section title="My leave" icon={<Palmtree size={15} />}>
+                        <Section
+                            title="My leave"
+                            icon={<Palmtree size={15} />}
+                            right={<span className="text-xs text-muted-foreground">Leave year {data.leaveBalance.year.label}</span>}
+                        >
+                            {/* What is left of each kind, before the list of what was
+                                asked for. A person deciding whether to apply wants the
+                                number first and the history second. */}
+                            <div className="mb-3 flex flex-wrap gap-2">
+                                {data.leaveBalance.balances.map((b) => (
+                                    <div key={b.code} className="rounded-lg border border-border px-3 py-2">
+                                        <div className="text-xs text-muted-foreground">{b.name}{b.paid ? "" : " (unpaid)"}</div>
+                                        <div className="text-sm font-medium tabular-nums">
+                                            {b.quota === null
+                                                ? `${b.taken} taken`
+                                                : `${b.left} left of ${b.quota}`}
+                                        </div>
+                                        {b.pending > 0 && (
+                                            <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                                                {b.pending} awaiting a decision
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                             <div className="overflow-x-auto rounded-lg border border-border">
                                 <Table>
                                     <TableHeader>

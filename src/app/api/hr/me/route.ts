@@ -9,6 +9,7 @@ import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
 import { nonPayableDays } from "@/modules/hr/lib/attendancePayable";
 import { LEAVE_INCLUDE, toLeaveDto } from "@/modules/hr/lib/leaveServer";
+import { leaveBalancesFor } from "@/modules/hr/lib/leaveBalance";
 import type { MyHrPayload } from "@/modules/hr/lib/myHrTypes";
 import type { RegisterPerson, HolidayDto, AttendanceMark } from "@/modules/hr/lib/attendanceTypes";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
         // running month stops at today, because the rest of it is not worked yet.
         const upto = to < today ? to : today;
 
-        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime] = await Promise.all([
+        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance] = await Promise.all([
             loadSeasonalHours(),
             prisma.user.findUnique({
                 where: { id: userId },
@@ -79,6 +80,9 @@ export async function GET(req: Request) {
                 include: LEAVE_INCLUDE,
             }),
             monthOvertimeFor(userId, upto),
+            // The leave year of the month being looked at, not of today — paging
+            // back into last year should show last year's balance.
+            leaveBalancesFor(userId, upto),
         ]);
         if (!me) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -131,6 +135,7 @@ export async function GET(req: Request) {
             overtime,
             staffCode: me.staffProfile?.staffCode ?? null,
             isCurrentMonth: month === today.slice(0, 7),
+            leaveBalance,
             lostDays: Math.round(notPayable * 2) / 2,
         };
         return NextResponse.json(payload);

@@ -6,6 +6,7 @@
 
 import type { MonthOvertime } from "@/shared/lib/hr/myDay";
 import type { HolidayDto, LeaveRequestDto, RegisterPerson } from "./attendanceTypes";
+import type { LeaveBalancePayload } from "./leaveTypes";
 
 export interface MyHrPayload {
     /** The month being shown, YYYY-MM. */
@@ -24,4 +25,6 @@ export interface MyHrPayload {
     isCurrentMonth: boolean;
     /** Days lost so far this month — absent counts 1, half counts 0.5. */
     lostDays: number;
+    /** How much leave of each kind is left, in the leave year this month sits in. */
+    leaveBalance: LeaveBalancePayload;
 }

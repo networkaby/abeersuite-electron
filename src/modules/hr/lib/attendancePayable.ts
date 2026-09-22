@@ -4,6 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { dutyHoursFor, dutyMinutesFor, gradeDay } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+import { unpaidLeaveDaysFor } from "./leaveBalance";
 
 /**
  * The attendance seam for payroll (agreed with the payroll session, 2026-09-20).
@@ -14,10 +15,13 @@ import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
  * absent from the map is a normal paid day — weekly offs, holidays and paid
  * leave included, because the structure is monthly and those days are paid.
  *
- * Not payable: ABSENT, and LEAVE whose approved request is UNPAID. Half:
- * HALF_DAY. Everything is read from the stored register rows; days nobody
- * marked are paid, which is what "calendar days are fine for now" means until
- * the register is in daily use.
+ * Not payable: ABSENT, and a LEAVE day that `unpaidLeaveDaysFor` calls unpaid —
+ * either its kind is not a paid one, or it is past that kind's yearly quota, which
+ * is the owner's "going over does not block, it just is not paid". That one helper
+ * is the only place the question is answered, so payroll and the screens cannot
+ * disagree about which day was the thirteenth. Half: HALF_DAY. Everything else is
+ * read from the stored register rows; days nobody marked are paid, which is what
+ * "calendar days are fine for now" means until the register is in daily use.
  *
  * A day the TILL wrote is graded from the minutes actually worked, by the same
  * `gradeDay` the register draws — payroll and the screen must never disagree
@@ -29,7 +33,7 @@ import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 export async function nonPayableDays(userId: number, fromIso: string, toIso: string): Promise<Map<string, 0 | 0.5>> {
     const from = new Date(`${fromIso}T00:00:00.000Z`);
     const to = new Date(`${toIso}T00:00:00.000Z`);
-    const [seasonal, profile, rows, unpaidLeaves] = await Promise.all([
+    const [seasonal, profile, rows, unpaid] = await Promise.all([
         loadSeasonalHours(),
         prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true, dutyStart: true, dutyEnd: true } }),
         // Every stored row, not only the three exception statuses: a COUNTER day
@@ -39,10 +43,7 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
             where: { userId, date: { gte: from, lte: to } },
             select: { date: true, status: true, source: true, workedMinutes: true },
         }),
-        prisma.leaveRequest.findMany({
-            where: { userId, status: "APPROVED", kind: "UNPAID", fromDate: { lte: to }, toDate: { gte: from } },
-            select: { fromDate: true, toDate: true },
-        }),
+        unpaidLeaveDaysFor(userId, fromIso, toIso),
     ]);
     /**
      * What was owed on THAT day.
@@ -59,12 +60,6 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
         });
         return dutyMinutesFor(profile?.dutyMinutes, hours.start, hours.end);
     };
-    const unpaid = new Set<string>();
-    for (const l of unpaidLeaves) {
-        const d = new Date(Math.max(l.fromDate.getTime(), from.getTime()));
-        const end = Math.min(l.toDate.getTime(), to.getTime());
-        while (d.getTime() <= end) { unpaid.add(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); }
-    }
     const out = new Map<string, 0 | 0.5>();
     for (const r of rows) {
         const iso = r.date.toISOString().slice(0, 10);

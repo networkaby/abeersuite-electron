@@ -95,3 +95,79 @@ export function toLeaveTypeDto(t: {
         sortOrder: t.sortOrder, active: t.active,
     };
 }
+
+/**
+ * The approved leave days that are NOT paid, for one person overlapping a range.
+ *
+ * Two reasons a leave day goes unpaid, and this is the only place that decides:
+ *
+ *   1. Its kind is not a paid one — UNPAID, today.
+ *   2. It is past the yearly quota of a paid kind. The owner's rule is that going
+ *      over never blocks the request; it makes those days unpaid instead. Which
+ *      days are "over" is settled by DATE: the year's approved days of that kind
+ *      are laid out in order and everything after the quota is the part over it.
+ *      So a person who has spent his twelve casual days keeps them, and only the
+ *      thirteenth onwards is cut — never the other way round.
+ *
+ * Counted inside the LEAVE YEAR, not inside the payroll period: a quota is a year's
+ * worth, so the days already spent before this month are what decide whether this
+ * month's are over it. A range touching two leave years is counted in each.
+ */
+export async function unpaidLeaveDaysFor(
+    userId: number,
+    fromIso: string,
+    toIso: string,
+    tx: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<Set<string>> {
+    const years = new Map<string, { from: string; to: string }>();
+    for (const iso of [fromIso, toIso]) {
+        const y = leaveYearOf(iso);
+        years.set(y.from, { from: y.from, to: y.to });
+    }
+
+    const types = await tx.leaveType.findMany({ select: { code: true, paid: true, yearlyQuota: true } });
+    const byCode = new Map(types.map((t) => [t.code, t]));
+
+    const unpaid = new Set<string>();
+    for (const year of years.values()) {
+        const requests = await tx.leaveRequest.findMany({
+            where: {
+                userId,
+                status: "APPROVED",
+                fromDate: { lte: new Date(`${year.to}T00:00:00.000Z`) },
+                toDate: { gte: new Date(`${year.from}T00:00:00.000Z`) },
+            },
+            orderBy: { fromDate: "asc" },
+            select: { fromDate: true, toDate: true, kind: true },
+        });
+
+        // Every approved day of the year, per kind, in date order.
+        const daysByKind = new Map<string, string[]>();
+        for (const r of requests) {
+            const start = toDateOnlyUtc(r.fromDate) > year.from ? toDateOnlyUtc(r.fromDate) : year.from;
+            const end = toDateOnlyUtc(r.toDate) < year.to ? toDateOnlyUtc(r.toDate) : year.to;
+            if (end < start) continue;
+            const list = daysByKind.get(r.kind) ?? [];
+            const d = new Date(`${start}T00:00:00.000Z`);
+            const stop = Date.parse(`${end}T00:00:00.000Z`);
+            while (d.getTime() <= stop) {
+                list.push(d.toISOString().slice(0, 10));
+                d.setUTCDate(d.getUTCDate() + 1);
+            }
+            daysByKind.set(r.kind, list);
+        }
+
+        for (const [kind, days] of daysByKind) {
+            const type = byCode.get(kind);
+            // A kind with no type row is unknown to the shop; it is not going to be
+            // docked on a guess, so it is treated as paid until somebody defines it.
+            if (!type) continue;
+            days.sort();
+            const over = type.paid ? (type.yearlyQuota === null ? [] : days.slice(type.yearlyQuota)) : days;
+            for (const iso of over) {
+                if (iso >= fromIso && iso <= toIso) unpaid.add(iso);
+            }
+        }
+    }
+    return unpaid;
+}
