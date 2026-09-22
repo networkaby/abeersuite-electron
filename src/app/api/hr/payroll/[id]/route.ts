@@ -6,16 +6,19 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { payrollRunPatchSchema } from "@/shared/lib/schemas/hrSchema";
 import {
     PAYROLL_RUN_INCLUDE,
+    PAYROLL_VOUCHER_SELECT,
     candidateTotals,
     dateOnly,
     toRunDetail,
+    voucherStateOf,
 } from "@/modules/hr/lib/payrollServer";
 import { formatPeriod } from "@/modules/hr/lib/payrollTypes";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
 // GET    /api/hr/payroll/[id] — the run and every line on it.
 // PATCH  /api/hr/payroll/[id] — edit a DRAFT: hold people back, change the date.
-// DELETE /api/hr/payroll/[id] — throw a DRAFT away. A posted run is never deleted.
+// DELETE /api/hr/payroll/[id] — throw a run away when nothing of it is in the
+//        books: a DRAFT, or a run whose journal has been deleted outright.
 
 function parseId(v: string): number | null {
     const n = Number(v);
@@ -144,11 +147,24 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (!id) return NextResponse.json({ error: "Invalid run id" }, { status: 400 });
 
     try {
-        const run = await prisma.payrollRun.findUnique({ where: { id }, select: { status: true, voucherRef: true } });
+        const run = await prisma.payrollRun.findUnique({
+            where:  { id },
+            select: { status: true, voucherId: true, voucherRef: true, voucher: PAYROLL_VOUCHER_SELECT },
+        });
         if (!run) return NextResponse.json({ error: "Payroll run not found" }, { status: 404 });
-        if (run.status !== "DRAFT") {
+
+        // A draft never reached the books. Neither did a run whose journal has
+        // since been deleted outright — the voucher is gone, its balances went
+        // with it, and all that is left is a row claiming a payment that no
+        // longer exists anywhere. Keeping that is worse than losing it, so it
+        // may be thrown away like a draft.
+        //
+        // A CANCELLED voucher is deliberately NOT enough. That voucher is still
+        // there, struck through, and the run is the other half of its story.
+        const deletable = run.status === "DRAFT" || voucherStateOf(run) === "REMOVED";
+        if (!deletable) {
             return NextResponse.json(
-                { error: `This run is ${run.status.toLowerCase()}${run.voucherRef ? ` as ${run.voucherRef}` : ""}. Cancel the journal voucher in Accountancy instead.` },
+                { error: `This run is ${run.status.toLowerCase()}${run.voucherRef ? ` as ${run.voucherRef}` : ""}. Cancel the run instead — its journal is reversed and both stay on record.` },
                 { status: 422 },
             );
         }

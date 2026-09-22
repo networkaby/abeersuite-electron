@@ -89,8 +89,9 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
                                     <span>
                                         {broken === 1 ? "One run says" : `${broken} runs say`} posted, but the journal behind
                                         {broken === 1 ? " it is" : " them is"} no longer standing — cancelled or deleted in
-                                        Accountancy, so the books carry nothing for it. Open the run and cancel it, then
-                                        generate that period again.
+                                        Accountancy, so the books carry nothing for it. Open the run and clear it — cancel
+                                        it, or delete it outright when its journal is gone for good — then generate that
+                                        period again.
                                     </span>
                                 </p>
                             )}

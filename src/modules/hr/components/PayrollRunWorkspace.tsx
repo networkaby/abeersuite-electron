@@ -67,6 +67,11 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
 
     const isDraft = data?.status === "DRAFT";
     const editable = canRun && isDraft;
+    // The journal was deleted outright, so nothing of this run is in the books
+    // and there is no voucher left for it to be the other half of. It can be
+    // thrown away like a draft — keeping a row that claims a payment nobody can
+    // trace is worse than losing it.
+    const removable = canRun && !isDraft && data?.voucherState === "REMOVED";
 
     const rows = useMemo(() => {
         const needle = q.trim().toLowerCase();
@@ -128,18 +133,21 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
 
     const discard = async () => {
         if (!data) return;
+        const orphan = !isDraft;
         const ok = await confirmAction({
-            title: `Delete the draft for ${formatPeriod(data.periodFrom, data.periodTo)}?`,
-            body: "Nothing has been posted, so nothing in the books changes. Those days become free to run again.",
-            confirmLabel: "Delete draft",
+            title: `Delete the run for ${formatPeriod(data.periodFrom, data.periodTo)}?`,
+            body: orphan
+                ? `Its journal${data.voucherRef ? ` (${data.voucherRef})` : ""} has already been deleted, so nothing of this run is in the books and nothing there changes. The run and its payslips go for good, and those days become free to run again.`
+                : "Nothing has been posted, so nothing in the books changes. Those days become free to run again.",
+            confirmLabel: orphan ? "Delete the run" : "Delete draft",
         });
         if (!ok) return;
         try {
             await axios.delete(url);
-            toast.success("Draft deleted");
+            toast.success(orphan ? "Run deleted" : "Draft deleted");
             router.push("/office/hr/payroll");
         } catch (e) {
-            toast.error(extractApiError(e, "Could not delete the draft"));
+            toast.error(extractApiError(e, "Could not delete the run"));
         }
     };
 
@@ -196,6 +204,18 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                             ) : data.voucherRef ? (
                                 <span className="text-sm text-muted-foreground line-through">{data.voucherRef}</span>
                             ) : null}
+                            {removable && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                                    onClick={discard}
+                                    disabled={busy}
+                                >
+                                    <Trash2 size={14} /> Delete run
+                                </Button>
+                            )}
                             {canRun && data.status === "POSTED" && (
                                 <Button
                                     type="button"
@@ -242,7 +262,10 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                     {data.voucherRef ? ` (${data.voucherRef})` : ""} is
                                     {data.voucherState === "REMOVED" ? " gone" : ` ${PAYROLL_VOUCHER_STATE_LABELS[data.voucherState]}`}.
                                     Nothing for this period is in the books, and the dates stay blocked until the run
-                                    itself is cancelled. Use <b>Cancel run</b> above, then generate the period again.
+                                    itself goes.{" "}
+                                    {data.voucherState === "REMOVED"
+                                        ? "Its journal is gone for good, so Delete run above throws this row away and frees the days."
+                                        : "Use Cancel run above, then generate the period again."}
                                 </span>
                             </p>
                         )}
