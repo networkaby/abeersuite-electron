@@ -81,6 +81,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "InvUnit": { model: "InvUnit", delegate: "invUnit", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "InvWarrantyTerm": { model: "InvWarrantyTerm", delegate: "invWarrantyTerm", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "leave_requests": { model: "LeaveRequest", delegate: "leaveRequest", pk: ["id"], exact: [], dates: ["createdAt", "decidedAt", "fromDate", "toDate", "updatedAt"], cache: [] },
+    "leave_types": { model: "LeaveType", delegate: "leaveType", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "LoyaltyAccount": { model: "LoyaltyAccount", delegate: "loyaltyAccount", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "LoyaltyConfig": { model: "LoyaltyConfig", delegate: "loyaltyConfig", pk: ["id"], exact: ["globalEarnRatePer", "maxRedeemPctOfBill", "minEarnInvoiceValue", "minRedeemInvoiceValue", "redeemValue"], dates: ["updatedAt"], cache: [] },
     "LoyaltyEarnRule": { model: "LoyaltyEarnRule", delegate: "loyaltyEarnRule", pk: ["id"], exact: ["multiplier", "redeemCapPct"], dates: ["createdAt", "updatedAt"], cache: [] },

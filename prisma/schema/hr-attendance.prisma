@@ -85,3 +85,50 @@ model LeaveRequest {
   @@index([updatedAt])
   @@map("leave_requests")
 }
+
+// A kind of leave, and how much of it a person gets in a leave year.
+//
+// Owner, 2026-09-22, asked "how many leave each type, where to set?" — until now
+// the four kinds were a hardcoded list with no limit on any of them, so CASUAL and
+// EARNED differed only by the word printed in the Kind column. This table is the
+// answer: the kinds become master data, each carrying its own yearly quota.
+//
+// `code` is what LeaveRequest.kind stores, so the existing rows keep working — the
+// four are seeded with exactly the codes already in use. A NULL `yearlyQuota` means
+// "no limit", which is what EARNED and UNPAID carry for now (the owner parked the
+// earned-leave policy). Going over a quota never blocks: the apply box warns and
+// HR still decides, and the days beyond the quota are treated as unpaid.
+//
+// The balance is NOT stored. It is counted from the approved requests inside the
+// leave year, the same rule the chart of accounts follows — a stored balance is one
+// more thing that can drift from the rows it claims to summarise.
+model LeaveType {
+  id   Int    @id @default(autoincrement())
+  /// CASUAL | SICK | EARNED | UNPAID — matches LeaveRequest.kind.
+  code String @unique
+  name String
+  /// Whether a day of this kind is paid. Only UNPAID is false today.
+  paid Boolean @default(true)
+  /// Days allowed in a leave year. NULL = no limit.
+  yearlyQuota Int?
+  /// Reserved: unused days rolling into the next year. Off for every type until
+  /// the owner settles the policy; `carryCap` is the ceiling when it is switched on.
+  carryForward Boolean @default(false)
+  carryCap     Int?
+  /// Days of notice a request of this kind must carry. NULL = follow the shop rule.
+  /// Sick leave carries 0 — you cannot give three days' notice of a fever.
+  ///
+  /// NOT READ YET. The notice rule currently lives in code, in
+  /// shared/lib/schemas/hrAttendanceSchema.ts (LEAVE_NOTICE_DAYS + the exempt
+  /// kinds), and that is still the one source. This column is where it should
+  /// move so the rule stops being a constant — until it does, nothing on screen
+  /// offers to set it, because two boxes for one rule is how they drift apart.
+  noticeDays Int?
+  sortOrder  Int     @default(0)
+  active     Boolean @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([updatedAt])
+  @@map("leave_types")
+}

@@ -22,6 +22,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import GlobalHoursCard from "./GlobalHoursCard";
+import LeaveTypesCard from "./LeaveTypesCard";
 import type { HolidayDto } from "../lib/attendanceTypes";
 
 export default function HolidayList({ canEdit }: { canEdit: boolean; selfId: number }) {
@@ -75,6 +76,13 @@ export default function HolidayList({ canEdit }: { canEdit: boolean; selfId: num
                     standing rule and a holiday is the exception to it. Both are
                     global, both are read by the sign-in screen's "opens next" line. */}
                 <GlobalHoursCard canEdit={canEdit} />
+
+                {/* How many days of each kind a year allows. Same grant, same page:
+                    hours, holidays and leave entitlement are the three standing
+                    calendar rules, and they belong where they can be read together. */}
+                <div className="mb-4">
+                    <LeaveTypesCard canEdit={canEdit} />
+                </div>
 
                 {canEdit && (
                     <div className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-border p-3">

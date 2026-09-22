@@ -1547,6 +1547,36 @@ ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) N
 ALTER TABLE "leave_requests" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "leave_types" (
+    "id" SERIAL NOT NULL,
+    "code" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "paid" BOOLEAN NOT NULL DEFAULT true,
+    "yearlyQuota" INTEGER,
+    "carryForward" BOOLEAN NOT NULL DEFAULT false,
+    "carryCap" INTEGER,
+    "noticeDays" INTEGER,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "leave_types_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "code" TEXT NOT NULL;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "paid" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "yearlyQuota" INTEGER;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "carryForward" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "carryCap" INTEGER;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "noticeDays" INTEGER;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "userId" INTEGER NOT NULL,
     "staffCode" TEXT,
@@ -4189,6 +4219,12 @@ CREATE INDEX IF NOT EXISTS "leave_requests_status_idx" ON "leave_requests"("stat
 CREATE INDEX IF NOT EXISTS "leave_requests_updatedAt_idx" ON "leave_requests"("updatedAt");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "leave_types_code_key" ON "leave_types"("code");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "leave_types_updatedAt_idx" ON "leave_types"("updatedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "staff_profiles_staffCode_key" ON "staff_profiles"("staffCode");
 
 -- CreateIndex
@@ -6744,6 +6780,13 @@ DO $$ BEGIN
     IF to_regclass('public."leave_requests"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "leave_requests";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "leave_requests"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."leave_types"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "leave_types";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "leave_types"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
