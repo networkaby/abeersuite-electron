@@ -257,9 +257,9 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                     {draft.kind === "SLABS" && (
                         <div className="space-y-2">
                             <div className="text-xs text-muted-foreground">
-                                The ladder starts at ₹0. Each row is a line where the rate changes, and a row&apos;s rate is paid on the sales between its line and the next — so &quot;1% up to ₹1,000&quot; is 1% of the first ₹1,000 of the month, whatever the month came to.
+                                The ladder starts at ₹0. Each row is a line where the rate changes. The month&apos;s total sales land in one slab, and that slab&apos;s rate is paid on the whole amount — a direct match, nothing summed across slabs.
                             </div>
-                            <div className="grid max-w-md grid-cols-[1fr_1fr_auto] gap-2 text-xs text-muted-foreground"><span>Sales from (₹)</span><span>Rate on this stretch (%)</span><span /></div>
+                            <div className="grid max-w-md grid-cols-[1fr_1fr_auto] gap-2 text-xs text-muted-foreground"><span>Sales from (₹)</span><span>Rate on the whole amount (%)</span><span /></div>
                             {draft.slabs.map((s, k) => (
                                 <div key={k} className="grid max-w-md grid-cols-[1fr_1fr_auto] items-center gap-2">
                                     <NumericInput mode="decimal" value={k === 0 ? "0" : s.from} disabled={k === 0} onValueChange={(v) => setSlab(k, { from: v })} placeholder="from ₹" aria-label="Slab from" />
