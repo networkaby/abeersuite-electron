@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
+import { getPriorInputAt } from "@/shared/components/ActivityPulse";
 import { useTheme } from "@/shared/components/ThemeProvider";
 import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -967,7 +968,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => void captureMyDay().then(() => signOutTo("/staff/login"))}
+                        onClick={() => void captureMyDay({ lastInputAt: getPriorInputAt() })
+                            .then(() => signOutTo("/staff/login"))}
                         title={collapsed ? "Sign Out" : ""}
                         className={[
                             "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",

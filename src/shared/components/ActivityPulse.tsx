@@ -46,10 +46,35 @@ const ACTIVITY_EVENTS = ["pointerdown", "keydown", "touchstart", "wheel"] as con
  */
 let lastInputAtModule = 0;
 
+/**
+ * The input BEFORE the one happening right now.
+ *
+ * `getLastInputAt()` cannot answer for a sign-out CLICK, and the reason is in the
+ * event order: `pointerdown` is one of the events listened for below, and it fires
+ * before React's `onClick`. So by the time the Sign out handler asks, the click
+ * itself has already moved `lastInputAt` to now — and the half hour of standing
+ * about that the question was asked to exclude is credited in full. The head error
+ * survives its own fix.
+ *
+ * This holds the instant before that, which for a sign-out is the last time he
+ * actually worked. For somebody signing out mid-flow it is a second or two earlier
+ * and costs nothing; for somebody who downed tools at 14:00 and clicked at 14:30 it
+ * is 14:00, which is the whole point.
+ */
+let priorInputAtModule = 0;
+
 /** The instant of the last real input, for callers outside this component. Pass it
- *  to `captureMyDay({ lastInputAt })` on any path that ends a session. */
+ *  to `captureMyDay({ lastInputAt })` on any path that ends a session WITHOUT a
+ *  click of its own — the idle timer, a hardware handover. A path triggered by the
+ *  person clicking something must use `getPriorInputAt()` instead. */
 export function getLastInputAt(): number {
     return lastInputAtModule;
+}
+
+/** The instant of the input before the current one — for a sign-out the person
+ *  clicked. See `priorInputAtModule`. */
+export function getPriorInputAt(): number {
+    return priorInputAtModule;
 }
 
 export default function ActivityPulse() {
@@ -72,8 +97,10 @@ export default function ActivityPulse() {
         // Mounting means somebody just signed in — the day starts here.
         lastInputAt.current = Date.now();
         lastInputAtModule = lastInputAt.current;
+        priorInputAtModule = lastInputAt.current;
 
         const onInput = () => {
+            priorInputAtModule = lastInputAt.current;   // before this one overwrites it
             lastInputAt.current = Date.now();
             lastInputAtModule = lastInputAt.current;
             inputSincePulse.current = true;
