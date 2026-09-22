@@ -50,9 +50,6 @@ model StaffProfile {
   /// a short one, a technician a long one; one number cannot serve both. Capped
   /// at the session backstop, shared/lib/hr/dutyTime.ts.
   idleLimitMinutes Int?
-  /// GLOBAL | OWN | OFF — follow the shop's commission scheme, carry an own one,
-  /// or earn none. A plain string like employmentType.
-  commissionMode   String @default("GLOBAL")
 
   // Personal / KYC — edited on the person's own profile page (self or admin).
   fatherName     String?
@@ -87,7 +84,7 @@ model StaffProfile {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt
   salaries  StaffSalary[]
-  commissionSchemes CommissionScheme[]
+  commissionOverrides CommissionOverride[]
 
   @@index([leftOn])
   @@index([updatedAt])
@@ -264,6 +261,12 @@ model PayrollRunLine {
   /// generated before this existed; such a slip simply prints without it.
   attendanceJson Json?
 
+  /// The commission, head by head, frozen with the pay — `PayslipCommissionData`
+  /// (shared/components/print/PayslipBody.tsx). The slip prints it under the pay
+  /// heads so its "Commission" earning explains itself. Null when the period
+  /// earned none, or on a line from before this existed.
+  commissionJson Json?
+
   /// Only included lines reach the journal. Untick a person to hold their
   /// salary back; `skipReason` is set by the generator when it cannot pay them.
   included   Boolean @default(true)
@@ -275,41 +278,73 @@ model PayrollRunLine {
 }
 
 // ── Targets & Commission ──────────────────────────────────────────────────────
-// Owner, 2026-09-22: *"earnings, commission, target, etc. need a page to
-// set/edit. user need to see it to get motivated."* Then: *"global commission,
-// user wise off/on and override, multiple target/commission type same time."*
+// Owner, 2026-09-22/23: *"earnings, commission, target, etc. need a page to
+// set/edit. user need to see it to get motivated."* — *"in set commission page
+// is like coupon page here we create different commission or target head its
+// not user specific"* — *"user kind applicable"* — *"user wise override %, per
+// commission head. user see only applicable to him and globally on."*
 //
-// So: a scheme is a LIST OF RULES paid together (a share of every sale, a share
-// above a target, slabs, a bonus at a target — each with its own target), dated
-// like a salary: the scheme in force on a day is the latest with
-// effectiveFrom <= day. A scheme with userId NULL is the shop's GLOBAL one;
-// StaffProfile.commissionMode says whether a person follows it (GLOBAL), has
-// their own (OWN) or earns none (OFF). The sales it counts are the person's own
-// posted sale vouchers (UniversalVoucher.createdById).
+//   CommissionHead     — the catalogue: one named way of earning (a share of
+//                        every sale, a share above a target, slabs, a bonus at
+//                        a target), globally on or off, for every role or a
+//                        few. Not tied to a person.
+//   CommissionOverride — one person's say over one head: their own rate or
+//                        bonus in place of the head's, or the head off for them.
 //
-// The arithmetic lives in ONE place, shared/lib/hr/commissionScheme.ts, so the
-// card on My Info, the board and the payroll run cannot disagree. Payroll
-// freezes the answer onto its line (PayrollRunLine.commissionPaise + a
-// "Commission" earning) — modules/hr/lib/commission.ts is its only door.
-model CommissionScheme {
-  id      Int           @id @default(autoincrement())
-  /// Null = the global scheme, everyone on GLOBAL mode follows it.
-  userId  Int?
-  profile StaffProfile? @relation(fields: [userId], references: [userId], onDelete: Cascade)
+// A person is judged by the heads that are ON, reach their role, and are not
+// off for them — with their override applied. That resolution lives once, in
+// modules/hr/lib/commissionServer.ts, and the arithmetic once, in
+// shared/lib/hr/commissionScheme.ts, so the board, My Info and payroll agree.
+// Payroll freezes the answer, head by head, onto PayrollRunLine.commissionJson
+// (and the total on commissionPaise + a "Commission" earning) — editing a head
+// later never rewrites a month already paid.
+model CommissionHead {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  /// PERCENT | ABOVE_TARGET | SLABS | BONUS — a plain string, validated by zod
+  /// (CommissionKind); not an enum, so a new kind needs no ADD VALUE migration.
+  kind        String
+  /// ABOVE_TARGET / BONUS: the monthly line, paise. 0 elsewhere.
+  targetPaise Int     @default(0)
+  /// PERCENT / ABOVE_TARGET: basis points, 100 = 1%.
+  rateBp      Int     @default(0)
+  /// SLABS: [{ fromPaise, rateBp }] ascending. Read whole, never queried.
+  slabsJson   Json?
+  /// BONUS: the flat amount, paise.
+  bonusPaise  Int     @default(0)
+  /// Globally on. An off head reaches nobody, whatever the overrides say.
+  active      Boolean @default(true)
+  /// Role labels (UserRole.label) this head is for. Empty = everyone.
+  appliesTo   String[] @default([])
+  sortOrder   Int     @default(0)
+  createdById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
-  /// First day this scheme applies. Two schemes of the same owner cannot start
-  /// on the same day (a partial unique index covers the global ones).
-  effectiveFrom DateTime @db.Date
-  /// [{ kind, targetPaise, rateBp, slabs, bonusPaise }] — CommissionRule[] in
-  /// shared/lib/hr/commissionScheme.ts. Read whole, never queried.
-  rulesJson     Json
-  note          String?
-  /// Scalar snapshot, no FK — like StaffSalary.createdById.
-  createdById   Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  overrides CommissionOverride[]
 
-  @@unique([userId, effectiveFrom])
+  @@index([active])
   @@index([updatedAt])
-  @@map("commission_schemes")
+  @@map("commission_heads")
+}
+
+model CommissionOverride {
+  id      Int            @id @default(autoincrement())
+  userId  Int
+  profile StaffProfile   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  headId  Int
+  head    CommissionHead @relation(fields: [headId], references: [id], onDelete: Cascade)
+
+  /// This person's own rate (share heads), null = the head's.
+  rateBp     Int?
+  /// This person's own bonus (bonus heads), null = the head's.
+  bonusPaise Int?
+  /// The head is switched off for this person.
+  off        Boolean @default(false)
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@unique([userId, headId])
+  @@index([headId])
+  @@map("commission_overrides")
 }

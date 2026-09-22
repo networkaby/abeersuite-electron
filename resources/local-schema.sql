@@ -1297,6 +1297,8 @@ CREATE TABLE IF NOT EXISTS "VoucherPrintTemplate" (
     "showFindingsThermal" BOOLEAN NOT NULL DEFAULT true,
     "showAttendance" BOOLEAN NOT NULL DEFAULT true,
     "showAttendanceThermal" BOOLEAN NOT NULL DEFAULT true,
+    "showCommission" BOOLEAN NOT NULL DEFAULT true,
+    "showCommissionThermal" BOOLEAN NOT NULL DEFAULT true,
     "termsText" TEXT NOT NULL DEFAULT '',
     "footerLine" TEXT NOT NULL DEFAULT 'Thank you · Visit again',
     "signatureLabel" TEXT NOT NULL DEFAULT 'Authorised Signatory',
@@ -1367,6 +1369,8 @@ ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showFindings" BOOLE
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showFindingsThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showAttendance" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showAttendanceThermal" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showCommission" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showCommissionThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "termsText" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "footerLine" TEXT NOT NULL DEFAULT 'Thank you · Visit again';
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "signatureLabel" TEXT NOT NULL DEFAULT 'Authorised Signatory';
@@ -1619,7 +1623,6 @@ CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "dutyStart" VARCHAR(5),
     "dutyEnd" VARCHAR(5),
     "idleLimitMinutes" INTEGER,
-    "commissionMode" TEXT NOT NULL DEFAULT 'GLOBAL',
     "fatherName" TEXT,
     "address" TEXT,
     "bloodGroup" TEXT,
@@ -1648,7 +1651,6 @@ ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyMinutes" INTEGER;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyStart" VARCHAR(5);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyEnd" VARCHAR(5);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "idleLimitMinutes" INTEGER;
-ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "commissionMode" TEXT NOT NULL DEFAULT 'GLOBAL';
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bloodGroup" TEXT;
@@ -1752,6 +1754,7 @@ CREATE TABLE IF NOT EXISTS "payroll_run_lines" (
     "ledgerAccountId" INTEGER,
     "commissionPaise" INTEGER NOT NULL DEFAULT 0,
     "attendanceJson" JSONB,
+    "commissionJson" JSONB,
     "included" BOOLEAN NOT NULL DEFAULT true,
     "skipReason" TEXT,
 
@@ -1773,30 +1776,63 @@ ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "payDays" INTEGER NOT N
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "commissionPaise" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "attendanceJson" JSONB;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "commissionJson" JSONB;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "included" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "skipReason" TEXT;
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "commission_schemes" (
+CREATE TABLE IF NOT EXISTS "commission_heads" (
     "id" SERIAL NOT NULL,
-    "userId" INTEGER,
-    "effectiveFrom" DATE NOT NULL,
-    "rulesJson" JSONB NOT NULL,
-    "note" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "kind" TEXT NOT NULL,
+    "targetPaise" INTEGER NOT NULL DEFAULT 0,
+    "rateBp" INTEGER NOT NULL DEFAULT 0,
+    "slabsJson" JSONB,
+    "bonusPaise" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "appliesTo" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdById" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "commission_schemes_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "commission_heads_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "userId" INTEGER;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "effectiveFrom" DATE NOT NULL;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "rulesJson" JSONB NOT NULL;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "note" TEXT;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "targetPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "rateBp" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "slabsJson" JSONB;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "bonusPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "appliesTo" TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "commission_overrides" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "headId" INTEGER NOT NULL,
+    "rateBp" INTEGER,
+    "bonusPaise" INTEGER,
+    "off" BOOLEAN NOT NULL DEFAULT false,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "commission_overrides_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "headId" INTEGER NOT NULL;
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "rateBp" INTEGER;
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "bonusPaise" INTEGER;
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "off" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "ChatRoom" (
@@ -4336,10 +4372,16 @@ CREATE INDEX IF NOT EXISTS "payroll_run_lines_userId_idx" ON "payroll_run_lines"
 CREATE UNIQUE INDEX IF NOT EXISTS "payroll_run_lines_runId_userId_key" ON "payroll_run_lines"("runId", "userId");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "commission_schemes_updatedAt_idx" ON "commission_schemes"("updatedAt");
+CREATE INDEX IF NOT EXISTS "commission_heads_active_idx" ON "commission_heads"("active");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "commission_schemes_userId_effectiveFrom_key" ON "commission_schemes"("userId", "effectiveFrom");
+CREATE INDEX IF NOT EXISTS "commission_heads_updatedAt_idx" ON "commission_heads"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "commission_overrides_headId_idx" ON "commission_overrides"("headId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "commission_overrides_userId_headId_key" ON "commission_overrides"("userId", "headId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
@@ -5234,7 +5276,14 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "commission_schemes" ADD CONSTRAINT "commission_schemes_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_headId_fkey" FOREIGN KEY ("headId") REFERENCES "commission_heads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6661,9 +6710,16 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
-    IF to_regclass('public."commission_schemes"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "commission_schemes";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "commission_schemes"
+    IF to_regclass('public."commission_heads"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "commission_heads";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "commission_heads"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."commission_overrides"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "commission_overrides";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "commission_overrides"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

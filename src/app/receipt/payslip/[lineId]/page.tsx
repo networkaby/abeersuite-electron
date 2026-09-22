@@ -10,7 +10,7 @@ import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefa
 import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
-import { PayslipBody, type PayslipAttendanceData, type PayslipBodyData } from "@/shared/components/print/PayslipBody";
+import { PayslipBody, type PayslipAttendanceData, type PayslipBodyData, type PayslipCommissionData } from "@/shared/components/print/PayslipBody";
 import { parseSalaryLines } from "@/modules/hr/lib/salaryLines";
 import { formatPeriod } from "@/modules/hr/lib/payrollTypes";
 
@@ -39,7 +39,7 @@ export default async function PayslipPage({
     const line = await prisma.payrollRunLine.findUnique({
         where: { id: lineId },
         select: {
-            id: true, userId: true, staffName: true, linesJson: true, attendanceJson: true,
+            id: true, userId: true, staffName: true, linesJson: true, attendanceJson: true, commissionJson: true,
             grossPaise: true, deductionsPaise: true, netPaise: true,
             paidDays: true, periodDays: true, payDays: true, included: true,
             run: { select: { status: true, periodFrom: true, periodTo: true, postingDate: true, voucherRef: true } },
@@ -84,6 +84,7 @@ export default async function PayslipPage({
         // Frozen at generation; a line from before that carries null and the
         // slip prints without the section rather than reading the register now.
         attendance:  (line.attendanceJson as unknown as PayslipAttendanceData | null) ?? null,
+        commission:  (line.commissionJson as unknown as PayslipCommissionData | null) ?? null,
     };
     const flags = resolveTemplateForFormat(template, format);
 
@@ -102,7 +103,7 @@ export default async function PayslipPage({
             format={format}
             template={template}
             sample={sample}
-            body={<PayslipBody data={bodyData} thermal={isThermal} showAttendance={flags.showAttendance} />}
+            body={<PayslipBody data={bodyData} thermal={isThermal} showAttendance={flags.showAttendance} showCommission={flags.showCommission} />}
             // Browser print only: the hardware bridge's thermal renderer has no
             // salary-slip middle, and a slip is an A4 document by default anyway.
             toolbar={<PrintToolbar autoPrint={sp.autoprint === "1"} showFormatPicker currentPaper={format} />}

@@ -156,12 +156,26 @@ export const SAMPLE_PAYSLIP: PayslipBodyData = {
         { name: "Basic", kind: "EARNING", amountPaise: 1_500_000 },
         { name: "HRA", kind: "EARNING", amountPaise: 300_000 },
         { name: "Overtime", kind: "EARNING", amountPaise: 86_500 },
+        { name: "Commission", kind: "EARNING", amountPaise: 152_960 },
         { name: "Advance recovery", kind: "DEDUCTION", amountPaise: 200_000 },
         { name: "Late arrival", kind: "DEDUCTION", amountPaise: 28_800 },
     ],
-    grossPaise: 1_886_500,
+    grossPaise: 2_039_460,
     deductionsPaise: 228_800,
-    netPaise: 1_657_700,
+    netPaise: 1_810_660,
+    // The Commission head's working: two heads reached this person, one a
+    // share of every sale and one a bonus at a target the month crossed.
+    commission: {
+        salesPaise: 10_296_000,
+        months: [{
+            month: "2026-09",
+            salesPaise: 10_296_000,
+            heads: [
+                { name: "Counter commission", terms: { kind: "PERCENT", targetPaise: 0, rateBp: 100, slabs: [], bonusPaise: 0 }, targetPaise: 0, paise: 102_960 },
+                { name: "Monthly target bonus", terms: { kind: "BONUS", targetPaise: 10_000_000, rateBp: 0, slabs: [], bonusPaise: 50_000 }, targetPaise: 10_000_000, paise: 50_000 },
+            ],
+        }],
+    },
     // The whole of September, the way the generator freezes it: Fridays are the
     // weekly off (one of them worked), two free late days and a charged one, an
     // absence, a half day, an overtime day, and every other day plain — so the

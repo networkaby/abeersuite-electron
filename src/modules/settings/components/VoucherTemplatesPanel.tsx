@@ -125,6 +125,7 @@ const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: Bool
 // Salary slip — its one section of its own, a switch per format like the rest.
 const PAYSLIP_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey }[] = [
     { label: "Attendance & hours (the month, day by day)", a4: "showAttendance", thermal: "showAttendanceThermal" },
+    { label: "Commission (head by head, with the target)", a4: "showCommission", thermal: "showCommissionThermal" },
 ];
 
 // The bespoke documents (repair ticket / shipping slip) have no line-items
@@ -219,7 +220,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
             />
         ) :
         selectedKind === "PAYSLIP" ? (
-            <PayslipBody data={SAMPLE_PAYSLIP} thermal={previewFormat === "THERMAL_80MM"} showAttendance={slipFlags.showAttendance} />
+            <PayslipBody data={SAMPLE_PAYSLIP} thermal={previewFormat === "THERMAL_80MM"} showAttendance={slipFlags.showAttendance} showCommission={slipFlags.showCommission} />
         ) :
         null;
 

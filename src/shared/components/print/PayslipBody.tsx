@@ -12,6 +12,8 @@
  * there is none here.
  */
 
+import { Fragment } from "react";
+import { describeRule, type CommissionRule } from "@/shared/lib/hr/commissionScheme";
 import React from "react";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
@@ -103,6 +105,31 @@ export interface PayslipBodyData {
     netPaise: number;
     /** Null on a line posted before the attendance was frozen with the pay. */
     attendance?: PayslipAttendanceData | null;
+    /** Null when the period earned no commission, or on a line from before it was frozen. */
+    commission?: PayslipCommissionData | null;
+}
+
+/**
+ * The commission, head by head, frozen on the payroll line at generation —
+ * `PayrollRunLine.commissionJson`. The slip's own "Commission" earning is the
+ * sum of every `paise` here; this section shows the working. A run is a date
+ * range, so the working is month by month (targets are a month's).
+ */
+export interface PayslipCommissionData {
+    /** Sales counted over the whole period, paise. */
+    salesPaise: number;
+    months: {
+        month: string;
+        salesPaise: number;
+        heads: {
+            name: string;
+            /** The rule as it applied to this person (their override in place). */
+            terms: CommissionRule;
+            /** The target for the part of the month the run covered, 0 when the head has none. */
+            targetPaise: number;
+            paise: number;
+        }[];
+    }[];
 }
 
 /** "+1h 8m", "−46m", "—" for nought — signed, because the sign is the point. */
@@ -219,13 +246,17 @@ function Row({ label, value, strong }: { label: string; value: React.ReactNode; 
     );
 }
 
-export function PayslipBody({ data, thermal = false, showAttendance = true }: {
+export function PayslipBody({ data, thermal = false, showAttendance = true, showCommission = true }: {
     data: PayslipBodyData;
     thermal?: boolean;
     /** The template's toggle for the attendance section — off hides it whatever the line carries. */
     showAttendance?: boolean;
+    /** The template's toggle for the commission working. */
+    showCommission?: boolean;
 }) {
     const att = data.attendance ?? null;
+    const comm = data.commission && data.commission.months.some((m) => m.heads.length) ? data.commission : null;
+    const monthName = (m: string) => new Date(`${m}-01T00:00:00.000Z`).toLocaleDateString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
     const summary = att ? summariseDays(att) : [];
     const inDays = att ? asDutyDays(att.accountedMinutes, dutyDayMinutes(att)) : null;
     const earnings = data.lines.filter((l) => l.kind === "EARNING");
@@ -263,6 +294,23 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                 <div style={{ borderTop: "1px dashed #777", margin: "6px 0" }} />
                 <Row label="NET PAY" value={formatRupeesFromPaise(data.netPaise)} strong />
                 <div style={{ fontSize: 10, color: "#444", marginTop: 2 }}>{words}</div>
+                {showCommission && comm && (
+                    <>
+                        <div style={{ borderTop: "1px dashed #777", margin: "6px 0" }} />
+                        <div style={{ fontWeight: 700 }}>Commission · sold {formatRupeesFromPaise(comm.salesPaise)}</div>
+                        {comm.months.map((m) => (
+                            <div key={m.month}>
+                                {comm.months.length > 1 && <div style={{ fontSize: 10, color: "#444" }}>{monthName(m.month)} · sold {formatRupeesFromPaise(m.salesPaise)}</div>}
+                                {m.heads.map((h, i) => (
+                                    <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
+                                        <span>{h.name} · {describeRule(h.terms, formatRupeesFromPaise)}</span>
+                                        <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{h.paise > 0 ? formatRupeesFromPaise(h.paise) : "—"}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                    </>
+                )}
                 {showAttendance && att && summary.length > 0 && (
                     <>
                         <div style={{ borderTop: "1px dashed #777", margin: "6px 0" }} />
@@ -349,6 +397,40 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                 attendance, accounted day by day the way the activity card does it,
                 frozen with the pay. Off a line from before it was frozen, or when
                 the template hides it, the slip ends at the net. */}
+            {/* The working behind the Commission head — one line per commission
+                head per month the run covered, frozen with the pay. */}
+            {showCommission && comm && (
+                <div style={{ marginTop: 12, fontSize: 11 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 3 }}>Commission · sold {formatRupeesFromPaise(comm.salesPaise)}</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                            <tr>
+                                <th style={{ ...head, textAlign: "left" }}>Head</th>
+                                <th style={{ ...head, textAlign: "left" }}>Terms</th>
+                                <th style={{ ...head, textAlign: "right" }}>Target</th>
+                                <th style={{ ...head, textAlign: "right" }}>Earned</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {comm.months.map((m) => (
+                                <Fragment key={m.month}>
+                                    {comm.months.length > 1 && (
+                                        <tr><td colSpan={4} style={{ ...tight, color: "#444" }}>{monthName(m.month)} · sold {formatRupeesFromPaise(m.salesPaise)}</td></tr>
+                                    )}
+                                    {m.heads.map((h, i) => (
+                                        <tr key={i}>
+                                            <td style={tight}>{h.name}</td>
+                                            <td style={tight}>{describeRule(h.terms, formatRupeesFromPaise)}</td>
+                                            <td style={tightNum}>{h.targetPaise > 0 ? formatRupeesFromPaise(h.targetPaise) : "—"}</td>
+                                            <td style={{ ...tightNum, fontWeight: 700 }}>{h.paise > 0 ? formatRupeesFromPaise(h.paise) : "—"}</td>
+                                        </tr>
+                                    ))}
+                                </Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
             {showAttendance && att && summary.length > 0 && (
                 <div style={{ marginTop: 12, fontSize: 11 }}>
                     <div style={{ fontWeight: 700, marginBottom: 3 }}>Attendance &amp; hours</div>

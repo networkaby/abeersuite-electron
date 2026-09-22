@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { partyBankSchema } from "./partyBankSchema";
 import { hhMmSchema } from "./commonSchemas";
-import { COMMISSION_KINDS, COMMISSION_MODES } from "../hr/commissionScheme";
+import { COMMISSION_KINDS } from "../hr/commissionScheme";
 
 export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "HELPER", "CONTRACT"] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
@@ -91,8 +91,8 @@ export const staffSalaryCreateSchema = z.object({
 export type StaffSalaryCreate = z.infer<typeof staffSalaryCreateSchema>;
 
 // ── Targets & Commission ──────────────────────────────────────────────────────
-// A dated scheme — global (userId null) or one person's — made of rules paid
-// together. The kinds and the arithmetic live in shared/lib/hr/commissionScheme.ts.
+// The catalogue of heads and a person's override on one. The kinds and the
+// arithmetic live in shared/lib/hr/commissionScheme.ts; this only checks bodies.
 
 const paise = (max: number) => z.number().int().min(0).max(max);
 const rateBp = z.number().int().min(0).max(10_000, "A rate cannot be above 100%");
@@ -102,13 +102,15 @@ export const commissionSlabSchema = z.object({
     rateBp,
 });
 
-export const commissionRuleSchema = z.object({
+const headTerms = z.object({
     kind:        z.enum(COMMISSION_KINDS),
     targetPaise: paise(1_000_000_000_000).default(0),
     rateBp:      rateBp.default(0),
     slabs:       z.array(commissionSlabSchema).max(10).default([]),
     bonusPaise:  paise(100_000_000_000).default(0),
-}).superRefine((r, ctx) => {
+});
+
+const checkTerms = (r: z.infer<typeof headTerms>, ctx: z.RefinementCtx) => {
     if ((r.kind === "PERCENT" || r.kind === "ABOVE_TARGET") && r.rateBp <= 0) ctx.addIssue({ code: "custom", path: ["rateBp"], message: "Enter the rate" });
     if ((r.kind === "ABOVE_TARGET" || r.kind === "BONUS") && r.targetPaise <= 0) ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "Enter the target" });
     if (r.kind === "BONUS" && r.bonusPaise <= 0) ctx.addIssue({ code: "custom", path: ["bonusPaise"], message: "Enter the bonus" });
@@ -118,23 +120,52 @@ export const commissionRuleSchema = z.object({
             if (r.slabs[i].fromPaise <= r.slabs[i - 1].fromPaise) { ctx.addIssue({ code: "custom", path: ["slabs", i, "fromPaise"], message: "Each slab must start above the one before" }); break; }
         }
     }
+};
+
+/** Create a head — the whole thing. */
+export const commissionHeadCreateSchema = headTerms.extend({
+    name:        z.string().trim().min(1, "Name the head").max(60),
+    description: optText(300),
+    active:      z.boolean().default(true),
+    /** Role labels; empty = everyone. */
+    appliesTo:   z.array(z.string().trim().min(1).max(60)).max(50).default([]),
+    sortOrder:   z.number().int().min(0).max(100_000).optional(),
+}).superRefine(checkTerms);
+
+export type CommissionHeadCreate = z.infer<typeof commissionHeadCreateSchema>;
+
+/** Edit a head — everything optional, but the terms are checked as a whole once merged. */
+export const commissionHeadPatchSchema = z.object({
+    name:        z.string().trim().min(1).max(60).optional(),
+    description: optText(300),
+    kind:        z.enum(COMMISSION_KINDS).optional(),
+    targetPaise: paise(1_000_000_000_000).optional(),
+    rateBp:      rateBp.optional(),
+    slabs:       z.array(commissionSlabSchema).max(10).optional(),
+    bonusPaise:  paise(100_000_000_000).optional(),
+    active:      z.boolean().optional(),
+    appliesTo:   z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+    sortOrder:   z.number().int().min(0).max(100_000).optional(),
 });
 
-export const commissionSchemeCreateSchema = z.object({
-    /** Null = the shop's global scheme. */
-    userId:        z.number().int().positive().nullable(),
-    effectiveFrom: isoDate,
-    rules:         z.array(commissionRuleSchema).min(1, "Add at least one rule").max(10),
-    note:          optText(300),
+export type CommissionHeadPatch = z.infer<typeof commissionHeadPatchSchema>;
+
+/** The merged head, checked the way a create is. */
+export const checkCommissionTerms = (r: z.infer<typeof headTerms>): string | null => {
+    const res = headTerms.superRefine(checkTerms).safeParse(r);
+    return res.success ? null : (res.error.issues[0]?.message ?? "Invalid terms");
+};
+
+/** One person's say over one head. Null clears a figure; `off` takes the head off them. */
+export const commissionOverrideSchema = z.object({
+    userId:     z.number().int().positive(),
+    headId:     z.number().int().positive(),
+    rateBp:     rateBp.nullable().optional(),
+    bonusPaise: paise(100_000_000_000).nullable().optional(),
+    off:        z.boolean().optional(),
 });
 
-export type CommissionSchemeCreate = z.infer<typeof commissionSchemeCreateSchema>;
-
-/** One person's commission mode — follow the shop scheme, carry an own one, or none. */
-export const commissionModeSchema = z.object({
-    userId: z.number().int().positive(),
-    mode:   z.enum(COMMISSION_MODES),
-});
+export type CommissionOverrideInput = z.infer<typeof commissionOverrideSchema>;
 
 // ── Payroll ───────────────────────────────────────────────────────────────────
 //

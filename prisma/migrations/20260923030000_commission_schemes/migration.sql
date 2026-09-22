@@ -1,30 +1,53 @@
--- Targets & Commission — a global scheme, a per-person mode, dated schemes made
--- of several rules paid together.
+-- Targets & Commission — a catalogue of commission heads, a per-person override,
+-- and the commission breakup frozen onto the payroll line.
 --
--- Additive. Owner, 2026-09-22: "earnings, commission, target, etc. need a page
--- to set/edit. user need to see it to get motivated." and "global commission,
--- user wise off/on and override, multiple target/commission type same time."
--- A scheme with userId NULL is the shop's global one; payroll freezes what a
--- period earned onto payroll_run_lines.commissionPaise.
-ALTER TABLE "staff_profiles" ADD COLUMN "commissionMode" TEXT NOT NULL DEFAULT 'GLOBAL';
-
-CREATE TABLE "commission_schemes" (
+-- Additive. Owner, 2026-09-22/23: "earnings, commission, target, etc. need a
+-- page to set/edit. user need to see it to get motivated." — "in set
+-- commission page is like coupon page here we create different commission or
+-- target head its not user specific" — "user kind applicable" — "user wise
+-- override %, per commission head".
+CREATE TABLE "commission_heads" (
     "id" SERIAL NOT NULL,
-    "userId" INTEGER,
-    "effectiveFrom" DATE NOT NULL,
-    "rulesJson" JSONB NOT NULL,
-    "note" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "kind" TEXT NOT NULL,
+    "targetPaise" INTEGER NOT NULL DEFAULT 0,
+    "rateBp" INTEGER NOT NULL DEFAULT 0,
+    "slabsJson" JSONB,
+    "bonusPaise" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "appliesTo" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdById" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "commission_schemes_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "commission_heads_pkey" PRIMARY KEY ("id")
 );
+CREATE INDEX "commission_heads_active_idx" ON "commission_heads"("active");
+CREATE INDEX "commission_heads_updatedAt_idx" ON "commission_heads"("updatedAt");
 
-CREATE UNIQUE INDEX "commission_schemes_userId_effectiveFrom_key" ON "commission_schemes"("userId", "effectiveFrom");
--- NULLs are distinct to a unique index, so the global schemes need their own.
-CREATE UNIQUE INDEX "commission_schemes_global_effectiveFrom_key" ON "commission_schemes"("effectiveFrom") WHERE "userId" IS NULL;
-CREATE INDEX "commission_schemes_updatedAt_idx" ON "commission_schemes"("updatedAt");
+CREATE TABLE "commission_overrides" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "headId" INTEGER NOT NULL,
+    "rateBp" INTEGER,
+    "bonusPaise" INTEGER,
+    "off" BOOLEAN NOT NULL DEFAULT false,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-ALTER TABLE "commission_schemes" ADD CONSTRAINT "commission_schemes_userId_fkey"
+    CONSTRAINT "commission_overrides_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "commission_overrides_userId_headId_key" ON "commission_overrides"("userId", "headId");
+CREATE INDEX "commission_overrides_headId_idx" ON "commission_overrides"("headId");
+ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_userId_fkey"
     FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_headId_fkey"
+    FOREIGN KEY ("headId") REFERENCES "commission_heads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- The slip's commission working, frozen with the pay it explains.
+ALTER TABLE "payroll_run_lines" ADD COLUMN "commissionJson" JSONB;
+
+-- Print template: the salary slip's commission section, A4 + thermal.
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN "showCommission" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN "showCommissionThermal" BOOLEAN NOT NULL DEFAULT true;

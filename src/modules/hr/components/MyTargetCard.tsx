@@ -2,8 +2,11 @@
 
 // My target — the motivation card. One bar to the biggest target, the rupees
 // sold, the next line to cross and what it pays, and what the month has earned
-// so far. Every figure comes from `commissionScheme.ts`, the same arithmetic
-// payroll will run, so what the card promises is what the payslip pays.
+// so far, head by head. Every figure comes from `commissionScheme.ts`, the
+// same arithmetic payroll will run, so what the card promises is what the
+// payslip pays. Only the heads that reach this person are here — globally on,
+// for their role, not switched off for them (owner, 2026-09-23: "user see only
+// applicable to him and globally on").
 
 import { Check, Target, Trophy } from "lucide-react";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
@@ -24,7 +27,7 @@ const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 
 /**
  * The bar and its one-line reading. `compact` is the board row; the full form
- * is the person's own card. Milestone ticks mark every targeted rule.
+ * is the person's own card. Milestone ticks mark every targeted head.
  */
 export function TargetProgress({ month: m, compact = false }: { month: CommissionMonth; compact?: boolean }) {
     const o = m.outcome;
@@ -74,25 +77,21 @@ export default function MyTargetCard({ month: m, isCurrentMonth }: { month: Comm
     const sold = m.salesPaise > 0
         ? <> You sold <span className="font-medium text-foreground">{formatRupeesFromPaise(m.salesPaise)}</span> in {m.billCount} bill{m.billCount === 1 ? "" : "s"}.</>
         : null;
-    if (m.mode === "OFF") {
-        return <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">Commission is switched off for you.{sold}</div>;
-    }
-    const scheme = m.scheme;
-    if (!scheme) {
+    const o = m.outcome;
+    if (!o) {
         return (
             <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                No target or commission scheme applies to you{isCurrentMonth ? " yet" : " for this month"}.{sold}
+                No commission head reaches you{isCurrentMonth ? " yet" : " for this month"}.{sold}
             </div>
         );
     }
-    const o = m.outcome!;
     const top = o.topTargetPaise;
     const next = o.nextTargetPaise;
     const short = next != null ? next - m.salesPaise : 0;
     const perDay = m.daysLeft > 0 && short > 0 ? Math.ceil(short / m.daysLeft) : 0;
     const nextRule = next != null ? o.rules.find((r) => r.targetPaise === next) : null;
     const nextPays = nextRule
-        ? nextRule.rule.kind === "BONUS" ? `${formatRupeesFromPaise(nextRule.rule.bonusPaise)} bonus` : `${describeRule(nextRule.rule, formatRupeesFromPaise)}`
+        ? nextRule.rule.kind === "BONUS" ? `${formatRupeesFromPaise(nextRule.rule.bonusPaise)} bonus` : describeRule(nextRule.rule, formatRupeesFromPaise)
         : "";
 
     let headline: string;
@@ -107,7 +106,7 @@ export default function MyTargetCard({ month: m, isCurrentMonth }: { month: Comm
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {o.targetMet ? <Trophy size={14} className="text-amber-500" /> : <Target size={14} />}
-                        <span>{top > 0 ? `Monthly target ${formatRupeesFromPaise(top)}` : "My sales"}{scheme.userId === null ? " · shop scheme" : " · my own scheme"}</span>
+                        <span>{top > 0 ? `Monthly target ${formatRupeesFromPaise(top)}` : "My sales"} · {o.rules.length} head{o.rules.length === 1 ? "" : "s"}</span>
                     </div>
                     <div className="mt-1 text-base font-semibold">{headline}</div>
                 </div>
@@ -122,13 +121,15 @@ export default function MyTargetCard({ month: m, isCurrentMonth }: { month: Comm
             <ul className="mt-3 grid gap-1 text-xs sm:grid-cols-2">
                 {o.rules.map((r, i) => (
                     <li key={i} className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1">
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex min-w-0 items-center gap-1.5">
                             {r.targetPaise > 0 && (r.targetMet
-                                ? <Check size={12} className="text-emerald-600" />
-                                : <span className="inline-block h-3 w-3 rounded-full border border-muted-foreground/50" />)}
-                            <span className={r.targetPaise > 0 && !r.targetMet ? "text-muted-foreground" : ""}>{describeRule(r.rule, formatRupeesFromPaise)}</span>
+                                ? <Check size={12} className="shrink-0 text-emerald-600" />
+                                : <span className="inline-block h-3 w-3 shrink-0 rounded-full border border-muted-foreground/50" />)}
+                            <span className={`truncate ${r.targetPaise > 0 && !r.targetMet ? "text-muted-foreground" : ""}`} title={describeRule(r.rule, formatRupeesFromPaise)}>
+                                {r.rule.label ? <><span className="font-medium">{r.rule.label}</span> · </> : null}{describeRule(r.rule, formatRupeesFromPaise)}
+                            </span>
                         </span>
-                        <span className="font-medium tabular-nums">{r.paise > 0 ? formatRupeesFromPaise(r.paise) : "—"}</span>
+                        <span className="shrink-0 font-medium tabular-nums">{r.paise > 0 ? formatRupeesFromPaise(r.paise) : "—"}</span>
                     </li>
                 ))}
             </ul>

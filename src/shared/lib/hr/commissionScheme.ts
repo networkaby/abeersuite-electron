@@ -5,11 +5,12 @@
 // set/edit. user need to see it to get motivated."* and *"global commission,
 // user wise off/on and override, multiple target/commission type same time."*
 //
-// A scheme is a LIST OF RULES paid together. Each rule is one way of earning
-// and carries its own target where it needs one, so "1% on everything, ₹500 at
-// ₹60,000 and ₹1,500 at ₹1,00,000" is one scheme of three rules. Three screens
-// read this file — the board, the card on My Info, and the payroll run — so the
-// sums are written once, here, with no server import.
+// A person is judged by a LIST OF RULES paid together — one per commission
+// HEAD that reaches them (modules/hr/lib/commissionServer.ts resolves which).
+// Each rule is one way of earning and carries its own target where it needs
+// one, so "1% on everything, ₹500 at ₹60,000 and ₹1,500 at ₹1,00,000" is three
+// heads. Three screens read this file — the board, the card on My Info, and
+// the payroll run — so the sums are written once, here, with no server import.
 //
 // Money is paise (Int). A rate is basis points: 100 bp = 1%.
 
@@ -21,14 +22,6 @@ export const COMMISSION_KIND_LABELS: Record<CommissionKind, string> = {
     ABOVE_TARGET: "A share of sales above a target",
     SLABS:        "Slabs — the rate steps up as sales grow",
     BONUS:        "A flat bonus on reaching a target",
-};
-
-export const COMMISSION_MODES = ["GLOBAL", "OWN", "OFF"] as const;
-export type CommissionMode = (typeof COMMISSION_MODES)[number];
-export const COMMISSION_MODE_LABELS: Record<CommissionMode, string> = {
-    GLOBAL: "Shop scheme",
-    OWN:    "Own scheme",
-    OFF:    "No commission",
 };
 
 /** One slab: the rate that applies to sales from this rupee upward, until the next slab starts. */
@@ -48,6 +41,8 @@ export interface CommissionRule {
     slabs: CommissionSlab[];
     /** BONUS. */
     bonusPaise: number;
+    /** The head's name, when the rule came from one — the card and the slip say it. */
+    label?: string;
 }
 
 /** What one scheme says — its rules. The wire and storage shape, minus the row's own ids. */
@@ -61,9 +56,6 @@ export const COMMISSION_RETURN_TYPES = ["SALE_RETURN"] as const;
 
 export function isCommissionKind(v: unknown): v is CommissionKind {
     return typeof v === "string" && (COMMISSION_KINDS as readonly string[]).includes(v);
-}
-export function isCommissionMode(v: unknown): v is CommissionMode {
-    return typeof v === "string" && (COMMISSION_MODES as readonly string[]).includes(v);
 }
 
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0; };
@@ -87,7 +79,7 @@ export function parseRules(raw: unknown): CommissionRule[] {
         if (!r || typeof r !== "object") continue;
         const o = r as Record<string, unknown>;
         if (!isCommissionKind(o.kind)) continue;
-        out.push({ kind: o.kind, targetPaise: num(o.targetPaise), rateBp: num(o.rateBp), slabs: parseSlabs(o.slabs), bonusPaise: num(o.bonusPaise) });
+        out.push({ kind: o.kind, targetPaise: num(o.targetPaise), rateBp: num(o.rateBp), slabs: parseSlabs(o.slabs), bonusPaise: num(o.bonusPaise), ...(typeof o.label === "string" ? { label: o.label } : {}) });
     }
     return out;
 }

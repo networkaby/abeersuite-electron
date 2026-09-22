@@ -501,6 +501,9 @@ model VoucherPrintTemplate {
   // slip's Overtime / Hours owed figures explain themselves.
   showAttendance        Boolean @default(true)
   showAttendanceThermal Boolean @default(true)
+  /// Salary slip: the commission section, head by head (A4 / thermal).
+  showCommission        Boolean @default(true)
+  showCommissionThermal Boolean @default(true)
 
   // Footer
   termsText      String @default("")

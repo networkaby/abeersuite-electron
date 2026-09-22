@@ -1,19 +1,20 @@
 "use client";
 
-// Set commission — a catalogue of commission / target HEADS, the way the
-// coupons page is a catalogue of offers. Owner, 2026-09-22: *"in set commission
-// page is like coupon page here we create different commission or target head
-// its not user specific. just do the tab only wiring later."* Then: *"user kind
-// applicable"* — a head says which kinds of user (roles) it is for.
+// Set commission — the catalogue of commission / target HEADS, the way the
+// coupons page is a catalogue of offers. Owner, 2026-09-22/23: *"in set
+// commission page is like coupon page here we create different commission or
+// target head its not user specific"* — *"user kind applicable"*.
 //
 // A head is one named way of earning: "1% on every sale", "₹1,500 at ₹1 lakh",
-// a slab ladder. Heads are created here once; the Per person tab then shows
-// each person the heads that apply to their role, with a per-person override.
-// UI ONLY for now — the list lives in the board's component state with a few
-// sample heads so the screen can be judged; nothing is saved. The rule
-// arithmetic it previews is the real one (shared/lib/hr/commissionScheme.ts).
+// a slab ladder — globally on or off, for every role or a few. Heads are made
+// here once; the Per person tab shows each person the heads that reach their
+// role, with their own override. Reads come with the board; writes go to
+// /api/hr/commission/heads. The arithmetic the form previews is the real one
+// (shared/lib/hr/commissionScheme.ts).
 
 import { useMemo, useState, type ReactNode } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { List, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,34 +25,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/shared/components/Field";
 import { NumericInput } from "@/shared/components/NumericInput";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import {
-    COMMISSION_KINDS, COMMISSION_KIND_LABELS, computeCommission, describeRule,
-    type CommissionKind, type CommissionRule,
-} from "@/shared/lib/hr/commissionScheme";
-import { blankRule, parseRule, toDraft, type RuleDraft } from "./CommissionSchemeDialog";
-
-/** One head as the screens hold it — not yet a table row anywhere. */
-export interface CommissionHead {
-    id: number;
-    name: string;
-    description: string;
-    rule: CommissionRule;
-    /** Globally on. An off head reaches nobody, whatever the overrides say. */
-    active: boolean;
-    /** Role labels this head is for. Empty = everyone. */
-    appliesTo: string[];
-}
-
-const L = 100_000_00;
-export const SAMPLE_HEADS: CommissionHead[] = [
-    { id: 1, name: "Counter commission", description: "On every bill the person rings.", rule: { kind: "PERCENT", targetPaise: 0, rateBp: 100, slabs: [], bonusPaise: 0 }, active: true, appliesTo: [] },
-    { id: 2, name: "Monthly target bonus", description: "Flat bonus the month the target is crossed.", rule: { kind: "BONUS", targetPaise: L, rateBp: 0, slabs: [], bonusPaise: 1500_00 }, active: true, appliesTo: [] },
-    { id: 3, name: "Star seller", description: "Extra share once past the stretch target.", rule: { kind: "ABOVE_TARGET", targetPaise: 2 * L, rateBp: 200, slabs: [], bonusPaise: 0 }, active: false, appliesTo: [] },
-];
-
-/** Does this head reach a person of this role? */
-export const headAppliesTo = (h: CommissionHead, role: string | null) => h.appliesTo.length === 0 || (!!role && h.appliesTo.includes(role));
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { COMMISSION_KINDS, COMMISSION_KIND_LABELS, computeCommission, describeRule, type CommissionKind } from "@/shared/lib/hr/commissionScheme";
+import { blankRule, parseRule, toDraft, type RuleDraft } from "../lib/commissionRuleDraft";
+import type { CommissionHeadDto } from "../lib/commissionTypes";
 
 export const KIND_BADGE: Record<CommissionKind, string> = {
     PERCENT:      "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-300",
@@ -61,29 +40,65 @@ export const KIND_BADGE: Record<CommissionKind, string> = {
 };
 export const KIND_SHORT: Record<CommissionKind, string> = { PERCENT: "Share of sales", ABOVE_TARGET: "Above target", SLABS: "Slabs", BONUS: "Target bonus" };
 
-export default function CommissionHeadsTab({ heads, setHeads, roles, canEdit }: {
-    heads: CommissionHead[];
-    setHeads: (fn: (hs: CommissionHead[]) => CommissionHead[]) => void;
+const L = 100_000_00;
+
+/** The body a create or edit sends — the terms flat, the way the API wants them. */
+type HeadBody = { name: string; description: string | null; kind: CommissionKind; targetPaise: number; rateBp: number; slabs: { fromPaise: number; rateBp: number }[]; bonusPaise: number; active: boolean; appliesTo: string[] };
+
+export default function CommissionHeadsTab({ heads, roles, canEdit, onChanged }: {
+    heads: CommissionHeadDto[];
     /** Every role label the current staff carry — the "user kinds" a head can be limited to. */
     roles: string[];
     canEdit: boolean;
+    onChanged: () => void;
 }) {
     const [view, setView] = useState<"LIST" | "CREATE">("LIST");
-    const [editing, setEditing] = useState<CommissionHead | null>(null);
+    const [editing, setEditing] = useState<CommissionHeadDto | null>(null);
     const [search, setSearch] = useState("");
     const [kindFilter, setKindFilter] = useState<"ALL" | CommissionKind>("ALL");
 
     const shown = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return heads.filter((h) => (kindFilter === "ALL" || h.rule.kind === kindFilter) && (!q || h.name.toLowerCase().includes(q) || h.description.toLowerCase().includes(q)));
+        return heads.filter((h) => (kindFilter === "ALL" || h.rule.kind === kindFilter) && (!q || h.name.toLowerCase().includes(q) || (h.description ?? "").toLowerCase().includes(q)));
     }, [heads, search, kindFilter]);
 
     const openCreate = () => { setEditing(null); setView("CREATE"); };
-    const openEdit = (h: CommissionHead) => { setEditing(h); setView("CREATE"); };
-    const save = (h: Omit<CommissionHead, "id">) => {
-        setHeads((hs) => editing ? hs.map((x) => (x.id === editing.id ? { ...x, ...h } : x)) : [...hs, { ...h, id: Math.max(0, ...hs.map((x) => x.id)) + 1 }]);
-        setEditing(null);
-        setView("LIST");
+    const openEdit = (h: CommissionHeadDto) => { setEditing(h); setView("CREATE"); };
+
+    const save = async (body: HeadBody) => {
+        try {
+            if (editing) await axios.patch(`/api/hr/commission/heads/${editing.id}`, body);
+            else await axios.post("/api/hr/commission/heads", body);
+            toast.success(editing ? "Head saved" : "Head created");
+            setEditing(null);
+            setView("LIST");
+            onChanged();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save the head"));
+        }
+    };
+    const toggle = async (h: CommissionHeadDto, active: boolean) => {
+        try {
+            await axios.patch(`/api/hr/commission/heads/${h.id}`, { active });
+            onChanged();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not change the head"));
+        }
+    };
+    const remove = async (h: CommissionHeadDto) => {
+        const ok = await confirmAction({
+            title: `Delete "${h.name}"?`,
+            body: "Every person's override on it goes too. Months already paid keep what payroll froze.",
+            confirmLabel: "Delete head",
+        });
+        if (!ok) return;
+        try {
+            await axios.delete(`/api/hr/commission/heads/${h.id}`);
+            toast.success("Head deleted");
+            onChanged();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not delete the head"));
+        }
     };
 
     return (
@@ -111,7 +126,7 @@ export default function CommissionHeadsTab({ heads, setHeads, roles, canEdit }: 
             </div>
 
             <p className="text-xs text-muted-foreground">
-                A head is one way of earning — a share of sales, a bonus at a target, a slab ladder. Create the heads here once and say which kinds of user they are for; each person&apos;s own overrides live on the Per person tab. <span className="font-medium text-foreground">Preview only: nothing here is saved yet.</span>
+                A head is one way of earning — a share of sales, a bonus at a target, a slab ladder. Create the heads here once and say which kinds of user they are for; each person&apos;s own overrides live on the Per person tab.
             </p>
 
             {view === "CREATE" ? (
@@ -147,14 +162,13 @@ export default function CommissionHeadsTab({ heads, setHeads, roles, canEdit }: 
                                             : <div className="flex flex-wrap gap-1">{h.appliesTo.map((r) => <Badge key={r} variant="outline" className="px-1.5 text-[10px]">{r}</Badge>)}</div>}
                                     </TableCell>
                                     <TableCell>
-                                        <Switch checked={h.active} disabled={!canEdit} aria-label={`${h.name} active`}
-                                            onCheckedChange={(v) => setHeads((hs) => hs.map((x) => (x.id === h.id ? { ...x, active: v } : x)))} />
+                                        <Switch checked={h.active} disabled={!canEdit} aria-label={`${h.name} active`} onCheckedChange={(v) => toggle(h, v)} />
                                     </TableCell>
                                     <TableCell className="text-right">
                                         {canEdit && (
                                             <div className="flex justify-end gap-0.5">
                                                 <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Edit head" onClick={() => openEdit(h)}><Pencil size={14} /></Button>
-                                                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Delete head" onClick={() => setHeads((hs) => hs.filter((x) => x.id !== h.id))}><Trash2 size={14} /></Button>
+                                                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Delete head" onClick={() => remove(h)}><Trash2 size={14} /></Button>
                                             </div>
                                         )}
                                     </TableCell>
@@ -169,14 +183,15 @@ export default function CommissionHeadsTab({ heads, setHeads, roles, canEdit }: 
 }
 
 /** The full-width editor for one head — name, kind, the kind's own boxes, who it is for, and the sentence it comes to. */
-function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHead | null; roles: string[]; onCancel: () => void; onSave: (h: Omit<CommissionHead, "id">) => void }) {
+function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHeadDto | null; roles: string[]; onCancel: () => void; onSave: (h: HeadBody) => Promise<void> }) {
     const [name, setName] = useState(initial?.name ?? "");
     const [description, setDescription] = useState(initial?.description ?? "");
     const [active, setActive] = useState(initial?.active ?? true);
     const [appliesTo, setAppliesTo] = useState<string[]>(initial?.appliesTo ?? []);
     const [draft, setDraft] = useState<RuleDraft>(() => (initial ? toDraft(initial.rule) : blankRule()));
+    const [saving, setSaving] = useState(false);
     const { rule, bad } = useMemo(() => parseRule(draft), [draft]);
-    const canSave = !bad && name.trim().length > 0;
+    const canSave = !bad && name.trim().length > 0 && !saving;
     const set = (patch: Partial<RuleDraft>) => setDraft((d) => ({ ...d, ...patch }));
     const setSlab = (k: number, patch: Partial<RuleDraft["slabs"][number]>) => setDraft((d) => ({ ...d, slabs: d.slabs.map((s, l) => (l === k ? { ...s, ...patch } : s)) }));
     const toggleRole = (r: string) => setAppliesTo((rs) => (rs.includes(r) ? rs.filter((x) => x !== r) : [...rs, r]));
@@ -187,6 +202,15 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
         const base = rule.targetPaise > 0 ? rule.targetPaise : L;
         return [base, Math.round(base * 1.2)].map((sales) => ({ sales, paise: computeCommission({ rules: [rule] }, sales).totalPaise }));
     }, [rule]);
+
+    const submit = async () => {
+        setSaving(true);
+        try {
+            await onSave({ name: name.trim(), description: description.trim() || null, ...rule, active, appliesTo });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <div className="rounded-xl border border-border bg-card p-4">
@@ -247,7 +271,7 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                         </div>
                     </div>
 
-                    <Field label="Description" hint="Shown under the head, and to the person on My Info">
+                    <Field label="Description" hint="Shown under the head">
                         {(id) => <Textarea id={id} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} rows={2} placeholder="What this head is for (optional)" />}
                     </Field>
                     <label className="flex items-center gap-2 text-sm"><Switch checked={active} onCheckedChange={setActive} /> Active — globally on; an off head reaches nobody</label>
@@ -267,7 +291,7 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
             </div>
             <div className="mt-4 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-                <Button type="button" disabled={!canSave} onClick={() => onSave({ name: name.trim(), description: description.trim(), rule, active, appliesTo })}>{initial ? "Save head" : "Create head"}</Button>
+                <Button type="button" disabled={!canSave} onClick={submit}>{saving ? "Saving…" : initial ? "Save head" : "Create head"}</Button>
             </div>
         </div>
     );

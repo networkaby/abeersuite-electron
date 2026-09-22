@@ -2,7 +2,8 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { SalaryLine } from "./salaryLines";
-import { COMMISSION_PROFILE_SELECT, commissionForUsers, loadGlobalSchemes, modeOf, schemesFor, toCommissionSchemeDto } from "./commissionServer";
+import type { PayslipCommissionData } from "@/shared/components/print/PayslipBody";
+import { COMMISSION_USER_SELECT, appliedHeadsFor, commissionForUsers, loadHeads, roleLabelOf } from "./commissionServer";
 
 /**
  * Commission — the seam, not the sums.
@@ -17,10 +18,10 @@ import { COMMISSION_PROFILE_SELECT, commissionForUsers, loadGlobalSchemes, modeO
  * will be created. This file is the single door between the two, and it is
  * deliberately the whole of the contract:
  *
- *   • `commissionForPeriod` is what payroll asks. It reads each person's dated
- *     schemes (the Targets & Commission page, /office/hr/commission) and hands
- *     back what the period earned; with no scheme on file the answer is the
- *     honest one — nothing.
+ *   • `commissionForPeriod` is what payroll asks. It reads the heads and each
+ *     person's overrides (the Targets & Commission page, /office/hr/commission)
+ *     and hands back what the period earned; with no head on the answer is
+ *     the honest one — nothing.
  *   • Payroll, the payslip, the print template and the journal never changed
  *     for it, because of the second half below.
  *
@@ -50,6 +51,8 @@ export interface CommissionResult {
      * while there are no rules.
      */
     basis: string | null;
+    /** The working head by head, frozen onto the line for the slip. */
+    breakup: PayslipCommissionData | null;
 }
 
 /**
@@ -58,10 +61,11 @@ export interface CommissionResult {
  * Returns a map keyed by userId; a person absent from the map earned nothing,
  * which is not the same as earning zero and is why the map is sparse.
  *
- * The Commission page exists now (2026-09-22, /office/hr/commission): each
- * person carries dated schemes, and `commissionForUsers` judges the period
- * month by month against the scheme in force — see commissionServer.ts. What
- * comes back is frozen onto the line by the caller and never recomputed.
+ * The Commission page exists (/office/hr/commission): a catalogue of heads,
+ * each on or off and for every role or a few, and a per-person override on any
+ * of them. `commissionForUsers` judges the period month by month against the
+ * heads that reach each person — see commissionServer.ts. What comes back is
+ * frozen onto the line by the caller, head by head, and never recomputed.
  */
 export async function commissionForPeriod(
     db: Prisma.TransactionClient,
@@ -70,20 +74,18 @@ export async function commissionForPeriod(
     toIso: string,
 ): Promise<Map<number, CommissionResult>> {
     if (!userIds.length) return new Map();
-    const [global, profiles] = await Promise.all([
-        loadGlobalSchemes(db),
-        db.staffProfile.findMany({ where: { userId: { in: [...userIds] } }, select: { userId: true, ...COMMISSION_PROFILE_SELECT } }),
+    const [heads, users] = await Promise.all([
+        loadHeads(db),
+        db.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, ...COMMISSION_USER_SELECT } }),
     ]);
-    // A person with no HR profile row yet is on GLOBAL - the default the row
-    // would carry - so the shop scheme reaches everyone the day it is set.
-    const byUser = new Map(profiles.map((p) => [p.userId, p]));
-    const people = userIds.map((userId) => {
-        const p = byUser.get(userId);
-        return { userId, schemes: schemesFor(modeOf(p?.commissionMode), (p?.commissionSchemes ?? []).map(toCommissionSchemeDto), global) };
-    });
+    if (!heads.some((h) => h.active)) return new Map();
+    const people = users.map((u) => ({
+        userId: u.id,
+        applied: appliedHeadsFor(heads, roleLabelOf(u), u.staffProfile?.commissionOverrides ?? []),
+    }));
     const earned = await commissionForUsers(db, people, fromIso, toIso);
     const out = new Map<number, CommissionResult>();
-    for (const [userId, e] of earned) out.set(userId, { userId, commissionPaise: e.commissionPaise, basis: e.basis });
+    for (const [userId, e] of earned) out.set(userId, { userId, commissionPaise: e.commissionPaise, basis: e.basis, breakup: e.breakup });
     return out;
 }
 

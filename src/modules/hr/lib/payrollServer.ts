@@ -10,7 +10,7 @@ import { nonPayableDays } from "./attendancePayable";
 import { loadPayRulesContext, payRuleLines } from "./payRulesApply";
 import { loadHoursBreakup } from "./attendanceHoursServer";
 import { freezeAttendanceForPayslip } from "./attendanceBreakup";
-import type { PayslipAttendanceData } from "@/shared/components/print/PayslipBody";
+import type { PayslipCommissionData, PayslipAttendanceData } from "@/shared/components/print/PayslipBody";
 import { loadPayRules } from "./payRulesServer";
 import { dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { EMPTY_ATTENDANCE_EFFECT } from "@/shared/lib/hr/payRules";
@@ -128,7 +128,7 @@ export interface PayrollCandidate {
      * Commission for the period, in paise. Already INSIDE `lines`, `grossPaise`
      * and `netPaise` — it is an earning head like any other; this is only the
      * part of the total that came from commission, so a sheet can name it.
-     * Always 0 until the Commission page exists (see `commission.ts`).
+     * 0 for a person no head reaches (see `commission.ts`).
      */
     commissionPaise: number;
     /**
@@ -137,6 +137,8 @@ export interface PayrollCandidate {
      * Null for a person with no structure: there is no pay to explain.
      */
     attendance: PayslipAttendanceData | null;
+    /** The commission head by head, for the slip — frozen with the pay. Null when there is none. */
+    commissionBreakup: PayslipCommissionData | null;
     /** How that commission was arrived at, for the breakup. Null when there is none. */
     commissionBasis: string | null;
     included: boolean;
@@ -284,6 +286,7 @@ export async function buildPayrollCandidates(
             ledger,
             commissionPaise,
             commissionBasis: commLine ? (comm?.basis ?? null) : null,
+            commissionBreakup: commLine ? (comm?.breakup ?? null) : null,
             attendance,
             included: skipReason === null,
             skipReason,

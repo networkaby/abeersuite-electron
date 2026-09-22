@@ -454,6 +454,7 @@ export interface VoucherTemplateDefaults {
     showFindings: boolean;           showFindingsThermal: boolean;   // findings box + return note
     // Salary slip: the month's attendance accounted day by day. Ignored by every other kind.
     showAttendance: boolean;         showAttendanceThermal: boolean;
+    showCommission: boolean;         showCommissionThermal: boolean;
     termsText: string;
     footerLine: string;
     signatureLabel: string;
@@ -507,6 +508,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showPreparedBy: true,                            showPreparedByThermal: true,
         showFindings: true,                              showFindingsThermal: true,
         showAttendance: true,                            showAttendanceThermal: true,
+        showCommission: true,                            showCommissionThermal: true,
         termsText: TERMS_TEXT_BY_KIND[kind] ?? "",
         footerLine: FOOTER_LINE_BY_KIND[kind] ?? "Thank you · Visit again",
         signatureLabel: SIGNATURE_LABEL_BY_KIND[kind] ?? "Authorised Signatory",
@@ -574,6 +576,7 @@ export type VoucherPrintTemplateRow = {
     showPreparedBy?: boolean | null;          showPreparedByThermal?: boolean | null;
     showFindings?: boolean | null;            showFindingsThermal?: boolean | null;
     showAttendance?: boolean | null;          showAttendanceThermal?: boolean | null;
+    showCommission?: boolean | null;          showCommissionThermal?: boolean | null;
     termsText: string; footerLine: string; signatureLabel: string;
     disclaimerLine?: string | null; // guards the window before `prisma db push` adds the column
     defaultPaper: string; paperWidthMm: number; fontFamily: string; fontSizePx: number;
@@ -647,6 +650,8 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showFindingsThermal:      row.showFindingsThermal      ?? f.showFindingsThermal,
         showAttendance:           row.showAttendance           ?? f.showAttendance,
         showAttendanceThermal:    row.showAttendanceThermal    ?? f.showAttendanceThermal,
+        showCommission:           row.showCommission           ?? f.showCommission,
+        showCommissionThermal:    row.showCommissionThermal    ?? f.showCommissionThermal,
         termsText:      row.termsText,
         footerLine:     row.footerLine,
         signatureLabel: row.signatureLabel,
@@ -689,5 +694,6 @@ export function resolveTemplateForFormat(
         showPreparedBy:    t.showPreparedByThermal,
         showFindings:      t.showFindingsThermal,
         showAttendance:    t.showAttendanceThermal,
+        showCommission:    t.showCommissionThermal,
     };
 }

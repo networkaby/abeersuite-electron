@@ -1,20 +1,21 @@
 "use client";
 
-// Per person — each person's overrides, and the leaderboard: under each person the heads that apply to
-// them with a per-person override. Owner, 2026-09-23: *"this month tab, should
-// be user wise override %, per commission head. user see only applicable to
-// him and globally on."* and *"rename this month tab … in this we will set
-// user override."*
+// Per person — each person's overrides, and the leaderboard. Owner, 2026-09-23:
+// *"user wise override %, per commission head. user see only applicable to him
+// and globally on"* — *"rename this month tab … in this we will set user
+// override."*
 //
-// So a person's row opens into one line per head that reaches them: the head's
-// own terms, a box to give THIS person their own rate (a share head) or their
-// own bonus (a bonus head), and a switch to take the head off them. A head that
-// is off globally, or not for their role, never appears — the same rule My Info
-// will follow. The month's sales are real (from the board read); what they
-// earn is computed here from the heads and overrides, with the real arithmetic
-// (shared/lib/hr/commissionScheme.ts). UI ONLY — overrides live in state.
+// A person's row opens into one line per head that reaches them: the head's
+// terms as they apply to this person, a box to give THEM their own rate (a
+// share head) or bonus (a bonus head), and a switch to take the head off them.
+// A head that is off globally, or not for their role, never appears — the very
+// rule My Info follows. The sales and the earned figure come from the board
+// read, computed server side with the real arithmetic; an override is saved
+// through /api/hr/commission/overrides and the board re-reads.
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,72 +24,67 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TableEmptyRow } from "@/shared/components/DataTableStates";
 import { NumericInput } from "@/shared/components/NumericInput";
 import UserAvatar from "@/shared/components/UserAvatar";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatRupeesFromPaise, paiseToRupees, parseRupeesToPaise } from "@/shared/lib/format/moneyInr";
-import { computeCommission, describeRule, formatBp, type CommissionRule } from "@/shared/lib/hr/commissionScheme";
-import type { CommissionBoardRow } from "../lib/commissionTypes";
-import { KIND_BADGE, KIND_SHORT, headAppliesTo, type CommissionHead } from "./CommissionHeadsTab";
+import { describeRule, formatBp } from "@/shared/lib/hr/commissionScheme";
+import { toBp } from "../lib/commissionRuleDraft";
+import type { AppliedHead, CommissionBoardRow, CommissionHeadDto } from "../lib/commissionTypes";
+import { KIND_BADGE, KIND_SHORT } from "./CommissionHeadsTab";
 import { TargetProgress } from "./MyTargetCard";
 
-/** One person's say over one head: their own figure (rate % or bonus ₹ as typed), and whether the head is off for them. */
-export interface HeadOverride {
-    value: string;
-    off: boolean;
-}
-export type Overrides = Record<string, HeadOverride>;
-export const overrideKey = (userId: number, headId: number) => `${userId}:${headId}`;
-
 /** What the override box edits for this kind of head, if anything. */
-function overridable(h: CommissionHead): "rate" | "bonus" | null {
-    return h.rule.kind === "PERCENT" || h.rule.kind === "ABOVE_TARGET" ? "rate" : h.rule.kind === "BONUS" ? "bonus" : null;
-}
+const overridable = (a: AppliedHead): "rate" | "bonus" | null =>
+    a.rule.kind === "PERCENT" || a.rule.kind === "ABOVE_TARGET" ? "rate" : a.rule.kind === "BONUS" ? "bonus" : null;
 
-/** The head's rule as it applies to one person — their own figure in place of the head's. */
-function effectiveRule(h: CommissionHead, o: HeadOverride | undefined): CommissionRule {
-    if (!o || o.value.trim() === "") return h.rule;
-    const what = overridable(h);
-    if (what === "rate") {
-        const n = Number(o.value);
-        return Number.isFinite(n) && n >= 0 ? { ...h.rule, rateBp: Math.round(n * 100) } : h.rule;
-    }
-    if (what === "bonus") {
-        const p = parseRupeesToPaise(o.value);
-        return p != null ? { ...h.rule, bonusPaise: p } : h.rule;
-    }
-    return h.rule;
-}
-
-export default function CommissionMonthTab({ rows, heads, overrides, setOverrides, canEdit, isCurrent, monthLabel }: {
+export default function CommissionMonthTab({ rows, heads, canEdit, isCurrent, monthLabel, onChanged }: {
     rows: CommissionBoardRow[];
-    heads: CommissionHead[];
-    overrides: Overrides;
-    setOverrides: (fn: (o: Overrides) => Overrides) => void;
+    heads: CommissionHeadDto[];
     canEdit: boolean;
     isCurrent: boolean;
     monthLabel: string;
+    onChanged: () => void;
 }) {
     const [open, setOpen] = useState<number | null>(null);
+    // The box as typed, per person+head, until it is saved on blur.
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const byId = new Map(heads.map((h) => [h.id, h]));
 
-    // Each person: the heads that reach them (globally on + their role), the
-    // rules after their overrides, and what the month's sales come to.
-    const judged = useMemo(() => rows.map((r) => {
-        const mine = heads.filter((h) => h.active && headAppliesTo(h, r.role));
-        const on = mine.filter((h) => !overrides[overrideKey(r.userId, h.id)]?.off);
-        const rules = on.map((h) => effectiveRule(h, overrides[overrideKey(r.userId, h.id)]));
-        const outcome = rules.length ? computeCommission({ rules }, r.thisMonth.salesPaise) : null;
-        return { row: r, mine, on, outcome, month: { ...r.thisMonth, outcome } };
-    }).sort((a, b) => {
-        const ax = a.outcome?.achieved ?? -1, bx = b.outcome?.achieved ?? -1;
+    // Achievers first, by share of target; then by sales — the board reads as
+    // a leaderboard, which is the point of putting it on a wall.
+    const ranked = [...rows].sort((a, b) => {
+        const ax = a.thisMonth.outcome?.achieved ?? -1, bx = b.thisMonth.outcome?.achieved ?? -1;
         if (bx !== ax) return bx - ax;
-        return b.row.thisMonth.salesPaise - a.row.thisMonth.salesPaise;
-    }), [rows, heads, overrides]);
+        return b.thisMonth.salesPaise - a.thisMonth.salesPaise;
+    });
 
-    const setOv = (userId: number, headId: number, patch: Partial<HeadOverride>) =>
-        setOverrides((o) => ({ ...o, [overrideKey(userId, headId)]: { value: "", off: false, ...o[overrideKey(userId, headId)], ...patch } }));
+    const save = async (userId: number, headId: number, patch: { rateBp?: number | null; bonusPaise?: number | null; off?: boolean }) => {
+        try {
+            await axios.put("/api/hr/commission/overrides", { userId, headId, ...patch });
+            onChanged();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save the override"));
+        }
+    };
+
+    /** The typed figure → the override, or null when blank (back to the head's). */
+    const commit = (r: CommissionBoardRow, a: AppliedHead, what: "rate" | "bonus", text: string) => {
+        const t = text.trim();
+        if (what === "rate") {
+            const bp = t === "" ? null : toBp(t);
+            if (bp === null && t !== "") return toast.error("The rate must be a number");
+            if (bp !== null && bp > 10_000) return toast.error("A rate cannot be above 100%");
+            void save(r.userId, a.headId, { rateBp: bp });
+        } else {
+            const p = t === "" ? null : parseRupeesToPaise(t);
+            if (p === null && t !== "") return toast.error("The bonus is not a rupee figure");
+            void save(r.userId, a.headId, { bonusPaise: p });
+        }
+    };
 
     return (
         <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-                Open a person to see the heads that reach them and give them their own rate or bonus on any of them. A head that is off globally, or not for their role, is not listed — they will not see it on My Info either. <span className="font-medium text-foreground">Preview only: overrides are not saved yet.</span>
+                Open a person to see the heads that reach them and give them their own rate or bonus on any of them. A head that is off globally, or not for their role, is not listed — they will not see it on My Info either.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
                 <Table>
@@ -103,13 +99,15 @@ export default function CommissionMonthTab({ rows, heads, overrides, setOverride
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {judged.length === 0 && <TableEmptyRow colSpan={6} message="No current staff." />}
-                        {judged.map(({ row: r, mine, on, outcome, month }, i) => {
+                        {ranked.length === 0 && <TableEmptyRow colSpan={6} message="No current staff." />}
+                        {ranked.map((r, i) => {
+                            const m = r.thisMonth;
+                            const on = m.heads.filter((a) => !a.off);
                             const isOpen = open === r.userId;
                             return (
                                 <Fragment key={r.userId}>
-                                    <TableRow className={`cursor-pointer ${outcome?.targetMet ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}`} onClick={() => setOpen(isOpen ? null : r.userId)}>
-                                        <TableCell className="text-muted-foreground">{outcome?.targetMet ? <Trophy size={16} className="text-amber-500" /> : i + 1}</TableCell>
+                                    <TableRow className={`cursor-pointer ${m.outcome?.targetMet ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}`} onClick={() => setOpen(isOpen ? null : r.userId)}>
+                                        <TableCell className="text-muted-foreground">{m.outcome?.targetMet ? <Trophy size={16} className="text-amber-500" /> : i + 1}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <UserAvatar avatarUrl={r.avatarUrl} name={r.name} sizePx={32} className="shrink-0" />
@@ -120,11 +118,11 @@ export default function CommissionMonthTab({ rows, heads, overrides, setOverride
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {mine.length === 0 ? <span className="text-muted-foreground">none</span> : `${on.length} of ${mine.length} on`}
+                                            {m.heads.length === 0 ? <span className="text-muted-foreground">none</span> : `${on.length} of ${m.heads.length} on`}
                                         </TableCell>
-                                        <TableCell><TargetProgress month={month} compact /></TableCell>
+                                        <TableCell><TargetProgress month={m} compact /></TableCell>
                                         <TableCell className="text-right font-medium tabular-nums">
-                                            {outcome && outcome.totalPaise > 0 ? formatRupeesFromPaise(outcome.totalPaise) : <span className="text-muted-foreground">—</span>}
+                                            {m.outcome && m.outcome.totalPaise > 0 ? formatRupeesFromPaise(m.outcome.totalPaise) : <span className="text-muted-foreground">—</span>}
                                         </TableCell>
                                         <TableCell>
                                             <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={isOpen ? "Hide heads" : "Show heads"}>
@@ -132,39 +130,42 @@ export default function CommissionMonthTab({ rows, heads, overrides, setOverride
                                             </Button>
                                         </TableCell>
                                     </TableRow>
-                                    {isOpen && mine.length === 0 && (
+                                    {isOpen && m.heads.length === 0 && (
                                         <TableRow className="bg-muted/30"><TableCell /><TableCell colSpan={5} className="text-xs text-muted-foreground">No head reaches {r.name} — none is on for {r.role ?? "someone with no role"}.</TableCell></TableRow>
                                     )}
-                                    {isOpen && mine.map((h) => {
-                                        const o = overrides[overrideKey(r.userId, h.id)];
-                                        const what = overridable(h);
-                                        const rule = effectiveRule(h, o);
-                                        const paid = o?.off ? 0 : (outcome?.rules.find((x) => x.rule === rule)?.paise ?? 0);
-                                        const base = what === "rate" ? formatBp(h.rule.rateBp) : what === "bonus" ? formatRupeesFromPaise(h.rule.bonusPaise) : null;
+                                    {isOpen && m.heads.map((a) => {
+                                        const head = byId.get(a.headId);
+                                        const what = overridable(a);
+                                        const key = `${r.userId}:${a.headId}`;
+                                        const paid = a.off ? 0 : (m.outcome?.rules.find((x) => x.rule === a.rule)?.paise ?? 0);
+                                        const own = what === "rate" ? String(Number((a.rule.rateBp / 100).toFixed(2))) : what === "bonus" ? String(paiseToRupees(a.rule.bonusPaise)) : "";
+                                        const headSays = head ? (what === "rate" ? formatBp(head.rule.rateBp) : what === "bonus" ? formatRupeesFromPaise(head.rule.bonusPaise) : "") : "";
                                         return (
-                                            <TableRow key={h.id} className={`bg-muted/30 ${o?.off ? "opacity-60" : ""}`}>
+                                            <TableRow key={a.headId} className={`bg-muted/30 ${a.off ? "opacity-60" : ""}`}>
                                                 <TableCell />
                                                 <TableCell className="whitespace-normal">
                                                     <div className="flex items-center gap-2 text-sm">
-                                                        <span className="font-medium">{h.name}</span>
-                                                        <Badge variant="outline" className={`px-1.5 text-[10px] ${KIND_BADGE[h.rule.kind]}`}>{KIND_SHORT[h.rule.kind]}</Badge>
+                                                        <span className="font-medium">{a.name}</span>
+                                                        <Badge variant="outline" className={`px-1.5 text-[10px] ${KIND_BADGE[a.rule.kind]}`}>{KIND_SHORT[a.rule.kind]}</Badge>
                                                     </div>
-                                                    <div className="text-xs text-muted-foreground">{describeRule(rule, formatRupeesFromPaise)}{o?.value.trim() ? ` · head says ${base}` : ""}</div>
+                                                    <div className="text-xs text-muted-foreground">{describeRule(a.rule, formatRupeesFromPaise)}{a.overridden ? ` · head says ${headSays}` : ""}</div>
                                                 </TableCell>
                                                 <TableCell colSpan={2}>
                                                     {what ? (
                                                         <div className="flex items-center gap-2 text-xs">
                                                             <span className="text-muted-foreground">{what === "rate" ? "Own rate %" : "Own bonus ₹"}</span>
-                                                            <NumericInput mode="decimal" className="h-8 w-28" disabled={!canEdit || !!o?.off} aria-label={`${r.name} ${h.name} override`}
-                                                                value={o?.value ?? ""} onValueChange={(v) => setOv(r.userId, h.id, { value: v })}
-                                                                placeholder={what === "rate" ? formatBp(h.rule.rateBp).replace("%", "") : String(paiseToRupees(h.rule.bonusPaise))} />
-                                                            {o?.value.trim() && <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOv(r.userId, h.id, { value: "" })}>use head&apos;s</Button>}
+                                                            <NumericInput mode="decimal" className="h-8 w-28" disabled={!canEdit || a.off} aria-label={`${r.name} ${a.name} override`}
+                                                                value={drafts[key] ?? (a.overridden ? own : "")}
+                                                                onValueChange={(v) => setDrafts((d) => ({ ...d, [key]: v }))}
+                                                                onBlur={() => { if (drafts[key] !== undefined) { commit(r, a, what, drafts[key]); setDrafts((d) => { const n = { ...d }; delete n[key]; return n; }); } }}
+                                                                placeholder={headSays.replace("%", "").replace("₹", "")} />
+                                                            {a.overridden && <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => commit(r, a, what, "")}>use head&apos;s</Button>}
                                                         </div>
                                                     ) : <span className="text-xs text-muted-foreground">Slabs — on or off only</span>}
                                                 </TableCell>
                                                 <TableCell className="text-right text-sm tabular-nums">{paid > 0 ? formatRupeesFromPaise(paid) : <span className="text-muted-foreground">—</span>}</TableCell>
                                                 <TableCell>
-                                                    <Switch checked={!o?.off} disabled={!canEdit} aria-label={`${h.name} on for ${r.name}`} onCheckedChange={(v) => setOv(r.userId, h.id, { off: !v })} />
+                                                    <Switch checked={!a.off} disabled={!canEdit} aria-label={`${a.name} on for ${r.name}`} onCheckedChange={(v) => save(r.userId, a.headId, { off: !v })} />
                                                 </TableCell>
                                             </TableRow>
                                         );

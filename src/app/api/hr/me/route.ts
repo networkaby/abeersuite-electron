@@ -11,7 +11,7 @@ import { nonPayableDays } from "@/modules/hr/lib/attendancePayable";
 import { LEAVE_INCLUDE, toLeaveDto } from "@/modules/hr/lib/leaveServer";
 import { leaveBalancesFor } from "@/modules/hr/lib/leaveBalance";
 import type { MyHrPayload } from "@/modules/hr/lib/myHrTypes";
-import { COMMISSION_PROFILE_SELECT, loadGlobalSchemes, modeOf, monthFor, salesByUser, schemesFor, toCommissionSchemeDto } from "@/modules/hr/lib/commissionServer";
+import { COMMISSION_USER_SELECT, appliedHeadsFor, loadHeads, monthFor, roleLabelOf, salesByUser } from "@/modules/hr/lib/commissionServer";
 import type { RegisterPerson, HolidayDto, AttendanceMark } from "@/modules/hr/lib/attendanceTypes";
 import { USER_BRANCHES_SELECT, branchIdsFrom } from "@/modules/hr/lib/staffBranchesServer";
 import { holidayApplies } from "@/modules/hr/lib/attendanceCalendar";
@@ -54,13 +54,14 @@ export async function GET(req: Request) {
         // running month stops at today, because the rest of it is not worked yet.
         const upto = to < today ? to : today;
 
-        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, globalSchemes] = await Promise.all([
+        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads] = await Promise.all([
             loadSeasonalHours(),
             prisma.user.findUnique({
                 where: { id: userId },
                 select: {
-                    id: true, name: true, avatarUrl: true, role: true,
-                    staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true, dutyMinutes: true, dutyStart: true, dutyEnd: true, staffCode: true, ...COMMISSION_PROFILE_SELECT } },
+                    id: true, name: true, avatarUrl: true,
+                    ...COMMISSION_USER_SELECT,
+                    staffProfile: { select: { ...COMMISSION_USER_SELECT.staffProfile.select, joinedOn: true, leftOn: true, dutyMinutes: true, dutyStart: true, dutyEnd: true, staffCode: true } },
                     ...USER_BRANCHES_SELECT,
                 },
             }),
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
             // My own sales this month — the target card's fuel. Whole month, so a
             // bill dated ahead (a post-dated invoice) is not lost.
             salesByUser(prisma, [userId], from, to),
-            loadGlobalSchemes(prisma),
+            loadHeads(prisma),
         ]);
         if (!me) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -150,9 +151,10 @@ export async function GET(req: Request) {
             isCurrentMonth: month === today.slice(0, 7),
             leaveBalance,
             lostDays: Math.round(notPayable * 2) / 2,
+            // Only the heads that reach ME — globally on, for my role, not off for
+            // me — the very list the board shows under my row.
             commission: monthFor(
-                modeOf(me.staffProfile?.commissionMode),
-                schemesFor(modeOf(me.staffProfile?.commissionMode), (me.staffProfile?.commissionSchemes ?? []).map(toCommissionSchemeDto), globalSchemes),
+                appliedHeadsFor(heads, roleLabelOf(me), me.staffProfile?.commissionOverrides ?? []),
                 sales.get(userId), month, today, person.weeklyOff,
             ),
         };
