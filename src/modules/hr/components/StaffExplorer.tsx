@@ -25,9 +25,10 @@ import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import UserAvatar from "@/shared/components/UserAvatar";
 import UserForm from "@/shared/components/UserForm";
 import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
-import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { formatInr, formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
+import { staffLedgerStanding } from "@/shared/lib/hr/staffLedgerStanding";
 import type { StaffRow } from "../lib/staffTypes";
 import StaffTable from "./StaffTable";
 import StaffProfileWorkspace from "./StaffProfileWorkspace";
@@ -186,20 +187,29 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="truncate text-sm font-medium">{r.name}</span>
+                                            {/* Where they stand on their own ledger — money owed to
+                                                them, or an advance they are holding. It reads the
+                                                top line because it is what changes; the pay below
+                                                it is the same figure month after month. */}
+                                            <StandingTag balance={r.ledger?.balance ?? 0} />
+                                        </div>
+                                        <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2">
+                                            <div className="flex min-w-0 items-center gap-1.5">
+                                                {r.positions.length > 0 ? (
+                                                    <PositionChip position={r.positions[0]} compact />
+                                                ) : (
+                                                    <span className="text-[11px] text-muted-foreground">No seat</span>
+                                                )}
+                                                {r.positions.length > 1 && (
+                                                    <span className="shrink-0 text-[11px] text-muted-foreground">+{r.positions.length - 1}</span>
+                                                )}
+                                            </div>
+                                            {/* Their pay — what they earn a month. Plain text, not
+                                                a chip: the chip above is the thing to look at. */}
                                             {r.currentSalary && (
                                                 <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
                                                     {formatRupeesFromPaise(r.currentSalary.netPaise)}
                                                 </span>
-                                            )}
-                                        </div>
-                                        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                                            {r.positions.length > 0 ? (
-                                                <PositionChip position={r.positions[0]} compact />
-                                            ) : (
-                                                <span className="text-[11px] text-muted-foreground">No seat</span>
-                                            )}
-                                            {r.positions.length > 1 && (
-                                                <span className="shrink-0 text-[11px] text-muted-foreground">+{r.positions.length - 1}</span>
                                             )}
                                         </div>
                                     </div>
@@ -259,5 +269,25 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                 </section>
             </div>
         </div>
+    );
+}
+
+/** The person's ledger standing as a small chip: what the shop owes them, or
+ *  the advance they hold. A settled ledger is a dash, so rows keep one height. */
+function StandingTag({ balance }: { balance: number }) {
+    const { standing, amount, tag } = staffLedgerStanding(balance, formatInr);
+    if (standing === "settled") return <span className="shrink-0 text-[11px] text-muted-foreground/65">—</span>;
+    return (
+        <span
+            className={cn(
+                "shrink-0 rounded px-1.5 py-px font-mono text-[11px] font-medium tabular-nums",
+                standing === "payable"
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+            )}
+            title={standing === "payable" ? "Owed to them" : "Advance they are holding"}
+        >
+            {formatInr(amount)} {tag}
+        </span>
     );
 }

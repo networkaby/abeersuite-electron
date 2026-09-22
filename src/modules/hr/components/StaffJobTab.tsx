@@ -18,6 +18,7 @@ import { FieldSaveMark } from "@/shared/components/FieldSaveMark";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { useFieldSave } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { staffLedgerStanding } from "@/shared/lib/hr/staffLedgerStanding";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { clampNumber, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format/parseNumericInput";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
@@ -219,11 +220,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                                         {detail.ledger.name}
                                     </Link>
                                     <span className="text-muted-foreground">
-                                        {detail.ledger.balance === 0
-                                            ? "— nothing outstanding"
-                                            : detail.ledger.balance > 0
-                                                ? `— ${formatInr(detail.ledger.balance)} owed to them`
-                                                : `— ${formatInr(Math.abs(detail.ledger.balance))} advance held`}
+                                        — {staffLedgerStanding(detail.ledger.balance, formatInr).sentence}
                                     </span>
                                 </>
                             ) : (

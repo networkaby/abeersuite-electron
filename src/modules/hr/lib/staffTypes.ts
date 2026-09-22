@@ -68,6 +68,10 @@ export interface StaffRow {
     } | null;
     /** The revision in force today — null until one is entered. */
     currentSalary: { effectiveFrom: string; grossPaise: number; netPaise: number } | null;
+    /** Their own "Salary Payable" account — same shape and same sign rule as
+     *  StaffDetail.ledger, so staffLedgerStanding() reads both. Null until the
+     *  first save opens the ledger. */
+    ledger: { id: number; name: string; balance: number } | null;
 }
 
 /** The profile workspace's payload. */
