@@ -109,32 +109,74 @@ export interface PayslipBodyData {
 const signed = (m: number) => (m === 0 ? "—" : m < 0 ? `−${formatWorked(-m)}` : formatWorked(m));
 const orDash = (m: number) => (m > 0 ? formatWorked(m) : "—");
 
-const fmtDay = (iso: string) =>
-    new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 
 /**
- * The days worth a row of their own, and the rest folded into one line.
+ * The month as a handful of summary lines — one per kind of thing that
+ * happened, not one per day.
  *
- * Owner, 2026-09-22: *"30 days is big to fit."* The slip exists to explain the
- * Overtime and Hours owed heads, and a day worked in full at ×1 explains
- * nothing — so only a day that moved the money is printed: overtime, lateness,
- * a shortfall, a half day or absence, a weekly off or holiday worked. The
- * ordinary days are counted, with their minutes, so the month row still adds up
- * in front of the reader.
+ * Owner, 2026-09-22: *"write summary style — x days late, penalty ×1 — because
+ * '20 days present in full' may not apply to everyone, and 26 looks bad."* So
+ * every line is a COUNT of days and the MINUTES they carry, with the rate and
+ * what those minutes came to after it. A kind with nothing in it is left out,
+ * and a clean month is three lines. The day-by-day working is on the person's
+ * own My Info page, not on the slip.
  */
-function splitDays(days: readonly PayslipAttendanceDay[]) {
-    const exceptions: PayslipAttendanceDay[] = [];
-    let ordinary = 0, ordinaryMinutes = 0;
-    for (const d of days) {
-        const plain = !d.shut && d.overtime === 0 && d.late === 0 && d.short === 0 && (d.status === "PRESENT" || !d.status);
-        if (plain) { ordinary++; ordinaryMinutes += d.worked; }
-        else exceptions.push(d);
-    }
-    return { exceptions, ordinary, ordinaryMinutes };
+interface SummaryLine {
+    key: string;
+    label: string;
+    /** "3 days", "1 day", or "" when a count means nothing (the month row). */
+    days: string;
+    /** The minutes and the rate, as printed: "23m × 2", "3h 10m × 2", "half already withheld". */
+    working: string;
+    /** Signed minutes after the rate; null prints a dash. */
+    accounted: number | null;
 }
 
-/** A shut day's one-word reason for the Day column. */
-const shutWord = (d: PayslipAttendanceDay) => (d.shut === "HOLIDAY" ? "holiday" : d.shut === "OFF" ? "weekly off" : null);
+const dayCount = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
+
+function summariseDays(att: PayslipAttendanceData): SummaryLine[] {
+    // Every day's minutes inside the duty, at ×1 — the base the other lines
+    // adjust. It has to cover the exception days too, or the column would not
+    // add up to the month.
+    let present = 0, dutyMinutes = 0;
+    let otDays = 0, otMinutes = 0, otAcc = 0;
+    let lateCharged = 0, lateChargedMinutes = 0, lateAcc = 0;
+    let shortDays = 0, shortMinutes = 0, shortAcc = 0;
+    let half = 0, halfAcc = 0;
+    let absent = 0;
+    let offDays = 0, offMinutes = 0, offAcc = 0;
+    let holDays = 0, holMinutes = 0, holAcc = 0;
+
+    for (const d of att.days) {
+        if (d.shut === "OFF")     { offDays++; offMinutes += d.worked; offAcc += d.grantedAccounted; continue; }
+        if (d.shut === "HOLIDAY") { holDays++; holMinutes += d.worked; holAcc += d.grantedAccounted; continue; }
+        if (d.status === "ABSENT") { absent++; continue; }
+        if (d.status === "HALF_DAY") { half++; halfAcc += d.shortAccounted; }
+        else if (d.short > 0) { shortDays++; shortMinutes += d.short; shortAcc += d.shortAccounted; }
+        if (d.overtime > 0) { otDays++; otMinutes += d.overtime; otAcc += d.overtimeAccounted; }
+        if (d.lateAccounted < 0) { lateCharged++; lateChargedMinutes += d.late; lateAcc += d.lateAccounted; }
+        if (d.worked > 0) { present++; dutyMinutes += Math.min(d.worked, d.duty); }
+    }
+
+    const out: SummaryLine[] = [];
+    if (present > 0) out.push({ key: "duty", label: "Duty worked", days: dayCount(present), working: `${formatWorked(dutyMinutes)} × 1`, accounted: dutyMinutes });
+    if (otDays > 0) out.push({ key: "ot", label: "Overtime", days: dayCount(otDays), working: `${formatWorked(otMinutes)} × ${att.rates.overtime}`, accounted: otAcc });
+    if (att.lateDays > 0) {
+        const free = att.lateDays - att.chargedLateDays;
+        out.push({
+            key: "late", label: "Late",
+            days: `${dayCount(att.lateDays)}${free > 0 ? ` (first ${free} free)` : ""}`,
+            working: lateCharged > 0 ? `${formatWorked(lateChargedMinutes)} charged ${att.rates.late}` : "none charged",
+            accounted: lateCharged > 0 ? lateAcc : null,
+        });
+    }
+    if (shortDays > 0) out.push({ key: "short", label: "Short of duty", days: dayCount(shortDays), working: `${formatWorked(shortMinutes)} × ${att.rates.shortHours}`, accounted: shortAcc });
+    if (half > 0) out.push({ key: "half", label: "Half day", days: dayCount(half), working: "half the day already withheld on the pay", accounted: halfAcc || null });
+    if (absent > 0) out.push({ key: "absent", label: "Absent", days: dayCount(absent), working: "paid at zero", accounted: null });
+    if (offDays > 0) out.push({ key: "off", label: "Weekly off worked", days: dayCount(offDays), working: `${formatWorked(offMinutes)} × ${att.rates.weeklyOff}`, accounted: offAcc });
+    if (holDays > 0) out.push({ key: "hol", label: "Holiday worked", days: dayCount(holDays), working: `${formatWorked(holMinutes)} × ${att.rates.holiday}`, accounted: holAcc });
+    return out;
+}
 
 function Row({ label, value, strong }: { label: string; value: React.ReactNode; strong?: boolean }) {
     return (
@@ -152,7 +194,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
     showAttendance?: boolean;
 }) {
     const att = data.attendance ?? null;
-    const split = splitDays(att?.days ?? []);
+    const summary = att ? summariseDays(att) : [];
     const earnings = data.lines.filter((l) => l.kind === "EARNING");
     const deductions = data.lines.filter((l) => l.kind === "DEDUCTION");
     const period = `${formatDate(data.periodFrom)} – ${formatDate(data.periodTo)}`;
@@ -188,27 +230,19 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                 <div style={{ borderTop: "1px dashed #777", margin: "6px 0" }} />
                 <Row label="NET PAY" value={formatRupeesFromPaise(data.netPaise)} strong />
                 <div style={{ fontSize: 10, color: "#444", marginTop: 2 }}>{words}</div>
-                {showAttendance && att && att.days.length > 0 && (
+                {showAttendance && att && summary.length > 0 && (
                     <>
                         <div style={{ borderTop: "1px dashed #777", margin: "6px 0" }} />
                         <div style={{ fontWeight: 700 }}>Attendance &amp; hours</div>
-                        {split.ordinary > 0 && (
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
-                                <span>{split.ordinary} {split.ordinary === 1 ? "day" : "days"} present in full</span>
-                                <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{formatWorked(split.ordinaryMinutes)} = {formatWorked(split.ordinaryMinutes)}</span>
-                            </div>
-                        )}
-                        {split.exceptions.map((d) => (
-                            <div key={d.date} style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
-                                <span>{fmtDay(d.date)}{shutWord(d) ? ` · ${shutWord(d)}` : ""}</span>
+                        {summary.map((l) => (
+                            <div key={l.key} style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
+                                <span>{l.label} · {l.days}</span>
                                 <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                                    {formatWorked(d.worked)}
-                                    {d.lateAccounted < 0 ? ` L${signed(d.lateAccounted)}` : ""}
-                                    {" = "}{signed(d.total)}
+                                    {l.working} = {l.accounted === null ? "—" : signed(l.accounted)}
                                 </span>
                             </div>
                         ))}
-                        <Row label="Accounted (before netting)" value={signed(att.accountedMinutes)} strong />
+                        <Row label={`Month · ${formatWorked(att.workedMinutes)} of ${formatWorked(att.dutyMinutes)}`} value={signed(att.accountedMinutes)} strong />
                         <Row label="Overtime payable" value={orDash(att.payableMinutes)} />
                         <Row label="Hours owed" value={orDash(att.owedMinutes)} />
                     </>
@@ -281,74 +315,40 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                 attendance, accounted day by day the way the activity card does it,
                 frozen with the pay. Off a line from before it was frozen, or when
                 the template hides it, the slip ends at the net. */}
-            {showAttendance && att && att.days.length > 0 && (
-                <div style={{ marginTop: 12, fontSize: 10 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 3, fontSize: 11 }}>Attendance &amp; hours</div>
+            {showAttendance && att && summary.length > 0 && (
+                <div style={{ marginTop: 12, fontSize: 11 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 3 }}>Attendance &amp; hours</div>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                             <tr>
-                                <th style={{ ...head, textAlign: "left" }}>Day</th>
-                                <th style={{ ...head, textAlign: "right" }}>Worked</th>
-                                <th style={{ ...head, textAlign: "right" }}>Duty</th>
-                                <th style={{ ...head, textAlign: "right" }}>Overtime ×{att.rates.overtime}</th>
-                                <th style={{ ...head, textAlign: "right" }}>Late {att.rates.late}</th>
-                                <th style={{ ...head, textAlign: "right" }}>Short ×{att.rates.shortHours}</th>
+                                <th style={{ ...head, textAlign: "left" }}>What</th>
+                                <th style={{ ...head, textAlign: "right" }}>Days</th>
+                                <th style={{ ...head, textAlign: "right" }}>Minutes × rate</th>
                                 <th style={{ ...head, textAlign: "right" }}>Accounted</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {split.ordinary > 0 && (
-                                <tr>
-                                    <td style={tight}>
-                                        {split.ordinary} {split.ordinary === 1 ? "day" : "days"} present in full
-                                        <span style={{ color: "#555" }}> · nothing to account beyond the duty</span>
-                                    </td>
-                                    <td style={tightNum}>{formatWorked(split.ordinaryMinutes)}</td>
-                                    <td style={tightNum}>{formatWorked(split.ordinaryMinutes)}</td>
-                                    <td style={tightNum}>—</td>
-                                    <td style={tightNum}>—</td>
-                                    <td style={tightNum}>—</td>
-                                    <td style={{ ...tightNum, fontWeight: 700 }}>{formatWorked(split.ordinaryMinutes)}</td>
-                                </tr>
-                            )}
-                            {split.exceptions.map((d) => (
-                                <tr key={d.date}>
-                                    <td style={tight}>
-                                        {fmtDay(d.date)}
-                                        <span style={{ color: "#555" }}>
-                                            {shutWord(d) ? ` · ${shutWord(d)}` : d.status && d.status !== "PRESENT" ? ` · ${d.status.toLowerCase().replace(/_/g, " ")}` : ""}
-                                        </span>
-                                    </td>
-                                    <td style={tightNum}>{orDash(d.worked)}</td>
-                                    <td style={tightNum}>{d.shut ? "—" : orDash(d.duty)}</td>
-                                    <td style={tightNum}>
-                                        {d.shut
-                                            ? `${orDash(d.worked)} ×${d.shut === "HOLIDAY" ? att.rates.holiday : att.rates.weeklyOff} = ${signed(d.grantedAccounted)}`
-                                            : d.overtime > 0 ? `${formatWorked(d.overtime)} = ${signed(d.overtimeAccounted)}` : "—"}
-                                    </td>
-                                    <td style={tightNum}>{d.late > 0 ? `${formatWorked(d.late)} = ${signed(d.lateAccounted)}` : "—"}</td>
-                                    <td style={tightNum}>{d.short > 0 ? `${formatWorked(d.short)} = ${signed(d.shortAccounted)}` : "—"}</td>
-                                    <td style={{ ...tightNum, fontWeight: 700 }}>{signed(d.total)}</td>
+                            {summary.map((l) => (
+                                <tr key={l.key}>
+                                    <td style={tight}>{l.label}</td>
+                                    <td style={tightNum}>{l.days}</td>
+                                    <td style={tightNum}>{l.working}</td>
+                                    <td style={{ ...tightNum, fontWeight: 700 }}>{l.accounted === null ? "—" : signed(l.accounted)}</td>
                                 </tr>
                             ))}
                             <tr style={{ fontWeight: 700 }}>
-                                <td style={{ ...cell, borderBottom: "1px solid #999" }}>Month</td>
-                                <td style={{ ...num, borderBottom: "1px solid #999" }}>{orDash(att.workedMinutes)}</td>
-                                <td style={{ ...num, borderBottom: "1px solid #999" }}>{orDash(att.dutyMinutes)}</td>
-                                <td style={{ ...num, borderBottom: "1px solid #999" }} colSpan={3}>
-                                    late {att.lateDays} {att.lateDays === 1 ? "day" : "days"}{att.lateDays > 0 ? ` (${att.chargedLateDays} charged, first ${att.rates.lateFreeDays} free)` : ""}
-                                </td>
-                                <td style={{ ...num, borderBottom: "1px solid #999" }}>{signed(att.accountedMinutes)}</td>
+                                <td style={{ ...tight, borderBottom: "1px solid #999" }}>Month</td>
+                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{dayCount(att.days.length)}</td>
+                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{formatWorked(att.workedMinutes)} of {formatWorked(att.dutyMinutes)} owed</td>
+                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{signed(att.accountedMinutes)}</td>
                             </tr>
                         </tbody>
                     </table>
-                    <div style={{ marginTop: 4, color: "#444" }}>
+                    <div style={{ marginTop: 4, color: "#444", fontSize: 10 }}>
                         Accounted is each day on its own. The month is then netted — overtime pays back the hours
                         fallen short first — and only what survives reaches the pay heads:{" "}
-                        <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>hours owed {orDash(att.owedMinutes)}</b>
-                        {att.weeklyOffMinutes > 0 && <> · weekly-off duty {formatWorked(att.weeklyOffMinutes)} at ×{att.rates.weeklyOff}</>}
-                        {att.holidayMinutes > 0 && <> · holiday duty {formatWorked(att.holidayMinutes)} at ×{att.rates.holiday}</>}
-                        .
+                        <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>hours owed {orDash(att.owedMinutes)}</b>.
+                        The day-by-day working is on your My Info page.
                     </div>
                 </div>
             )}

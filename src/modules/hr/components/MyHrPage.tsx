@@ -13,7 +13,7 @@
 
 import { useMemo, useState } from "react";
 import {
-    CalendarDays, ChevronLeft, ChevronRight, Clock, IdCard, Palmtree, Plus, ReceiptIndianRupee, Timer,
+    Activity, CalendarDays, ChevronLeft, ChevronRight, Clock, IdCard, Palmtree, Plus, ReceiptIndianRupee, Timer,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import { CELL, DOW } from "../lib/attendanceStyles";
 import type { MyHrPayload } from "../lib/myHrTypes";
 import { LeaveDialog } from "./LeaveBoard";
 import StaffPayslips from "./StaffPayslips";
+import AttendanceBreakup from "./AttendanceBreakup";
 
 const STATUS_BADGE: Record<LeaveStatus, string> = {
     PENDING:   "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300",
@@ -230,6 +231,19 @@ export default function MyHrPage({ userId }: { userId: number }) {
                                     </TableBody>
                                 </Table>
                             </div>
+                        </Section>
+
+                        {/* My activity — the same day cards HR reads on Employee
+                            Activity, for the month chosen above, and only for me.
+                            Owner, 2026-09-22: the slip carries the summary; the
+                            day-by-day working lives here, with the person it is
+                            about. The route refuses any other person's id. */}
+                        <Section title="My activity" icon={<Activity size={15} />}>
+                            <p className="mb-2 text-xs text-muted-foreground">
+                                Every stretch you were active in {monthLabel(month)}, how each day was accounted, and what
+                                the month nets to — the working behind the salary slip.
+                            </p>
+                            <AttendanceBreakup userId={userId} from={data.from} to={data.to} />
                         </Section>
 
                         {/* My payslips — the same surface the staff profile shows. */}
