@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, prismaUniqueError, validateRequest } from "@/shared/lib/api";
 import { staffSalaryCreateSchema } from "@/shared/lib/schemas/hrSchema";
 import { salaryTotals } from "@/modules/hr/lib/salaryLines";
+import { payDaysOf } from "@/modules/hr/lib/payrollProrate";
 import { ensureStaffProfile, dateOnlyFromIso, toStaffSalaryDto } from "@/modules/hr/lib/staffProfileServer";
 
 // POST /api/hr/staff/[userId]/salary — add a salary revision.
@@ -36,6 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
                 data: {
                     userId,
                     effectiveFrom: dateOnlyFromIso(body.effectiveFrom),
+                    payDays: payDaysOf(body.payDays),
                     linesJson: body.lines,
                     grossPaise,
                     netPaise,

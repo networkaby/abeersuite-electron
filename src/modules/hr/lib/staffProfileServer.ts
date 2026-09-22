@@ -74,6 +74,7 @@ export function toStaffSalaryDto(s: StaffProfileWithRels["salaries"][number]): S
     return {
         id: s.id,
         effectiveFrom: toDateOnlyUtc(s.effectiveFrom),
+        payDays: s.payDays,
         lines: parseSalaryLines(s.linesJson),
         grossPaise: s.grossPaise,
         netPaise: s.netPaise,

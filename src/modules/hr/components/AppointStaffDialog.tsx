@@ -29,6 +29,7 @@ import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format/m
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABELS, type EmploymentType } from "@/shared/lib/schemas/hrSchema";
 import { DEFAULT_SALARY_LINES, salaryTotals, type SalaryLine } from "../lib/salaryLines";
+import PayDaysField, { DEFAULT_PAY_DAYS } from "./PayDaysField";
 import type { StaffDetail } from "../lib/staffTypes";
 
 interface PositionRow {
@@ -59,6 +60,7 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
     const [lines, setLines] = useState<Draft[]>(() =>
         DEFAULT_SALARY_LINES.map((l) => ({ name: l.name, kind: l.kind, amount: "" })),
     );
+    const [payDays, setPayDays] = useState(String(DEFAULT_PAY_DAYS));
     const [saving, setSaving] = useState(false);
 
     const { data: positions } = useApiResource<PositionRow[]>(canAppointSeat ? "/api/positions" : null);
@@ -81,7 +83,9 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
     );
     const totals = salaryTotals(parsed);
     const badLine = lines.some((l) => !l.name.trim() || (l.amount.trim() !== "" && parseRupeesToPaise(l.amount) == null));
-    const canSave = !saving && !badLine && !!joinedOn && totals.grossPaise > 0;
+    const days = Number(payDays);
+    const badDays = !Number.isInteger(days) || days < 1 || days > 31;
+    const canSave = !saving && !badLine && !badDays && !!joinedOn && totals.grossPaise > 0;
 
     const set = (i: number, patch: Partial<Draft>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
@@ -108,6 +112,7 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
             // 3. The first salary structure, dated from the joining day.
             await axios.post(`${url}/salary`, {
                 effectiveFrom: joinedOn,
+                payDays: days,
                 lines: parsed,
                 note: "On appointment",
             });
@@ -180,6 +185,7 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
 
                 <div className="space-y-2">
                     <p className="text-sm font-medium">Salary structure</p>
+                    <PayDaysField value={payDays} onChange={setPayDays} grossPaise={totals.grossPaise} />
                     {lines.map((l, i) => (
                         <div key={i} className="flex items-center gap-2">
                             <Input

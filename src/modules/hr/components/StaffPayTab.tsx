@@ -16,6 +16,7 @@ import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { salaryTotals } from "../lib/salaryLines";
+import { payRateHint } from "./PayDaysField";
 import type { StaffDetail, StaffSalaryDto } from "../lib/staffTypes";
 import SalaryRevisionDialog from "./SalaryRevisionDialog";
 
@@ -49,7 +50,7 @@ export default function StaffPayTab({ url, detail, canEdit, onChanged }: {
     return (
         <div className="space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-                {current ? <CurrentCard s={current} /> : (
+                {current ? <CurrentCard s={current} dutyMinutes={detail.profile?.dutyMinutes ?? null} /> : (
                     <p className="text-sm text-muted-foreground">
                         {salaries.length ? "No revision has started yet — the first one is dated in the future." : "No salary structure entered yet."}
                     </p>
@@ -66,6 +67,7 @@ export default function StaffPayTab({ url, detail, canEdit, onChanged }: {
                     <TableHeader>
                         <TableRow>
                             <TableHead>From</TableHead>
+                            <TableHead className="text-right">Days</TableHead>
                             <TableHead>Lines</TableHead>
                             <TableHead className="text-right">Gross</TableHead>
                             <TableHead className="text-right">Deductions</TableHead>
@@ -76,7 +78,7 @@ export default function StaffPayTab({ url, detail, canEdit, onChanged }: {
                     </TableHeader>
                     <TableBody>
                         {salaries.length === 0 ? (
-                            <TableEmptyRow colSpan={canEdit ? 7 : 6} message="No revisions yet." />
+                            <TableEmptyRow colSpan={canEdit ? 8 : 7} message="No revisions yet." />
                         ) : salaries.map((s) => {
                             const t = salaryTotals(s.lines);
                             return (
@@ -85,6 +87,7 @@ export default function StaffPayTab({ url, detail, canEdit, onChanged }: {
                                         {formatDate(s.effectiveFrom)}
                                         {s.id === current?.id && <span className="ml-2 text-xs text-muted-foreground">current</span>}
                                     </TableCell>
+                                    <TableCell className="text-right tabular-nums">{s.payDays}</TableCell>
                                     <TableCell className="text-xs text-muted-foreground">
                                         {s.lines.map((l) => `${l.name} ${l.kind === "DEDUCTION" ? "−" : ""}${formatRupeesFromPaise(l.amountPaise)}`).join(" · ")}
                                     </TableCell>
@@ -110,6 +113,7 @@ export default function StaffPayTab({ url, detail, canEdit, onChanged }: {
                 <SalaryRevisionDialog
                     url={url}
                     startFrom={current}
+                    dutyMinutes={detail.profile?.dutyMinutes ?? null}
                     onClose={() => setOpen(false)}
                     onSaved={() => { setOpen(false); onChanged(); }}
                 />
@@ -118,7 +122,7 @@ export default function StaffPayTab({ url, detail, canEdit, onChanged }: {
     );
 }
 
-function CurrentCard({ s }: { s: StaffSalaryDto }) {
+function CurrentCard({ s, dutyMinutes }: { s: StaffSalaryDto; dutyMinutes: number | null }) {
     const t = salaryTotals(s.lines);
     return (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
@@ -127,7 +131,10 @@ function CurrentCard({ s }: { s: StaffSalaryDto }) {
                 <Stat label="Gross" value={formatRupeesFromPaise(t.grossPaise)} />
                 <Stat label="Deductions" value={t.deductionsPaise ? formatRupeesFromPaise(t.deductionsPaise) : "—"} />
                 <Stat label="Net a month" value={formatRupeesFromPaise(t.netPaise)} strong />
+                <Stat label={`Paid days a month`} value={String(s.payDays)} />
             </div>
+            {/* What the divisor actually means in money — a day off, an extra hour. */}
+            <p className="mt-2 text-xs text-muted-foreground">{payRateHint(t.grossPaise, s.payDays, dutyMinutes)}</p>
         </div>
     );
 }

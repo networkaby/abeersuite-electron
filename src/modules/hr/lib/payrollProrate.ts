@@ -1,15 +1,20 @@
 // Proportioning a monthly salary over a date range.
 //
 // Owner, 2026-09-20: the payroll sheet shows "the total from last payroll to
-// till day", so a run rarely covers a whole month. A monthly structure is
-// therefore worth, for each day the person was employed inside the period,
+// till day", so a run rarely covers a whole month.
 //
-//     that day's pay head amount ÷ days in THAT calendar month
+// Owner, 2026-09-22: *"salary is decided for 26 days as per gvt. rule, now feb
+// and January salary will be difference"*. So the day rate is NOT the length of
+// the calendar month — it is the revision's own `payDays`, 26 unless a contract
+// says otherwise:
 //
-// which is the ordinary day-basis rule and needs no attendance — only dates.
-// Dividing by the real length of each month (28/29/30/31) rather than a flat
-// 30 is what makes a full month always come back to exactly the structure's
-// figure, in February as much as in January.
+//     one day  =  that day's pay head amount / payDays
+//
+// and the period pays for the WORKING days inside it. A weekly off is not paid
+// as a day of its own; it is already bought by the 26. On ₹16,000 with Sunday
+// off that gives ₹16,000 / 26 = ₹615.38 a day, so January 2026 (27 working
+// days) pays ₹16,615 and February (24) pays ₹14,769 — the difference the owner
+// described. A month with exactly 26 working days comes back to ₹16,000.
 //
 // It walks day by day because that is the only version of this that is
 // obviously correct: a salary revision landing mid-period, a person joining on
@@ -18,7 +23,8 @@
 // additions — far cheaper than the query that fetched them.
 //
 // Fractions are carried at full precision and rounded ONCE per pay head at the
-// end, so thirty days of ₹16,000/30 add back to ₹16,000 and not to ₹15,999.90.
+// end, so twenty-six days of ₹16,000/26 add back to ₹16,000 and not to
+// ₹15,999.90.
 
 import type { SalaryLine, SalaryLineKind } from "./salaryLines";
 
@@ -26,6 +32,8 @@ export interface ProrateRevision {
     /** Inclusive first day this structure applies. */
     effectiveFrom: string;
     lines: SalaryLine[];
+    /** Days a month this structure buys. Falls back to 26 when not set. */
+    payDays?: number | null;
 }
 
 export interface ProrateInput {
@@ -38,6 +46,12 @@ export interface ProrateInput {
     leftOn: string | null;
     /** Newest first or oldest first — either; sorted here. */
     revisions: readonly ProrateRevision[];
+    /**
+     * Weekdays this person does not work — 0 = Sunday … 6 = Saturday, the
+     * StaffProfile.weeklyOff convention. They earn nothing of their own, being
+     * inside the 26. Empty means every day of the period is a working day.
+     */
+    weeklyOff?: readonly number[];
 }
 
 export interface ProrateResult {
@@ -45,8 +59,10 @@ export interface ProrateResult {
     grossPaise: number;
     deductionsPaise: number;
     netPaise: number;
-    /** Days in the period the person was employed and had a structure. */
+    /** WORKING days in the period the person was employed and had a structure. */
     paidDays: number;
+    /** Days of the period that fell on the person's weekly off. */
+    weeklyOffDays: number;
     /** Days in the period itself. */
     periodDays: number;
 }
@@ -61,10 +77,23 @@ function isoOf(ms: number): string {
     return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** Calendar length of the month a day falls in — 28, 29, 30 or 31. */
-export function daysInMonthOf(iso: string): number {
-    const [y, m] = iso.split("-").map(Number);
-    return new Date(Date.UTC(y, m, 0)).getUTCDate();
+/**
+ * The government month: how many days a monthly salary is taken to buy.
+ *
+ * Every divisor in HR comes through here — payroll, the hourly rate behind
+ * overtime, and the per-day figure the salary dialog shows — so the number
+ * cannot drift apart between the sheet and the screen.
+ */
+export const DEFAULT_PAY_DAYS = 26;
+
+/** A stored `payDays` made safe: a missing or silly value falls back to 26. */
+export function payDaysOf(v: number | null | undefined): number {
+    return typeof v === "number" && Number.isFinite(v) && v >= 1 && v <= 31 ? Math.round(v) : DEFAULT_PAY_DAYS;
+}
+
+/** 0 = Sunday … 6 = Saturday, for an ISO date. */
+export function weekdayOf(iso: string): number {
+    return new Date(`${iso}T00:00:00.000Z`).getUTCDay();
 }
 
 /** Inclusive day count between two ISO dates; 0 when the range is backwards. */
@@ -73,10 +102,10 @@ export function inclusiveDays(fromIso: string, toIso: string): number {
     return n > 0 ? n : 0;
 }
 
-export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions }: ProrateInput): ProrateResult {
+export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff = [] }: ProrateInput): ProrateResult {
     const periodDays = inclusiveDays(fromIso, toIso);
     const empty: ProrateResult = {
-        lines: [], grossPaise: 0, deductionsPaise: 0, netPaise: 0, paidDays: 0, periodDays,
+        lines: [], grossPaise: 0, deductionsPaise: 0, netPaise: 0, paidDays: 0, weeklyOffDays: 0, periodDays,
     };
     if (periodDays === 0) return empty;
 
@@ -87,7 +116,9 @@ export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions }: Prorate
     // Fractional paise per head, keyed so a head keeps its identity across a
     // revision that renames nothing but changes the amount.
     const acc = new Map<string, { name: string; kind: SalaryLineKind; paise: number }>();
+    const offDays = new Set(weeklyOff);
     let paidDays = 0;
+    let weeklyOffDays = 0;
 
     const start = utc(fromIso);
     const end = utc(toIso);
@@ -104,7 +135,11 @@ export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions }: Prorate
         while (cursor + 1 < sorted.length && sorted[cursor + 1].effectiveFrom <= day) cursor += 1;
         if (cursor < 0) continue; // no structure had started yet
 
-        const perDay = daysInMonthOf(day);
+        // A weekly off earns nothing on its own — the 26-day rate already paid
+        // for it. It is counted separately so the sheet can say so out loud.
+        if (offDays.has(weekdayOf(day))) { weeklyOffDays += 1; continue; }
+
+        const perDay = payDaysOf(sorted[cursor].payDays);
         for (const l of sorted[cursor].lines) {
             const key = `${l.kind}|${l.name}`;
             const row = acc.get(key) ?? { name: l.name, kind: l.kind, paise: 0 };
@@ -114,7 +149,7 @@ export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions }: Prorate
         paidDays += 1;
     }
 
-    if (paidDays === 0) return empty;
+    if (paidDays === 0) return { ...empty, weeklyOffDays };
 
     const lines: SalaryLine[] = [...acc.values()].map((r) => ({
         name: r.name,
@@ -127,5 +162,38 @@ export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions }: Prorate
         else deductionsPaise += l.amountPaise;
     }
 
-    return { lines, grossPaise, deductionsPaise, netPaise: grossPaise - deductionsPaise, paidDays, periodDays };
+    return { lines, grossPaise, deductionsPaise, netPaise: grossPaise - deductionsPaise, paidDays, weeklyOffDays, periodDays };
+}
+
+// ── The hourly rate ───────────────────────────────────────────────────────────
+//
+// Owner, 2026-09-22: *"we have the hourly price from the (monthly salary/26)/
+// standard office hour, we sum the hours and then calculate the payment. it's
+// not per day."* So extra work is never rounded into days: the month's leftover
+// minutes are added up and multiplied by this rate, and two hours twenty is
+// 2.33 hours of pay, not half a day.
+//
+// Fractional paise on purpose — the caller rounds once, at the end, exactly as
+// the day walk above does.
+
+/** One day of a monthly figure: amount / payDays. */
+export function perDayPaise(amountPaise: number, payDays: number | null | undefined): number {
+    return amountPaise / payDaysOf(payDays);
+}
+
+/** One hour: a day's pay spread over the duty the person owes in a day. */
+export function perHourPaise(amountPaise: number, payDays: number | null | undefined, dutyMinutes: number): number {
+    if (!(dutyMinutes > 0)) return 0;
+    return perDayPaise(amountPaise, payDays) / (dutyMinutes / 60);
+}
+
+/** What `minutes` of netted overtime is worth, rounded to whole paise. */
+export function overtimePaise(
+    minutes: number,
+    amountPaise: number,
+    payDays: number | null | undefined,
+    dutyMinutes: number,
+): number {
+    if (minutes <= 0) return 0;
+    return Math.round(perHourPaise(amountPaise, payDays, dutyMinutes) * (minutes / 60));
 }

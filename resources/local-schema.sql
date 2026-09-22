@@ -1607,6 +1607,7 @@ CREATE TABLE IF NOT EXISTS "staff_salaries" (
     "id" SERIAL NOT NULL,
     "userId" INTEGER NOT NULL,
     "effectiveFrom" DATE NOT NULL,
+    "payDays" INTEGER NOT NULL DEFAULT 26,
     "linesJson" JSONB NOT NULL,
     "grossPaise" INTEGER NOT NULL,
     "netPaise" INTEGER NOT NULL,
@@ -1620,6 +1621,7 @@ CREATE TABLE IF NOT EXISTS "staff_salaries" (
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "effectiveFrom" DATE NOT NULL;
+ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "payDays" INTEGER NOT NULL DEFAULT 26;
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "linesJson" JSONB NOT NULL;
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "grossPaise" INTEGER NOT NULL;
 ALTER TABLE "staff_salaries" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT NULL;
@@ -1684,6 +1686,7 @@ CREATE TABLE IF NOT EXISTS "payroll_run_lines" (
     "netPaise" INTEGER NOT NULL DEFAULT 0,
     "paidDays" INTEGER NOT NULL DEFAULT 0,
     "periodDays" INTEGER NOT NULL DEFAULT 0,
+    "payDays" INTEGER NOT NULL DEFAULT 26,
     "ledgerAccountId" INTEGER,
     "included" BOOLEAN NOT NULL DEFAULT true,
     "skipReason" TEXT,
@@ -1702,6 +1705,7 @@ ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "deductionsPaise" INTEG
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "netPaise" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "paidDays" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "periodDays" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "payDays" INTEGER NOT NULL DEFAULT 26;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "ledgerAccountId" INTEGER;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "included" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "skipReason" TEXT;

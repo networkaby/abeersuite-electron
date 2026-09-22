@@ -5,7 +5,7 @@ import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { parseSalaryLines } from "./salaryLines";
-import { prorate, inclusiveDays } from "./payrollProrate";
+import { prorate, inclusiveDays, payDaysOf } from "./payrollProrate";
 import type { PayrollLineDto, PayrollRunDetail, PayrollRunRow, PayrollRunStatus } from "./payrollTypes";
 import { formatPeriod } from "./payrollTypes";
 
@@ -15,7 +15,9 @@ import { formatPeriod } from "./payrollTypes";
  * A run pays a DATE RANGE — from the day after the last run ended, up to
  * whatever day you are standing on. Generating it is a pure read of the salary
  * structures: for every person employed in that window, their monthly heads
- * proportioned by the days they were actually employed (payrollProrate.ts).
+ * proportioned by the WORKING days they were actually employed — the revision's
+ * own `payDays` (26 by default) is the divisor and a weekly off is not a day of
+ * its own, being already inside the 26 (payrollProrate.ts).
  * Nothing is guessed and nothing is estimated; a person the run cannot pay is
  * still written down with the reason rather than dropped.
  */
@@ -97,8 +99,12 @@ export interface PayrollCandidate {
     grossPaise: number;
     deductionsPaise: number;
     netPaise: number;
+    /** Working days paid, days of the period, and the divisor behind them. */
     paidDays: number;
     periodDays: number;
+    payDays: number;
+    /** Days of the period that were this person's weekly off. */
+    weeklyOffDays: number;
     ledger: { id: number; name: string } | null;
     included: boolean;
     skipReason: string | null;
@@ -128,6 +134,7 @@ export async function buildPayrollCandidates(
                     staffCode: true,
                     joinedOn: true,
                     leftOn: true,
+                    weeklyOff: true,
                     ledgerAccount: { select: { id: true, name: true } },
                     // Every revision starting on or before the period's last
                     // day: one that lands mid-period has to be honoured for the
@@ -135,7 +142,7 @@ export async function buildPayrollCandidates(
                     salaries: {
                         where:   { effectiveFrom: { lte: dateOnly(toIso) } },
                         orderBy: { effectiveFrom: "asc" },
-                        select:  { id: true, effectiveFrom: true, linesJson: true, netPaise: true },
+                        select:  { id: true, effectiveFrom: true, linesJson: true, netPaise: true, payDays: true },
                     },
                 },
             },
@@ -158,15 +165,20 @@ export async function buildPayrollCandidates(
         const revisions = (p?.salaries ?? []).map((s) => ({
             effectiveFrom: toDateOnlyUtc(s.effectiveFrom),
             lines: parseSalaryLines(s.linesJson),
+            payDays: s.payDays,
         }));
         const latest = p?.salaries.length ? p.salaries[p.salaries.length - 1] : null;
 
-        const r = prorate({ fromIso, toIso, joinedOn, leftOn, revisions });
+        const r = prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff: p?.weeklyOff ?? [] });
         const ledger = p?.ledgerAccount ?? null;
 
         let skipReason: string | null = null;
         if (!revisions.length) skipReason = "No salary structure entered";
-        else if (r.paidDays === 0) skipReason = "Not on the staff during this period";
+        else if (r.paidDays === 0) {
+            skipReason = r.weeklyOffDays > 0
+                ? "Only weekly offs fell in this period"
+                : "Not on the staff during this period";
+        }
         else if (r.netPaise <= 0) skipReason = "Comes to nothing for this period";
         else if (!ledger) skipReason = "No ledger — open the staff profile and save it once";
 
@@ -183,6 +195,8 @@ export async function buildPayrollCandidates(
             netPaise: r.netPaise,
             paidDays: r.paidDays,
             periodDays: r.periodDays || periodDays,
+            payDays: payDaysOf(latest?.payDays),
+            weeklyOffDays: r.weeklyOffDays,
             ledger,
             included: skipReason === null,
             skipReason,
@@ -259,6 +273,8 @@ export function toRunDetail(
         netPaise: l.netPaise,
         paidDays: l.paidDays,
         periodDays: l.periodDays,
+        payDays: l.payDays,
+        weeklyOffDays: 0,
         ledger: l.ledgerAccountId ? { id: l.ledgerAccountId, name: accounts.get(l.ledgerAccountId) ?? "—" } : null,
         included: l.included,
         skipReason: l.skipReason,

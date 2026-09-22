@@ -81,6 +81,8 @@ export type SalaryLineInput = z.infer<typeof salaryLineSchema>;
 
 export const staffSalaryCreateSchema = z.object({
     effectiveFrom: isoDate,
+    /** Days a month the salary buys — the government's 26 unless told otherwise. */
+    payDays:       z.number().int().min(1, "At least one day").max(31, "A month has no more than 31 days").optional(),
     lines:         z.array(salaryLineSchema).min(1, "At least one line"),
     note:          optText(300),
 });

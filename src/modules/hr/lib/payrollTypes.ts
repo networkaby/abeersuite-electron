@@ -2,7 +2,8 @@
 //
 // A run pays a date RANGE — "from the last payroll to till day" — not a
 // calendar month, so every shape here carries periodFrom / periodTo and the
-// day counts the proportion was worked out from.
+// day counts the proportion was worked out from: `paidDays` working days out of
+// `payDays` (26, the government month) — never out of the calendar.
 
 import type { SalaryLine } from "./salaryLines";
 
@@ -23,9 +24,13 @@ export interface PayrollLineDto {
     grossPaise: number;
     deductionsPaise: number;
     netPaise: number;
-    /** Days of the period they were employed, and the period's own length. */
+    /** WORKING days of the period they were employed, and the period's length. */
     paidDays: number;
     periodDays: number;
+    /** The divisor the revision carried — one day is a head / this. */
+    payDays: number;
+    /** Days of the period that fell on their weekly off. 0 on a stored run. */
+    weeklyOffDays: number;
     ledger: { id: number; name: string } | null;
     included: boolean;
     /** Why the generator could not pay them. Null on a normal line. */
@@ -74,6 +79,7 @@ export interface PayslipDto {
     netPaise: number;
     paidDays: number;
     periodDays: number;
+    payDays: number;
     /** The salary revision the figures came from. */
     effectiveFrom: string | null;
 }
@@ -113,6 +119,23 @@ export interface PayrollPreview {
     netPaise: number;
     headcount: number;
     skippedCount: number;
+}
+
+/**
+ * How a figure was arrived at, for a table cell: "22 of 30 · ÷26".
+ *
+ * The first pair is working days paid out of the period's own length; the
+ * divisor is the revision's 26-day month. Both are needed — the same 22 days
+ * pay differently on a 26-day month and a 30-day one.
+ */
+export function formatDayBasis(paidDays: number, periodDays: number, payDays: number): string {
+    return `${paidDays} of ${periodDays} · ÷${payDays}`;
+}
+
+/** The same, spelled out for the expanded breakup under a person's row. */
+export function formatDayBasisLong(paidDays: number, periodDays: number, payDays: number): string {
+    const d = paidDays === 1 ? "working day" : "working days";
+    return `Pay heads for ${paidDays} ${d} of ${periodDays}, on a ${payDays}-day month`;
 }
 
 /** "2026-09-01".."2026-09-20" → "1–20 Sep 2026", collapsing what is shared. */

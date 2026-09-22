@@ -17,6 +17,8 @@ import type { NextOfficeDay } from "./seasonalHours";
 export type MonthOvertime = {
     month: string;
     surplusMinutes: number;
+    /** Of the surplus, the part worked on his own weekly offs. */
+    weeklyOffMinutes: number;
     shortfallMinutes: number;
     madeUpMinutes: number;
     payableMinutes: number;

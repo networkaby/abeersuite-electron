@@ -50,6 +50,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
                 netPaise: true,
                 paidDays: true,
                 periodDays: true,
+                payDays: true,
                 effectiveFrom: true,
                 run: {
                     select: {
@@ -80,6 +81,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
             netPaise: l.netPaise,
             paidDays: l.paidDays,
             periodDays: l.periodDays,
+            payDays: l.payDays,
             effectiveFrom: l.effectiveFrom ? toDateOnlyUtc(l.effectiveFrom) : null,
         }));
 

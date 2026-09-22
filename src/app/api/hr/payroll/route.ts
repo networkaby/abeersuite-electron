@@ -112,6 +112,7 @@ export async function POST(req: Request) {
                         netPaise:         c.netPaise,
                         paidDays:         c.paidDays,
                         periodDays:       c.periodDays,
+                        payDays:          c.payDays,
                         ledgerAccountId:  c.ledger?.id ?? null,
                         included:         c.included,
                         skipReason:       c.skipReason,

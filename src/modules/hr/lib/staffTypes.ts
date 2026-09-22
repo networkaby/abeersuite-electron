@@ -37,6 +37,8 @@ export interface StaffProfileDto {
 export interface StaffSalaryDto {
     id: number;
     effectiveFrom: string;
+    /** Days a month this structure buys — one day is gross / this. Default 26. */
+    payDays: number;
     lines: SalaryLine[];
     grossPaise: number;
     netPaise: number;

@@ -22,7 +22,7 @@ import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { useApiResource } from "@/shared/hooks";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { formatPeriod, type PayslipDto } from "../lib/payrollTypes";
+import { formatDayBasis, formatDayBasisLong, formatPeriod, type PayslipDto } from "../lib/payrollTypes";
 
 export default function StaffPayslips({ userId }: { userId: number }) {
     // No `loading`: the table is always mounted and says "Reading…" in its body.
@@ -94,7 +94,7 @@ export default function StaffPayslips({ userId }: { userId: number }) {
                                     </TableCell>
                                     <TableCell className="font-medium">{formatPeriod(s.periodFrom, s.periodTo)}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground tabular-nums">
-                                        {s.paidDays} of {s.periodDays}
+                                        {formatDayBasis(s.paidDays, s.periodDays, s.payDays)}
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">{formatRupeesFromPaise(s.grossPaise)}</TableCell>
                                     <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -109,7 +109,7 @@ export default function StaffPayslips({ userId }: { userId: number }) {
                                         <TableCell colSpan={5} className="py-3">
                                             <div className="max-w-md space-y-1.5">
                                                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                    Pay heads for {s.paidDays} of {s.periodDays} days
+                                                    {formatDayBasisLong(s.paidDays, s.periodDays, s.payDays)}
                                                 </p>
                                                 {s.lines.map((h) => (
                                                     <div

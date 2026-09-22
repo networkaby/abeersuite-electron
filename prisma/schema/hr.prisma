@@ -99,6 +99,14 @@ model StaffSalary {
 
   /// First day this structure applies. Two revisions cannot start on the same day.
   effectiveFrom DateTime @db.Date
+  /// How many days a month this salary buys — the government's 26, editable per
+  /// revision because a contract may say otherwise. ONE DAY = pay head / payDays,
+  /// and the month pays for its own working days (weekly offs excluded), so a
+  /// 27-working-day January pays more than a 24-day February on the same
+  /// structure. It is also the divisor behind the hourly rate that prices
+  /// overtime: (gross / payDays) / duty hours. Frozen onto a payroll run when it
+  /// generates, like every other figure there.
+  payDays       Int      @default(26)
   /// [{ name, kind: "EARNING" | "DEDUCTION", amountPaise }] — read whole, never queried.
   linesJson     Json
   /// Sum of EARNING lines, denormalised so the directory never parses JSON.
@@ -123,10 +131,12 @@ model StaffSalary {
 // twice — the overlap check in payrollServer.ts is what enforces that, since a
 // range cannot be made unique by the database the way a month could.
 //
-// Amounts are proportioned by DAYS: a monthly structure is worth
-// amount / days-in-that-month for each day the person was employed inside the
-// period. That needs only dates, no attendance. Creating a run FREEZES the
-// result, so a salary revised later can never change what was already paid.
+// Amounts are proportioned by WORKING DAYS: a monthly structure is worth
+// amount / StaffSalary.payDays (26 by default, the government month) for each
+// working day the person was employed inside the period — their weekly offs are
+// not counted, being already paid for inside the 26. That needs only dates and
+// the weekly-off pattern, no attendance. Creating a run FREEZES the result, so a
+// salary revised later can never change what was already paid.
 //
 // Posting turns the run into ONE journal voucher: a credit to each person's own
 // ledger (their net), and debits to the salary expense ledgers, grouped — the
@@ -205,9 +215,13 @@ model PayrollRunLine {
   netPaise        Int @default(0)
 
   /// How the proportion was arrived at, kept so the sheet and a payslip can
-  /// show "18 of 30 days" without recomputing it from dates that may have moved.
+  /// show "18 of 26 days" without recomputing it from dates that may have moved.
+  /// `paidDays` counts WORKING days only — a weekly off is not a paid day of its
+  /// own any more, it is already inside the 26. `payDays` is the divisor the
+  /// revision carried at generation time.
   paidDays   Int @default(0)
   periodDays Int @default(0)
+  payDays    Int @default(26)
 
   /// The person's own liability ledger, as resolved at generation time. Null
   /// only on a line that is not included — having no ledger is exactly why it

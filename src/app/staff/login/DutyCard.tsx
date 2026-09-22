@@ -79,6 +79,10 @@ export default function DutyCard() {
                         : m.payableMinutes > 0
                             ? `This month: ${formatWorked(m.madeUpMinutes)} made up, ${formatWorked(m.payableMinutes)} overtime payable.`
                             : "This month: shortfall fully made up, nothing extra yet."}
+                {/* A day off worked is all surplus — but it pays back the short
+                    hours first, so saying it out loud stops "I came on Sunday"
+                    from being read as money that is not there. */}
+                {m.weeklyOffMinutes > 0 ? ` Includes ${formatWorked(m.weeklyOffMinutes)} on your day off.` : ""}
             </p>
 
             {/* ── Next time to start duty ───────────────────────────────────────

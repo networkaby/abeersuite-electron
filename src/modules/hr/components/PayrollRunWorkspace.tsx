@@ -37,7 +37,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { PAYROLL_STATUS_LABELS, formatPeriod, type PayrollRunDetail } from "../lib/payrollTypes";
+import { PAYROLL_STATUS_LABELS, formatDayBasis, formatDayBasisLong, formatPeriod, type PayrollRunDetail } from "../lib/payrollTypes";
 
 export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; canRun: boolean }) {
     const router = useRouter();
@@ -278,7 +278,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                                 {l.skipReason && <p className="text-xs text-amber-600">{l.skipReason}</p>}
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground tabular-nums">
-                                                {l.paidDays} of {l.periodDays}
+                                                {formatDayBasis(l.paidDays, l.periodDays, l.payDays)}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">{formatRupeesFromPaise(l.grossPaise)}</TableCell>
                                             <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -296,7 +296,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                                     ) : (
                                                         <div className="max-w-xl space-y-1.5">
                                                             <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                Pay heads for {l.paidDays} of {l.periodDays} days
+                                                                {formatDayBasisLong(l.paidDays, l.periodDays, l.payDays)}
                                                                 {l.effectiveFrom && ` \u00b7 structure from ${formatDate(l.effectiveFrom)}`}
                                                             </p>
                                                             {l.lines.map((h) => (

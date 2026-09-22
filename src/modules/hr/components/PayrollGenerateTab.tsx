@@ -41,7 +41,7 @@ import { useApiResource } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { formatPeriod, type PayrollLineDto, type PayrollPreview } from "../lib/payrollTypes";
+import { formatDayBasis, formatDayBasisLong, formatPeriod, type PayrollLineDto, type PayrollPreview } from "../lib/payrollTypes";
 
 export default function PayrollGenerateTab({ canRun, onGenerated }: {
     canRun: boolean;
@@ -285,7 +285,7 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                                 {l.skipReason && <p className="text-xs text-amber-600">{l.skipReason}</p>}
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground tabular-nums">
-                                                {l.paidDays} of {l.periodDays}
+                                                {formatDayBasis(l.paidDays, l.periodDays, l.payDays)}
                                             </TableCell>
                                             <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                                                 {l.monthlyNetPaise ? formatRupeesFromPaise(l.monthlyNetPaise) : "—"}
@@ -321,7 +321,7 @@ function Breakup({ line }: { line: PayrollLineDto }) {
                 ) : (
                     <div className="max-w-xl space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Pay heads for {line.paidDays} of {line.periodDays} days
+                            {formatDayBasisLong(line.paidDays, line.periodDays, line.payDays)}
                             {line.effectiveFrom && ` · structure from ${formatDate(line.effectiveFrom)}`}
                         </p>
                         {earnings.map((h) => (
