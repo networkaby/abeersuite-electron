@@ -82,6 +82,15 @@ export async function GET(
     if (!person) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    // A converted or merged row has no Account any more — it lives on under
+    // the survivor. Say where, so an old link or bookmark can hop across
+    // instead of a blank panel.
+    if (person.convertedToCompanyId != null) {
+        return NextResponse.json({ error: "Moved", movedTo: { kind: "company", id: person.convertedToCompanyId } }, { status: 404 });
+    }
+    if (person.mergedIntoPersonId != null) {
+        return NextResponse.json({ error: "Moved", movedTo: { kind: "person", id: person.mergedIntoPersonId } }, { status: 404 });
+    }
 
     return NextResponse.json({
         ...person,

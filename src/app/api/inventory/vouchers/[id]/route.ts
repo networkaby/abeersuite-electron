@@ -15,6 +15,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib/postInvVoucher";
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
+import { resolvePartyAccountId } from "@/shared/lib/parties/partyLinkServer";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
@@ -432,14 +433,11 @@ export async function PATCH(req: Request, { params }: Params) {
                     effectiveCharges,
                 )
                 : undefined;
-            // Resolve the canonical ledger account from the (possibly updated)
-            // party identity so accountId tracks the routing pair.
-            let patchAccountId: number | null = null;
-            if (partyId != null && partyType === "customer") {
-                patchAccountId = (await tx.account.findUnique({ where: { personId: partyId }, select: { id: true } }))?.id ?? null;
-            } else if (partyId != null && partyType === "company") {
-                patchAccountId = (await tx.account.findUnique({ where: { companyId: partyId }, select: { id: true } }))?.id ?? null;
-            }
+            // The (possibly updated) party's ledger, resolved through any
+            // conversion / merge forwarding note — an old bill re-saved from the
+            // editor still names the converted-away id, and must keep posting to
+            // the survivor rather than lose its party ledger.
+            const patchAccountId = await resolvePartyAccountId(tx, { partyType: partyType ?? null, partyId: partyId ?? null });
             // Status stays POSTED for posted edits; the re-post below sets a
             // fresh journalEntryId. For draft edits the row is unchanged.
             await tx.voucherDetail.update({

@@ -682,7 +682,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 } else if (v.partyId != null && v.partyType) {
                     setParty({
                         id: v.partyId,
-                        kind: (v.partyType === "customer" || v.partyType === "supplier" || v.partyType === "company")
+                        kind: (v.partyType === "customer" || v.partyType === "company")
                             ? v.partyType
                             : "customer",
                         name: v.partyName ?? "",
@@ -2242,7 +2242,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         if (parent.partyId != null && parent.partyType) {
                                             setParty({
                                                 id: parent.partyId,
-                                                kind: (parent.partyType === "customer" || parent.partyType === "supplier" || parent.partyType === "company")
+                                                kind: (parent.partyType === "customer" || parent.partyType === "company")
                                                     ? parent.partyType
                                                     : (copy.party === "Sundry Debtors" ? "customer" : "supplier"),
                                                 name: parent.partyName ?? "",

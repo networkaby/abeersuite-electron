@@ -161,3 +161,19 @@ export async function resolvePartyLinks(
         },
     };
 }
+
+/**
+ * The ledger Account a voucher's party posts to TODAY.
+ *
+ * A save must not look the account up by the stored id alone: after a
+ * conversion or merge that id names a soft-deleted row with no Account, and
+ * the naive lookup would write a blank party ledger onto the spine — the
+ * voucher would vanish from the party's statement and outstandings. This
+ * follows the forwarding note first, so an old bill re-saved from the editor
+ * keeps posting to the survivor.
+ */
+export async function resolvePartyAccountId(db: Db, ref: PartyRef): Promise<number | null> {
+    if (ref.partyId == null || partyKindFromType(ref.partyType) == null) return null;
+    const links = await resolvePartyLinks(db, [ref], { withAccountId: true });
+    return links.for(ref)?.accountId ?? null;
+}

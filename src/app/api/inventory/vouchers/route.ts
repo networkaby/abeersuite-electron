@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NO_PARTY_LINK, partyLinkFields } from "@/shared/lib/parties/partyLink";
-import { resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
+import { resolvePartyAccountId, resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
@@ -556,12 +556,9 @@ export async function POST(req: NextRequest) {
         !resolvedPlaceOfSupply && isCompany
             ? prisma.company.findUnique({ where: { id: partyId }, select: { gstin: true, gstStateCode: true, shippingStateCode: true } })
             : null,
-        // Resolve the canonical ledger account from the party identity so accountId is
-        // always populated — not just the legacy partyType/partyId pair. (Account.personId
-        // / companyId are unique.)
-        isCustomer ? prisma.account.findUnique({ where: { personId: partyId }, select: { id: true } })
-            : isCompany ? prisma.account.findUnique({ where: { companyId: partyId }, select: { id: true } })
-                : null,
+        // The party's ledger, resolved through any conversion / merge forwarding
+        // note so the spine always carries the account that is live today.
+        resolvePartyAccountId(prisma, { partyType: partyType ?? null, partyId: partyId ?? null }),
         // Dresses the response's `lines[].product`, and — when this request also
         // posts — feeds the stock arm, which reads `stock` and `mrpPaise`. Fetched
         // here so the transaction never has to read back rows it just wrote.
@@ -587,7 +584,7 @@ export async function POST(req: NextRequest) {
     const buyerStateCode  = resolvedPlaceOfSupply || sellerStateCode;
 
     const userId = user!.id;
-    const resolvedAccountId: number | null = partyAccount?.id ?? null;
+    const resolvedAccountId: number | null = partyAccount;
     const productById = new Map(productsForResponse.map((p) => [p.id, p]));
 
     // Orders ride the unified Orders pipeline (P7) so they show on the Orders board

@@ -137,7 +137,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         // Party cell links correctly whether the party is a Person or a Company
         // — and keeps linking after a Person<->Company conversion, which leaves
         // the voucher's stored partyId pointing at the converted-away record.
-    const partyLinks = await resolvePartyLinks(prisma, lines.map((l) => l.voucher));
+        const partyLinks = await resolvePartyLinks(prisma, lines.map((l) => l.voucher));
         const transactions: TxRow[] = lines.map((line) => ({
             lineId: line.id,
             voucherId: line.voucher.id,

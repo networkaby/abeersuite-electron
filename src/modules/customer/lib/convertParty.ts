@@ -424,7 +424,11 @@ export async function hardDeleteTombstone(
 }
 
 async function collectPersonRefs(personId: number) {
-    const [account, phones, emails, links, leads, orders, cred] = await Promise.all([
+    const [vouchers, account, phones, emails, links, leads, orders, cred] = await Promise.all([
+        // Old vouchers keep naming this id and reach the survivor only through
+        // the forwarding note on this row — delete it and every one of them
+        // loses its party link again.
+        prisma.voucherDetail.count({ where: { partyType: "customer", partyId: personId } }),
         prisma.account.count({ where: { personId } }),
         prisma.phone.count({ where: { personId } }),
         prisma.email.count({ where: { personId } }),
@@ -434,6 +438,7 @@ async function collectPersonRefs(personId: number) {
         prisma.personPortalCredential.count({ where: { personId } }),
     ]);
     return [
+        { table: "Voucher", count: vouchers },
         { table: "Account", count: account },
         { table: "Phone", count: phones },
         { table: "Email", count: emails },
@@ -445,7 +450,8 @@ async function collectPersonRefs(personId: number) {
 }
 
 async function collectCompanyRefs(companyId: number) {
-    const [account, phones, emails, links, leads] = await Promise.all([
+    const [vouchers, account, phones, emails, links, leads] = await Promise.all([
+        prisma.voucherDetail.count({ where: { partyType: "company", partyId: companyId } }),
         prisma.account.count({ where: { companyId } }),
         prisma.phone.count({ where: { companyId } }),
         prisma.email.count({ where: { companyId } }),
@@ -453,6 +459,7 @@ async function collectCompanyRefs(companyId: number) {
         prisma.ticketDeal.count({ where: { companyId } }),
     ]);
     return [
+        { table: "Voucher", count: vouchers },
         { table: "Account", count: account },
         { table: "Phone", count: phones },
         { table: "Email", count: emails },

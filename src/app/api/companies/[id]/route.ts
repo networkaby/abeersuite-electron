@@ -80,6 +80,13 @@ export async function GET(
     if (!company) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    // Converted / merged away — see the same check on /api/person/[id].
+    if (company.convertedToPersonId != null) {
+        return NextResponse.json({ error: "Moved", movedTo: { kind: "person", id: company.convertedToPersonId } }, { status: 404 });
+    }
+    if (company.mergedIntoCompanyId != null) {
+        return NextResponse.json({ error: "Moved", movedTo: { kind: "company", id: company.mergedIntoCompanyId } }, { status: 404 });
+    }
 
     const contacts = await getCompanyContacts(companyId);
     // Backward-compat shape: expose `customers` (linked persons) and primary phone/email scalars.
