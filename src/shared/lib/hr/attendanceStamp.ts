@@ -122,6 +122,21 @@ export async function stampAttendanceOut(
  * on the value already stored. Two pings landing together can only over-credit by
  * one interval, which is not worth a transaction on this hot a path.
  *
+ * `lastInputAt` is the instant of the caller's LAST REAL KEYPRESS OR CLICK, which
+ * only the client knows. Passing it fixes both ends of the same error:
+ *
+ *   • the tail — pulses land every few minutes, so up to one interval of genuine
+ *     work between the final pulse and the final keypress was being thrown away.
+ *     On an idle sign-out it was lost for certain, because by then the gap to now
+ *     exceeds the limit and credits nothing at all.
+ *   • the head — a person who idles twenty minutes and THEN clicks Sign out was
+ *     credited all twenty, because the gap to now was still inside the limit.
+ *
+ * It cannot be used to inflate a day. The value is clamped to `at`, so it can only
+ * ever credit LESS than the plain call would, and the idle-limit cap still applies
+ * on top. A client that lies can only rob itself — which is the right direction for
+ * a number the client supplies and the wage depends on.
+ *
  * Returns the day's running total, so the screen can show it without a second read.
  */
 export async function stampActivity(
@@ -130,9 +145,16 @@ export async function stampActivity(
     counterId: number | null,
     at = new Date(),
     idleLimitMs = IDLE_LIMIT_MS,
+    lastInputAt?: Date | null,
 ): Promise<number> {
     try {
         const date = dayOf(businessTodayIso(at));
+        // Never the future, and never a moment already counted. Bad input simply
+        // falls back to `at`, the behaviour before this argument existed.
+        const seenAt =
+            lastInputAt && !Number.isNaN(lastInputAt.getTime()) && lastInputAt.getTime() <= at.getTime()
+                ? lastInputAt
+                : at;
         const row = await db.attendanceDay.findUnique({
             where:  { userId_date: { userId, date } },
             select: { lastSeenAt: true, workedMinutes: true, source: true },
@@ -142,15 +164,20 @@ export async function stampActivity(
         // path for anyone who works without opening a till at all.
         if (!row) {
             await db.attendanceDay.create({
-                data: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, lastSeenAt: at, counterId },
+                data: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, lastSeenAt: seenAt, counterId },
             }).catch(() => undefined);
             return 0;
         }
 
-        const add = creditableMinutes(row.lastSeenAt, at, idleLimitMs);
+        // A late-arriving request must not drag the clock backwards — two pulses can
+        // cross, and the older one's `lastInputAt` would then un-count real minutes.
+        const movedForward = !row.lastSeenAt || seenAt.getTime() > row.lastSeenAt.getTime();
+        const add = movedForward ? creditableMinutes(row.lastSeenAt, seenAt, idleLimitMs) : 0;
         await db.attendanceDay.update({
             where: { userId_date: { userId, date } },
-            data:  { lastSeenAt: at, workedMinutes: { increment: add } },
+            data:  movedForward
+                ? { lastSeenAt: seenAt, workedMinutes: { increment: add } }
+                : { workedMinutes: { increment: 0 } },
         });
         return row.workedMinutes + add;
     } catch {
