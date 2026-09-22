@@ -9,5 +9,6 @@ export default async function PayrollPage() {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canRun = hasPermissionWithScope(permissions, PERMISSIONS.HR_PAYROLL_RUN);
-    return <PayrollRunList canRun={canRun} />;
+    const canGive = hasPermissionWithScope(permissions, PERMISSIONS.HR_STAFF_EDIT);
+    return <PayrollRunList canRun={canRun} canGive={canGive} />;
 }

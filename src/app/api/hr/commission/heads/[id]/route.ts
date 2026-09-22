@@ -52,7 +52,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 kind,
                 targetPaise: kind === "ABOVE_TARGET" || kind === "BONUS" ? merged.targetPaise : 0,
                 rateBp: kind === "PERCENT" || kind === "ABOVE_TARGET" ? merged.rateBp : 0,
-                slabsJson: kind === "SLABS" ? merged.slabs : Prisma.DbNull,
+                slabsJson: kind === "SLABS" ? (merged.slabs as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
                 bonusPaise: kind === "BONUS" || kind === "MANUAL" ? merged.bonusPaise : 0,
                 unit: kind === "MANUAL" ? merged.unit?.trim() || null : null,
                 targetCount: kind === "MANUAL" ? merged.targetCount : 0,

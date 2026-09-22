@@ -8,11 +8,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TriangleAlert, WalletMinimal } from "lucide-react";
+import { HandCoins, TriangleAlert, WalletMinimal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
+import GiveCommissionDialog from "./GiveCommissionDialog";
 import { ModuleTabs } from "@/shared/components/ModuleTabs";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { TableEmptyRow } from "@/shared/components/DataTableStates";
@@ -32,7 +34,8 @@ import PayrollPayTab from "./PayrollPayTab";
 const TABS = ["generate", "pay", "history"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function PayrollRunList({ canRun }: { canRun: boolean }) {
+export default function PayrollRunList({ canRun, canGive }: { canRun: boolean; /** hr:staff:edit — may open Give commission and write in it. */ canGive: boolean }) {
+    const [giving, setGiving] = useState(false);
     const router = useRouter();
     const [tab, setTab] = useState<Tab>("generate");
     const { data, loading, refreshing, error, reload } = useApiResource<PayrollRunRow[]>("/api/hr/payroll");
@@ -57,7 +60,9 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
                         ? `${rows.length} run${rows.length === 1 ? "" : "s"}, ${posted} posted${refreshing ? " · refreshing…" : ""}`
                         : "Reading the runs…"}
                     icon={<WalletMinimal size={20} />}
+                    actions={<Button type="button" variant="outline" onClick={() => setGiving(true)}><HandCoins size={16} /> Give commission</Button>}
                 />
+                {giving && <GiveCommissionDialog canEdit={canGive} onClose={() => { setGiving(false); reload(); }} />}
 
                 <ModuleTabs module="hr" tabs={TABS} active={tab} onChange={setTab} className="mt-2 rounded-t-lg border border-b-0" />
                 <div className="rounded-b-lg border border-border bg-card p-5">

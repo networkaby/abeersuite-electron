@@ -13,7 +13,7 @@
 // sees the same heads on My Info, through the same server-side resolution.
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Settings2, Target, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, HandCoins, Settings2, Target, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +25,7 @@ import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import type { CommissionBoardPayload } from "../lib/commissionTypes";
 import CommissionHeadsTab from "./CommissionHeadsTab";
 import CommissionMonthTab from "./CommissionMonthTab";
+import GiveCommissionDialog from "./GiveCommissionDialog";
 import { monthLabel, shiftMonth } from "./MyTargetCard";
 
 export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
@@ -32,6 +33,7 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
     const { data, loading, refreshing, error, reload } = useApiResource<CommissionBoardPayload>(`/api/hr/commission?month=${month}`);
     useRealtimeTopics(["settings", "ledger"], reload);
     const [tab, setTab] = useState<"set" | "person">("set");
+    const [giving, setGiving] = useState(false);
 
     const isCurrent = data ? month === data.today.slice(0, 7) : true;
     const onHeads = data?.heads.filter((h) => h.active).length ?? 0;
@@ -45,13 +47,19 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
                         ? `${onHeads} of ${data.heads.length} heads on · ${data.rows.length} staff · team sold ${formatRupeesFromPaise(data.teamSalesPaise)} in ${monthLabel(month)}${refreshing ? " · refreshing…" : ""}`
                         : "Reading the board…"}
                     icon={<Target size={20} />}
-                    actions={tab === "person" && (
-                        <div className="flex items-center gap-1">
-                            <Button type="button" variant="outline" size="icon" aria-label="Previous month" onClick={() => setMonth((m) => shiftMonth(m, -1))}><ChevronLeft size={16} /></Button>
-                            <span className="min-w-[9rem] text-center text-sm font-medium">{monthLabel(month)}</span>
-                            <Button type="button" variant="outline" size="icon" aria-label="Next month" disabled={isCurrent} onClick={() => setMonth((m) => shiftMonth(m, 1))}><ChevronRight size={16} /></Button>
+                    actions={
+                        <div className="flex items-center gap-2">
+                            {tab === "person" && (
+                                <div className="flex items-center gap-1">
+                                    <Button type="button" variant="outline" size="icon" aria-label="Previous month" onClick={() => setMonth((m) => shiftMonth(m, -1))}><ChevronLeft size={16} /></Button>
+                                    <span className="min-w-[9rem] text-center text-sm font-medium">{monthLabel(month)}</span>
+                                    <Button type="button" variant="outline" size="icon" aria-label="Next month" disabled={isCurrent} onClick={() => setMonth((m) => shiftMonth(m, 1))}><ChevronRight size={16} /></Button>
+                                </div>
+                            )}
+                            {/* The one-stop modal — owner: "the place is too inside". */}
+                            <Button type="button" onClick={() => setGiving(true)}><HandCoins size={16} /> Give commission</Button>
                         </div>
-                    )}
+                    }
                 />
 
                 <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
@@ -70,6 +78,7 @@ export default function CommissionBoard({ canEdit }: { canEdit: boolean }) {
                         </TabsContent>
                     </Tabs>
                 )}
+                {giving && <GiveCommissionDialog canEdit={canEdit} onClose={() => { setGiving(false); reload(); }} />}
             </div>
         </ScrollArea>
     );
