@@ -172,6 +172,15 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
         return () => { alive = false; };
     }, []);
     const earliest = earliestLeaveDate(kind, todayIso(), noticeDays);
+    /* The dialog opens on the fallback notice and learns the shop's own a moment
+       later. If the real one is longer, the dates it opened with are now too
+       early and have to be pushed forward — otherwise the box shows a day the
+       server will refuse. */
+    useEffect(() => {
+        if (!held) return;
+        setFromDate((f) => (f && f < earliest ? earliest : f));
+        setToDate((t) => (t && t < earliest ? earliest : t));
+    }, [held, earliest]);
     const [fromDate, setFromDate] = useState(held ? earliest : todayIso());
     const [toDate, setToDate] = useState(held ? earliest : todayIso());
     const [reason, setReason] = useState("");
@@ -193,6 +202,13 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
 
     /* Switching Casual → Sick and back moves the earliest day, so a From that is
        now too early is pushed forward rather than left sitting there invalid. */
+    /* Moving the start forward drags the end with it, so the pair is never
+       backwards — the same courtesy the kind switch below does. */
+    const pickFrom = (iso: string) => {
+        setFromDate(iso);
+        if (iso && toDate < iso) setToDate(iso);
+    };
+
     const pickKind = (next: LeaveKind) => {
         setKind(next);
         if (!held) return;
@@ -228,8 +244,35 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
                         </Field>
                     )}
                     <div className="grid grid-cols-2 gap-3">
-                        <Field label="From">{(id) => <TallyDateInput id={id} value={fromDate} onValueChange={setFromDate} className="h-9 text-sm" />}</Field>
-                        <Field label="To">{(id) => <TallyDateInput id={id} value={toDate} onValueChange={setToDate} monthMode="end" className="h-9 text-sm" />}</Field>
+                        {/* The notice is a rule about dates, so it is enforced ON the
+                            date box: an earlier day is pulled up to the earliest one
+                            allowed, and the hint under it says which day that is —
+                            a value that moves without explanation is worse than one
+                            that is refused. HR filing by hand has no bound. */}
+                        <Field label="From" hint={held ? `Earliest ${formatDate(earliest)}` : undefined}>
+                            {(id) => (
+                                <TallyDateInput
+                                    id={id}
+                                    value={fromDate}
+                                    onValueChange={pickFrom}
+                                    minIso={held ? earliest : undefined}
+                                    className="h-9 text-sm"
+                                />
+                            )}
+                        </Field>
+                        <Field label="To">
+                            {(id) => (
+                                <TallyDateInput
+                                    id={id}
+                                    value={toDate}
+                                    onValueChange={setToDate}
+                                    /* A leave cannot end before it starts, whoever is filing. */
+                                    minIso={fromDate || (held ? earliest : undefined)}
+                                    monthMode="end"
+                                    className="h-9 text-sm"
+                                />
+                            )}
+                        </Field>
                     </div>
                     <Field label="Kind">
                         {(id) => (

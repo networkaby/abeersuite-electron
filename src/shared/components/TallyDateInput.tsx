@@ -27,10 +27,23 @@ export interface TallyDateInputProps extends Omit<InputProps, "value" | "onChang
      *  month) — fits single-date and "From" fields. Pass "end" on "To" fields
      *  so it resolves to the last day of the month instead. */
     monthMode?: MonthMode;
+    /** Earliest / latest ISO date this field may hold. A date outside the bound
+     *  is pulled to it rather than refused: the person sees what the rule allows
+     *  instead of a box that will not take what they typed. The caller should
+     *  say WHY on screen — a value that moves without explanation is worse than
+     *  one that is rejected. Clamping happens after parsing, so the shorthand
+     *  grammar is untouched. */
+    minIso?: string;
+    maxIso?: string;
 }
 
-export function TallyDateInput({ value, onValueChange, placeholder, inputMode, monthMode, ...rest }: TallyDateInputProps) {
-    const { display, onChange, onBlur, onFocus, onKeyDown } = useTallyDate(value, onValueChange, monthMode);
+export function TallyDateInput({ value, onValueChange, placeholder, inputMode, monthMode, minIso, maxIso, ...rest }: TallyDateInputProps) {
+    const commit = React.useCallback((iso: string) => {
+        if (iso && minIso && iso < minIso) return onValueChange(minIso);
+        if (iso && maxIso && iso > maxIso) return onValueChange(maxIso);
+        onValueChange(iso);
+    }, [onValueChange, minIso, maxIso]);
+    const { display, onChange, onBlur, onFocus, onKeyDown } = useTallyDate(value, commit, monthMode);
     return (
         <Input
             type="text"

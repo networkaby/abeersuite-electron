@@ -50,10 +50,13 @@ function shiftMonth(month: string, by: number): string {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/* `isHr` only decides whether the leave-notice rule binds this person in the
-   dialog — HR files by hand and is not held to it. The server decides the same
-   thing again on its own. */
-export default function MyHrPage({ userId, isHr }: { userId: number; isHr: boolean }) {
+/* Owner, 2026-09-22: *"the date should be restricted as per minimum day need
+   before the leave date"* — said while looking at this page as HR. So asking for
+   YOUR OWN leave carries the notice whoever you are: the From box will not go
+   earlier than the rule allows, and sick leave is outside it as always. HR's
+   exemption is for filing on somebody ELSE'S behalf, and lives on the Leave
+   board where that is done. */
+export default function MyHrPage({ userId }: { userId: number }) {
     const [month, setMonth] = useState(() => todayIso().slice(0, 7));
     const { data, loading, refreshing, error, reload } = useApiResource<MyHrPayload>(`/api/hr/me?month=${month}`);
     useRealtimeTopics(["settings"], reload);
@@ -260,7 +263,7 @@ export default function MyHrPage({ userId, isHr }: { userId: number; isHr: boole
                 {filing && (
                     <LeaveDialog
                         canPickPerson={false}
-                        heldToNotice={!isHr}
+                        heldToNotice
                         onClose={() => setFiling(false)}
                         onSaved={() => { setFiling(false); reload(); }}
                     />
