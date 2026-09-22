@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { BadgeIndianRupee, Clock4, CalendarHeart, TriangleAlert } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
 import { Field } from "@/shared/components/Field";
@@ -24,7 +24,8 @@ interface Rule {
     key: string;
     label: string;
     suffix: string;
-    /** Smallest step the box moves by — quarter-multiples for a rate, whole for a count. */
+    /** Smallest step the rule moves by — quarter-multiples for a rate, whole for
+     *  a count. A whole step means the box takes digits only. */
     step: number;
     explain: (value: number) => string;
 }
@@ -69,6 +70,7 @@ const WEEKEND_RULES: Rule[] = [
     },
 ];
 
+/** The two boxes that decide WHICH days are charged, before the charge itself. */
 const PENALTY_RULES: Rule[] = [
     {
         key: "lateGraceMinutes",
@@ -88,17 +90,55 @@ const PENALTY_RULES: Rule[] = [
                 ? "Every late day is charged."
                 : `The first ${v} late day${v === 1 ? "" : "s"} of the month cost nothing. The penalty starts from the next one.`,
     },
-    {
-        key: "latePenaltyDays",
-        label: "Penalty per late day",
-        suffix: "days of basic",
-        step: 0.25,
-        explain: (v) =>
-            v === 0
-                ? "No penalty — late arrival costs only the minutes not worked."
-                : `Each charged late day cuts ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of basic.`,
-    },
 ];
+
+/**
+ * HOW a charged late day is charged — in money, or in time.
+ *
+ * Money is the blunt one: a slice of the day's basic, straight off the payslip.
+ *
+ * Time is the owner's own idea (2026-09-22) and it is the gentler, more honest
+ * instrument: it does not touch the payslip at all, it shortens the duty the day
+ * is credited with. That shortfall then goes through the machinery that already
+ * exists — it eats his overtime first, and only what is still owed at month end
+ * meets the "hours still owed" rate above. So a man who works the time back is
+ * not punished twice, and a man who does not is charged once, at a rate the shop
+ * has already agreed.
+ *
+ * One style is in force at a time. Mixing money and time for the same late day
+ * would be two punishments for one offence, so the screen makes it a choice.
+ */
+type LateStyle = "none" | "pay" | "timesLate" | "shareOfDay";
+
+const LATE_STYLES: { id: LateStyle; label: string; suffix?: string; step?: number }[] = [
+    { id: "none", label: "Nothing more" },
+    { id: "pay", label: "Cut from his pay", suffix: "days of basic", step: 0.25 },
+    { id: "timesLate", label: "Cut from his hours — by the lateness", suffix: "times the minutes late", step: 0.5 },
+    { id: "shareOfDay", label: "Cut from his hours — a slice of the day", suffix: "% of the day's duty", step: 5 },
+];
+
+/** A worked example, so the rule is felt and not merely read. */
+const EXAMPLE_LATE_MINUTES = 5;
+const EXAMPLE_DUTY_HOURS = 9;
+
+function explainLate(style: LateStyle, v: number): string {
+    switch (style) {
+        case "pay":
+            return v === 0
+                ? "No penalty — late arrival costs only the minutes not worked."
+                : `Each charged late day cuts ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of basic from the payslip.`;
+        case "timesLate":
+            return v === 0
+                ? "Nothing extra is cut — only the minutes actually missed."
+                : `The lateness is counted ${times(v)} over. ${EXAMPLE_LATE_MINUTES} minutes late costs ${Math.round(EXAMPLE_LATE_MINUTES * v)} minutes of the day's duty.`;
+        case "shareOfDay":
+            return v === 0
+                ? "Nothing extra is cut — only the minutes actually missed."
+                : `A charged late day is credited ${v}% less duty — on a ${EXAMPLE_DUTY_HOURS}-hour day that is ${Math.round((EXAMPLE_DUTY_HOURS * 60 * v) / 100)} minutes, however small the lateness.`;
+        default:
+            return "Late arrival costs only the minutes not worked. Nothing further is charged.";
+    }
+}
 
 /* Held as text, not numbers: a box being typed into passes through "1." and "",
    and turning those into 0 on the way would fight the person's fingers. */
@@ -109,11 +149,15 @@ const DEFAULTS: Record<string, string> = {
     holidayRate: "2",
     lateGraceMinutes: "15",
     lateFreeDays: "2",
-    latePenaltyDays: "0",
+    /* One box per style, so switching between them does not lose what was typed. */
+    pay: "1",
+    timesLate: "2",
+    shareOfDay: "10",
 };
 
 export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
     const [values, setValues] = useState<Record<string, string>>(DEFAULTS);
+    const [lateStyle, setLateStyle] = useState<LateStyle>("timesLate");
 
     const num = (key: string) => {
         const n = Number(values[key]);
@@ -133,14 +177,13 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                         <Field label={r.label} className="w-64">
                             {(id) => (
                                 <div className="flex items-center gap-2">
-                                    <Input
+                                    <NumericInput
                                         id={id}
-                                        type="number"
+                                        mode={Number.isInteger(r.step) ? "digits" : "decimal"}
                                         min={0}
-                                        step={r.step}
                                         disabled={!canEdit}
                                         value={values[r.key]}
-                                        onChange={(e) => setValues((v) => ({ ...v, [r.key]: e.target.value }))}
+                                        onValueChange={(next) => setValues((v) => ({ ...v, [r.key]: next }))}
                                         className="h-9 w-24 text-sm"
                                     />
                                     <span className="text-xs text-muted-foreground">{r.suffix}</span>
@@ -195,9 +238,64 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                 {group(
                     "Late arrival",
                     <TriangleAlert size={15} />,
-                    "Coming late already costs the minutes — duty is credited from the real sign-in. A penalty is a second, deliberate charge on top.",
+                    "Coming late already costs the minutes — duty is credited from the real sign-in. What follows is a second, deliberate charge on top.",
                     PENALTY_RULES,
                 )}
+
+                {/* The charge itself, kept apart from the two boxes above because it
+                    is a choice and not a number: money OR time, never both for the
+                    same late day. */}
+                <section className="mb-4 rounded-lg border border-border p-3">
+                    <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                        <TriangleAlert size={15} />
+                        How a charged late day is punished
+                    </div>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                        Take it off his pay, or take it off his hours. Taking hours is the lighter hand — the day is
+                        credited with less duty, and he can work it back as overtime in the same month before anything
+                        is cut.
+                    </p>
+                    <div className="space-y-2">
+                        {LATE_STYLES.map((s) => {
+                            const active = lateStyle === s.id;
+                            return (
+                                <label
+                                    key={s.id}
+                                    className={`flex cursor-pointer flex-col gap-1 rounded-md border p-2 ${active ? "border-primary bg-primary/5" : "border-border"}`}
+                                >
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="lateStyle"
+                                            checked={active}
+                                            disabled={!canEdit}
+                                            onChange={() => setLateStyle(s.id)}
+                                            className="accent-primary"
+                                        />
+                                        <span className="text-sm">{s.label}</span>
+                                        {s.suffix && (
+                                            <span className="ml-auto flex items-center gap-2">
+                                                <NumericInput
+                                                    mode={Number.isInteger(s.step ?? 1) ? "digits" : "decimal"}
+                                                    min={0}
+                                                    aria-label={s.label}
+                                                    disabled={!canEdit || !active}
+                                                    value={values[s.id]}
+                                                    onValueChange={(next) => setValues((v) => ({ ...v, [s.id]: next }))}
+                                                    className="h-8 w-20 text-sm"
+                                                />
+                                                <span className="text-xs text-muted-foreground">{s.suffix}</span>
+                                            </span>
+                                        )}
+                                    </div>
+                                    {active && (
+                                        <p className="text-xs text-muted-foreground">{explainLate(s.id, num(s.id))}</p>
+                                    )}
+                                </label>
+                            );
+                        })}
+                    </div>
+                </section>
             </div>
         </ScrollArea>
     );
