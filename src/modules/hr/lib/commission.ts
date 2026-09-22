@@ -2,8 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { SalaryLine } from "./salaryLines";
-import { commissionForUsers, toCommissionSchemeDto } from "./commissionServer";
-import type { CommissionSchemeDto } from "./commissionTypes";
+import { COMMISSION_PROFILE_SELECT, commissionForUsers, loadGlobalSchemes, modeOf, schemesFor, toCommissionSchemeDto } from "./commissionServer";
 
 /**
  * Commission — the seam, not the sums.
@@ -71,17 +70,18 @@ export async function commissionForPeriod(
     toIso: string,
 ): Promise<Map<number, CommissionResult>> {
     if (!userIds.length) return new Map();
-    const rows = await db.commissionScheme.findMany({
-        where: { userId: { in: [...userIds] }, effectiveFrom: { lte: new Date(`${toIso}T00:00:00.000Z`) } },
-        select: { id: true, userId: true, effectiveFrom: true, targetPaise: true, kind: true, rateBp: true, slabsJson: true, bonusPaise: true, note: true, createdAt: true },
+    const [global, profiles] = await Promise.all([
+        loadGlobalSchemes(db),
+        db.staffProfile.findMany({ where: { userId: { in: [...userIds] } }, select: { userId: true, ...COMMISSION_PROFILE_SELECT } }),
+    ]);
+    // A person with no HR profile row yet is on GLOBAL - the default the row
+    // would carry - so the shop scheme reaches everyone the day it is set.
+    const byUser = new Map(profiles.map((p) => [p.userId, p]));
+    const people = userIds.map((userId) => {
+        const p = byUser.get(userId);
+        return { userId, schemes: schemesFor(modeOf(p?.commissionMode), (p?.commissionSchemes ?? []).map(toCommissionSchemeDto), global) };
     });
-    const byUser = new Map<number, CommissionSchemeDto[]>();
-    for (const r of rows) {
-        const list = byUser.get(r.userId) ?? [];
-        list.push(toCommissionSchemeDto(r));
-        byUser.set(r.userId, list);
-    }
-    const earned = await commissionForUsers(db, [...byUser].map(([userId, schemes]) => ({ userId, schemes })), fromIso, toIso);
+    const earned = await commissionForUsers(db, people, fromIso, toIso);
     const out = new Map<number, CommissionResult>();
     for (const [userId, e] of earned) out.set(userId, { userId, commissionPaise: e.commissionPaise, basis: e.basis });
     return out;

@@ -1619,6 +1619,7 @@ CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "dutyStart" VARCHAR(5),
     "dutyEnd" VARCHAR(5),
     "idleLimitMinutes" INTEGER,
+    "commissionMode" TEXT NOT NULL DEFAULT 'GLOBAL',
     "fatherName" TEXT,
     "address" TEXT,
     "bloodGroup" TEXT,
@@ -1647,6 +1648,7 @@ ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyMinutes" INTEGER;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyStart" VARCHAR(5);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "dutyEnd" VARCHAR(5);
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "idleLimitMinutes" INTEGER;
+ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "commissionMode" TEXT NOT NULL DEFAULT 'GLOBAL';
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "staff_profiles" ADD COLUMN IF NOT EXISTS "bloodGroup" TEXT;
@@ -1777,13 +1779,9 @@ ALTER TABLE "payroll_run_lines" ADD COLUMN IF NOT EXISTS "skipReason" TEXT;
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "commission_schemes" (
     "id" SERIAL NOT NULL,
-    "userId" INTEGER NOT NULL,
+    "userId" INTEGER,
     "effectiveFrom" DATE NOT NULL,
-    "targetPaise" INTEGER NOT NULL DEFAULT 0,
-    "kind" TEXT NOT NULL DEFAULT 'NONE',
-    "rateBp" INTEGER NOT NULL DEFAULT 0,
-    "slabsJson" JSONB,
-    "bonusPaise" INTEGER NOT NULL DEFAULT 0,
+    "rulesJson" JSONB NOT NULL,
     "note" TEXT,
     "createdById" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1792,13 +1790,9 @@ CREATE TABLE IF NOT EXISTS "commission_schemes" (
     CONSTRAINT "commission_schemes_pkey" PRIMARY KEY ("id")
 );
 ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "userId" INTEGER;
 ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "effectiveFrom" DATE NOT NULL;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "targetPaise" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'NONE';
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "rateBp" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "slabsJson" JSONB;
-ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "bonusPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "rulesJson" JSONB NOT NULL;
 ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "note" TEXT;
 ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
 ALTER TABLE "commission_schemes" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

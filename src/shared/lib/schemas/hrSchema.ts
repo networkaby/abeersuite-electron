@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { partyBankSchema } from "./partyBankSchema";
 import { hhMmSchema } from "./commonSchemas";
-import { COMMISSION_KINDS } from "../hr/commissionScheme";
+import { COMMISSION_KINDS, COMMISSION_MODES } from "../hr/commissionScheme";
 
 export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "HELPER", "CONTRACT"] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
@@ -91,47 +91,50 @@ export const staffSalaryCreateSchema = z.object({
 export type StaffSalaryCreate = z.infer<typeof staffSalaryCreateSchema>;
 
 // ── Targets & Commission ──────────────────────────────────────────────────────
-// A dated scheme per person, revised like a salary. The arithmetic and the kind
-// list live in shared/lib/hr/commissionScheme.ts; this only checks the body.
+// A dated scheme — global (userId null) or one person's — made of rules paid
+// together. The kinds and the arithmetic live in shared/lib/hr/commissionScheme.ts.
 
 const paise = (max: number) => z.number().int().min(0).max(max);
+const rateBp = z.number().int().min(0).max(10_000, "A rate cannot be above 100%");
 
 export const commissionSlabSchema = z.object({
     fromPaise: paise(1_000_000_000_000),
-    rateBp:    z.number().int().min(0).max(10_000, "A rate cannot be above 100%"),
+    rateBp,
+});
+
+export const commissionRuleSchema = z.object({
+    kind:        z.enum(COMMISSION_KINDS),
+    targetPaise: paise(1_000_000_000_000).default(0),
+    rateBp:      rateBp.default(0),
+    slabs:       z.array(commissionSlabSchema).max(10).default([]),
+    bonusPaise:  paise(100_000_000_000).default(0),
+}).superRefine((r, ctx) => {
+    if ((r.kind === "PERCENT" || r.kind === "ABOVE_TARGET") && r.rateBp <= 0) ctx.addIssue({ code: "custom", path: ["rateBp"], message: "Enter the rate" });
+    if ((r.kind === "ABOVE_TARGET" || r.kind === "BONUS") && r.targetPaise <= 0) ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "Enter the target" });
+    if (r.kind === "BONUS" && r.bonusPaise <= 0) ctx.addIssue({ code: "custom", path: ["bonusPaise"], message: "Enter the bonus" });
+    if (r.kind === "SLABS") {
+        if (!r.slabs.length) ctx.addIssue({ code: "custom", path: ["slabs"], message: "Add at least one slab" });
+        for (let i = 1; i < r.slabs.length; i++) {
+            if (r.slabs[i].fromPaise <= r.slabs[i - 1].fromPaise) { ctx.addIssue({ code: "custom", path: ["slabs", i, "fromPaise"], message: "Each slab must start above the one before" }); break; }
+        }
+    }
 });
 
 export const commissionSchemeCreateSchema = z.object({
-    userId:        z.number().int().positive(),
+    /** Null = the shop's global scheme. */
+    userId:        z.number().int().positive().nullable(),
     effectiveFrom: isoDate,
-    targetPaise:   paise(1_000_000_000_000),
-    kind:          z.enum(COMMISSION_KINDS),
-    rateBp:        z.number().int().min(0).max(10_000, "A rate cannot be above 100%"),
-    slabs:         z.array(commissionSlabSchema).max(10).default([]),
-    bonusPaise:    paise(100_000_000_000),
+    rules:         z.array(commissionRuleSchema).min(1, "Add at least one rule").max(10),
     note:          optText(300),
-}).superRefine((v, ctx) => {
-    if ((v.kind === "PERCENT" || v.kind === "ABOVE_TARGET") && v.rateBp <= 0) {
-        ctx.addIssue({ code: "custom", path: ["rateBp"], message: "Enter the rate" });
-    }
-    if (v.kind === "ABOVE_TARGET" && v.targetPaise <= 0) {
-        ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "Sales above WHAT target — set one" });
-    }
-    if (v.kind === "SLABS") {
-        if (!v.slabs.length) ctx.addIssue({ code: "custom", path: ["slabs"], message: "Add at least one slab" });
-        for (let i = 1; i < v.slabs.length; i++) {
-            if (v.slabs[i].fromPaise <= v.slabs[i - 1].fromPaise) {
-                ctx.addIssue({ code: "custom", path: ["slabs", i, "fromPaise"], message: "Each slab must start above the one before" });
-                break;
-            }
-        }
-    }
-    if (v.bonusPaise > 0 && v.targetPaise <= 0) {
-        ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "A bonus needs a target to reach" });
-    }
 });
 
 export type CommissionSchemeCreate = z.infer<typeof commissionSchemeCreateSchema>;
+
+/** One person's commission mode — follow the shop scheme, carry an own one, or none. */
+export const commissionModeSchema = z.object({
+    userId: z.number().int().positive(),
+    mode:   z.enum(COMMISSION_MODES),
+});
 
 // ── Payroll ───────────────────────────────────────────────────────────────────
 //

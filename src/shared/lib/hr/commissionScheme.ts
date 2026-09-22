@@ -2,22 +2,33 @@
 // a month's sales into money.
 //
 // Owner, 2026-09-22: *"earnings, commission, target, etc. need a page to
-// set/edit. user need to see it to get motivated."* Three screens read this
-// file — the board where HR sets a scheme, the card on My Info where the person
-// watches his own month, and the payroll run that freezes the answer — so the
-// sums are written once, here, with no server import, and every screen quotes
-// the same rupee.
+// set/edit. user need to see it to get motivated."* and *"global commission,
+// user wise off/on and override, multiple target/commission type same time."*
+//
+// A scheme is a LIST OF RULES paid together. Each rule is one way of earning
+// and carries its own target where it needs one, so "1% on everything, ₹500 at
+// ₹60,000 and ₹1,500 at ₹1,00,000" is one scheme of three rules. Three screens
+// read this file — the board, the card on My Info, and the payroll run — so the
+// sums are written once, here, with no server import.
 //
 // Money is paise (Int). A rate is basis points: 100 bp = 1%.
 
-export const COMMISSION_KINDS = ["NONE", "PERCENT", "ABOVE_TARGET", "SLABS"] as const;
+export const COMMISSION_KINDS = ["PERCENT", "ABOVE_TARGET", "SLABS", "BONUS"] as const;
 export type CommissionKind = (typeof COMMISSION_KINDS)[number];
 
 export const COMMISSION_KIND_LABELS: Record<CommissionKind, string> = {
-    NONE:         "Target only — no commission on sales",
     PERCENT:      "A share of every sale",
-    ABOVE_TARGET: "A share of sales above the target",
+    ABOVE_TARGET: "A share of sales above a target",
     SLABS:        "Slabs — the rate steps up as sales grow",
+    BONUS:        "A flat bonus on reaching a target",
+};
+
+export const COMMISSION_MODES = ["GLOBAL", "OWN", "OFF"] as const;
+export type CommissionMode = (typeof COMMISSION_MODES)[number];
+export const COMMISSION_MODE_LABELS: Record<CommissionMode, string> = {
+    GLOBAL: "Shop scheme",
+    OWN:    "Own scheme",
+    OFF:    "No commission",
 };
 
 /** One slab: the rate that applies to sales from this rupee upward, until the next slab starts. */
@@ -26,120 +37,152 @@ export interface CommissionSlab {
     rateBp: number;
 }
 
-/** What one scheme says. The wire and storage shape, minus the row's own ids. */
-export interface CommissionSchemeTerms {
-    targetPaise: number;
+/** One way of earning. Fields a kind does not use are 0 / empty. */
+export interface CommissionRule {
     kind: CommissionKind;
+    /** ABOVE_TARGET: the line; BONUS: the line. 0 elsewhere. */
+    targetPaise: number;
+    /** PERCENT / ABOVE_TARGET. */
     rateBp: number;
+    /** SLABS. */
     slabs: CommissionSlab[];
+    /** BONUS. */
     bonusPaise: number;
+}
+
+/** What one scheme says — its rules. The wire and storage shape, minus the row's own ids. */
+export interface CommissionSchemeTerms {
+    rules: CommissionRule[];
 }
 
 /** The sale voucher kinds a person's commission counts, and the one that takes back. */
 export const COMMISSION_SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
 export const COMMISSION_RETURN_TYPES = ["SALE_RETURN"] as const;
 
-/** `slabsJson` comes back from the database as unknown; read it defensively. */
+export function isCommissionKind(v: unknown): v is CommissionKind {
+    return typeof v === "string" && (COMMISSION_KINDS as readonly string[]).includes(v);
+}
+export function isCommissionMode(v: unknown): v is CommissionMode {
+    return typeof v === "string" && (COMMISSION_MODES as readonly string[]).includes(v);
+}
+
+const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0; };
+
+/** `slabsJson` / a rule's slabs come from JSON; read defensively, sorted ascending. */
 export function parseSlabs(raw: unknown): CommissionSlab[] {
     if (!Array.isArray(raw)) return [];
     const out: CommissionSlab[] = [];
     for (const s of raw) {
         if (!s || typeof s !== "object") continue;
-        const from = Number((s as { fromPaise?: unknown }).fromPaise);
-        const rate = Number((s as { rateBp?: unknown }).rateBp);
-        if (!Number.isFinite(from) || !Number.isFinite(rate) || from < 0 || rate < 0) continue;
-        out.push({ fromPaise: Math.round(from), rateBp: Math.round(rate) });
+        out.push({ fromPaise: num((s as { fromPaise?: unknown }).fromPaise), rateBp: num((s as { rateBp?: unknown }).rateBp) });
     }
     return out.sort((a, b) => a.fromPaise - b.fromPaise);
 }
 
-export function isCommissionKind(v: unknown): v is CommissionKind {
-    return typeof v === "string" && (COMMISSION_KINDS as readonly string[]).includes(v);
+/** `rulesJson` from the database; a rule of an unknown kind is dropped, not guessed at. */
+export function parseRules(raw: unknown): CommissionRule[] {
+    if (!Array.isArray(raw)) return [];
+    const out: CommissionRule[] = [];
+    for (const r of raw) {
+        if (!r || typeof r !== "object") continue;
+        const o = r as Record<string, unknown>;
+        if (!isCommissionKind(o.kind)) continue;
+        out.push({ kind: o.kind, targetPaise: num(o.targetPaise), rateBp: num(o.rateBp), slabs: parseSlabs(o.slabs), bonusPaise: num(o.bonusPaise) });
+    }
+    return out;
 }
 
 /** "1%", "1.5%", "0.25%" — never "1.50%". */
 export const formatBp = (bp: number) => `${Number((bp / 100).toFixed(2))}%`;
 
-export interface CommissionOutcome {
-    /** Commission on the sales themselves, before any bonus. */
-    onSalesPaise: number;
-    /** The flat bonus, only when the target was reached (and one is set). */
-    bonusPaise: number;
-    /** onSales + bonus — what goes on the payslip. */
-    totalPaise: number;
-    /** Sales as a share of the target, 0..∞. Null when there is no target. */
-    achieved: number | null;
+export interface RuleOutcome {
+    rule: CommissionRule;
+    /** What this rule paid on these sales. */
+    paise: number;
+    /** The rule's target, scaled — 0 when the kind has none. */
+    targetPaise: number;
     targetMet: boolean;
+}
+
+export interface CommissionOutcome {
+    /** Everything the rules paid, summed — what goes on the payslip. */
+    totalPaise: number;
+    /** Rule by rule, in scheme order. */
+    rules: RuleOutcome[];
+    /** The highest target among the rules — the bar's far end. 0 when none. */
+    topTargetPaise: number;
+    /** Sales as a share of the top target. Null when there is no target. */
+    achieved: number | null;
+    /** Every targeted rule reached. False when there is no target at all. */
+    targetMet: boolean;
+    /** The nearest target still ahead, or null when all are met / none exist. */
+    nextTargetPaise: number | null;
 }
 
 /**
  * The money a month's sales are worth under a scheme.
  *
- * `targetPaise` is passed separately so a payroll period covering part of a
- * month can hand in the target scaled to the days it covers; a whole month
- * passes the scheme's own target.
+ * `scale` shrinks every target to the share of the month a payroll period
+ * covers (10 days of a 30-day month → 1/3); a whole month passes 1.
  */
-export function computeCommission(terms: CommissionSchemeTerms, salesPaise: number, targetPaise = terms.targetPaise): CommissionOutcome {
+export function computeCommission(terms: CommissionSchemeTerms, salesPaise: number, scale = 1): CommissionOutcome {
     const sales = Math.max(0, salesPaise);
-    let onSales = 0;
-    switch (terms.kind) {
-        case "PERCENT":
-            onSales = (sales * terms.rateBp) / 10_000;
-            break;
-        case "ABOVE_TARGET":
-            onSales = (Math.max(0, sales - targetPaise) * terms.rateBp) / 10_000;
-            break;
-        case "SLABS": {
-            // Marginal: each slab's rate is paid on the sales that fall inside it,
-            // the way income tax slabs work. A flat "whole amount at the top rate"
-            // would make the first rupee past a boundary worth a jump in pay,
-            // which is a fight at the counter, not a target.
-            const slabs = terms.slabs;
-            for (let i = 0; i < slabs.length; i++) {
-                const lo = slabs[i].fromPaise;
-                const hi = i + 1 < slabs.length ? slabs[i + 1].fromPaise : Infinity;
-                if (sales <= lo) break;
-                onSales += ((Math.min(sales, hi) - lo) * slabs[i].rateBp) / 10_000;
+    const rules: RuleOutcome[] = terms.rules.map((rule) => {
+        const target = rule.kind === "ABOVE_TARGET" || rule.kind === "BONUS" ? Math.round(rule.targetPaise * scale) : 0;
+        let paise = 0;
+        switch (rule.kind) {
+            case "PERCENT":
+                paise = (sales * rule.rateBp) / 10_000;
+                break;
+            case "ABOVE_TARGET":
+                paise = (Math.max(0, sales - target) * rule.rateBp) / 10_000;
+                break;
+            case "SLABS": {
+                // Marginal: each slab's rate is paid on the sales that fall inside
+                // it, the way tax slabs work, so crossing a line never loses money.
+                const slabs = rule.slabs;
+                for (let i = 0; i < slabs.length; i++) {
+                    const lo = slabs[i].fromPaise;
+                    const hi = i + 1 < slabs.length ? slabs[i + 1].fromPaise : Infinity;
+                    if (sales <= lo) break;
+                    paise += ((Math.min(sales, hi) - lo) * slabs[i].rateBp) / 10_000;
+                }
+                break;
             }
-            break;
+            case "BONUS":
+                paise = target > 0 && sales >= target ? rule.bonusPaise : 0;
+                break;
         }
-        case "NONE":
-        default:
-            break;
-    }
-    const targetMet = targetPaise > 0 && sales >= targetPaise;
-    const bonus = targetMet ? terms.bonusPaise : 0;
-    const onSalesPaise = Math.round(onSales);
+        return { rule, paise: Math.round(paise), targetPaise: target, targetMet: target > 0 && sales >= target };
+    });
+    const targets = rules.map((r) => r.targetPaise).filter((t) => t > 0);
+    const top = targets.length ? Math.max(...targets) : 0;
+    const ahead = targets.filter((t) => sales < t);
     return {
-        onSalesPaise,
-        bonusPaise: bonus,
-        totalPaise: onSalesPaise + bonus,
-        achieved: targetPaise > 0 ? sales / targetPaise : null,
-        targetMet,
+        totalPaise: rules.reduce((a, r) => a + r.paise, 0),
+        rules,
+        topTargetPaise: top,
+        achieved: top > 0 ? sales / top : null,
+        targetMet: top > 0 && ahead.length === 0,
+        nextTargetPaise: ahead.length ? Math.min(...ahead) : null,
     };
 }
 
-/** The scheme in one plain sentence, for the board row and the person's card. */
-export function describeScheme(terms: CommissionSchemeTerms, formatPaise: (p: number) => string): string {
-    const parts: string[] = [];
-    switch (terms.kind) {
-        case "PERCENT":
-            parts.push(`${formatBp(terms.rateBp)} of every sale`);
-            break;
-        case "ABOVE_TARGET":
-            parts.push(`${formatBp(terms.rateBp)} of sales above the target`);
-            break;
+/** One rule in a plain phrase. */
+export function describeRule(r: CommissionRule, formatPaise: (p: number) => string): string {
+    switch (r.kind) {
+        case "PERCENT":      return `${formatBp(r.rateBp)} of every sale`;
+        case "ABOVE_TARGET": return `${formatBp(r.rateBp)} of sales above ${formatPaise(r.targetPaise)}`;
+        case "BONUS":        return `${formatPaise(r.bonusPaise)} bonus at ${formatPaise(r.targetPaise)}`;
         case "SLABS":
-            parts.push(terms.slabs.map((s, i) => {
-                const next = terms.slabs[i + 1];
-                const range = next ? `${formatPaise(s.fromPaise)}–${formatPaise(next.fromPaise)}` : `above ${formatPaise(s.fromPaise)}`;
-                return `${formatBp(s.rateBp)} on ${range}`;
-            }).join(", ") || "slabs not set");
-            break;
-        default:
-            break;
+            return r.slabs.map((s, i) => {
+                const next = r.slabs[i + 1];
+                return `${formatBp(s.rateBp)} on ${next ? `${formatPaise(s.fromPaise)}–${formatPaise(next.fromPaise)}` : `above ${formatPaise(s.fromPaise)}`}`;
+            }).join(", ") || "slabs not set";
     }
-    if (terms.bonusPaise > 0 && terms.targetPaise > 0) parts.push(`${formatPaise(terms.bonusPaise)} bonus on reaching the target`);
-    if (!parts.length) return terms.targetPaise > 0 ? "Target only" : "Nothing set";
-    return parts.join(" · ");
+}
+
+/** The scheme in one sentence, for the board row and the person's card. */
+export function describeScheme(terms: CommissionSchemeTerms, formatPaise: (p: number) => string): string {
+    return terms.rules.length ? terms.rules.map((r) => describeRule(r, formatPaise)).join(" · ") : "Nothing set";
 }

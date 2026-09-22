@@ -156,9 +156,9 @@ What still reads the cache is the two surfaces that want **every** account in on
 
 **Definition:** Every staff member's own ledger, under the **Salary Payable** group (LIABILITY, Current Liabilities), opened the first time their HR profile is saved. Salary accrues INTO it (a later payroll journal), advances and salary payments go OUT of it (ordinary Payment vouchers), so its balance always reads "owed to them" (Cr) or "advance outstanding" (Dr). Not to be confused with the person's **salary expense ledger** (`Salary & Wages`, or a per-person one like `Naba Salary`) — that is the Dr side, chosen on the Job tab.
 
-## Commission scheme · Target
+## Commission scheme · Target · Commission mode
 
-**Definition:** A staff member's monthly sales target and the way their own bills turn into commission (`CommissionScheme`, `commission_schemes`) — dated and revised like a salary, so the scheme in force on a day is the latest that had started by then. Kinds: a share of every sale, a share of sales above the target, marginal slabs, or target only; plus an optional flat bonus the month the target is reached. **Whose sale** is the voucher's creator — the person who rang the bill. Set on **HR & People → Targets & Commission**; the person watches their own month on **My Info → My target**; payroll pays what the period earned as a "Commission" line. The arithmetic lives once, in `shared/lib/hr/commissionScheme.ts`.
+**Definition:** A dated list of rules that turn a person's own sales into commission (`CommissionScheme`, `commission_schemes`), revised like a salary — the scheme in force on a day is the latest that had started by then. Rules are paid together, each with its own target where it needs one: a share of every sale, a share of sales above a target, marginal slabs, a flat bonus at a target. A scheme with no `userId` is the **shop scheme**; each person's **commission mode** (`StaffProfile.commissionMode`) says whether they follow it (`GLOBAL`), carry their **own** scheme (`OWN`, overriding the shop's) or earn none (`OFF`). **Whose sale** is the voucher's creator — the person who rang the bill. Set on **HR & People → Targets & Commission**; the person watches their own month on **My Info → My target**; payroll pays what the period earned as a "Commission" line. The arithmetic lives once, in `shared/lib/hr/commissionScheme.ts`.
 
 ---
 

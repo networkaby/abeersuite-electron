@@ -50,6 +50,9 @@ model StaffProfile {
   /// a short one, a technician a long one; one number cannot serve both. Capped
   /// at the session backstop, shared/lib/hr/dutyTime.ts.
   idleLimitMinutes Int?
+  /// GLOBAL | OWN | OFF — follow the shop's commission scheme, carry an own one,
+  /// or earn none. A plain string like employmentType.
+  commissionMode   String @default("GLOBAL")
 
   // Personal / KYC — edited on the person's own profile page (self or admin).
   fatherName     String?
@@ -273,36 +276,33 @@ model PayrollRunLine {
 
 // ── Targets & Commission ──────────────────────────────────────────────────────
 // Owner, 2026-09-22: *"earnings, commission, target, etc. need a page to
-// set/edit. user need to see it to get motivated."* So one dated scheme per
-// person, revised like a salary: the row in force on a date is the latest with
-// effectiveFrom <= date. A scheme is a MONTHLY target plus a way of earning on
-// sales, and the sales it counts are the person's own posted sale vouchers
-// (UniversalVoucher.createdById) — the cashier who rang the bill earns on it.
+// set/edit. user need to see it to get motivated."* Then: *"global commission,
+// user wise off/on and override, multiple target/commission type same time."*
+//
+// So: a scheme is a LIST OF RULES paid together (a share of every sale, a share
+// above a target, slabs, a bonus at a target — each with its own target), dated
+// like a salary: the scheme in force on a day is the latest with
+// effectiveFrom <= day. A scheme with userId NULL is the shop's GLOBAL one;
+// StaffProfile.commissionMode says whether a person follows it (GLOBAL), has
+// their own (OWN) or earns none (OFF). The sales it counts are the person's own
+// posted sale vouchers (UniversalVoucher.createdById).
 //
 // The arithmetic lives in ONE place, shared/lib/hr/commissionScheme.ts, so the
-// motivation card on My Info, the board and the payroll run cannot disagree
-// about what a month is worth. Payroll freezes the answer onto its line
-// (PayrollRunLine.commissionPaise + a "Commission" earning) — see
-// modules/hr/lib/commission.ts, which is the only door payroll uses.
+// card on My Info, the board and the payroll run cannot disagree. Payroll
+// freezes the answer onto its line (PayrollRunLine.commissionPaise + a
+// "Commission" earning) — modules/hr/lib/commission.ts is its only door.
 model CommissionScheme {
-  id      Int          @id @default(autoincrement())
-  userId  Int
-  profile StaffProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  id      Int           @id @default(autoincrement())
+  /// Null = the global scheme, everyone on GLOBAL mode follows it.
+  userId  Int?
+  profile StaffProfile? @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
-  /// First day this scheme applies. Two schemes cannot start on the same day.
+  /// First day this scheme applies. Two schemes of the same owner cannot start
+  /// on the same day (a partial unique index covers the global ones).
   effectiveFrom DateTime @db.Date
-  /// The month's sales target, paise. 0 = no target — the card shows sales only.
-  targetPaise   Int      @default(0)
-  /// PERCENT | ABOVE_TARGET | SLABS | NONE — how sales turn into commission. A
-  /// plain string, validated by zod, for the same reason as employmentType.
-  kind          String   @default("NONE")
-  /// Rate in basis points (100 = 1%) for PERCENT / ABOVE_TARGET.
-  rateBp        Int      @default(0)
-  /// SLABS only: [{ fromPaise, rateBp }] ascending — marginal, each slab's rate
-  /// on the sales inside it. Read whole, never queried.
-  slabsJson     Json?
-  /// A flat bonus, paise, paid on top when the month's sales reach the target.
-  bonusPaise    Int      @default(0)
+  /// [{ kind, targetPaise, rateBp, slabs, bonusPaise }] — CommissionRule[] in
+  /// shared/lib/hr/commissionScheme.ts. Read whole, never queried.
+  rulesJson     Json
   note          String?
   /// Scalar snapshot, no FK — like StaffSalary.createdById.
   createdById   Int

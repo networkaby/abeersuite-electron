@@ -5,7 +5,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { moneyNumber, rupeesToPaise } from "@/shared/lib/format/moneyInr";
 import {
-    COMMISSION_RETURN_TYPES, COMMISSION_SALE_TYPES, computeCommission, isCommissionKind, parseSlabs,
+    COMMISSION_RETURN_TYPES, COMMISSION_SALE_TYPES, computeCommission, isCommissionMode, parseRules,
+    type CommissionMode,
 } from "@/shared/lib/hr/commissionScheme";
 import { isoDaysBetween, monthBounds, weekdayOf } from "./attendanceCalendar";
 import { dateOnlyFromIso } from "./staffProfileServer";
@@ -14,28 +15,30 @@ import type { CommissionMonth, CommissionSchemeDto } from "./commissionTypes";
 /**
  * Targets & Commission, server side — the reads the board, My Info and payroll
  * share. The arithmetic itself is in shared/lib/hr/commissionScheme.ts; this
- * file only fetches the sales and picks the scheme in force.
+ * file fetches the sales, resolves WHICH scheme applies to a person, and picks
+ * the revision in force.
+ *
+ * WHICH scheme: StaffProfile.commissionMode — GLOBAL follows the shop's scheme
+ * (rows with userId NULL), OWN uses the person's own rows, OFF earns nothing.
  *
  * WHOSE sale: the voucher's `createdById` — the person who rang the bill. There
- * is no salesman column on a voucher and none is invented here; when the shop
- * wants "sold by" separate from "billed by", that is a voucher field first and
- * a change of one `where` below second.
+ * is no salesman column on a voucher and none is invented here.
  *
  * WHAT counts: posted, not deleted, of the sale kinds, less sale returns — the
- * figure a customer actually paid for, the same reading `tierSpend.ts` gives a
- * customer's own spend.
+ * figure a customer actually paid for, the same reading `tierSpend.ts` gives.
  */
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
 const SCHEME_SELECT = {
-    id: true, userId: true, effectiveFrom: true, targetPaise: true, kind: true, rateBp: true,
-    slabsJson: true, bonusPaise: true, note: true, createdAt: true,
+    id: true, userId: true, effectiveFrom: true, rulesJson: true, note: true, createdAt: true,
 } satisfies Prisma.CommissionSchemeSelect;
 
 export type SchemeRow = Prisma.CommissionSchemeGetPayload<{ select: typeof SCHEME_SELECT }>;
 
-export const COMMISSION_SCHEMES_INCLUDE = {
+/** Spread into a StaffProfile select: the person's own schemes, newest first, plus the mode. */
+export const COMMISSION_PROFILE_SELECT = {
+    commissionMode: true,
     commissionSchemes: { orderBy: { effectiveFrom: "desc" as const }, select: SCHEME_SELECT },
 };
 
@@ -44,14 +47,18 @@ export function toCommissionSchemeDto(s: SchemeRow): CommissionSchemeDto {
         id: s.id,
         userId: s.userId,
         effectiveFrom: toDateOnlyUtc(s.effectiveFrom),
-        targetPaise: s.targetPaise,
-        kind: isCommissionKind(s.kind) ? s.kind : "NONE",
-        rateBp: s.rateBp,
-        slabs: parseSlabs(s.slabsJson),
-        bonusPaise: s.bonusPaise,
+        rules: parseRules(s.rulesJson),
         note: s.note,
         createdAt: s.createdAt.toISOString(),
     };
+}
+
+export const modeOf = (v: unknown): CommissionMode => (isCommissionMode(v) ? v : "GLOBAL");
+
+/** The shop's global schemes, newest first. */
+export async function loadGlobalSchemes(db: Db): Promise<CommissionSchemeDto[]> {
+    const rows = await db.commissionScheme.findMany({ where: { userId: null }, orderBy: { effectiveFrom: "desc" }, select: SCHEME_SELECT });
+    return rows.map(toCommissionSchemeDto);
 }
 
 /** The revision in force on a day: the latest that had started by then. `schemes` in any order. */
@@ -61,6 +68,11 @@ export function schemeInForce(schemes: readonly CommissionSchemeDto[], iso: stri
         if (s.effectiveFrom <= iso && (!best || s.effectiveFrom > best.effectiveFrom)) best = s;
     }
     return best;
+}
+
+/** The scheme list a person is judged by, given their mode. Empty for OFF. */
+export function schemesFor(mode: CommissionMode, own: readonly CommissionSchemeDto[], global: readonly CommissionSchemeDto[]): readonly CommissionSchemeDto[] {
+    return mode === "OFF" ? [] : mode === "OWN" ? own : global;
 }
 
 export interface SalesTally {
@@ -109,6 +121,7 @@ function workingDaysLeft(fromIso: string, toIso: string, weeklyOff: readonly num
  * `salesByUser` returned them (absent = nothing sold).
  */
 export function monthFor(
+    mode: CommissionMode,
     schemes: readonly CommissionSchemeDto[],
     tally: SalesTally | undefined,
     month: string,
@@ -118,16 +131,14 @@ export function monthFor(
     const { from, to } = monthBounds(Number(month.slice(0, 4)), Number(month.slice(5, 7)));
     const scheme = schemeInForce(schemes, to);
     const salesPaise = tally?.salesPaise ?? 0;
-    const outcome = scheme ? computeCommission(scheme, salesPaise) : null;
-    const short = scheme && scheme.targetPaise > 0 ? Math.max(0, scheme.targetPaise - salesPaise) : 0;
     return {
         month, from, to,
         salesPaise,
         billCount: tally?.billCount ?? 0,
+        mode,
         scheme,
-        outcome,
+        outcome: scheme ? computeCommission(scheme, salesPaise) : null,
         daysLeft: today > to ? 0 : workingDaysLeft(today < from ? from : today, to, weeklyOff),
-        shortPaise: short,
     };
 }
 
@@ -135,9 +146,9 @@ export function monthFor(
  * What a payroll period earned — month by month, because a target is a month's
  * and a run is a date range. Each calendar month the period touches is judged
  * on its own: the sales inside the overlap, against the scheme in force at the
- * overlap's last day, with the target scaled to the share of the month the run
- * covers (a run that pays 10 days of a 30-day month asks for a third of the
- * target). The months are then summed.
+ * overlap's last day, with every target scaled to the share of the month the
+ * run covers (a run that pays 10 days of a 30-day month asks for a third). The
+ * months are then summed.
  */
 export async function commissionForUsers(
     db: Db,
@@ -161,18 +172,17 @@ export async function commissionForUsers(
 
     for (const seg of segments) {
         const tallies = await salesByUser(db, withScheme.map((p) => p.userId), seg.from, seg.to);
-        const share = isoDaysBetween(seg.from, seg.to).length / seg.monthDays;
+        const scale = isoDaysBetween(seg.from, seg.to).length / seg.monthDays;
         for (const p of withScheme) {
             const scheme = schemeInForce(p.schemes, seg.to);
             if (!scheme) continue;
             const sales = tallies.get(p.userId)?.salesPaise ?? 0;
-            const target = Math.round(scheme.targetPaise * share);
-            const o = computeCommission(scheme, sales, target);
+            const o = computeCommission(scheme, sales, scale);
             if (o.totalPaise <= 0) continue;
             const prev = out.get(p.userId) ?? { commissionPaise: 0, basis: "" };
             const note = `${seg.from.slice(0, 7)}: sold ${formatLakh(sales)}` +
-                (target > 0 ? ` of ${formatLakh(target)} target` : "") +
-                (o.bonusPaise > 0 ? ", bonus earned" : "");
+                (o.topTargetPaise > 0 ? ` against ${formatLakh(o.topTargetPaise)}` : "") +
+                (scheme.userId === null ? " (shop scheme)" : "");
             out.set(p.userId, {
                 commissionPaise: prev.commissionPaise + o.totalPaise,
                 basis: prev.basis ? `${prev.basis}; ${note}` : note,

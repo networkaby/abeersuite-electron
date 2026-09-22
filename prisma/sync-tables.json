@@ -258,9 +258,8 @@
       "pk": [
         "id"
       ],
-      "strategy": "child",
-      "parent": "StaffProfile",
-      "fk": "userId"
+      "strategy": "watermark",
+      "column": "updatedAt"
     },
     "Company": {
       "n": 15,
