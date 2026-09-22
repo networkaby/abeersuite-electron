@@ -20,7 +20,7 @@ export type CommissionKind = (typeof COMMISSION_KINDS)[number];
 export const COMMISSION_KIND_LABELS: Record<CommissionKind, string> = {
     PERCENT:      "A share of every sale",
     ABOVE_TARGET: "A share of sales above a target",
-    SLABS:        "Slabs — the rate depends on how much was sold",
+    SLABS:        "Slabs — a rate for each stretch of the sales",
     BONUS:        "A flat bonus on reaching a target",
 };
 
@@ -130,14 +130,16 @@ export function computeCommission(terms: CommissionSchemeTerms, salesPaise: numb
                 paise = (Math.max(0, sales - target) * rule.rateBp) / 10_000;
                 break;
             case "SLABS": {
-                // The slab the month's sales land in sets the rate for the WHOLE
-                // amount — owner, 2026-09-23: a ₹1,00,000 month in the "above
-                // ₹20,000 at 1%" slab earns ₹1,000, not 1% of the part past the
-                // line. Slabs are ascending; the last one whose start is not
-                // above the sales is the one that applies.
-                let rate = 0;
-                for (const slab of rule.slabs) if (sales >= slab.fromPaise) rate = slab.rateBp;
-                paise = (sales * rate) / 10_000;
+                // Each slab's rate is paid on the sales inside that slab — owner,
+                // 2026-09-23: "1% up to ₹1,000" means 1% of the first ₹1,000 of
+                // the month's sales, whatever the month came to.
+                const slabs = rule.slabs;
+                for (let i = 0; i < slabs.length; i++) {
+                    const lo = slabs[i].fromPaise;
+                    const hi = i + 1 < slabs.length ? slabs[i + 1].fromPaise : Infinity;
+                    if (sales <= lo) break;
+                    paise += ((Math.min(sales, hi) - lo) * slabs[i].rateBp) / 10_000;
+                }
                 break;
             }
             case "BONUS":
@@ -168,9 +170,9 @@ export function describeRule(r: CommissionRule, formatPaise: (p: number) => stri
         case "SLABS":
             return r.slabs.map((s, i) => {
                 const next = r.slabs[i + 1];
-                if (!next) return `${formatBp(s.rateBp)} on everything from ${formatPaise(s.fromPaise)}`;
-                if (s.fromPaise === 0) return `${formatBp(s.rateBp)} on everything below ${formatPaise(next.fromPaise)}`;
-                return `${formatBp(s.rateBp)} on everything from ${formatPaise(s.fromPaise)} to ${formatPaise(next.fromPaise)}`;
+                if (!next) return `${formatBp(s.rateBp)} on the sales above ${formatPaise(s.fromPaise)}`;
+                if (s.fromPaise === 0) return `${formatBp(s.rateBp)} on the first ${formatPaise(next.fromPaise)}`;
+                return `${formatBp(s.rateBp)} on ${formatPaise(s.fromPaise)}–${formatPaise(next.fromPaise)}`;
             }).join(", ") || "slabs not set";
     }
 }

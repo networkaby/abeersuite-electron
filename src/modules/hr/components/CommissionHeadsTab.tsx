@@ -198,9 +198,19 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
     // A role from an earlier save that nobody carries today still shows, so it can be unticked.
     const roleChips = useMemo(() => [...new Set([...roles, ...appliesTo])].sort(), [roles, appliesTo]);
 
+    // The example: for a slab ladder, a month landing on each line and one past
+    // the last; otherwise at the target and a fifth past it, or a round lakh.
     const example = useMemo(() => {
-        const base = rule.targetPaise > 0 ? rule.targetPaise : L;
-        return [base, Math.round(base * 1.2)].map((sales) => ({ sales, paise: computeCommission({ rules: [rule] }, sales).totalPaise }));
+        let points: number[];
+        if (rule.kind === "SLABS" && rule.slabs.length) {
+            const lines = rule.slabs.map((s) => s.fromPaise).filter((f) => f > 0);
+            const last = lines[lines.length - 1] ?? 0;
+            points = [...lines, last > 0 ? last * 2 : L];
+        } else {
+            const base = rule.targetPaise > 0 ? rule.targetPaise : L;
+            points = [base, Math.round(base * 1.2)];
+        }
+        return points.map((sales) => ({ sales, paise: computeCommission({ rules: [rule] }, sales).totalPaise }));
     }, [rule]);
 
     const submit = async () => {
@@ -247,9 +257,9 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                     {draft.kind === "SLABS" && (
                         <div className="space-y-2">
                             <div className="text-xs text-muted-foreground">
-                                The ladder starts at ₹0. Each row is a line where the rate changes; the slab the month&apos;s total sales land in sets the rate for the whole amount.
+                                The ladder starts at ₹0. Each row is a line where the rate changes, and a row&apos;s rate is paid on the sales between its line and the next — so &quot;1% up to ₹1,000&quot; is 1% of the first ₹1,000 of the month, whatever the month came to.
                             </div>
-                            <div className="grid max-w-md grid-cols-[1fr_1fr_auto] gap-2 text-xs text-muted-foreground"><span>Sales from (₹)</span><span>Rate on all sales (%)</span><span /></div>
+                            <div className="grid max-w-md grid-cols-[1fr_1fr_auto] gap-2 text-xs text-muted-foreground"><span>Sales from (₹)</span><span>Rate on this stretch (%)</span><span /></div>
                             {draft.slabs.map((s, k) => (
                                 <div key={k} className="grid max-w-md grid-cols-[1fr_1fr_auto] items-center gap-2">
                                     <NumericInput mode="decimal" value={k === 0 ? "0" : s.from} disabled={k === 0} onValueChange={(v) => setSlab(k, { from: v })} placeholder="from ₹" aria-label="Slab from" />
