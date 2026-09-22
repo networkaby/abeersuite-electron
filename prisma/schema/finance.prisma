@@ -167,6 +167,9 @@ model UniversalVoucher {
   couponRedemptions         CouponRedemption[]         @relation("SpineCouponRedemptions")
   giftCardTxns              GiftCardTxn[]              @relation("SpineGiftCardTxns")
   additionalCostAllocations AdditionalCostAllocation[] @relation("SpineAdditionalCostAllocations")
+  // Payroll runs posted as this voucher. SetNull on the other side: deleting
+  // a journal breaks the run's pointer, it never deletes the run.
+  payrollRuns               PayrollRun[]               @relation("PayrollVoucher")
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 

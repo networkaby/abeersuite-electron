@@ -9,6 +9,36 @@ import type { SalaryLine } from "./salaryLines";
 
 export type PayrollRunStatus = "DRAFT" | "POSTED" | "CANCELLED";
 
+/**
+ * What has become of the journal a run posted — read from the voucher itself,
+ * never assumed from the run's own status.
+ *
+ * NONE      the run never posted one (a draft).
+ * LIVE      the voucher is there and standing. The normal case.
+ * DRAFT     the voucher exists but was never posted to the books.
+ * CANCELLED the voucher was voided in Accountancy.
+ * REMOVED   the voucher is gone — hard-deleted, or soft-deleted. The run still
+ *           says POSTED, but the books carry nothing.
+ *
+ * Anything but NONE or LIVE means the screen must warn: the run looks paid and
+ * is not.
+ */
+export type PayrollVoucherState = "NONE" | "LIVE" | "DRAFT" | "CANCELLED" | "REMOVED";
+
+/** True when a run claims to be posted but its journal is not standing. */
+export function voucherIsBroken(status: PayrollRunStatus, state: PayrollVoucherState): boolean {
+    return status === "POSTED" && state !== "LIVE";
+}
+
+/** The short words the screens put beside the voucher number. */
+export const PAYROLL_VOUCHER_STATE_LABELS: Record<PayrollVoucherState, string> = {
+    NONE:      "",
+    LIVE:      "",
+    DRAFT:     "not posted",
+    CANCELLED: "cancelled",
+    REMOVED:   "removed",
+};
+
 /** One person on a run — their pay for that period, frozen at generation. */
 export interface PayrollLineDto {
     id: number;
@@ -46,6 +76,8 @@ export interface PayrollRunRow {
     status: PayrollRunStatus;
     voucherId: number | null;
     voucherRef: string | null;
+    /** What became of that voucher. Read from the voucher, not guessed. */
+    voucherState: PayrollVoucherState;
     /** The one ledger the whole run is booked against. */
     expenseAccount: { id: number; name: string } | null;
     grossPaise: number;

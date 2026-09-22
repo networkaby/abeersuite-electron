@@ -4251,6 +4251,9 @@ CREATE INDEX IF NOT EXISTS "payroll_runs_status_idx" ON "payroll_runs"("status")
 CREATE INDEX IF NOT EXISTS "payroll_runs_expenseAccountId_idx" ON "payroll_runs"("expenseAccountId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "payroll_runs_voucherId_idx" ON "payroll_runs"("voucherId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "payroll_runs_periodFrom_idx" ON "payroll_runs"("periodFrom");
 
 -- CreateIndex
@@ -5131,6 +5134,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "payroll_runs" ADD CONSTRAINT "payroll_runs_expenseAccountId_fkey" FOREIGN KEY ("expenseAccountId") REFERENCES "Account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "payroll_runs" ADD CONSTRAINT "payroll_runs_voucherId_fkey" FOREIGN KEY ("voucherId") REFERENCES "UniversalVoucher"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

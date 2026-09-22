@@ -8,7 +8,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { WalletMinimal } from "lucide-react";
+import { TriangleAlert, WalletMinimal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,7 +19,13 @@ import { TableEmptyRow } from "@/shared/components/DataTableStates";
 import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { PAYROLL_STATUS_LABELS, formatPeriod, type PayrollRunRow } from "../lib/payrollTypes";
+import {
+    PAYROLL_STATUS_LABELS,
+    PAYROLL_VOUCHER_STATE_LABELS,
+    formatPeriod,
+    voucherIsBroken,
+    type PayrollRunRow,
+} from "../lib/payrollTypes";
 import PayrollGenerateTab from "./PayrollGenerateTab";
 import PayrollPayTab from "./PayrollPayTab";
 
@@ -33,7 +39,11 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
     useRealtimeTopics(["ledger", "settings"], reload);
 
     const rows = data ?? [];
-    const posted = rows.filter((r) => r.status === "POSTED").length;
+    // Counted on the voucher, not on the run's own word: a run whose journal
+    // has been cancelled or deleted is not posted, whatever it says about
+    // itself, and the subtitle must not claim it is.
+    const posted = rows.filter((r) => r.status === "POSTED" && r.voucherState === "LIVE").length;
+    const broken = rows.filter((r) => voucherIsBroken(r.status, r.voucherState)).length;
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -73,6 +83,18 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
                                 is an ordinary Payment voucher against that ledger.
                             </p>
 
+                            {!!broken && (
+                                <p className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                    <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+                                    <span>
+                                        {broken === 1 ? "One run says" : `${broken} runs say`} posted, but the journal behind
+                                        {broken === 1 ? " it is" : " them is"} no longer standing — cancelled or deleted in
+                                        Accountancy, so the books carry nothing for it. Open the run and cancel it, then
+                                        generate that period again.
+                                    </span>
+                                </p>
+                            )}
+
                             <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
 
                             {data && (
@@ -108,18 +130,45 @@ export default function PayrollRunList({ canRun }: { canRun: boolean }) {
                                                     </TableCell>
                                                     <TableCell className="text-right font-medium tabular-nums">{formatRupeesFromPaise(r.netPaise)}</TableCell>
                                                     <TableCell>
-                                                        <Badge variant={r.status === "POSTED" ? "default" : r.status === "CANCELLED" ? "destructive" : "secondary"}>
-                                                            {PAYROLL_STATUS_LABELS[r.status]}
-                                                        </Badge>
+                                                        {voucherIsBroken(r.status, r.voucherState) ? (
+                                                            // "Posted" on its own reads as done, and it is not: the
+                                                            // journal behind it is gone. The badge says so here, where
+                                                            // the eye already goes for the answer.
+                                                            <Badge variant="destructive" className="gap-1">
+                                                                <TriangleAlert size={12} />
+                                                                No voucher
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant={r.status === "POSTED" ? "default" : r.status === "CANCELLED" ? "destructive" : "secondary"}>
+                                                                {PAYROLL_STATUS_LABELS[r.status]}
+                                                            </Badge>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell onClick={(e) => e.stopPropagation()}>
                                                         {r.voucherId ? (
-                                                            <Link
-                                                                href={`/vouchers/journal-entries/${r.voucherId}`}
-                                                                className="text-sm text-primary underline-offset-2 hover:underline"
-                                                            >
-                                                                {r.voucherRef}
-                                                            </Link>
+                                                            <span className="flex items-center gap-1.5">
+                                                                <Link
+                                                                    href={`/vouchers/journal-entries/${r.voucherId}`}
+                                                                    className="text-sm text-primary underline-offset-2 hover:underline"
+                                                                >
+                                                                    {r.voucherRef}
+                                                                </Link>
+                                                                {/* Still there, but no longer counting — say which,
+                                                                    right beside its number. */}
+                                                                {PAYROLL_VOUCHER_STATE_LABELS[r.voucherState] && (
+                                                                    <span className="text-xs text-destructive">
+                                                                        {PAYROLL_VOUCHER_STATE_LABELS[r.voucherState]}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        ) : r.voucherRef ? (
+                                                            // The pointer broke when the voucher was deleted. The
+                                                            // number it carried survives, struck through, so the run
+                                                            // can still be traced through the audit log.
+                                                            <span className="flex items-center gap-1.5">
+                                                                <span className="text-sm text-muted-foreground line-through">{r.voucherRef}</span>
+                                                                <span className="text-xs text-destructive">removed</span>
+                                                            </span>
                                                         ) : <span className="text-sm text-muted-foreground">—</span>}
                                                     </TableCell>
                                                 </TableRow>

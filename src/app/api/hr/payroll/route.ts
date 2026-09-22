@@ -11,6 +11,7 @@ import {
     candidateTotals,
     dateOnly,
     overlappingRun,
+    PAYROLL_VOUCHER_SELECT,
     toRunRow,
 } from "@/modules/hr/lib/payrollServer";
 import { ensureSalaryExpenseAccount } from "@/modules/hr/lib/staffLedger";
@@ -29,7 +30,13 @@ export async function GET() {
     try {
         const runs = await prisma.payrollRun.findMany({
             orderBy: { periodTo: "desc" },
-            include: { expenseAccount: { select: { id: true, name: true } } },
+            // The voucher comes along in the same query — one join, no second
+            // round trip — so a run that says POSTED is checked against the
+            // journal's own status instead of the number it copied.
+            include: {
+                expenseAccount: { select: { id: true, name: true } },
+                voucher: PAYROLL_VOUCHER_SELECT,
+            },
         });
 
         const ids = [...new Set(runs.flatMap((r) => [r.createdById, r.postedById].filter((v): v is number => v != null)))];

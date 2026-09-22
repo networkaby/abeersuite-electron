@@ -62,11 +62,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             const fresh = await tx.payrollRun.findUnique({ where: { id }, select: { status: true } });
             if (fresh?.status !== "POSTED") throw new Error("ALREADY_CANCELLED");
 
-            if (run.voucherId) {
+            // The voucher may be gone entirely — hard-deleted from Accountancy,
+            // which the FK's SET NULL turns into a null `voucherId` beside a
+            // `voucherRef` that still names it. There is then nothing to
+            // reverse, and this route's whole job is the second half: put the
+            // run's own word right and free the days.
+            const voucher = run.voucherId
+                ? await tx.universalVoucher.findUnique({
+                      where:  { id: run.voucherId },
+                      select: { id: true, deletedAt: true },
+                  })
+                : null;
+
+            if (voucher && !voucher.deletedAt) {
                 // `skipIfCancelled`: someone may have cancelled the journal by
                 // hand in Accountancy already, which is exactly the state we
                 // want — that must not stop the run being marked to match.
-                await cancelVoucherInTx(tx, run.voucherId, caller!.id, body.reason, { skipIfCancelled: true });
+                await cancelVoucherInTx(tx, voucher.id, caller!.id, body.reason, { skipIfCancelled: true });
             }
 
             await tx.payrollRun.update({

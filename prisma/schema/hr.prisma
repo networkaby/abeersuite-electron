@@ -161,10 +161,18 @@ model PayrollRun {
   /// StaffProfile.employmentType — a new state must not need an enum migration.
   status      String   @default("DRAFT")
 
-  /// The journal voucher this run posted. Scalar snapshot, no FK (like
-  /// StaffSalary.createdById): cancelling the voucher must not cascade to the
-  /// run's history. `voucherRef` is the JV-… number, so the list needs no join.
+  /// The journal voucher this run posted.
+  ///
+  /// A real relation, but `onDelete: SetNull` — never Cascade. Deleting the
+  /// journal must not take the payroll history with it; it only breaks the
+  /// pointer. `voucherRef` is a plain string and is deliberately NOT cleared
+  /// with it, so a run whose voucher is gone still says which one it was:
+  /// `voucherId` null + `voucherRef` set IS the "voucher removed" state the
+  /// screens warn about. The relation exists so the list can read the
+  /// voucher's own status in the same query — a posted run must never look
+  /// clean when its journal has been cancelled or deleted.
   voucherId  Int?
+  voucher    UniversalVoucher? @relation("PayrollVoucher", fields: [voucherId], references: [id], onDelete: SetNull)
   voucherRef String?
 
   note String?
@@ -186,6 +194,7 @@ model PayrollRun {
 
   @@index([status])
   @@index([expenseAccountId])
+  @@index([voucherId])
   @@index([periodFrom])
   @@index([periodTo])
   @@index([updatedAt])

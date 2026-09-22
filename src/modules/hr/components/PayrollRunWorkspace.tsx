@@ -37,7 +37,15 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { PAYROLL_STATUS_LABELS, formatDayBasis, formatDayBasisLong, formatPeriod, type PayrollRunDetail } from "../lib/payrollTypes";
+import {
+    PAYROLL_STATUS_LABELS,
+    PAYROLL_VOUCHER_STATE_LABELS,
+    formatDayBasis,
+    formatDayBasisLong,
+    formatPeriod,
+    voucherIsBroken,
+    type PayrollRunDetail,
+} from "../lib/payrollTypes";
 
 export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; canRun: boolean }) {
     const router = useRouter();
@@ -162,16 +170,32 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                     )}
                     actions={data ? (
                         <div className="flex items-center gap-2">
-                            <Badge variant={data.status === "POSTED" ? "default" : data.status === "CANCELLED" ? "destructive" : "secondary"}>
-                                {PAYROLL_STATUS_LABELS[data.status]}
-                            </Badge>
-                            {data.voucherId && (
+                            {/* The run's own word is not enough: a POSTED run whose
+                                journal has been cancelled or deleted must not wear a
+                                calm badge. */}
+                            {voucherIsBroken(data.status, data.voucherState) ? (
+                                <Badge variant="destructive" className="gap-1">
+                                    <AlertTriangle size={12} /> No voucher
+                                </Badge>
+                            ) : (
+                                <Badge variant={data.status === "POSTED" ? "default" : data.status === "CANCELLED" ? "destructive" : "secondary"}>
+                                    {PAYROLL_STATUS_LABELS[data.status]}
+                                </Badge>
+                            )}
+                            {data.voucherId ? (
                                 <Button asChild size="sm" variant="outline">
                                     <Link href={`/vouchers/journal-entries/${data.voucherId}`}>
                                         <BookOpen size={14} /> {data.voucherRef}
+                                        {PAYROLL_VOUCHER_STATE_LABELS[data.voucherState] && (
+                                            <span className="text-xs text-destructive">
+                                                · {PAYROLL_VOUCHER_STATE_LABELS[data.voucherState]}
+                                            </span>
+                                        )}
                                     </Link>
                                 </Button>
-                            )}
+                            ) : data.voucherRef ? (
+                                <span className="text-sm text-muted-foreground line-through">{data.voucherRef}</span>
+                            ) : null}
                             {canRun && data.status === "POSTED" && (
                                 <Button
                                     type="button"
@@ -209,6 +233,19 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                             <Stat label="Net payable" value={formatRupeesFromPaise(data.netPaise)} strong />
                             {data.postedBy && <Stat label="Posted by" value={data.postedBy} />}
                         </div>
+
+                        {voucherIsBroken(data.status, data.voucherState) && (
+                            <p className="mb-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                                <span>
+                                    This run says posted, but its journal
+                                    {data.voucherRef ? ` (${data.voucherRef})` : ""} is
+                                    {data.voucherState === "REMOVED" ? " gone" : ` ${PAYROLL_VOUCHER_STATE_LABELS[data.voucherState]}`}.
+                                    Nothing for this period is in the books, and the dates stay blocked until the run
+                                    itself is cancelled. Use <b>Cancel run</b> above, then generate the period again.
+                                </span>
+                            </p>
+                        )}
 
                         {!!skipped.length && (
                             <p className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
