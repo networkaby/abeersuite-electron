@@ -35,7 +35,7 @@ import AppointStaffDialog from "./AppointStaffDialog";
 const TABS = ["job", "access", "personal", "pay", "money", "identity"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions }: {
+export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions, embedded = false }: {
     userId: number;
     /** hr:staff:edit — the HR record itself. */
     canEdit: boolean;
@@ -43,6 +43,10 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
     canEditUsers: boolean;
     /** positions:edit — appointing to and vacating a seat. */
     canEditPositions: boolean;
+    /** Inside StaffExplorer's right pane: the list is already on screen, so the
+     *  "back to the directory" button goes, and the pane does its own scrolling
+     *  rather than this being a second ScrollArea inside one. */
+    embedded?: boolean;
 }) {
     const url = `/api/hr/staff/${userId}`;
     const { data, loading, error, reload } = useApiResource<StaffDetail>(url);
@@ -50,12 +54,13 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
     const [tab, setTab] = useState<Tab>("job");
     const [appointing, setAppointing] = useState(false);
 
-    return (
-        <ScrollArea className="h-full" type="always">
+    const body = (
             <div className="px-6 pt-3 pb-8">
-                <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
-                    <Link href="/office/hr/staff"><ArrowLeft size={14} /> Staff Directory</Link>
-                </Button>
+                {!embedded && (
+                    <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
+                        <Link href="/office/hr/staff"><ArrowLeft size={14} /> Staff Directory</Link>
+                    </Button>
+                )}
 
                 <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
 
@@ -95,8 +100,10 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
                     </>
                 )}
             </div>
-        </ScrollArea>
     );
+
+    if (embedded) return body;
+    return <ScrollArea className="h-full" type="always">{body}</ScrollArea>;
 }
 
 function Header({ detail, canAppoint, onAppoint }: {

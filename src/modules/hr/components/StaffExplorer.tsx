@@ -1,0 +1,291 @@
+"use client";
+
+// HR & People → Staff Directory, as a master-detail explorer — the same shape
+// the Cash Book uses (see AccountLedgerExplorer): a narrow list of people on
+// the left, the chosen person's profile filling the main area on the right.
+//
+// Every User is a staff member; the HR profile rides along once HR has saved
+// something. One read, filtered and paged here (the list is the size of the
+// staff, not the customer book), and it feeds both panes — the left list and
+// the overview table are the same rows.
+//
+// The pick rides the URL as `?user=<id>` so the back button and a refresh keep
+// the same person open. /office/hr/staff/[userId] still works on its own for
+// old links and bookmarks.
+
+import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Contact, Users } from "lucide-react";
+import {
+    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+    BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { EntityListPanel } from "@/shared/components/EntityListPanel";
+import { PositionChip } from "@/shared/components/PositionChip";
+import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import UserAvatar from "@/shared/components/UserAvatar";
+import UserForm from "@/shared/components/UserForm";
+import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { cn } from "@/shared/lib/format/utils";
+import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
+import type { StaffRow } from "../lib/staffTypes";
+import StaffTable from "./StaffTable";
+import StaffProfileWorkspace from "./StaffProfileWorkspace";
+
+type Status = "active" | "left" | "all";
+
+export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions }: {
+    /** hr:staff:edit — the HR record itself, and adding a person. */
+    canEdit: boolean;
+    /** users:edit — the role, scope, manager and password on the Access tab. */
+    canEditUsers: boolean;
+    /** positions:edit — appointing to and vacating a seat. */
+    canEditPositions: boolean;
+}) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const selectedId = Number(searchParams.get("user")) || null;
+
+    // No `loading`: both panes are always mounted and say "Reading…" in their
+    // own body, so there is no first-paint spinner to gate on.
+    const { data, refreshing, error, reload } = useApiResource<StaffRow[]>("/api/hr/staff?includeLeft=1");
+    // A profile saved or a user added elsewhere announces `settings`.
+    useRealtimeTopics(["settings"], reload);
+
+    const [q, setQ] = useState("");
+    const [branchId, setBranchId] = useState<string | null>(null);
+    const [departmentId, setDepartmentId] = useState<string | null>(null);
+    const [status, setStatus] = useState<Status>("active");
+    const [showForm, setShowForm] = useState(false);
+
+    const rows = useMemo(() => data ?? [], [data]);
+
+    const select = useCallback((userId: number | null) => {
+        const next = new URLSearchParams(searchParams.toString());
+        if (userId) next.set("user", String(userId));
+        else next.delete("user");
+        const qs = next.toString();
+        router.replace(qs ? `/office/hr/staff?${qs}` : "/office/hr/staff", { scroll: false });
+    }, [router, searchParams]);
+
+    // Filter options come from the rows themselves — no second fetch for a
+    // handful of branches and departments.
+    const branchOptions = useMemo(() => {
+        const m = new Map<string, string>();
+        for (const r of rows) for (const b of r.branches) m.set(b.id, b.name);
+        return [...m].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [rows]);
+    const departmentOptions = useMemo(() => {
+        const m = new Map<string, string>();
+        for (const r of rows) for (const d of r.departments) m.set(d.id, d.name);
+        return [...m].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [rows]);
+
+    const filtered = useMemo(() => {
+        const needle = q.trim().toLowerCase();
+        return rows.filter((r) => {
+            const left = staffHasLeft(r.staffProfile);
+            if (status === "active" && left) return false;
+            if (status === "left" && !left) return false;
+            if (branchId && !r.branches.some((b) => b.id === branchId)) return false;
+            if (departmentId && !r.departments.some((d) => d.id === departmentId)) return false;
+            if (!needle) return true;
+            const hay = [r.name, r.email, r.phone ?? "", r.staffProfile?.staffCode ?? "", ...r.positions.map((p) => p.title)]
+                .join(" ").toLowerCase();
+            return hay.includes(needle);
+        });
+    }, [rows, q, status, branchId, departmentId]);
+
+    const leftCount = rows.filter((r) => staffHasLeft(r.staffProfile)).length;
+    const selected = selectedId ? rows.find((r) => r.id === selectedId) : undefined;
+
+    return (
+        <div className="flex h-full flex-col overflow-hidden bg-card">
+            <BreadcrumbBar>
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <Link href="/office/hr">HR &amp; People</Link>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            {selectedId ? (
+                                <BreadcrumbLink asChild>
+                                    <button type="button" onClick={() => select(null)} className="transition-colors hover:text-foreground">
+                                        Staff Directory
+                                    </button>
+                                </BreadcrumbLink>
+                            ) : (
+                                <BreadcrumbPage>Staff Directory</BreadcrumbPage>
+                            )}
+                        </BreadcrumbItem>
+                        {selected && (
+                            <>
+                                <BreadcrumbSeparator />
+                                <BreadcrumbItem>
+                                    <BreadcrumbPage>{selected.name}</BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </>
+                        )}
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </BreadcrumbBar>
+
+            {showForm && (
+                <UserForm
+                    onClose={() => { setShowForm(false); reload(); }}
+                    // A new person opens straight on their HR profile — the login is
+                    // made; joining date and pay are what HR fills in next.
+                    onSaved={(u) => select(u.id)}
+                />
+            )}
+
+            {/* Master-detail row */}
+            <div className="flex flex-1 overflow-hidden">
+                <EntityListPanel
+                    title="Staff"
+                    icon={<Contact size={15} className="text-primary" />}
+                    count={filtered.length}
+                    search={q}
+                    onSearchChange={setQ}
+                    searchPlaceholder="Search name, email, phone, staff ID, seat"
+                    onAdd={canEdit ? () => setShowForm(true) : undefined}
+                    addLabel="Add staff"
+                    onTitleClick={selectedId ? () => select(null) : undefined}
+                    isEmpty={filtered.length === 0}
+                    emptyMessage={rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."}
+                    toolbar={
+                        <div className="mt-2 space-y-2">
+                            {branchOptions.length > 1 && (
+                                <SearchableSelect
+                                    value={branchId}
+                                    options={branchOptions}
+                                    onChange={setBranchId}
+                                    placeholder="All branches"
+                                    ariaLabel="Filter by branch"
+                                    triggerClassName="h-8 w-full text-sm"
+                                />
+                            )}
+                            {departmentOptions.length > 1 && (
+                                <SearchableSelect
+                                    value={departmentId}
+                                    options={departmentOptions}
+                                    onChange={setDepartmentId}
+                                    placeholder="All departments"
+                                    ariaLabel="Filter by department"
+                                    triggerClassName="h-8 w-full text-sm"
+                                />
+                            )}
+                            <div role="group" aria-label="Staff status" className="flex gap-1">
+                                {(["active", "left", "all"] as const).map((s) => (
+                                    <Button
+                                        key={s}
+                                        type="button"
+                                        size="sm"
+                                        variant={status === s ? "default" : "outline"}
+                                        aria-pressed={status === s}
+                                        onClick={() => setStatus(s)}
+                                        className="h-7 flex-1 px-1 text-xs"
+                                    >
+                                        {s === "active" ? "On the staff" : s === "left" ? "Left" : "Everyone"}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+                    }
+                >
+                    {filtered.map((r) => {
+                        const left = staffHasLeft(r.staffProfile);
+                        return (
+                            <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => select(r.id)}
+                                className={cn(
+                                    "w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-muted/50",
+                                    selectedId === r.id
+                                        ? "border-l-2 border-l-primary bg-primary/10"
+                                        : "border-l-2 border-l-transparent",
+                                    left && "opacity-60",
+                                )}
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    <UserAvatar avatarUrl={r.avatarUrl} name={r.name} role={r.role} sizePx={30} className="shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="truncate text-sm font-medium">{r.name}</span>
+                                            {r.currentSalary && (
+                                                <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+                                                    {formatRupeesFromPaise(r.currentSalary.netPaise)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                                            {r.positions.length > 0 ? (
+                                                <PositionChip position={r.positions[0]} compact />
+                                            ) : (
+                                                <span className="text-[11px] text-muted-foreground">No seat</span>
+                                            )}
+                                            {r.positions.length > 1 && (
+                                                <span className="shrink-0 text-[11px] text-muted-foreground">+{r.positions.length - 1}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </EntityListPanel>
+
+                {/* ── Right section: the chosen person, or the whole directory ── */}
+                <section className="flex flex-1 flex-col overflow-y-auto bg-muted/30">
+                    {selectedId ? (
+                        <StaffProfileWorkspace
+                            key={selectedId}
+                            userId={selectedId}
+                            canEdit={canEdit}
+                            canEditUsers={canEditUsers}
+                            canEditPositions={canEditPositions}
+                            embedded
+                        />
+                    ) : (
+                        <div className="px-6 pt-4 pb-6">
+                            <div className="mb-3 flex items-center gap-2">
+                                <Users size={18} className="text-primary" />
+                                <div>
+                                    <h1 className="text-base font-semibold tracking-tight">Staff Directory</h1>
+                                    {/* Never undefined: a subtitle that arrives with the data
+                                        pushes everything below it down once the fetch lands. */}
+                                    <p className="text-xs text-muted-foreground">
+                                        {data
+                                            ? `${rows.length - leftCount} on the staff${leftCount ? `, ${leftCount} left` : ""}${refreshing ? " · refreshing…" : ""}`
+                                            : "Reading the staff…"}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Errors only. Swapping a centred spinner for the whole table is
+                                the biggest jump on the page, so the table below is always
+                                mounted and carries its own "Reading…" row instead. */}
+                            {error && <QueryStateBlock loading={false} error={error} hasData={!!data} onRetry={reload} />}
+
+                            <StaffTable
+                                rows={filtered}
+                                loaded={!!data}
+                                emptyMessage={rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."}
+                                onSelect={select}
+                            />
+                        </div>
+                    )}
+                </section>
+            </div>
+        </div>
+    );
+}
