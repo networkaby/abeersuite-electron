@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -49,6 +50,8 @@ type Transaction = {
     date: string;
     partyName: string | null;
     partyType: string | null;
+    partyKind: PartyLinkKind | null;
+    partyEntityId: number | null;
     partyId: number | null;
     quantity: number;
     rate: number;
@@ -435,13 +438,12 @@ export default function InventoryDetailsPage() {
                                                 // full-page editable form with ?voucherId=; other types fall back to
                                                 // their read-only detail. See editFormUrl in VoucherActionsMenu.
                                                 const url = editFormUrl(tx.type, tx.voucherId);
-                                                // Party link — only customer/supplier party types map to a Person
-                                                // record under /office/customers/all?personId=. Account-type and
-                                                // walk-in (null) parties render as plain text.
-                                                const partyHref = tx.partyId != null
-                                                    && (tx.partyType === "customer" || tx.partyType === "supplier")
-                                                    ? `/office/customers/all?personId=${tx.partyId}`
-                                                    : null;
+                                                // Party link — the server already decided whether this party is
+                                                // a Person or a Company (following a conversion where needed), so
+                                                // we just spell the URL. `partyType` is the ROLE on the document
+                                                // (customer / supplier / account) and cannot answer that question.
+                                                // Walk-ins and unresolvable parties render as plain text.
+                                                const partyHref = partyProfileHref(tx.partyKind, tx.partyEntityId);
                                                 const typeClass = TYPE_COLORS[tx.type] ?? "bg-muted text-muted-foreground";
                                                 const statusClass = STATUS_COLORS[tx.paymentStatus] ?? "bg-muted text-muted-foreground";
                                                 return (

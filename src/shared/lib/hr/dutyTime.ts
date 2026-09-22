@@ -207,6 +207,35 @@ export function lateMinutes(
     return late > 0 ? late : 0;
 }
 
+/**
+ * How early the day was left, in minutes — 0 when they stayed to closing or past it.
+ *
+ * The mirror of `lateMinutes`, and it exists for the same reason: a short day and
+ * an early finish are two different failings, and a card that only says "6h of 9h
+ * worked" cannot tell you which one happened. No grace: leaving early is a choice
+ * in a way that arriving late in traffic is not, and the shop can forgive it by
+ * eye. Null when there is no departure to judge — a day still running, or one
+ * nobody recorded.
+ */
+export function earlyMinutes(
+    lastOutAt: Date | string | null,
+    endHhMm: string,
+    timeZone = "Asia/Kolkata",
+): number | null {
+    if (!lastOutAt) return null;
+    const at = typeof lastOutAt === "string" ? new Date(lastOutAt) : lastOutAt;
+    if (Number.isNaN(at.getTime())) return null;
+    const end = parseHhMm(endHhMm);
+    if (end === null) return null;
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(at);
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
+    const leftAt = get("hour") * 60 + get("minute");
+    const early = end - leftAt;
+    return early > 0 ? early : 0;
+}
+
 export type DutyGrade = "PRESENT" | "HALF_DAY" | "ABSENT";
 
 /**
@@ -274,3 +303,4 @@ export function shortMinutes(workedMinutes: number, dutyMinutes: number): number
     const short = dutyMinutes - workedMinutes;
     return short > 0 ? short : 0;
 }
+

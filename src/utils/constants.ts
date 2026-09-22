@@ -643,6 +643,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "My Info", icon: UserRound, href: "/office/hr/me", sidebarKey: "me" },
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
             { label: "Attendance", icon: CalendarCheck, href: "/office/hr/attendance", sidebarKey: "attendance" },
+            // The register says what the month came to; this one says why — a
+            // person at a time, day by day, down to the stretches they were active.
+            { label: "Employee Activity", icon: Activity, href: "/office/hr/activity", sidebarKey: "activity" },
             { label: "Leave", icon: Palmtree, href: "/office/hr/leave", sidebarKey: "leave" },
             { label: "Calendar & Hours", icon: CalendarOff, href: "/office/hr/holidays", sidebarKey: "holidays" },
             { label: "Pay Rules", icon: BadgeIndianRupee, href: "/office/hr/pay-rules", sidebarKey: "payRules" },

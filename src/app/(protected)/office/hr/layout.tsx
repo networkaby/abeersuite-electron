@@ -22,7 +22,7 @@ export default async function HrModuleLayout({ children }: { children: React.Rea
                 root={{ href: "/office/hr", label: "HR & People" }}
                 basePath="/office/hr"
                 escapeBack
-                labels={{ me: "My Info", staff: "Staff Directory", payroll: "Payroll", "pay-rules": "Pay Rules" }}
+                labels={{ me: "My Info", staff: "Staff Directory", activity: "Employee Activity", payroll: "Payroll", "pay-rules": "Pay Rules" }}
             />
             <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
         </div>

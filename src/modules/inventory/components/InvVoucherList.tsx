@@ -7,6 +7,7 @@
 // the same row markup, click-to-edit Reference link, and ⋮ action menu.
 
 import { useEffect, useMemo, useState } from "react";
+import type { PartyLinkKind } from "@/shared/lib/parties";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -46,8 +47,8 @@ type ListRow = {
     description:     string;
     partyName:       string | null;
     partyAccountId?: number | null;
-    partyPersonId?:  number | null;
-    partyCompanyId?: number | null;
+    partyKind?:      PartyLinkKind | null;
+    partyEntityId?:  number | null;
     paymentMode?:    string | null;
     totalAmount:     number | string;
     amountReceived?: number | string;
@@ -130,8 +131,8 @@ export function InvVoucherList({
                     date:           v.date,
                     party:          v.partyName,
                     partyAccountId: v.partyAccountId ?? null,
-                    partyKind:      v.partyPersonId != null ? "person" : v.partyCompanyId != null ? "company" : null,
-                    partyEntityId:  v.partyPersonId ?? v.partyCompanyId ?? null,
+                    partyKind:      v.partyKind ?? null,
+                    partyEntityId:  v.partyEntityId ?? null,
                     narration:      v.description,
                     totalAmount:    Number(v.totalAmount),
                     amountReceived: v.amountReceived != null ? Number(v.amountReceived) : 0,

@@ -10,6 +10,8 @@
 // CREDIT_NOTE / DEBIT_NOTE (GL-only) do NOT count as settlement here.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { partyLinkFields } from "@/shared/lib/parties/partyLink";
+import { resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
@@ -113,6 +115,10 @@ export async function GET(req: NextRequest) {
         lines: v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [],
     }));
 
+    // One bounded pass resolves every party id to its live Person/Company —
+    // following the conversion tombstone — so the Party cell never goes dead.
+    const partyLinks = await resolvePartyLinks(prisma, rows.map((v) => v.partyId));
+
     const today = businessToday();
     const shaped = rows.map((v) => {
         const d = new Date(v.universalVoucher!.date); d.setHours(0, 0, 0, 0);   // 5D-10: date on spine
@@ -125,6 +131,7 @@ export async function GET(req: NextRequest) {
             partyId:     v.partyId,
             partyType:   v.partyType,
             partyName:   readPartyName(v.partyJson),
+            ...partyLinkFields(v.partyId != null ? partyLinks.get(v.partyId) : null),
             description: v.universalVoucher?.description ?? "",
             totalAmount: Number(v.totalAmount),
             lineCount:   v.lines.length,

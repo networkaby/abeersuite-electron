@@ -19,6 +19,7 @@
 // this table, done.  Behaviour stays uniform — fix once, fixed everywhere.
 
 import React, { useState } from "react";
+import { partyProfileHref } from "@/shared/lib/parties";
 import axios from "axios";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
@@ -231,6 +232,8 @@ export function VoucherRegisterTable({
                     {rows.map((r) => {
                         const href        = referenceHref(r.source, r.rawId, r.kind);
                         const isOpt       = optionalKinds?.has(r.kind) ?? false;
+                        // null for a walk-in, or a party whose record no longer resolves.
+                        const partyHref   = partyProfileHref(r.partyKind, r.partyEntityId);
                         const isDraft     = r.status === "DRAFT";
                         const isCancelled = r.status === "CANCELLED";
                         const isPosted    = r.status === "POSTED";
@@ -326,9 +329,9 @@ export function VoucherRegisterTable({
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         {r.party
-                                            ? (r.partyKind && r.partyEntityId
+                                            ? (partyHref
                                                 ? <Link
-                                                      href={`/office/customers/all?${r.partyKind}Id=${r.partyEntityId}`}
+                                                      href={partyHref}
                                                       className="text-primary hover:underline underline-offset-2"
                                                   >
                                                       {r.party}

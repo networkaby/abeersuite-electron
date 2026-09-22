@@ -6,6 +6,7 @@
 // See plan: voucher taxonomy + per-type settlement rules.
 
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
+import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -120,6 +121,8 @@ type Row = {
     date: string;
     partyId: number | null;
     partyType: string | null;
+    partyKind: PartyLinkKind | null;
+    partyEntityId: number | null;
     partyName: string | null;
     description: string;
     totalAmount: number;
@@ -609,10 +612,9 @@ export default function PendingVouchersPage() {
                                                 // The local TYPE_ROUTE map is kept (and used for the StockRow tab below
                                                 // + for SETTLE_NEW_ROUTE) to avoid touching unrelated code paths.
                                                 const drillUrl = editFormUrl(r.type, r.id) ?? `${TYPE_ROUTE[r.type]}/new?voucherId=${r.id}`;
-                                                const partyHref = r.partyId != null
-                                                    && (r.partyType === "customer" || r.partyType === "supplier")
-                                                    ? `/office/customers/all?personId=${r.partyId}`
-                                                    : null;
+                                                // The server decided Person vs Company (following a conversion
+                                                // where needed); `partyType` is only the role on the document.
+                                                const partyHref = partyProfileHref(r.partyKind, r.partyEntityId);
                                                 return (
                                                     <Fragment key={r.id}>
                                                         <tr

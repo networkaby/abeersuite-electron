@@ -6,6 +6,7 @@
 // (weekly off, holiday, approved leave, or unmarked).
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
@@ -21,7 +22,6 @@ import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/sche
 import { isoDaysBetween, monthBounds, readDay, summarise, weekdayOf, holidayDatesFor } from "../lib/attendanceCalendar";
 import { CELL, DOW } from "../lib/attendanceStyles";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
-import HoursBreakupDialog from "./HoursBreakupDialog";
 import type { AttendanceMark, RegisterPayload } from "../lib/attendanceTypes";
 
 const CYCLE: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
@@ -38,9 +38,6 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
 
     // Optimistic marks laid over the payload, so a click paints at once (AGENTS §7).
     const [overrides, setOverrides] = useState<Record<string, AttendanceMark | null>>({});
-    // Whose hours are open. The register answers "what did the month look like";
-    // this answers "and why" — see HoursBreakupDialog.
-    const [hoursFor, setHoursFor] = useState<{ id: number; name: string } | null>(null);
     const days = useMemo(() => isoDaysBetween(from, to), [from, to]);
     // Every listed holiday, for the column tooltip; each person's own set is
     // narrowed by branch when a row is read.
@@ -136,15 +133,17 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                     return (
                                         <tr key={p.id} className="border-t border-border">
                                             <td className="sticky left-0 z-10 bg-card px-3 py-1">
-                                                <button
-                                                    type="button"
+                                                {/* The register answers "what did the month look like".
+                                                    The name answers "and why": Employee Activity opens
+                                                    on this person, day by day, stretch by stretch. */}
+                                                <Link
+                                                    href={`/office/hr/activity?user=${p.id}`}
                                                     className="flex items-center gap-2 text-left hover:underline"
-                                                    onClick={() => setHoursFor({ id: p.id, name: p.name })}
                                                     title={`${p.name} — hours, day by day`}
                                                 >
                                                     <UserAvatar avatarUrl={p.avatarUrl} name={p.name} role={p.role} sizePx={22} />
                                                     <span className="whitespace-nowrap font-medium">{p.name}</span>
-                                                </button>
+                                                </Link>
                                             </td>
                                             {days.map((iso) => {
                                                 const r = readDay(p, iso, mine);
@@ -200,15 +199,6 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                     </div>
                 )}
 
-                {hoursFor && (
-                    <HoursBreakupDialog
-                        userId={hoursFor.id}
-                        userName={hoursFor.name}
-                        year={year}
-                        month={month}
-                        onClose={() => setHoursFor(null)}
-                    />
-                )}
             </div>
         </ScrollArea>
     );

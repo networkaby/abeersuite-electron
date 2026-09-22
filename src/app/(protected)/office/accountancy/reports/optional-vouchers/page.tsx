@@ -7,6 +7,7 @@
 // post to the general ledger. Modelled on Day Book.
 
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
+import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -73,6 +74,8 @@ type Row = {
     description: string;
     partyName:   string | null;
     partyType:   string | null;
+    partyKind: PartyLinkKind | null;
+    partyEntityId: number | null;
     partyId:     number | null;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
     deletedAt:   string | null;
@@ -226,11 +229,9 @@ export default function OptionalVouchersPage() {
                                     // Edit form — uses editFormUrl so the drill opens the editable
                                     // page (?voucherId=…) instead of read-only detail.
                                     const drillUrl = editFormUrl(r.type, r.id) ?? "";
-                                    // Party link — customer/supplier → /office/customers/all?personId=N
-                                    const partyHref = r.partyId != null
-                                        && (r.partyType === "customer" || r.partyType === "supplier")
-                                        ? `/office/customers/all?personId=${r.partyId}`
-                                        : null;
+                                    // Party link — the server decided Person vs Company (following a
+                                    // conversion where needed); `partyType` is only the role on the document.
+                                    const partyHref = partyProfileHref(r.partyKind, r.partyEntityId);
                                     return (
                                         <Fragment key={r.id}>
                                             <tr

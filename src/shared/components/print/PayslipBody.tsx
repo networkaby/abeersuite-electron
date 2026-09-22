@@ -134,6 +134,38 @@ interface SummaryLine {
 
 const dayCount = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
 
+/**
+ * The length of one duty day that month — the most common `duty` among the
+ * working days, so a stray shortened day does not skew it. 0 when nothing
+ * was owed (a month of shut days only).
+ */
+function dutyDayMinutes(att: PayslipAttendanceData): number {
+    const tally = new Map<number, number>();
+    for (const d of att.days) {
+        if (d.shut || d.duty <= 0) continue;
+        tally.set(d.duty, (tally.get(d.duty) ?? 0) + 1);
+    }
+    let best = 0, bestN = 0;
+    for (const [duty, n] of tally) if (n > bestN) { best = duty; bestN = n; }
+    return best;
+}
+
+/**
+ * Signed minutes spelled out as days, hours and minutes at that month's duty
+ * day — "31 days 1h 30m at 8h a day" — so 249h 30m means something on the
+ * shop floor. null when there is no duty day to divide by.
+ */
+function asDutyDays(minutes: number, dutyDay: number): string | null {
+    if (dutyDay <= 0 || minutes === 0) return null;
+    const abs = Math.abs(minutes);
+    const days = Math.floor(abs / dutyDay);
+    const rest = abs % dutyDay;
+    const parts: string[] = [];
+    if (days > 0) parts.push(dayCount(days));
+    if (rest > 0) parts.push(formatWorked(rest));
+    return `${minutes < 0 ? "−" : ""}${parts.join(" ")} at ${formatWorked(dutyDay)} a day`;
+}
+
 function summariseDays(att: PayslipAttendanceData): SummaryLine[] {
     // Every day's minutes inside the duty, at ×1 — the base the other lines
     // adjust. It has to cover the exception days too, or the column would not
@@ -195,6 +227,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
 }) {
     const att = data.attendance ?? null;
     const summary = att ? summariseDays(att) : [];
+    const inDays = att ? asDutyDays(att.accountedMinutes, dutyDayMinutes(att)) : null;
     const earnings = data.lines.filter((l) => l.kind === "EARNING");
     const deductions = data.lines.filter((l) => l.kind === "DEDUCTION");
     const period = `${formatDate(data.periodFrom)} – ${formatDate(data.periodTo)}`;
@@ -243,6 +276,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                             </div>
                         ))}
                         <Row label={`Month · ${formatWorked(att.workedMinutes)} of ${formatWorked(att.dutyMinutes)}`} value={signed(att.accountedMinutes)} strong />
+                        {inDays && <Row label="  = in days" value={inDays} />}
                         <Row label="Overtime payable" value={orDash(att.payableMinutes)} />
                         <Row label="Hours owed" value={orDash(att.owedMinutes)} />
                     </>
@@ -345,6 +379,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                         </tbody>
                     </table>
                     <div style={{ marginTop: 4, color: "#444", fontSize: 10 }}>
+                        {inDays && <>Accounted <b>{signed(att.accountedMinutes)}</b> = <b>{inDays}</b>.{" "}</>}
                         Accounted is each day on its own. The month is then netted — overtime pays back the hours
                         fallen short first — and only what survives reaches the pay heads:{" "}
                         <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>hours owed {orDash(att.owedMinutes)}</b>.

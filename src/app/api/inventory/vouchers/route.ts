@@ -1,5 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
+import { NO_PARTY_LINK, partyLinkFields } from "@/shared/lib/parties/partyLink";
+import { resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
@@ -131,86 +133,12 @@ export async function GET(req: NextRequest) {
         },
     });
 
-    // Resolve partyAccountId per row so the Day Book / register tables can
-    // link the Party cell to /office/customers/<accountId>. InvVoucher only
-    // stores `partyId` (a Person id), so we bulk-fetch the matching Accounts
-    // in one query and attach the id back.
-    const partyIds = [...new Set(
-        vouchers.map((v) => v.partyId).filter((id): id is number => id != null),
-    )];
-    const partyAccounts = partyIds.length > 0
-        ? await prisma.account.findMany({
-            where: {
-                OR: [
-                    { personId:  { in: partyIds } },
-                    { companyId: { in: partyIds } },
-                ],
-            },
-            select: { id: true, personId: true, companyId: true },
-        })
-        : [];
-    const personToAccount  = new Map<number, number>();
-    const companyToAccount = new Map<number, number>();
-    for (const a of partyAccounts) {
-        if (a.personId  != null) personToAccount.set(a.personId,  a.id);
-        if (a.companyId != null) companyToAccount.set(a.companyId, a.id);
-    }
-    // A stored partyId may since have been converted (Person→Company or
-    // Company→Person) — the Account moved to the new row and the old id no
-    // longer resolves directly. Follow the conversion tombstone
-    // (convertedToCompanyId / convertedToPersonId) so the Day Book / register
-    // link still lands on the party's live profile instead of going dead.
-    const unresolvedPartyIds = partyIds.filter(
-        (id) => !personToAccount.has(id) && !companyToAccount.has(id),
-    );
-    const convertedKind     = new Map<number, "person" | "company">();
-    const convertedEntityId = new Map<number, number>();
-    const convertedAccountId = new Map<number, number>();
-    if (unresolvedPartyIds.length > 0) {
-        const [convertedPersons, convertedCompanies] = await Promise.all([
-            prisma.person.findMany({
-                where: { id: { in: unresolvedPartyIds }, convertedToCompanyId: { not: null } },
-                select: { id: true, convertedToCompanyId: true },
-            }),
-            prisma.company.findMany({
-                where: { id: { in: unresolvedPartyIds }, convertedToPersonId: { not: null } },
-                select: { id: true, convertedToPersonId: true },
-            }),
-        ]);
-        const targetCompanyIds = convertedPersons.map((p) => p.convertedToCompanyId!);
-        const targetPersonIds  = convertedCompanies.map((c) => c.convertedToPersonId!);
-        if (targetCompanyIds.length > 0 || targetPersonIds.length > 0) {
-            const targetAccounts = await prisma.account.findMany({
-                where: {
-                    OR: [
-                        { companyId: { in: targetCompanyIds } },
-                        { personId:  { in: targetPersonIds } },
-                    ],
-                },
-                select: { id: true, personId: true, companyId: true },
-            });
-            const accountByCompanyId = new Map(
-                targetAccounts.filter((a) => a.companyId != null).map((a) => [a.companyId as number, a.id]),
-            );
-            const accountByPersonId = new Map(
-                targetAccounts.filter((a) => a.personId != null).map((a) => [a.personId as number, a.id]),
-            );
-            for (const p of convertedPersons) {
-                const accId = accountByCompanyId.get(p.convertedToCompanyId!);
-                if (accId == null) continue;
-                convertedKind.set(p.id, "company");
-                convertedEntityId.set(p.id, p.convertedToCompanyId!);
-                convertedAccountId.set(p.id, accId);
-            }
-            for (const c of convertedCompanies) {
-                const accId = accountByPersonId.get(c.convertedToPersonId!);
-                if (accId == null) continue;
-                convertedKind.set(c.id, "person");
-                convertedEntityId.set(c.id, c.convertedToPersonId!);
-                convertedAccountId.set(c.id, accId);
-            }
-        }
-    }
+    // Resolve each row's party to a live record so the Day Book / register can
+    // link the Party cell. The voucher only stores a bare `partyId`, and after a
+    // Person<->Company conversion that id no longer resolves on its own — the
+    // shared resolver follows the conversion tombstone so the link still lands
+    // on the party's live profile instead of going dead.
+    const partyLinks = await resolvePartyLinks(prisma, vouchers.map((v) => v.partyId));
     // 5D-2: resolve creator names from each row's spine (createdById on the spine).
     const creatorIds = [...new Set(vouchers.map((v) => v.universalVoucher?.createdById).filter((x): x is number => x != null))];
     const creatorById = new Map(
@@ -246,24 +174,9 @@ export async function GET(req: NextRequest) {
             sourceCounterId: v.universalVoucher?.sourceCounterId ?? null,
         };
         if (v.partyId == null) {
-            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId), description: v.universalVoucher?.description ?? null, lineCount: v.universalVoucher?._count?.inventoryLines ?? 0, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+            return { ...v, type: v.universalVoucher?.type, branch: v.universalVoucher?.branch ?? null, date: v.universalVoucher?.date, reference: voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId), description: v.universalVoucher?.description ?? null, lineCount: v.universalVoucher?._count?.inventoryLines ?? 0, ...spineLifecycle, ...partyDisplay, createdBy: creatorName(v), converted: convertedIds.has(v.id), partyAccountId: null, ...NO_PARTY_LINK };
         }
-        // Same partyId may resolve as either a Person or a Company id depending
-        // on which lookup matches. Person wins when both are set (shouldn't
-        // happen in practice — Person.id and Company.id are independent
-        // sequences, so a collision is possible but the row's partyType
-        // disambiguates at write time).
-        const accFromPerson  = personToAccount.get(v.partyId);
-        const accFromCompany = companyToAccount.get(v.partyId);
-        // Fall back to the conversion tombstone when neither side resolved —
-        // the party living at v.partyId today may be a different kind/id.
-        const kind = accFromPerson != null ? "person" as const
-            : accFromCompany != null ? "company" as const
-            : convertedKind.get(v.partyId);
-        const entityId = accFromPerson != null || accFromCompany != null
-            ? v.partyId
-            : convertedEntityId.get(v.partyId) ?? null;
-        const resolvedAccountId = accFromPerson ?? accFromCompany ?? convertedAccountId.get(v.partyId) ?? null;
+        const link = partyLinks.get(v.partyId);
         return {
             ...v,
             type:            v.universalVoucher?.type,   // 5D-11: type on spine
@@ -276,9 +189,8 @@ export async function GET(req: NextRequest) {
             ...partyDisplay,
             createdBy:       creatorName(v),
             converted:       convertedIds.has(v.id),
-            partyAccountId:  resolvedAccountId,
-            partyPersonId:   kind === "person" ? entityId : null,
-            partyCompanyId:  kind === "company" ? entityId : null,
+            partyAccountId:  link?.accountId ?? null,
+            ...partyLinkFields(link),
         };
     });
 

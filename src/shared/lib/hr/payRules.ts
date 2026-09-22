@@ -173,6 +173,35 @@ export function lateDutyCutMinutes(rules: PayRules, lateMinutes: number, dutyMin
     }
 }
 
+/**
+ * What one person's clock did to their pay over a period, before it is turned
+ * into money.
+ *
+ * It lives here, beside the rules that produce it, rather than in the server
+ * module that counts it — a screen showing the figures must be able to name
+ * their shape without dragging Prisma into the browser bundle.
+ */
+export interface AttendanceEffect {
+    /** Extra minutes that survived the netting — paid at `overtimeRate`. */
+    payableMinutes: number;
+    /** Minutes still owed after the netting — cut at `shortHoursRate`. */
+    owedMinutes: number;
+    /** Minutes worked on their own weekly off, and on a listed shop holiday. */
+    weeklyOffMinutes: number;
+    holidayMinutes: number;
+    /** Late days that survived the grace, and those charged after the free ones. */
+    lateDays: number;
+    chargedLateDays: number;
+    /** Days absent with no leave granted for them. */
+    unaskedAbsentDays: number;
+}
+
+/** A period in which the clock did nothing at all. */
+export const EMPTY_ATTENDANCE_EFFECT: AttendanceEffect = {
+    payableMinutes: 0, owedMinutes: 0, weeklyOffMinutes: 0, holidayMinutes: 0,
+    lateDays: 0, chargedLateDays: 0, unaskedAbsentDays: 0,
+};
+
 /** Days of basic a single charged late day costs. Only the "pay" style charges. */
 export function latePayCutDays(rules: PayRules): number {
     return rules.latePenaltyStyle === "pay" ? rules.latePenaltyDays : 0;

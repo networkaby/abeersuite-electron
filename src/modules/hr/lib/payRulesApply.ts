@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
-import { lateDutyCutMinutes, type PayRules } from "@/shared/lib/hr/payRules";
+import { EMPTY_ATTENDANCE_EFFECT, lateDutyCutMinutes, type AttendanceEffect, type PayRules } from "@/shared/lib/hr/payRules";
 import { perDayPaise, perHourPaise, weekdayOf } from "./payrollProrate";
 import type { SalaryLine } from "./salaryLines";
 import { holidayDatesFor } from "./attendanceCalendar";
@@ -36,26 +36,9 @@ import { userBranchIds } from "./staffBranchesServer";
  * payroll has already withheld is excluded.
  */
 
-/** What the clock did to one person's pay, before it is turned into money. */
-export interface AttendanceEffect {
-    /** Extra minutes that survived the netting — paid at `overtimeRate`. */
-    payableMinutes: number;
-    /** Minutes still owed after the netting — cut at `shortHoursRate`. */
-    owedMinutes: number;
-    /** Minutes worked on his own weekly off, and on a listed shop holiday. */
-    weeklyOffMinutes: number;
-    holidayMinutes: number;
-    /** Late days that survived the grace, and those charged after the free ones. */
-    lateDays: number;
-    chargedLateDays: number;
-    /** Days absent with no leave granted for them. */
-    unaskedAbsentDays: number;
-}
-
-const EMPTY_EFFECT: AttendanceEffect = {
-    payableMinutes: 0, owedMinutes: 0, weeklyOffMinutes: 0, holidayMinutes: 0,
-    lateDays: 0, chargedLateDays: 0, unaskedAbsentDays: 0,
-};
+// `AttendanceEffect` itself lives in `shared/lib/hr/payRules.ts`, beside the
+// rules that produce it, so a screen can show these figures without importing a
+// server-only module.
 
 /** The shop-wide reads a whole payroll run shares — fetched once, not per person. */
 export interface PayRulesContext {
@@ -119,7 +102,7 @@ export async function attendanceEffectFor(
         }),
         userBranchIds(userId),
     ]);
-    if (!rows.length) return { ...EMPTY_EFFECT };
+    if (!rows.length) return { ...EMPTY_ATTENDANCE_EFFECT };
     const holidays = holidayDatesFor(ctx.holidays, branchIds);
 
     const offDays = new Set(profile?.weeklyOff ?? []);
@@ -137,7 +120,7 @@ export async function attendanceEffectFor(
 
     let surplus = 0;
     let shortfall = 0;
-    const out: AttendanceEffect = { ...EMPTY_EFFECT };
+    const out: AttendanceEffect = { ...EMPTY_ATTENDANCE_EFFECT };
 
     /* Late days are charged oldest first, so the free ones are the first of the
        period and not whichever the query happened to return first. */

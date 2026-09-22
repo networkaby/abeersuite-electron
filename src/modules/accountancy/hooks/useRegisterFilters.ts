@@ -3,20 +3,18 @@
 import { useEffect, useState } from "react";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { presetRangeOf } from "@/shared/lib/format/datePresets";
 
 export type DatePreset = "today" | "yesterday" | "last7" | "thisMonth" | "thisFY" | "custom";
 
+/**
+ * A financial year is this module's own idea, so it stays here; every other
+ * preset is the shop-wide arithmetic in `shared/lib/format/datePresets.ts` and
+ * is not written twice.
+ */
 export function presetRange(p: DatePreset): { from: string; to: string } {
-    const t = new Date();
-    const f = (d: Date) => toIsoDate(d);
-    switch (p) {
-        case "today":     return { from: f(t), to: f(t) };
-        case "yesterday": { const d = new Date(t); d.setDate(d.getDate() - 1); return { from: f(d), to: f(d) }; }
-        case "last7":     { const d = new Date(t); d.setDate(d.getDate() - 6); return { from: f(d), to: f(t) }; }
-        case "thisMonth": return { from: f(new Date(t.getFullYear(), t.getMonth(), 1)), to: f(t) };
-        case "thisFY":    return { from: toIsoDate(indianFiscalYearStart()), to: f(t) };
-        default:          return { from: "", to: "" };
-    }
+    if (p === "thisFY") return { from: toIsoDate(indianFiscalYearStart()), to: toIsoDate(new Date()) };
+    return presetRangeOf(p);
 }
 
 /** Client-side row filter. Generic so it works with extended row shapes (SalesRegister, etc.) */

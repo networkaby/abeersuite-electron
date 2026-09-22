@@ -5,6 +5,8 @@
 // date-range, paginated, optional kind + search filters.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { partyLinkFields } from "@/shared/lib/parties/partyLink";
+import { resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
@@ -99,6 +101,10 @@ export async function GET(req: Request) {
     const linesFor = (v: { universalVoucherId: number | null }) =>
         v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [];
 
+    // One bounded pass resolves every party id to its live Person/Company —
+    // following the conversion tombstone — so the Party cell never goes dead.
+    const partyLinks = await resolvePartyLinks(prisma, rows.map((v) => v.partyId));
+
     const shaped = rows.map((v) => {
       const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11: type on spine
       return {
@@ -110,6 +116,7 @@ export async function GET(req: Request) {
         partyName:   readPartyName(v.partyJson),
         partyType:   v.partyType,
         partyId:     v.partyId,
+        ...partyLinkFields(v.partyId != null ? partyLinks.get(v.partyId) : null),
         status:      v.universalVoucher?.status ?? "DRAFT",
         deletedAt:   v.universalVoucher?.deletedAt ?? null,
         totalAmount: Number(v.totalAmount),

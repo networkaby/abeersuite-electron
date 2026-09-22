@@ -6,6 +6,8 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { loadLiveStockByBranch } from "@/modules/inventory/lib/liveStock";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { NO_PARTY_LINK, partyLinkFields, type PartyLinkFields } from "@/shared/lib/parties/partyLink";
+import { resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 
 
 // GET /api/inventory/products/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -120,6 +122,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             reference: string;
             date:      Date;
             partyName: string | null;
+            /** The ROLE the party played on the document — never a record kind. */
             partyType: string | null;
             partyId:   number | null;
             quantity:  number;
@@ -129,7 +132,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             /** "N/A" for synthetic rows (opening); real rows leave it undefined
              *  so the existing receivables/payables resolver can fill it in. */
             paymentStatus?: "PAID" | "PARTIAL" | "UNPAID" | "N/A";
-        };
+        } & PartyLinkFields;
+        // Resolve every party id to a live record in one bounded pass, so the
+        // Party cell links correctly whether the party is a Person or a Company
+        // — and keeps linking after a Person<->Company conversion, which leaves
+        // the voucher's stored partyId pointing at the converted-away record.
+        const partyLinks = await resolvePartyLinks(prisma, lines.map((l) => l.voucher.partyId));
         const transactions: TxRow[] = lines.map((line) => ({
             lineId: line.id,
             voucherId: line.voucher.id,
@@ -143,6 +151,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             rate: toNumber(line.rate),
             amount: toNumber(line.amount),
             unitCode: product.unit.code,
+            ...partyLinkFields(line.voucher.partyId != null ? partyLinks.get(line.voucher.partyId) : null),
         }));
 
         // Synthetic opening-balance row — always prepended when openingStock > 0
@@ -171,6 +180,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                     rate:      product.openingRate != null ? toNumber(product.openingRate) : 0,
                     amount:    product.openingValue != null ? toNumber(product.openingValue) : 0,
                     unitCode:  product.unit.code,
+                    ...NO_PARTY_LINK,       // opening has no party to open
                     paymentStatus: "N/A",   // suppress the receivables/payables badge
                 });
                 // Keep newest-first ordering; opening usually slides to the bottom.

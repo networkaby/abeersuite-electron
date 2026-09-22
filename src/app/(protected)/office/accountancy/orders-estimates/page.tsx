@@ -7,6 +7,7 @@
 // — accountancy only, no pipeline. Modelled on <InvVoucherList>, but multi-type.
 
 import { useEffect, useMemo, useState } from "react";
+import type { PartyLinkKind } from "@/shared/lib/parties";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -36,8 +37,8 @@ type ListRow = {
     description:     string;
     partyName:       string | null;
     partyAccountId?: number | null;
-    partyPersonId?:  number | null;
-    partyCompanyId?: number | null;
+    partyKind?:      PartyLinkKind | null;
+    partyEntityId?:  number | null;
     totalAmount:     number | string;
     status:          "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt?:    string | null;
@@ -76,8 +77,8 @@ export default function OrdersEstimatesPage() {
                     date:           v.date,
                     party:          v.partyName,
                     partyAccountId: v.partyAccountId ?? null,
-                    partyKind:      v.partyPersonId != null ? "person" : v.partyCompanyId != null ? "company" : null,
-                    partyEntityId:  v.partyPersonId ?? v.partyCompanyId ?? null,
+                    partyKind:      v.partyKind ?? null,
+                    partyEntityId:  v.partyEntityId ?? null,
                     narration:      v.description,
                     totalAmount:    Number(v.totalAmount),
                     status:         v.status,

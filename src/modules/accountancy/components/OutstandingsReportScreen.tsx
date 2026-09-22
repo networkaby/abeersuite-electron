@@ -6,6 +6,7 @@
 // side it is. Anything added below shows up on both, which is the point.
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { partyProfileHref } from "@/shared/lib/parties";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -125,11 +126,9 @@ export function OutstandingsReportScreen({
         () => new Map(
             (data?.parties ?? []).map((p) => [
                 p.accountId,
-                p.personId != null
-                    ? `/office/customers/all?personId=${p.personId}`
-                    : p.companyId != null
-                        ? `/office/customers/all?companyId=${p.companyId}`
-                        : null,
+                p.personId  != null ? partyProfileHref("person",  p.personId)
+                    : p.companyId != null ? partyProfileHref("company", p.companyId)
+                    : null,
             ] as const),
         ),
         [data],
