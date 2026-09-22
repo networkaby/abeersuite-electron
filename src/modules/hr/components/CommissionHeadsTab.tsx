@@ -93,7 +93,6 @@ export default function CommissionHeadsTab({ canEdit }: { canEdit: boolean }) {
                                 {COMMISSION_KINDS.map((k) => <SelectItem key={k} value={k}>{KIND_SHORT[k]}</SelectItem>)}
                             </SelectContent>
                         </Select>
-                        {canEdit && <Button type="button" size="sm" onClick={openCreate}><Plus size={14} /> Add head</Button>}
                     </div>
                 )}
             </div>
