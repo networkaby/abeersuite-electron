@@ -353,3 +353,65 @@
 .key:hover { background: rgba(255, 255, 255, .13) }
 .key:active { transform: scale(.96) }
 .key.soft { background: none; border-color: transparent; color: var(--ink-dim); font-size: 13px }
+
+/* ── Your duty today ──────────────────────────────────────────────────────────
+   Shown on the login screen after a counter sign-out — see DutyCard.tsx for why
+   it lives here and not in a dialog. Sits between the showcase and the sign-in
+   card on a wide till; on a narrow one the showcase is gone and this wraps above
+   the sign-in card rather than disappearing with it. */
+.duty {
+    position: relative;
+    z-index: 3;
+    flex: 0 0 300px;
+    max-width: 100%;
+    padding: 22px;
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    box-shadow: 0 24px 60px rgba(2, 6, 23, .5);
+}
+@media (max-width: 1080px) { .stage { flex-wrap: wrap } .duty { flex-basis: 372px } }
+
+.dutyhead {
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+}
+.dutybig { font-size: 34px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums }
+.dutysub { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 16px }
+
+.dutyrows { margin: 0 0 14px; display: grid; gap: 7px }
+.dutyrows div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px }
+.dutyrows dt { color: var(--ink-dim); margin: 0 }
+.dutyrows dd { color: var(--ink); margin: 0; font-variant-numeric: tabular-nums }
+
+.dutygood, .dutywarn { font-size: 13px; font-weight: 500; margin: 0 0 12px }
+.dutygood { color: #4ade80 }
+.dutywarn { color: #fbbf24 }
+
+.dutymonth { font-size: 12px; line-height: 1.55; color: rgba(226, 232, 240, .72); margin: 0 }
+
+/* "Back on duty tomorrow, 10:54 AM" — closes the duty card by answering the one
+   question left after the figures: when do I come back? Separated by a rule
+   because it is advice about the future, not another number about today. */
+.dutynext {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: rgba(226, 232, 240, .92);
+    margin: 12px 0 0;
+    padding: 10px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, .10);
+}
+
+/* The same answer, shop-wide, under the clock — for everyone who did NOT just
+   sign out of a counter and so has no duty card to read it from. */
+.nextopen {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    margin: -14px 0 20px;
+}

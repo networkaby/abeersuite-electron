@@ -6,6 +6,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
+import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { IDLE_WARNING_MS, idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 
 /**
@@ -70,7 +71,14 @@ export default function ActivityPulse() {
             if (idleFor >= idleLimitMs) {
                 markDeliberateSignOut();   // not a dead session — this one is explained here
                 toast.error("Signed out — the counter was left idle. Sign in again to carry on.");
-                void signOut({ redirect: false }).finally(() => window.location.assign("/staff/login"));
+                // The day's figures, read while the session is still good, so the
+                // login screen can show him what the day came to when he returns.
+                // `creditTail: false` — the gap that fired this logout is longer than
+                // his idle limit, so asking the server to credit it would add nothing
+                // and only delay the sign-out by a request.
+                void captureMyDay({ creditTail: false })
+                    .then(() => signOut({ redirect: false }))
+                    .finally(() => window.location.assign("/staff/login"));
                 return;
             }
             if (!warned.current && idleFor >= idleLimitMs - IDLE_WARNING_MS) {

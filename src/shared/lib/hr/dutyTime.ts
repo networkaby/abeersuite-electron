@@ -19,6 +19,9 @@
  * only ever answers for a day the till wrote and nobody has overruled.
  */
 
+import { parseHhMm } from "./hhmm";
+import { DEFAULT_DUTY_END, DEFAULT_DUTY_START, seasonalStartFor, type SeasonalHours, type ShopDate } from "./seasonalHours";
+
 /**
  * No click, no keypress, no touch for this long → signed out, and the stretch is
  * not counted.
@@ -95,14 +98,14 @@ export const IDLE_WARNING_MS = 2 * 60 * 1000;
 export const DEFAULT_DUTY_MINUTES = 9 * 60;
 
 /**
- * The shop's own hours, as "HH:MM" in shop time — when duty starts and ends.
+ * The shop's own hours — defined in `seasonalHours.ts` and re-exported here.
  *
- * Two jobs: they say who is LATE, and they give the length of a full day when
- * nobody has typed one. Defaults read off the real shifts on live, which open
- * 10:30–12:20 and close 20:30–22:18. Per person on StaffProfile.
+ * They moved there when the opening time became seasonal: the fallback curve has
+ * to be built from them at load time, and this module imports that one, so a
+ * definition here would close a cycle. Re-exported so every caller still reads
+ * them off dutyTime, which is where the owner's numbers have always lived.
  */
-export const DEFAULT_DUTY_START = "10:30";
-export const DEFAULT_DUTY_END = "20:30";
+export { DEFAULT_DUTY_START, DEFAULT_DUTY_END } from "./seasonalHours";
 
 /**
  * Arriving within this of the start is not late.
@@ -113,27 +116,37 @@ export const DEFAULT_DUTY_END = "20:30";
  */
 export const LATE_GRACE_MINUTES = 15;
 
-/** "HH:MM" → minutes past midnight, or null if it is not a time. */
-export function parseHhMm(hhmm: string | null | undefined): number | null {
-    if (!hhmm) return null;
-    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
-    if (!m) return null;
-    const h = Number(m[1]), min = Number(m[2]);
-    if (h > 23 || min > 59) return null;
-    return h * 60 + min;
-}
+/** Clock-time parsing lives in `hhmm.ts`; re-exported so callers find it here. */
+export { parseHhMm, formatHhMm } from "./hhmm";
 
-/** Minutes past midnight → "HH:MM". */
-export function formatHhMm(minutes: number): string {
-    const h = Math.floor(minutes / 60) % 24;
-    return `${String(h).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-}
-
-/** The person's office hours, falling back to the shop's. */
-export function dutyHoursFor(start: string | null | undefined, end: string | null | undefined): { start: string; end: string } {
+/**
+ * The person's office hours, falling back to the shop's.
+ *
+ * This is the one place office hours are resolved — the attendance API, the
+ * register, payroll, `dutyMinutesFor` and the staff editor all arrive here — which
+ * is why the season enters the system through this function and nowhere else.
+ * Widening it was the whole of making the shop's hours seasonal: every caller got
+ * it for free, and `dutyMinutesFor` reading the SPAN means a shorter winter day
+ * shrinks duty on its own, with no second number to keep in step.
+ *
+ * `opts.on` is the day being asked about and `opts.seasonal` the shop's configured
+ * anchors; with neither, the shop's flat defaults answer exactly as before. A
+ * person's own typed hours still win outright — somebody on a fixed shift does not
+ * follow the sun.
+ */
+export function dutyHoursFor(
+    start: string | null | undefined,
+    end: string | null | undefined,
+    opts?: { on?: Date | ShopDate; seasonal?: SeasonalHours },
+): { start: string; end: string } {
+    const seasonal = opts?.seasonal;
     return {
-        start: parseHhMm(start) !== null ? start!.trim() : DEFAULT_DUTY_START,
-        end:   parseHhMm(end) !== null ? end!.trim() : DEFAULT_DUTY_END,
+        start: parseHhMm(start) !== null
+            ? start!.trim()
+            : seasonal ? seasonalStartFor(opts?.on ?? new Date(), seasonal) : DEFAULT_DUTY_START,
+        end: parseHhMm(end) !== null
+            ? end!.trim()
+            : seasonal?.end ?? DEFAULT_DUTY_END,
     };
 }
 
@@ -226,4 +239,30 @@ export function creditableMinutes(previousSeenAt: Date | null, now: Date, idleLi
     const gapMs = now.getTime() - previousSeenAt.getTime();
     if (gapMs <= 0 || gapMs > idleLimitMs) return 0;
     return Math.round(gapMs / 60000);
+}
+
+/**
+ * Overtime for ONE day: time worked above the duty he is paid for.
+ *
+ * Owner, 2026-09-22: *"time above paid duty is called over time for the day."*
+ * Deliberately measured against his duty MINUTES, not against the duty END clock:
+ * a man who came in at noon and worked till eleven has done his hours, and a rule
+ * reading "after 20:30" would hand him overtime for being late.
+ */
+export function overtimeMinutes(workedMinutes: number, dutyMinutes: number): number {
+    const over = workedMinutes - dutyMinutes;
+    return over > 0 ? over : 0;
+}
+
+/**
+ * The other side of the same coin: duty owed but not worked.
+ *
+ * This is the "absent from duty during duty hours" figure on the counter's own
+ * card — the idle stretches and the late arrival, already netted out, because
+ * neither was ever credited to `workedMinutes` in the first place. A day is
+ * either over or short, never both.
+ */
+export function shortMinutes(workedMinutes: number, dutyMinutes: number): number {
+    const short = dutyMinutes - workedMinutes;
+    return short > 0 ? short : 0;
 }

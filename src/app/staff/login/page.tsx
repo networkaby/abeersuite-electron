@@ -24,6 +24,7 @@ import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStor
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
+import DutyCard from "./DutyCard";
 import PinPad from "./PinPad";
 import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
 
@@ -525,6 +526,10 @@ function StaffLoginForm() {
                         {LOGIN_MODULES.map((name) => <span key={name}>{name}</span>)}
                     </div>
                 </section>
+
+                {/* The day he just finished — only after a counter sign-out, and only
+                    once. Renders nothing at all the rest of the time. */}
+                <DutyCard />
 
                 {stage === "faces" ? (
                     <section className={styles.card}>
