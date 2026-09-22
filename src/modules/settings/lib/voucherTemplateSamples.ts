@@ -162,19 +162,23 @@ export const SAMPLE_PAYSLIP: PayslipBodyData = {
     grossPaise: 1_886_500,
     deductionsPaise: 228_800,
     netPaise: 1_657_700,
-    // A week of the month, the way the generator freezes it: a plain day, an
-    // overtime day, a charged late day, a half day and a weekly off worked.
+    // A stretch of the month, the way the generator freezes it: four plain days
+    // (folded into one line on the slip), an overtime day, a charged late day,
+    // a half day and a weekly off worked.
     attendance: {
         days: [
+            { date: "2026-09-17", status: "PRESENT",  shut: null,  worked: 600, duty: 600, overtime: 0,  overtimeAccounted: 0,  late: 0,  lateAccounted: 0,   short: 0,   shortAccounted: 0,    grantedAccounted: 0,   total: 600 },
+            { date: "2026-09-18", status: "PRESENT",  shut: null,  worked: 600, duty: 600, overtime: 0,  overtimeAccounted: 0,  late: 0,  lateAccounted: 0,   short: 0,   shortAccounted: 0,    grantedAccounted: 0,   total: 600 },
+            { date: "2026-09-19", status: "PRESENT",  shut: null,  worked: 600, duty: 600, overtime: 0,  overtimeAccounted: 0,  late: 0,  lateAccounted: 0,   short: 0,   shortAccounted: 0,    grantedAccounted: 0,   total: 600 },
             { date: "2026-09-21", status: "PRESENT",  shut: null,  worked: 600, duty: 600, overtime: 0,  overtimeAccounted: 0,  late: 0,  lateAccounted: 0,   short: 0,   shortAccounted: 0,    grantedAccounted: 0,   total: 600 },
             { date: "2026-09-22", status: "PRESENT",  shut: null,  worked: 660, duty: 600, overtime: 60, overtimeAccounted: 90, late: 0,  lateAccounted: 0,   short: 0,   shortAccounted: 0,    grantedAccounted: 0,   total: 690 },
             { date: "2026-09-23", status: "PRESENT",  shut: null,  worked: 585, duty: 600, overtime: 0,  overtimeAccounted: 0,  late: 23, lateAccounted: -46, short: 15,  shortAccounted: -15,  grantedAccounted: 0,   total: 524 },
             { date: "2026-09-24", status: "HALF_DAY", shut: null,  worked: 280, duty: 600, overtime: 0,  overtimeAccounted: 0,  late: 0,  lateAccounted: 0,   short: 320, shortAccounted: -20,  grantedAccounted: 0,   total: 260 },
             { date: "2026-09-25", status: "PRESENT",  shut: "OFF", worked: 190, duty: 0,   overtime: 0,  overtimeAccounted: 0,  late: 0,  lateAccounted: 0,   short: 0,   shortAccounted: 0,    grantedAccounted: 380, total: 380 },
         ],
-        workedMinutes: 2315,
-        dutyMinutes: 2400,
-        accountedMinutes: 2454,
+        workedMinutes: 4115,
+        dutyMinutes: 4200,
+        accountedMinutes: 4254,
         payableMinutes: 0,
         owedMinutes: 21,
         weeklyOffMinutes: 190,

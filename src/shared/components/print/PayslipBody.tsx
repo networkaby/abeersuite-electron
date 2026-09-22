@@ -112,6 +112,27 @@ const orDash = (m: number) => (m > 0 ? formatWorked(m) : "—");
 const fmtDay = (iso: string) =>
     new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 
+/**
+ * The days worth a row of their own, and the rest folded into one line.
+ *
+ * Owner, 2026-09-22: *"30 days is big to fit."* The slip exists to explain the
+ * Overtime and Hours owed heads, and a day worked in full at ×1 explains
+ * nothing — so only a day that moved the money is printed: overtime, lateness,
+ * a shortfall, a half day or absence, a weekly off or holiday worked. The
+ * ordinary days are counted, with their minutes, so the month row still adds up
+ * in front of the reader.
+ */
+function splitDays(days: readonly PayslipAttendanceDay[]) {
+    const exceptions: PayslipAttendanceDay[] = [];
+    let ordinary = 0, ordinaryMinutes = 0;
+    for (const d of days) {
+        const plain = !d.shut && d.overtime === 0 && d.late === 0 && d.short === 0 && (d.status === "PRESENT" || !d.status);
+        if (plain) { ordinary++; ordinaryMinutes += d.worked; }
+        else exceptions.push(d);
+    }
+    return { exceptions, ordinary, ordinaryMinutes };
+}
+
 /** A shut day's one-word reason for the Day column. */
 const shutWord = (d: PayslipAttendanceDay) => (d.shut === "HOLIDAY" ? "holiday" : d.shut === "OFF" ? "weekly off" : null);
 
@@ -131,6 +152,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
     showAttendance?: boolean;
 }) {
     const att = data.attendance ?? null;
+    const split = splitDays(att?.days ?? []);
     const earnings = data.lines.filter((l) => l.kind === "EARNING");
     const deductions = data.lines.filter((l) => l.kind === "DEDUCTION");
     const period = `${formatDate(data.periodFrom)} – ${formatDate(data.periodTo)}`;
@@ -170,7 +192,13 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                     <>
                         <div style={{ borderTop: "1px dashed #777", margin: "6px 0" }} />
                         <div style={{ fontWeight: 700 }}>Attendance &amp; hours</div>
-                        {att.days.map((d) => (
+                        {split.ordinary > 0 && (
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
+                                <span>{split.ordinary} {split.ordinary === 1 ? "day" : "days"} present in full</span>
+                                <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{formatWorked(split.ordinaryMinutes)} = {formatWorked(split.ordinaryMinutes)}</span>
+                            </div>
+                        )}
+                        {split.exceptions.map((d) => (
                             <div key={d.date} style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
                                 <span>{fmtDay(d.date)}{shutWord(d) ? ` · ${shutWord(d)}` : ""}</span>
                                 <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
@@ -193,6 +221,10 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
     const num: React.CSSProperties = { ...cell, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
     const head: React.CSSProperties = { ...cell, fontWeight: 700, background: "#f3f3f3", borderBottom: "1px solid #999" };
     const rows = Math.max(earnings.length, deductions.length, 1);
+    // The attendance table's rows, a size down and a point tighter: a bad month
+    // is a dozen exception rows, and every one of them has to stay on the sheet.
+    const tight: React.CSSProperties = { ...cell, padding: "2px 5px" };
+    const tightNum: React.CSSProperties = { ...num, padding: "2px 5px" };
 
     return (
         <div style={{ fontSize: 12, lineHeight: 1.4, color: "#111" }}>
@@ -250,8 +282,8 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                 frozen with the pay. Off a line from before it was frozen, or when
                 the template hides it, the slip ends at the net. */}
             {showAttendance && att && att.days.length > 0 && (
-                <div style={{ marginTop: 14, fontSize: 11 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Attendance &amp; hours</div>
+                <div style={{ marginTop: 12, fontSize: 10 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 3, fontSize: 11 }}>Attendance &amp; hours</div>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                             <tr>
@@ -265,24 +297,38 @@ export function PayslipBody({ data, thermal = false, showAttendance = true }: {
                             </tr>
                         </thead>
                         <tbody>
-                            {att.days.map((d) => (
+                            {split.ordinary > 0 && (
+                                <tr>
+                                    <td style={tight}>
+                                        {split.ordinary} {split.ordinary === 1 ? "day" : "days"} present in full
+                                        <span style={{ color: "#555" }}> · nothing to account beyond the duty</span>
+                                    </td>
+                                    <td style={tightNum}>{formatWorked(split.ordinaryMinutes)}</td>
+                                    <td style={tightNum}>{formatWorked(split.ordinaryMinutes)}</td>
+                                    <td style={tightNum}>—</td>
+                                    <td style={tightNum}>—</td>
+                                    <td style={tightNum}>—</td>
+                                    <td style={{ ...tightNum, fontWeight: 700 }}>{formatWorked(split.ordinaryMinutes)}</td>
+                                </tr>
+                            )}
+                            {split.exceptions.map((d) => (
                                 <tr key={d.date}>
-                                    <td style={cell}>
+                                    <td style={tight}>
                                         {fmtDay(d.date)}
                                         <span style={{ color: "#555" }}>
                                             {shutWord(d) ? ` · ${shutWord(d)}` : d.status && d.status !== "PRESENT" ? ` · ${d.status.toLowerCase().replace(/_/g, " ")}` : ""}
                                         </span>
                                     </td>
-                                    <td style={num}>{orDash(d.worked)}</td>
-                                    <td style={num}>{d.shut ? "—" : orDash(d.duty)}</td>
-                                    <td style={num}>
+                                    <td style={tightNum}>{orDash(d.worked)}</td>
+                                    <td style={tightNum}>{d.shut ? "—" : orDash(d.duty)}</td>
+                                    <td style={tightNum}>
                                         {d.shut
                                             ? `${orDash(d.worked)} ×${d.shut === "HOLIDAY" ? att.rates.holiday : att.rates.weeklyOff} = ${signed(d.grantedAccounted)}`
                                             : d.overtime > 0 ? `${formatWorked(d.overtime)} = ${signed(d.overtimeAccounted)}` : "—"}
                                     </td>
-                                    <td style={num}>{d.late > 0 ? `${formatWorked(d.late)} = ${signed(d.lateAccounted)}` : "—"}</td>
-                                    <td style={num}>{d.short > 0 ? `${formatWorked(d.short)} = ${signed(d.shortAccounted)}` : "—"}</td>
-                                    <td style={{ ...num, fontWeight: 700 }}>{signed(d.total)}</td>
+                                    <td style={tightNum}>{d.late > 0 ? `${formatWorked(d.late)} = ${signed(d.lateAccounted)}` : "—"}</td>
+                                    <td style={tightNum}>{d.short > 0 ? `${formatWorked(d.short)} = ${signed(d.shortAccounted)}` : "—"}</td>
+                                    <td style={{ ...tightNum, fontWeight: 700 }}>{signed(d.total)}</td>
                                 </tr>
                             ))}
                             <tr style={{ fontWeight: 700 }}>
