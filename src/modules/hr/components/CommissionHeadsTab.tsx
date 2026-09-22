@@ -186,7 +186,6 @@ export default function CommissionHeadsTab({ heads, roles, canEdit, onChanged }:
 function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHeadDto | null; roles: string[]; onCancel: () => void; onSave: (h: HeadBody) => Promise<void> }) {
     const [name, setName] = useState(initial?.name ?? "");
     const [description, setDescription] = useState(initial?.description ?? "");
-    const [active, setActive] = useState(initial?.active ?? true);
     const [appliesTo, setAppliesTo] = useState<string[]>(initial?.appliesTo ?? []);
     const [draft, setDraft] = useState<RuleDraft>(() => (initial ? toDraft(initial.rule) : blankRule()));
     const [saving, setSaving] = useState(false);
@@ -216,7 +215,8 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
     const submit = async () => {
         setSaving(true);
         try {
-            await onSave({ name: name.trim(), description: description.trim() || null, ...rule, active, appliesTo });
+            // A new head starts on; the Active switch on the list is where it is turned off.
+            await onSave({ name: name.trim(), description: description.trim() || null, ...rule, active: initial?.active ?? true, appliesTo });
         } finally {
             setSaving(false);
         }
@@ -287,7 +287,6 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                     <Field label="Description" hint="Shown under the head">
                         {(id) => <Textarea id={id} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} rows={2} placeholder="What this head is for (optional)" />}
                     </Field>
-                    <label className="flex items-center gap-2 text-sm"><Switch checked={active} onCheckedChange={setActive} /> Active — globally on; an off head reaches nobody</label>
                 </div>
 
                 <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
