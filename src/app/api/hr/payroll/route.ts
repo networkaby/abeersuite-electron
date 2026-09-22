@@ -120,6 +120,9 @@ export async function POST(req: Request) {
                         paidDays:         c.paidDays,
                         periodDays:       c.periodDays,
                         payDays:          c.payDays,
+                        // Frozen with everything else. Always 0 today — the
+                        // Commission page is what will make it otherwise.
+                        commissionPaise:  c.commissionPaise,
                         ledgerAccountId:  c.ledger?.id ?? null,
                         included:         c.included,
                         skipReason:       c.skipReason,

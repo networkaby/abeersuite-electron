@@ -5,6 +5,7 @@ import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { parseSalaryLines } from "./salaryLines";
+import { commissionForPeriod, commissionLine } from "./commission";
 import { nonPayableDays } from "./attendancePayable";
 import { attendanceEffectFor, loadPayRulesContext, payRuleLines } from "./payRulesApply";
 import { loadPayRules } from "./payRulesServer";
@@ -119,6 +120,15 @@ export interface PayrollCandidate {
     /** Days of the period that were this person's weekly off. */
     weeklyOffDays: number;
     ledger: { id: number; name: string } | null;
+    /**
+     * Commission for the period, in paise. Already INSIDE `lines`, `grossPaise`
+     * and `netPaise` — it is an earning head like any other; this is only the
+     * part of the total that came from commission, so a sheet can name it.
+     * Always 0 until the Commission page exists (see `commission.ts`).
+     */
+    commissionPaise: number;
+    /** How that commission was arrived at, for the breakup. Null when there is none. */
+    commissionBasis: string | null;
     included: boolean;
     skipReason: string | null;
 }
@@ -169,6 +179,9 @@ export async function buildPayrollCandidates(
     // The rules and the shop's calendar are the same for everyone on the run —
     // read once here, never per person.
     const ctx = await loadPayRulesContext(await loadPayRules(), fromIso, toIso);
+    // Commission is owned by the Commission page, not by HR. One call for the
+    // whole run — and today it always comes back empty, so nothing changes.
+    const commissions = await commissionForPeriod(db, users.map((u) => u.id), fromIso, toIso);
     const out: PayrollCandidate[] = [];
 
     for (const u of users) {
@@ -212,9 +225,16 @@ export async function buildPayrollCandidates(
         // The rule heads sit beside the proportioned ones and are totalled with
         // them — an "Overtime" earning and an "Absence penalty" deduction are
         // salary lines like any other.
-        const lines = [...r.lines, ...ruleLines];
+        // Commission joins them as a third source of heads, and stops being
+        // special the moment it does — the totals below cannot tell the three
+        // apart, and neither can the payslip or the journal.
+        const comm = commissions.get(u.id) ?? null;
+        const commissionPaise = comm?.commissionPaise ?? 0;
+        const commLine = commissionLine(commissionPaise);
+
+        const lines = [...r.lines, ...ruleLines, ...(commLine ? [commLine] : [])];
         let grossPaise = r.grossPaise, deductionsPaise = r.deductionsPaise;
-        for (const l of ruleLines) {
+        for (const l of [...ruleLines, ...(commLine ? [commLine] : [])]) {
             if (l.kind === "EARNING") grossPaise += l.amountPaise;
             else deductionsPaise += l.amountPaise;
         }
@@ -246,6 +266,8 @@ export async function buildPayrollCandidates(
             payDays: payDaysOf(latest?.payDays),
             weeklyOffDays: r.weeklyOffDays,
             ledger,
+            commissionPaise,
+            commissionBasis: commLine ? (comm?.basis ?? null) : null,
             included: skipReason === null,
             skipReason,
         });
@@ -357,6 +379,10 @@ export function toRunDetail(
         payDays: l.payDays,
         weeklyOffDays: 0,
         ledger: l.ledgerAccountId ? { id: l.ledgerAccountId, name: accounts.get(l.ledgerAccountId) ?? "—" } : null,
+        // Frozen with the run. The basis is not stored — a stored sentence goes
+        // stale the day the scheme is renamed, and the amount is the record.
+        commissionPaise: l.commissionPaise,
+        commissionBasis: null,
         included: l.included,
         skipReason: l.skipReason,
     });

@@ -304,6 +304,8 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                         <TableHead className="w-8" />
                                         <TableHead>Staff</TableHead>
                                         <TableHead>Days paid</TableHead>
+                                        {/* Frozen with the run, like every other figure here. */}
+                                        <TableHead className="text-right">Commission</TableHead>
                                         <TableHead className="text-right">Gross</TableHead>
                                         <TableHead className="text-right">Deductions</TableHead>
                                         <TableHead className="text-right">Net</TableHead>
@@ -311,7 +313,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {!rows.length && <TableEmptyRow colSpan={8} message="Nobody matches that search." />}
+                                    {!rows.length && <TableEmptyRow colSpan={9} message="Nobody matches that search." />}
                                     {rows.map((l) => (
                                         <Fragment key={l.id}>
                                         <TableRow className={l.included ? "" : "opacity-55"}>
@@ -340,6 +342,9 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                             <TableCell className="text-sm text-muted-foreground tabular-nums">
                                                 {formatDayBasis(l.paidDays, l.periodDays, l.payDays)}
                                             </TableCell>
+                                            <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                                                {l.commissionPaise ? formatRupeesFromPaise(l.commissionPaise) : "—"}
+                                            </TableCell>
                                             <TableCell className="text-right tabular-nums">{formatRupeesFromPaise(l.grossPaise)}</TableCell>
                                             <TableCell className="text-right tabular-nums text-muted-foreground">
                                                 {l.deductionsPaise ? formatRupeesFromPaise(l.deductionsPaise) : "—"}
@@ -350,7 +355,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                         {open.has(l.id) && (
                                             <TableRow className="bg-muted/30 hover:bg-muted/30">
                                                 <TableCell colSpan={2} />
-                                                <TableCell colSpan={6} className="py-3">
+                                                <TableCell colSpan={7} className="py-3">
                                                     {!l.lines.length ? (
                                                         <p className="text-sm text-muted-foreground">{l.skipReason ?? "Nothing to break up."}</p>
                                                     ) : (

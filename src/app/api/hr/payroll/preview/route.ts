@@ -81,6 +81,8 @@ export async function GET(req: Request) {
                 periodDays:      c.periodDays,
                 payDays:         c.payDays,
                 weeklyOffDays:   c.weeklyOffDays,
+                commissionPaise: c.commissionPaise,
+                commissionBasis: c.commissionBasis,
                 ledger:          c.ledger,
                 included:        c.included,
                 skipReason:      c.skipReason,

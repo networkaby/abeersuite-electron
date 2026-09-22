@@ -253,6 +253,10 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                     <TableHead>Staff</TableHead>
                                     <TableHead>Days paid</TableHead>
                                     <TableHead className="text-right">A month</TableHead>
+                                    {/* Room for commission. Reads — for everybody until the
+                                        Commission page exists to fill it; the column is here so
+                                        the sheet does not change shape the day it does. */}
+                                    <TableHead className="text-right">Commission</TableHead>
                                     <TableHead className="text-right">Gross</TableHead>
                                     <TableHead className="text-right">Deductions</TableHead>
                                     <TableHead className="text-right">Net for this period</TableHead>
@@ -261,13 +265,13 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                             <TableBody>
                                 {!data && (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
                                             Reading…
                                         </TableCell>
                                     </TableRow>
                                 )}
                                 {data && !rows.length && (
-                                    <TableEmptyRow colSpan={7} message="Nobody was on the staff in this period." />
+                                    <TableEmptyRow colSpan={8} message="Nobody was on the staff in this period." />
                                 )}
                                 {rows.map((l) => (
                                     <Fragment key={l.id}>
@@ -289,6 +293,9 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                             </TableCell>
                                             <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                                                 {l.monthlyNetPaise ? formatRupeesFromPaise(l.monthlyNetPaise) : "—"}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                                                {l.commissionPaise ? formatRupeesFromPaise(l.commissionPaise) : "—"}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">{formatRupeesFromPaise(l.grossPaise)}</TableCell>
                                             <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -313,7 +320,7 @@ function Breakup({ line }: { line: PayrollLineDto }) {
     return (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
             <TableCell />
-            <TableCell colSpan={6} className="py-3">
+            <TableCell colSpan={7} className="py-3">
                 {!line.lines.length ? (
                     <p className="text-sm text-muted-foreground">
                         {line.skipReason ?? "Nothing to break up for this period."}
@@ -324,6 +331,12 @@ function Breakup({ line }: { line: PayrollLineDto }) {
                             {formatDayBasisLong(line.paidDays, line.periodDays, line.payDays)}
                             {line.effectiveFrom && ` · structure from ${formatDate(line.effectiveFrom)}`}
                         </p>
+                        {/* Commission is already one of the earning heads below — this
+                            only says how it was arrived at, and the Commission page owns
+                            those words. Nothing shows while there are no schemes. */}
+                        {line.commissionBasis && (
+                            <p className="text-xs text-muted-foreground">Commission: {line.commissionBasis}</p>
+                        )}
                         {earnings.map((h) => (
                             <HeadRow key={`e-${h.name}`} name={h.name} paise={h.amountPaise} />
                         ))}

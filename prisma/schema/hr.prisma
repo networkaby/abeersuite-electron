@@ -238,6 +238,22 @@ model PayrollRunLine {
   /// run, on PayrollRun.
   ledgerAccountId Int?
 
+  /// Commission earned in this period, frozen like every other figure here.
+  ///
+  /// Owner, 2026-09-22: *"make room for commission in hr module, commission
+  /// calculation will be in commission page where verity of commission may be
+  /// created."* So this is ROOM, not a rule. HR does not decide who earns
+  /// commission or how much — a Commission page, not yet built, will answer
+  /// that, and `modules/hr/lib/commission.ts` is the one door it comes through.
+  ///
+  /// It is NOT a separate amount to be added on: when it is non-zero the
+  /// generator ALSO writes a "Commission" EARNING into `linesJson`, so
+  /// `grossPaise` and `netPaise` already contain it and the payslip, the print
+  /// template and the journal need no special case for any of it. This column
+  /// exists only so a sheet can show the commission part without parsing the
+  /// JSON — the same reason `grossPaise` is denormalised beside the lines.
+  commissionPaise Int @default(0)
+
   /// Only included lines reach the journal. Untick a person to hold their
   /// salary back; `skipReason` is set by the generator when it cannot pay them.
   included   Boolean @default(true)

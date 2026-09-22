@@ -61,6 +61,16 @@ export interface PayrollLineDto {
     payDays: number;
     /** Days of the period that fell on their weekly off. 0 on a stored run. */
     weeklyOffDays: number;
+    /**
+     * The commission part of the pay, in paise. It is ALREADY inside `lines`,
+     * `grossPaise` and `netPaise` as an ordinary earning head — never add it on
+     * top. It is here only so the sheet can put it in its own column.
+     *
+     * 0 for everybody until the Commission page exists; HR does not calculate it.
+     */
+    commissionPaise: number;
+    /** How it was worked out, for the breakup. Null on a stored run and while there are no schemes. */
+    commissionBasis: string | null;
     ledger: { id: number; name: string } | null;
     included: boolean;
     /** Why the generator could not pay them. Null on a normal line. */
