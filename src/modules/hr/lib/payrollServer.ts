@@ -7,9 +7,13 @@ import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { parseSalaryLines } from "./salaryLines";
 import { commissionForPeriod, commissionLine } from "./commission";
 import { nonPayableDays } from "./attendancePayable";
-import { attendanceEffectFor, loadPayRulesContext, payRuleLines } from "./payRulesApply";
+import { loadPayRulesContext, payRuleLines } from "./payRulesApply";
+import { loadHoursBreakup } from "./attendanceHoursServer";
+import { freezeAttendanceForPayslip } from "./attendanceBreakup";
+import type { PayslipAttendanceData } from "@/shared/components/print/PayslipBody";
 import { loadPayRules } from "./payRulesServer";
 import { dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
+import { EMPTY_ATTENDANCE_EFFECT } from "@/shared/lib/hr/payRules";
 import { prorate, inclusiveDays, payDaysOf } from "./payrollProrate";
 import type { PayrollLineDto, PayrollRunDetail, PayrollRunRow, PayrollRunStatus, PayrollVoucherState } from "./payrollTypes";
 import { formatPeriod } from "./payrollTypes";
@@ -127,6 +131,12 @@ export interface PayrollCandidate {
      * Always 0 until the Commission page exists (see `commission.ts`).
      */
     commissionPaise: number;
+    /**
+     * The month's attendance accounted day by day, for the slip — frozen with
+     * the pay so a day edited later cannot change a slip already handed out.
+     * Null for a person with no structure: there is no pay to explain.
+     */
+    attendance: PayslipAttendanceData | null;
     /** How that commission was arrived at, for the breakup. Null when there is none. */
     commissionBasis: string | null;
     included: boolean;
@@ -206,9 +216,15 @@ export async function buildPayrollCandidates(
         // nothing to apply them to, and it saves two queries a head.
         let dayFactors: Map<string, 0 | 0.5> | undefined;
         let ruleLines: ReturnType<typeof payRuleLines> = [];
+        let attendance: PayslipAttendanceData | null = null;
         if (revisions.length) {
             dayFactors = await nonPayableDays(u.id, fromIso, toIso);
-            const effect = await attendanceEffectFor(ctx, u.id, fromIso, toIso);
+            // The same read the activity screen makes: the days, and the netting
+            // (`attendanceEffectFor`) run on them. One source for the card, the
+            // pay heads and the slip's working, so the three cannot disagree.
+            const hours = await loadHoursBreakup(u.id, fromIso, toIso);
+            const effect = hours?.effect ?? { ...EMPTY_ATTENDANCE_EFFECT };
+            attendance = hours ? freezeAttendanceForPayslip(hours.days, ctx.rules, effect) : null;
             const latest = p!.salaries[p!.salaries.length - 1];
             ruleLines = payRuleLines(
                 effect,
@@ -268,6 +284,7 @@ export async function buildPayrollCandidates(
             ledger,
             commissionPaise,
             commissionBasis: commLine ? (comm?.basis ?? null) : null,
+            attendance,
             included: skipReason === null,
             skipReason,
         });

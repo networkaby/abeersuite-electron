@@ -6,10 +6,11 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
+import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
-import { PayslipBody, type PayslipBodyData } from "@/shared/components/print/PayslipBody";
+import { PayslipBody, type PayslipAttendanceData, type PayslipBodyData } from "@/shared/components/print/PayslipBody";
 import { parseSalaryLines } from "@/modules/hr/lib/salaryLines";
 import { formatPeriod } from "@/modules/hr/lib/payrollTypes";
 
@@ -38,7 +39,7 @@ export default async function PayslipPage({
     const line = await prisma.payrollRunLine.findUnique({
         where: { id: lineId },
         select: {
-            id: true, userId: true, staffName: true, linesJson: true,
+            id: true, userId: true, staffName: true, linesJson: true, attendanceJson: true,
             grossPaise: true, deductionsPaise: true, netPaise: true,
             paidDays: true, periodDays: true, payDays: true, included: true,
             run: { select: { status: true, periodFrom: true, periodTo: true, postingDate: true, voucherRef: true } },
@@ -80,7 +81,11 @@ export default async function PayslipPage({
         grossPaise:  line.grossPaise,
         deductionsPaise: line.deductionsPaise,
         netPaise:    line.netPaise,
+        // Frozen at generation; a line from before that carries null and the
+        // slip prints without the section rather than reading the register now.
+        attendance:  (line.attendanceJson as unknown as PayslipAttendanceData | null) ?? null,
     };
+    const flags = resolveTemplateForFormat(template, format);
 
     // The chrome's own meta row: slip number and the posting date.
     const sample: ThermalReceiptSample = {
@@ -97,7 +102,7 @@ export default async function PayslipPage({
             format={format}
             template={template}
             sample={sample}
-            body={<PayslipBody data={bodyData} thermal={isThermal} />}
+            body={<PayslipBody data={bodyData} thermal={isThermal} showAttendance={flags.showAttendance} />}
             // Browser print only: the hardware bridge's thermal renderer has no
             // salary-slip middle, and a slip is an A4 document by default anyway.
             toolbar={<PrintToolbar autoPrint={sp.autoprint === "1"} showFormatPicker currentPaper={format} />}

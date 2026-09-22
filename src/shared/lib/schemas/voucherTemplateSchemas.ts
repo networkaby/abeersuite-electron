@@ -68,6 +68,9 @@ export const voucherTemplateUpdateSchema = z.object({
     showPreparedByThermal:    z.boolean().optional(),
     showFindings:             z.boolean().optional(),
     showFindingsThermal:      z.boolean().optional(),
+    // Salary slip attendance section (A4 base + thermal).
+    showAttendance:           z.boolean().optional(),
+    showAttendanceThermal:    z.boolean().optional(),
 
     termsText:      txt(1000),
     footerLine:     txt(200),

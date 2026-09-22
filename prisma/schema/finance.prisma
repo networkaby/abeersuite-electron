@@ -496,6 +496,11 @@ model VoucherPrintTemplate {
   // return-with-device note — one toggle.
   showFindings          Boolean @default(true)
   showFindingsThermal   Boolean @default(true)
+  // Salary slip only: the month's attendance accounted day by day under the
+  // pay heads. On by default — the whole point of the section is that the
+  // slip's Overtime / Hours owed figures explain themselves.
+  showAttendance        Boolean @default(true)
+  showAttendanceThermal Boolean @default(true)
 
   // Footer
   termsText      String @default("")

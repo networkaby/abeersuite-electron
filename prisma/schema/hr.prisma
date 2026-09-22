@@ -254,6 +254,12 @@ model PayrollRunLine {
   /// JSON — the same reason `grossPaise` is denormalised beside the lines.
   commissionPaise Int @default(0)
 
+  /// The month's attendance, accounted day by day and frozen with the pay —
+  /// `PayslipAttendanceData`. The slip prints it under the pay heads so its
+  /// Overtime and Hours owed figures explain themselves. Null on a line
+  /// generated before this existed; such a slip simply prints without it.
+  attendanceJson Json?
+
   /// Only included lines reach the journal. Untick a person to hold their
   /// salary back; `skipReason` is set by the generator when it cannot pay them.
   included   Boolean @default(true)

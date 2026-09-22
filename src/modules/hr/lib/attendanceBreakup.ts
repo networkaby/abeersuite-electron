@@ -6,7 +6,8 @@
 
 import type { DutyGrade } from "@/shared/lib/hr/dutyTime";
 import { earlyMinutes, gradeDay, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
-import type { PayRules } from "@/shared/lib/hr/payRules";
+import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
+import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
 /** One active stretch, as the screens want it: ISO instants, minutes, why it ended. */
 export interface SpanDto {
@@ -312,6 +313,69 @@ function fmtShort(minutes: number): string {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}
+
+/**
+ * The month's accounting in the shape the salary slip freezes.
+ *
+ * Owner, 2026-09-22: *"also show it in the payslip print."* The slip prints
+ * from its own posted line and must say the same thing in ten years, so the
+ * days are not read back from the register at print time — they are worked out
+ * once here, at generation, and stored beside the pay. Only tracked days are
+ * kept: a day the clock never measured has nothing to account, and the slip
+ * would otherwise be a page of dashes.
+ */
+export function freezeAttendanceForPayslip(
+    days: readonly DayBreakup[],
+    rules: PayRules,
+    effect: AttendanceEffect,
+): PayslipAttendanceData {
+    const out: PayslipAttendanceDay[] = [];
+    for (const d of days) {
+        if (!d.tracked) continue;
+        const acc = accountDay(d, rules);
+        const line = (key: AccountLine["key"]) => acc.lines.find((l) => l.key === key);
+        const late = line("late");
+        const short = line("short");
+        const ot = line("overtime");
+        const shut = line("holiday") ?? line("weeklyOff");
+        out.push({
+            date: d.date,
+            status: d.status || d.grade,
+            shut: d.holidayName ? "HOLIDAY" : d.weeklyOff ? "OFF" : null,
+            worked: d.workedMinutes,
+            duty: d.dutyMinutes,
+            overtime: ot?.minutes ?? 0,
+            overtimeAccounted: ot?.accounted ?? 0,
+            late: late?.minutes ?? 0,
+            lateAccounted: late?.accounted ?? 0,
+            short: short?.minutes ?? 0,
+            shortAccounted: short?.accounted ?? 0,
+            grantedAccounted: shut?.accounted ?? 0,
+            total: acc.total,
+        });
+    }
+    const t = totalBreakup(days, rules);
+    return {
+        days: out,
+        workedMinutes: t.worked,
+        dutyMinutes: t.duty,
+        accountedMinutes: t.accounted,
+        payableMinutes: effect.payableMinutes,
+        owedMinutes: effect.owedMinutes,
+        weeklyOffMinutes: effect.weeklyOffMinutes,
+        holidayMinutes: effect.holidayMinutes,
+        lateDays: effect.lateDays,
+        chargedLateDays: effect.chargedLateDays,
+        rates: {
+            overtime: rules.overtimeRate,
+            shortHours: rules.shortHoursRate,
+            weeklyOff: rules.weeklyOffRate,
+            holiday: rules.holidayRate,
+            late: rateOfLate(rules),
+            lateFreeDays: rules.lateFreeDays,
+        },
+    };
 }
 
 /**

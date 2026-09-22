@@ -123,6 +123,11 @@ export async function POST(req: Request) {
                         // Frozen with everything else. Always 0 today — the
                         // Commission page is what will make it otherwise.
                         commissionPaise:  c.commissionPaise,
+                        // The slip's working, frozen with the pay it explains.
+                        // Left out, not written as null, when there is none — the
+                        // column defaults to NULL and the slip reads that as "no
+                        // section", the same as a line from before this existed.
+                        ...(c.attendance ? { attendanceJson: c.attendance as unknown as Prisma.InputJsonValue } : {}),
                         ledgerAccountId:  c.ledger?.id ?? null,
                         included:         c.included,
                         skipReason:       c.skipReason,

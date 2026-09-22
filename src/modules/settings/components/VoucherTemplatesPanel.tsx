@@ -122,6 +122,11 @@ const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: Bool
     { label: "Findings & note (Service Centre use)", a4: "showFindings", thermal: "showFindingsThermal" },
 ];
 
+// Salary slip — its one section of its own, a switch per format like the rest.
+const PAYSLIP_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTemplateKey }[] = [
+    { label: "Attendance & hours (the month, day by day)", a4: "showAttendance", thermal: "showAttendanceThermal" },
+];
+
 // The bespoke documents (repair ticket / shipping slip) have no line-items
 // table, tax, barcode or issuing branch — hide those toggles for them.
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
@@ -214,7 +219,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
             />
         ) :
         selectedKind === "PAYSLIP" ? (
-            <PayslipBody data={SAMPLE_PAYSLIP} thermal={previewFormat === "THERMAL_80MM"} />
+            <PayslipBody data={SAMPLE_PAYSLIP} thermal={previewFormat === "THERMAL_80MM"} showAttendance={slipFlags.showAttendance} />
         ) :
         null;
 
@@ -550,6 +555,40 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                     <span className="text-center">Thermal</span>
                                 </div>
                                 {SLIP_SIGNOFF_ELEMENTS.map((el) => (
+                                    <div
+                                        key={el.a4}
+                                        className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-2 border-b px-3 py-1.5 text-sm last:border-0"
+                                    >
+                                        <span className="truncate">{el.label}</span>
+                                        <Switch
+                                            className="justify-self-center"
+                                            checked={current[el.a4]}
+                                            onCheckedChange={(v) => setField(el.a4, v)}
+                                        />
+                                        <Switch
+                                            className="justify-self-center"
+                                            checked={current[el.thermal]}
+                                            onCheckedChange={(v) => setField(el.thermal, v)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </fieldset>
+                    )}
+
+                    {/* Salary slip — the attendance section under the pay heads. */}
+                    {selectedKind === "PAYSLIP" && (
+                        <fieldset className="space-y-2">
+                            <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
+                                Salary slip
+                            </legend>
+                            <div className="rounded-md border overflow-hidden">
+                                <div className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-2 border-b bg-muted/40 px-3 py-1.5 text-[10px] uppercase tracking-wide font-medium text-muted-foreground">
+                                    <span>Element</span>
+                                    <span className="text-center">A4</span>
+                                    <span className="text-center">Thermal</span>
+                                </div>
+                                {PAYSLIP_ELEMENTS.map((el) => (
                                     <div
                                         key={el.a4}
                                         className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-2 border-b px-3 py-1.5 text-sm last:border-0"
