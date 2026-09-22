@@ -5,6 +5,10 @@ import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { parseSalaryLines } from "./salaryLines";
+import { nonPayableDays } from "./attendancePayable";
+import { attendanceEffectFor, loadPayRulesContext, payRuleLines } from "./payRulesApply";
+import { loadPayRules } from "./payRulesServer";
+import { dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { prorate, inclusiveDays, payDaysOf } from "./payrollProrate";
 import type { PayrollLineDto, PayrollRunDetail, PayrollRunRow, PayrollRunStatus } from "./payrollTypes";
 import { formatPeriod } from "./payrollTypes";
@@ -20,6 +24,15 @@ import { formatPeriod } from "./payrollTypes";
  * its own, being already inside the 26 (payrollProrate.ts).
  * Nothing is guessed and nothing is estimated; a person the run cannot pay is
  * still written down with the reason rather than dropped.
+ *
+ * What his CLOCK did to that figure is the second half, and it comes from the
+ * Pay Rules (HR → Pay Rules, `shared/lib/hr/payRules.ts`): a day he was absent
+ * or on unpaid leave is not paid (`attendancePayable.nonPayableDays`), and his
+ * overtime, his hours still owed, his duty on a closed day, his lateness and an
+ * absence nobody granted each become a pay head of their own
+ * (`payRulesApply.ts`). Both halves are ordinary salary lines by the time they
+ * leave here, so the journal, the payslip and the print template need no
+ * special case for any of it.
  */
 
 // ── Dates ─────────────────────────────────────────────────────────────────────
@@ -135,6 +148,9 @@ export async function buildPayrollCandidates(
                     joinedOn: true,
                     leftOn: true,
                     weeklyOff: true,
+                    dutyMinutes: true,
+                    dutyStart: true,
+                    dutyEnd: true,
                     ledgerAccount: { select: { id: true, name: true } },
                     // Every revision starting on or before the period's last
                     // day: one that lands mid-period has to be honoured for the
@@ -150,6 +166,9 @@ export async function buildPayrollCandidates(
     });
 
     const periodDays = inclusiveDays(fromIso, toIso);
+    // The rules and the shop's calendar are the same for everyone on the run —
+    // read once here, never per person.
+    const ctx = await loadPayRulesContext(await loadPayRules(), fromIso, toIso);
     const out: PayrollCandidate[] = [];
 
     for (const u of users) {
@@ -169,8 +188,37 @@ export async function buildPayrollCandidates(
         }));
         const latest = p?.salaries.length ? p.salaries[p.salaries.length - 1] : null;
 
-        const r = prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff: p?.weeklyOff ?? [] });
+        // What the register says about his days, then what the rules make of it.
+        // Both are skipped for a person with no structure — there would be
+        // nothing to apply them to, and it saves two queries a head.
+        let dayFactors: Map<string, 0 | 0.5> | undefined;
+        let ruleLines: ReturnType<typeof payRuleLines> = [];
+        if (revisions.length) {
+            dayFactors = await nonPayableDays(u.id, fromIso, toIso);
+            const effect = await attendanceEffectFor(ctx, u.id, fromIso, toIso);
+            const latest = p!.salaries[p!.salaries.length - 1];
+            ruleLines = payRuleLines(
+                effect,
+                ctx.rules,
+                parseSalaryLines(latest.linesJson),
+                latest.payDays,
+                dutyMinutesFor(p?.dutyMinutes, p?.dutyStart, p?.dutyEnd),
+            );
+        }
+
+        const r = prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff: p?.weeklyOff ?? [], dayFactors });
         const ledger = p?.ledgerAccount ?? null;
+
+        // The rule heads sit beside the proportioned ones and are totalled with
+        // them — an "Overtime" earning and an "Absence penalty" deduction are
+        // salary lines like any other.
+        const lines = [...r.lines, ...ruleLines];
+        let grossPaise = r.grossPaise, deductionsPaise = r.deductionsPaise;
+        for (const l of ruleLines) {
+            if (l.kind === "EARNING") grossPaise += l.amountPaise;
+            else deductionsPaise += l.amountPaise;
+        }
+        const netPaise = grossPaise - deductionsPaise;
 
         let skipReason: string | null = null;
         if (!revisions.length) skipReason = "No salary structure entered";
@@ -179,7 +227,7 @@ export async function buildPayrollCandidates(
                 ? "Only weekly offs fell in this period"
                 : "Not on the staff during this period";
         }
-        else if (r.netPaise <= 0) skipReason = "Comes to nothing for this period";
+        else if (netPaise <= 0) skipReason = "Comes to nothing for this period";
         else if (!ledger) skipReason = "No ledger — open the staff profile and save it once";
 
         out.push({
@@ -188,11 +236,11 @@ export async function buildPayrollCandidates(
             staffCode: p?.staffCode ?? null,
             salaryId: latest?.id ?? null,
             effectiveFrom: latest ? toDateOnlyUtc(latest.effectiveFrom) : null,
-            lines: r.lines,
+            lines,
             monthlyNetPaise: latest?.netPaise ?? 0,
-            grossPaise: r.grossPaise,
-            deductionsPaise: r.deductionsPaise,
-            netPaise: r.netPaise,
+            grossPaise,
+            deductionsPaise,
+            netPaise,
             paidDays: r.paidDays,
             periodDays: r.periodDays || periodDays,
             payDays: payDaysOf(latest?.payDays),

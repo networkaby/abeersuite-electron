@@ -53,27 +53,35 @@ export const leaveDecisionSchema = z.object({
 });
 
 /* ── The notice a leave must carry ──────────────────────────────────────────
-   Pay Rules shows this same number ("Leave must be applied at least N days
-   before the leave day"); when that card becomes savable, both should read it
-   from there instead of from here. Sick is outside the rule — illness gives no
-   notice — and HR filing by hand is outside it too, which is why the check is
-   asked for by the caller and not baked into leaveCreateSchema. */
+   The number itself now comes from Pay Rules (HR → Pay Rules, "Leave must be
+   applied at least N days before the leave day") and is passed in by the caller:
+   the API reads it with `loadPayRules()`, the Leave board with `getPayRules()`.
+   The constant below is only the fallback for a caller that has not read them.
+   Sick is outside the rule — illness gives no notice — and HR filing by hand is
+   outside it too, which is why the check is asked for by the caller and not
+   baked into leaveCreateSchema. */
 export const LEAVE_NOTICE_DAYS = 3;
 export const LEAVE_NOTICE_EXEMPT_KINDS: readonly LeaveKind[] = ["SICK"];
 
 /** The first day a leave of this kind may be asked for, given today. */
-export function earliestLeaveDate(kind: LeaveKind, today: string): string {
-    const ahead = LEAVE_NOTICE_EXEMPT_KINDS.includes(kind) ? 0 : LEAVE_NOTICE_DAYS;
+export function earliestLeaveDate(kind: LeaveKind, today: string, noticeDays: number = LEAVE_NOTICE_DAYS): string {
+    const ahead = LEAVE_NOTICE_EXEMPT_KINDS.includes(kind) ? 0 : Math.max(0, Math.round(noticeDays));
     const d = new Date(`${today}T00:00:00.000Z`);
     d.setUTCDate(d.getUTCDate() + ahead);
     return d.toISOString().slice(0, 10);
 }
 
 /** Null when the notice is enough, else the sentence to show the person. */
-export function leaveNoticeError(kind: LeaveKind, fromDate: string, today: string): string | null {
-    const earliest = earliestLeaveDate(kind, today);
+export function leaveNoticeError(
+    kind: LeaveKind,
+    fromDate: string,
+    today: string,
+    noticeDays: number = LEAVE_NOTICE_DAYS,
+): string | null {
+    const days = Math.max(0, Math.round(noticeDays));
+    const earliest = earliestLeaveDate(kind, today, days);
     if (fromDate >= earliest) return null;
     return LEAVE_NOTICE_EXEMPT_KINDS.includes(kind)
         ? "A leave cannot be asked for after the day is gone. Ask HR to file it for you."
-        : `${LEAVE_KIND_LABELS[kind]} leave must be applied at least ${LEAVE_NOTICE_DAYS} days before the leave day — the earliest you can ask for is ${earliest}. Only sick leave is outside this rule; for anything urgent, ask HR to file it for you.`;
+        : `${LEAVE_KIND_LABELS[kind]} leave must be applied at least ${days} day${days === 1 ? "" : "s"} before the leave day — the earliest you can ask for is ${earliest}. Only sick leave is outside this rule; for anything urgent, ask HR to file it for you.`;
 }

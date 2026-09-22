@@ -235,6 +235,15 @@ model OrgDefaults {
   // Admin-chosen, so bootstrap-seed leaves it untouched (survives reseed).
   labelTemplateJson Json?
 
+  // ── Pay rules (HR → Pay Rules) ─────────────────────────────────────────────
+  // How time turns into money for the whole shop: the overtime multiple, the
+  // weekly-off and holiday multiples, the absence penalty and leave notice, and
+  // how a late day is charged. Multiples and counts only — never a rupee, a
+  // basic being per person. null = the code defaults. Shape: PayRules — see
+  // src/shared/lib/hr/payRules.ts. Admin-chosen, so bootstrap-seed leaves it
+  // untouched (survives reseed).
+  hrPayRulesJson Json?
+
   // ── Office hours, as the year moves (HR → Calendar & Hours) ────────────────
   // The shop's own opening and closing in shop time. Two openings, one for each
   // solstice: every other day of the year falls between them on a cosine (see

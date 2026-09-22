@@ -99,6 +99,25 @@ export const orgDefaultsUpdateSchema = z.object({
     }).optional(),
     /// Barcode-label design (Print labels settings bar). See labelTemplateSchema.
     labelTemplateJson:          labelTemplateSchema.optional(),
+    /// Pay rules (HR → Pay Rules) — how time turns into money for the whole shop.
+    /// Multiples and counts only, never a rupee. Bounds match `parsePayRules`,
+    /// which is the defensive read on the way back out. See shared/lib/hr/payRules.
+    hrPayRulesJson: z.object({
+        overtimeRate:      z.number().min(0).max(10),
+        shortHoursRate:    z.number().min(0).max(10),
+        weeklyOffRate:     z.number().min(0).max(10),
+        holidayRate:       z.number().min(0).max(10),
+        absentPenaltyDays: z.number().min(0).max(31),
+        leaveNoticeDays:   z.number().min(0).max(90),
+        lateGraceMinutes:  z.number().min(0).max(240),
+        lateFreeDays:      z.number().min(0).max(31),
+        latePenaltyStyle:  z.enum(["none", "pay", "timesLate", "sharePerSlab", "shareOfDay"]),
+        latePenaltyDays:   z.number().min(0).max(31),
+        lateTimesLate:     z.number().min(0).max(20),
+        lateSlabPct:       z.number().min(0).max(100),
+        lateSlabMinutes:   z.number().min(0).max(240),
+        lateSharePct:      z.number().min(0).max(100),
+    }).optional(),
     /// Office hours (HR → Calendar & Hours). Two openings, one per solstice; every
     /// other day of the year is interpolated on a cosine. Closing does not move.
     /// Same "HH:MM" shape as StaffProfile.dutyStart, so the two validate alike.

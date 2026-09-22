@@ -184,7 +184,15 @@ export function dutyMinutesFor(
  * a UTC instant and the office hours are shop-clock, so the comparison is made in
  * shop time; doing it in UTC would call everybody five and a half hours late.
  */
-export function lateMinutes(firstInAt: Date | string | null, startHhMm: string, timeZone = "Asia/Kolkata"): number | null {
+export function lateMinutes(
+    firstInAt: Date | string | null,
+    startHhMm: string,
+    timeZone = "Asia/Kolkata",
+    /* The shop's own grace, once it has one. LATE_GRACE_MINUTES is only the
+       fallback for a caller that has not read the pay rules — see
+       shared/lib/hr/payRules.ts, `lateGraceMinutes`. */
+    graceMinutes: number = LATE_GRACE_MINUTES,
+): number | null {
     if (!firstInAt) return null;
     const at = typeof firstInAt === "string" ? new Date(firstInAt) : firstInAt;
     if (Number.isNaN(at.getTime())) return null;
@@ -195,7 +203,7 @@ export function lateMinutes(firstInAt: Date | string | null, startHhMm: string, 
     }).formatToParts(at);
     const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
     const arrived = get("hour") * 60 + get("minute");
-    const late = arrived - start - LATE_GRACE_MINUTES;
+    const late = arrived - start - Math.max(0, graceMinutes);
     return late > 0 ? late : 0;
 }
 

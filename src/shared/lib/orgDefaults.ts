@@ -1,5 +1,6 @@
 import axios from "axios";
 import { SHOP_SEASONAL_FALLBACK, type SeasonalHours } from "./hr/seasonalHours";
+import { parsePayRules, type PayRules } from "./hr/payRules";
 
 export interface OrgDefaultsData {
     id: number;
@@ -21,6 +22,9 @@ export interface OrgDefaultsData {
     dutyEnd: string;
     /// Days the whole shop is closed, 0 = Sunday.
     weeklyOff: number[];
+    /// How time turns into money — overtime, weekend, absence, lateness.
+    /// Null on a row nobody has saved yet; read it through `getPayRules()`.
+    hrPayRulesJson: PayRules | null;
 }
 
 // Module-level cache — populated once per browser session on first call.
@@ -53,4 +57,16 @@ export async function getSeasonalHours(): Promise<SeasonalHours> {
         winterStart: d.dutyWinterStart || SHOP_SEASONAL_FALLBACK.winterStart,
         end:         d.dutyEnd         || SHOP_SEASONAL_FALLBACK.end,
     };
+}
+
+/**
+ * The shop's pay rules, with every missing field filled from the code defaults.
+ *
+ * Always through here, never off the raw column: a row saved before a rule
+ * existed, or an older browser's cached copy, would otherwise put `undefined`
+ * into an arithmetic that ends on somebody's payslip.
+ */
+export async function getPayRules(): Promise<PayRules> {
+    const d = await getOrgDefaults();
+    return parsePayRules(d.hrPayRulesJson);
 }

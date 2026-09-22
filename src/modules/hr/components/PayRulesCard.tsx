@@ -6,18 +6,23 @@
 // here: a basic is per person and lives on the staff record, so this screen stays
 // the rule and the staff record stays the amount.
 //
-// PREVIEW ONLY, deliberately. Nothing here is saved and nothing here pays
-// anybody: it exists so the owner can see and feel the rules before they are
-// wired to OrgDefaults and to the payroll run. The numbers below are proposed
-// defaults, not settings. Wiring comes in a second commit once the shape is
-// agreed — see PROJECT_BRAIN.md.
+// The rules themselves live in `src/shared/lib/hr/payRules.ts` — shape, code
+// defaults and the arithmetic — and are stored on `OrgDefaults.hrPayRulesJson`.
+// This screen only edits them. Each box saves on its own the moment it is
+// changed, the way the office-hours card does; there is no Save button to
+// forget.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { BadgeIndianRupee, Clock4, CalendarHeart, CalendarX2, TriangleAlert } from "lucide-react";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
 import { Field } from "@/shared/components/Field";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { getOrgDefaults, invalidateOrgDefaultsCache } from "@/shared/lib/orgDefaults";
+import { DEFAULT_PAY_RULES, parsePayRules, type LatePenaltyStyle, type PayRules } from "@/shared/lib/hr/payRules";
 
 /** One line on the screen: a number, and the sentence that says what it means. */
 interface Rule {
@@ -139,8 +144,6 @@ const ABSENCE_RULES: Rule[] = [
  * One style is in force at a time. Mixing money and time for the same late day
  * would be two punishments for one offence, so the screen makes it a choice.
  */
-type LateStyle = "none" | "pay" | "timesLate" | "shareOfDay" | "sharePerSlab";
-
 /** A style's own box: which value it edits, what it is measured in, how it steps. */
 interface LateField {
     key: string;
@@ -148,26 +151,26 @@ interface LateField {
     step: number;
 }
 
-const LATE_STYLES: { id: LateStyle; label: string; fields: LateField[] }[] = [
+const LATE_STYLES: { id: LatePenaltyStyle; label: string; fields: LateField[] }[] = [
     { id: "none", label: "Nothing more", fields: [] },
-    { id: "pay", label: "Cut from his pay", fields: [{ key: "pay", suffix: "days of basic", step: 0.25 }] },
+    { id: "pay", label: "Cut from his pay", fields: [{ key: "latePenaltyDays", suffix: "days of basic", step: 0.25 }] },
     {
         id: "timesLate",
         label: "Cut from his hours — by the lateness",
-        fields: [{ key: "timesLate", suffix: "times the minutes late", step: 0.5 }],
+        fields: [{ key: "lateTimesLate", suffix: "times the minutes late", step: 0.5 }],
     },
     {
         id: "sharePerSlab",
         label: "Cut from his hours — a slice for every slab of lateness",
         fields: [
-            { key: "slabPct", suffix: "% of the day's duty for every", step: 5 },
-            { key: "slabMinutes", suffix: "minutes late", step: 5 },
+            { key: "lateSlabPct", suffix: "% of the day's duty for every", step: 5 },
+            { key: "lateSlabMinutes", suffix: "minutes late", step: 5 },
         ],
     },
     {
         id: "shareOfDay",
         label: "Cut from his hours — a flat slice of the day",
-        fields: [{ key: "shareOfDay", suffix: "% of the day's duty", step: 5 }],
+        fields: [{ key: "lateSharePct", suffix: "% of the day's duty", step: 5 }],
     },
 ];
 
@@ -177,7 +180,7 @@ const EXAMPLE_DUTY_HOURS = 9;
 
 const NOTHING_EXTRA = "Nothing extra is cut — only the minutes actually missed.";
 
-function explainLate(style: LateStyle, v: number, v2: number): string {
+function explainLate(style: LatePenaltyStyle, v: number, v2: number): string {
     const dutyMinutes = EXAMPLE_DUTY_HOURS * 60;
     switch (style) {
         case "pay":
@@ -207,32 +210,87 @@ function explainLate(style: LateStyle, v: number, v2: number): string {
     }
 }
 
-/* Held as text, not numbers: a box being typed into passes through "1." and "",
-   and turning those into 0 on the way would fight the person's fingers. */
-const DEFAULTS: Record<string, string> = {
-    overtimeRate: "1.5",
-    shortHoursRate: "1",
-    weeklyOffRate: "2",
-    holidayRate: "2",
-    lateGraceMinutes: "15",
-    lateFreeDays: "2",
-    absentPenaltyDays: "1",
-    leaveNoticeDays: "3",
-    /* One box per style, so switching between them does not lose what was typed. */
-    pay: "1",
-    timesLate: "2",
-    slabPct: "10",
-    slabMinutes: "5",
-    shareOfDay: "10",
-};
+/**
+ * The rules as the boxes hold them — text, not numbers.
+ *
+ * A box being typed into passes through "1." and "", and turning those into 0
+ * on the way would fight the person's fingers. The numbers are read back out
+ * only when a sentence needs one, or when the rule is saved.
+ */
+type Draft = Record<string, string>;
+
+const toDraft = (r: PayRules): Draft =>
+    Object.fromEntries(Object.entries(r).filter(([, v]) => typeof v === "number").map(([k, v]) => [k, String(v)]));
 
 export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
-    const [values, setValues] = useState<Record<string, string>>(DEFAULTS);
-    const [lateStyle, setLateStyle] = useState<LateStyle>("timesLate");
+    /* The code defaults are on screen from the first paint, so the page never
+       flashes empty boxes while the stored rules are on their way. */
+    const [values, setValues] = useState<Draft>(() => toDraft(DEFAULT_PAY_RULES));
+    const [lateStyle, setLateStyle] = useState<LatePenaltyStyle>(DEFAULT_PAY_RULES.latePenaltyStyle);
+    const [loaded, setLoaded] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        void (async () => {
+            try {
+                const d = await getOrgDefaults();
+                if (!alive) return;
+                const rules = parsePayRules(d.hrPayRulesJson);
+                setValues(toDraft(rules));
+                setLateStyle(rules.latePenaltyStyle);
+            } catch {
+                /* the defaults are already on screen */
+            } finally {
+                if (alive) setLoaded(true);
+            }
+        })();
+        return () => { alive = false; };
+    }, []);
 
     const num = (key: string) => {
         const n = Number(values[key]);
         return Number.isFinite(n) && n >= 0 ? n : 0;
+    };
+
+    /**
+     * Save the whole rule set, a moment after the typing stops.
+     *
+     * `NumericInput` reports every sanitised keystroke as well as the clamped
+     * value on blur, so saving on each call would send three or four writes for
+     * one edit. The timer collapses them into one — and because the whole rule
+     * set goes every time, the last write is always complete.
+     *
+     * The blob is small and it is one row: sending all of it costs nothing and
+     * removes the class of bug where a half-saved rule set leaves the payroll
+     * reading an overtime rate from today and a late rule from last week. The
+     * caller passes what changed because React state has not caught up yet at
+     * the moment of the call.
+     */
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+    const save = (patch: Partial<Draft>, style: LatePenaltyStyle = lateStyle) => {
+        if (!canEdit || !loaded) return;
+        const draft = { ...values, ...patch };
+        const rules = parsePayRules({
+            ...Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, Number(v)])),
+            latePenaltyStyle: style,
+        });
+        setSaving(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+            void (async () => {
+                try {
+                    await axios.patch("/api/settings/org-defaults", { hrPayRulesJson: rules });
+                    invalidateOrgDefaultsCache();
+                } catch (e) {
+                    toast.error(extractApiError(e, "Could not save the pay rule"));
+                } finally {
+                    setSaving(false);
+                }
+            })();
+        }, 600);
     };
 
     const group = (title: string, icon: React.ReactNode, note: string, rules: Rule[]) => (
@@ -254,7 +312,10 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                                         min={0}
                                         disabled={!canEdit}
                                         value={values[r.key]}
-                                        onValueChange={(next) => setValues((v) => ({ ...v, [r.key]: next }))}
+                                        onValueChange={(next) => {
+                                            setValues((v) => ({ ...v, [r.key]: next }));
+                                            save({ [r.key]: next });
+                                        }}
                                         className="h-9 w-24 text-sm"
                                     />
                                     <span className="text-xs text-muted-foreground">{r.suffix}</span>
@@ -277,14 +338,10 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                     icon={<BadgeIndianRupee size={20} />}
                 />
 
-                <div className="mb-4 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
-                    <TriangleAlert size={16} className="mt-px shrink-0" />
-                    <span>
-                        <strong>Preview only.</strong> Change the numbers and watch the sentences — nothing is saved
-                        and no payslip is affected yet. Once you agree with the shape, these get stored beside the
-                        office hours and the monthly payroll starts obeying them.
-                    </span>
-                </div>
+                <p className="mb-4 text-xs text-muted-foreground">
+                    Every box saves itself the moment you change it — there is no Save button to forget.
+                    {saving ? " Saving…" : ""}
+                </p>
 
                 <p className="mb-4 text-xs text-muted-foreground">
                     Every rule is a multiple, never a rupee figure. A person&apos;s normal hour is his own basic
@@ -347,7 +404,7 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                                             name="lateStyle"
                                             checked={active}
                                             disabled={!canEdit}
-                                            onChange={() => setLateStyle(s.id)}
+                                            onChange={() => { setLateStyle(s.id); save({}, s.id); }}
                                             className="accent-primary"
                                         />
                                         <span className="text-sm">{s.label}</span>
@@ -361,7 +418,10 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                                                             aria-label={`${s.label} — ${f.suffix}`}
                                                             disabled={!canEdit || !active}
                                                             value={values[f.key]}
-                                                            onValueChange={(next) => setValues((v) => ({ ...v, [f.key]: next }))}
+                                                            onValueChange={(next) => {
+                                                                setValues((v) => ({ ...v, [f.key]: next }));
+                                                                save({ [f.key]: next });
+                                                            }}
                                                             className="h-8 w-20 text-sm"
                                                         />
                                                         <span className="text-xs text-muted-foreground">{f.suffix}</span>

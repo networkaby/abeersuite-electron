@@ -7,6 +7,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { leaveCreateSchema, leaveNoticeError } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { todayIso } from "@/shared/lib/format/formatDate";
 import { toLeaveDto, LEAVE_INCLUDE } from "@/modules/hr/lib/leaveServer";
+import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 
 // /api/hr/leave — leave requests.
 //   GET  ?status=PENDING|APPROVED|REJECTED|CANCELLED
@@ -51,7 +52,8 @@ export async function POST(req: Request) {
        Pay Rules asks for; sick leave is outside it. HR filing by hand is outside
        it too — sickness and emergencies are granted across the counter. */
     if (userId === user.id && !hasPermissionWithScope(user.permissions, PERMISSIONS.HR_LEAVE_APPROVE)) {
-        const notice = leaveNoticeError(data.kind, data.fromDate, todayIso());
+        const { leaveNoticeDays } = await loadPayRules();
+        const notice = leaveNoticeError(data.kind, data.fromDate, todayIso(), leaveNoticeDays);
         if (notice) return NextResponse.json({ error: notice }, { status: 400 });
     }
     try {

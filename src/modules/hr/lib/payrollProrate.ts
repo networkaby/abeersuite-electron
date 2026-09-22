@@ -52,6 +52,15 @@ export interface ProrateInput {
      * inside the 26. Empty means every day of the period is a working day.
      */
     weeklyOff?: readonly number[];
+    /**
+     * ISO date → how much of that day is payable: 0 for a day not paid at all,
+     * 0.5 for a half day. A day missing from the map is a normal full day.
+     *
+     * This is the attendance seam (`attendancePayable.nonPayableDays`). Without
+     * it the walk below pays every employed day whether the person came or not,
+     * which is fine only while the register is not in daily use — and it is now.
+     */
+    dayFactors?: ReadonlyMap<string, number>;
 }
 
 export interface ProrateResult {
@@ -59,7 +68,7 @@ export interface ProrateResult {
     grossPaise: number;
     deductionsPaise: number;
     netPaise: number;
-    /** WORKING days in the period the person was employed and had a structure. */
+    /** WORKING days paid — fractional when a half day falls in the period. */
     paidDays: number;
     /** Days of the period that fell on the person's weekly off. */
     weeklyOffDays: number;
@@ -102,7 +111,7 @@ export function inclusiveDays(fromIso: string, toIso: string): number {
     return n > 0 ? n : 0;
 }
 
-export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff = [] }: ProrateInput): ProrateResult {
+export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff = [], dayFactors }: ProrateInput): ProrateResult {
     const periodDays = inclusiveDays(fromIso, toIso);
     const empty: ProrateResult = {
         lines: [], grossPaise: 0, deductionsPaise: 0, netPaise: 0, paidDays: 0, weeklyOffDays: 0, periodDays,
@@ -139,14 +148,19 @@ export function prorate({ fromIso, toIso, joinedOn, leftOn, revisions, weeklyOff
         // for it. It is counted separately so the sheet can say so out loud.
         if (offDays.has(weekdayOf(day))) { weeklyOffDays += 1; continue; }
 
+        // What he was actually there for: 1 normally, 0.5 for a half day, 0 for
+        // an absence or an unpaid leave. A day nobody marked is a full day.
+        const factor = dayFactors?.get(day) ?? 1;
+        if (factor <= 0) continue;
+
         const perDay = payDaysOf(sorted[cursor].payDays);
         for (const l of sorted[cursor].lines) {
             const key = `${l.kind}|${l.name}`;
             const row = acc.get(key) ?? { name: l.name, kind: l.kind, paise: 0 };
-            row.paise += l.amountPaise / perDay;
+            row.paise += (l.amountPaise / perDay) * factor;
             acc.set(key, row);
         }
-        paidDays += 1;
+        paidDays += factor;
     }
 
     if (paidDays === 0) return { ...empty, weeklyOffDays };

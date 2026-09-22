@@ -4,7 +4,7 @@
 // file their own; HR (hr:leave:approve) decides, and may file for someone else.
 // An approval writes LEAVE onto the register for those days.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Check, Palmtree, Plus, X } from "lucide-react";
@@ -25,7 +25,8 @@ import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
-import { LEAVE_KINDS, LEAVE_KIND_LABELS, earliestLeaveDate, leaveNoticeError, type LeaveKind, type LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { LEAVE_KINDS, LEAVE_KIND_LABELS, LEAVE_NOTICE_DAYS, earliestLeaveDate, leaveNoticeError, type LeaveKind, type LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { getPayRules } from "@/shared/lib/orgDefaults";
 import { isoDaysBetween } from "../lib/attendanceCalendar";
 import type { LeaveRequestDto } from "../lib/attendanceTypes";
 import type { LeaveBalancePayload } from "../lib/leaveTypes";
@@ -160,13 +161,23 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
        hand is outside it, so the dialog stops nagging the moment it can pick a
        person. The server holds the same line — this is only to save the trip. */
     const held = heldToNotice;
-    const earliest = earliestLeaveDate(kind, todayIso());
+    /* The shop's own notice, from Pay Rules. The code fallback is on screen until
+       it arrives, so the dialog never opens with an empty or wrong first day. */
+    const [noticeDays, setNoticeDays] = useState(LEAVE_NOTICE_DAYS);
+    useEffect(() => {
+        let alive = true;
+        void getPayRules()
+            .then((r) => { if (alive) setNoticeDays(r.leaveNoticeDays); })
+            .catch(() => { /* the fallback stands */ });
+        return () => { alive = false; };
+    }, []);
+    const earliest = earliestLeaveDate(kind, todayIso(), noticeDays);
     const [fromDate, setFromDate] = useState(held ? earliest : todayIso());
     const [toDate, setToDate] = useState(held ? earliest : todayIso());
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
     const options = useMemo(() => (staff ?? []).map((s) => ({ value: s.id, label: s.name })), [staff]);
-    const notice = held ? leaveNoticeError(kind, fromDate, todayIso()) : null;
+    const notice = held ? leaveNoticeError(kind, fromDate, todayIso(), noticeDays) : null;
 
     /* What this person has left of this kind. Read for whoever the leave is FOR —
        HR filing on somebody's behalf needs that person's balance, not their own —
@@ -185,7 +196,7 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
     const pickKind = (next: LeaveKind) => {
         setKind(next);
         if (!held) return;
-        const first = earliestLeaveDate(next, todayIso());
+        const first = earliestLeaveDate(next, todayIso(), noticeDays);
         if (fromDate < first) {
             setFromDate(first);
             if (toDate < first) setToDate(first);
