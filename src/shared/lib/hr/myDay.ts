@@ -61,16 +61,17 @@ const KEY = "abeer.myDay";
 /**
  * Take the reading, then hand it to the login screen.
  *
- * Called immediately BEFORE `signOut()`, while the session is still good.
+ * Called immediately BEFORE `signOut()`, while the session is still good. Two
+ * steps: credit the tail, then read the card.
  *
- * `creditTail` is the difference between the two ways a session ends, and it is
- * not a nicety. On a DELIBERATE sign-out the man is still standing there, so the
- * quiet stretch since the last pulse is worked time and one POST to
- * /api/hr/activity credits it — without it his last few minutes are thrown away
- * and the figure he reads is not the one he worked. On an IDLE sign-out the same
- * POST credits exactly nothing on purpose: the gap is longer than his idle limit,
- * which is what fired the logout, and `creditableMinutes` drops it. That stretch
- * is the time the owner decided is not duty. So the idle path does not ask.
+ * `lastInputAt` is the instant of his last real click or keypress, which only the
+ * browser knows, and it is what makes the tail credit honest on BOTH ways out.
+ * Pulses land every few minutes, so the work between the final pulse and the
+ * final keypress was being thrown away — and on an idle sign-out it was lost for
+ * certain, because by then the gap to now exceeds the idle limit and the server
+ * credits nothing. Passing the instant instead of relying on "now" fixes both.
+ * The server clamps it to now and still caps it at the idle limit, so it can only
+ * ever credit less than omitting it would (see stampActivity).
  *
  * Nothing here may delay a sign-out for long, and nothing here may prevent one.
  * A till that cannot reach the server must still be able to let go of the person
@@ -78,16 +79,19 @@ const KEY = "abeer.myDay";
  * swallowed: no card is a fine outcome, a stuck sign-out is not.
  */
 export async function captureMyDay(
-    { creditTail = true, timeoutMs = 4000 }: { creditTail?: boolean; timeoutMs?: number } = {},
+    { lastInputAt, timeoutMs = 4000 }: { lastInputAt?: number | null; timeoutMs?: number } = {},
 ): Promise<void> {
     if (typeof window === "undefined") return;
     try {
         const ac = new AbortController();
         const timer = setTimeout(() => ac.abort(), timeoutMs);
         try {
-            if (creditTail) {
-                await fetch("/api/hr/activity", { method: "POST", signal: ac.signal }).catch(() => undefined);
-            }
+            await fetch("/api/hr/activity", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(lastInputAt ? { lastInputAt: new Date(lastInputAt).toISOString() } : {}),
+                signal: ac.signal,
+            }).catch(() => undefined);
             const res = await fetch("/api/hr/my-day", { signal: ac.signal });
             if (!res.ok) return;
             const day = await res.json() as MyDay;
