@@ -13,7 +13,7 @@
 // agreed — see PROJECT_BRAIN.md.
 
 import { useState } from "react";
-import { BadgeIndianRupee, Clock4, CalendarHeart, TriangleAlert } from "lucide-react";
+import { BadgeIndianRupee, Clock4, CalendarHeart, CalendarX2, TriangleAlert } from "lucide-react";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
@@ -89,6 +89,37 @@ const PENALTY_RULES: Rule[] = [
             v === 0
                 ? "Every late day is charged."
                 : `The first ${v} late day${v === 1 ? "" : "s"} of the month cost nothing. The penalty starts from the next one.`,
+    },
+];
+
+/**
+ * Absence and the notice a leave must carry.
+ *
+ * An absent day is ALREADY unpaid — payroll prorates the month and the day is
+ * worth nothing. So the penalty below is a second charge on top of that, and it
+ * is meant only for the day he simply did not come and did not ask. A day that
+ * was applied for and granted never reaches it.
+ */
+const ABSENCE_RULES: Rule[] = [
+    {
+        key: "absentPenaltyDays",
+        label: "Absent without a granted leave",
+        suffix: "days of basic, on top",
+        step: 0.25,
+        explain: (v) =>
+            v === 0
+                ? "An unasked absence costs the day itself and nothing more — that day is already paid at zero."
+                : `Besides losing the day, each unasked absence cuts a further ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of basic. Two such days in a month therefore cost about ${Number((2 * (1 + v)).toFixed(2))} days' pay.`,
+    },
+    {
+        key: "leaveNoticeDays",
+        label: "Leave must be applied at least",
+        suffix: "days before the leave day",
+        step: 1,
+        explain: (v) =>
+            v === 0
+                ? "Leave may be applied for on the day itself."
+                : `An application filed less than ${v} day${v === 1 ? "" : "s"} ahead is short notice. It can still be granted by hand — sickness and emergencies do not give notice — but the shop is not obliged to, and an ungranted absence falls under the rule above.`,
     },
 ];
 
@@ -185,6 +216,8 @@ const DEFAULTS: Record<string, string> = {
     holidayRate: "2",
     lateGraceMinutes: "15",
     lateFreeDays: "2",
+    absentPenaltyDays: "1",
+    leaveNoticeDays: "3",
     /* One box per style, so switching between them does not lose what was typed. */
     pay: "1",
     timesLate: "2",
@@ -271,6 +304,13 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                     <CalendarHeart size={15} />,
                     "Hours worked on a day the shop is shut, or on his own weekly off.",
                     WEEKEND_RULES,
+                )}
+
+                {group(
+                    "Absence & leave notice",
+                    <CalendarX2 size={15} />,
+                    "A day off that was asked for and granted is just leave. A day he simply did not come is the one charged here — and an absent day is already unpaid before any penalty is added.",
+                    ABSENCE_RULES,
                 )}
 
                 {group(
