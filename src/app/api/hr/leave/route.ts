@@ -8,19 +8,23 @@ import { leaveCreateSchema } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { toLeaveDto, LEAVE_INCLUDE } from "@/modules/hr/lib/leaveServer";
 
 // /api/hr/leave — leave requests.
-//   GET  ?status=PENDING|APPROVED|REJECTED|CANCELLED (default: every open + this year's decided)
+//   GET  ?status=PENDING|APPROVED|REJECTED|CANCELLED
+//        HR (hr:leave:approve) sees everybody; everyone else sees only their OWN.
+//        A leave reason is a private thing — being able to open the board is not
+//        a reason to read why a colleague was away.
 //   POST { userId?, fromDate, toDate, kind, reason } — file a request. For oneself
 //        no grant is needed; filing for someone else needs hr:leave:approve.
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const status = new URL(req.url).searchParams.get("status");
+        const all = hasPermissionWithScope(user.permissions, PERMISSIONS.HR_LEAVE_APPROVE);
         const rows = await prisma.leaveRequest.findMany({
-            where: status ? { status } : undefined,
+            where: { ...(status ? { status } : {}), ...(all ? {} : { userId: user.id }) },
             orderBy: [{ status: "asc" }, { fromDate: "desc" }],
             take: 500,
             include: LEAVE_INCLUDE,

@@ -131,7 +131,7 @@ export default function LeaveBoard({ canEdit, selfId }: { canEdit: boolean; self
     );
 }
 
-function LeaveDialog({ canPickPerson, onClose, onSaved }: { canPickPerson: boolean; onClose: () => void; onSaved: () => void }) {
+export function LeaveDialog({ canPickPerson, onClose, onSaved }: { canPickPerson: boolean; onClose: () => void; onSaved: () => void }) {
     const { data: staff } = useApiResource<StaffRow[]>(canPickPerson ? "/api/hr/staff" : null);
     const [userId, setUserId] = useState<number | null>(null);
     const [fromDate, setFromDate] = useState(todayIso());

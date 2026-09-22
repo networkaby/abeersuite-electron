@@ -137,6 +137,7 @@ import {
     Upload,
     UserCog,
     UserMinus,
+    UserRound,
     UserRoundPlus,
     Users,
     UsersRound,
@@ -637,6 +638,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/hr",
         pathPrefixes: ["/office/hr"],
         children: [
+            // First on purpose: it is the one link a plain staff member is given,
+            // and /office/hr lands on the first page the person actually holds.
+            { label: "My Info", icon: UserRound, href: "/office/hr/me", sidebarKey: "me" },
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
             { label: "Attendance", icon: CalendarCheck, href: "/office/hr/attendance", sidebarKey: "attendance" },
             { label: "Leave", icon: Palmtree, href: "/office/hr/leave", sidebarKey: "leave" },

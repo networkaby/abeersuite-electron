@@ -9,6 +9,7 @@ import { sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
 // anyone who holds only, say, Leave straight back out of the module. Sidebar
 // order, so the landing matches what they see on the left.
 const LANDING: [key: string, href: string][] = [
+    ["me", "/office/hr/me"],
     ["staff", "/office/hr/staff"],
     ["attendance", "/office/hr/attendance"],
     ["leave", "/office/hr/leave"],

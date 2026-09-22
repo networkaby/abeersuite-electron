@@ -19,20 +19,11 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { todayIso } from "@/shared/lib/format/formatDate";
 import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { isoDaysBetween, monthBounds, readDay, summarise, weekdayOf } from "../lib/attendanceCalendar";
+import { CELL, DOW } from "../lib/attendanceStyles";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceMark, RegisterPayload } from "../lib/attendanceTypes";
 
 const CYCLE: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
-const DOW = ["S", "M", "T", "W", "T", "F", "S"];
-
-const CELL: Record<AttendanceStatus, string> = {
-    PRESENT:    "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-    HALF_DAY:   "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-    ABSENT:     "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300",
-    LEAVE:      "bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
-    WEEKLY_OFF: "bg-muted text-muted-foreground",
-    HOLIDAY:    "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
-};
 
 const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
 
