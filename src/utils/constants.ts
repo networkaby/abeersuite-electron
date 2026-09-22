@@ -632,7 +632,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "HR & People",
         icon: IdCard,
         key: "hr",
-        dashboardHref: "/office/hr/staff",
+        // "/office/hr" rather than a fixed page: HR is ticked page by page, so the
+        // landing route picks the first page this person actually holds.
+        dashboardHref: "/office/hr",
         pathPrefixes: ["/office/hr"],
         children: [
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
