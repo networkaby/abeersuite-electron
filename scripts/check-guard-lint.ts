@@ -21,6 +21,13 @@ const EXCLUDED_OFFICE_ROUTES = new Set([
     // session to require. It is gated instead by `thisCounterId()`: off a counter it
     // answers "no PIN" and nothing else, so it does not exist on the web deployment.
     "src/app/api/counter-pin/status/route.ts",
+    // "When does the shop open next?", asked by the sign-in screen with nobody
+    // signed in. Every fact it returns is the sort a shop paints on its own door —
+    // opening and closing times, the days it is shut, the names of holidays. It
+    // takes no input, names no person, and reveals nothing about who works when:
+    // the SHOP's weekly off is a shop fact, while a person's own weekly off lives
+    // on StaffProfile and never reaches this route.
+    "src/app/api/office-hours/next/route.ts",
 ]);
 
 const GUARD_PATTERNS = [
