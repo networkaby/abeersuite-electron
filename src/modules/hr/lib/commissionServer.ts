@@ -11,13 +11,13 @@ import {
 import type { PayslipCommissionData } from "@/shared/components/print/PayslipBody";
 import { isoDaysBetween, monthBounds, weekdayOf } from "./attendanceCalendar";
 import { dateOnlyFromIso } from "./staffProfileServer";
-import type { AppliedHead, CommissionHeadDto, CommissionMonth, CommissionOverrideDto } from "./commissionTypes";
+import type { AppliedHead, CommissionEntryDto, CommissionHeadDto, CommissionMonth, CommissionOverrideDto } from "./commissionTypes";
 
 /**
  * Targets & Commission, server side — the reads the board, My Info and payroll
  * share. The arithmetic itself is in shared/lib/hr/commissionScheme.ts; this
- * file fetches the heads, the overrides and the sales, and resolves WHICH
- * heads reach a person.
+ * file fetches the heads, the overrides, the entries and the sales, and
+ * resolves WHICH heads reach a person.
  *
  * WHICH heads: every head that is globally on and reaches the person's role
  * (`appliesTo` empty = everyone), minus the ones switched off for them, with
@@ -27,19 +27,24 @@ import type { AppliedHead, CommissionHeadDto, CommissionMonth, CommissionOverrid
  *
  * WHAT counts: posted, not deleted, of the sale kinds, less sale returns — the
  * figure a customer actually paid for, the same reading `tierSpend.ts` gives.
+ * A MANUAL head counts CommissionEntry rows instead — things the app cannot
+ * see, typed in by HR — summed over the same date range.
  */
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
 const HEAD_SELECT = {
     id: true, name: true, description: true, kind: true, targetPaise: true, rateBp: true, slabsJson: true,
-    bonusPaise: true, active: true, appliesTo: true, sortOrder: true,
+    bonusPaise: true, unit: true, targetCount: true, perUnitPaise: true, active: true, appliesTo: true, sortOrder: true,
 } satisfies Prisma.CommissionHeadSelect;
 export type HeadRow = Prisma.CommissionHeadGetPayload<{ select: typeof HEAD_SELECT }>;
+export const COMMISSION_HEAD_SELECT = HEAD_SELECT;
 
 const OVERRIDE_SELECT = { userId: true, headId: true, rateBp: true, bonusPaise: true, off: true } satisfies Prisma.CommissionOverrideSelect;
+const ENTRY_SELECT = { id: true, userId: true, headId: true, date: true, count: true, note: true } satisfies Prisma.CommissionEntrySelect;
+export type EntryRow = Prisma.CommissionEntryGetPayload<{ select: typeof ENTRY_SELECT }>;
 
-/** Everything the profile carries for a person's role and sales month. Spread into a User select. */
+/** Everything the profile carries for a person's role and month. Spread into a User select. */
 export const COMMISSION_USER_SELECT = {
     role: true,
     userRole: { select: { label: true } },
@@ -47,16 +52,18 @@ export const COMMISSION_USER_SELECT = {
 };
 
 export function toHeadDto(h: HeadRow): CommissionHeadDto {
+    const kind = isCommissionKind(h.kind) ? h.kind : "PERCENT";
     return {
         id: h.id,
         name: h.name,
         description: h.description,
         rule: {
-            kind: isCommissionKind(h.kind) ? h.kind : "PERCENT",
+            kind,
             targetPaise: h.targetPaise,
             rateBp: h.rateBp,
             slabs: parseSlabs(h.slabsJson),
             bonusPaise: h.bonusPaise,
+            ...(kind === "MANUAL" ? { unit: h.unit ?? "units", targetCount: h.targetCount, perUnitPaise: h.perUnitPaise } : {}),
             label: h.name,
         },
         active: h.active,
@@ -65,10 +72,31 @@ export function toHeadDto(h: HeadRow): CommissionHeadDto {
     };
 }
 
+export const toEntryDto = (e: EntryRow): CommissionEntryDto => ({
+    id: e.id, userId: e.userId, headId: e.headId, date: toDateOnlyUtc(e.date), count: e.count, note: e.note,
+});
+
 /** The whole catalogue, in display order — off heads included; the callers decide. */
 export async function loadHeads(db: Db): Promise<CommissionHeadDto[]> {
     const rows = await db.commissionHead.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: HEAD_SELECT });
     return rows.map(toHeadDto);
+}
+
+/** Every entry for these people inside a date range, newest first, keyed by user. */
+export async function entriesByUser(db: Db, userIds: readonly number[], fromIso: string, toIso: string): Promise<Map<number, CommissionEntryDto[]>> {
+    const out = new Map<number, CommissionEntryDto[]>();
+    if (!userIds.length || fromIso > toIso) return out;
+    const rows = await db.commissionEntry.findMany({
+        where: { userId: { in: [...userIds] }, date: { gte: dateOnlyFromIso(fromIso), lte: dateOnlyFromIso(toIso) } },
+        orderBy: [{ date: "desc" }, { id: "desc" }],
+        select: ENTRY_SELECT,
+    });
+    for (const r of rows) {
+        const list = out.get(r.userId) ?? [];
+        list.push(toEntryDto(r));
+        out.set(r.userId, list);
+    }
+    return out;
 }
 
 /** The role label a head is matched against: the UserRole's label, else the raw role code. */
@@ -78,11 +106,16 @@ export const roleLabelOf = (u: { role: string | null; userRole: { label: string 
 export const headAppliesTo = (h: CommissionHeadDto, role: string | null) => h.appliesTo.length === 0 || (!!role && h.appliesTo.includes(role));
 
 /**
- * The heads that reach one person, each with their override applied.
- * Off-for-them heads are kept (flagged) so the board can switch them back;
- * `rulesOf` below drops them.
+ * The heads that reach one person, each with their override applied and — for
+ * a MANUAL head — the period's entries counted in. Off-for-them heads are kept
+ * (flagged) so the board can switch them back; `rulesOf` below drops them.
  */
-export function appliedHeadsFor(heads: readonly CommissionHeadDto[], role: string | null, overrides: readonly CommissionOverrideDto[]): AppliedHead[] {
+export function appliedHeadsFor(
+    heads: readonly CommissionHeadDto[],
+    role: string | null,
+    overrides: readonly CommissionOverrideDto[],
+    entries: readonly CommissionEntryDto[] = [],
+): AppliedHead[] {
     const out: AppliedHead[] = [];
     for (const h of heads) {
         if (!h.active || !headAppliesTo(h, role)) continue;
@@ -90,8 +123,14 @@ export function appliedHeadsFor(heads: readonly CommissionHeadDto[], role: strin
         let rule: CommissionRule = h.rule;
         let overridden = false;
         if (o?.rateBp != null && (h.rule.kind === "PERCENT" || h.rule.kind === "ABOVE_TARGET")) { rule = { ...rule, rateBp: o.rateBp }; overridden = true; }
-        if (o?.bonusPaise != null && h.rule.kind === "BONUS") { rule = { ...rule, bonusPaise: o.bonusPaise }; overridden = true; }
-        out.push({ headId: h.id, name: h.name, rule, overridden, off: !!o?.off });
+        if (o?.bonusPaise != null && (h.rule.kind === "BONUS" || h.rule.kind === "MANUAL")) { rule = { ...rule, bonusPaise: o.bonusPaise }; overridden = true; }
+        const applied: AppliedHead = { headId: h.id, name: h.name, rule, overridden, off: !!o?.off };
+        if (h.rule.kind === "MANUAL") {
+            const mine = entries.filter((e) => e.headId === h.id);
+            applied.rule = { ...applied.rule, count: mine.reduce((a, e) => a + e.count, 0) };
+            applied.entries = mine;
+        }
+        out.push(applied);
     }
     return out;
 }
@@ -175,10 +214,14 @@ export interface PeriodCommission {
 /**
  * What a payroll period earned — month by month, because a target is a month's
  * and a run is a date range. Each calendar month the period touches is judged
- * on its own: the sales inside the overlap against the person's heads, with
- * every target scaled to the share of the month the run covers (a run that pays
- * 10 days of a 30-day month asks for a third). The months are then summed, and
- * the breakup keeps one line per head per month so the slip can show its working.
+ * on its own: the sales (and the manual entries) inside the overlap against
+ * the person's heads, with every target scaled to the share of the month the
+ * run covers (a run that pays 10 days of a 30-day month asks for a third). The
+ * months are then summed, and the breakup keeps one line per head per month
+ * so the slip can show its working.
+ *
+ * `people[].applied` carries the heads WITHOUT a month's count — this function
+ * counts each segment's entries itself.
  */
 export async function commissionForUsers(
     db: Db,
@@ -200,13 +243,22 @@ export async function commissionForUsers(
         cursor = toDateOnlyUtc(new Date(dateOnlyFromIso(b.to).getTime() + 86_400_000));
     }
 
+    const ids = judged.map((p) => p.userId);
+    const needsEntries = judged.some((p) => p.on.some((a) => a.rule.kind === "MANUAL"));
     for (const seg of segments) {
-        const tallies = await salesByUser(db, judged.map((p) => p.userId), seg.from, seg.to);
+        const [tallies, entries] = await Promise.all([
+            salesByUser(db, ids, seg.from, seg.to),
+            needsEntries ? entriesByUser(db, ids, seg.from, seg.to) : Promise.resolve(new Map<number, CommissionEntryDto[]>()),
+        ]);
         const scale = isoDaysBetween(seg.from, seg.to).length / seg.monthDays;
         const month = seg.from.slice(0, 7);
         for (const p of judged) {
             const sales = tallies.get(p.userId)?.salesPaise ?? 0;
-            const o = computeCommission({ rules: p.on.map((a) => a.rule) }, sales, scale);
+            const mine = entries.get(p.userId) ?? [];
+            const rules = p.on.map((a) => a.rule.kind === "MANUAL"
+                ? { ...a.rule, count: mine.filter((e) => e.headId === a.headId).reduce((s, e) => s + e.count, 0) }
+                : a.rule);
+            const o = computeCommission({ rules }, sales, scale);
             if (o.totalPaise <= 0) continue;
             const prev = out.get(p.userId) ?? { commissionPaise: 0, basis: "", breakup: { salesPaise: 0, months: [] } };
             const note = `${month}: sold ${formatLakh(sales)}` + (o.topTargetPaise > 0 ? ` against ${formatLakh(o.topTargetPaise)}` : "");
@@ -221,7 +273,8 @@ export async function commissionForUsers(
                     terms: r.rule,
                     targetPaise: r.targetPaise,
                     paise: r.paise,
-                })).filter((h) => h.paise > 0 || h.targetPaise > 0),
+                    ...(r.count !== undefined ? { count: r.count, targetCount: r.targetCount ?? 0 } : {}),
+                })).filter((h) => h.paise > 0 || h.targetPaise > 0 || (h.targetCount ?? 0) > 0),
             });
             out.set(p.userId, prev);
         }

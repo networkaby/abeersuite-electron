@@ -6,7 +6,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { checkCommissionTerms, commissionHeadPatchSchema } from "@/shared/lib/schemas/hrSchema";
 import { parseSlabs } from "@/shared/lib/hr/commissionScheme";
-import { toHeadDto } from "@/modules/hr/lib/commissionServer";
+import { COMMISSION_HEAD_SELECT, toHeadDto } from "@/modules/hr/lib/commissionServer";
 
 // PATCH  /api/hr/commission/heads/[id] — edit a head (any subset of fields; the
 //        merged terms are checked as a whole, so a kind change cannot leave a
@@ -14,7 +14,7 @@ import { toHeadDto } from "@/modules/hr/lib/commissionServer";
 // DELETE /api/hr/commission/heads/[id] — remove it; the overrides on it go too.
 //        Months already paid keep what payroll froze.
 
-const SELECT = { id: true, name: true, description: true, kind: true, targetPaise: true, rateBp: true, slabsJson: true, bonusPaise: true, active: true, appliesTo: true, sortOrder: true };
+const SELECT = COMMISSION_HEAD_SELECT;
 
 const idOf = async (params: Promise<{ id: string }>) => {
     const id = Number((await params).id);
@@ -31,13 +31,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const cur = await prisma.commissionHead.findUnique({ where: { id }, select: SELECT });
         if (!cur) return NextResponse.json({ error: "Head not found" }, { status: 404 });
-        const kind = body.kind ?? (cur.kind as "PERCENT" | "ABOVE_TARGET" | "SLABS" | "BONUS");
+        const kind = body.kind ?? (cur.kind as "PERCENT" | "ABOVE_TARGET" | "SLABS" | "BONUS" | "MANUAL");
         const merged = {
             kind,
             targetPaise: body.targetPaise ?? cur.targetPaise,
             rateBp: body.rateBp ?? cur.rateBp,
             slabs: body.slabs ?? parseSlabs(cur.slabsJson),
             bonusPaise: body.bonusPaise ?? cur.bonusPaise,
+            unit: body.unit === undefined ? cur.unit : body.unit,
+            targetCount: body.targetCount ?? cur.targetCount,
+            perUnitPaise: body.perUnitPaise ?? cur.perUnitPaise,
         };
         const bad = checkCommissionTerms(merged);
         if (bad) return NextResponse.json({ error: bad }, { status: 400 });
@@ -50,7 +53,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 targetPaise: kind === "ABOVE_TARGET" || kind === "BONUS" ? merged.targetPaise : 0,
                 rateBp: kind === "PERCENT" || kind === "ABOVE_TARGET" ? merged.rateBp : 0,
                 slabsJson: kind === "SLABS" ? merged.slabs : Prisma.DbNull,
-                bonusPaise: kind === "BONUS" ? merged.bonusPaise : 0,
+                bonusPaise: kind === "BONUS" || kind === "MANUAL" ? merged.bonusPaise : 0,
+                unit: kind === "MANUAL" ? merged.unit?.trim() || null : null,
+                targetCount: kind === "MANUAL" ? merged.targetCount : 0,
+                perUnitPaise: kind === "MANUAL" ? merged.perUnitPaise : 0,
                 ...(body.active !== undefined ? { active: body.active } : {}),
                 ...(body.appliesTo !== undefined ? { appliesTo: body.appliesTo } : {}),
                 ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),

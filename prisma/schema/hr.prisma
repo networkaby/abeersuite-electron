@@ -85,6 +85,7 @@ model StaffProfile {
   updatedAt DateTime      @default(now()) @updatedAt
   salaries  StaffSalary[]
   commissionOverrides CommissionOverride[]
+  commissionEntries   CommissionEntry[]
 
   @@index([leftOn])
   @@index([updatedAt])
@@ -302,8 +303,10 @@ model CommissionHead {
   id          Int     @id @default(autoincrement())
   name        String
   description String?
-  /// PERCENT | ABOVE_TARGET | SLABS | BONUS — a plain string, validated by zod
-  /// (CommissionKind); not an enum, so a new kind needs no ADD VALUE migration.
+  /// PERCENT | ABOVE_TARGET | SLABS | BONUS | MANUAL — a plain string, validated
+  /// by zod (CommissionKind); not an enum, so a new kind needs no ADD VALUE
+  /// migration. MANUAL counts things the app cannot see (new customers, social
+  /// work, visits) from CommissionEntry rows typed in by HR.
   kind        String
   /// ABOVE_TARGET / BONUS: the monthly line, paise. 0 elsewhere.
   targetPaise Int     @default(0)
@@ -311,8 +314,14 @@ model CommissionHead {
   rateBp      Int     @default(0)
   /// SLABS: [{ fromPaise, rateBp }] ascending. Read whole, never queried.
   slabsJson   Json?
-  /// BONUS: the flat amount, paise.
+  /// BONUS / MANUAL: the flat amount at the target, paise.
   bonusPaise  Int     @default(0)
+  /// MANUAL: what is counted — "customers", "visits", "posts".
+  unit         String?
+  /// MANUAL: how many a month. 0 = no target, only the per-unit pay.
+  targetCount  Int     @default(0)
+  /// MANUAL: paid for each unit, paise.
+  perUnitPaise Int     @default(0)
   /// Globally on. An off head reaches nobody, whatever the overrides say.
   active      Boolean @default(true)
   /// Role labels (UserRole.label) this head is for. Empty = everyone.
@@ -323,6 +332,7 @@ model CommissionHead {
   updatedAt   DateTime @default(now()) @updatedAt
 
   overrides CommissionOverride[]
+  entries   CommissionEntry[]
 
   @@index([active])
   @@index([updatedAt])
@@ -347,4 +357,31 @@ model CommissionOverride {
   @@unique([userId, headId])
   @@index([headId])
   @@map("commission_overrides")
+}
+
+// One thing done that the app could not see — owner, 2026-09-23: *"give a
+// customer target that is outside the app like social work etc. those are not
+// possible to track automatically but we will manually create entry for
+// those."* HR types it in against a MANUAL head; the month's entries add up
+// to the count that head is judged on. Payroll freezes the count with the pay.
+model CommissionEntry {
+  id      Int            @id @default(autoincrement())
+  userId  Int
+  profile StaffProfile   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  headId  Int
+  head    CommissionHead @relation(fields: [headId], references: [id], onDelete: Cascade)
+
+  /// The day it happened — the month it counts in.
+  date        DateTime @db.Date
+  /// How many units — 3 new customers in one entry.
+  count       Int      @default(1)
+  note        String?
+  createdById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([userId, headId, date])
+  @@index([headId])
+  @@index([updatedAt])
+  @@map("commission_entries")
 }

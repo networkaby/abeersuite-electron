@@ -11,7 +11,7 @@ import { nonPayableDays } from "@/modules/hr/lib/attendancePayable";
 import { LEAVE_INCLUDE, toLeaveDto } from "@/modules/hr/lib/leaveServer";
 import { leaveBalancesFor } from "@/modules/hr/lib/leaveBalance";
 import type { MyHrPayload } from "@/modules/hr/lib/myHrTypes";
-import { COMMISSION_USER_SELECT, appliedHeadsFor, loadHeads, monthFor, roleLabelOf, salesByUser } from "@/modules/hr/lib/commissionServer";
+import { COMMISSION_USER_SELECT, appliedHeadsFor, entriesByUser, loadHeads, monthFor, roleLabelOf, salesByUser } from "@/modules/hr/lib/commissionServer";
 import type { RegisterPerson, HolidayDto, AttendanceMark } from "@/modules/hr/lib/attendanceTypes";
 import { USER_BRANCHES_SELECT, branchIdsFrom } from "@/modules/hr/lib/staffBranchesServer";
 import { holidayApplies } from "@/modules/hr/lib/attendanceCalendar";
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         // running month stops at today, because the rest of it is not worked yet.
         const upto = to < today ? to : today;
 
-        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads] = await Promise.all([
+        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads, myEntries] = await Promise.all([
             loadSeasonalHours(),
             prisma.user.findUnique({
                 where: { id: userId },
@@ -92,6 +92,7 @@ export async function GET(req: Request) {
             // bill dated ahead (a post-dated invoice) is not lost.
             salesByUser(prisma, [userId], from, to),
             loadHeads(prisma),
+            entriesByUser(prisma, [userId], from, to),
         ]);
         if (!me) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -154,7 +155,7 @@ export async function GET(req: Request) {
             // Only the heads that reach ME — globally on, for my role, not off for
             // me — the very list the board shows under my row.
             commission: monthFor(
-                appliedHeadsFor(heads, roleLabelOf(me), me.staffProfile?.commissionOverrides ?? []),
+                appliedHeadsFor(heads, roleLabelOf(me), me.staffProfile?.commissionOverrides ?? [], myEntries.get(userId) ?? []),
                 sales.get(userId), month, today, person.weeklyOff,
             ),
         };

@@ -21,20 +21,32 @@ export interface CommissionOverrideDto {
     headId: number;
     /** Their own rate (share heads), null = the head's. */
     rateBp: number | null;
-    /** Their own bonus (bonus heads), null = the head's. */
+    /** Their own bonus (bonus / manual heads), null = the head's. */
     bonusPaise: number | null;
     off: boolean;
+}
+
+/** One thing done outside the app, typed in against a MANUAL head. */
+export interface CommissionEntryDto {
+    id: number;
+    userId: number;
+    headId: number;
+    date: string;
+    count: number;
+    note: string | null;
 }
 
 /** One head as it applies to one person, after their override. */
 export interface AppliedHead {
     headId: number;
     name: string;
-    /** The head's rule with the person's own figure in place, when they have one. */
+    /** The head's rule with the person's own figure in place, and — for a MANUAL head — the month's count. */
     rule: CommissionRule;
     /** True when the rule's figure is the person's own, not the head's. */
     overridden: boolean;
     off: boolean;
+    /** MANUAL only: the month's entries, newest first. */
+    entries?: CommissionEntryDto[];
 }
 
 /** A month's sales against the heads that reach a person — the figures the card and the board show. */

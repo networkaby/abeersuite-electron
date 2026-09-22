@@ -14,9 +14,15 @@
 // through /api/hr/commission/overrides and the board re-reads.
 
 import { Fragment, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Field } from "@/shared/components/Field";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Trophy } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -34,7 +40,7 @@ import { TargetProgress } from "./MyTargetCard";
 
 /** What the override box edits for this kind of head, if anything. */
 const overridable = (a: AppliedHead): "rate" | "bonus" | null =>
-    a.rule.kind === "PERCENT" || a.rule.kind === "ABOVE_TARGET" ? "rate" : a.rule.kind === "BONUS" ? "bonus" : null;
+    a.rule.kind === "PERCENT" || a.rule.kind === "ABOVE_TARGET" ? "rate" : a.rule.kind === "BONUS" || a.rule.kind === "MANUAL" ? "bonus" : null;
 
 export default function CommissionMonthTab({ rows, heads, canEdit, isCurrent, monthLabel, onChanged }: {
     rows: CommissionBoardRow[];
@@ -47,6 +53,18 @@ export default function CommissionMonthTab({ rows, heads, canEdit, isCurrent, mo
     const [open, setOpen] = useState<number | null>(null);
     // The box as typed, per person+head, until it is saved on blur.
     const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [adding, setAdding] = useState<{ row: CommissionBoardRow; head: AppliedHead } | null>(null);
+
+    const removeEntry = async (e: { id: number; count: number; date: string }, head: AppliedHead) => {
+        const ok = await confirmAction({ title: `Remove ${e.count} ${head.rule.unit ?? ""} on ${formatDate(e.date)}?`.replace("  ", " "), body: "A month already paid keeps what payroll froze.", confirmLabel: "Remove entry" });
+        if (!ok) return;
+        try {
+            await axios.delete(`/api/hr/commission/entries/${e.id}`);
+            onChanged();
+        } catch (err) {
+            toast.error(extractApiError(err, "Could not remove the entry"));
+        }
+    };
     const byId = new Map(heads.map((h) => [h.id, h]));
 
     // Achievers first, by share of target; then by sales — the board reads as
@@ -149,6 +167,26 @@ export default function CommissionMonthTab({ rows, heads, canEdit, isCurrent, mo
                                                         <Badge variant="outline" className={`px-1.5 text-[10px] ${KIND_BADGE[a.rule.kind]}`}>{KIND_SHORT[a.rule.kind]}</Badge>
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">{describeRule(a.rule, formatRupeesFromPaise)}{a.overridden ? ` · head says ${headSays}` : ""}</div>
+                                                    {a.rule.kind === "MANUAL" && (
+                                                        <div className="mt-1 space-y-0.5 text-xs">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium tabular-nums">{a.rule.count ?? 0}{a.rule.targetCount ? ` of ${a.rule.targetCount}` : ""} {a.rule.unit}</span>
+                                                                {canEdit && !a.off && (
+                                                                    <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={(ev) => { ev.stopPropagation(); setAdding({ row: r, head: a }); }}>
+                                                                        <Plus size={12} /> Add entry
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                            {(a.entries ?? []).map((e) => (
+                                                                <div key={e.id} className="flex items-center gap-2 text-muted-foreground">
+                                                                    <span className="tabular-nums">{formatDate(e.date)}</span>
+                                                                    <span className="font-medium text-foreground">{e.count}</span>
+                                                                    {e.note && <span className="truncate">— {e.note}</span>}
+                                                                    {canEdit && <button type="button" className="text-muted-foreground hover:text-destructive" aria-label="Remove entry" onClick={() => removeEntry(e, a)}><Trash2 size={12} /></button>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell colSpan={2}>
                                                     {what ? (
@@ -176,6 +214,50 @@ export default function CommissionMonthTab({ rows, heads, canEdit, isCurrent, mo
                     </TableBody>
                 </Table>
             </div>
+            {adding && (
+                <EntryDialog row={adding.row} head={adding.head} onClose={() => setAdding(null)} onSaved={() => { setAdding(null); onChanged(); }} />
+            )}
         </div>
+    );
+}
+
+/** One thing done outside the app: the day, how many, a note. */
+function EntryDialog({ row, head, onClose, onSaved }: { row: CommissionBoardRow; head: AppliedHead; onClose: () => void; onSaved: () => void }) {
+    const [date, setDate] = useState(todayIso());
+    const [count, setCount] = useState("1");
+    const [note, setNote] = useState("");
+    const [saving, setSaving] = useState(false);
+    const n = Number(count);
+    const canSave = !saving && !!date && Number.isInteger(n) && n >= 1;
+    const submit = async () => {
+        setSaving(true);
+        try {
+            await axios.post("/api/hr/commission/entries", { userId: row.userId, headId: head.headId, date, count: n, note: note.trim() || null });
+            toast.success("Entry added");
+            onSaved();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not add the entry"));
+        } finally {
+            setSaving(false);
+        }
+    };
+    return (
+        <Dialog open onOpenChange={(o) => !o && onClose()}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{head.name} — {row.name}</DialogTitle>
+                    <DialogDescription>Counted in {head.rule.unit}. It lands in the month of its date.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Date" required>{(id) => <TallyDateInput id={id} value={date} onValueChange={setDate} maxIso={todayIso()} />}</Field>
+                    <Field label={`How many ${head.rule.unit ?? ""}`.trim()} required>{(id) => <NumericInput id={id} mode="digits" value={count} onValueChange={setCount} min={1} />}</Field>
+                    <Field label="Note" className="sm:col-span-2">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Who, what, where (optional)" />}</Field>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button type="button" onClick={submit} disabled={!canSave}>{saving ? "Saving…" : "Add entry"}</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -37,13 +37,14 @@ export const KIND_BADGE: Record<CommissionKind, string> = {
     ABOVE_TARGET: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-300",
     SLABS:        "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
     BONUS:        "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300",
+    MANUAL:       "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-300",
 };
-export const KIND_SHORT: Record<CommissionKind, string> = { PERCENT: "Share of sales", ABOVE_TARGET: "Above target", SLABS: "Slabs", BONUS: "Target bonus" };
+export const KIND_SHORT: Record<CommissionKind, string> = { PERCENT: "Share of sales", ABOVE_TARGET: "Above target", SLABS: "Slabs", BONUS: "Target bonus", MANUAL: "Manual count" };
 
 const L = 100_000_00;
 
 /** The body a create or edit sends — the terms flat, the way the API wants them. */
-type HeadBody = { name: string; description: string | null; kind: CommissionKind; targetPaise: number; rateBp: number; slabs: { fromPaise: number; rateBp: number }[]; bonusPaise: number; active: boolean; appliesTo: string[] };
+type HeadBody = { name: string; description: string | null; kind: CommissionKind; targetPaise: number; rateBp: number; slabs: { fromPaise: number; rateBp: number }[]; bonusPaise: number; unit?: string; targetCount?: number; perUnitPaise?: number; active: boolean; appliesTo: string[] };
 
 export default function CommissionHeadsTab({ heads, roles, canEdit, onChanged }: {
     heads: CommissionHeadDto[];
@@ -126,7 +127,7 @@ export default function CommissionHeadsTab({ heads, roles, canEdit, onChanged }:
             </div>
 
             <p className="text-xs text-muted-foreground">
-                A head is one way of earning — a share of sales, a bonus at a target, a slab ladder. Create the heads here once and say which kinds of user they are for; each person&apos;s own overrides live on the Per person tab.
+                A head is one way of earning — a share of sales, a bonus at a target, a slab ladder, or a manual count for things the app cannot see (new customers, social work) that HR types in on the Per person tab. Create the heads here once and say which kinds of user they are for; each person&apos;s own overrides live on the Per person tab.
             </p>
 
             {view === "CREATE" ? (
@@ -200,6 +201,11 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
     // The example: for a slab ladder, a month landing on each line and one past
     // the last; otherwise at the target and a fifth past it, or a round lakh.
     const example = useMemo(() => {
+        if (rule.kind === "MANUAL") {
+            // Counts, not rupees: at the target and half again past it, or ten when there is none.
+            const tc = rule.targetCount || 10;
+            return [tc, Math.round(tc * 1.5)].map((count) => ({ sales: count, paise: computeCommission({ rules: [{ ...rule, count }] }, 0).totalPaise }));
+        }
         let points: number[];
         if (rule.kind === "SLABS" && rule.slabs.length) {
             const lines = rule.slabs.map((s) => s.fromPaise).filter((f) => f > 0);
@@ -248,6 +254,22 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                                 {(id) => <NumericInput id={id} mode="decimal" value={draft.rate} onValueChange={(v) => set({ rate: v })} placeholder="e.g. 1.5" />}
                             </Field>
                         )}
+                        {draft.kind === "MANUAL" && (
+                            <>
+                                <Field label="What is counted" required hint="customers, visits, posts — whatever HR will type in">
+                                    {(id) => <Input id={id} value={draft.unit} onChange={(e) => set({ unit: e.target.value })} maxLength={30} placeholder="e.g. new customers" />}
+                                </Field>
+                                <Field label="Monthly target (count)" hint="0 or blank = no target, only the pay per unit">
+                                    {(id) => <NumericInput id={id} mode="digits" value={draft.targetCount} onValueChange={(v) => set({ targetCount: v })} placeholder="e.g. 10" />}
+                                </Field>
+                                <Field label="Pay per unit (₹)" hint="For each one counted">
+                                    {(id) => <NumericInput id={id} mode="decimal" value={draft.perUnit} onValueChange={(v) => set({ perUnit: v })} placeholder="e.g. 100" />}
+                                </Field>
+                                <Field label="Bonus at the target (₹)" hint="A flat amount the month the count is reached">
+                                    {(id) => <NumericInput id={id} mode="decimal" value={draft.bonus} onValueChange={(v) => set({ bonus: v })} placeholder="optional" />}
+                                </Field>
+                            </>
+                        )}
                         {draft.kind === "BONUS" && (
                             <Field label="Bonus (₹)" required hint="A flat amount the month the target is met">
                                 {(id) => <NumericInput id={id} mode="decimal" value={draft.bonus} onValueChange={(v) => set({ bonus: v })} placeholder="e.g. 1,500" />}
@@ -295,7 +317,7 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                     {!bad && (
                         <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                             {example.map(({ sales, paise }) => (
-                                <li key={sales}>Sells {formatRupeesFromPaise(sales)} in a month → <span className="font-medium text-foreground">{formatRupeesFromPaise(paise)}</span></li>
+                                <li key={sales}>{rule.kind === "MANUAL" ? `${sales} ${rule.unit || "units"} in a month` : `Sells ${formatRupeesFromPaise(sales)} in a month`} → <span className="font-medium text-foreground">{formatRupeesFromPaise(paise)}</span></li>
                             ))}
                         </ul>
                     )}

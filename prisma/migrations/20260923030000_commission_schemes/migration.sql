@@ -15,6 +15,9 @@ CREATE TABLE "commission_heads" (
     "rateBp" INTEGER NOT NULL DEFAULT 0,
     "slabsJson" JSONB,
     "bonusPaise" INTEGER NOT NULL DEFAULT 0,
+    "unit" TEXT,
+    "targetCount" INTEGER NOT NULL DEFAULT 0,
+    "perUnitPaise" INTEGER NOT NULL DEFAULT 0,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "appliesTo" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
@@ -43,6 +46,28 @@ CREATE INDEX "commission_overrides_headId_idx" ON "commission_overrides"("headId
 ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_userId_fkey"
     FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_headId_fkey"
+    FOREIGN KEY ("headId") REFERENCES "commission_heads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Things the app cannot see, typed in by HR against a MANUAL head.
+CREATE TABLE "commission_entries" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "headId" INTEGER NOT NULL,
+    "date" DATE NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 1,
+    "note" TEXT,
+    "createdById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "commission_entries_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX "commission_entries_userId_headId_date_idx" ON "commission_entries"("userId", "headId", "date");
+CREATE INDEX "commission_entries_headId_idx" ON "commission_entries"("headId");
+CREATE INDEX "commission_entries_updatedAt_idx" ON "commission_entries"("updatedAt");
+ALTER TABLE "commission_entries" ADD CONSTRAINT "commission_entries_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "commission_entries" ADD CONSTRAINT "commission_entries_headId_fkey"
     FOREIGN KEY ("headId") REFERENCES "commission_heads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- The slip's commission working, frozen with the pay it explains.

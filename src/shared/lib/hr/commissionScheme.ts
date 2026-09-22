@@ -14,7 +14,7 @@
 //
 // Money is paise (Int). A rate is basis points: 100 bp = 1%.
 
-export const COMMISSION_KINDS = ["PERCENT", "ABOVE_TARGET", "SLABS", "BONUS"] as const;
+export const COMMISSION_KINDS = ["PERCENT", "ABOVE_TARGET", "SLABS", "BONUS", "MANUAL"] as const;
 export type CommissionKind = (typeof COMMISSION_KINDS)[number];
 
 export const COMMISSION_KIND_LABELS: Record<CommissionKind, string> = {
@@ -22,6 +22,7 @@ export const COMMISSION_KIND_LABELS: Record<CommissionKind, string> = {
     ABOVE_TARGET: "A share of sales above a target",
     SLABS:        "Slabs — the rate depends on how much was sold",
     BONUS:        "A flat bonus on reaching a target",
+    MANUAL:       "Manual count — things the app cannot see, typed in by HR",
 };
 
 /** One slab: the rate that applies to sales from this rupee upward, until the next slab starts. */
@@ -39,8 +40,19 @@ export interface CommissionRule {
     rateBp: number;
     /** SLABS. */
     slabs: CommissionSlab[];
-    /** BONUS. */
+    /** BONUS / MANUAL: the flat amount at the target. */
     bonusPaise: number;
+    /** MANUAL: what is counted — "customers", "visits", "posts". */
+    unit?: string;
+    /** MANUAL: how many a month. 0 = no target, only the per-unit pay. */
+    targetCount?: number;
+    /** MANUAL: paid for each unit. */
+    perUnitPaise?: number;
+    /**
+     * MANUAL: the month's count as resolved by the server from the entries —
+     * the arithmetic's input, set on the applied rule, never stored on a head.
+     */
+    count?: number;
     /** The head's name, when the rule came from one — the card and the slip say it. */
     label?: string;
 }
@@ -79,7 +91,14 @@ export function parseRules(raw: unknown): CommissionRule[] {
         if (!r || typeof r !== "object") continue;
         const o = r as Record<string, unknown>;
         if (!isCommissionKind(o.kind)) continue;
-        out.push({ kind: o.kind, targetPaise: num(o.targetPaise), rateBp: num(o.rateBp), slabs: parseSlabs(o.slabs), bonusPaise: num(o.bonusPaise), ...(typeof o.label === "string" ? { label: o.label } : {}) });
+        out.push({
+            kind: o.kind, targetPaise: num(o.targetPaise), rateBp: num(o.rateBp), slabs: parseSlabs(o.slabs), bonusPaise: num(o.bonusPaise),
+            ...(typeof o.unit === "string" ? { unit: o.unit } : {}),
+            ...(o.targetCount !== undefined ? { targetCount: num(o.targetCount) } : {}),
+            ...(o.perUnitPaise !== undefined ? { perUnitPaise: num(o.perUnitPaise) } : {}),
+            ...(o.count !== undefined ? { count: num(o.count) } : {}),
+            ...(typeof o.label === "string" ? { label: o.label } : {}),
+        });
     }
     return out;
 }
@@ -94,6 +113,9 @@ export interface RuleOutcome {
     /** The rule's target, scaled — 0 when the kind has none. */
     targetPaise: number;
     targetMet: boolean;
+    /** MANUAL only: the month's count, and the (scaled) target count. */
+    count?: number;
+    targetCount?: number;
 }
 
 export interface CommissionOutcome {
@@ -142,6 +164,15 @@ export function computeCommission(terms: CommissionSchemeTerms, salesPaise: numb
             case "BONUS":
                 paise = target > 0 && sales >= target ? rule.bonusPaise : 0;
                 break;
+            case "MANUAL": {
+                // Judged on the entries' count, not on sales: so much per unit,
+                // and the bonus once the (scaled) target count is reached.
+                const count = rule.count ?? 0;
+                const targetCount = Math.round((rule.targetCount ?? 0) * scale);
+                const met = targetCount > 0 && count >= targetCount;
+                paise = count * (rule.perUnitPaise ?? 0) + (met ? rule.bonusPaise : 0);
+                return { rule, paise: Math.round(paise), targetPaise: 0, targetMet: met, count, targetCount };
+            }
         }
         return { rule, paise: Math.round(paise), targetPaise: target, targetMet: target > 0 && sales >= target };
     });
@@ -164,6 +195,14 @@ export function describeRule(r: CommissionRule, formatPaise: (p: number) => stri
         case "PERCENT":      return `${formatBp(r.rateBp)} of every sale`;
         case "ABOVE_TARGET": return `${formatBp(r.rateBp)} of sales above ${formatPaise(r.targetPaise)}`;
         case "BONUS":        return `${formatPaise(r.bonusPaise)} bonus at ${formatPaise(r.targetPaise)}`;
+        case "MANUAL": {
+            const unit = r.unit || "units";
+            const parts: string[] = [];
+            if (r.perUnitPaise) parts.push(`${formatPaise(r.perUnitPaise)} per ${singular(unit)}`);
+            if (r.targetCount && r.bonusPaise) parts.push(`${formatPaise(r.bonusPaise)} bonus at ${r.targetCount} ${unit}`);
+            else if (r.targetCount) parts.push(`target ${r.targetCount} ${unit}`);
+            return parts.join(" · ") || `counted in ${unit}`;
+        }
         case "SLABS":
             return r.slabs.map((s, i) => {
                 const next = r.slabs[i + 1];
@@ -173,6 +212,9 @@ export function describeRule(r: CommissionRule, formatPaise: (p: number) => stri
             }).join(", ") || "slabs not set";
     }
 }
+
+/** "customers" → "customer", "posts" → "post"; a word not ending in s is left alone. */
+const singular = (unit: string) => (unit.length > 3 && unit.endsWith("s") ? unit.slice(0, -1) : unit);
 
 /** The scheme in one sentence, for the board row and the person's card. */
 export function describeScheme(terms: CommissionSchemeTerms, formatPaise: (p: number) => string): string {

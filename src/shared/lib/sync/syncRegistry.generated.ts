@@ -49,6 +49,7 @@ export const SYNC_REGISTRY: Record<string, SyncRegistryEntry> = {
     "ChatMessage": { model: "ChatMessage", delegate: "chatMessage", pk: ["id"], exact: [], dates: ["createdAt"], cache: [] },
     "ChatRoom": { model: "ChatRoom", delegate: "chatRoom", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "ChatRoomMember": { model: "ChatRoomMember", delegate: "chatRoomMember", pk: ["id"], exact: [], dates: ["joinedAt", "lastReadAt"], cache: [] },
+    "commission_entries": { model: "CommissionEntry", delegate: "commissionEntry", pk: ["id"], exact: [], dates: ["createdAt", "date", "updatedAt"], cache: [] },
     "commission_heads": { model: "CommissionHead", delegate: "commissionHead", pk: ["id"], exact: [], dates: ["createdAt", "updatedAt"], cache: [] },
     "commission_overrides": { model: "CommissionOverride", delegate: "commissionOverride", pk: ["id"], exact: [], dates: ["updatedAt"], cache: [] },
     "Company": { model: "Company", delegate: "company", pk: ["id"], exact: [], dates: ["booksBeginningFrom", "convertedAt", "createdAt", "financialYearFrom", "mergedAt", "updatedAt"], cache: [] },

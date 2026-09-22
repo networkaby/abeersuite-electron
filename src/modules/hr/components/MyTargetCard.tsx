@@ -122,11 +122,14 @@ export default function MyTargetCard({ month: m, isCurrentMonth }: { month: Comm
                 {o.rules.map((r, i) => (
                     <li key={i} className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1">
                         <span className="flex min-w-0 items-center gap-1.5">
-                            {r.targetPaise > 0 && (r.targetMet
+                            {(r.targetPaise > 0 || (r.targetCount ?? 0) > 0) && (r.targetMet
                                 ? <Check size={12} className="shrink-0 text-emerald-600" />
                                 : <span className="inline-block h-3 w-3 shrink-0 rounded-full border border-muted-foreground/50" />)}
-                            <span className={`truncate ${r.targetPaise > 0 && !r.targetMet ? "text-muted-foreground" : ""}`} title={describeRule(r.rule, formatRupeesFromPaise)}>
-                                {r.rule.label ? <><span className="font-medium">{r.rule.label}</span> · </> : null}{describeRule(r.rule, formatRupeesFromPaise)}
+                            <span className={`truncate ${(r.targetPaise > 0 || (r.targetCount ?? 0) > 0) && !r.targetMet ? "text-muted-foreground" : ""}`} title={describeRule(r.rule, formatRupeesFromPaise)}>
+                                {r.rule.label ? <><span className="font-medium">{r.rule.label}</span> · </> : null}
+                                {r.count !== undefined
+                                    ? <><span className="font-medium text-foreground">{r.count}{r.targetCount ? ` of ${r.targetCount}` : ""} {r.rule.unit}</span> · {describeRule(r.rule, formatRupeesFromPaise)}</>
+                                    : describeRule(r.rule, formatRupeesFromPaise)}
                             </span>
                         </span>
                         <span className="shrink-0 font-medium tabular-nums">{r.paise > 0 ? formatRupeesFromPaise(r.paise) : "—"}</span>

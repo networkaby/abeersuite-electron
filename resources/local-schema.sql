@@ -1790,6 +1790,9 @@ CREATE TABLE IF NOT EXISTS "commission_heads" (
     "rateBp" INTEGER NOT NULL DEFAULT 0,
     "slabsJson" JSONB,
     "bonusPaise" INTEGER NOT NULL DEFAULT 0,
+    "unit" TEXT,
+    "targetCount" INTEGER NOT NULL DEFAULT 0,
+    "perUnitPaise" INTEGER NOT NULL DEFAULT 0,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "appliesTo" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
@@ -1807,6 +1810,9 @@ ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "targetPaise" INTEGER NO
 ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "rateBp" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "slabsJson" JSONB;
 ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "bonusPaise" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "unit" TEXT;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "targetCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "perUnitPaise" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "appliesTo" TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE "commission_heads" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
@@ -1833,6 +1839,30 @@ ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "rateBp" INTEGER;
 ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "bonusPaise" INTEGER;
 ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "off" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "commission_overrides" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "commission_entries" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "headId" INTEGER NOT NULL,
+    "date" DATE NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 1,
+    "note" TEXT,
+    "createdById" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "commission_entries_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "headId" INTEGER NOT NULL;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "date" DATE NOT NULL;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "count" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "commission_entries" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "ChatRoom" (
@@ -4384,6 +4414,15 @@ CREATE INDEX IF NOT EXISTS "commission_overrides_headId_idx" ON "commission_over
 CREATE UNIQUE INDEX IF NOT EXISTS "commission_overrides_userId_headId_key" ON "commission_overrides"("userId", "headId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "commission_entries_userId_headId_date_idx" ON "commission_entries"("userId", "headId", "date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "commission_entries_headId_idx" ON "commission_entries"("headId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "commission_entries_updatedAt_idx" ON "commission_entries"("updatedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_key_key" ON "ChatRoom"("key");
 
 -- CreateIndex
@@ -5284,6 +5323,20 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "commission_overrides" ADD CONSTRAINT "commission_overrides_headId_fkey" FOREIGN KEY ("headId") REFERENCES "commission_heads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "commission_entries" ADD CONSTRAINT "commission_entries_userId_fkey" FOREIGN KEY ("userId") REFERENCES "staff_profiles"("userId") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "commission_entries" ADD CONSTRAINT "commission_entries_headId_fkey" FOREIGN KEY ("headId") REFERENCES "commission_heads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6706,6 +6759,13 @@ DO $$ BEGIN
     IF to_regclass('public."ChatRoomMember"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "ChatRoomMember";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ChatRoomMember"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."commission_entries"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "commission_entries";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "commission_entries"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

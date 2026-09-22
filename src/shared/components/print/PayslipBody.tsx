@@ -128,6 +128,9 @@ export interface PayslipCommissionData {
             /** The target for the part of the month the run covered, 0 when the head has none. */
             targetPaise: number;
             paise: number;
+            /** MANUAL heads: the entries counted, and the (scaled) target count. */
+            count?: number;
+            targetCount?: number;
         }[];
     }[];
 }
@@ -303,7 +306,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true, show
                                 {comm.months.length > 1 && <div style={{ fontSize: 10, color: "#444" }}>{monthName(m.month)} · sold {formatRupeesFromPaise(m.salesPaise)}</div>}
                                 {m.heads.map((h, i) => (
                                     <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 10 }}>
-                                        <span>{h.name} · {describeRule(h.terms, formatRupeesFromPaise)}</span>
+                                        <span>{h.name} · {describeRule(h.terms, formatRupeesFromPaise)}{h.count !== undefined ? ` · ${h.count}${h.targetCount ? ` of ${h.targetCount}` : ""} ${h.terms.unit ?? ""}` : ""}</span>
                                         <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{h.paise > 0 ? formatRupeesFromPaise(h.paise) : "—"}</span>
                                     </div>
                                 ))}
@@ -421,7 +424,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true, show
                                         <tr key={i}>
                                             <td style={tight}>{h.name}</td>
                                             <td style={tight}>{describeRule(h.terms, formatRupeesFromPaise)}</td>
-                                            <td style={tightNum}>{h.targetPaise > 0 ? formatRupeesFromPaise(h.targetPaise) : "—"}</td>
+                                            <td style={tightNum}>{h.count !== undefined ? `${h.count}${h.targetCount ? ` of ${h.targetCount}` : ""} ${h.terms.unit ?? ""}`.trim() : h.targetPaise > 0 ? formatRupeesFromPaise(h.targetPaise) : "—"}</td>
                                             <td style={{ ...tightNum, fontWeight: 700 }}>{h.paise > 0 ? formatRupeesFromPaise(h.paise) : "—"}</td>
                                         </tr>
                                     ))}

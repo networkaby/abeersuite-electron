@@ -108,12 +108,19 @@ const headTerms = z.object({
     rateBp:      rateBp.default(0),
     slabs:       z.array(commissionSlabSchema).max(10).default([]),
     bonusPaise:  paise(100_000_000_000).default(0),
+    unit:        z.string().trim().max(30).nullable().optional(),
+    targetCount: z.number().int().min(0).max(1_000_000).default(0),
+    perUnitPaise: paise(100_000_000_000).default(0),
 });
 
 const checkTerms = (r: z.infer<typeof headTerms>, ctx: z.RefinementCtx) => {
     if ((r.kind === "PERCENT" || r.kind === "ABOVE_TARGET") && r.rateBp <= 0) ctx.addIssue({ code: "custom", path: ["rateBp"], message: "Enter the rate" });
     if ((r.kind === "ABOVE_TARGET" || r.kind === "BONUS") && r.targetPaise <= 0) ctx.addIssue({ code: "custom", path: ["targetPaise"], message: "Enter the target" });
     if (r.kind === "BONUS" && r.bonusPaise <= 0) ctx.addIssue({ code: "custom", path: ["bonusPaise"], message: "Enter the bonus" });
+    if (r.kind === "MANUAL") {
+        if (!r.unit?.trim()) ctx.addIssue({ code: "custom", path: ["unit"], message: "Say what is counted" });
+        if (r.perUnitPaise <= 0 && !(r.targetCount > 0 && r.bonusPaise > 0)) ctx.addIssue({ code: "custom", path: ["perUnitPaise"], message: "Pay per unit, or a bonus at a target count" });
+    }
     if (r.kind === "SLABS") {
         if (!r.slabs.length) ctx.addIssue({ code: "custom", path: ["slabs"], message: "Add at least one slab" });
         for (let i = 1; i < r.slabs.length; i++) {
@@ -143,6 +150,9 @@ export const commissionHeadPatchSchema = z.object({
     rateBp:      rateBp.optional(),
     slabs:       z.array(commissionSlabSchema).max(10).optional(),
     bonusPaise:  paise(100_000_000_000).optional(),
+    unit:        z.string().trim().max(30).nullable().optional(),
+    targetCount: z.number().int().min(0).max(1_000_000).optional(),
+    perUnitPaise: paise(100_000_000_000).optional(),
     active:      z.boolean().optional(),
     appliesTo:   z.array(z.string().trim().min(1).max(60)).max(50).optional(),
     sortOrder:   z.number().int().min(0).max(100_000).optional(),
@@ -166,6 +176,17 @@ export const commissionOverrideSchema = z.object({
 });
 
 export type CommissionOverrideInput = z.infer<typeof commissionOverrideSchema>;
+
+/** One thing done outside the app, against a MANUAL head. */
+export const commissionEntrySchema = z.object({
+    userId: z.number().int().positive(),
+    headId: z.number().int().positive(),
+    date:   isoDate,
+    count:  z.number().int().min(1).max(100_000).default(1),
+    note:   optText(300),
+});
+
+export type CommissionEntryInput = z.infer<typeof commissionEntrySchema>;
 
 // ── Payroll ───────────────────────────────────────────────────────────────────
 //

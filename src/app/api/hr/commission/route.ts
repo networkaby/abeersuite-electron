@@ -6,7 +6,7 @@ import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
-import { COMMISSION_USER_SELECT, appliedHeadsFor, loadHeads, monthFor, roleLabelOf, salesByUser } from "@/modules/hr/lib/commissionServer";
+import { COMMISSION_USER_SELECT, appliedHeadsFor, entriesByUser, loadHeads, monthFor, roleLabelOf, salesByUser } from "@/modules/hr/lib/commissionServer";
 import type { CommissionBoardPayload, CommissionBoardRow } from "@/modules/hr/lib/commissionTypes";
 
 // GET /api/hr/commission?month=YYYY-MM — the Targets & Commission board: the
@@ -41,12 +41,13 @@ export async function GET(req: Request) {
             loadHeads(prisma),
         ]);
         const live = users.filter((u) => !staffHasLeft(u.staffProfile, today));
-        const tallies = await salesByUser(prisma, live.map((u) => u.id), from, to);
+        const ids = live.map((u) => u.id);
+        const [tallies, entries] = await Promise.all([salesByUser(prisma, ids, from, to), entriesByUser(prisma, ids, from, to)]);
 
         let teamSalesPaise = 0;
         const rows: CommissionBoardRow[] = live.map((u) => {
             const role = roleLabelOf(u);
-            const applied = appliedHeadsFor(heads, role, u.staffProfile?.commissionOverrides ?? []);
+            const applied = appliedHeadsFor(heads, role, u.staffProfile?.commissionOverrides ?? [], entries.get(u.id) ?? []);
             const thisMonth = monthFor(applied, tallies.get(u.id), month, today, u.staffProfile?.weeklyOff ?? [0]);
             teamSalesPaise += thisMonth.salesPaise;
             return { userId: u.id, name: u.name, avatarUrl: u.avatarUrl, role, staffCode: u.staffProfile?.staffCode ?? null, thisMonth };
