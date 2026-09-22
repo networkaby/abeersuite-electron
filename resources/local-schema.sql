@@ -2661,6 +2661,10 @@ CREATE TABLE IF NOT EXISTS "OrgDefaults" (
     "posEstimateShowDiscountsJson" JSONB,
     "storefrontHomeJson" JSONB,
     "labelTemplateJson" JSONB,
+    "dutySummerStart" VARCHAR(5) NOT NULL DEFAULT '10:30',
+    "dutyWinterStart" VARCHAR(5) NOT NULL DEFAULT '10:30',
+    "dutyEnd" VARCHAR(5) NOT NULL DEFAULT '20:30',
+    "weeklyOff" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "OrgDefaults_pkey" PRIMARY KEY ("id")
@@ -2688,6 +2692,10 @@ ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopOutOfStockPolicy" "ShopO
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "posEstimateShowDiscountsJson" JSONB;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "storefrontHomeJson" JSONB;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "labelTemplateJson" JSONB;
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "dutySummerStart" VARCHAR(5) NOT NULL DEFAULT '10:30';
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "dutyWinterStart" VARCHAR(5) NOT NULL DEFAULT '10:30';
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "dutyEnd" VARCHAR(5) NOT NULL DEFAULT '20:30';
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "weeklyOff" INTEGER[] DEFAULT ARRAY[]::INTEGER[];
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable

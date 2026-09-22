@@ -8,6 +8,7 @@ import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate"
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
 import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { dutyHoursFor, dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
+import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import type { RegisterPayload, RegisterPerson, HolidayDto } from "@/modules/hr/lib/attendanceTypes";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
 
@@ -37,7 +38,8 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Bad date range" }, { status: 400 });
         }
 
-        const [users, marks, leaves, holidays] = await Promise.all([
+        const [seasonal, users, marks, leaves, holidays] = await Promise.all([
+            loadSeasonalHours(),
             prisma.user.findMany({
                 where: excludingSuperAdmin(),
                 orderBy: { name: "asc" },
@@ -61,6 +63,10 @@ export async function GET(req: Request) {
             }),
         ]);
 
+        /** This person's hours as they stand today — the headline figures. */
+        const todayHours = (u: { staffProfile?: { dutyStart: string | null; dutyEnd: string | null } | null }) =>
+            dutyHoursFor(u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd, { seasonal });
+
         const byUser = new Map<number, RegisterPerson>();
         for (const u of users) {
             const leftOn = u.staffProfile?.leftOn ? toDateOnlyUtc(u.staffProfile.leftOn) : null;
@@ -70,9 +76,16 @@ export async function GET(req: Request) {
                 joinedOn: u.staffProfile?.joinedOn ? toDateOnlyUtc(u.staffProfile.joinedOn) : null,
                 leftOn,
                 weeklyOff: u.staffProfile?.weeklyOff ?? [0],
-                dutyMinutes: dutyMinutesFor(u.staffProfile?.dutyMinutes, u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd),
-                dutyStart: dutyHoursFor(u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd).start,
-                dutyEnd:   dutyHoursFor(u.staffProfile?.dutyStart, u.staffProfile?.dutyEnd).end,
+                // Today's resolved figures, for anything that wants one number.
+                dutyMinutes: dutyMinutesFor(u.staffProfile?.dutyMinutes, todayHours(u).start, todayHours(u).end),
+                dutyStart: todayHours(u).start,
+                dutyEnd:   todayHours(u).end,
+                // …and the raw settings, so the grid can re-resolve per day: the
+                // shop's opening is not the same in December as in June.
+                ownDutyMinutes: u.staffProfile?.dutyMinutes ?? null,
+                ownDutyStart:   u.staffProfile?.dutyStart ?? null,
+                ownDutyEnd:     u.staffProfile?.dutyEnd ?? null,
+                seasonal,
                 marks: {}, leaveDays: {},
             });
         }

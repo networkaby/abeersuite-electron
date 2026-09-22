@@ -62,3 +62,13 @@ export const nameIsActiveSchema = z.object({
     name: z.string().trim().min(1).max(200),
     isActive: z.boolean().optional().default(true),
 });
+
+/**
+ * A clock face — "HH:MM" in shop time, never an instant.
+ *
+ * Office hours are the same shape wherever they are set: a person's own hours on
+ * StaffProfile, and the shop's two seasonal openings plus its closing on
+ * OrgDefaults. One definition so a time that is valid on the staff page cannot be
+ * rejected on the settings page, or the other way round.
+ */
+export const hhMmSchema = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 10:30");

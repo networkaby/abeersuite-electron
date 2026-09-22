@@ -1396,6 +1396,12 @@ async function main() {
         // Scalars in `orgDefaultsData` re-seed to baseline; barcodeBandsJson and
         // cashDenominationsJson are create-only so admin customisation is
         // preserved across reseeds.
+        //
+        // Office hours (dutySummerStart / dutyWinterStart / dutyEnd / weeklyOff)
+        // are deliberately in NEITHER list. They are admin-chosen in HR → Calendar
+        // & Hours, the column defaults already give a working 10:30–20:30, and
+        // naming them here would reset the shop's seasonal opening — and with it
+        // every late mark and duty figure derived from it — on the next reseed.
         create: { id: 1, ...orgDefaultsData, barcodeBandsJson: DEFAULT_BARCODE_BANDS, cashDenominationsJson: DEFAULT_CASH_DENOMINATIONS },
         update: orgDefaultsData,
     });

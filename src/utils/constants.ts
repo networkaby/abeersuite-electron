@@ -638,7 +638,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
             { label: "Attendance", icon: CalendarCheck, href: "/office/hr/attendance", sidebarKey: "attendance" },
             { label: "Leave", icon: Palmtree, href: "/office/hr/leave", sidebarKey: "leave" },
-            { label: "Holidays", icon: CalendarOff, href: "/office/hr/holidays", sidebarKey: "holidays" },
+            { label: "Calendar & Hours", icon: CalendarOff, href: "/office/hr/holidays", sidebarKey: "holidays" },
             { label: "Payroll", icon: WalletMinimal, href: "/office/hr/payroll", sidebarKey: "payroll" },
         ],
     },

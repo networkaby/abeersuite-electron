@@ -1,4 +1,5 @@
 import axios from "axios";
+import { SHOP_SEASONAL_FALLBACK, type SeasonalHours } from "./hr/seasonalHours";
 
 export interface OrgDefaultsData {
     id: number;
@@ -12,6 +13,14 @@ export interface OrgDefaultsData {
     defaultCurrencySymbol: string;
     /// Cash note/coin denominations for the POS shift-close counter, high → low.
     cashDenominationsJson: number[];
+    /// Office hours — the two solstice openings and the fixed closing, "HH:MM".
+    /// Every other day of the year falls between the anchors on a cosine; see
+    /// src/shared/lib/hr/seasonalHours.ts.
+    dutySummerStart: string;
+    dutyWinterStart: string;
+    dutyEnd: string;
+    /// Days the whole shop is closed, 0 = Sunday.
+    weeklyOff: number[];
 }
 
 // Module-level cache — populated once per browser session on first call.
@@ -27,4 +36,21 @@ export async function getOrgDefaults(): Promise<OrgDefaultsData> {
 /** Call this after a successful PATCH to OrgDefaults so the cache stays fresh. */
 export function invalidateOrgDefaultsCache() {
     cache = null;
+}
+
+/**
+ * The shop's office hours in the shape the seasonal curve wants.
+ *
+ * A helper rather than three reads at every call site: the curve needs all three
+ * together, and an older cached row — from a browser that loaded before the
+ * columns existed — would otherwise put `undefined` into the maths and produce a
+ * time of "NaN:NaN". Falling back per field keeps that impossible.
+ */
+export async function getSeasonalHours(): Promise<SeasonalHours> {
+    const d = await getOrgDefaults();
+    return {
+        summerStart: d.dutySummerStart || SHOP_SEASONAL_FALLBACK.summerStart,
+        winterStart: d.dutyWinterStart || SHOP_SEASONAL_FALLBACK.winterStart,
+        end:         d.dutyEnd         || SHOP_SEASONAL_FALLBACK.end,
+    };
 }

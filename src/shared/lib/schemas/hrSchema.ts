@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { partyBankSchema } from "./partyBankSchema";
+import { hhMmSchema } from "./commonSchemas";
 
 export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "HELPER", "CONTRACT"] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
@@ -44,9 +45,9 @@ export const staffProfilePatchSchema = z.object({
      *  whole month absent — every day would fall under the 40% half-day line. */
     dutyMinutes:      z.number().int().min(30).max(24 * 60).nullable().optional(),
     /** Office hours as "HH:MM" in shop time — a clock face, never an instant. */
-    dutyStart:        z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 10:30").nullable().optional()
+    dutyStart:        hhMmSchema.nullable().optional()
         .or(z.literal("").transform(() => null)),
-    dutyEnd:          z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 20:30").nullable().optional()
+    dutyEnd:          hhMmSchema.nullable().optional()
         .or(z.literal("").transform(() => null)),
     /** Minutes away before this person is signed out. Capped at the session
      *  backstop — a longer figure is a promise the session would break first. */

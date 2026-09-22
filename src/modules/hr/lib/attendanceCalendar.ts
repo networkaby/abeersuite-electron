@@ -3,7 +3,25 @@
 
 import type { AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { RegisterPerson } from "./attendanceTypes";
-import { gradeDay, lateMinutes } from "@/shared/lib/hr/dutyTime";
+import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes } from "@/shared/lib/hr/dutyTime";
+import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+
+/**
+ * What this person owed on THAT day — not what they owe today.
+ *
+ * The shop's opening moves through the year while its closing does not, so a
+ * December day is genuinely shorter than a June one and the 75%/40% grading lines
+ * move with it. Resolving per day is what stops a winter month reading as a
+ * fortnight of half days. Somebody with office hours of their own resolves to the
+ * same figure on every date, which is the point of having set them.
+ */
+export function dutyOn(person: RegisterPerson, iso: string): { start: string; end: string; minutes: number } {
+    const hours = dutyHoursFor(person.ownDutyStart, person.ownDutyEnd, {
+        on: shopDateFromIso(iso),
+        seasonal: person.seasonal,
+    });
+    return { ...hours, minutes: dutyMinutesFor(person.ownDutyMinutes, hours.start, hours.end) };
+}
 
 /** ISO dates from `from` to `to`, inclusive. */
 export function isoDaysBetween(from: string, to: string): string[] {
@@ -63,11 +81,12 @@ export function readDay(person: RegisterPerson, iso: string, holidayDates: Reado
         // Lateness is judged on the arrival alone, so it stands whether or not the
         // day was graded — a short day and a late start are two different failings
         // and the register has to be able to say which one happened.
-        const lateBy = lateMinutes(mark.firstInAt, person.dutyStart) ?? undefined;
+        const duty = dutyOn(person, iso);
+        const lateBy = lateMinutes(mark.firstInAt, duty.start) ?? undefined;
         if (mark.source === "COUNTER" && mark.workedMinutes > 0) {
             return {
                 kind: "marked",
-                status: gradeDay(mark.workedMinutes, person.dutyMinutes),
+                status: gradeDay(mark.workedMinutes, duty.minutes),
                 stored: true,
                 source: mark.source,
                 workedMinutes: mark.workedMinutes,

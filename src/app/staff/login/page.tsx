@@ -25,6 +25,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
 import DutyCard from "./DutyCard";
+import NextOpening from "./NextOpening";
 import PinPad from "./PinPad";
 import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
 
@@ -535,6 +536,7 @@ function StaffLoginForm() {
                     <section className={styles.card}>
                         <h1 className={styles.greet}>{greet}</h1>
                         <p className={styles.clock}>{clock || "\u00a0"}</p>
+                        <NextOpening />
                         <FaceGrid
                             roster={roster}
                             editing={editing}
@@ -628,6 +630,7 @@ function StaffLoginForm() {
 
                     <h1 className={styles.greet}>{greet}</h1>
                     <p className={styles.clock}>{clock || " "}</p>
+                    <NextOpening />
 
                     <div className={styles.field}>
                         <label htmlFor="email">Email</label>

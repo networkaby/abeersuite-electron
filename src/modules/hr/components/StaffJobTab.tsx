@@ -4,7 +4,7 @@
 // salary ledger, and leaving. Every field saves on blur (Pattern D):
 // the PATCH is partial, so each box is its own write and its own tick.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -21,7 +21,9 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
-import { DEFAULT_DUTY_END, DEFAULT_DUTY_START, DEFAULT_IDLE_LIMIT_MINUTES, dutyMinutesFor, formatWorked } from "@/shared/lib/hr/dutyTime";
+import { DEFAULT_IDLE_LIMIT_MINUTES, dutyHoursFor, dutyMinutesFor, formatWorked } from "@/shared/lib/hr/dutyTime";
+import { SHOP_SEASONAL_FALLBACK, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
+import { getSeasonalHours } from "@/shared/lib/orgDefaults";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABELS } from "@/shared/lib/schemas/hrSchema";
 import type { StaffDetail } from "../lib/staffTypes";
@@ -49,7 +51,23 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
     const [dutyStart, setDutyStart] = useState(profile?.dutyStart ?? "");
     const [dutyEnd, setDutyEnd] = useState(profile?.dutyEnd ?? "");
     const [dutyMinutes, setDutyMinutes] = useState<number | null>(profile?.dutyMinutes ?? null);
-    const dutyDay = dutyMinutesFor(dutyMinutes, dutyStart, dutyEnd);
+
+    // The shop's hours, so a blank pair of boxes can say what it actually falls
+    // back to TODAY rather than quoting a constant. Seasonal, so the answer moves
+    // with the year — and with it the "= a N-hour day" line, because a winter day
+    // really is shorter when the shop opens later and closes at the same time.
+    const [shopHours, setShopHours] = useState<SeasonalHours>(SHOP_SEASONAL_FALLBACK);
+    useEffect(() => {
+        let alive = true;
+        void getSeasonalHours()
+            .then((h) => { if (alive) setShopHours(h); })
+            .catch(() => { /* the fallback is already in state */ });
+        return () => { alive = false; };
+    }, []);
+
+    const shopToday = dutyHoursFor(null, null, { seasonal: shopHours });
+    const effective = dutyHoursFor(dutyStart, dutyEnd, { seasonal: shopHours });
+    const dutyDay = dutyMinutesFor(dutyMinutes, effective.start, effective.end);
 
     const left = staffHasLeft(profile);
     const disabled = !canEdit;
@@ -193,7 +211,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                     )}
                 </Field>
 
-                <Field label="Office hours" hint={`When duty starts and ends. Arriving more than 15 minutes after the start counts as late. Blank = the shop's ${DEFAULT_DUTY_START}–${DEFAULT_DUTY_END}.`}>
+                <Field label="Office hours" hint={`When duty starts and ends. Arriving more than 15 minutes after the start counts as late. Blank = the shop's own hours, ${shopToday.start}–${shopToday.end} today${shopHours.summerStart !== shopHours.winterStart ? ", which move with the season" : ""}.`}>
                     {(id) => (
                         <div className="flex items-center gap-1">
                             <Input
@@ -242,7 +260,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                                 step="0.5"
                                 min="0.5"
                                 max="24"
-                                placeholder={String(+(dutyMinutesFor(null, dutyStart, dutyEnd) / 60).toFixed(2))}
+                                placeholder={String(+(dutyMinutesFor(null, effective.start, effective.end) / 60).toFixed(2))}
                                 defaultValue={profile?.dutyMinutes ? String(+(profile.dutyMinutes / 60).toFixed(2)) : ""}
                                 className="h-9 w-24 text-sm"
                                 onBlur={(e) => { const v = e.target.value.trim(); void save({

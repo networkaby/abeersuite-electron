@@ -1,7 +1,9 @@
 import "server-only";
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { dutyMinutesFor, gradeDay } from "@/shared/lib/hr/dutyTime";
+import { dutyHoursFor, dutyMinutesFor, gradeDay } from "@/shared/lib/hr/dutyTime";
+import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
+import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 
 /**
  * The attendance seam for payroll (agreed with the payroll session, 2026-09-20).
@@ -27,7 +29,8 @@ import { dutyMinutesFor, gradeDay } from "@/shared/lib/hr/dutyTime";
 export async function nonPayableDays(userId: number, fromIso: string, toIso: string): Promise<Map<string, 0 | 0.5>> {
     const from = new Date(`${fromIso}T00:00:00.000Z`);
     const to = new Date(`${toIso}T00:00:00.000Z`);
-    const [profile, rows, unpaidLeaves] = await Promise.all([
+    const [seasonal, profile, rows, unpaidLeaves] = await Promise.all([
+        loadSeasonalHours(),
         prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true, dutyStart: true, dutyEnd: true } }),
         // Every stored row, not only the three exception statuses: a COUNTER day
         // stored as PRESENT may still grade to HALF or ABSENT on its hours, and
@@ -41,7 +44,21 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
             select: { fromDate: true, toDate: true },
         }),
     ]);
-    const duty = dutyMinutesFor(profile?.dutyMinutes, profile?.dutyStart, profile?.dutyEnd);
+    /**
+     * What was owed on THAT day.
+     *
+     * Resolved per row rather than once for the range, because the shop's opening
+     * moves through the year while its closing does not: a fixed figure would grade
+     * a whole winter month against summer hours and dock pay for days that were
+     * worked in full. A person with hours of their own gets the same number every
+     * day, which is what setting them means.
+     */
+    const dutyOnDay = (iso: string) => {
+        const hours = dutyHoursFor(profile?.dutyStart, profile?.dutyEnd, {
+            on: shopDateFromIso(iso), seasonal,
+        });
+        return dutyMinutesFor(profile?.dutyMinutes, hours.start, hours.end);
+    };
     const unpaid = new Set<string>();
     for (const l of unpaidLeaves) {
         const d = new Date(Math.max(l.fromDate.getTime(), from.getTime()));
@@ -53,7 +70,7 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
         const iso = r.date.toISOString().slice(0, 10);
         const status =
             r.source === "COUNTER" && r.workedMinutes > 0
-                ? gradeDay(r.workedMinutes, duty)
+                ? gradeDay(r.workedMinutes, dutyOnDay(iso))
                 : r.status;
         if (status === "ABSENT") out.set(iso, 0);
         else if (status === "HALF_DAY") out.set(iso, 0.5);

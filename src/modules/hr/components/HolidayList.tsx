@@ -21,6 +21,7 @@ import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import GlobalHoursCard from "./GlobalHoursCard";
 import type { HolidayDto } from "../lib/attendanceTypes";
 
 export default function HolidayList({ canEdit }: { canEdit: boolean; selfId: number }) {
@@ -58,8 +59,8 @@ export default function HolidayList({ canEdit }: { canEdit: boolean; selfId: num
         <ScrollArea className="h-full" type="always">
             <div className="max-w-3xl px-6 pt-3 pb-6">
                 <DataPageHeader
-                    title="Holidays"
-                    subtitle={data ? `${data.length} in ${year}` : "Reading the list…"}
+                    title="Calendar & Hours"
+                    subtitle={data ? `${data.length} holiday${data.length === 1 ? "" : "s"} in ${year}` : "Reading the list…"}
                     icon={<CalendarOff size={20} />}
                     actions={
                         <div className="flex items-center gap-1">
@@ -69,6 +70,11 @@ export default function HolidayList({ canEdit }: { canEdit: boolean; selfId: num
                         </div>
                     }
                 />
+
+                {/* The shop's hours sit above the holidays because they are the
+                    standing rule and a holiday is the exception to it. Both are
+                    global, both are read by the sign-in screen's "opens next" line. */}
+                <GlobalHoursCard canEdit={canEdit} />
 
                 {canEdit && (
                     <div className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-border p-3">

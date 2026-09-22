@@ -235,6 +235,29 @@ model OrgDefaults {
   // Admin-chosen, so bootstrap-seed leaves it untouched (survives reseed).
   labelTemplateJson Json?
 
+  // ── Office hours, as the year moves (HR → Calendar & Hours) ────────────────
+  // The shop's own opening and closing in shop time. Two openings, one for each
+  // solstice: every other day of the year falls between them on a cosine (see
+  // src/shared/lib/hr/seasonalHours.ts). Assam's sun moves about 95 minutes
+  // between June and January while IST does not move at all, so one fixed
+  // opening is wrong for half the year.
+  //
+  // The CLOSING does not move — the owner's call, 2026-09-22 — so a winter day
+  // is genuinely shorter than a summer one, and duty shrinks with it because
+  // dutyMinutesFor reads the span rather than a second stored number.
+  //
+  // Both anchors default to the same 10:30 the code used before, which flattens
+  // the curve: nothing changes until somebody sets a winter time that differs.
+  // A person's own StaffProfile.dutyStart still overrides all of this.
+  dutySummerStart String @default("10:30") @db.VarChar(5)
+  dutyWinterStart String @default("10:30") @db.VarChar(5)
+  dutyEnd         String @default("20:30") @db.VarChar(5)
+
+  // Days the whole shop is closed, 0 = Sunday. Separate from a person's
+  // StaffProfile.weeklyOff, which is their own day off in a shop that is open.
+  // Empty = the shop never closes for a day of the week.
+  weeklyOff Int[] @default([])
+
   updatedAt DateTime @updatedAt
 }
 

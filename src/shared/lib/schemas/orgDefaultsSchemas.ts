@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hhMmSchema } from "./commonSchemas";
 
 const TAXABILITY = ["TAXABLE", "EXEMPT", "NIL_RATED", "NON_GST"] as const;
 const VALUATION_METHOD = ["WEIGHTED_AVG", "SIMPLE_AVG", "FIFO", "LAST_INWARD", "MONTHLY_AVG"] as const;
@@ -98,6 +99,18 @@ export const orgDefaultsUpdateSchema = z.object({
     }).optional(),
     /// Barcode-label design (Print labels settings bar). See labelTemplateSchema.
     labelTemplateJson:          labelTemplateSchema.optional(),
+    /// Office hours (HR → Calendar & Hours). Two openings, one per solstice; every
+    /// other day of the year is interpolated on a cosine. Closing does not move.
+    /// Same "HH:MM" shape as StaffProfile.dutyStart, so the two validate alike.
+    dutySummerStart:            hhMmSchema.optional(),
+    dutyWinterStart:            hhMmSchema.optional(),
+    dutyEnd:                    hhMmSchema.optional(),
+    /// Days the whole shop is closed, 0 = Sunday. Deduped and sorted so the
+    /// stored array is stable no matter which order the toggles were pressed.
+    weeklyOff:                  z.array(z.number().int().min(0).max(6))
+        .max(7)
+        .transform((arr) => [...new Set(arr)].sort((a, b) => a - b))
+        .optional(),
 });
 
 export type OrgDefaultsUpdateInput = z.infer<typeof orgDefaultsUpdateSchema>;

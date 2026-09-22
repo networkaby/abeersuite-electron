@@ -163,3 +163,43 @@ export function formatInboxTime(iso: string): string {
 export function formatTimeOnly(iso: string): string {
     return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
+
+/**
+ * A weekday name from a "YYYY-MM-DD" — "Wednesday", or "Tomorrow" when it is.
+ *
+ * Pinned to en-GB like the rest of this file. The login screen used the browser's
+ * locale inline, which on a till set to another language would have printed a
+ * weekday nobody on the floor reads.
+ *
+ * "Tomorrow" wins over the name deliberately: when the answer IS tomorrow, naming
+ * the weekday makes the reader do a small calculation to find out that nothing
+ * unusual is happening.
+ */
+export function weekdayName(iso: string, relativeTo?: string): string {
+    const at = new Date(`${iso}T12:00:00.000Z`);
+    if (Number.isNaN(at.getTime())) return iso;
+    if (relativeTo) {
+        const base = new Date(`${relativeTo}T12:00:00.000Z`);
+        const days = Math.round((at.getTime() - base.getTime()) / 86_400_000);
+        if (days === 0) return "Today";
+        if (days === 1) return "Tomorrow";
+    }
+    return at.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+}
+
+/** "Wednesday 24 September" — the full form, for a day further out than tomorrow. */
+export function weekdayAndDate(iso: string): string {
+    const at = new Date(`${iso}T12:00:00.000Z`);
+    if (Number.isNaN(at.getTime())) return iso;
+    return at.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+/** "10:53" → "10:53 AM". Office hours are stored as a 24h clock face. */
+export function formatHhMmFriendly(hhmm: string): string {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+    if (!m) return hhmm;
+    const h = Number(m[1]), min = m[2];
+    const suffix = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${min} ${suffix}`;
+}
