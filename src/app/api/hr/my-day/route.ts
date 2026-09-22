@@ -9,6 +9,7 @@ import {
 } from "@/shared/lib/hr/dutyTime";
 import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
 import { loadOfficeCalendar } from "@/shared/lib/hr/officeCalendarServer";
+import { userBranchIds } from "@/modules/hr/lib/staffBranchesServer";
 import { nextOfficeDay, shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import type { MyDay } from "@/shared/lib/hr/myDay";
 
@@ -50,7 +51,8 @@ export async function GET() {
                 select: { firstInAt: true, workedMinutes: true, counterId: true, source: true, status: true },
             }),
             monthOvertimeFor(userId, date),
-            loadOfficeCalendar(),
+            // His own calendar: the shop's holidays plus his branch's.
+            userBranchIds(userId).then((ids) => loadOfficeCalendar(new Date(), 14, ids)),
         ]);
 
         // Today's own hours, on the season's curve. The person's typed hours still

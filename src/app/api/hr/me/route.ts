@@ -12,6 +12,8 @@ import { LEAVE_INCLUDE, toLeaveDto } from "@/modules/hr/lib/leaveServer";
 import { leaveBalancesFor } from "@/modules/hr/lib/leaveBalance";
 import type { MyHrPayload } from "@/modules/hr/lib/myHrTypes";
 import type { RegisterPerson, HolidayDto, AttendanceMark } from "@/modules/hr/lib/attendanceTypes";
+import { USER_BRANCHES_SELECT, branchIdsFrom } from "@/modules/hr/lib/staffBranchesServer";
+import { holidayApplies } from "@/modules/hr/lib/attendanceCalendar";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
 
 /**
@@ -58,6 +60,7 @@ export async function GET(req: Request) {
                 select: {
                     id: true, name: true, avatarUrl: true, role: true,
                     staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true, dutyMinutes: true, dutyStart: true, dutyEnd: true, staffCode: true } },
+                    ...USER_BRANCHES_SELECT,
                 },
             }),
             prisma.attendanceDay.findMany({
@@ -92,6 +95,7 @@ export async function GET(req: Request) {
             joinedOn: me.staffProfile?.joinedOn ? toDateOnlyUtc(me.staffProfile.joinedOn) : null,
             leftOn: me.staffProfile?.leftOn ? toDateOnlyUtc(me.staffProfile.leftOn) : null,
             weeklyOff: me.staffProfile?.weeklyOff ?? [0],
+            branchIds: branchIdsFrom(me),
             dutyMinutes: dutyMinutesFor(me.staffProfile?.dutyMinutes, hours.start, hours.end),
             dutyStart: hours.start,
             dutyEnd: hours.end,
@@ -130,7 +134,11 @@ export async function GET(req: Request) {
         const payload: MyHrPayload = {
             month, from, to, today,
             person,
-            holidays: holidays.map((h): HolidayDto => ({ id: h.id, date: toDateOnlyUtc(h.date), name: h.name, branchId: h.branchId })),
+            // Only the holidays that are THIS person's — a branch holiday elsewhere
+            // is not a day off here, and must not read as one on their month.
+            holidays: holidays
+                .filter((h) => holidayApplies(h, person.branchIds))
+                .map((h): HolidayDto => ({ id: h.id, date: toDateOnlyUtc(h.date), name: h.name, branchId: h.branchId })),
             leaves: myLeaves.map(toLeaveDto),
             overtime,
             staffCode: me.staffProfile?.staffCode ?? null,

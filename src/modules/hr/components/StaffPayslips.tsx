@@ -3,9 +3,11 @@
 // "Salary slips" on a person's own profile page.
 //
 // Owner, 2026-09-20: "display in users own profile so they can see. print will
-// be later." So this is a reading surface, not a document: a person opens their
-// own profile and sees what they were paid for each period, and can open any
-// one to see the pay heads behind it.
+// be later." So this is a reading surface: a person opens their own profile and
+// sees what they were paid for each period, and can open any one to see the pay
+// heads behind it. The printable slip came on 2026-09-22 — the printer button on
+// a row opens /receipt/payslip/[lineId], which prints the same frozen line
+// through the PAYSLIP print template.
 //
 // Only POSTED runs appear. A draft has not happened yet and a cancelled one has
 // been taken back out of the books, so neither is a slip. Every figure is the
@@ -15,7 +17,8 @@
 // VoucherRegisterTable.
 
 import { Fragment, useState } from "react";
-import { Receipt } from "lucide-react";
+import { Printer, Receipt } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
@@ -65,19 +68,20 @@ export default function StaffPayslips({ userId }: { userId: number }) {
                             <TableHead className="text-right">Gross</TableHead>
                             <TableHead className="text-right">Deductions</TableHead>
                             <TableHead className="text-right">Net</TableHead>
+                            <TableHead className="w-10" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {!data && (
                             <TableRow>
-                                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                                     Reading…
                                 </TableCell>
                             </TableRow>
                         )}
                         {data && !slips.length && (
                             <TableRow>
-                                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                                     Nothing yet — a slip appears here once a payroll run covering you is posted.
                                 </TableCell>
                             </TableRow>
@@ -101,12 +105,27 @@ export default function StaffPayslips({ userId }: { userId: number }) {
                                         {s.deductionsPaise ? formatRupeesFromPaise(s.deductionsPaise) : "—"}
                                     </TableCell>
                                     <TableCell className="text-right font-medium tabular-nums">{formatRupeesFromPaise(s.netPaise)}</TableCell>
+                                    <TableCell>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            aria-label="Print this slip"
+                                            title="Print this slip"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(`/receipt/payslip/${s.id}`, "_blank", "noopener");
+                                            }}
+                                        >
+                                            <Printer size={14} />
+                                        </Button>
+                                    </TableCell>
                                 </TableRow>
 
                                 {open.has(s.id) && (
                                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                                         <TableCell />
-                                        <TableCell colSpan={5} className="py-3">
+                                        <TableCell colSpan={6} className="py-3">
                                             <div className="max-w-md space-y-1.5">
                                                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                                     {formatDayBasisLong(s.paidDays, s.periodDays, s.payDays)}
@@ -142,7 +161,7 @@ export default function StaffPayslips({ userId }: { userId: number }) {
 
             <p className="text-xs text-muted-foreground">
                 This is what was earned for each period. When it was actually paid shows on the salary
-                ledger itself — a printable slip comes later.
+                ledger itself. The printer on a row opens the slip for printing.
             </p>
         </div>
     );

@@ -11,10 +11,11 @@ import {
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
 import type { OrganisationView } from "@/shared/lib/org/organisationView";
-import { buildSampleForKind, VOUCHER_KIND_LABEL, SAMPLE_COUPON_CARD, SAMPLE_GIFT_CARD, SAMPLE_SHIFT_CLOSE } from "@/modules/settings/lib/voucherTemplateSamples";
+import { buildSampleForKind, VOUCHER_KIND_LABEL, SAMPLE_COUPON_CARD, SAMPLE_GIFT_CARD, SAMPLE_SHIFT_CLOSE, SAMPLE_PAYSLIP } from "@/modules/settings/lib/voucherTemplateSamples";
 import CouponCard from "@/shared/components/print/CouponCard";
 import GiftCardCard from "@/shared/components/print/GiftCardCard";
 import { ShiftCloseBody } from "@/shared/components/print/ShiftCloseBody";
+import { PayslipBody } from "@/shared/components/print/PayslipBody";
 
 interface Props {
     templates:    VoucherTemplateDefaults[];
@@ -65,6 +66,11 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                     </optgroup>
                     <optgroup label="POS & Register">
                         {VOUCHER_TEMPLATE_KIND_GROUPS.pos.map((k) => (
+                            <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="HR & People">
+                        {VOUCHER_TEMPLATE_KIND_GROUPS.hr.map((k) => (
                             <option key={k} value={k}>{VOUCHER_KIND_LABEL[k]}</option>
                         ))}
                     </optgroup>
@@ -138,6 +144,8 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                                     thermal={false}
                                     showSignature={template.showSignature}
                                 />
+                            ) : selectedKind === "PAYSLIP" ? (
+                                <PayslipBody data={SAMPLE_PAYSLIP} thermal={false} />
                             ) : undefined}
                         />
                     </div>
@@ -163,6 +171,8 @@ export function VoucherTemplatesPreviewGallery({ templates, organisation }: Prop
                                     thermal={true}
                                     showSignature={template.showSignatureThermal}
                                 />
+                            ) : selectedKind === "PAYSLIP" ? (
+                                <PayslipBody data={SAMPLE_PAYSLIP} thermal />
                             ) : undefined}
                         />
                     </div>

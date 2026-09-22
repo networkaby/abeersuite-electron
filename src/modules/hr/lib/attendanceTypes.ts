@@ -21,6 +21,12 @@ export interface RegisterPerson {
     joinedOn: string | null;
     leftOn: string | null;
     weeklyOff: number[];
+    /**
+     * The branches this person belongs to, through the seats they hold. A
+     * holiday listed for a branch is a holiday for these people only; one with
+     * no branch is for everybody. See `holidayApplies`.
+     */
+    branchIds: string[];
     /** A full day's duty for this person TODAY, in minutes. See `own*` below. */
     dutyMinutes: number;
     /** Office hours "HH:MM" in shop time — the start decides who is late. */

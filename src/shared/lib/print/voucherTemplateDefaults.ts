@@ -91,12 +91,21 @@ export const POS_DOCUMENT_KINDS = [
     "SHIFT_CLOSE",
 ] as const;
 
+// HR & People documents. The salary slip is a person's own frozen payroll line
+// (PayrollRunLine) with the letterhead chrome around it — no ledger table, no
+// tax. See /receipt/payslip/[lineId]. The staff ID card is deliberately NOT
+// here (owner, 2026-09-20: its preview is its template).
+export const HR_DOCUMENT_KINDS = [
+    "PAYSLIP",
+] as const;
+
 export const VOUCHER_TEMPLATE_KINDS = [
     ...ACCOUNTING_VOUCHER_KINDS,
     ...INVENTORY_VOUCHER_KINDS,
     ...REPAIR_DOCUMENT_KINDS,
     ...MARKETING_DOCUMENT_KINDS,
     ...POS_DOCUMENT_KINDS,
+    ...HR_DOCUMENT_KINDS,
 ] as const;
 
 export type VoucherTemplateKind = (typeof VOUCHER_TEMPLATE_KINDS)[number];
@@ -107,6 +116,7 @@ export const VOUCHER_TEMPLATE_KIND_GROUPS = {
     pos: POS_DOCUMENT_KINDS,
     repair: REPAIR_DOCUMENT_KINDS,
     marketing: MARKETING_DOCUMENT_KINDS,
+    hr: HR_DOCUMENT_KINDS,
 } as const;
 
 // Human-readable per-kind sub-titles that go into headerLine2 by default.
@@ -147,6 +157,7 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     COUPON: "Coupon",
     GIFT_CARD: "Gift Card",
     SHIFT_CLOSE: "Shift Closing & Cash Reconciliation",
+    PAYSLIP: "Salary Slip",
 };
 
 // Voucher kinds that don't have a monetary tax breakdown by their nature.
@@ -169,6 +180,7 @@ const NO_TAX_SUMMARY: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     "COUPON",
     "GIFT_CARD",
     "SHIFT_CLOSE",
+    "PAYSLIP",
 ]);
 
 // Repair-shop documents that show customer + staff signature lines by default.
@@ -177,6 +189,8 @@ const WITH_SIGNATURE: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplate
     // Cash paid out needs proof it reached the payee — the receiver signs.
     "PAYMENT",
     "SHIFT_CLOSE",
+    // A slip handed to a person is signed for the shop.
+    "PAYSLIP",
 ]);
 
 // Kinds that print a scannable barcode of the voucher number by default — the
@@ -286,6 +300,7 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     COUPON: "A4",
     GIFT_CARD: "A4",
     SHIFT_CLOSE: "THERMAL_80MM",
+    PAYSLIP: "A4",
 };
 
 // Per-kind default for the voucher form's "Print after save" toggle
@@ -331,6 +346,7 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     COUPON:                false,
     GIFT_CARD:             false,
     SHIFT_CLOSE:           true,
+    PAYSLIP:               false,
 };
 
 /** Initial "Print after save" toggle state for a voucher kind (false if unknown). */
@@ -380,6 +396,7 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     COUPON:                false,
     GIFT_CARD:             false,
     SHIFT_CLOSE:           true,
+    PAYSLIP:               false,
 };
 
 /** Initial "Thermal" toggle state for a voucher kind (false → browser print). */

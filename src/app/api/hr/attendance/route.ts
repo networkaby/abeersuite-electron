@@ -10,6 +10,7 @@ import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { dutyHoursFor, dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import type { RegisterPayload, RegisterPerson, HolidayDto } from "@/modules/hr/lib/attendanceTypes";
+import { USER_BRANCHES_SELECT, branchIdsFrom } from "@/modules/hr/lib/staffBranchesServer";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
 
 // /api/hr/attendance — the register.
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
                 select: {
                     id: true, name: true, avatarUrl: true, role: true,
                     staffProfile: { select: { joinedOn: true, leftOn: true, weeklyOff: true, dutyMinutes: true, dutyStart: true, dutyEnd: true } },
+                    ...USER_BRANCHES_SELECT,
                 },
             }),
             prisma.attendanceDay.findMany({
@@ -76,6 +78,7 @@ export async function GET(req: Request) {
                 joinedOn: u.staffProfile?.joinedOn ? toDateOnlyUtc(u.staffProfile.joinedOn) : null,
                 leftOn,
                 weeklyOff: u.staffProfile?.weeklyOff ?? [0],
+                branchIds: branchIdsFrom(u),
                 // Today's resolved figures, for anything that wants one number.
                 dutyMinutes: dutyMinutesFor(u.staffProfile?.dutyMinutes, todayHours(u).start, todayHours(u).end),
                 dutyStart: todayHours(u).start,

@@ -42,9 +42,15 @@ export async function loadSeasonalHours(): Promise<SeasonalHours> {
  * which turns midnight UTC into 05:30 the same day only by luck of the sign. Kept
  * explicit because the two look interchangeable and are not.
  */
-export async function loadHolidays(fromIso: string, toIso: string): Promise<Record<string, string>> {
+export async function loadHolidays(fromIso: string, toIso: string, branchIds: readonly string[] = []): Promise<Record<string, string>> {
+    // The org-wide holidays, plus those of the branches asked for. With none
+    // asked for — the login screen, which speaks for the shop and not for a
+    // person — a branch's holiday does not close the whole shop.
     const rows = await prisma.holiday.findMany({
-        where: { date: { gte: new Date(`${fromIso}T00:00:00.000Z`), lte: new Date(`${toIso}T00:00:00.000Z`) } },
+        where: {
+            date: { gte: new Date(`${fromIso}T00:00:00.000Z`), lte: new Date(`${toIso}T00:00:00.000Z`) },
+            OR: [{ branchId: null }, { branchId: { in: [...branchIds] } }],
+        },
         select: { date: true, name: true },
         orderBy: { date: "asc" },
     });
@@ -60,14 +66,14 @@ export async function loadHolidays(fromIso: string, toIso: string): Promise<Reco
  * the walk can never run past the holidays it was given and silently report a
  * closed day as open.
  */
-export async function loadOfficeCalendar(from: Date = new Date(), lookaheadDays = 14): Promise<OfficeCalendar> {
+export async function loadOfficeCalendar(from: Date = new Date(), lookaheadDays = 14, branchIds: readonly string[] = []): Promise<OfficeCalendar> {
     const today = shopDateOf(from);
     const until = new Date(Date.UTC(today.year, today.month - 1, today.day + lookaheadDays, 12))
         .toISOString().slice(0, 10);
 
     const [seasonal, holidays, row] = await Promise.all([
         loadSeasonalHours(),
-        loadHolidays(today.iso, until),
+        loadHolidays(today.iso, until, branchIds),
         prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { weeklyOff: true } }),
     ]);
 

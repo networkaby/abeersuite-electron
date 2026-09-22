@@ -18,9 +18,10 @@ import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { todayIso } from "@/shared/lib/format/formatDate";
 import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
-import { isoDaysBetween, monthBounds, readDay, summarise, weekdayOf } from "../lib/attendanceCalendar";
+import { isoDaysBetween, monthBounds, readDay, summarise, weekdayOf, holidayDatesFor } from "../lib/attendanceCalendar";
 import { CELL, DOW } from "../lib/attendanceStyles";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
+import HoursBreakupDialog from "./HoursBreakupDialog";
 import type { AttendanceMark, RegisterPayload } from "../lib/attendanceTypes";
 
 const CYCLE: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
@@ -37,8 +38,14 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
 
     // Optimistic marks laid over the payload, so a click paints at once (AGENTS §7).
     const [overrides, setOverrides] = useState<Record<string, AttendanceMark | null>>({});
+    // Whose hours are open. The register answers "what did the month look like";
+    // this answers "and why" — see HoursBreakupDialog.
+    const [hoursFor, setHoursFor] = useState<{ id: number; name: string } | null>(null);
     const days = useMemo(() => isoDaysBetween(from, to), [from, to]);
-    const holidayDates = useMemo(() => new Set((data?.holidays ?? []).map((h) => h.date)), [data]);
+    // Every listed holiday, for the column tooltip; each person's own set is
+    // narrowed by branch when a row is read.
+    const holidays = useMemo(() => data?.holidays ?? [], [data]);
+    const holidayDates = useMemo(() => new Set(holidays.map((h) => h.date)), [holidays]);
     const people = useMemo(() => (data?.people ?? []).map((p) => {
         const marks = { ...p.marks };
         for (const [k, v] of Object.entries(overrides)) {
@@ -124,17 +131,23 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                 {people.length === 0 ? (
                                     <tr><td colSpan={days.length + 4} className="px-3 py-6 text-center text-muted-foreground">Nobody on the staff this month.</td></tr>
                                 ) : people.map((p) => {
-                                    const t = summarise(p, days, holidayDates);
+                                    const mine = holidayDatesFor(holidays, p.branchIds);
+                                    const t = summarise(p, days, mine);
                                     return (
                                         <tr key={p.id} className="border-t border-border">
                                             <td className="sticky left-0 z-10 bg-card px-3 py-1">
-                                                <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="flex items-center gap-2 text-left hover:underline"
+                                                    onClick={() => setHoursFor({ id: p.id, name: p.name })}
+                                                    title={`${p.name} — hours, day by day`}
+                                                >
                                                     <UserAvatar avatarUrl={p.avatarUrl} name={p.name} role={p.role} sizePx={22} />
                                                     <span className="whitespace-nowrap font-medium">{p.name}</span>
-                                                </div>
+                                                </button>
                                             </td>
                                             {days.map((iso) => {
-                                                const r = readDay(p, iso, holidayDates);
+                                                const r = readDay(p, iso, mine);
                                                 if (r.kind === "outside") return <td key={iso} className="px-0.5 py-1 text-center text-muted-foreground/40">·</td>;
                                                 const status = r.kind === "marked" ? r.status : null;
                                                 const stored = r.kind === "marked" && r.stored;
@@ -185,6 +198,16 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                             </tbody>
                         </table>
                     </div>
+                )}
+
+                {hoursFor && (
+                    <HoursBreakupDialog
+                        userId={hoursFor.id}
+                        userName={hoursFor.name}
+                        year={year}
+                        month={month}
+                        onClose={() => setHoursFor(null)}
+                    />
                 )}
             </div>
         </ScrollArea>

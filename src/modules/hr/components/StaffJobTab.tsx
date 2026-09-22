@@ -340,7 +340,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                 </div>
 
                 <div className="sm:col-span-2">
-                    <Field label="Weekly off" hint="The attendance register (a later release) treats these days as paid days off.">
+                    <Field label="Weekly off" hint="The attendance register reads these days as paid days off, and an hour worked on one is paid at the weekly-off rate.">
                         {(id) => (
                             <div id={id} role="group" aria-label="Weekly off days" className="flex flex-wrap items-center gap-1">
                                 {DAYS.map((d, i) => {

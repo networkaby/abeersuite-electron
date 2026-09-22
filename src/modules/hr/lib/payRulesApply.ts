@@ -7,6 +7,8 @@ import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHou
 import { lateDutyCutMinutes, type PayRules } from "@/shared/lib/hr/payRules";
 import { perDayPaise, perHourPaise, weekdayOf } from "./payrollProrate";
 import type { SalaryLine } from "./salaryLines";
+import { holidayDatesFor } from "./attendanceCalendar";
+import { userBranchIds } from "./staffBranchesServer";
 
 /**
  * The pay rules, applied to one person's attendance over one payroll period.
@@ -59,8 +61,8 @@ const EMPTY_EFFECT: AttendanceEffect = {
 export interface PayRulesContext {
     rules: PayRules;
     seasonal: SeasonalHours;
-    /** ISO date → holiday name, for the period. */
-    holidays: Record<string, string>;
+    /** Every holiday in the period, org-wide and per branch; narrowed per person. */
+    holidays: { id: number; date: string; name: string; branchId: string | null }[];
 }
 
 export async function loadPayRulesContext(rules: PayRules, fromIso: string, toIso: string): Promise<PayRulesContext> {
@@ -69,9 +71,9 @@ export async function loadPayRulesContext(rules: PayRules, fromIso: string, toIs
         prisma.holiday
             .findMany({
                 where: { date: { gte: dateOf(fromIso), lte: dateOf(toIso) } },
-                select: { date: true, name: true },
+                select: { id: true, date: true, name: true, branchId: true },
             })
-            .then((rows) => Object.fromEntries(rows.map((h) => [iso(h.date), h.name]))),
+            .then((rows) => rows.map((h) => ({ id: h.id, date: iso(h.date), name: h.name, branchId: h.branchId }))),
     ]);
     return { rules, seasonal, holidays };
 }
@@ -96,8 +98,8 @@ export async function attendanceEffectFor(
     fromIso: string,
     toIso: string,
 ): Promise<AttendanceEffect> {
-    const { rules, seasonal, holidays } = ctx;
-    const [profile, rows, leaves] = await Promise.all([
+    const { rules, seasonal } = ctx;
+    const [profile, rows, leaves, branchIds] = await Promise.all([
         prisma.staffProfile.findUnique({
             where: { userId },
             select: { dutyMinutes: true, dutyStart: true, dutyEnd: true, weeklyOff: true },
@@ -115,8 +117,10 @@ export async function attendanceEffectFor(
             },
             select: { fromDate: true, toDate: true },
         }),
+        userBranchIds(userId),
     ]);
     if (!rows.length) return { ...EMPTY_EFFECT };
+    const holidays = holidayDatesFor(ctx.holidays, branchIds);
 
     const offDays = new Set(profile?.weeklyOff ?? []);
     const grantedLeave = (day: string) =>
@@ -154,7 +158,7 @@ export async function attendanceEffectFor(
 
         // A day the shop was shut is not part of the netting at all — every
         // minute of it is extra by definition, and paid at its own rate.
-        if (holidays[day]) { out.holidayMinutes += r.workedMinutes; continue; }
+        if (holidays.has(day)) { out.holidayMinutes += r.workedMinutes; continue; }
         if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += r.workedMinutes; continue; }
 
         surplus += overtimeMinutes(r.workedMinutes, duty);

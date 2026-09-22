@@ -20,6 +20,7 @@ import OrderParcelLabel from "@/shared/components/print/OrderParcelLabel";
 import CouponCard from "@/shared/components/print/CouponCard";
 import GiftCardCard from "@/shared/components/print/GiftCardCard";
 import { ShiftCloseBody } from "@/shared/components/print/ShiftCloseBody";
+import { PayslipBody } from "@/shared/components/print/PayslipBody";
 import {
     VOUCHER_TEMPLATE_KIND_GROUPS,
     resolveTemplateForFormat,
@@ -41,6 +42,7 @@ import {
     SAMPLE_COUPON_CARD,
     SAMPLE_GIFT_CARD,
     SAMPLE_SHIFT_CLOSE,
+    SAMPLE_PAYSLIP,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
@@ -125,7 +127,7 @@ const SLIP_SIGNOFF_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: Bool
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
     "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
 ]);
-const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD", "SHIFT_CLOSE"]);
+const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD", "SHIFT_CLOSE", "PAYSLIP"]);
 // The cards read only logo / brand / phone (foot) — the rest of the chrome has no place on them.
 const CARD_KINDS = new Set<VoucherTemplateKind>(["COUPON", "GIFT_CARD"]);
 const CARD_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
@@ -211,6 +213,9 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                 showSignature={slipFlags.showSignature}
             />
         ) :
+        selectedKind === "PAYSLIP" ? (
+            <PayslipBody data={SAMPLE_PAYSLIP} thermal={previewFormat === "THERMAL_80MM"} />
+        ) :
         null;
 
     // The shipping label is its OWN postcard document (not the letterhead chrome),
@@ -235,7 +240,9 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         if (isParcelLabel) return [];
         const hidden = new Set(BESPOKE_HIDDEN_ELEMENTS);
         if (isCard) for (const k of CARD_HIDDEN_ELEMENTS) hidden.add(k);
-        if (selectedKind === "SHIFT_CLOSE") {
+        // Neither is a document a customer pays against — no bank block, no
+        // party balance.
+        if (selectedKind === "SHIFT_CLOSE" || selectedKind === "PAYSLIP") {
             hidden.add("showBank");
             hidden.add("showPartyBalance");
         }
@@ -334,6 +341,15 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                 <KindGroup
                     title="POS & Register"
                     kinds={VOUCHER_TEMPLATE_KIND_GROUPS.pos}
+                    selected={selectedKind}
+                    onSelect={setSelectedKind}
+                    workingMap={working}
+                    savedMap={saved}
+                />
+                <div className="my-2 border-t" />
+                <KindGroup
+                    title="HR & People"
+                    kinds={VOUCHER_TEMPLATE_KIND_GROUPS.hr}
                     selected={selectedKind}
                     onSelect={setSelectedKind}
                     workingMap={working}

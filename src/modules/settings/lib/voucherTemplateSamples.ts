@@ -16,6 +16,7 @@ import type { ParcelLabelData } from "@/shared/components/print/OrderParcelLabel
 import type { CouponCardData } from "@/shared/components/print/CouponCard";
 import type { GiftCardData } from "@/shared/components/print/GiftCardCard";
 import type { ShiftCloseBodyData } from "@/shared/components/print/ShiftCloseBody";
+import type { PayslipBodyData } from "@/shared/components/print/PayslipBody";
 
 // 1×1 transparent PNG stands in for the QR in the editor preview.
 const SAMPLE_QR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -135,6 +136,32 @@ export const SAMPLE_SHIFT_CLOSE: ShiftCloseBodyData = {
     },
     closingContraVoucher: { reference: "CV/26-27/0045" },
     notes: "Shift closed on time. Cash tallied and swept to vault.",
+};
+
+// Salary slip fixture — one posted payroll line, the way HR's Pay tab writes it.
+export const SAMPLE_PAYSLIP: PayslipBodyData = {
+    slipNo: "PS-1042",
+    staffName: "Wasim Akram",
+    staffCode: "ST-007",
+    designation: "Counter Executive",
+    joinedOn: "2024-04-01",
+    periodFrom: "2026-09-01",
+    periodTo: "2026-09-30",
+    postingDate: "2026-09-30",
+    voucherRef: "JV-10812-26",
+    paidDays: 25,
+    periodDays: 30,
+    payDays: 26,
+    lines: [
+        { name: "Basic", kind: "EARNING", amountPaise: 1_500_000 },
+        { name: "HRA", kind: "EARNING", amountPaise: 300_000 },
+        { name: "Overtime", kind: "EARNING", amountPaise: 86_500 },
+        { name: "Advance recovery", kind: "DEDUCTION", amountPaise: 200_000 },
+        { name: "Late arrival", kind: "DEDUCTION", amountPaise: 28_800 },
+    ],
+    grossPaise: 1_886_500,
+    deductionsPaise: 228_800,
+    netPaise: 1_657_700,
 };
 
 /** Sample-only date shift — the credit-sale due date in the preview. */
@@ -563,6 +590,15 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 subtotal: null, taxAmount: null, total: null,
                 notes: null,
             };
+        case "PAYSLIP":
+            // The slip renders its bespoke PayslipBody fixture (SAMPLE_PAYSLIP).
+            return {
+                reference: SAMPLE_PAYSLIP.slipNo, date: SAMPLE_PAYSLIP.postingDate,
+                partyName: SAMPLE_PAYSLIP.staffName, partyPhone: null,
+                lines: [],
+                subtotal: null, taxAmount: null, total: null,
+                notes: null,
+            };
     }
 }
 
@@ -600,4 +636,5 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     COUPON: "Coupon Card",
     GIFT_CARD: "Gift Card",
     SHIFT_CLOSE: "Shift Close",
+    PAYSLIP: "Salary Slip",
 };

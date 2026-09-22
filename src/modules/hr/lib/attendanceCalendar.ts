@@ -2,9 +2,22 @@
 // register needs. Pure — shared by the API and the grid.
 
 import type { AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
-import type { RegisterPerson } from "./attendanceTypes";
+import type { HolidayDto, RegisterPerson } from "./attendanceTypes";
 import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes } from "@/shared/lib/hr/dutyTime";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+
+/**
+ * Whether a holiday is this person's. An org-wide holiday (no branch) is
+ * everybody's; a branch holiday belongs to the people who hold a seat there.
+ */
+export function holidayApplies(h: Pick<HolidayDto, "branchId">, branchIds: readonly string[]): boolean {
+    return h.branchId === null || branchIds.includes(h.branchId);
+}
+
+/** The holiday dates that apply to one person, for `readDay` / `summarise`. */
+export function holidayDatesFor(holidays: readonly HolidayDto[], branchIds: readonly string[]): Set<string> {
+    return new Set(holidays.filter((h) => holidayApplies(h, branchIds)).map((h) => h.date));
+}
 
 /**
  * What this person owed on THAT day — not what they owe today.
