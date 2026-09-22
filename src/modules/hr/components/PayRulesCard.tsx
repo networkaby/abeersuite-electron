@@ -108,20 +108,46 @@ const PENALTY_RULES: Rule[] = [
  * One style is in force at a time. Mixing money and time for the same late day
  * would be two punishments for one offence, so the screen makes it a choice.
  */
-type LateStyle = "none" | "pay" | "timesLate" | "shareOfDay";
+type LateStyle = "none" | "pay" | "timesLate" | "shareOfDay" | "sharePerSlab";
 
-const LATE_STYLES: { id: LateStyle; label: string; suffix?: string; step?: number }[] = [
-    { id: "none", label: "Nothing more" },
-    { id: "pay", label: "Cut from his pay", suffix: "days of basic", step: 0.25 },
-    { id: "timesLate", label: "Cut from his hours — by the lateness", suffix: "times the minutes late", step: 0.5 },
-    { id: "shareOfDay", label: "Cut from his hours — a slice of the day", suffix: "% of the day's duty", step: 5 },
+/** A style's own box: which value it edits, what it is measured in, how it steps. */
+interface LateField {
+    key: string;
+    suffix: string;
+    step: number;
+}
+
+const LATE_STYLES: { id: LateStyle; label: string; fields: LateField[] }[] = [
+    { id: "none", label: "Nothing more", fields: [] },
+    { id: "pay", label: "Cut from his pay", fields: [{ key: "pay", suffix: "days of basic", step: 0.25 }] },
+    {
+        id: "timesLate",
+        label: "Cut from his hours — by the lateness",
+        fields: [{ key: "timesLate", suffix: "times the minutes late", step: 0.5 }],
+    },
+    {
+        id: "sharePerSlab",
+        label: "Cut from his hours — a slice for every slab of lateness",
+        fields: [
+            { key: "slabPct", suffix: "% of the day's duty for every", step: 5 },
+            { key: "slabMinutes", suffix: "minutes late", step: 5 },
+        ],
+    },
+    {
+        id: "shareOfDay",
+        label: "Cut from his hours — a flat slice of the day",
+        fields: [{ key: "shareOfDay", suffix: "% of the day's duty", step: 5 }],
+    },
 ];
 
 /** A worked example, so the rule is felt and not merely read. */
-const EXAMPLE_LATE_MINUTES = 5;
+const EXAMPLE_LATE_MINUTES = 12;
 const EXAMPLE_DUTY_HOURS = 9;
 
-function explainLate(style: LateStyle, v: number): string {
+const NOTHING_EXTRA = "Nothing extra is cut — only the minutes actually missed.";
+
+function explainLate(style: LateStyle, v: number, v2: number): string {
+    const dutyMinutes = EXAMPLE_DUTY_HOURS * 60;
     switch (style) {
         case "pay":
             return v === 0
@@ -129,12 +155,22 @@ function explainLate(style: LateStyle, v: number): string {
                 : `Each charged late day cuts ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of basic from the payslip.`;
         case "timesLate":
             return v === 0
-                ? "Nothing extra is cut — only the minutes actually missed."
+                ? NOTHING_EXTRA
                 : `The lateness is counted ${times(v)} over. ${EXAMPLE_LATE_MINUTES} minutes late costs ${Math.round(EXAMPLE_LATE_MINUTES * v)} minutes of the day's duty.`;
+        case "sharePerSlab": {
+            if (v === 0 || v2 === 0) return NOTHING_EXTRA;
+            /* A part slab counts as a whole one — 12 minutes late against a 5-minute
+               slab is three slabs, not two and a bit. Rounding the other way would
+               make the first minutes of every slab free, and the rule is meant to
+               push him towards the shutter, not towards the next round number. */
+            const slabs = Math.ceil(EXAMPLE_LATE_MINUTES / v2);
+            const cut = Math.round((dutyMinutes * Math.min(100, slabs * v)) / 100);
+            return `Every ${v2} minutes late — or part of it — costs ${v}% of the day's duty. ${EXAMPLE_LATE_MINUTES} minutes late is ${slabs} slab${slabs === 1 ? "" : "s"}, so ${slabs * v}% of a ${EXAMPLE_DUTY_HOURS}-hour day: ${cut} minutes.`;
+        }
         case "shareOfDay":
             return v === 0
-                ? "Nothing extra is cut — only the minutes actually missed."
-                : `A charged late day is credited ${v}% less duty — on a ${EXAMPLE_DUTY_HOURS}-hour day that is ${Math.round((EXAMPLE_DUTY_HOURS * 60 * v) / 100)} minutes, however small the lateness.`;
+                ? NOTHING_EXTRA
+                : `A charged late day is credited ${v}% less duty — on a ${EXAMPLE_DUTY_HOURS}-hour day that is ${Math.round((dutyMinutes * v) / 100)} minutes, however small the lateness.`;
         default:
             return "Late arrival costs only the minutes not worked. Nothing further is charged.";
     }
@@ -152,6 +188,8 @@ const DEFAULTS: Record<string, string> = {
     /* One box per style, so switching between them does not lose what was typed. */
     pay: "1",
     timesLate: "2",
+    slabPct: "10",
+    slabMinutes: "5",
     shareOfDay: "10",
 };
 
@@ -273,23 +311,29 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                                             className="accent-primary"
                                         />
                                         <span className="text-sm">{s.label}</span>
-                                        {s.suffix && (
-                                            <span className="ml-auto flex items-center gap-2">
-                                                <NumericInput
-                                                    mode={Number.isInteger(s.step ?? 1) ? "digits" : "decimal"}
-                                                    min={0}
-                                                    aria-label={s.label}
-                                                    disabled={!canEdit || !active}
-                                                    value={values[s.id]}
-                                                    onValueChange={(next) => setValues((v) => ({ ...v, [s.id]: next }))}
-                                                    className="h-8 w-20 text-sm"
-                                                />
-                                                <span className="text-xs text-muted-foreground">{s.suffix}</span>
+                                        {s.fields.length > 0 && (
+                                            <span className="ml-auto flex flex-wrap items-center gap-2">
+                                                {s.fields.map((f) => (
+                                                    <span key={f.key} className="flex items-center gap-2">
+                                                        <NumericInput
+                                                            mode={Number.isInteger(f.step) ? "digits" : "decimal"}
+                                                            min={0}
+                                                            aria-label={`${s.label} — ${f.suffix}`}
+                                                            disabled={!canEdit || !active}
+                                                            value={values[f.key]}
+                                                            onValueChange={(next) => setValues((v) => ({ ...v, [f.key]: next }))}
+                                                            className="h-8 w-20 text-sm"
+                                                        />
+                                                        <span className="text-xs text-muted-foreground">{f.suffix}</span>
+                                                    </span>
+                                                ))}
                                             </span>
                                         )}
                                     </div>
                                     {active && (
-                                        <p className="text-xs text-muted-foreground">{explainLate(s.id, num(s.id))}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {explainLate(s.id, num(s.fields[0]?.key ?? ""), num(s.fields[1]?.key ?? ""))}
+                                        </p>
                                     )}
                                 </label>
                             );
