@@ -132,3 +132,58 @@ model LeaveType {
   @@index([updatedAt])
   @@map("leave_types")
 }
+
+/// ONE ACTIVE STRETCH of a working day — in at 10:30, gone by 14:00.
+///
+/// Owner, 2026-09-22: *"we need to know how many time he/she was active, how the
+/// day is calculated, hour breakup user wise day wise."* None of that could be
+/// answered before, and not for want of a screen: `AttendanceDay.workedMinutes`
+/// is a running TOTAL, and a total cannot be taken apart again. 490 minutes says
+/// nothing about whether it was one stretch or five, when they were, or which
+/// till they were on. So the stretches are stored as they happen.
+///
+/// The rule is the one already in `creditableMinutes` and not a new one: each
+/// sign of life extends the open span, and a gap longer than the person's idle
+/// limit means they were NOT here — that span is closed off at its last sign of
+/// life and a fresh one begins. The idle gap itself is stored nowhere, because it
+/// is not time; it is simply the space between two spans, and the day's breakup
+/// reads it as the difference.
+///
+/// These rows are a LEDGER of the same minutes `AttendanceDay.workedMinutes`
+/// carries as a balance, and the two must agree: the spans of a day sum to it.
+/// The day row stays the one the register, grading and payroll read, so nothing
+/// that works today depends on this table being right — it only ever explains.
+model AttendanceSpan {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation("AttendanceSpanUser", fields: [userId], references: [id], onDelete: Cascade)
+  /// The business day this stretch belongs to — the same day key as
+  /// AttendanceDay, so the two join without any date arithmetic.
+  date DateTime @db.Date
+  /// The first sign of life in this stretch, and the last. `endedAt` is null
+  /// while the stretch is still running — that is the open span the next pulse
+  /// extends, and there is at most one per person per day.
+  startedAt DateTime
+  endedAt   DateTime?
+  /// Minutes credited so far, kept in step with the two clocks above rather than
+  /// derived at read time: the span's credit is capped by the idle limit in
+  /// places, and re-deriving it from the ends would quietly pay for a gap the
+  /// stamping already refused.
+  minutes Int @default(0)
+  /// Where it was worked. Plain Int like AttendanceDay.counterId — no FK, so a
+  /// retired till never takes attendance history with it.
+  counterId Int?
+  /// How the stretch finished, for the breakup's "why it ended" column:
+  /// IDLE — the gap to the next sign of life exceeded the idle limit.
+  /// SIGNED_OUT — the person signed out themselves.
+  /// SHIFT_CLOSED — the till's shift close ended the day.
+  /// OPEN — still running; null `endedAt` always carries this.
+  endedBy String @default("OPEN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([userId, date])
+  @@index([date])
+  @@index([updatedAt])
+  @@map("attendance_spans")
+}

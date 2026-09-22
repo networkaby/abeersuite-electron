@@ -25,8 +25,15 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { IDLE_LIMIT_MS, creditableMinutes } from "@/shared/lib/hr/dutyTime";
+import { closeOpenSpan, openSpanOnArrival, recordSpanBeat } from "@/shared/lib/hr/attendanceSpans";
 
-type Db = Pick<PrismaClient, "attendanceDay">;
+/**
+ * The day row is the balance; the spans are the ledger behind it. Every write
+ * below keeps both, and the span half is written SECOND and swallows its own
+ * errors, so the number people are paid on can never fail because its explanation
+ * did. See attendanceSpans.ts.
+ */
+type Db = Pick<PrismaClient, "attendanceDay" | "attendanceSpan">;
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
@@ -43,7 +50,10 @@ export async function stampAttendanceIn(db: Db, userId: number, counterId: numbe
             where: { userId, date, firstInAt: null },
             data:  { firstInAt: at, counterId, lastSeenAt: at },
         });
-        if (filled.count > 0) return;
+        if (filled.count > 0) {
+            await openSpanOnArrival(db, userId, date, at, counterId);
+            return;
+        }
 
         // Either today has no row yet, or it already carries an arrival time.
         // An office mark made earlier today stands either way — `update: {}`
@@ -53,6 +63,8 @@ export async function stampAttendanceIn(db: Db, userId: number, counterId: numbe
             create: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, counterId, lastSeenAt: at },
             update: {},
         }).catch(() => undefined);
+        // A re-login inside a live stretch opens nothing — see openSpanOnArrival.
+        await openSpanOnArrival(db, userId, date, at, counterId);
     } catch { /* never fail the sign-in */ }
 }
 
@@ -96,6 +108,9 @@ export async function stampAttendanceOut(
             where: { userId_date: { userId, date } },
             data:  { lastSeenAt: at, workedMinutes: { increment: add } },
         }).catch(() => undefined);
+        // The same minutes on the ledger, and the stretch ends here: closing the
+        // till is the end of the working day, not an idle gap.
+        await closeOpenSpan(db, userId, date, at, add, "SHIFT_CLOSED");
 
         // The row already existed but carries no arrival — the sign-in stamp was
         // skipped on this till. Fill it from the shift open, never over a real one.
@@ -166,6 +181,7 @@ export async function stampActivity(
             await db.attendanceDay.create({
                 data: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, lastSeenAt: seenAt, counterId },
             }).catch(() => undefined);
+            await recordSpanBeat(db, userId, date, null, at, 0, counterId);
             return 0;
         }
 
@@ -179,6 +195,10 @@ export async function stampActivity(
                 ? { lastSeenAt: seenAt, workedMinutes: { increment: add } }
                 : { workedMinutes: { increment: 0 } },
         });
+        // The ledger takes exactly what the balance took. A beat that moved
+        // nothing forward is a crossed pulse, already counted — it must not break
+        // the stretch, so it is not put on the ledger either.
+        if (movedForward) await recordSpanBeat(db, userId, date, row.lastSeenAt, seenAt, add, counterId);
         return row.workedMinutes + add;
     } catch {
         return 0;   /* never fail a page over a clock */

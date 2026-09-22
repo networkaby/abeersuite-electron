@@ -1577,6 +1577,32 @@ ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT 
 ALTER TABLE "leave_types" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "attendance_spans" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "date" DATE NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL,
+    "endedAt" TIMESTAMP(3),
+    "minutes" INTEGER NOT NULL DEFAULT 0,
+    "counterId" INTEGER,
+    "endedBy" TEXT NOT NULL DEFAULT 'OPEN',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "attendance_spans_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "date" DATE NOT NULL;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3) NOT NULL;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "endedAt" TIMESTAMP(3);
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "minutes" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "counterId" INTEGER;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "endedBy" TEXT NOT NULL DEFAULT 'OPEN';
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "attendance_spans" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "staff_profiles" (
     "userId" INTEGER NOT NULL,
     "staffCode" TEXT,
@@ -4227,6 +4253,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS "leave_types_code_key" ON "leave_types"("code"
 CREATE INDEX IF NOT EXISTS "leave_types_updatedAt_idx" ON "leave_types"("updatedAt");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "attendance_spans_userId_date_idx" ON "attendance_spans"("userId", "date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "attendance_spans_date_idx" ON "attendance_spans"("date");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "attendance_spans_updatedAt_idx" ON "attendance_spans"("updatedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "staff_profiles_staffCode_key" ON "staff_profiles"("staffCode");
 
 -- CreateIndex
@@ -5106,6 +5141,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "leave_requests" ADD CONSTRAINT "leave_requests_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "attendance_spans" ADD CONSTRAINT "attendance_spans_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -6465,6 +6507,13 @@ DO $$ BEGIN
     IF to_regclass('public."attendance_days"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "attendance_days";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "attendance_days"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."attendance_spans"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "attendance_spans";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "attendance_spans"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

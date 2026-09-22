@@ -70,6 +70,7 @@ model User {
   // HR & People — the employment record of this staff member (hr.prisma).
   staffProfile                     StaffProfile?
   attendanceDays                   AttendanceDay[]            @relation("AttendanceUser")
+  attendanceSpans                  AttendanceSpan[]           @relation("AttendanceSpanUser")
   leaveRequests                    LeaveRequest[]             @relation("LeaveUser")
 }
 
