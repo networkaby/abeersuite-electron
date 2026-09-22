@@ -9,20 +9,15 @@
 // staff, not the customer book), and it feeds both panes — the left list and
 // the overview table are the same rows.
 //
-// The pick rides the URL as `?user=<id>` so the back button and a refresh keep
-// the same person open. /office/hr/staff/[userId] still works on its own for
-// old links and bookmarks.
+// The pick rides the URL as `?user=<id>` (replaced, not pushed — one row click
+// per person should not pile up history), so a refresh or a shared link opens
+// the same person. /office/hr/staff/[userId] still works on its own for old
+// links and bookmarks.
 
 import { useCallback, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Contact, Users } from "lucide-react";
-import {
-    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-    BreadcrumbPage, BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { ArrowLeft, Contact, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { PositionChip } from "@/shared/components/PositionChip";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
@@ -102,42 +97,12 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
     }, [rows, q, status, branchId, departmentId]);
 
     const leftCount = rows.filter((r) => staffHasLeft(r.staffProfile)).length;
-    const selected = selectedId ? rows.find((r) => r.id === selectedId) : undefined;
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
-            <BreadcrumbBar>
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbLink asChild>
-                                <Link href="/office/hr">HR &amp; People</Link>
-                            </BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator />
-                        <BreadcrumbItem>
-                            {selectedId ? (
-                                <BreadcrumbLink asChild>
-                                    <button type="button" onClick={() => select(null)} className="transition-colors hover:text-foreground">
-                                        Staff Directory
-                                    </button>
-                                </BreadcrumbLink>
-                            ) : (
-                                <BreadcrumbPage>Staff Directory</BreadcrumbPage>
-                            )}
-                        </BreadcrumbItem>
-                        {selected && (
-                            <>
-                                <BreadcrumbSeparator />
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>{selected.name}</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </>
-                        )}
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </BreadcrumbBar>
-
+            {/* No breadcrumb bar of our own — /office/hr's layout already puts
+                "HR & People › Staff Directory" above us, and a second strip only
+                repeats it. The person's name is the heading of the right pane. */}
             {showForm && (
                 <UserForm
                     onClose={() => { setShowForm(false); reload(); }}
@@ -160,7 +125,7 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                     addLabel="Add staff"
                     onTitleClick={selectedId ? () => select(null) : undefined}
                     isEmpty={filtered.length === 0}
-                    emptyMessage={rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."}
+                    emptyMessage={!data ? "Reading…" : rows.length === 0 ? "No staff yet — add the first person." : "Nobody matches these filters."}
                     toolbar={
                         <div className="mt-2 space-y-2">
                             {branchOptions.length > 1 && (
@@ -247,6 +212,12 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                 {/* ── Right section: the chosen person, or the whole directory ── */}
                 <section className="flex flex-1 flex-col overflow-y-auto bg-muted/30">
                     {selectedId ? (
+                        <>
+                        <div className="px-6 pt-3">
+                            <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={() => select(null)}>
+                                <ArrowLeft size={14} /> All staff
+                            </Button>
+                        </div>
                         <StaffProfileWorkspace
                             key={selectedId}
                             userId={selectedId}
@@ -255,6 +226,7 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                             canEditPositions={canEditPositions}
                             embedded
                         />
+                        </>
                     ) : (
                         <div className="px-6 pt-4 pb-6">
                             <div className="mb-3 flex items-center gap-2">
