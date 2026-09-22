@@ -246,12 +246,15 @@ function HeadForm({ initial, roles, onCancel, onSave }: { initial: CommissionHea
                     </div>
                     {draft.kind === "SLABS" && (
                         <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">Each slab&apos;s rate is paid on the sales inside it — like tax slabs, so crossing a line never loses money.</div>
+                            <div className="text-xs text-muted-foreground">
+                                The ladder starts at ₹0. Each row is a line where the rate changes, and the rate is paid only on the sales inside that slab — like tax slabs, so crossing a line never loses money.
+                            </div>
+                            <div className="grid max-w-md grid-cols-[1fr_1fr_auto] gap-2 text-xs text-muted-foreground"><span>Sales from (₹)</span><span>Rate on this slab (%)</span><span /></div>
                             {draft.slabs.map((s, k) => (
                                 <div key={k} className="grid max-w-md grid-cols-[1fr_1fr_auto] items-center gap-2">
-                                    <NumericInput mode="decimal" value={s.from} onValueChange={(v) => setSlab(k, { from: v })} placeholder={k === 0 ? "from ₹0" : "from ₹"} aria-label="Slab from" />
+                                    <NumericInput mode="decimal" value={k === 0 ? "0" : s.from} disabled={k === 0} onValueChange={(v) => setSlab(k, { from: v })} placeholder="from ₹" aria-label="Slab from" />
                                     <NumericInput mode="decimal" value={s.rate} onValueChange={(v) => setSlab(k, { rate: v })} placeholder="rate %" aria-label="Slab rate" />
-                                    <Button type="button" variant="ghost" size="icon" aria-label="Remove slab" disabled={draft.slabs.length <= 1} onClick={() => set({ slabs: draft.slabs.filter((_, l) => l !== k) })}><Trash2 size={14} /></Button>
+                                    <Button type="button" variant="ghost" size="icon" aria-label="Remove slab" disabled={k === 0} onClick={() => set({ slabs: draft.slabs.filter((_, l) => l !== k) })}><Trash2 size={14} /></Button>
                                 </div>
                             ))}
                             <Button type="button" variant="outline" size="sm" disabled={draft.slabs.length >= 10} onClick={() => set({ slabs: [...draft.slabs, { from: "", rate: "" }] })}><Plus size={14} /> Add slab</Button>

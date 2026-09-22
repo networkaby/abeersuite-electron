@@ -169,7 +169,9 @@ export function describeRule(r: CommissionRule, formatPaise: (p: number) => stri
         case "SLABS":
             return r.slabs.map((s, i) => {
                 const next = r.slabs[i + 1];
-                return `${formatBp(s.rateBp)} on ${next ? `${formatPaise(s.fromPaise)}–${formatPaise(next.fromPaise)}` : `above ${formatPaise(s.fromPaise)}`}`;
+                if (!next) return `${formatBp(s.rateBp)} above ${formatPaise(s.fromPaise)}`;
+                if (s.fromPaise === 0) return `${formatBp(s.rateBp)} up to ${formatPaise(next.fromPaise)}`;
+                return `${formatBp(s.rateBp)} on ${formatPaise(s.fromPaise)}–${formatPaise(next.fromPaise)}`;
             }).join(", ") || "slabs not set";
     }
 }
