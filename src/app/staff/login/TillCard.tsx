@@ -141,19 +141,16 @@ export default function TillCard() {
                                 : `${firstName} · since ${formatClockTime(shift.openedAt)}`}
                         </span>
                     </p>
-                    {/* A deliberate handover leads with what the cashier COUNTED — that
-                        is the figure the next person checks the notes against, with the
-                        books' expectation beside it. A plain sign-out (a break he never
-                        came back from, an emergency) has no count, so the books' figure
-                        leads and the methods below are what there is to verify. */}
+                    {/* A deliberate handover shows only what the cashier COUNTED — the
+                        server has already folded any gap into the Cash line, and books it
+                        as Cash Short / Over when the next person accepts. A plain sign-out
+                        has no count, so the books' figure leads and the methods below are
+                        what there is to verify. */}
                     {handedOver && shift.countedPaise != null ? (
-                        <>
-                            <p className={styles.dutybig}>
-                                {inr(shift.countedPaise)}
-                                <small> counted by {firstName}</small>
-                            </p>
-                            <p className={styles.dutysub}>Books expect {inr(shift.expectedCashPaise)} in the drawer</p>
-                        </>
+                        <p className={styles.dutybig}>
+                            {inr(shift.countedPaise)}
+                            <small> counted by {firstName}</small>
+                        </p>
                     ) : (
                         <p className={styles.dutybig}>
                             {inr(shift.expectedCashPaise)}

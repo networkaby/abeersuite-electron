@@ -50,6 +50,12 @@ export async function GET() {
         const expected = computeExpectedCash(await tillBalancePaise(prisma, shift.counter.tillAccountId), sumPaise(shift.drops));
         const tenders  = await buildShiftTenderBreakdown(prisma, { shiftId: shift.id, counter: shift.counter, includeZero: true });
         const pending  = shift.status === "AWAITING_HANDOVER" && shift.handover?.status === "PENDING" ? shift.handover : null;
+        // A counted handover shows the drawer as counted. The gap is booked as
+        // Cash Short / Over only when the next cashier accepts (takeover route);
+        // until then the screen already reads as if it were, so the next person
+        // sees one figure — the one in the drawer.
+        const counted  = pending?.declaredByAPaise ?? null;
+        const gap      = counted != null ? counted - expected : BigInt(0);
 
         return NextResponse.json({
             status:            shift.status,
@@ -57,9 +63,12 @@ export async function GET() {
             counterName:       shift.counter.name,
             openedAt:          shift.openedAt,
             handedOverAt:      pending?.initiatedAt ?? null,
-            countedPaise:      pending?.declaredByAPaise?.toString() ?? null,
-            expectedCashPaise: expected.toString(),
-            tenders:           tenders.map((t) => ({ label: t.label, amountPaise: t.amountPaise })),
+            countedPaise:      counted?.toString() ?? null,
+            expectedCashPaise: (counted ?? expected).toString(),
+            tenders:           tenders.map((t) => ({
+                label:       t.label,
+                amountPaise: t.method === "CASH" ? (BigInt(t.amountPaise) + gap).toString() : t.amountPaise,
+            })),
         });
     } catch {
         return NextResponse.json(null);
