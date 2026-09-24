@@ -252,12 +252,14 @@ export type TenderBreakdownRow = { method: string; label: string; amountPaise: s
  * Per-method tally of everything collected at a counter during a shift, for
  * the close report. CASH routes to the till; each other method uses its
  * per-counter routing account and optional custom label ("PhonePe UPI" etc.).
- * Only methods with a positive total are returned. If two methods share one
- * account, the first in display order claims it (no double-count).
+ * Only methods with a positive total are returned, unless `includeZero` asks for
+ * the full list — the lock screen shows every method the counter takes, so a
+ * quiet shift still says "UPI ₹0" rather than hiding the method. If two methods
+ * share one account, the first in display order claims it (no double-count).
  */
 export async function buildShiftTenderBreakdown(
     tx: Tx,
-    args: { shiftId: number; counter: CounterRouting },
+    args: { shiftId: number; counter: CounterRouting; includeZero?: boolean },
 ): Promise<TenderBreakdownRow[]> {
     const c = args.counter;
     const defs: Array<{ method: string; accountId: number | null; label: string }> = [
@@ -274,7 +276,7 @@ export async function buildShiftTenderBreakdown(
         if (d.accountId == null || claimed.has(d.accountId)) continue;
         claimed.add(d.accountId);
         const amt = totals.get(d.accountId) ?? BigInt(0);
-        if (amt > BigInt(0)) rows.push({ method: d.method, label: d.label, amountPaise: amt.toString() });
+        if (amt > BigInt(0) || args.includeZero) rows.push({ method: d.method, label: d.label, amountPaise: amt.toString() });
     }
     return rows;
 }

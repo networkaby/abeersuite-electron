@@ -354,16 +354,16 @@
 .key:active { transform: scale(.96) }
 .key.soft { background: none; border-color: transparent; color: var(--ink-dim); font-size: 13px }
 
-/* ── The till's own cards ─────────────────────────────────────────────────────
-   "Your duty today" (DutyCard.tsx) and "Shift open" (CounterShiftCard.tsx) — both
-   `.duty`, both only on a counter, both arriving after the page has painted.
+/* ── The till's own card ──────────────────────────────────────────────────────
+   TillCard.tsx — next duty, the day just finished and whose drawer is on this
+   counter, in one `.duty`. Counter only, arriving after the page has painted.
 
-   When either is up, the showcase steps aside: the person at the till has real
+   When it is up, the showcase steps aside: the person at the till has real
    business to read, and the row has no room for marketing as well — squeezed in,
-   it went one word per line. The cards and the sign-in card then sit as one even
+   it went one word per line. The card and the sign-in card then sit as one even
    row, same height, tops level. With no card the screen is exactly the shell's,
    so the cold-start handover still does not jump. */
-.stage:has(.duty) { gap: 20px; align-items: stretch; flex-wrap: wrap }
+.stage:has(.duty) { gap: 24px; align-items: stretch; flex-wrap: wrap }
 .stage:has(.duty) .side { display: none }
 /* Its only job was keeping the showcase text readable. */
 .root:has(.duty) .readscrim { display: none }
@@ -373,9 +373,9 @@
     z-index: 3;
     display: flex;
     flex-direction: column;
-    flex: 0 0 300px;
+    flex: 0 0 400px;
     max-width: 100%;
-    padding: 22px;
+    padding: 22px 24px 20px;
     background: var(--glass);
     border: 1px solid var(--line);
     border-radius: 18px;
@@ -384,54 +384,132 @@
     box-shadow: 0 24px 60px rgba(2, 6, 23, .5);
     animation: dutyIn .35s ease both;
 }
-/* Narrow till: the cards wrap above the sign-in card at its width. */
+/* Narrow till: the card wraps above the sign-in card at its width. */
 @media (max-width: 1080px) { .duty { flex-basis: 372px } }
 @keyframes dutyIn { from { opacity: 0; transform: translateY(6px) } }
 @media (prefers-reduced-motion: reduce) { .duty { animation: none } }
 
+/* Counter on the left, the date on the right. */
 .dutyhead {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
     font-size: 11.5px;
     letter-spacing: .14em;
     text-transform: uppercase;
     color: var(--ink-dim);
-    margin: 0 0 12px;
+    margin: 0 0 14px;
 }
-.dutybig { font-size: 34px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums }
-.dutysub { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 16px }
 
-/* Worked against duty, under the big figure. */
-.dutybar { height: 4px; margin: -6px 0 16px; border-radius: 999px; background: rgba(255, 255, 255, .10); overflow: hidden }
-.dutybar i { display: block; height: 100%; border-radius: inherit; background: var(--accent) }
-
-.dutyrows { margin: 0 0 14px; display: grid; gap: 7px }
-.dutyrows div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px }
-.dutyrows dt { color: var(--ink-dim); margin: 0 }
-.dutyrows dd { color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; text-align: right }
-
-/* The day's verdict, as a tag rather than a line of coloured text. */
-.dutygood, .dutywarn {
-    align-self: flex-start;
-    font-size: 12px;
+/* ── 1. Next duty: the hero ──────────────────────────────────────────────────
+   A lit panel of its own, the accent colour bleeding in from the corner, the day
+   in large type and the time larger still — it is the one line the man on his
+   way out actually needs, so it is the biggest thing on the card. */
+.nexthero {
+    position: relative;
+    overflow: hidden;
+    margin: 0 0 16px;
+    padding: 16px 18px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(56, 189, 248, .35);
+    background:
+        radial-gradient(120% 140% at 100% 0%, rgba(56, 189, 248, .28), transparent 60%),
+        rgba(56, 189, 248, .08);
+}
+.nextlabel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 6px;
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+/* "Closed tomorrow for Durga Puja" — the reason there is a gap, as a tag. */
+.nextlabel em {
+    font-style: normal;
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 11.5px;
     font-weight: 600;
-    margin: 0 0 12px;
-    padding: 3px 10px;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, .16);
+    padding: 2px 9px;
     border-radius: 999px;
 }
-.dutygood { color: #4ade80; background: rgba(74, 222, 128, .14) }
-.dutywarn { color: #fbbf24; background: rgba(251, 191, 36, .14) }
+.nextday { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); line-height: 1.2 }
+.nexttime { margin: 2px 0 0; font-size: 40px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); line-height: 1.1; font-variant-numeric: tabular-nums }
 
-.dutymonth { font-size: 12px; line-height: 1.55; color: rgba(226, 232, 240, .72); margin: 0 0 12px }
+/* ── 2 and 3: a block each, ruled off from the one above ───────────────────── */
+.tillblock { padding: 14px 0 0; margin: 0 0 8px; border-top: 1px solid rgba(255, 255, 255, .10) }
+.tillblock:last-child { margin-bottom: 0; display: flex; flex-direction: column; flex: 1 }
+.tilllabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin: 0 0 6px;
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+}
+.tilllabel span { letter-spacing: 0; text-transform: none; font-size: 12px; color: var(--ink-dim); font-variant-numeric: tabular-nums }
 
-/* The closing line of either card — "Back on duty tomorrow, 10:54 AM", or what
-   signing in will do to the drawer. Held to the bottom so the cards in the row
-   end level, and ruled off because it says what comes next, not another figure. */
+.dutybig { font-size: 30px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; line-height: 1.15 }
+.dutybig small { font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--ink-dim) }
+.dutysub { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 0 }
+
+/* Worked against duty, under the big figure. */
+.dutybar { height: 4px; margin: 10px 0 12px; border-radius: 999px; background: rgba(255, 255, 255, .10); overflow: hidden }
+.dutybar i { display: block; height: 100%; border-radius: inherit; background: var(--accent) }
+
+/* The day's figures as tiles in a strip — verdict first, then only what happened. */
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px }
+.stats div {
+    flex: 1 1 0;
+    min-width: 76px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid rgba(255, 255, 255, .08);
+}
+.stats b { display: block; font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.2 }
+.stats span { display: block; font-size: 11px; color: var(--ink-dim); margin-top: 2px }
+.stats .statgood { background: rgba(74, 222, 128, .12); border-color: rgba(74, 222, 128, .28) }
+.statgood b { color: #4ade80 }
+.stats .statwarn { background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .28) }
+.statwarn b { color: #fbbf24 }
+
+.dutymonth { font-size: 12px; line-height: 1.55; color: rgba(226, 232, 240, .72); margin: 0 }
+
+/* Every method the counter takes, two to a row. A ₹0 method stays on the list
+   but steps back, so what was collected reads first. */
+.tenders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 12px 0 0 }
+.tenders div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid rgba(255, 255, 255, .08);
+}
+.tenders dt { color: var(--ink-dim); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tenders dd { color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; font-weight: 600 }
+.tenders .nil dd { color: var(--ink-dim); font-weight: 400 }
+
+/* The closing line — what signing in will do to the drawer. Held to the bottom
+   so the card ends level with the sign-in card. */
 .dutyfoot {
     font-size: 12.5px;
     line-height: 1.55;
     color: rgba(226, 232, 240, .92);
     margin: auto 0 0;
-    padding: 10px 0 0;
-    border-top: 1px solid rgba(255, 255, 255, .10);
+    padding: 12px 0 0;
 }
 
 /* The same answer, shop-wide, under the clock — for everyone who did NOT just

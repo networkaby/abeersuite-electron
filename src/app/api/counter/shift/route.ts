@@ -3,7 +3,7 @@
 // "Whose drawer is on this counter?" — for the sign-in (lock) screen, before
 // anybody is signed in. The next cashier reads it standing at the till: whose
 // shift it is, whether it was handed over or just left, the cash expected in the
-// drawer and what was collected by each method. It is what they check before
+// drawer and every method the counter takes, with what each collected. It is what they check before
 // signing in and accepting the drawer as theirs.
 //
 // Unauthenticated by necessity, and deliberately narrow — the same fence as
@@ -48,7 +48,7 @@ export async function GET() {
         if (!shift) return NextResponse.json(null);
 
         const expected = computeExpectedCash(await tillBalancePaise(prisma, shift.counter.tillAccountId), sumPaise(shift.drops));
-        const tenders  = await buildShiftTenderBreakdown(prisma, { shiftId: shift.id, counter: shift.counter });
+        const tenders  = await buildShiftTenderBreakdown(prisma, { shiftId: shift.id, counter: shift.counter, includeZero: true });
         const pending  = shift.status === "AWAITING_HANDOVER" && shift.handover?.status === "PENDING" ? shift.handover : null;
 
         return NextResponse.json({

@@ -24,8 +24,7 @@ import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStor
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
-import DutyCard from "./DutyCard";
-import CounterShiftCard from "./CounterShiftCard";
+import TillCard from "./TillCard";
 import NextOpening from "./NextOpening";
 import PinPad from "./PinPad";
 import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
@@ -529,13 +528,10 @@ function StaffLoginForm() {
                     </div>
                 </section>
 
-                {/* The day he just finished — only after a counter sign-out, and only
-                    once. Renders nothing at all the rest of the time. */}
-                <DutyCard />
-
-                {/* Whose drawer is on this counter — counter PCs only, and only
-                    while a shift is running here. Renders nothing otherwise. */}
-                <CounterShiftCard />
+                {/* The till's own card: next duty, the day just finished and whose
+                    drawer is on this counter. Counter PCs only; renders nothing
+                    the rest of the time. */}
+                <TillCard />
 
                 {stage === "faces" ? (
                     <section className={styles.card}>
