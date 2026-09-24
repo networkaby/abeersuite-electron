@@ -96,7 +96,7 @@ export default function TillCard() {
             {next && nextWords && (
                 <div className={styles.nexthero}>
                     <p className={styles.nextlabel}>
-                        Next duty
+                        Next duty day
                         {nextWords.closed && <em>{nextWords.closed.replace(/\.$/, "")}</em>}
                     </p>
                     <p className={styles.nextday}>{nextDay}</p>
