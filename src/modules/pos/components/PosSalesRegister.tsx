@@ -20,6 +20,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { todayIso } from "@/shared/lib/format";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
+import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { EscapeBack } from "@/shared/components/EscapeBack";
@@ -106,8 +107,8 @@ export function PosSalesRegister() {
     const [shiftOpenOpen, setShiftOpenOpen] = useState(false);
 
     const refreshShift = useCallback(() => {
-        axios.get<ActiveShift | null>("/api/pos/shifts/current")
-            .then((r) => setActiveShift(r.data))
+        fetchCurrentShift()
+            .then(setActiveShift)
             .catch(() => setActiveShift(null))
             .finally(() => setShiftLoaded(true));
     }, []);

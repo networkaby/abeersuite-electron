@@ -21,6 +21,7 @@ import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
+import { cancelPendingHandover } from "@/modules/pos/lib/handover";
 import { blockStartFor } from "@/shared/lib/counter/idRange";
 
 const openSchema = z.object({
@@ -183,6 +184,7 @@ export async function POST(req: NextRequest) {
     const existing = await prismaAuthoritative.posShift.findFirst({
         where:   { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
         include: {
+            user:    { select: { name: true } },
             counter: { include: { tillAccount: { select: { id: true, name: true } } } },
             branch:  { select: { id: true, name: true } },
         },
@@ -190,11 +192,15 @@ export async function POST(req: NextRequest) {
     if (existing) {
         // ── Same cashier returning (e.g. browser crashed / reopened) ─────────
         // Hand back the running shift instead of blocking. The cashier can
-        // continue billing seamlessly from any browser.
-        if (existing.userId === user!.id && existing.status === "OPEN") {
+        // continue billing seamlessly from any browser. A handover they asked
+        // for and nobody took is dropped — they carry on as if it never happened.
+        if (existing.userId === user!.id) {
+            if (existing.status === "AWAITING_HANDOVER") {
+                await prisma.$transaction((tx) => cancelPendingHandover(tx, existing.id));
+            }
             return NextResponse.json({
                 id:                  existing.id,
-                status:              existing.status,
+                status:              "OPEN",
                 openedAt:            existing.openedAt,
                 notes:               existing.notes,
                 resumed:             true,
@@ -212,16 +218,11 @@ export async function POST(req: NextRequest) {
                 branch: { id: existing.branch.id, name: existing.branch.name },
             });  // 200 — not created, resumed
         }
-        // ── Same cashier but shift is AWAITING_HANDOVER ───────────────────────
-        if (existing.userId === user!.id) {
-            return NextResponse.json(
-                { error: "Your shift is awaiting handover. Cancel it first or let the next cashier accept.", shiftId: existing.id },
-                { status: 409 },
-            );
-        }
-        // ── Different cashier — hard block ────────────────────────────────────
+        // ── Different cashier — the drawer is taken over, never opened on top ─
+        // The open-shift dialog offers the takeover for a busy counter; this is
+        // the backstop for anything that calls open directly.
         return NextResponse.json(
-            { error: "This counter is already in use by another cashier.", shiftId: existing.id },
+            { error: `This counter is with ${existing.user.name}. Review the drawer and take it over instead.`, code: "COUNTER_IN_USE", shiftId: existing.id },
             { status: 409 },
         );
     }

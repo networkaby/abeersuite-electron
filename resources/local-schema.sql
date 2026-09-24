@@ -3304,10 +3304,11 @@ ALTER TABLE "pos_cash_drops" ADD COLUMN IF NOT EXISTS "notes" TEXT;
 CREATE TABLE IF NOT EXISTS "pos_handovers" (
     "id" SERIAL NOT NULL,
     "fromShiftId" INTEGER NOT NULL,
-    "toUserId" INTEGER NOT NULL,
+    "toUserId" INTEGER,
     "toShiftId" INTEGER,
     "status" "PosHandoverStatus" NOT NULL DEFAULT 'PENDING',
-    "declaredByAPaise" BIGINT NOT NULL,
+    "declaredByAPaise" BIGINT,
+    "denominationsJson" JSONB,
     "countedByBPaise" BIGINT,
     "carryOverPaise" BIGINT NOT NULL DEFAULT 0,
     "notes" TEXT,
@@ -3319,10 +3320,11 @@ CREATE TABLE IF NOT EXISTS "pos_handovers" (
 );
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "fromShiftId" INTEGER NOT NULL;
-ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "toUserId" INTEGER NOT NULL;
+ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "toUserId" INTEGER;
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "toShiftId" INTEGER;
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "status" "PosHandoverStatus" NOT NULL DEFAULT 'PENDING';
-ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "declaredByAPaise" BIGINT NOT NULL;
+ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "declaredByAPaise" BIGINT;
+ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "denominationsJson" JSONB;
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "countedByBPaise" BIGINT;
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "carryOverPaise" BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE "pos_handovers" ADD COLUMN IF NOT EXISTS "notes" TEXT;

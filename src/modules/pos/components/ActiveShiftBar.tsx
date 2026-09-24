@@ -3,7 +3,10 @@
 // ── ActiveShiftBar ───────────────────────────────────────────────────────────
 // Top strip on PosScreen.
 //   OPEN              → normal green bar with drop + close buttons.
-//   AWAITING_HANDOVER → amber bar; billing disabled; shows who B is + cancel.
+//   AWAITING_HANDOVER → amber bar; billing disabled; cancel. Rarely seen: the
+//                       cashier is signed out on handing over, and coming back
+//                       resumes the shift (fetchCurrentShift) — this is what
+//                       shows when that resume could not reach the server.
 
 import { useState, useCallback, type ReactNode } from "react";
 import axios from "axios";
@@ -50,9 +53,7 @@ export type ActiveShift = {
     // Populated when status = AWAITING_HANDOVER
     handover?: {
         id: number;
-        declaredByAPaise: string;
-        carryOverPaise:   string;
-        toUser: { id: number; name: string };
+        declaredByAPaise: string | null;
     } | null;
 };
 
@@ -123,14 +124,10 @@ export function ActiveShiftBar({
                 <span className="inline-flex items-center gap-1 text-muted-foreground">
                     <Monitor size={12} /> {shift.counter.name}
                 </span>
-                {shift.handover && (
-                    <>
-                        <span className="text-muted-foreground">·</span>
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            <Users size={12} /> Waiting for <span className="font-medium text-foreground ml-0.5">{shift.handover.toUser.name}</span>
-                        </span>
-                    </>
-                )}
+                <span className="text-muted-foreground">·</span>
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    <Users size={12} /> Waiting for the next cashier
+                </span>
                 <div className="ml-auto flex items-center gap-2 text-amber-700 dark:text-amber-300">
                     <span className="text-xs">Billing disabled. Log out &amp; hand terminal over.</span>
                     <Button size="sm" variant="outline" className="h-7 text-xs border-amber-300/60" onClick={cancelHandover} disabled={cancelling}>

@@ -4,8 +4,10 @@
 // Two close modes:
 //   1. "Close to vault"  — standard end-of-day. Declares physical count,
 //      sets overnight carry-over, posts variance JE + Contra to vault.
-//   2. "Hand to cashier" — two-step handover. A declares count, picks B.
-//      No GL yet; shift → AWAITING_HANDOVER. B logs in and accepts.
+//   2. "Hand to cashier" — the whole drawer passes to whoever signs in next at
+//      this counter. A counts it and is signed out; nobody is named and nothing
+//      goes to the vault. No GL yet — shift → AWAITING_HANDOVER; it all posts
+//      when the next cashier takes over (ShiftTakeoverDialog).
 //
 // After a successful vault close, the form swaps to a closing report that
 // shows the full cash reconciliation summary and GL references.
@@ -16,14 +18,11 @@ import { toast } from "sonner";
 import {
     Loader2, ArrowRightLeft, TrendingUp, TrendingDown,
     CheckCheck, Users, Vault,
-    Banknote, Calculator, ShieldCheck, CreditCard, Receipt,
+    Banknote, ShieldCheck,
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,71 +34,23 @@ import { parseDigitsInput, parseDecimalInput } from "@/shared/lib/format";
 import { toDateTimeLocalInput } from "@/shared/lib/format/dateInput";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 import { FooterToggle } from "@/modules/accountancy/components/FooterToggle";
+import { captureMyDay } from "@/shared/lib/hr/myDay";
+import { getPriorInputAt } from "@/shared/components/ActivityPulse";
+import { signOutTo } from "@/shared/lib/auth/signOutTo";
+import type { HandoverDenominations } from "@/modules/pos/lib/handoverDenominations";
+import {
+    CashDrawerPositionCard, CashFlowCard, PaymentsCollectedCard, CollectionsCard,
+    type ShiftSummary,
+} from "@/modules/pos/components/ShiftSummaryCards";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-// One line of the "Payments collected this shift" tally (cash + digital).
-type TenderRow = { method: string; label: string; amountPaise: string };
-
-type MovementBreakdown = {
-    cashSalesPaise:    string;
-    receiptsPaise:     string;
-    expendituresPaise: string;
-    refundsPaise:      string;
-    otherPaise:        string;
-    netMovementPaise:  string;
-};
-
-type CollectionsBreakdown = {
-    salesPaise:        string;
-    salesCount:        number;
-    receiptsPaise:     string;
-    receiptsCount:     number;
-    refundsPaise:      string;
-    refundsCount:      number;
-    netCollectedPaise: string;
-};
-
-type ShiftDetail = {
+type ShiftDetail = ShiftSummary & {
     id: number;
-    openingFloatPaise: string;
-    // Net movement on the till ledger since open (sales + receipts − refunds −
-    // expenditures − anything else posted there). Signed.
-    tillMovementPaise:   string;
-    dropsPaise:          string;
-    expendituresPaise:   string;
-    movementBreakdown?:  MovementBreakdown;
-    collectionsBreakdown?: CollectionsBreakdown;
-    runningExpectedPaise: string;
-    tenderBreakdown?: TenderRow[];
     counter: { id: number; name: string; tillAccount: { name: string } };
     branch:  { name: string };
 };
 
-type ClosedReport = {
-    id: number;
-    openedAt: string;
-    closedAt: string;
-    notes: string | null;
-    openingFloatPaise:   string;
-    tillMovementPaise:   string;
-    dropsPaise:          string;
-    expendituresPaise:   string;
-    movementBreakdown?:  MovementBreakdown;
-    collectionsBreakdown?: CollectionsBreakdown;
-    expectedCashPaise:   string | null;
-    declaredCashPaise:   string | null;
-    variancePaise:       string | null;
-    carryOverNextPaise:  string | null;
-    toVaultPaise:        string | null;
-    tenderBreakdown?:    TenderRow[];
-    counter: { id: number; name: string; tillAccount: { id: number; name: string } };
-    branch:  { id: string; name: string };
-    closingContraVoucher: { id: number; reference: string } | null;
-    varianceJournalEntry: { id: number; reference: string } | null;
-};
-
-type Candidate = { id: number; name: string; email: string };
 type Mode = "vault" | "handover";
 
 // Fallback note/coin denominations (high → low) used until the org's configured
@@ -178,11 +129,6 @@ export function ShiftCloseDialog({
     // Back-dated close (re-close flow only) — `yyyy-MM-ddTHH:mm` local.
     const [closedAt, setClosedAt]   = useState("");
 
-    // Handover mode
-    const [candidates, setCandidates]               = useState<Candidate[]>([]);
-    const [loadingCandidates, setLoadingCandidates] = useState(false);
-    const [selectedUserId, setSelectedUserId]       = useState<number | null>(null);
-
     // Print after save + Thermal toggles (persisted in localStorage)
     const [printAfterSave, setPrintAfterSave] = useState(() => {
         if (typeof window === "undefined") return true;
@@ -218,7 +164,6 @@ export function ShiftCloseDialog({
         if (!open) return;
         setLoading(true);
         setMode("vault");
-        setSelectedUserId(null);
         setDenoms({});
         setOtherCash("");
         // null = open shift closed from the detail page: default to now, still editable.
@@ -240,20 +185,8 @@ export function ShiftCloseDialog({
             .finally(() => setLoading(false));
     }, [open, shiftId, initialClosedAt]);
 
-    // Load handover candidates when mode switches to "handover".
-    useEffect(() => {
-        if (mode !== "handover" || !detail) return;
-        setLoadingCandidates(true);
-        axios.get<Candidate[]>(`/api/pos/shifts/handover-candidates?counterId=${detail.counter.id}`)
-            .then((r) => setCandidates(r.data))
-            .catch(() => toast.error("Failed to load eligible cashiers"))
-            .finally(() => setLoadingCandidates(false));
-    }, [mode, detail]);
-
     const expected     = detail ? Number(detail.runningExpectedPaise) / 100 : 0;
     const dropsNum     = detail ? Number(detail.dropsPaise) / 100 : 0;
-    const expNum       = detail ? Number(detail.expendituresPaise) / 100 : 0;
-    const tenderTotal  = (detail?.tenderBreakdown ?? []).reduce((s, t) => s + Number(t.amountPaise) / 100, 0);
     const declaredNum  = parseFloat(declared) || 0;
     const carryOverNum = parseFloat(carryOver) || 0;
     // Sweep the drawer surplus PLUS the cash dropped to the safe — both leave the
@@ -298,7 +231,7 @@ export function ShiftCloseDialog({
         if (initialClosedAt !== undefined && !closedAt) { toast.error("Enter the close date and time"); return; }
         setSubmitting(true);
         try {
-            const { data } = await axios.patch<ClosedReport>(`/api/pos/shifts/${shiftId}/close`, {
+            const { data } = await axios.patch<{ id: number }>(`/api/pos/shifts/${shiftId}/close`, {
                 declaredCashPaise:  Math.round(declaredNum * 100),
                 carryOverNextPaise: Math.round(carryOverNum * 100),
                 notes:              notes.trim() || undefined,
@@ -319,24 +252,29 @@ export function ShiftCloseDialog({
         }
     };
 
+    // The whole drawer, counted, to whoever signs in next — then A is signed out
+    // the ordinary way (the day card is captured first, as the Sign Out button does).
     const submitHandover = async () => {
-        if (!detail || !selectedUserId) { toast.error("Select the next cashier"); return; }
+        if (!detail) return;
         if (declaredNum < 0) { toast.error("Declared count can't be negative"); return; }
+        const denominations: HandoverDenominations = {
+            lines: denomList
+                .map((d) => ({ denom: d, count: parseInt(denoms[d] || "0", 10) || 0 }))
+                .filter((l) => l.count > 0),
+            otherPaise: Math.round((parseFloat(otherCash) || 0) * 100),
+        };
         setSubmitting(true);
         try {
             await axios.post(`/api/pos/shifts/${shiftId}/handover`, {
-                toUserId:          selectedUserId,
                 declaredCashPaise: Math.round(declaredNum * 100),
-                carryOverPaise:    Math.round(carryOverNum * 100),
+                denominations,
                 notes:             notes.trim() || undefined,
             });
-            const cand = candidates.find((c) => c.id === selectedUserId);
-            toast.success(`Handover requested to ${cand?.name ?? "cashier"}. Please log out.`);
-            onClosed();
-            onOpenChange(false);
+            toast.success("Handed over. Signing you out — the next cashier takes the drawer.");
+            await captureMyDay({ lastInputAt: getPriorInputAt() });
+            await signOutTo("/staff/login");
         } catch (e: unknown) {
-            toast.error(extractApiError(e, "Failed to initiate handover"));
-        } finally {
+            toast.error(extractApiError(e, "Failed to hand over"));
             setSubmitting(false);
         }
     };
@@ -430,35 +368,7 @@ export function ShiftCloseDialog({
                                             </div>
                                         )}
 
-                                        {/* Handover mode acceptance notice */}
-                                        {mode === "handover" && selectedUserId && (
-                                            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
-                                                ⚠ Handover to {candidates.find((c) => c.id === selectedUserId)?.name ?? "cashier"}.
-                                                Declared ₹{fmt(declaredNum)} · Carry-over ₹{fmt(carryOverNum)} · GL posts on acceptance.
-                                            </div>
-                                        )}
-
-                                        {/* Cash Drawer Position */}
-                                        <div className="rounded-md border border-sky-300/60 bg-sky-50/30 dark:border-sky-500/30 dark:bg-sky-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
-                                            <div className="flex items-center justify-between mb-0.5">
-                                                <p className="text-[11px] font-semibold text-sky-800 dark:text-sky-300 uppercase tracking-wide flex items-center gap-1.5">
-                                                    <Calculator size={13} className="text-sky-600 dark:text-sky-400" /> Cash Drawer Position
-                                                </p>
-                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">
-                                                    System Ledger
-                                                </span>
-                                            </div>
-                                            <Row label="Counter opening cash" value={fmt(Number(detail.openingFloatPaise) / 100)} />
-                                            <Row
-                                                label="Counter cash flow"
-                                                value={signed(Number(detail.tillMovementPaise) / 100)}
-                                            />
-                                            <Row label="Dropped to safe" value={`− ₹${fmt(Number(detail.dropsPaise) / 100)}`} />
-                                            <div className="border-t border-sky-200/70 dark:border-sky-800/50 pt-1 mt-0.5 flex justify-between items-center bg-sky-100/50 dark:bg-sky-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
-                                                <span className="text-sky-950 dark:text-sky-200">Expected in drawer</span>
-                                                <span className="font-mono text-sm text-sky-900 dark:text-sky-100 font-bold">₹{fmt(expected)}</span>
-                                            </div>
-                                        </div>
+                                        <CashDrawerPositionCard s={detail} />
 
                                         {/* Reconciliation & Closing Inputs Card */}
                                         <div className="rounded-md border border-amber-300/60 bg-amber-50/20 dark:border-amber-500/30 dark:bg-amber-950/20 p-2.5 text-xs sm:text-sm space-y-2 shadow-sm">
@@ -531,17 +441,16 @@ export function ShiftCloseDialog({
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div className="space-y-0.5">
-                                                    <Label htmlFor="carry-over-ho" className="text-xs font-medium text-foreground">Carry-over float (₹)</Label>
-                                                    <Input
-                                                        id="carry-over-ho"
-                                                        value={carryOver}
-                                                        onChange={(e) => setCarryOver(parseDecimalInput(e.target.value))}
-                                                        onFocus={(e) => e.target.select()}
-                                                        onClick={(e) => e.currentTarget.select()}
-                                                        placeholder="0"
-                                                        className="h-8 font-mono bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500"
-                                                    />
+                                                // The whole drawer passes — no float, no vault, nobody named.
+                                                <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                                                    <p className="font-medium flex items-center gap-1.5">
+                                                        <Users size={13} className="shrink-0" /> The whole drawer goes to the next cashier
+                                                    </p>
+                                                    <p className="text-amber-800/90 dark:text-amber-300/90">
+                                                        You will be signed out. Whoever signs in next at {detail.counter.name} sees
+                                                        your count of ₹{fmt(declaredNum)} and takes the drawer over. Any short or
+                                                        excess against the books posts to your shift when they accept.
+                                                    </p>
                                                 </div>
                                             )}
 
@@ -551,178 +460,14 @@ export function ShiftCloseDialog({
                                                     <TallyDateTimeInput value={closedAt} onValueChange={setClosedAt} />
                                                 </div>
                                             )}
-
-                                            {/* Handover mode cashier selector */}
-                                            {mode === "handover" && (
-                                                <div className="space-y-1">
-                                                    <Label className="text-xs font-medium text-foreground">Hand over to</Label>
-                                                    {loadingCandidates ? (
-                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                            <Loader2 size={13} className="animate-spin" /> Loading eligible cashiers…
-                                                        </div>
-                                                    ) : candidates.length === 0 ? (
-                                                        <div className="text-xs text-muted-foreground rounded-md border border-border p-2 bg-background">
-                                                            No eligible cashiers available (all on shift or no permission).
-                                                        </div>
-                                                    ) : (
-                                                        <Select
-                                                            value={selectedUserId?.toString() ?? ""}
-                                                            onValueChange={(v) => setSelectedUserId(Number(v))}
-                                                        >
-                                                            <SelectTrigger className="h-8 bg-white dark:bg-zinc-900 border border-input focus-visible:ring-amber-500">
-                                                                <SelectValue placeholder="Select cashier…" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {candidates.map((c) => (
-                                                                    <SelectItem key={c.id} value={c.id.toString()}>
-                                                                        {c.name}{" "}
-                                                                        <span className="text-muted-foreground text-xs ml-1">({c.email})</span>
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    )}
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
 
-                                    {/* ── Column 3: Breakdowns & Contra Action Preview ── */}
+                                    {/* ── Column 3: Breakdowns ── */}
                                     <div className="space-y-2">
-                                        {/* Dedicated Till Movement Breakdown Card */}
-                                        <div className="rounded-md border border-violet-300/60 bg-violet-50/30 dark:border-violet-500/30 dark:bg-violet-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
-                                            <div className="flex items-center justify-between mb-0.5">
-                                                <p className="text-[11px] font-semibold text-violet-800 dark:text-violet-300 uppercase tracking-wide flex items-center gap-1.5">
-                                                    <TrendingUp size={13} className="text-violet-600 dark:text-violet-400" /> Counter Cash Flow Breakdown
-                                                </p>
-                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
-                                                    Cash Flows
-                                                </span>
-                                            </div>
-                                            <div className="space-y-0.5">
-                                                <div className="flex justify-between text-muted-foreground text-xs">
-                                                    <span>Cash sales</span>
-                                                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                                                        {Number(detail.movementBreakdown?.cashSalesPaise || 0) > 0 ? `+ ₹${fmt(Number(detail.movementBreakdown?.cashSalesPaise || 0) / 100)}` : "₹0.00"}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between text-muted-foreground text-xs">
-                                                    <span>Customer receipts (Rcv)</span>
-                                                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                                                        {Number(detail.movementBreakdown?.receiptsPaise || 0) > 0 ? `+ ₹${fmt(Number(detail.movementBreakdown?.receiptsPaise || 0) / 100)}` : "₹0.00"}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between text-muted-foreground text-xs">
-                                                    <span>Counter expenses (Exp)</span>
-                                                    <span className={`font-mono ${Number(detail.movementBreakdown?.expendituresPaise || 0) > 0 ? "text-rose-700 dark:text-rose-400 font-medium" : "text-foreground"}`}>
-                                                        {Number(detail.movementBreakdown?.expendituresPaise || 0) > 0 ? `− ₹${fmt(Number(detail.movementBreakdown?.expendituresPaise || 0) / 100)}` : "₹0.00"}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between text-muted-foreground text-xs">
-                                                    <span>Cash refunds / returns</span>
-                                                    <span className={`font-mono ${Number(detail.movementBreakdown?.refundsPaise || 0) > 0 ? "text-rose-700 dark:text-rose-400 font-medium" : "text-foreground"}`}>
-                                                        {Number(detail.movementBreakdown?.refundsPaise || 0) > 0 ? `− ₹${fmt(Number(detail.movementBreakdown?.refundsPaise || 0) / 100)}` : "₹0.00"}
-                                                    </span>
-                                                </div>
-                                                {detail.movementBreakdown?.otherPaise !== undefined && Number(detail.movementBreakdown.otherPaise) !== 0 && (
-                                                    <div className="flex justify-between text-muted-foreground text-xs">
-                                                        <span>Other adjustments</span>
-                                                        <span className="font-mono text-foreground font-medium">
-                                                            {signed(Number(detail.movementBreakdown.otherPaise) / 100)}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="border-t border-violet-200/70 dark:border-violet-800/50 pt-1 mt-0.5 flex justify-between items-center bg-violet-100/50 dark:bg-violet-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
-                                                <span className="text-violet-950 dark:text-violet-200">Net counter cash flow</span>
-                                                <span className="font-mono text-sm text-violet-900 dark:text-violet-100 font-bold">{signed(Number(detail.tillMovementPaise) / 100)}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* All payment methods collected this shift (cash + digital).
-                                            Informational — only cash is physically reconciled below. */}
-                                        {detail.tenderBreakdown && detail.tenderBreakdown.length > 0 && (
-                                            <div className="rounded-md border border-indigo-300/60 bg-indigo-50/30 dark:border-indigo-500/30 dark:bg-indigo-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
-                                                <div className="flex items-center justify-between mb-0.5">
-                                                    <p className="text-[11px] font-semibold text-indigo-800 dark:text-indigo-300 uppercase tracking-wide flex items-center gap-1.5">
-                                                        <CreditCard size={13} className="text-indigo-600 dark:text-indigo-400" /> Payments collected this shift
-                                                    </p>
-                                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                                                        All Modes
-                                                    </span>
-                                                </div>
-                                                <div className="space-y-0.5">
-                                                    {detail.tenderBreakdown.map((t) => (
-                                                        <Row key={t.method} label={t.label} value={fmt(Number(t.amountPaise) / 100)} />
-                                                    ))}
-                                                </div>
-                                                <div className="border-t border-indigo-200/70 dark:border-indigo-800/50 pt-1 mt-0.5 flex justify-between items-center bg-indigo-100/50 dark:bg-indigo-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
-                                                    <span className="text-indigo-950 dark:text-indigo-200">Total collected</span>
-                                                    <span className="font-mono text-sm text-indigo-900 dark:text-indigo-100 font-bold">₹{fmt(tenderTotal)}</span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Total Collected Breakdown — justifies total collections across all tender modes */}
-                                        {detail.collectionsBreakdown && (
-                                            <div className="rounded-md border border-teal-300/60 bg-teal-50/30 dark:border-teal-500/30 dark:bg-teal-950/20 p-2.5 text-xs sm:text-sm space-y-1 shadow-sm">
-                                                <div className="flex items-center justify-between mb-0.5">
-                                                    <p className="text-[11px] font-semibold text-teal-800 dark:text-teal-300 uppercase tracking-wide flex items-center gap-1.5">
-                                                        <Receipt size={13} className="text-teal-600 dark:text-teal-400" /> Total Collected Breakdown
-                                                    </p>
-                                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300">
-                                                        By Type
-                                                    </span>
-                                                </div>
-                                                <div className="space-y-0.5">
-                                                    <div className="flex justify-between text-muted-foreground text-xs">
-                                                        <span>
-                                                            POS Sales
-                                                            {detail.collectionsBreakdown.salesCount > 0 && (
-                                                                <span className="text-[10px] font-medium ml-1.5 px-1.5 py-0.2 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
-                                                                    {detail.collectionsBreakdown.salesCount} {detail.collectionsBreakdown.salesCount === 1 ? "bill" : "bills"}
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                        <span className="font-mono text-teal-700 dark:text-teal-300 font-medium">
-                                                            + ₹{fmt(Number(detail.collectionsBreakdown.salesPaise) / 100)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex justify-between text-muted-foreground text-xs">
-                                                        <span>
-                                                            Customer receipts (Rcv)
-                                                            {detail.collectionsBreakdown.receiptsCount > 0 && (
-                                                                <span className="text-[10px] font-medium ml-1.5 px-1.5 py-0.2 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
-                                                                    {detail.collectionsBreakdown.receiptsCount} {detail.collectionsBreakdown.receiptsCount === 1 ? "rcv" : "rcvs"}
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                        <span className="font-mono text-teal-700 dark:text-teal-300 font-medium">
-                                                            + ₹{fmt(Number(detail.collectionsBreakdown.receiptsPaise) / 100)}
-                                                        </span>
-                                                    </div>
-                                                    {Number(detail.collectionsBreakdown.refundsPaise) > 0 && (
-                                                        <div className="flex justify-between text-muted-foreground text-xs">
-                                                            <span>
-                                                                Sales returns / refunds
-                                                                {detail.collectionsBreakdown.refundsCount > 0 && (
-                                                                    <span className="text-[10px] font-medium ml-1.5 px-1.5 py-0.2 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
-                                                                        {detail.collectionsBreakdown.refundsCount}
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                            <span className="font-mono text-rose-700 dark:text-rose-400 font-medium">
-                                                                − ₹{fmt(Number(detail.collectionsBreakdown.refundsPaise) / 100)}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="border-t border-teal-200/70 dark:border-teal-800/50 pt-1 mt-0.5 flex justify-between items-center bg-teal-100/50 dark:bg-teal-950/50 -mx-1 px-2 py-0.5 rounded font-semibold">
-                                                    <span className="text-teal-950 dark:text-teal-200">Net total collected</span>
-                                                    <span className="font-mono text-sm text-teal-900 dark:text-teal-100 font-bold">₹{fmt(tenderTotal)}</span>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <CashFlowCard s={detail} />
+                                        <PaymentsCollectedCard s={detail} />
+                                        <CollectionsCard s={detail} />
                                     </div>
                                 </div>{/* ── end three-column grid ── */}
                             </div>
@@ -730,13 +475,16 @@ export function ShiftCloseDialog({
 
                         <DialogFooter className="pt-2 border-t border-border flex items-center justify-end gap-2 flex-wrap">
                             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
-                            <FooterToggle
-                                label="Print after save"
-                                checked={printAfterSave}
-                                onChange={updatePrintAfterSave}
-                                disabled={submitting}
-                            />
-                            {printAfterSave && (
+                            {/* A handover prints nothing — the report prints on the close. */}
+                            {mode === "vault" && (
+                                <FooterToggle
+                                    label="Print after save"
+                                    checked={printAfterSave}
+                                    onChange={updatePrintAfterSave}
+                                    disabled={submitting}
+                                />
+                            )}
+                            {mode === "vault" && printAfterSave && (
                                 <FooterToggle
                                     label="Thermal"
                                     checked={thermal}
@@ -750,9 +498,9 @@ export function ShiftCloseDialog({
                                     Close &amp; sweep to vault
                                 </Button>
                             ) : (
-                                <Button onClick={submitHandover} disabled={submitting || loading || !selectedUserId} className="bg-amber-600 hover:bg-amber-700 text-white">
+                                <Button onClick={submitHandover} disabled={submitting || loading} className="bg-amber-600 hover:bg-amber-700 text-white">
                                     {submitting ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
-                                    Request handover
+                                    Hand over &amp; sign out
                                 </Button>
                             )}
                         </DialogFooter>
@@ -762,24 +510,6 @@ export function ShiftCloseDialog({
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
-
-// "+ ₹1,234.00" / "− ₹1,234.00" — the till movement carries a sign of its own.
-function signed(n: number): string {
-    return `${n < 0 ? "−" : "+"} ₹${fmt(Math.abs(n))}`;
-}
-
-function Row({ label, value, sub, className }: { label: string; value: string; sub?: string; className?: string }) {
-    const displayValue = value.includes("₹") ? value : `₹${value}`;
-    return (
-        <div className={`flex justify-between text-muted-foreground ${className ?? ""}`}>
-            <span>
-                {label}
-                {sub && <span className="block text-[10px] leading-tight opacity-60">{sub}</span>}
-            </span>
-            <span className="font-mono text-foreground">{displayValue}</span>
-        </div>
-    );
-}
 
 // Note/coin tally — counts per denomination, summed into the physical count.
 // `list` is the org's configured denominations (high → low).

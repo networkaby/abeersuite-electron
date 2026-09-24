@@ -22,7 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ActiveShiftBar } from "@/modules/pos/components/ActiveShiftBar";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
-import { HandoverAcceptDialog } from "@/modules/pos/components/HandoverAcceptDialog";
+import { ShiftTakeoverDialog } from "@/modules/pos/components/ShiftTakeoverDialog";
+import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
@@ -155,22 +156,26 @@ export function PosScreenShell({
                         b.setShiftOpenDialogOpen(false);
                         b.refreshActiveShift();
                     }}
+                    onTakeover={(counterId) => {
+                        b.setShiftOpenDialogOpen(false);
+                        void b.openTakeover(counterId);
+                    }}
                 />
 
-                {/* HandoverAcceptDialog — shown when B has a pending handover */}
-                {b.pendingHandover && (
-                    <HandoverAcceptDialog
-                        open={true}
-                        handover={b.pendingHandover}
-                        onAccepted={(shiftId, openingFloat) => {
-                            b.setPendingHandover(null);
+                {/* ShiftTakeoverDialog — somebody else's drawer is on this counter.
+                    Found on sign-in: Reject signs out, the drawer waits for the next
+                    person. Picked from the open-shift dialog: Reject goes back. */}
+                {b.takeover && (
+                    <ShiftTakeoverDialog
+                        takeover={b.takeover.data}
+                        rejectLabel={b.takeover.fromPicker ? "Back" : "Reject & sign out"}
+                        onAccepted={() => {
+                            b.setTakeover(null);
                             b.refreshActiveShift();
-                            void shiftId;
-                            void openingFloat;
                         }}
-                        onDismiss={() => {
-                            // User chose to log out instead.
-                            window.location.href = "/api/auth/signout";
+                        onReject={() => {
+                            if (b.takeover?.fromPicker) b.setTakeover(null);
+                            else void signOutTo("/staff/login");
                         }}
                     />
                 )}

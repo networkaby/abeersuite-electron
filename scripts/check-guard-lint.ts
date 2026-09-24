@@ -21,6 +21,11 @@ const EXCLUDED_OFFICE_ROUTES = new Set([
     // session to require. It is gated instead by `thisCounterId()`: off a counter it
     // answers "no PIN" and nothing else, so it does not exist on the web deployment.
     "src/app/api/counter-pin/status/route.ts",
+    // "Whose drawer is on this counter?", for the lock screen with nobody signed in
+    // — the next cashier checks it before taking the drawer over. Fenced the same
+    // way: `thisCounterId()` only, so it does not exist on the web deployment, and
+    // it only ever describes the drawer standing in front of the asking PC.
+    "src/app/api/counter/shift/route.ts",
     // "When does the shop open next?", asked by the sign-in screen with nobody
     // signed in. Every fact it returns is the sort a shop paints on its own door —
     // opening and closing times, the days it is shut, the names of holidays. It

@@ -12,7 +12,9 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, computeExpectedCash, tillBalancePaise, buildShiftTenderBreakdown, listShiftMovements, buildShiftMovementBreakdown, buildShiftCollectionsBreakdown } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, listShiftMovements } from "@/modules/pos/lib/shiftMath";
+import { buildShiftSummary } from "@/modules/pos/lib/shiftSummary";
+import { parseHandoverDenominations } from "@/modules/pos/lib/handoverDenominations";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any signed-in staff may ASK; access is decided per-shift below. The shift's
@@ -43,6 +45,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                     select: {
                         id: true, status: true,
                         declaredByAPaise: true, countedByBPaise: true, carryOverPaise: true,
+                        denominationsJson: true, notes: true, initiatedAt: true, acceptedAt: true,
                         toUser:  { select: { id: true, name: true } },
                         toShift: { select: { id: true } },
                     },
@@ -75,23 +78,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "No access to this shift" }, { status: 403 });
         }
 
-        // Live drawer figure straight off the till's book: balance now − drops.
-        // Every till movement (sales, receipts, refunds, expenditures) is already
-        // on that ledger, so nothing is re-derived per voucher type.
         // Receipts taken and expenditures paid on this shift, straight off the
         // vouchers (digital receipts never touch the till, so cash sales can read
         // ₹0 while the shift still carries them). The detail page uses the counts
         // to know whether the shift can be deleted.
         const movements = await listShiftMovements(prisma, shift.id);
-        const dropsPaise           = sumPaise(shift.drops);
-        const expendituresPaise    = sumPaise(movements.expenditures);
+        const expendituresPaise = sumPaise(movements.expenditures);
 
-        // For a closed shift with recorded expected cash, reconstruct the till's book balance
-        // at close time (expectedCashPaise + dropsPaise) before the closing Contra sweep ran.
-        // For an open / in-progress shift, read the live drawer figure straight off the till account.
-        const tillBookBalancePaise = (shift.status === "CLOSED" && shift.expectedCashPaise != null)
-            ? shift.expectedCashPaise + dropsPaise
-            : await tillBalancePaise(prisma, shift.counter.tillAccountId);
+        // The drawer — expected cash, till movement, per-method collections.
+        const summary = await buildShiftSummary(prisma, shift);
 
         // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
         // Resolve them by id to keep the old response shape the UI consumes.
@@ -103,48 +98,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const openingContraVoucher = shift.openingContraVoucherId != null ? (contraById.get(shift.openingContraVoucherId) ?? null) : null;
         const closingContraVoucher = shift.closingContraVoucherId != null ? (contraById.get(shift.closingContraVoucherId) ?? null) : null;
 
-        // Per-method tally of everything collected this shift (cash + digital).
-        const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
-            shiftId: shift.id,
-            counter: shift.counter,
-        });
-
-        // Line-by-line breakdown of how the till moved (cash sales, receipts, expenses, refunds, etc.)
-        const movementBreakdown = await buildShiftMovementBreakdown(prisma, {
-            shiftId: shift.id,
-            tillAccountId: shift.counter.tillAccount.id,
-            tillBookBalancePaise,
-            openingFloatPaise: shift.openingFloatPaise,
-        });
-
-        // Breakdown of all collections across all tenders (sales, receipts, returns)
-        const collectionsBreakdown = await buildShiftCollectionsBreakdown(prisma, {
-            shiftId: shift.id,
-            counter: shift.counter,
-        });
-
         return NextResponse.json({
             ...shift,
             openingContraVoucher,
             closingContraVoucher,
-            tenderBreakdown,
-            movementBreakdown: {
-                cashSalesPaise:    movementBreakdown.cashSalesPaise.toString(),
-                receiptsPaise:     movementBreakdown.receiptsPaise.toString(),
-                expendituresPaise: movementBreakdown.expendituresPaise.toString(),
-                refundsPaise:      movementBreakdown.refundsPaise.toString(),
-                otherPaise:        movementBreakdown.otherPaise.toString(),
-                netMovementPaise:  movementBreakdown.netMovementPaise.toString(),
-            },
-            collectionsBreakdown: {
-                salesPaise:        collectionsBreakdown.salesPaise.toString(),
-                salesCount:        collectionsBreakdown.salesCount,
-                receiptsPaise:     collectionsBreakdown.receiptsPaise.toString(),
-                receiptsCount:     collectionsBreakdown.receiptsCount,
-                refundsPaise:      collectionsBreakdown.refundsPaise.toString(),
-                refundsCount:      collectionsBreakdown.refundsCount,
-                netCollectedPaise: collectionsBreakdown.netCollectedPaise.toString(),
-            },
+            ...summary,
             openingFloatPaise:   shift.openingFloatPaise.toString(),
             carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
             vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),
@@ -153,23 +111,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             variancePaise:       shift.variancePaise?.toString()      ?? null,
             carryOverNextPaise:  shift.carryOverNextPaise?.toString() ?? null,
             toVaultPaise:        shift.toVaultPaise?.toString()       ?? null,
-            tillBookBalancePaise: tillBookBalancePaise.toString(),
-            tillMovementPaise:    (tillBookBalancePaise - shift.openingFloatPaise).toString(),
-            dropsPaise:           dropsPaise.toString(),
             expendituresPaise:    expendituresPaise.toString(),
-            runningExpectedPaise: computeExpectedCash(tillBookBalancePaise, dropsPaise).toString(),
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
             expenditures: movements.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
             _count: { receipts: movements.receipts.length },
             handover: shift.handover ? {
                 ...shift.handover,
-                declaredByAPaise: shift.handover.declaredByAPaise.toString(),
-                countedByBPaise:  shift.handover.countedByBPaise?.toString() ?? null,
-                carryOverPaise:   shift.handover.carryOverPaise.toString(),
+                declaredByAPaise:  shift.handover.declaredByAPaise?.toString() ?? null,
+                countedByBPaise:   shift.handover.countedByBPaise?.toString() ?? null,
+                carryOverPaise:    shift.handover.carryOverPaise.toString(),
+                denominationsJson: parseHandoverDenominations(shift.handover.denominationsJson),
             } : null,
             receivedHandover: shift.receivedHandover ? {
                 ...shift.receivedHandover,
-                declaredByAPaise: shift.receivedHandover.declaredByAPaise.toString(),
+                declaredByAPaise: shift.receivedHandover.declaredByAPaise?.toString() ?? null,
                 countedByBPaise:  shift.receivedHandover.countedByBPaise?.toString() ?? null,
             } : null,
         });

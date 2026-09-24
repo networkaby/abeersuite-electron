@@ -5,9 +5,11 @@
 // which branch cookie is set. (Branch filter caused 404 whenever the user switched
 // the branch switcher after opening a shift.)
 // PosScreen calls this on mount:
-//   • OPEN            → show ActiveShiftBar
-//   • AWAITING_HANDOVER → show amber "Handover pending" bar
-//   • null            → check /api/pos/shifts/pending-handover, then ShiftOpenDialog
+//   • OPEN              → carry on billing
+//   • AWAITING_HANDOVER → the cashier came back before anybody took the drawer:
+//                         the client cancels the handover and carries on
+//                         (modules/pos/lib/currentShift.ts)
+//   • null              → check /api/pos/shifts/counter-takeover, then ShiftOpenDialog
 //
 // ── Why the replica's answer is confirmed before it is trusted ───────────────
 // The heavy read stays on `prisma` (the replica on a counter PC) — it is the whole
@@ -58,16 +60,8 @@ export async function GET() {
                 },
                 branch:  { select: { id: true, name: true, vaultAccountId: true } },
                 drops:   { orderBy: { droppedAt: "desc" }, select: { id: true, amountPaise: true, droppedAt: true, notes: true } },
-                // Include pending handover so UI can show who B is.
-                handover: {
-                    select: {
-                        id: true,
-                        status: true,
-                        declaredByAPaise: true,
-                        carryOverPaise: true,
-                        toUser: { select: { id: true, name: true } },
-                    },
-                },
+                // The handover this cashier asked for, while nobody has taken it.
+                handover: { select: { id: true, status: true, declaredByAPaise: true } },
             },
             orderBy: { openedAt: "desc" },
         });
@@ -108,8 +102,7 @@ export async function GET() {
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
             handover: shift.handover ? {
                 ...shift.handover,
-                declaredByAPaise: shift.handover.declaredByAPaise.toString(),
-                carryOverPaise:   shift.handover.carryOverPaise.toString(),
+                declaredByAPaise: shift.handover.declaredByAPaise?.toString() ?? null,
             } : null,
         });
     } catch (e) {

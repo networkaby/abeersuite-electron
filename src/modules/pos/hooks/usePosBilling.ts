@@ -13,11 +13,13 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { extractApiError } from "@/shared/lib/api";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
 import { calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/voucherMath";
 import { type PartySearchAndCreateHandle, type PickedParty } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
-import { type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
+import { type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
+import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";
 import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
@@ -142,15 +144,17 @@ export function usePosBilling(opts: {
 
     // ── Active POS shift ────────────────────────────────────────────────────
     // Mount order:
-    //   1. GET /api/pos/shifts/current
-    //      → OPEN            : show ActiveShiftBar (billing enabled)
-    //      → AWAITING_HANDOVER: show ActiveShiftBar in amber mode (billing blocked)
-    //      → null            : check for pending handover ↓
-    //   2. GET /api/pos/shifts/pending-handover
-    //      → found           : show HandoverAcceptDialog (B accepts A's handover)
-    //      → null            : show ShiftOpenDialog (fresh start)
+    //   1. fetchCurrentShift() — this cashier's own shift. One they had handed
+    //      over and nobody took is quietly resumed (they came back).
+    //      → found : billing enabled
+    //      → null  : is somebody else's drawer on this counter? ↓
+    //   2. GET /api/pos/shifts/counter-takeover (this PC's counter)
+    //      → found : ShiftTakeoverDialog — accept the drawer or sign out
+    //      → null  : fresh start from the ShiftOpenDialog
     const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
-    const [pendingHandover, setPendingHandover] = useState<PendingHandover | null>(null);
+    // `fromPicker` — chosen in the open-shift dialog (Reject goes back) rather
+    // than found on sign-in at this counter (Reject signs out).
+    const [takeover, setTakeover] = useState<{ data: CounterTakeover; fromPicker: boolean } | null>(null);
     const [shiftLoaded, setShiftLoaded] = useState(false);
     const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
     const [returnDialogOpen, setReturnDialogOpen] = useState(false);
@@ -161,24 +165,31 @@ export function usePosBilling(opts: {
     const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
 
     const refreshActiveShift = useCallback(() => {
-        axios.get<ActiveShift | null>("/api/pos/shifts/current")
-            .then(async (r) => {
-                if (r.data) {
-                    setActiveShift(r.data);
-                    setPendingHandover(null);
-                } else {
-                    setActiveShift(null);
-                    // Check if B has a handover waiting.
-                    try {
-                        const h = await axios.get<PendingHandover | null>("/api/pos/shifts/pending-handover");
-                        setPendingHandover(h.data);
-                    } catch {
-                        setPendingHandover(null);
-                    }
+        fetchCurrentShift()
+            .then(async (shift) => {
+                setActiveShift(shift);
+                if (shift) { setTakeover(null); return; }
+                // No shift of their own — is somebody else's drawer on this counter?
+                try {
+                    const t = await axios.get<CounterTakeover | null>("/api/pos/shifts/counter-takeover");
+                    setTakeover(t.data ? { data: t.data, fromPicker: false } : null);
+                } catch {
+                    setTakeover(null);
                 }
             })
-            .catch(() => { setActiveShift(null); setPendingHandover(null); })
+            .catch(() => { setActiveShift(null); setTakeover(null); })
             .finally(() => setShiftLoaded(true));
+    }, []);
+
+    // A busy counter picked in the open-shift dialog.
+    const openTakeover = useCallback(async (counterId: number) => {
+        try {
+            const t = await axios.get<CounterTakeover | null>(`/api/pos/shifts/counter-takeover?counterId=${counterId}`);
+            if (t.data) setTakeover({ data: t.data, fromPicker: true });
+            else toast.info("That counter is free now — open a shift on it.");
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Could not read that counter"));
+        }
     }, []);
 
     useEffect(() => {
@@ -1475,7 +1486,7 @@ export function usePosBilling(opts: {
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
         charges, setCharges, resetDraft, resetAfterSubmit, ticketId,
         // shift
-        activeShift, setActiveShift, pendingHandover, setPendingHandover, shiftLoaded,
+        activeShift, setActiveShift, takeover, setTakeover, openTakeover, shiftLoaded,
         shiftOpenDialogOpen, setShiftOpenDialogOpen, returnDialogOpen, setReturnDialogOpen,
         expenditureDialogOpen, setExpenditureDialogOpen, receiptDialogOpen, setReceiptDialogOpen,
         shiftDropOpen, setShiftDropOpen, shiftCloseOpen, setShiftCloseOpen,

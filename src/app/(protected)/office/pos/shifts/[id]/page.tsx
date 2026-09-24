@@ -86,16 +86,18 @@ type ShiftDetail = {
     openingContraVoucher: { id: number; reference: string; date: string } | null;
     closingContraVoucher: { id: number; reference: string; date: string } | null;
     varianceJournalEntry: { id: number; reference: string; date: string } | null;
+    // `declaredByAPaise` null = taken over without a count (A just signed out).
+    // `toUser` null until somebody accepts.
     handover: {
         id: number; status: string;
-        declaredByAPaise: string; countedByBPaise: string | null; carryOverPaise: string;
-        toUser: { id: number; name: string };
+        declaredByAPaise: string | null; countedByBPaise: string | null; carryOverPaise: string;
+        toUser: { id: number; name: string } | null;
         toShift: { id: number } | null;
     } | null;
     receivedHandover: {
         id: number;
         fromShift: { id: number; user: { name: string } };
-        declaredByAPaise: string; countedByBPaise: string | null;
+        declaredByAPaise: string | null; countedByBPaise: string | null;
     } | null;
     drops: { id: number; amountPaise: string; droppedAt: string; notes: string | null; droppedBy: { id: number; name: string } }[];
     expenditures: { id: number }[];
@@ -312,11 +314,14 @@ export default function ShiftDetailPage() {
                         Shift #{shift.receivedHandover.fromShift.id} ({shift.receivedHandover.fromShift.user.name})
                     </Link>
                     <span className="text-muted-foreground text-xs ml-auto">
-                        Declared: ₹{fmt(Number(shift.receivedHandover.declaredByAPaise) / 100)} · Counted: ₹{fmt(Number(shift.receivedHandover.countedByBPaise ?? shift.receivedHandover.declaredByAPaise) / 100)}
+                        {shift.receivedHandover.declaredByAPaise != null
+                            ? `Counted by ${shift.receivedHandover.fromShift.user.name}: ₹${fmt(Number(shift.receivedHandover.declaredByAPaise) / 100)}`
+                            : "Taken over without a count — at the books' figure"}
                     </span>
                 </div>
             )}
-            {shift.handover && (
+            {/* A cancelled handover (the cashier came back) changed nothing — not shown. */}
+            {shift.handover && shift.handover.status !== "CANCELLED" && (
                 <div className={`rounded-lg border px-4 py-2.5 text-sm flex items-center gap-2 shadow-sm ${
                     shift.handover.status === "PENDING"
                         ? "border-amber-300/60 bg-amber-50 dark:bg-amber-950/20"
@@ -328,13 +333,15 @@ export default function ShiftDetailPage() {
                     </span>
                     {shift.handover.toShift ? (
                         <Link href={`/office/pos/shifts/${shift.handover.toShift.id}`} className="font-semibold text-primary hover:underline">
-                            Shift #{shift.handover.toShift.id} ({shift.handover.toUser.name})
+                            Shift #{shift.handover.toShift.id} ({shift.handover.toUser?.name ?? "next cashier"})
                         </Link>
                     ) : (
-                        <span className="font-medium">{shift.handover.toUser.name} (not yet accepted)</span>
+                        <span className="font-medium">whoever signs in next (not yet taken)</span>
                     )}
                     <span className="text-muted-foreground text-xs ml-auto">
-                        Declared: ₹{fmt(Number(shift.handover.declaredByAPaise) / 100)} · Carry-over: ₹{fmt(Number(shift.handover.carryOverPaise) / 100)}
+                        {shift.handover.declaredByAPaise != null
+                            ? `Counted: ₹${fmt(Number(shift.handover.declaredByAPaise) / 100)}`
+                            : "Signed out without a count"}
                     </span>
                 </div>
             )}

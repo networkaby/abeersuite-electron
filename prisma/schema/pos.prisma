@@ -292,15 +292,22 @@ model PosCashDrop {
   @@map("pos_cash_drops")
 }
 
-// ── POS Handover (two-step cashier-to-cashier) ───────────────────────────────
-// A initiates: shift → AWAITING_HANDOVER, PosHandover created (PENDING).
-// A logs out, B logs in. B sees the pending handover, counts physical cash,
-// and accepts. On accept (one transaction):
-//   1. Variance JE posted against counter till if declared ≠ expected.
-//   2. Closing Contra posted if (declared − carryOverNext) > 0 (vault sweep).
-//   3. A's shift → CLOSED; B's new PosShift created (OPEN).
-//   4. PosHandover → ACCEPTED.
-// Any discrepancy between A's declared and B's count hits A's shift variance.
+// ── POS Handover (whole drawer, cashier to cashier) ──────────────────────────
+// One row per handed-over shift (`fromShiftId` is unique), written two ways:
+//
+//   • A proper handover — A counts the drawer on the close-shift screen and signs
+//     out. The shift goes AWAITING_HANDOVER and this row is PENDING, carrying A's
+//     count and denominations. No GL moves yet. A signing back in cancels it.
+//   • A plain sign-out — A just leaves; the shift stays OPEN and no row exists
+//     until somebody takes over, when one is written straight as ACCEPTED with no
+//     count (`declaredByAPaise` null).
+//
+// Either way the next person to sign in at that counter sees the drawer (lock
+// screen + an information-only modal) and accepts or signs out. On accept, one
+// transaction (api/pos/shifts/[id]/takeover): variance Journal on A's shift from
+// A's count (none when nobody counted), the day's safe drops swept to the vault,
+// A's shift CLOSED, B's shift OPEN with the whole drawer, this row ACCEPTED. The
+// whole drawer stays on the counter — nothing else goes to the vault.
 
 model PosHandover {
   id Int @id @default(autoincrement())
@@ -308,8 +315,9 @@ model PosHandover {
   fromShiftId Int      @unique
   fromShift   PosShift @relation("HandoverFromShift", fields: [fromShiftId], references: [id])
 
-  toUserId Int
-  toUser   User @relation("HandoverToUser", fields: [toUserId], references: [id])
+  // Who took the drawer — unknown until somebody accepts (no named recipient).
+  toUserId Int?
+  toUser   User? @relation("HandoverToUser", fields: [toUserId], references: [id], onDelete: Restrict)
 
   // Filled when B accepts — points to B's new shift.
   toShiftId Int?      @unique
@@ -317,10 +325,12 @@ model PosHandover {
 
   status PosHandoverStatus @default(PENDING)
 
-  declaredByAPaise BigInt // what A declared (pre-filled from A's declared count)
-  countedByBPaise  BigInt? // what B counted on acceptance
-  carryOverPaise   BigInt  @default(0) // carry-over float for B's shift
-  notes            String?
+  declaredByAPaise  BigInt? // A's count; null = A signed out without counting
+  // A's note/coin tally behind that count, shown to B: { lines: [{ denom, count }], otherPaise }.
+  denominationsJson Json?
+  countedByBPaise   BigInt? // retired — B no longer counts; kept for rows written before 2026-09-24
+  carryOverPaise    BigInt   @default(0) // retired — the whole drawer passes; kept for old rows
+  notes             String?
 
   initiatedAt DateTime  @default(now())
   acceptedAt  DateTime?

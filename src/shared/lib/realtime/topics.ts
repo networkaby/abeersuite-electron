@@ -52,7 +52,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/accountancy\//,                       ["ledger"]],
     [/^\/api\/inventory\/vouchers/,                 ["ledger", "stock"]],
     [/^\/api\/pos\/(sale|return|estimate|order)/,   ["ledger", "stock"]],
-    [/^\/api\/pos\/(shifts|cash-movements|handovers|till-ledger)/, ["ledger"]],
+    [/^\/api\/pos\/(shifts|cash-movements|till-ledger)/,  ["ledger"]],
     [/^\/api\/gift-cards/,                          ["ledger"]],
     [/^\/api\/refunds/,                             ["ledger"]],
     [/^\/api\/loyalty\//,                           ["ledger"]],

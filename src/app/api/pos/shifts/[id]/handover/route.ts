@@ -1,29 +1,37 @@
 // POST /api/pos/shifts/[id]/handover
 //
-// A initiates a cashier-to-cashier handover. Sets the shift to
-// AWAITING_HANDOVER and creates a PENDING PosHandover record.
-// NO GL movement at this point — only when B accepts.
+// A hands the whole drawer over: counts it on the close-shift screen and signs
+// out. The shift goes AWAITING_HANDOVER and the handover row is PENDING with A's
+// count and denominations. Nobody is named — whoever signs in next at this
+// counter sees it (lock screen, then the takeover modal) and takes it over.
+// NO GL movement here; everything posts on takeover (shifts/[id]/takeover).
 //
-// Body: { toUserId, declaredCashPaise, carryOverPaise?, notes? }
+// Body: { declaredCashPaise, denominations?, notes? }
 //
 // DELETE /api/pos/shifts/[id]/handover
-// Cancel a pending handover. Returns shift to OPEN so A can close normally.
+// A came back before anybody took over — the shift is OPEN again, as if the
+// handover had never been asked for.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { handoverDenominationsSchema } from "@/modules/pos/lib/handoverDenominations";
+import { cancelPendingHandover } from "@/modules/pos/lib/handover";
 
 const initiateSchema = z.object({
-    toUserId:          z.number().int().positive(),
     declaredCashPaise: z.number().int().min(0),
-    carryOverPaise:    z.number().int().min(0).optional().default(0),
+    denominations:     handoverDenominationsSchema.optional(),
     notes:             z.string().trim().max(500).optional(),
 });
 
-// ── POST — Initiate handover ─────────────────────────────────────────────────
+/** Thrown inside the transaction when the shift stopped being OPEN under us. */
+class NotOpenError extends Error {}
+
+// ── POST — Hand over ─────────────────────────────────────────────────────────
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_CLOSE);
     if (response) return response;
@@ -37,77 +45,53 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         const shift = await prisma.posShift.findUnique({
-            where:   { id: shiftId },
-            select:  { id: true, status: true, userId: true, branchId: true, counterId: true },
+            where:  { id: shiftId },
+            select: { id: true, status: true, userId: true },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
-        if (shift.status !== "OPEN") {
-            return NextResponse.json({ error: "Only OPEN shifts can initiate a handover" }, { status: 409 });
-        }
 
         const canManage = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }
-        if (data.toUserId === user!.id) {
-            return NextResponse.json({ error: "Cannot hand over to yourself" }, { status: 400 });
-        }
 
-        // Ensure target user exists and doesn't already have an active shift in this branch.
-        const targetUser = await prisma.user.findUnique({
-            where:  { id: data.toUserId },
-            select: { id: true, name: true },
-        });
-        if (!targetUser) return NextResponse.json({ error: "Target user not found" }, { status: 404 });
-
-        const targetBusy = await prisma.posShift.findFirst({
-            where:  { userId: data.toUserId, branchId: shift.branchId, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
-            select: { id: true },
-        });
-        if (targetBusy) {
-            return NextResponse.json(
-                { error: `${targetUser.name} already has an active shift in this branch.` },
-                { status: 409 },
-            );
-        }
-
-        // No existing pending handover on this shift.
-        const existingHandover = await prisma.posHandover.findUnique({
-            where:  { fromShiftId: shiftId },
-            select: { id: true, status: true },
-        });
-        if (existingHandover && existingHandover.status === "PENDING") {
-            return NextResponse.json({ error: "A handover is already pending for this shift" }, { status: 409 });
-        }
+        const figures = {
+            declaredByAPaise:  BigInt(data.declaredCashPaise),
+            denominationsJson: data.denominations ?? Prisma.DbNull,
+            notes:             data.notes || null,
+            initiatedAt:       new Date(),
+        };
 
         const result = await prisma.$transaction(async (tx) => {
-            const handover = await tx.posHandover.create({
-                data: {
-                    fromShiftId:      shiftId,
-                    toUserId:         data.toUserId,
-                    declaredByAPaise: BigInt(data.declaredCashPaise),
-                    carryOverPaise:   BigInt(data.carryOverPaise),
-                    notes:            data.notes ?? null,
-                },
-            });
-            await tx.posShift.update({
-                where: { id: shiftId },
+            // The status check IS the write: two clicks, or a takeover landing at
+            // the same moment, cannot both find the shift OPEN.
+            const claimed = await tx.posShift.updateMany({
+                where: { id: shiftId, status: "OPEN" },
                 data:  { status: "AWAITING_HANDOVER" },
             });
-            return handover;
+            if (claimed.count !== 1) throw new NotOpenError();
+
+            // One row per shift. A handover cancelled earlier (A came back) is
+            // reused rather than created again — `fromShiftId` is unique.
+            return tx.posHandover.upsert({
+                where:  { fromShiftId: shiftId },
+                create: { fromShiftId: shiftId, status: "PENDING", ...figures },
+                update: { status: "PENDING", toUserId: null, acceptedAt: null, ...figures },
+            });
         });
 
         return NextResponse.json({
-            id:              result.id,
-            fromShiftId:     result.fromShiftId,
-            toUserId:        result.toUserId,
-            status:          result.status,
-            declaredByAPaise: result.declaredByAPaise.toString(),
-            carryOverPaise:  result.carryOverPaise.toString(),
-            initiatedAt:     result.initiatedAt,
+            id:               result.id,
+            fromShiftId:      result.fromShiftId,
+            status:           result.status,
+            declaredByAPaise: result.declaredByAPaise?.toString() ?? null,
+            initiatedAt:      result.initiatedAt,
         }, { status: 201 });
     } catch (e) {
-        return handleApiError(e, "Failed to initiate handover");
+        if (e instanceof NotOpenError) {
+            return NextResponse.json({ error: "This shift is no longer open, so it cannot be handed over." }, { status: 409 });
+        }
+        return handleApiError(e, "Failed to hand over");
     }
 }
 
@@ -126,24 +110,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
             select: { id: true, status: true, userId: true },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
-        if (shift.status !== "AWAITING_HANDOVER") {
-            return NextResponse.json({ error: "No pending handover on this shift" }, { status: 409 });
-        }
         const canManage = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         if (shift.userId !== user!.id && !canManage) {
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }
 
-        await prisma.$transaction(async (tx) => {
-            await tx.posHandover.updateMany({
-                where: { fromShiftId: shiftId, status: "PENDING" },
-                data:  { status: "CANCELLED" },
-            });
-            await tx.posShift.update({
-                where: { id: shiftId },
-                data:  { status: "OPEN" },
-            });
-        });
+        const reopened = await prisma.$transaction((tx) => cancelPendingHandover(tx, shiftId));
+        if (!reopened) return NextResponse.json({ error: "No pending handover on this shift" }, { status: 409 });
 
         return NextResponse.json({ ok: true });
     } catch (e) {
