@@ -375,7 +375,7 @@
     flex-direction: column;
     flex: 0 0 400px;
     max-width: 100%;
-    padding: 22px 24px 20px;
+    padding: 18px 22px 18px;
     background: var(--glass);
     border: 1px solid var(--line);
     border-radius: 18px;
@@ -408,8 +408,8 @@
 .nexthero {
     position: relative;
     overflow: hidden;
-    margin: 0 0 16px;
-    padding: 16px 18px 18px;
+    margin: 0 0 12px;
+    padding: 12px 16px 14px;
     border-radius: 14px;
     border: 1px solid rgba(56, 189, 248, .35);
     background:
@@ -438,11 +438,11 @@
     padding: 2px 9px;
     border-radius: 999px;
 }
-.nextday { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); line-height: 1.2 }
-.nexttime { margin: 2px 0 0; font-size: 40px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); line-height: 1.1; font-variant-numeric: tabular-nums }
+.nextday { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); line-height: 1.2 }
+.nexttime { margin: 0; font-size: 36px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); line-height: 1.1; font-variant-numeric: tabular-nums }
 
 /* ── 2 and 3: a block each, ruled off from the one above ───────────────────── */
-.tillblock { padding: 14px 0 0; margin: 0 0 8px; border-top: 1px solid rgba(255, 255, 255, .10) }
+.tillblock { padding: 12px 0 0; margin: 0 0 6px; border-top: 1px solid rgba(255, 255, 255, .10) }
 .tillblock:last-child { margin-bottom: 0; display: flex; flex-direction: column; flex: 1 }
 .tilllabel {
     display: flex;
@@ -457,16 +457,16 @@
 }
 .tilllabel span { letter-spacing: 0; text-transform: none; font-size: 12px; color: var(--ink-dim); font-variant-numeric: tabular-nums }
 
-.dutybig { font-size: 30px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; line-height: 1.15 }
+.dutybig { font-size: 28px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; line-height: 1.15 }
 .dutybig small { font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--ink-dim) }
 .dutysub { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 0 }
 
 /* Worked against duty, under the big figure. */
-.dutybar { height: 4px; margin: 10px 0 12px; border-radius: 999px; background: rgba(255, 255, 255, .10); overflow: hidden }
+.dutybar { height: 4px; margin: 8px 0 10px; border-radius: 999px; background: rgba(255, 255, 255, .10); overflow: hidden }
 .dutybar i { display: block; height: 100%; border-radius: inherit; background: var(--accent) }
 
 /* The day's figures as tiles in a strip — verdict first, then only what happened. */
-.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 }
 .stats div {
     flex: 1 1 0;
     min-width: 76px;
@@ -482,11 +482,9 @@
 .stats .statwarn { background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .28) }
 .statwarn b { color: #fbbf24 }
 
-.dutymonth { font-size: 12px; line-height: 1.55; color: rgba(226, 232, 240, .72); margin: 0 }
-
 /* Every method the counter takes, two to a row. A ₹0 method stays on the list
    but steps back, so what was collected reads first. */
-.tenders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 12px 0 0 }
+.tenders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 10px 0 0 }
 .tenders div {
     display: flex;
     justify-content: space-between;
@@ -509,7 +507,7 @@
     line-height: 1.55;
     color: rgba(226, 232, 240, .92);
     margin: auto 0 0;
-    padding: 12px 0 0;
+    padding: 10px 0 0;
 }
 
 /* The same answer, shop-wide, under the clock — for everyone who did NOT just

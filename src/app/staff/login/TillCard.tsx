@@ -28,11 +28,12 @@ const inr = (paise: string) =>
  *
  *   1. NEXT DUTY — when he is next expected, said big. The most useful line on
  *      the screen for the man on his way out, so it is the hero, not a footnote.
- *   2. TODAY — the day he just finished: worked against duty, away, late, the
- *      verdict, and where the month stands after the make-up.
- *   3. THE DRAWER — whose shift is on this counter, the cash expected in it, and
- *      every payment method the counter takes with what each collected. Zero
- *      rows stay, so a quiet evening still shows UPI and Card as methods.
+ *   2. TODAY — the day he just finished: worked against duty, away, late and
+ *      the verdict. The month's netting stays on his payslip, not here.
+ *   3. THE DRAWER — whose shift is on this counter and what to verify before
+ *      taking it: the cash he counted on a deliberate handover, the books' figure
+ *      when he simply left, and every payment method the counter takes with what
+ *      each collected. Zero rows stay, so a quiet evening still shows the methods.
  *
  * Two sources, each on its own rule. The day comes from `sessionStorage`, put
  * there by the sign-out and read exactly once — it shows on the LOGIN screen
@@ -81,16 +82,6 @@ export default function TillCard() {
       :                            "Not counted";
 
     const filled = day && day.dutyMinutes > 0 ? Math.min(100, (day.workedMinutes / day.dutyMinutes) * 100) : null;
-    const m = day?.month;
-    const monthLine = !m ? "" :
-        m.surplusMinutes === 0 && m.shortfallMinutes === 0
-            ? "This month: on duty, nothing over and nothing owed."
-            : m.owedMinutes > 0
-                ? `This month: ${formatWorked(m.surplusMinutes)} overtime against ${formatWorked(m.shortfallMinutes)} short — ${formatWorked(m.owedMinutes)} still to make up.`
-                : m.payableMinutes > 0
-                    ? `This month: ${formatWorked(m.madeUpMinutes)} made up, ${formatWorked(m.payableMinutes)} overtime payable.`
-                    : "This month: shortfall fully made up, nothing extra yet.";
-
     const handedOver = shift?.status === "AWAITING_HANDOVER";
     const firstName = shift?.cashierName.split(/\s+/)[0] ?? "";
 
@@ -136,10 +127,6 @@ export default function TillCard() {
                         {day.shortMinutes > 0 && <div><b>{formatWorked(day.shortMinutes)}</b><span>away</span></div>}
                         {day.lateMinutes ? <div><b>{formatWorked(day.lateMinutes)}</b><span>late</span></div> : null}
                     </div>
-                    <p className={styles.dutymonth}>
-                        {monthLine}
-                        {m && m.weeklyOffMinutes > 0 ? ` Includes ${formatWorked(m.weeklyOffMinutes)} on your day off.` : ""}
-                    </p>
                 </div>
             )}
 
@@ -154,12 +141,24 @@ export default function TillCard() {
                                 : `${firstName} · since ${formatClockTime(shift.openedAt)}`}
                         </span>
                     </p>
-                    <p className={styles.dutybig}>
-                        {inr(shift.expectedCashPaise)}
-                        <small> expected cash</small>
-                    </p>
-                    {shift.countedPaise != null && (
-                        <p className={styles.dutysub}>{firstName} counted {inr(shift.countedPaise)}</p>
+                    {/* A deliberate handover leads with what the cashier COUNTED — that
+                        is the figure the next person checks the notes against, with the
+                        books' expectation beside it. A plain sign-out (a break he never
+                        came back from, an emergency) has no count, so the books' figure
+                        leads and the methods below are what there is to verify. */}
+                    {handedOver && shift.countedPaise != null ? (
+                        <>
+                            <p className={styles.dutybig}>
+                                {inr(shift.countedPaise)}
+                                <small> counted by {firstName}</small>
+                            </p>
+                            <p className={styles.dutysub}>Books expect {inr(shift.expectedCashPaise)} in the drawer</p>
+                        </>
+                    ) : (
+                        <p className={styles.dutybig}>
+                            {inr(shift.expectedCashPaise)}
+                            <small> expected cash · verify</small>
+                        </p>
                     )}
                     <dl className={styles.tenders}>
                         {shift.tenders.map((t) => (
@@ -170,8 +169,8 @@ export default function TillCard() {
                     </dl>
                     <p className={styles.dutyfoot}>
                         {handedOver
-                            ? "Sign in to review the drawer and take it over — it becomes yours."
-                            : `${firstName} signed out without handing over. Sign in to take the drawer over, or ${firstName} signs back in and carries on.`}
+                            ? `${firstName} handed the drawer over. Sign in to take it — it becomes yours.`
+                            : `${firstName} left without handing over. Check the drawer against these, then sign in to take it over — or ${firstName} signs back in and carries on.`}
                     </p>
                 </div>
             )}
