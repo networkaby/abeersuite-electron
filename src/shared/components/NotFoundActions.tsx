@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
@@ -18,13 +18,15 @@ import { Button } from "@/components/ui/button";
  *
  * `homeHref` is decided by the build variant on the server — see not-found.tsx.
  */
+const noSubscribe = () => () => {};
+
 export default function NotFoundActions({ homeHref }: { homeHref: string }) {
     const router = useRouter();
-    const [canGoBack, setCanGoBack] = useState(false);
-
-    useEffect(() => {
-        setCanGoBack(window.history.length > 1);
-    }, []);
+    const canGoBack = useSyncExternalStore(
+        noSubscribe,
+        () => window.history.length > 1,
+        () => false,
+    );
 
     return (
         <div className="flex flex-wrap items-center justify-center gap-3">
