@@ -9,10 +9,11 @@
 // (Sale) ones: new-customer is icon-only and the parallel-tab button reads "New".
 
 import Link from "next/link";
+import { useState } from "react";
 import {
     ArrowLeft, X, UserPlus, ExternalLink, RotateCcw,
     MoreVertical, RefreshCw, LayoutDashboard, Monitor,
-    ShoppingCart, ClipboardList, FileText,
+    ShoppingCart, ClipboardList, FileText, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
+import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 
 // Soft pastel tints for the header action buttons — muted so they're easy on
 // the eye (no saturated rainbows), with dark-mode pairs so the bar stays calm
@@ -78,6 +80,8 @@ export function PosTopBar({
     activeShift, shiftLoaded,
     onRefreshShift, onOpenShift,
 }: PosTopBarProps) {
+    // Quick "Hand over" beside the shift pill — same dialog as the shift bar's button.
+    const [handoverOpen, setHandoverOpen] = useState(false);
     return (
         <header className={`flex shrink-0 items-center gap-3 border-b-2 px-4 py-3 ${headerClass}`}>
             <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
@@ -204,6 +208,26 @@ export function PosTopBar({
                 {!shiftLoaded ? "Shift…" : activeShift ? `Shift #${activeShift.id}` : "No shift"}
                 <RefreshCw size={13} className="opacity-70" />
             </Button>
+            {activeShift?.status === "OPEN" && (
+                <>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHandoverOpen(true)}
+                        title="Hand the drawer over to the next cashier"
+                        className={tint.violet}
+                    >
+                        <Users size={14} /> Hand over
+                    </Button>
+                    <ShiftCloseDialog
+                        open={handoverOpen}
+                        onOpenChange={setHandoverOpen}
+                        mode="handover"
+                        shiftId={activeShift.id}
+                        onClosed={onRefreshShift}
+                    />
+                </>
+            )}
         </header>
     );
 }
