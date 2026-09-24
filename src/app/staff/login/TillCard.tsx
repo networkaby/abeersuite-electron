@@ -99,7 +99,7 @@ export default function TillCard() {
     const verdict = !day ? "" :
         day.grade === "PRESENT"  ? "Full day"
       : day.grade === "HALF_DAY" ? "Half day"
-      :                            "Not counted";
+      :                            "Absent";   // never "not counted" — the drawer's "counted" sits right below
 
     const filled = day && day.dutyMinutes > 0 ? Math.min(100, (day.workedMinutes / day.dutyMinutes) * 100) : null;
     const handedOver = shift?.status === "AWAITING_HANDOVER";
