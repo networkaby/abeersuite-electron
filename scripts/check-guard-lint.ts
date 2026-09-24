@@ -26,6 +26,10 @@ const EXCLUDED_OFFICE_ROUTES = new Set([
     // way: `thisCounterId()` only, so it does not exist on the web deployment, and
     // it only ever describes the drawer standing in front of the asking PC.
     "src/app/api/counter/shift/route.ts",
+    // The duty card of whoever last ran a shift on this counter, for the lock
+    // screen after a restart. Same fence as counter/shift. Owner, 2026-09-25:
+    // the card shows always, not only straight after a sign-out.
+    "src/app/api/counter/day/route.ts",
     // "When does the shop open next?", asked by the sign-in screen with nobody
     // signed in. Every fact it returns is the sort a shop paints on its own door —
     // opening and closing times, the days it is shut, the names of holidays. It

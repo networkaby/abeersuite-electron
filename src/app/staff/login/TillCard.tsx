@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatClockTime, formatHhMmFriendly, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
-import { myDayStore } from "@/shared/lib/hr/myDay";
+import { myDayStore, type MyDay } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
 import styles from "./login.module.css";
 
@@ -15,7 +15,7 @@ type CounterShift = {
     handedOverAt:      string | null;
     countedPaise:      string | null;
     expectedCashPaise: string;
-    /** Every method the counter takes, cash first, ₹0 rows included. */
+    /** Every non-cash method the counter takes, ₹0 rows included. Cash is the big figure. */
     tenders:           { label: string; amountPaise: string }[];
 };
 
@@ -35,20 +35,23 @@ const inr = (paise: string) =>
  *      when he simply left, and every payment method the counter takes with what
  *      each collected. Zero rows stay, so a quiet evening still shows the methods.
  *
- * Two sources, each on its own rule. The day comes from `sessionStorage`, put
- * there by the sign-out and read exactly once — it shows on the LOGIN screen
- * rather than a dialog because the common way a till session ends is the idle
- * auto-logout, with nobody there to read a dialog. The drawer is fetched from
- * `/api/counter/shift`, counter PCs only, silent on every failure: a panel that
- * cannot load must never stand between a cashier and the keypad.
+ * The day comes from `sessionStorage` when someone has just signed out here
+ * (read exactly once — the idle auto-logout leaves nobody to read a dialog).
+ * Otherwise — a restart, a fresh install, first thing in the morning — it is
+ * fetched from `/api/counter/day`: whoever last ran a shift on this counter
+ * (owner, 2026-09-25: the card always shows). The drawer comes from
+ * `/api/counter/shift`. Both counter PCs only, silent on every failure: a panel
+ * that cannot load must never stand between a cashier and the keypad.
  *
  * Renders nothing when neither is there, so an ordinary locked till is exactly
  * the shell's screen and the cold-start handover does not jump.
  */
 export default function TillCard() {
-    const day = useSyncExternalStore(
+    const signedOutDay = useSyncExternalStore(
         myDayStore.subscribe, myDayStore.getSnapshot, myDayStore.getServerSnapshot,
     );
+    const [counterDay, setCounterDay] = useState<MyDay | null>(null);
+    const day = signedOutDay ?? counterDay;
     const [shift, setShift] = useState<CounterShift | null>(null);
 
     useEffect(() => {
@@ -65,6 +68,23 @@ export default function TillCard() {
         })();
         return () => { alive = false; };
     }, []);
+
+    // Only when no sign-out handed a day over — that one is fresher and his own.
+    useEffect(() => {
+        if (signedOutDay) return;
+        let alive = true;
+        (async () => {
+            try {
+                const res = await fetch("/api/counter/day");
+                if (!res.ok) return;
+                const out = await res.json() as MyDay | null;
+                if (alive && out?.tracked) setCounterDay(out);
+            } catch {
+                /* no panel, never a blocked sign-in */
+            }
+        })();
+        return () => { alive = false; };
+    }, [signedOutDay]);
 
     if (!day && !shift) return null;
 
