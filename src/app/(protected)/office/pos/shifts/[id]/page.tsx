@@ -298,7 +298,6 @@ export default function ShiftDetailPage() {
                     open={true}
                     onOpenChange={(v) => { if (!v) setReclosing(false); }}
                     shiftId={shift.id}
-                    allowHandover={false}
                     forCashierName={shift.user.name}
                     initialClosedAt={originalClosedAt}
                     onClosed={load}

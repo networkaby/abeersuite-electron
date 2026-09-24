@@ -77,7 +77,8 @@ export function ActiveShiftBar({
     const { canDrop } = usePosAccess();
     const [summary, setSummary]   = useState<Summary | null>(null);
     const [dropOpen, setDropOpen] = useState(false);
-    const [closeOpen, setCloseOpen] = useState(false);
+    // Which close dialog is open — "Hand over" and "Close shift" are separate buttons.
+    const [closeMode, setCloseMode] = useState<"vault" | "handover" | null>(null);
     const [cancelling, setCancelling] = useState(false);
 
     const refresh = useCallback(() => {
@@ -180,7 +181,10 @@ export function ActiveShiftBar({
                             <Lock size={12} /> Drop to safe
                         </Button>
                     )}
-                    <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setCloseOpen(true)}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCloseMode("handover")}>
+                        <Users size={12} /> Hand over
+                    </Button>
+                    <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setCloseMode("vault")}>
                         <ArrowRightLeft size={12} /> Close shift
                     </Button>
                 </div>
@@ -193,8 +197,9 @@ export function ActiveShiftBar({
                 onDropped={refresh}
             />
             <ShiftCloseDialog
-                open={closeOpen}
-                onOpenChange={setCloseOpen}
+                open={closeMode !== null}
+                onOpenChange={(v) => { if (!v) setCloseMode(null); }}
+                mode={closeMode ?? "vault"}
                 shiftId={shift.id}
                 onClosed={onClosed}
             />

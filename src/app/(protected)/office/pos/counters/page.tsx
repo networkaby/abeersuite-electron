@@ -199,7 +199,6 @@ export default function CountersStatusPage() {
                     open={true}
                     onOpenChange={(v) => { if (!v) setClosing(null); }}
                     shiftId={closing.shiftId}
-                    allowHandover={false}
                     forCashierName={closing.cashierName}
                     onClosed={() => load({ silent: true })}
                 />
