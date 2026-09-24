@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { stampActivity } from "@/shared/lib/hr/attendanceStamp";
-import { thisCounterId } from "@/shared/lib/auth/counterPin";
+import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 import { TRACK_OFF_COUNTER, idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 
 /**
@@ -38,7 +38,11 @@ export async function POST(req: Request) {
                 ? new Date(body.lastInputAt)
                 : null;
 
-        const counterId = thisCounterId();
+        // `sourceCounterId`, not `thisCounterId`: an online till relays this call to
+        // the office, where there is no counter-setup file and every beat was being
+        // dropped as "off a counter". The relay stamps the till's number on the
+        // request; offline, the till answers from its own setup as before.
+        const counterId = await sourceCounterId();
         // Off a counter, nothing is recorded yet — see TRACK_OFF_COUNTER. Answering
         // 200 with no minutes keeps the client simple: it pulses either way and does
         // not need to know where it is running.
