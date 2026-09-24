@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { formatClockTime } from "@/shared/lib/format/formatDate";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { myDayStore } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
@@ -35,6 +36,9 @@ export default function DutyCard() {
       :                            "Not counted as a day";
 
     const m = day.month;
+    // How much of the duty was worked, for the bar. A day off has no duty to fill,
+    // so it gets no bar rather than one stuck at empty or full.
+    const filled = day.dutyMinutes > 0 ? Math.min(100, (day.workedMinutes / day.dutyMinutes) * 100) : null;
 
     return (
         <section className={styles.duty}>
@@ -45,8 +49,11 @@ export default function DutyCard() {
             <p className={styles.dutybig}>{formatWorked(day.workedMinutes)}</p>
             <p className={styles.dutysub}>
                 worked of {formatWorked(day.dutyMinutes)} duty
-                {day.firstInAt ? ` · in at ${new Date(day.firstInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                {day.firstInAt ? ` · in at ${formatClockTime(day.firstInAt)}` : ""}
             </p>
+            {filled !== null && (
+                <div className={styles.dutybar}><i style={{ width: `${filled}%` }} /></div>
+            )}
 
             <dl className={styles.dutyrows}>
                 {day.overtimeMinutes > 0 && (
@@ -92,7 +99,7 @@ export default function DutyCard() {
                 unless he has hours of his own. Absent on a card stashed by an older
                 build, which is why it is guarded rather than assumed. */}
             {day.nextDuty && (
-                <p className={styles.dutynext}>
+                <p className={styles.dutyfoot}>
                     {nextOpeningText(day.nextDuty, day.date, "mine").full}
                 </p>
             )}

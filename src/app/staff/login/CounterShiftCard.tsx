@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatClockTime } from "@/shared/lib/format/formatDate";
 import styles from "./login.module.css";
 
 type CounterShift = {
@@ -16,8 +17,6 @@ type CounterShift = {
 
 const inr = (paise: string) =>
     (Number(paise) / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
-const clock = (iso: string) =>
-    new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
 /**
  * "Waiting handover · Rakib · Expected cash ₹12,500 · Card ₹8,200"
@@ -52,6 +51,8 @@ export default function CounterShiftCard() {
 
     if (!shift) return null;
     const handedOver = shift.status === "AWAITING_HANDOVER";
+    // The full name is in the Cashier row; the note only needs to point back at him.
+    const firstName = shift.cashierName.split(/\s+/)[0];
 
     return (
         <section className={styles.duty}>
@@ -60,26 +61,25 @@ export default function CounterShiftCard() {
             </p>
 
             <p className={styles.dutybig}>{inr(shift.expectedCashPaise)}</p>
-            <p className={styles.dutysub}>
-                expected cash in the drawer · {shift.cashierName}
-                {handedOver && shift.handedOverAt
-                    ? `, handed over at ${clock(shift.handedOverAt)}`
-                    : `, since ${clock(shift.openedAt)}`}
-            </p>
+            <p className={styles.dutysub}>expected cash in the drawer</p>
 
             <dl className={styles.dutyrows}>
+                <div><dt>Cashier</dt><dd>{shift.cashierName}</dd></div>
+                {handedOver && shift.handedOverAt
+                    ? <div><dt>Handed over at</dt><dd>{formatClockTime(shift.handedOverAt)}</dd></div>
+                    : <div><dt>Open since</dt><dd>{formatClockTime(shift.openedAt)}</dd></div>}
                 {shift.countedPaise != null && (
-                    <div><dt>Counted by {shift.cashierName}</dt><dd>{inr(shift.countedPaise)}</dd></div>
+                    <div><dt>Counted</dt><dd>{inr(shift.countedPaise)}</dd></div>
                 )}
                 {shift.tenders.map((t) => (
                     <div key={t.label}><dt>{t.label} collected</dt><dd>{inr(t.amountPaise)}</dd></div>
                 ))}
             </dl>
 
-            <p className={styles.dutymonth}>
+            <p className={styles.dutyfoot}>
                 {handedOver
                     ? "Sign in to review the drawer and take it over."
-                    : `${shift.cashierName} signed out without handing over. Sign in to review the drawer and take it over — or ${shift.cashierName} signs back in and carries on.`}
+                    : `Signed out without handing over. Sign in to review the drawer and take it over — or ${firstName} signs back in and carries on.`}
                 {" "}Accepting makes the drawer yours.
             </p>
         </section>

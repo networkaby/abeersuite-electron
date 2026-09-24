@@ -164,6 +164,11 @@ export function formatTimeOnly(iso: string): string {
     return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** "5:13 PM" — no leading zero, the same face as `formatHhMmFriendly`. */
+export function formatClockTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 /**
  * A weekday name from a "YYYY-MM-DD" — "Wednesday", or "Tomorrow" when it is.
  *

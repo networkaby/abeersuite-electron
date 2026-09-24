@@ -306,7 +306,7 @@
 .post { font-size: 11.5px; color: var(--ink-dim); margin: 4px 0 0; line-height: 1.3 }
 /* Where a seat sits — deliberately quieter than the seat itself, so a card with two
    positions still reads as a name with detail under it rather than four equal lines. */
-.scope { font-size: 10.5px; color: #64748b; margin: 0; line-height: 1.3 }
+.scope { font-size: 10.5px; color: #8391a7; margin: 0; line-height: 1.3 }
 
 .drop {
   position: absolute;
@@ -354,14 +354,25 @@
 .key:active { transform: scale(.96) }
 .key.soft { background: none; border-color: transparent; color: var(--ink-dim); font-size: 13px }
 
-/* ── Your duty today ──────────────────────────────────────────────────────────
-   Shown on the login screen after a counter sign-out — see DutyCard.tsx for why
-   it lives here and not in a dialog. Sits between the showcase and the sign-in
-   card on a wide till; on a narrow one the showcase is gone and this wraps above
-   the sign-in card rather than disappearing with it. */
+/* ── The till's own cards ─────────────────────────────────────────────────────
+   "Your duty today" (DutyCard.tsx) and "Shift open" (CounterShiftCard.tsx) — both
+   `.duty`, both only on a counter, both arriving after the page has painted.
+
+   When either is up, the showcase steps aside: the person at the till has real
+   business to read, and the row has no room for marketing as well — squeezed in,
+   it went one word per line. The cards and the sign-in card then sit as one even
+   row, same height, tops level. With no card the screen is exactly the shell's,
+   so the cold-start handover still does not jump. */
+.stage:has(.duty) { gap: 20px; align-items: stretch; flex-wrap: wrap }
+.stage:has(.duty) .side { display: none }
+/* Its only job was keeping the showcase text readable. */
+.root:has(.duty) .readscrim { display: none }
+
 .duty {
     position: relative;
     z-index: 3;
+    display: flex;
+    flex-direction: column;
     flex: 0 0 300px;
     max-width: 100%;
     padding: 22px;
@@ -371,8 +382,12 @@
     backdrop-filter: blur(22px) saturate(140%);
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     box-shadow: 0 24px 60px rgba(2, 6, 23, .5);
+    animation: dutyIn .35s ease both;
 }
-@media (max-width: 1080px) { .stage { flex-wrap: wrap } .duty { flex-basis: 372px } }
+/* Narrow till: the cards wrap above the sign-in card at its width. */
+@media (max-width: 1080px) { .duty { flex-basis: 372px } }
+@keyframes dutyIn { from { opacity: 0; transform: translateY(6px) } }
+@media (prefers-reduced-motion: reduce) { .duty { animation: none } }
 
 .dutyhead {
     font-size: 11.5px;
@@ -384,25 +399,37 @@
 .dutybig { font-size: 34px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums }
 .dutysub { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 16px }
 
+/* Worked against duty, under the big figure. */
+.dutybar { height: 4px; margin: -6px 0 16px; border-radius: 999px; background: rgba(255, 255, 255, .10); overflow: hidden }
+.dutybar i { display: block; height: 100%; border-radius: inherit; background: var(--accent) }
+
 .dutyrows { margin: 0 0 14px; display: grid; gap: 7px }
 .dutyrows div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px }
 .dutyrows dt { color: var(--ink-dim); margin: 0 }
-.dutyrows dd { color: var(--ink); margin: 0; font-variant-numeric: tabular-nums }
+.dutyrows dd { color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; text-align: right }
 
-.dutygood, .dutywarn { font-size: 13px; font-weight: 500; margin: 0 0 12px }
-.dutygood { color: #4ade80 }
-.dutywarn { color: #fbbf24 }
+/* The day's verdict, as a tag rather than a line of coloured text. */
+.dutygood, .dutywarn {
+    align-self: flex-start;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+.dutygood { color: #4ade80; background: rgba(74, 222, 128, .14) }
+.dutywarn { color: #fbbf24; background: rgba(251, 191, 36, .14) }
 
-.dutymonth { font-size: 12px; line-height: 1.55; color: rgba(226, 232, 240, .72); margin: 0 }
+.dutymonth { font-size: 12px; line-height: 1.55; color: rgba(226, 232, 240, .72); margin: 0 0 12px }
 
-/* "Back on duty tomorrow, 10:54 AM" — closes the duty card by answering the one
-   question left after the figures: when do I come back? Separated by a rule
-   because it is advice about the future, not another number about today. */
-.dutynext {
+/* The closing line of either card — "Back on duty tomorrow, 10:54 AM", or what
+   signing in will do to the drawer. Held to the bottom so the cards in the row
+   end level, and ruled off because it says what comes next, not another figure. */
+.dutyfoot {
     font-size: 12.5px;
     line-height: 1.55;
     color: rgba(226, 232, 240, .92);
-    margin: 12px 0 0;
+    margin: auto 0 0;
     padding: 10px 0 0;
     border-top: 1px solid rgba(255, 255, 255, .10);
 }
