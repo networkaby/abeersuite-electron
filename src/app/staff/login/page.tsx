@@ -27,6 +27,8 @@ import FaceGrid from "./FaceGrid";
 import TillCard from "./TillCard";
 import NextOpening from "./NextOpening";
 import PinPad from "./PinPad";
+import { ShiftTakeoverDialog, type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
+import { fetchCounterTakeover } from "@/modules/pos/lib/currentShift";
 import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
 
 /**
@@ -162,7 +164,12 @@ function StaffLoginForm() {
     //
     // `pending` holds the finished sign-in until the step is done with — the session
     // is real from this moment, only the navigation waits.
-    const [pending, setPending] = useState<{ dest: string; password: string; hasPin: boolean } | null>(null);
+    const [pending, setPending] = useState<{ dest: string; password: string; hasPin: boolean; isCounter: boolean } | null>(null);
+
+    // Somebody else's drawer on this counter, found on the way in. The app stays
+    // shut behind it: Accept goes to POS as the drawer's new owner, Reject signs
+    // out and the drawer waits for the next person.
+    const [takeover, setTakeover] = useState<CounterTakeover | null>(null);
 
     // ── The sequence ────────────────────────────────────────────────────────
     //
@@ -204,6 +211,13 @@ function StaffLoginForm() {
      * rule below run exactly the same for both, and both end up with the identical
      * session (see shared/lib/auth/authorizeStaff.ts).
      */
+    /** Into the app — unless another cashier's drawer is waiting on this counter. */
+    const enter = useCallback(async (dest: string, isCounter: boolean) => {
+        const t = isCounter ? await fetchCounterTakeover() : null;
+        if (t) { setTakeover(t); setLoading(false); return; }
+        router.push(dest);
+    }, [router]);
+
     const doSignIn = useCallback(async (
         emailValue: string,
         secret: string,
@@ -323,18 +337,18 @@ function StaffLoginForm() {
             // path, which is the only one that can prove who they are again.
             if (setPin && kind === "password") {
                 setCounterNumber((await getLocalCounterSetup())?.counterNumber ?? null);
-                setPending({ dest, password: secret, hasPin: await hasCounterPin(emailValue) });
+                setPending({ dest, password: secret, hasPin: await hasCounterPin(emailValue), isCounter });
                 setStage("choosePin");
                 setLoading(false);
                 return;
             }
 
-            router.push(dest);
+            await enter(dest, isCounter);
         }
         // `chosen` is read in the failure branch to decide whether a refused PIN goes
         // back to the keypad. Without it here, that branch closes over a stale null and
         // the cashier is dropped on the password form — the very thing being fixed.
-    }, [callbackUrl, router, chosen]);
+    }, [callbackUrl, router, chosen, enter]);
 
     /** Save the six digits, then let the app open. */
     const savePin = async () => {
@@ -353,7 +367,7 @@ function StaffLoginForm() {
             });
             const out = await res.json().catch(() => ({})) as { error?: string };
             if (!res.ok) { setPinError(out.error || "Could not save your PIN."); return; }
-            router.push(pending.dest);
+            void enter(pending.dest, pending.isCounter);
         } catch {
             setPinError("Could not reach the office. A PIN can only be saved with the line up.");
         } finally {
@@ -369,7 +383,7 @@ function StaffLoginForm() {
             const res = await fetch(`/api/me/counter-pin?scope=${scope}`, { method: "DELETE" });
             const out = await res.json().catch(() => ({})) as { error?: string };
             if (!res.ok) { setPinError(out.error || "Could not remove your PIN."); return; }
-            router.push(pending.dest);
+            void enter(pending.dest, pending.isCounter);
         } catch {
             setPinError("Could not reach the office. A PIN can only be removed with the line up.");
         } finally {
@@ -533,6 +547,22 @@ function StaffLoginForm() {
                     the rest of the time. */}
                 <TillCard />
 
+                {takeover && (
+                    <ShiftTakeoverDialog
+                        takeover={takeover}
+                        rejectLabel="Reject & sign out"
+                        onAccepted={() => router.push("/vouchers/pos/new")}
+                        onReject={() => {
+                            void signOut({ redirect: false }).then(() => {
+                                setTakeover(null);
+                                setPending(null);
+                                setPassword("");
+                                setStage(roster.length ? "faces" : "password");
+                            });
+                        }}
+                    />
+                )}
+
                 {stage === "faces" ? (
                     <section className={styles.card}>
                         <h1 className={styles.greet}>{greet}</h1>
@@ -613,7 +643,7 @@ function StaffLoginForm() {
                         )}
 
                         <button type="button" className={styles.pinlink} disabled={pinBusy}
-                            onClick={() => router.push(pending.dest)}>
+                            onClick={() => void enter(pending.dest, pending.isCounter)}>
                             Skip for now
                         </button>
 

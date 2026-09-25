@@ -51,10 +51,13 @@ export async function GET(req: Request) {
 
         // The replica cannot know about a close made while this PC was away (see
         // shifts/current). One indexed column confirms it; offline, the replica stands.
-        try {
-            const live = await prismaAuthoritative.posShift.findUnique({ where: { id: shift.id }, select: { status: true } });
-            if (live?.status === "CLOSED") return NextResponse.json(null);
-        } catch { /* DB unreachable — trust the replica */ }
+        // Asked alongside the summary; a closed answer throws the summary away.
+        const [live, summary] = await Promise.all([
+            prismaAuthoritative.posShift.findUnique({ where: { id: shift.id }, select: { status: true } })
+                .catch(() => null), // DB unreachable — trust the replica
+            buildShiftSummary(prisma, shift),
+        ]);
+        if (live?.status === "CLOSED") return NextResponse.json(null);
 
         const pending = shift.status === "AWAITING_HANDOVER" && shift.handover?.status === "PENDING" ? shift.handover : null;
 
@@ -73,7 +76,7 @@ export async function GET(req: Request) {
                 notes:            pending.notes,
                 initiatedAt:      pending.initiatedAt,
             } : null,
-            summary: await buildShiftSummary(prisma, shift),
+            summary,
         });
     } catch (e) {
         return handleApiError(e, "Failed to read the counter");

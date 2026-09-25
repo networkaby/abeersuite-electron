@@ -165,17 +165,15 @@ export function usePosBilling(opts: {
     const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
 
     const refreshActiveShift = useCallback(() => {
+        // Both asked at once; the counter's answer only counts when there is no
+        // shift of their own.
+        const counterP = axios.get<CounterTakeover | null>("/api/pos/shifts/counter-takeover")
+            .then((r) => r.data).catch(() => null);
         fetchCurrentShift()
             .then(async (shift) => {
                 setActiveShift(shift);
-                if (shift) { setTakeover(null); return; }
-                // No shift of their own — is somebody else's drawer on this counter?
-                try {
-                    const t = await axios.get<CounterTakeover | null>("/api/pos/shifts/counter-takeover");
-                    setTakeover(t.data ? { data: t.data, fromPicker: false } : null);
-                } catch {
-                    setTakeover(null);
-                }
+                const t = shift ? null : await counterP;
+                setTakeover(t ? { data: t, fromPicker: false } : null);
             })
             .catch(() => { setActiveShift(null); setTakeover(null); })
             .finally(() => setShiftLoaded(true));

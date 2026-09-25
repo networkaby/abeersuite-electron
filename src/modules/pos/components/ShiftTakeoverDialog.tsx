@@ -91,12 +91,12 @@ export function ShiftTakeoverDialog({
     return (
         <Dialog open onOpenChange={() => { /* controlled — only Accept / Reject close it */ }}>
             <DialogContent
-                className="flex flex-col w-[96vw] max-w-[96vw] sm:max-w-[1100px] max-h-[94vh]"
+                className="flex flex-col w-[96vw] max-w-[96vw] sm:max-w-[1320px] max-h-[94vh]"
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
                 showCloseButton={false}
             >
-                <DialogHeader className="pb-1">
+                <DialogHeader className="pb-1 [zoom:1.2]">
                     <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 flex items-center justify-center shrink-0 shadow-sm border border-amber-300/40">
                             <HandshakeIcon size={18} />
@@ -115,7 +115,7 @@ export function ShiftTakeoverDialog({
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto py-1 pr-1">
+                <div className="flex-1 overflow-y-auto py-1 pr-1 [zoom:1.2]">
                     <div className="grid gap-3 grid-cols-1 lg:grid-cols-3">
                         {/* ── Column 1: what A counted ── */}
                         <div className="space-y-2">
@@ -171,7 +171,7 @@ export function ShiftTakeoverDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="pt-2 border-t border-border flex items-center gap-2 flex-wrap sm:justify-between">
+                <DialogFooter className="pt-2 border-t border-border flex items-center gap-2 flex-wrap sm:justify-between [zoom:1.2]">
                     <p className="text-xs text-amber-800 dark:text-amber-300 font-medium">
                         Accepting makes this drawer your responsibility.
                     </p>

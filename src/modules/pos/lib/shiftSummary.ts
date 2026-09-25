@@ -60,18 +60,20 @@ export async function buildShiftSummary(db: Tx, shift: SummaryShift): Promise<Sh
     // A closed shift's till has since been swept by its closing Contra, so its
     // book balance at close is rebuilt from what the close recorded. A running
     // shift reads the till's ledger now.
-    const tillBookBalancePaise = (shift.status === "CLOSED" && shift.expectedCashPaise != null)
-        ? shift.expectedCashPaise + dropsPaise
-        : await tillBalancePaise(db, shift.counter.tillAccountId);
+    // Read alongside the other breakdowns — only the movement waits for it.
+    const tillP = (shift.status === "CLOSED" && shift.expectedCashPaise != null)
+        ? Promise.resolve(shift.expectedCashPaise + dropsPaise)
+        : tillBalancePaise(db, shift.counter.tillAccountId);
 
-    const [tenderBreakdown, movement, collections] = await Promise.all([
+    const [tillBookBalancePaise, tenderBreakdown, movement, collections] = await Promise.all([
+        tillP,
         buildShiftTenderBreakdown(db, { shiftId: shift.id, counter: shift.counter }),
-        buildShiftMovementBreakdown(db, {
+        tillP.then((tillBookBalancePaise) => buildShiftMovementBreakdown(db, {
             shiftId:           shift.id,
             tillAccountId:     shift.counter.tillAccountId,
             tillBookBalancePaise,
             openingFloatPaise: shift.openingFloatPaise,
-        }),
+        })),
         buildShiftCollectionsBreakdown(db, { shiftId: shift.id, counter: shift.counter }),
     ]);
 
