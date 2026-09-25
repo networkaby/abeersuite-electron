@@ -8,6 +8,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelect";
+import { isStaffMailAddress, STAFF_MAIL_DOMAIN, syncStaffForwarding } from "@/shared/lib/email/cloudflareRouting";
 
 // Identity-only user creation. Role, branch, department, and reporting line
 // are NOT accepted — they all flow from Position appointments on
@@ -18,6 +19,8 @@ const createUserSchema = z.object({
     name:     z.string().trim().min(1, "Name is required"),
     email:    z.string().trim().email("Valid email is required"),
     password: z.string().min(6, "Password must be at least 6 characters"),
+    /** Where their company address forwards (Cloudflare). Absent = the catch-all. */
+    forwardTo: z.string().trim().toLowerCase().email("Forward to must be an email address").optional(),
 });
 
 // The row shape and the flattening live in src/shared/lib/users/staffSelect.ts,
@@ -52,6 +55,10 @@ export async function POST(req: Request) {
             );
         }
 
+        if (body.forwardTo && isStaffMailAddress(body.forwardTo)) {
+            return NextResponse.json({ error: `Forward to a personal inbox, not an @${STAFF_MAIL_DOMAIN} one` }, { status: 400 });
+        }
+
         // Silence unused caller (rank guard isn't needed at creation —
         // the new user has no role and no permissions until appointed).
         void caller;
@@ -68,7 +75,9 @@ export async function POST(req: Request) {
             select: STAFF_USER_SELECT,
         });
 
-        return NextResponse.json(shapeStaffUser(user));
+        // After the login exists — a Cloudflare refusal must not undo it.
+        const forwardingError = await syncStaffForwarding(user.email, body.forwardTo);
+        return NextResponse.json({ ...shapeStaffUser(user), forwardingError });
     } catch (e) {
         return handleApiError(e, "Failed to create user");
     }

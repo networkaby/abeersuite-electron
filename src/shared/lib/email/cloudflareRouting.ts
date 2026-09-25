@@ -138,12 +138,23 @@ export async function getForwarding(address: string): Promise<ForwardingStatus> 
     return { forwardTo, verified: Boolean(dest?.verified), enabled: rule.enabled, catchAll: null };
 }
 
+const ruleBody = (address: string, forwardTo: string) => JSON.stringify({
+    name: `Staff forward: ${address}`,
+    enabled: true,
+    matchers: [{ type: "literal", field: "to", value: address }],
+    actions: [{ type: "forward", value: [forwardTo] }],
+});
+
 /**
- * Point `address` at `forwardTo`. Adding a new destination makes Cloudflare send it a
- * verify mail; mail flows once that link is clicked. The rule is written straight
- * away either way, so the person does not have to come back and save twice.
+ * Point `address` at `forwardTo` — the address's rule is edited when it has one and
+ * created when it does not. `previousAddress` (a renamed login) hands its rule over
+ * instead, so a rename leaves no stray rule behind.
+ *
+ * Adding a new destination makes Cloudflare send it a verify mail; mail flows once
+ * that link is clicked. The rule is written straight away either way, so nobody has
+ * to come back and save twice.
  */
-export async function setForwarding(address: string, forwardTo: string): Promise<ForwardingStatus> {
+export async function setForwarding(address: string, forwardTo: string, previousAddress?: string): Promise<ForwardingStatus> {
     let dest = await destination(forwardTo);
     // Added once and never verified: Cloudflare's link has long expired and it has no
     // "resend". Removing and re-adding it is how a fresh verify mail goes out. Safe —
@@ -159,15 +170,38 @@ export async function setForwarding(address: string, forwardTo: string): Promise
         })).result;
     }
 
-    const body = JSON.stringify({
-        name: `Staff forward: ${address}`,
-        enabled: true,
-        matchers: [{ type: "literal", field: "to", value: address }],
-        actions: [{ type: "forward", value: [forwardTo] }],
-    });
-    const rule = ruleFor(await cfList<Rule>(rulesPath()), address);
-    if (rule) await cf(`${rulesPath()}/${rule.id}`, { method: "PUT", body });
-    else await cf(rulesPath(), { method: "POST", body });
+    const rules = await cfList<Rule>(rulesPath());
+    const own = ruleFor(rules, address);
+    const old = previousAddress ? ruleFor(rules, previousAddress) : undefined;
+    const rule = own ?? old;
+    if (rule) await cf(`${rulesPath()}/${rule.id}`, { method: "PUT", body: ruleBody(address, forwardTo) });
+    else await cf(rulesPath(), { method: "POST", body: ruleBody(address, forwardTo) });
+    // The new address already had a rule of its own — the old one is now orphaned.
+    if (own && old) await cf(`${rulesPath()}/${old.id}`, { method: "DELETE" });
 
     return { forwardTo, verified: Boolean(dest.verified), enabled: true, catchAll: null };
+}
+
+/**
+ * After a staff login is saved (Add / Edit User): create or update the forward when
+ * a target was given, and carry it across when the address was renamed. Returns why
+ * it could not, or null — never throws, because the login itself is already saved.
+ */
+export async function syncStaffForwarding(address: string, forwardTo?: string, previousAddress?: string): Promise<string | null> {
+    const renamedFrom = previousAddress && previousAddress.toLowerCase() !== address.toLowerCase()
+        && isStaffMailAddress(previousAddress) ? previousAddress : undefined;
+    if (!isStaffMailAddress(address) || (!forwardTo && !renamedFrom)) return null;
+    if (!isForwardingConfigured()) return "mail forwarding is set from the office website";
+    try {
+        // A rename with no new target keeps where the old address went; if the old one
+        // rode the catch-all, so does the new one and there is nothing to write.
+        const target = forwardTo
+            ?? (renamedFrom ? forwardTarget(ruleFor(await cfList<Rule>(rulesPath()), renamedFrom)) : null);
+        if (!target) return null;
+        await setForwarding(address, target, renamedFrom);
+        return null;
+    } catch (e) {
+        console.error(e instanceof Error ? e.message : e);
+        return e instanceof CloudflareError ? `Cloudflare refused: ${e.reason}` : "could not reach Cloudflare";
+    }
 }

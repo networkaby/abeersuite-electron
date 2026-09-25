@@ -13,11 +13,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FieldError } from "@/shared/components/FieldError";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const STAFF_DOMAIN = COMPANY_DETAILS.staffMailDomain;
+const DEFAULT_FORWARD = COMPANY_DETAILS.staffMailDefaultForward;
+const isCompanyAddress = (email: string) => email.toLowerCase().endsWith(`@${STAFF_DOMAIN}`);
+
+/** What `/api/users/[id]/forward-email` reports — where their company mail goes now. */
+type Forwarding = { forwardTo: string | null; verified: boolean; catchAll: string | null };
 
 // Identity-only add / edit of a staff login — name, email, password. The one
 // dialog behind both Admin → Users and HR → Staff Directory (Add staff, and the
@@ -27,10 +32,11 @@ const STAFF_DOMAIN = COMPANY_DETAILS.staffMailDomain;
 // (Position) they are appointed to — the Appoint button on their HR profile.
 // One-off extra permissions sit on Admin → Users' shield button.
 
-// A new account's address is always `name@<staff domain>`, so the form asks only for
-// the name part — nothing to mistype. Editing keeps the full box: older accounts may
-// sit on another domain. No Cloudflare step here: the zone's catch-all takes the new
-// address's mail until the person (or an admin) sets a forward on the profile.
+// A company address is `name@<staff domain>`, so the form asks only for the name part
+// — nothing to mistype. An older login on another domain keeps its full box until the
+// admin presses "Give company email". "Forward to" is where that address's mail goes
+// (Cloudflare Email Routing): saved after the login, created if Cloudflare has no rule
+// for it and edited if it has; a renamed address carries its forward along.
 const schema = z.object({
     name:     z.string().min(1, "Name is required"),
     email:    z.string().trim().min(1, "Email is required"),
@@ -52,19 +58,53 @@ interface Props {
 }
 
 export default function UserForm({ user, onClose, onSaved }: Props) {
-    const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
+    const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } =
         useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: "", email: "", password: "" } });
+
+    const [company, setCompany] = useState(!user || isCompanyAddress(user.email));
+    const [forwardTo, setForwardTo] = useState(user ? "" : DEFAULT_FORWARD);
+    /** Where it forwards now; null while loading or when there is nothing to read. */
+    const [current, setCurrent] = useState<Forwarding | null>(null);
+    const [forwardNote, setForwardNote] = useState("");
 
     useEffect(() => {
         if (user) {
-            reset({ name: user.name, email: user.email, password: "" });
+            reset({ name: user.name, email: isCompanyAddress(user.email) ? user.email.split("@")[0] : user.email, password: "" });
         }
     }, [user, reset]);
 
+    // An existing company address: show where its mail goes now, prefill the box.
+    useEffect(() => {
+        if (!user || !isCompanyAddress(user.email)) return;
+        let live = true;
+        axios.get<Forwarding>(`/api/users/${user.id}/forward-email`)
+            .then(({ data }) => {
+                if (!live) return;
+                setCurrent(data);
+                setForwardTo(f => f || data.forwardTo || DEFAULT_FORWARD);
+            })
+            .catch(e => { if (live) setForwardNote(axios.isAxiosError(e) ? e.response?.data?.error ?? "" : ""); });
+        return () => { live = false; };
+    }, [user]);
+
+    /** An older login on another domain: switch to a company address, and keep its
+     *  mail flowing to the inbox it used before. */
+    const giveCompanyEmail = () => {
+        if (!user) return;
+        setCompany(true);
+        setValue("email", user.email.split("@")[0].toLowerCase());
+        setForwardTo(user.email.toLowerCase());
+    };
+
     const onSubmit = async (data: FormData) => {
-        const email = user ? data.email : `${data.email.toLowerCase()}@${STAFF_DOMAIN}`;
+        const email = company ? `${data.email.toLowerCase()}@${STAFF_DOMAIN}` : data.email;
         if (!z.string().email().safeParse(email).success) {
-            toast.error(user ? "Invalid email" : "Use letters, digits, dots or dashes before the @");
+            toast.error(company ? "Use letters, digits, dots or dashes before the @" : "Invalid email");
+            return;
+        }
+        const target = forwardTo.trim().toLowerCase();
+        if (company && target && !z.string().email().safeParse(target).success) {
+            toast.error("Forward to must be an email address");
             return;
         }
         try {
@@ -72,16 +112,16 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                 name:  data.name,
                 email,
                 ...(data.password ? { password: data.password } : {}),
+                // Only when it changes something — an unchanged box costs no Cloudflare call.
+                ...(company && target && target !== current?.forwardTo ? { forwardTo: target } : {}),
             };
-            if (user) {
-                const { data: saved } = await axios.put<{ id: number; name: string; email: string }>(`/api/users/${user.id}`, payload);
-                toast.success("User updated");
-                onSaved?.(saved);
-            } else {
-                const { data: saved } = await axios.post<{ id: number; name: string; email: string }>("/api/users", payload);
-                toast.success(`${saved.name} added — appoint them to a seat to give access`);
-                onSaved?.(saved);
-            }
+            type Saved = { id: number; name: string; email: string; forwardingError?: string | null };
+            const { data: saved } = user
+                ? await axios.put<Saved>(`/api/users/${user.id}`, payload)
+                : await axios.post<Saved>("/api/users", payload);
+            toast.success(user ? "User updated" : `${saved.name} added — appoint them to a seat to give access`);
+            if (saved.forwardingError) toast.warning(`Saved, but the mail forward was not: ${saved.forwardingError}`);
+            onSaved?.(saved);
             onClose();
         } catch (e: unknown) {
             const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Something went wrong";
@@ -110,26 +150,46 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                         </div>
                         <div className="space-y-1.5">
                             <Label>Email</Label>
-                            {user ? (
-                                <Input {...register("email")} placeholder={`ahmed@${STAFF_DOMAIN}`} />
+                            {company ? (
+                                <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
+                                    <Input
+                                        {...register("email", { setValueAs: (v: string) => v.replace(/@.*$/, "").trim() })}
+                                        placeholder="ahmed"
+                                        autoComplete="off"
+                                        className="border-0 shadow-none focus-visible:ring-0"
+                                    />
+                                    <span className="pr-3 text-sm text-muted-foreground">@{STAFF_DOMAIN}</span>
+                                </div>
                             ) : (
                                 <>
-                                    <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
-                                        <Input
-                                            {...register("email", { setValueAs: (v: string) => v.replace(/@.*$/, "").trim() })}
-                                            placeholder="ahmed"
-                                            autoComplete="off"
-                                            className="border-0 shadow-none focus-visible:ring-0"
-                                        />
-                                        <span className="pr-3 text-sm text-muted-foreground">@{STAFF_DOMAIN}</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Mail goes to the catch-all inbox until a forward is set on their profile.
-                                    </p>
+                                    <Input {...register("email")} autoComplete="off" />
+                                    <button type="button" className="text-xs text-primary underline" onClick={giveCompanyEmail}>
+                                        Give company email (@{STAFF_DOMAIN})
+                                    </button>
                                 </>
                             )}
                             <FieldError message={errors.email?.message} />
                         </div>
+                        {company && (
+                            <div className="space-y-1.5">
+                                <Label>Forward to</Label>
+                                <Input
+                                    type="email"
+                                    autoComplete="off"
+                                    value={forwardTo}
+                                    onChange={e => setForwardTo(e.target.value)}
+                                    placeholder={DEFAULT_FORWARD}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    {forwardNote
+                                        || (current?.forwardTo
+                                            ? `Now: ${current.forwardTo}${current.verified ? "" : " (waiting for verify)"}`
+                                            : current?.catchAll
+                                                ? `Now: catch-all (${current.catchAll}). Save to forward it here.`
+                                                : "Where their company mail goes. A new inbox gets Cloudflare's verify email first.")}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="border-t border-border pt-3 space-y-1.5">
@@ -137,9 +197,12 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                             Password{" "}
                             {user && <span className="text-muted-foreground font-normal">(leave blank to keep current)</span>}
                         </Label>
+                        {/* new-password: stops the browser dropping YOUR saved password in
+                            here — pressing Update would then quietly set it as theirs. */}
                         <Input
                             {...register("password")}
                             type="password"
+                            autoComplete="new-password"
                             placeholder={user ? "Leave blank to keep current" : "Min 6 characters"}
                         />
                     </div>

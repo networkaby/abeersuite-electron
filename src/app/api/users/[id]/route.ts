@@ -9,6 +9,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
+import { isStaffMailAddress, STAFF_MAIL_DOMAIN, syncStaffForwarding } from "@/shared/lib/email/cloudflareRouting";
 
 const PROFILE_SELECT = {
     id:          true,
@@ -100,6 +101,9 @@ const userUpdateSchema = z.object({
     role:          z.string().trim().min(1).optional(),
     scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
     managerId:     z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    // Where their company address forwards (Cloudflare) — create or update. Absent =
+    // leave it; a renamed address carries its forward along either way.
+    forwardTo:     z.string().trim().toLowerCase().email("Forward to must be an email address").optional(),
 });
 
 const PUT_SELECT = {
@@ -167,6 +171,10 @@ export async function PUT(
             );
         }
 
+        if (body.forwardTo && isStaffMailAddress(body.forwardTo)) {
+            return NextResponse.json({ error: `Forward to a personal inbox, not an @${STAFF_MAIL_DOMAIN} one` }, { status: 400 });
+        }
+
         // Rank guard when an admin changes someone's role
         if (body.role && isAdmin && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
             const [targetRole, callerRole] = await Promise.all([
@@ -208,6 +216,8 @@ export async function PUT(
             if (body.managerId !== undefined) updateData.managerId = body.managerId ? Number(body.managerId) : null;
         }
 
+        // The address before this save, so a renamed login can carry its forward along.
+        const before = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
         const user = await prisma.user.update({ where: { id: userId }, data: updateData, select: PUT_SELECT });
         // Someone else set their password or changed their role: sign them out
         // everywhere, so the old password stops working and the new role's
@@ -215,7 +225,9 @@ export async function PUT(
         if (!isSelf && (updateData.password || updateData.role !== undefined)) {
             await revokeUserSessions(userId);
         }
-        return NextResponse.json(shapeUser(user));
+        // After the save — a Cloudflare refusal must not undo it.
+        const forwardingError = await syncStaffForwarding(body.email, body.forwardTo, before?.email);
+        return NextResponse.json({ ...shapeUser(user), forwardingError });
     } catch (e) {
         return handleApiError(e, "Failed to update user");
     }

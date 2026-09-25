@@ -58,6 +58,9 @@ export type CompanyDetails = {
     /** Staff sign-in addresses are `name@<this>`. No mailboxes — Cloudflare Email
      *  Routing forwards each to the person's own inbox (cloudflareRouting.ts). */
     staffMailDomain: string;
+    /** Where a staff address forwards when the admin adding them gives no inbox of
+     *  their own — the office's shared Gmail. Prefilled in Add / Edit User. */
+    staffMailDefaultForward: string;
 
     /** Contact channels shown in footer / order emails. */
     contact: {
@@ -173,6 +176,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
     },
 
     staffMailDomain: "networkservice.in",
+    staffMailDefaultForward: "networkaby@gmail.com",
 
     contact: {
         email: "hello@networkservice.in",
