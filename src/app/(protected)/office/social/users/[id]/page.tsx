@@ -833,7 +833,76 @@ function SecurityTab({ profileId }: { profileId: number }) {
                     <Button type="submit" disabled={saving}>{saving ? "Changing…" : "Change Password"}</Button>
                 </div>
             </form>
+            <CounterPinCard />
         </div>
+    );
+}
+
+/** Your own counter PIN — `/api/me/counter-pin` has no user id, so this only ever
+ *  touches the signed-in person. Setting works only on a counter (the route says so
+ *  when it is not); removing from all counters works anywhere. Both need the line up. */
+function CounterPinCard() {
+    const [pin, setPin] = useState("");
+    const [pinAgain, setPinAgain] = useState("");
+    const [password, setPassword] = useState("");
+    const [busy, setBusy] = useState(false);
+    const digits = (v: string) => v.replace(/\D/g, "").slice(0, 6);
+
+    const save = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (pin !== pinAgain) { toast.error("The two PINs are not the same."); return; }
+        setBusy(true);
+        try {
+            await axios.put("/api/me/counter-pin", { pin, password });
+            toast.success("PIN saved for this counter");
+            setPin(""); setPinAgain(""); setPassword("");
+        } catch (e) {
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not save your PIN");
+        } finally { setBusy(false); }
+    };
+
+    const remove = async (scope: "counter" | "all") => {
+        const where = scope === "all" ? "every counter" : "this counter";
+        if (!confirm(`Remove your PIN from ${where}? You will sign in with your password there.`)) return;
+        setBusy(true);
+        try {
+            await axios.delete(`/api/me/counter-pin?scope=${scope}`);
+            toast.success(`PIN removed from ${where}`);
+        } catch (e) {
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not remove your PIN");
+        } finally { setBusy(false); }
+    };
+
+    return (
+        <form onSubmit={save} className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+                <Lock size={14} className="text-muted-foreground" />
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Counter PIN</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">Six digits to sign in on this counter. Saved only for the counter you are on.</p>
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                    <Label>New PIN</Label>
+                    <Input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={e => setPin(digits(e.target.value))} placeholder="6 digits" />
+                </div>
+                <div className="space-y-1.5">
+                    <Label>Confirm PIN</Label>
+                    <Input type="password" inputMode="numeric" autoComplete="off" value={pinAgain} onChange={e => setPinAgain(digits(e.target.value))} placeholder="Repeat" />
+                </div>
+            </div>
+            <div className="space-y-1.5">
+                <Label>Your Password</Label>
+                <Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Needed to set a PIN" />
+            </div>
+            <div className="flex justify-end pt-1">
+                <Button type="submit" disabled={busy || pin.length !== 6 || !password}>{busy ? "Saving…" : "Set PIN"}</Button>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                <span className="mr-auto text-xs text-muted-foreground">Remove PIN</span>
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => remove("counter")}>This counter</Button>
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => remove("all")}>All counters</Button>
+            </div>
+        </form>
     );
 }
 
