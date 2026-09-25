@@ -24,6 +24,7 @@ import UserForm from "@/shared/components/UserForm";
 import { Input } from "@/components/ui/input";
 import { useApiResource, useForwardEmail } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import type { StaffDetail, StaffRow } from "../lib/staffTypes";
 
 interface RoleRow {
@@ -167,11 +168,11 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
 }
 
 /** Where their company mail goes (Gmail etc.) — needed for Forgot password. Same
- *  read/save as the profile's Forward Email card. Hidden when the route refuses,
- *  e.g. the sign-in email is not a company address. */
+ *  read/save as the profile's Forward Email card. Hidden only for a non-company
+ *  address; any other refusal (Cloudflare, not configured) shows as the note. */
 function ForwardRow({ userId, email, canEdit }: { userId: number; email: string; canEdit: boolean }) {
     const { state, unavailable, forwardTo, setForwardTo, busy, load, save, status } = useForwardEmail(userId, email);
-    if (unavailable) return null;
+    if (!isStaffMail(email)) return null;
     return (
         <form
             onSubmit={e => { e.preventDefault(); void save(); }}
@@ -197,9 +198,11 @@ function ForwardRow({ userId, email, canEdit }: { userId: number; email: string;
                     )}
                 </div>
                 <button type="button" className="text-xs text-muted-foreground underline" onClick={() => void load()}>
-                    {state ? `${status}${state.forwardTo ? ` · now ${state.forwardTo}` : ""}` : "Loading…"}
+                    {unavailable || (state ? `${status}${state.forwardTo ? ` · now ${state.forwardTo}` : ""}` : "Loading…")}
                 </button>
             </div>
         </form>
     );
 }
+
+const isStaffMail = (email: string) => email.toLowerCase().endsWith(`@${COMPANY_DETAILS.staffMailDomain}`);

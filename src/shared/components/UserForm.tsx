@@ -21,9 +21,6 @@ const STAFF_DOMAIN = COMPANY_DETAILS.staffMailDomain;
 const DEFAULT_FORWARD = COMPANY_DETAILS.staffMailDefaultForward;
 const isCompanyAddress = (email: string) => email.toLowerCase().endsWith(`@${STAFF_DOMAIN}`);
 
-/** What `/api/users/[id]/forward-email` reports — where their company mail goes now. */
-type Forwarding = { forwardTo: string | null; verified: boolean; catchAll: string | null };
-
 // Identity-only add / edit of a staff login — name, email, password. The one
 // dialog behind both Admin → Users and HR → Staff Directory (Add staff, and the
 // Access tab's Edit login), so the two pages can never save a person differently.
@@ -34,9 +31,10 @@ type Forwarding = { forwardTo: string | null; verified: boolean; catchAll: strin
 
 // A company address is `name@<staff domain>`, so the form asks only for the name part
 // — nothing to mistype. An older login on another domain keeps its full box until the
-// admin presses "Give company email". "Forward to" is where that address's mail goes
-// (Cloudflare Email Routing): saved after the login, created if Cloudflare has no rule
-// for it and edited if it has; a renamed address carries its forward along.
+// admin presses "Give company email". Where that address's mail goes (Cloudflare Email
+// Routing) is not asked here: a new login forwards to the office default, a switched
+// one to its old inbox, and a renamed one carries its forward along. Changing it
+// afterwards is the Staff Directory Login card's Forward to row.
 const schema = z.object({
     name:     z.string().min(1, "Name is required"),
     email:    z.string().trim().min(1, "Email is required"),
@@ -62,30 +60,14 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
         useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: "", email: "", password: "" } });
 
     const [company, setCompany] = useState(!user || isCompanyAddress(user.email));
+    /** Sent only when there is something to set — new login, or a switch to a company address. */
     const [forwardTo, setForwardTo] = useState(user ? "" : DEFAULT_FORWARD);
-    /** Where it forwards now; null while loading or when there is nothing to read. */
-    const [current, setCurrent] = useState<Forwarding | null>(null);
-    const [forwardNote, setForwardNote] = useState("");
 
     useEffect(() => {
         if (user) {
             reset({ name: user.name, email: isCompanyAddress(user.email) ? user.email.split("@")[0] : user.email, password: "" });
         }
     }, [user, reset]);
-
-    // An existing company address: show where its mail goes now, prefill the box.
-    useEffect(() => {
-        if (!user || !isCompanyAddress(user.email)) return;
-        let live = true;
-        axios.get<Forwarding>(`/api/users/${user.id}/forward-email`)
-            .then(({ data }) => {
-                if (!live) return;
-                setCurrent(data);
-                setForwardTo(f => f || data.forwardTo || DEFAULT_FORWARD);
-            })
-            .catch(e => { if (live) setForwardNote(axios.isAxiosError(e) ? e.response?.data?.error ?? "" : ""); });
-        return () => { live = false; };
-    }, [user]);
 
     /** An older login on another domain: switch to a company address, and keep its
      *  mail flowing to the inbox it used before. */
@@ -102,18 +84,12 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
             toast.error(company ? "Use letters, digits, dots or dashes before the @" : "Invalid email");
             return;
         }
-        const target = forwardTo.trim().toLowerCase();
-        if (company && target && !z.string().email().safeParse(target).success) {
-            toast.error("Forward to must be an email address");
-            return;
-        }
         try {
             const payload = {
                 name:  data.name,
                 email,
                 ...(data.password ? { password: data.password } : {}),
-                // Only when it changes something — an unchanged box costs no Cloudflare call.
-                ...(company && target && target !== current?.forwardTo ? { forwardTo: target } : {}),
+                ...(company && forwardTo ? { forwardTo } : {}),
             };
             type Saved = { id: number; name: string; email: string; forwardingError?: string | null };
             const { data: saved } = user
@@ -170,26 +146,6 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                             )}
                             <FieldError message={errors.email?.message} />
                         </div>
-                        {company && (
-                            <div className="space-y-1.5">
-                                <Label>Forward to</Label>
-                                <Input
-                                    type="email"
-                                    autoComplete="off"
-                                    value={forwardTo}
-                                    onChange={e => setForwardTo(e.target.value)}
-                                    placeholder={DEFAULT_FORWARD}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    {forwardNote
-                                        || (current?.forwardTo
-                                            ? `Now: ${current.forwardTo}${current.verified ? "" : " (waiting for verify)"}`
-                                            : current?.catchAll
-                                                ? `Now: catch-all (${current.catchAll}). Save to forward it here.`
-                                                : "Where their company mail goes. A new inbox gets Cloudflare's verify email first.")}
-                                </p>
-                            </div>
-                        )}
                     </div>
 
                     <div className="border-t border-border pt-3 space-y-1.5">
