@@ -85,6 +85,8 @@ import {
     MessageSquare,
     Milestone,
     Monitor,
+    ScanBarcode,
+    CalendarClock,
     MonitorCog,
     MonitorSmartphone,
     Network,
@@ -316,7 +318,7 @@ export const POS_RAIL_ACTIONS: PosRailAction[] = [
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
     { label: "Work Flow", href: "/office/work-flow-inbox", icon: Workflow, permission: null },
-    { label: "POS", href: "/vouchers/pos", icon: Monitor, permission: "pos:shift:open" },
+    { label: "POS Register", href: "/vouchers/pos", icon: ScanBarcode, permission: "pos:shift:open" },
     // { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
 
 ];
@@ -328,8 +330,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     // shift-report VIEW permission, NOT the operator's `pos:shift:open`. It points at
     // the shift reports page, not the register.
     {
-        label: "POS",
-        icon: Monitor,
+        label: "POS Shift",
+        icon: CalendarClock,
         key: "pos",
         dashboardHref: "/office/pos/shifts",
         pathPrefixes: ["/office/pos"],
@@ -386,7 +388,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         pathPrefixes: ["/office/accountancy"],
         createActions: [
-            { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+            { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: RotateCcw, variant: "outline", action: "new-sale-return" },
@@ -520,7 +522,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
         createActions: [
-            { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+            { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: RotateCcw, variant: "outline", action: "new-sale-return" },
@@ -907,7 +909,7 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         permission: "tickets:create",
     },
     { label: "Help Ticket +", subtitle: "Log a front-desk enquiry", icon: LifeBuoy, module: "help", variant: "default", action: "new-help-ticket", permission: "help:create" },
-    { label: "POS", subtitle: "Open POS register", icon: Monitor, module: "pos", variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+    { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, module: "pos", variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
 
     { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, module: "accountancy", variant: "default", action: "new-sale" },
     { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, module: "accountancy", variant: "outline", action: "new-purchase" },
