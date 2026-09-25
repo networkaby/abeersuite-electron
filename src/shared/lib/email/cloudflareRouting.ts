@@ -40,7 +40,6 @@ type CfEnvelope<T> = {
     success: boolean;
     errors?: { code: number; message: string }[];
     result: T;
-    result_info?: { page: number; total_pages: number };
 };
 
 async function cf<T>(path: string, init?: RequestInit): Promise<CfEnvelope<T>> {
@@ -52,6 +51,7 @@ async function cf<T>(path: string, init?: RequestInit): Promise<CfEnvelope<T>> {
             "Content-Type": "application/json",
         },
         cache: "no-store",
+        signal: AbortSignal.timeout(15_000),
     });
     const body = await res.json().catch(() => null) as CfEnvelope<T> | null;
     if (!res.ok || !body?.success) {
@@ -68,7 +68,9 @@ async function cfList<T>(path: string): Promise<T[]> {
     for (let page = 1; ; page++) {
         const body = await cf<T[]>(`${path}?per_page=50&page=${page}`);
         out.push(...body.result);
-        if (!body.result_info || page >= body.result_info.total_pages) return out;
+        // Email Routing sends no `total_pages` — a short page is the only end marker.
+        // The cap stops a misbehaving API from spinning this forever.
+        if (body.result.length < 50 || page >= 40) return out;
     }
 }
 
