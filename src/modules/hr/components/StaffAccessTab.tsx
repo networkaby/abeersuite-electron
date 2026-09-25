@@ -16,12 +16,13 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { KeyRound, Pencil, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail, Pencil, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/shared/components/Field";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import UserForm from "@/shared/components/UserForm";
-import { useApiResource } from "@/shared/hooks";
+import { Input } from "@/components/ui/input";
+import { useApiResource, useForwardEmail } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import type { StaffDetail, StaffRow } from "../lib/staffTypes";
 
@@ -109,6 +110,7 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
                     <dt className="text-muted-foreground">Sign-in email</dt>
                     <dd className="break-all">{user.email}</dd>
                 </dl>
+                <ForwardRow userId={user.id} email={user.email} canEdit={canEdit} />
                 {canEdit && (
                     <div className="mt-3 flex flex-wrap gap-2">
                         {canEdit && (
@@ -161,5 +163,43 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
                 </Field>
             </fieldset>
         </div>
+    );
+}
+
+/** Where their company mail goes (Gmail etc.) — needed for Forgot password. Same
+ *  read/save as the profile's Forward Email card. Hidden when the route refuses,
+ *  e.g. the sign-in email is not a company address. */
+function ForwardRow({ userId, email, canEdit }: { userId: number; email: string; canEdit: boolean }) {
+    const { state, unavailable, forwardTo, setForwardTo, busy, load, save, status } = useForwardEmail(userId, email);
+    if (unavailable) return null;
+    return (
+        <form
+            onSubmit={e => { e.preventDefault(); void save(); }}
+            className="mt-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_1fr]"
+        >
+            <label htmlFor={`fwd-${userId}`} className="flex items-center gap-1 text-muted-foreground"><Mail size={13} /> Forward to</label>
+            <div className="space-y-1">
+                <div className="flex gap-2">
+                    <Input
+                        id={`fwd-${userId}`}
+                        type="email"
+                        autoComplete="off"
+                        value={forwardTo}
+                        onChange={e => setForwardTo(e.target.value)}
+                        placeholder="someone@gmail.com"
+                        disabled={!canEdit}
+                        className="h-8"
+                    />
+                    {canEdit && (
+                        <Button type="submit" size="sm" disabled={busy || !state || !forwardTo.trim()}>
+                            {busy ? "Saving…" : "Save"}
+                        </Button>
+                    )}
+                </div>
+                <button type="button" className="text-xs text-muted-foreground underline" onClick={() => void load()}>
+                    {state ? `${status}${state.forwardTo ? ` · now ${state.forwardTo}` : ""}` : "Loading…"}
+                </button>
+            </div>
+        </form>
     );
 }

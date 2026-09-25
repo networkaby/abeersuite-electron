@@ -8,6 +8,7 @@ import { imageLoaderFor } from "@/shared/lib/cloudinaryImage";
 import Link from "next/link";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useForwardEmail } from "@/shared/hooks/useForwardEmail";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -841,47 +842,13 @@ function SecurityTab({ profileId, isSelf }: { profileId: number; isSelf: boolean
     );
 }
 
-type Forwarding = { address: string; forwardTo: string | null; verified: boolean; enabled: boolean; catchAll: string | null };
-
 /** Where a staff address forwards — Cloudflare Email Routing. Until it is set, the
  *  catch-all takes the mail, so "Forgot password" codes reach the office, not the person. */
 function ForwardEmailCard({ userId, isSelf }: { userId: number; isSelf: boolean }) {
-    const [state, setState] = useState<Forwarding | null>(null);
-    const [unavailable, setUnavailable] = useState("");
-    const [forwardTo, setForwardTo] = useState("");
-    const [busy, setBusy] = useState(false);
-
-    const load = async () => {
-        try {
-            const { data } = await axios.get<Forwarding>(`/api/users/${userId}/forward-email`);
-            setState(data); setUnavailable("");
-            setForwardTo(f => f || data.forwardTo || "");
-        } catch (e) {
-            setUnavailable(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not read your forwarding");
-        }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the profile changes
-    useEffect(() => { void load(); }, [userId]);
-
-    const save = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setBusy(true);
-        try {
-            const { data } = await axios.put<Forwarding>(`/api/users/${userId}/forward-email`, { forwardTo });
-            setState(data);
-            toast.success(data.verified ? "Forwarding saved" : "Saved — open Cloudflare's email in that inbox and click Verify");
-        } catch (e) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not save your forwarding");
-        } finally { setBusy(false); }
-    };
-
-    const status = !state?.forwardTo
-        ? (state?.catchAll ? `Not set — going to catch-all (${state.catchAll})` : "Not set")
-        : !state.verified ? "Waiting for verify"
-        : state.enabled ? "Active" : "Turned off";
+    const { state, unavailable, forwardTo, setForwardTo, busy, load, save, status } = useForwardEmail(userId);
 
     return (
-        <form onSubmit={save} className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
+        <form onSubmit={e => { e.preventDefault(); void save(); }} className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
             <div className="flex items-center gap-2 mb-1">
                 <Mail size={14} className="text-muted-foreground" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Forward Email</h3>

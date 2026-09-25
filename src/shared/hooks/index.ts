@@ -3,6 +3,7 @@ export { useResizable } from "./useResizable";
 export { usePartySearch, usePartyList, toPartyHit, type PartyHit } from "./usePartySearch";
 export { useDeleteWithConfirm } from "./useDeleteWithConfirm";
 export { useApiResource } from "./useApiResource";
+export { useForwardEmail, type Forwarding } from "./useForwardEmail";
 export { useTallyDate, parseTallyDate, isoToDisplay, toIsoDate } from "./useTallyDate";
 export { useEscape } from "./useEscape";
 export { useActiveRow } from "./useActiveRow";
