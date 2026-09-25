@@ -11,8 +11,8 @@
 //
 // The pick rides the URL as `?user=<id>` (replaced, not pushed — one row click
 // per person should not pile up history), so a refresh or a shared link opens
-// the same person. /office/hr/staff/[userId] still works on its own for old
-// links and bookmarks.
+// the same person. It is the only address for one person's HR profile —
+// every "HR profile" link elsewhere points here.
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -234,7 +234,6 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                             canEdit={canEdit}
                             canEditUsers={canEditUsers}
                             canEditPositions={canEditPositions}
-                            embedded
                         />
                         </>
                     ) : (

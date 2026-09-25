@@ -1704,7 +1704,7 @@ export default function UserProfilePage() {
                         <StaffPersonalForm
                             userId={profile.id}
                             canEdit={isSelf || canEditHr}
-                            hrHref={canOpenHr ? `/office/hr/staff/${profile.id}` : null}
+                            hrHref={canOpenHr ? `/office/hr/staff?user=${profile.id}` : null}
                         />
                     )}
                     {activeTab === 9 && (isSelf || isAdmin) && <StaffPayslips userId={profile.id} />}

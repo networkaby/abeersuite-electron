@@ -333,7 +333,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                                 {open.has(l.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                             </TableCell>
                                             <TableCell>
-                                                <Link href={`/office/hr/staff/${l.userId}`} className="font-medium hover:underline">
+                                                <Link href={`/office/hr/staff?user=${l.userId}`} className="font-medium hover:underline">
                                                     {l.staffName}
                                                 </Link>
                                                 {l.staffCode && <span className="ml-2 text-xs text-muted-foreground">{l.staffCode}</span>}

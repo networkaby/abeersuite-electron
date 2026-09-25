@@ -8,13 +8,15 @@
 // is where a person is given them. The person keeps their own personal and bank
 // details current on their profile page — the same form is shown here so HR can
 // put the first copy on file at hiring.
+//
+// Rendered only in StaffExplorer's right pane (/office/hr/staff?user=<id>):
+// the list is already on screen, so there is no "back" button here, and the
+// pane does its own scrolling.
 
 import { useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { ModuleTabs } from "@/shared/components/ModuleTabs";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
@@ -35,7 +37,7 @@ import AppointStaffDialog from "./AppointStaffDialog";
 const TABS = ["job", "access", "personal", "pay", "money", "identity"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions, embedded = false }: {
+export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions }: {
     userId: number;
     /** hr:staff:edit — the HR record itself. */
     canEdit: boolean;
@@ -43,10 +45,6 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
     canEditUsers: boolean;
     /** positions:edit — appointing to and vacating a seat. */
     canEditPositions: boolean;
-    /** Inside StaffExplorer's right pane: the list is already on screen, so the
-     *  "back to the directory" button goes, and the pane does its own scrolling
-     *  rather than this being a second ScrollArea inside one. */
-    embedded?: boolean;
 }) {
     const url = `/api/hr/staff/${userId}`;
     const { data, loading, error, reload } = useApiResource<StaffDetail>(url);
@@ -54,56 +52,47 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
     const [tab, setTab] = useState<Tab>("job");
     const [appointing, setAppointing] = useState(false);
 
-    const body = (
-            <div className="px-6 pt-3 pb-8">
-                {!embedded && (
-                    <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
-                        <Link href="/office/hr/staff"><ArrowLeft size={14} /> Staff Directory</Link>
-                    </Button>
-                )}
+    return (
+        <div className="px-6 pt-3 pb-8">
+            <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
 
-                <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
+            {data && (
+                <>
+                    <Header
+                        detail={data}
+                        canAppoint={canEdit}
+                        onAppoint={() => setAppointing(true)}
+                    />
 
-                {data && (
-                    <>
-                        <Header
+                    {appointing && (
+                        <AppointStaffDialog
                             detail={data}
-                            canAppoint={canEdit}
-                            onAppoint={() => setAppointing(true)}
+                            canAppointSeat={canEditPositions}
+                            onClose={() => setAppointing(false)}
+                            onDone={() => { setAppointing(false); reload(); }}
                         />
-
-                        {appointing && (
-                            <AppointStaffDialog
-                                detail={data}
-                                canAppointSeat={canEditPositions}
-                                onClose={() => setAppointing(false)}
-                                onDone={() => { setAppointing(false); reload(); }}
-                            />
+                    )}
+                    <ModuleTabs module="hr" tabs={TABS} active={tab} onChange={setTab} className="mt-4 rounded-t-lg border border-b-0" />
+                    <div className="rounded-b-lg border border-border bg-card p-5">
+                        {tab === "job" && (
+                            <div className="space-y-6">
+                                <StaffJobTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />
+                                <StaffSeatsCard detail={data} canEdit={canEditPositions} onChanged={reload} />
+                            </div>
                         )}
-                        <ModuleTabs module="hr" tabs={TABS} active={tab} onChange={setTab} className="mt-4 rounded-t-lg border border-b-0" />
-                        <div className="rounded-b-lg border border-border bg-card p-5">
-                            {tab === "job" && (
-                                <div className="space-y-6">
-                                    <StaffJobTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />
-                                    <StaffSeatsCard detail={data} canEdit={canEditPositions} onChanged={reload} />
-                                </div>
-                            )}
-                            {tab === "access" && <StaffAccessTab detail={data} canEdit={canEditUsers} onChanged={reload} />}
-                            {/* The same form the person sees on their own profile page —
-                                HR puts the first copy on file, they keep it current. */}
-                            {tab === "personal" && <StaffPersonalForm userId={userId} canEdit={canEdit} />}
-                            {tab === "pay" && <StaffPayTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />}
-                            {tab === "money" && <StaffMoneyTab detail={data} />}
-                            {/* The printable staff ID card — same card the person sees on their own profile. */}
-                            {tab === "identity" && <StaffIdCardTab userId={userId} />}
-                        </div>
-                    </>
-                )}
-            </div>
+                        {tab === "access" && <StaffAccessTab detail={data} canEdit={canEditUsers} onChanged={reload} />}
+                        {/* The same form the person sees on their own profile page —
+                            HR puts the first copy on file, they keep it current. */}
+                        {tab === "personal" && <StaffPersonalForm userId={userId} canEdit={canEdit} />}
+                        {tab === "pay" && <StaffPayTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />}
+                        {tab === "money" && <StaffMoneyTab detail={data} />}
+                        {/* The printable staff ID card — same card the person sees on their own profile. */}
+                        {tab === "identity" && <StaffIdCardTab userId={userId} />}
+                    </div>
+                </>
+            )}
+        </div>
     );
-
-    if (embedded) return body;
-    return <ScrollArea className="h-full" type="always">{body}</ScrollArea>;
 }
 
 function Header({ detail, canAppoint, onAppoint }: {

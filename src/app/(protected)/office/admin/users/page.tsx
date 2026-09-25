@@ -286,7 +286,7 @@ export default function UsersPage() {
                                     <TableCell>
                                         <div className="flex gap-2">
                                             <Button asChild variant="outline" size="icon-sm" title="HR profile">
-                                                <Link href={`/office/hr/staff/${u.id}`} aria-label={`HR profile of ${u.name}`}>
+                                                <Link href={`/office/hr/staff?user=${u.id}`} aria-label={`HR profile of ${u.name}`}>
                                                     <IdCard size={14} />
                                                 </Link>
                                             </Button>
