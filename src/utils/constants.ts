@@ -168,6 +168,13 @@ export type NavItem = {
     label: string;
     href: string;
     icon: LucideIcon;
+    /**
+     * Stable slug for the sidebar-visibility permission id
+     * (`ui:sidebar:<module>:<sidebarKey>`). Defaults to slug(label) when omitted —
+     * set it when the display label may change but the granted permission id
+     * must stay put. Read by sidebarModules.ts (makeChildren).
+     */
+    sidebarKey?: string;
     permission?: string | null;
     children?: NavItem[];
 };
