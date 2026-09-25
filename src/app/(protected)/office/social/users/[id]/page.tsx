@@ -833,8 +833,76 @@ function SecurityTab({ profileId }: { profileId: number }) {
                     <Button type="submit" disabled={saving}>{saving ? "Changing…" : "Change Password"}</Button>
                 </div>
             </form>
+            <ForwardEmailCard />
             <CounterPinCard />
         </div>
+    );
+}
+
+type Forwarding = { address: string; forwardTo: string | null; verified: boolean; enabled: boolean };
+
+/** Where your staff address forwards — Cloudflare Email Routing via `/api/me/forward-email`.
+ *  Without it, "Forgot password" mail to your staff address reaches nobody. */
+function ForwardEmailCard() {
+    const [state, setState] = useState<Forwarding | null>(null);
+    const [unavailable, setUnavailable] = useState("");
+    const [forwardTo, setForwardTo] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    const load = async () => {
+        try {
+            const { data } = await axios.get<Forwarding>("/api/me/forward-email");
+            setState(data); setUnavailable("");
+            setForwardTo(f => f || data.forwardTo || "");
+        } catch (e) {
+            setUnavailable(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not read your forwarding");
+        }
+    };
+    useEffect(() => { void load(); }, []);
+
+    const save = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            const { data } = await axios.put<Forwarding>("/api/me/forward-email", { forwardTo });
+            setState(data);
+            toast.success(data.verified ? "Forwarding saved" : "Saved — open the Cloudflare email in that inbox and click Verify");
+        } catch (e) {
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not save your forwarding");
+        } finally { setBusy(false); }
+    };
+
+    const status = !state?.forwardTo ? "Not set"
+        : !state.verified ? "Waiting for you to verify"
+        : state.enabled ? "Active" : "Turned off";
+
+    return (
+        <form onSubmit={save} className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+                <Mail size={14} className="text-muted-foreground" />
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Forward Email</h3>
+            </div>
+            {unavailable ? (
+                <p className="text-xs text-muted-foreground">{unavailable}</p>
+            ) : (
+                <>
+                    <p className="text-xs text-muted-foreground">
+                        Mail to <span className="font-medium text-foreground">{state?.address ?? "your staff address"}</span> goes
+                        to this inbox — needed for Forgot password.
+                    </p>
+                    <div className="space-y-1.5">
+                        <Label>Personal email</Label>
+                        <Input type="email" autoComplete="email" value={forwardTo} onChange={e => setForwardTo(e.target.value)} placeholder="you@gmail.com" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                        <button type="button" className="text-xs text-muted-foreground underline" onClick={() => void load()}>
+                            {state ? status : "Loading…"}
+                        </button>
+                        <Button type="submit" disabled={busy || !state || !forwardTo.trim()}>{busy ? "Saving…" : "Save"}</Button>
+                    </div>
+                </>
+            )}
+        </form>
     );
 }
 

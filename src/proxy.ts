@@ -7,6 +7,7 @@ import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
     if (pathname === "/staff/login") return true;
+    if (pathname === "/staff/forgot-password") return true;
     // Policy pages — Razorpay activation and Google OAuth verification fetch
     // these anonymously, so they must never redirect to a sign-in.
     if (isLegalPath(pathname)) return true;

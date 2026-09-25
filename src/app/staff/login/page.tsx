@@ -736,7 +736,8 @@ function StaffLoginForm() {
                     </div>
 
                     <p className={styles.customer}>
-                        Customer? <Link href="/login">Sign in here</Link>
+                        <Link href="/staff/forgot-password">Forgot password?</Link>
+                        {" · "}Customer? <Link href="/login">Sign in here</Link>
                     </p>
                 </form>
                 )}
