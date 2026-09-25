@@ -55,6 +55,10 @@ export type CompanyDetails = {
     /** Theme colors for the mobile browser chrome (light/dark). */
     themeColor: { light: string; dark: string };
 
+    /** Staff sign-in addresses are `name@<this>`. No mailboxes — Cloudflare Email
+     *  Routing forwards each to the person's own inbox (cloudflareRouting.ts). */
+    staffMailDomain: string;
+
     /** Contact channels shown in footer / order emails. */
     contact: {
         email: string;
@@ -167,6 +171,8 @@ export const COMPANY_DETAILS: CompanyDetails = {
         light: "#ffffff",
         dark: "#0a0a0a",
     },
+
+    staffMailDomain: "networkservice.in",
 
     contact: {
         email: "hello@networkservice.in",

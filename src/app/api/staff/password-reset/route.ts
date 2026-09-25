@@ -9,7 +9,7 @@
  * Reuses the portal's signed-cookie OTP (otpChallenge.ts) under its own cookie name,
  * so a portal code in flight and a staff reset never step on each other. The mail goes
  * to `name@networkservice.in`; Cloudflare forwards it to the person's own inbox, which
- * they set on their profile (`/api/me/forward-email`).
+ * they (or an admin) set on the profile (`/api/users/[id]/forward-email`).
  *
  * A successful reset bumps `tokensValidFrom`: whoever knew the old password is signed
  * out everywhere.

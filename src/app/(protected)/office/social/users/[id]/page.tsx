@@ -793,7 +793,9 @@ const securitySchema = z.object({
 }).refine(d => d.password === d.confirmPassword, { message: "Passwords do not match", path: ["confirmPassword"] });
 type SecurityForm = z.infer<typeof securitySchema>;
 
-function SecurityTab({ profileId }: { profileId: number }) {
+/** Password and forwarding for the person or an admin (`users:edit`); the counter PIN
+ *  only ever for the person themselves — its route has no id to aim elsewhere. */
+function SecurityTab({ profileId, isSelf }: { profileId: number; isSelf: boolean }) {
     const [saving, setSaving] = useState(false);
     const { register, handleSubmit, reset, formState: { errors } } = useForm<SecurityForm>({
         resolver: zodResolver(securitySchema),
@@ -833,17 +835,17 @@ function SecurityTab({ profileId }: { profileId: number }) {
                     <Button type="submit" disabled={saving}>{saving ? "Changing…" : "Change Password"}</Button>
                 </div>
             </form>
-            <ForwardEmailCard />
-            <CounterPinCard />
+            <ForwardEmailCard userId={profileId} isSelf={isSelf} />
+            {isSelf && <CounterPinCard />}
         </div>
     );
 }
 
-type Forwarding = { address: string; forwardTo: string | null; verified: boolean; enabled: boolean };
+type Forwarding = { address: string; forwardTo: string | null; verified: boolean; enabled: boolean; catchAll: string | null };
 
-/** Where your staff address forwards — Cloudflare Email Routing via `/api/me/forward-email`.
- *  Without it, "Forgot password" mail to your staff address reaches nobody. */
-function ForwardEmailCard() {
+/** Where a staff address forwards — Cloudflare Email Routing. Until it is set, the
+ *  catch-all takes the mail, so "Forgot password" codes reach the office, not the person. */
+function ForwardEmailCard({ userId, isSelf }: { userId: number; isSelf: boolean }) {
     const [state, setState] = useState<Forwarding | null>(null);
     const [unavailable, setUnavailable] = useState("");
     const [forwardTo, setForwardTo] = useState("");
@@ -851,29 +853,31 @@ function ForwardEmailCard() {
 
     const load = async () => {
         try {
-            const { data } = await axios.get<Forwarding>("/api/me/forward-email");
+            const { data } = await axios.get<Forwarding>(`/api/users/${userId}/forward-email`);
             setState(data); setUnavailable("");
             setForwardTo(f => f || data.forwardTo || "");
         } catch (e) {
             setUnavailable(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not read your forwarding");
         }
     };
-    useEffect(() => { void load(); }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the profile changes
+    useEffect(() => { void load(); }, [userId]);
 
     const save = async (e: React.FormEvent) => {
         e.preventDefault();
         setBusy(true);
         try {
-            const { data } = await axios.put<Forwarding>("/api/me/forward-email", { forwardTo });
+            const { data } = await axios.put<Forwarding>(`/api/users/${userId}/forward-email`, { forwardTo });
             setState(data);
-            toast.success(data.verified ? "Forwarding saved" : "Saved — open the Cloudflare email in that inbox and click Verify");
+            toast.success(data.verified ? "Forwarding saved" : "Saved — open Cloudflare's email in that inbox and click Verify");
         } catch (e) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not save your forwarding");
         } finally { setBusy(false); }
     };
 
-    const status = !state?.forwardTo ? "Not set"
-        : !state.verified ? "Waiting for you to verify"
+    const status = !state?.forwardTo
+        ? (state?.catchAll ? `Not set — going to catch-all (${state.catchAll})` : "Not set")
+        : !state.verified ? "Waiting for verify"
         : state.enabled ? "Active" : "Turned off";
 
     return (
@@ -887,7 +891,7 @@ function ForwardEmailCard() {
             ) : (
                 <>
                     <p className="text-xs text-muted-foreground">
-                        Mail to <span className="font-medium text-foreground">{state?.address ?? "your staff address"}</span> goes
+                        Mail to <span className="font-medium text-foreground">{state?.address ?? (isSelf ? "your staff address" : "this staff address")}</span> goes
                         to this inbox — needed for Forgot password.
                     </p>
                     <div className="space-y-1.5">
@@ -1484,7 +1488,7 @@ const TABS = [
     { id: 2 as const, label: "About", icon: Info, access: "all" },
     { id: 3 as const, label: "Activity Timeline", icon: Activity, access: "all" },
     { id: 4 as const, label: "Edit Profile", icon: Pencil, access: "self" },
-    { id: 5 as const, label: "Security", icon: Lock, access: "self" },
+    { id: 5 as const, label: "Security", icon: Lock, access: "selfOrAdmin" },
     // { id: 6 as const, label: "Permissions", icon: Shield, access: "selfOrAdmin" },
     { id: 6 as const, label: "Org Position", icon: GitBranch, access: "all" },
     { id: 7 as const, label: "Friends", icon: Users, access: "all" },
@@ -1693,7 +1697,7 @@ export default function UserProfilePage() {
                         <EditProfileTab profile={profile}
                             onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)} />
                     )}
-                    {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
+                    {activeTab === 5 && (isSelf || isAdmin) && <SecurityTab profileId={profile.id} isSelf={isSelf} />}
                     {activeTab === 6 && <OrgPositionTab />}
                     {activeTab === 7 && <FriendsTab userId={profile.id} />}
                     {activeTab === 8 && (isSelf || isAdmin) && (

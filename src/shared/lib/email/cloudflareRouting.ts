@@ -1,11 +1,15 @@
 import "server-only";
 
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+
 /**
  * Cloudflare Email Routing — staff mail forwarding.
  *
  * Staff sign in as `name@networkservice.in`, a mailbox that does not exist: Cloudflare
- * forwards it to the person's own inbox (usually Gmail). This lets each person point
- * THEIR address at THEIR inbox from the profile, so "Forgot password" mail reaches them.
+ * forwards it to the person's own inbox (usually Gmail). The person, or an admin, points
+ * that address at that inbox from the profile, so "Forgot password" mail reaches them.
+ * Until then the zone's catch-all rule takes it — a new user's address works from the
+ * first minute without anything being created here.
  *
  * Cloudflare is the only record — no column in our DB. The rule for an address says
  * where it goes; the destination says whether its owner has clicked Cloudflare's
@@ -16,7 +20,7 @@ import "server-only";
  * and CLOUDFLARE_ZONE_ID. Office only — counters do not carry the token.
  */
 
-export const STAFF_MAIL_DOMAIN = "networkservice.in";
+export const STAFF_MAIL_DOMAIN = COMPANY_DETAILS.staffMailDomain;
 
 export class ForwardingNotConfiguredError extends Error {
     constructor() {
@@ -95,11 +99,15 @@ type Rule = {
 const rulesPath = () => `/zones/${process.env.CLOUDFLARE_ZONE_ID}/email/routing/rules`;
 const addressesPath = () => `/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/email/routing/addresses`;
 
-async function ruleFor(address: string): Promise<Rule | undefined> {
-    const rules = await cfList<Rule>(rulesPath());
+const forwardTarget = (rule: Rule | undefined) => rule?.actions.find(a => a.type === "forward")?.value?.[0] ?? null;
+
+function ruleFor(rules: Rule[], address: string): Rule | undefined {
     const a = address.toLowerCase();
     return rules.find(r => r.matchers.some(m => m.type === "literal" && m.field === "to" && m.value?.toLowerCase() === a));
 }
+
+/** `akramul@gmail.com` → `akr…@gmail.com` — enough to recognise, not to harvest. */
+const maskEmail = (e: string) => e.replace(/^(.{1,3}).*(@.*)$/, "$1…$2");
 
 async function destination(email: string): Promise<Destination | undefined> {
     const all = await cfList<Destination>(addressesPath());
@@ -108,19 +116,26 @@ async function destination(email: string): Promise<Destination | undefined> {
 }
 
 export type ForwardingStatus = {
-    /** Where the address forwards now, or null when it has no forwarding rule. */
+    /** Where the address forwards now, or null when it has no rule of its own. */
     forwardTo: string | null;
     /** false until the owner clicks Cloudflare's verify mail — nothing arrives before. */
     verified: boolean;
     enabled: boolean;
+    /** With no rule of its own, the mail lands here (masked), or null when nothing catches it. */
+    catchAll: string | null;
 };
 
 export async function getForwarding(address: string): Promise<ForwardingStatus> {
-    const rule = await ruleFor(address);
-    const forwardTo = rule?.actions.find(a => a.type === "forward")?.value?.[0] ?? null;
-    if (!rule || !forwardTo) return { forwardTo: null, verified: false, enabled: false };
+    const rules = await cfList<Rule>(rulesPath());
+    const rule = ruleFor(rules, address);
+    const forwardTo = forwardTarget(rule);
+    if (!rule || !forwardTo) {
+        const all = rules.find(r => r.enabled && r.matchers.some(m => m.type === "all"));
+        const target = forwardTarget(all);
+        return { forwardTo: null, verified: false, enabled: false, catchAll: target ? maskEmail(target) : null };
+    }
     const dest = await destination(forwardTo);
-    return { forwardTo, verified: Boolean(dest?.verified), enabled: rule.enabled };
+    return { forwardTo, verified: Boolean(dest?.verified), enabled: rule.enabled, catchAll: null };
 }
 
 /**
@@ -130,6 +145,13 @@ export async function getForwarding(address: string): Promise<ForwardingStatus> 
  */
 export async function setForwarding(address: string, forwardTo: string): Promise<ForwardingStatus> {
     let dest = await destination(forwardTo);
+    // Added once and never verified: Cloudflare's link has long expired and it has no
+    // "resend". Removing and re-adding it is how a fresh verify mail goes out. Safe —
+    // an unverified destination carries no mail for any rule.
+    if (dest && !dest.verified) {
+        await cf(`${addressesPath()}/${dest.id}`, { method: "DELETE" });
+        dest = undefined;
+    }
     if (!dest) {
         dest = (await cf<Destination>(addressesPath(), {
             method: "POST",
@@ -143,9 +165,9 @@ export async function setForwarding(address: string, forwardTo: string): Promise
         matchers: [{ type: "literal", field: "to", value: address }],
         actions: [{ type: "forward", value: [forwardTo] }],
     });
-    const rule = await ruleFor(address);
+    const rule = ruleFor(await cfList<Rule>(rulesPath()), address);
     if (rule) await cf(`${rulesPath()}/${rule.id}`, { method: "PUT", body });
     else await cf(rulesPath(), { method: "POST", body });
 
-    return { forwardTo, verified: Boolean(dest.verified), enabled: true };
+    return { forwardTo, verified: Boolean(dest.verified), enabled: true, catchAll: null };
 }

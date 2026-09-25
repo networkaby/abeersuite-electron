@@ -15,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useEffect } from "react";
 import { FieldError } from "@/shared/components/FieldError";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+
+const STAFF_DOMAIN = COMPANY_DETAILS.staffMailDomain;
 
 // Identity-only user creation.
 //
@@ -23,9 +26,13 @@ import { FieldError } from "@/shared/components/FieldError";
 // / rewards are layered on top via the per-user PermissionsModal (shield icon
 // in the users table).
 
+// A new account's address is always `name@<staff domain>`, so the form asks only for
+// the name part — nothing to mistype. Editing keeps the full box: older accounts may
+// sit on another domain. No Cloudflare step here: the zone's catch-all takes the new
+// address's mail until the person (or an admin) sets a forward on the profile.
 const schema = z.object({
     name:     z.string().min(1, "Name is required"),
-    email:    z.string().email("Invalid email"),
+    email:    z.string().trim().min(1, "Email is required"),
     password: z.string().optional(),
 });
 
@@ -54,10 +61,15 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     }, [user, reset]);
 
     const onSubmit = async (data: FormData) => {
+        const email = user ? data.email : `${data.email.toLowerCase()}@${STAFF_DOMAIN}`;
+        if (!z.string().email().safeParse(email).success) {
+            toast.error(user ? "Invalid email" : "Use letters, digits, dots or dashes before the @");
+            return;
+        }
         try {
             const payload = {
                 name:  data.name,
-                email: data.email,
+                email,
                 ...(data.password ? { password: data.password } : {}),
             };
             if (user) {
@@ -97,7 +109,24 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                         </div>
                         <div className="space-y-1.5">
                             <Label>Email</Label>
-                            <Input {...register("email")} placeholder="ahmed@company.com" />
+                            {user ? (
+                                <Input {...register("email")} placeholder={`ahmed@${STAFF_DOMAIN}`} />
+                            ) : (
+                                <>
+                                    <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
+                                        <Input
+                                            {...register("email", { setValueAs: (v: string) => v.replace(/@.*$/, "").trim() })}
+                                            placeholder="ahmed"
+                                            autoComplete="off"
+                                            className="border-0 shadow-none focus-visible:ring-0"
+                                        />
+                                        <span className="pr-3 text-sm text-muted-foreground">@{STAFF_DOMAIN}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Mail goes to the catch-all inbox until a forward is set on their profile.
+                                    </p>
+                                </>
+                            )}
                             <FieldError message={errors.email?.message} />
                         </div>
                     </div>
