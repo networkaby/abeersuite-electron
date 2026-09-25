@@ -1497,10 +1497,58 @@ function classifyTarget(rawUrl: string): { internal: boolean; href: string; prot
 }
 
 /**
+ * Every window the app opened from itself with `window.open` — POS tabs, the office
+ * opened beside a bill, receipts. The main window is never in here.
+ */
+const childWindows = new Set<BrowserWindow>();
+
+function isLoginUrl(rawUrl: string): boolean {
+    try {
+        const u = new URL(rawUrl);
+        return (u.protocol === "http:" || u.protocol === "https:") && u.pathname.startsWith("/staff/login");
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Closes every child window the moment any window lands on the sign-in page.
+ *
+ * Sign-out is decided per window: each one watches its own session and only hears
+ * about a sign-out elsewhere through next-auth's broadcast, which fires solely when
+ * `signOut()` is called. A session that went cold overnight, or a token an admin
+ * revoked, sends the main window to sign-in with no broadcast at all — and a POS
+ * tab sitting beside it, visible and idle with an empty cart, never re-checks. It
+ * kept showing an open shift and a Hand over button for a person who was no longer
+ * signed in. Closing the children on every route to sign-in, rather than only on a
+ * button press, covers the silent routes too and leaves one window to sign in on.
+ *
+ * A child reaching sign-in is closed as well — a second sign-in window has no use —
+ * and the main window is brought up so nobody is left staring at an empty desktop
+ * because the main window had been hidden to the tray.
+ */
+function closeChildWindowsOnLogin(win: BrowserWindow): void {
+    const onNavigate = (_event: unknown, url: string) => {
+        if (!isLoginUrl(url)) return;
+        // Deferred: closing a window from inside its own navigation event is asking
+        // for trouble, and the main window needs no such care but gains nothing here.
+        setImmediate(() => {
+            for (const child of Array.from(childWindows)) {
+                if (!child.isDestroyed()) child.close();
+            }
+            if (win !== mainWindow) showMainWindow();
+        });
+    };
+    win.webContents.on("did-navigate", onNavigate);
+    win.webContents.on("did-navigate-in-page", onNavigate);
+}
+
+/**
  * Applies the origin split to `win`, and to any window `win` itself opens — a receipt
  * window that opens a further link must not fall back to Electron's permissive default.
  */
 function attachWindowOpenPolicy(win: BrowserWindow): void {
+    closeChildWindowsOnLogin(win);
     // Electron syncs the window title to document.title on every navigation by default —
     // the splash page, the boot-error page, and every real app page each carry their own
     // <title>, which would silently overwrite the version-stamped title set at
@@ -1551,6 +1599,8 @@ function attachWindowOpenPolicy(win: BrowserWindow): void {
         // Child windows are ordinary windows: closing one closes it. Only the tray-backed
         // main window gets the hide-on-close treatment, so a closed report window is not
         // left invisible in memory with nothing able to bring it back.
+        childWindows.add(child);
+        child.on("closed", () => childWindows.delete(child));
         attachWindowOpenPolicy(child);
         attachZoom(child);
     });
