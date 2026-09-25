@@ -3,6 +3,7 @@ import { dateOnOrBefore, businessToday, startOfDayUtc, businessTodayIso } from "
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
+import { sourceCounterNumber } from "@/shared/lib/counter/sourceCounter";
 
 export type LineForBalance = {
     type: "DEBIT" | "CREDIT";
@@ -189,24 +190,23 @@ export function computeBalance(
 /**
  * Which counter this save numbers under — THE one rule, for every voucher kind.
  *
- * The MACHINE THAT WRITES decides, never the voucher:
+ * The COUNTER THE BILL IS RAISED AT decides, on every write mode (owner's call,
+ * 2026-09-25 — it reverses the 2026-09-20 "machine that writes" rule):
  *   • a till writing to its own replica numbers under its own counter;
- *   • the office numbers as counter 1 — a relayed sale included, because under
- *     `WRITE_MODE=v_live` the route code really is running on the office machine.
+ *   • a `v_live` till's relayed sale numbers under THAT till, read from the
+ *     `x-abeer-counter-number` header the relay stamps (sourceCounter.ts);
+ *   • the office itself, and anything with no counter, numbers as counter 1.
+ * It is the same resolution that stamps `sourceCounterId`, so a voucher's number
+ * and its provenance always name the same counter.
  *
- * So no voucher path passes a context any more. Since 2026-09-20 that includes
- * Sale Invoices, which used to be numbered from the voucher's `sourceCounterId`
- * and so took `SV-93…` from a till's private run while the same till's POS sale,
- * in the same minute, took `POS-1…` from the office run. `sourceCounterId` is
- * still stamped on every row — it is the provenance the Day Book and the counter
- * reports read — it is just not an input to NUMBERING.
+ * Two machines can now write one till's `VoucherSeriesCounter` row — the till while
+ * it writes locally, the office for its relayed sales. Sync keeps the higher number
+ * when the till pushes (`mergeSeriesCounter` in sync/push.ts), and pull hands the
+ * till the office's newer copy.
  *
- * The `ctx` parameter survives for the one caller that legitimately asks about a
- * counter other than its own: /api/accountancy/vouchers/next-ref, previewing what
- * a given till's next number would be.
- *
- * Same fallback `assembleReference` renders, so the printed reference and the
- * series row it came from always agree.
+ * `ctx` survives for the callers that ask about a named counter (the next-ref
+ * previews). `resolveCounterNumber` is the synchronous half — explicit, else this
+ * PC's own setup, else 1 — for those GET previews, which a till never relays.
  */
 export function resolveCounterNumber(ctx?: import("./voucherRef").ReferenceContext): number {
     const explicit = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;
@@ -216,6 +216,16 @@ export function resolveCounterNumber(ctx?: import("./voucherRef").ReferenceConte
         if (setup && setup.counterNumber > 0) return setup.counterNumber;
     }
     return 1;
+}
+
+/** The counter a WRITE numbers under: explicit, else the relayed/own counter, else 1. */
+export async function numberingCounter(
+    tx: import("@/generated/prisma/client").Prisma.TransactionClient,
+    ctx?: import("./voucherRef").ReferenceContext,
+): Promise<number> {
+    const explicit = typeof ctx === "number" ? ctx : ctx?.counterNumber ?? null;
+    if (explicit != null && explicit > 0) return explicit;
+    return (await sourceCounterNumber(tx)) ?? 1;
 }
 
 export async function nextRefFromSeries(
@@ -245,12 +255,10 @@ export async function nextRefFromSeries(
         throw new Error(`VoucherSeries for kind '${kind}' not found. Visit Settings → Year Ending to initialise.`);
     }
 
-    const counterNumber = resolveCounterNumber(ctx);
+    const counterNumber = await numberingCounter(tx, ctx);
     const key = { kind_counterNumber: { kind, counterNumber } };
 
-    // One row per (kind, counter), so only this machine ever writes it — which is
-    // what makes the increment safe under sync's last-write-wins. Counter 1 (the
-    // office) inherits the legacy `VoucherSeries.nextSeq` the first time so numbering
+    // One row per (kind, counter). Counter 1 (the office) inherits the legacy `VoucherSeries.nextSeq` the first time so numbering
     // continues; every other counter starts its own run at `startFrom`.
     const row = await tx.voucherSeriesCounter.upsert({
         where: key,

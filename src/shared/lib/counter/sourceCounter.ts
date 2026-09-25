@@ -97,6 +97,19 @@ async function counterIdForNumber(db: DbClient, counterNumber: number): Promise<
  * "office / unknown" everywhere downstream.
  */
 export async function sourceCounterId(db: DbClient = prisma): Promise<number | null> {
+    return (await resolveSource(db))?.counterId ?? null;
+}
+
+/**
+ * The same answer as `sourceCounterId`, as the counter's NUMBER — what voucher
+ * numbering runs on (`nextRefFromSeries`). null means the office, which numbers
+ * as counter 1. Same order, same never-throws promise.
+ */
+export async function sourceCounterNumber(db: DbClient = prisma): Promise<number | null> {
+    return (await resolveSource(db))?.counterNumber ?? null;
+}
+
+async function resolveSource(db: DbClient): Promise<{ counterId: number; counterNumber: number } | null> {
     // 1. Relayed from a till — the office's only way to know who is billing.
     try {
         const raw = (await headers()).get(COUNTER_NUMBER_HEADER)?.trim();
@@ -104,7 +117,8 @@ export async function sourceCounterId(db: DbClient = prisma): Promise<number | n
             const n = Number(raw);
             if (!Number.isInteger(n) || n <= 0) return null;
             // A number matching no counter is attributed to nothing, never guessed.
-            return await counterIdForNumber(db, n);
+            const counterId = await counterIdForNumber(db, n);
+            return counterId == null ? null : { counterId, counterNumber: n };
         }
     } catch {
         // No request in scope (seed / job), or headers unavailable. Not an error:
@@ -114,7 +128,8 @@ export async function sourceCounterId(db: DbClient = prisma): Promise<number | n
     // 2. This machine is the till, writing its own rows. The setup file holds the
     //    id directly, so no lookup is needed.
     try {
-        return readCounterSetup()?.counterId ?? null;
+        const setup = readCounterSetup();
+        return setup ? { counterId: setup.counterId, counterNumber: setup.counterNumber } : null;
     } catch {
         // 3. The office, or a read that failed. Either way: unattributed.
         return null;

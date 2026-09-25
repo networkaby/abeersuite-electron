@@ -10,6 +10,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2, Undo2, RefreshCw, Trash2, ShieldAlert, FileClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
@@ -138,6 +139,28 @@ export function RecycleBin() {
         }
     };
 
+    // Empty the whole bin — super admin only, and armed by typing EMPTY so it cannot
+    // go on a mis-click. The server repeats the same check.
+    const [emptyArmed, setEmptyArmed] = useState(false);
+    const [emptyText, setEmptyText] = useState("");
+    const [emptying, setEmptying] = useState(false);
+    const emptyBin = async () => {
+        setEmptying(true);
+        try {
+            const { data } = await axios.delete<{ removed: number; released: string[] }>("/api/audit", { data: { confirm: emptyText } });
+            toast.success(`Recycle bin emptied — ${data.removed} cop${data.removed === 1 ? "y" : "ies"} deleted`
+                + (data.released.length ? `, ${data.released.length} number(s) released for re-use` : ""));
+            setRows([]);
+            setEmptyArmed(false);
+            setEmptyText("");
+            load({ silent: true });
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Could not empty the recycle bin"));
+        } finally {
+            setEmptying(false);
+        }
+    };
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-card">
             <div className="flex items-center gap-3 border-b px-6 py-3">
@@ -152,6 +175,33 @@ export function RecycleBin() {
                 <Button size="sm" variant="outline" className="h-8" disabled={refreshing} onClick={refresh}>
                     <RefreshCw size={13} className={`mr-1 ${refreshing ? "animate-spin" : ""}`} /> Refresh
                 </Button>
+                {isSuperAdmin && (emptyArmed ? (
+                    <div className="flex items-center gap-1">
+                        <Input
+                            autoFocus
+                            value={emptyText}
+                            onChange={(e) => setEmptyText(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => { if (e.key === "Enter" && emptyText === "EMPTY") void emptyBin(); if (e.key === "Escape") setEmptyArmed(false); }}
+                            placeholder="Type EMPTY"
+                            className="h-8 w-28 font-mono text-xs"
+                        />
+                        <Button size="sm" variant="destructive" className="h-8" disabled={emptyText !== "EMPTY" || emptying} onClick={emptyBin}>
+                            {emptying ? <Loader2 size={13} className="mr-1 animate-spin" /> : <ShieldAlert size={13} className="mr-1" />} Delete everything
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEmptyArmed(false); setEmptyText(""); }}>Cancel</Button>
+                    </div>
+                ) : (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-destructive hover:text-destructive"
+                        disabled={rows.length === 0}
+                        title="Delete every copy in the recycle bin for good — nothing in it can be restored afterwards"
+                        onClick={() => setEmptyArmed(true)}
+                    >
+                        <Trash2 size={13} className="mr-1" /> Empty bin
+                    </Button>
+                ))}
             </div>
 
             <div className="flex-1 overflow-auto">

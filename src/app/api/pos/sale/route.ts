@@ -848,10 +848,9 @@ export async function POST(req: Request) {
             // tender for any unsettled balance). postInvVoucherToGl posts
             // a single balanced JE per voucher; no separate Receipt
             // voucher / VoucherAllocation needed.
-            // No explicit counter: resolveCounterNumber() numbers a counter PC's own
-            // write under its counter and anything saved at the office — including a
-            // sale a v_live till relayed there — in the common series. Owner decision
-            // (2026-09-07): one series for every voucher that reaches the office.
+            // No explicit counter: numberingCounter() numbers the sale under the
+            // counter it is raised at — this till, or a v_live till relaying it to
+            // the office — and the office's own sales as counter 1 (2026-09-25).
             const voucherRef = await invNextRef(tx, "POS");
             // Whatever the counter did not collect goes on the customer's own
             // ledger as an AR tender, so the tender rows always add up to the

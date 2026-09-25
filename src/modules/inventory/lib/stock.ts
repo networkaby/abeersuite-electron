@@ -1,5 +1,5 @@
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
-import { nextRefFromSeries, resolveCounterNumber } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries, numberingCounter } from "@/modules/accountancy/lib/balance";
 
 // ── Reference number generation ───────────────────────────────────────────────
 
@@ -78,10 +78,10 @@ export async function invNextRef(
     // This used to default to 1 whenever the caller passed no context, which is every
     // POS_ESTIMATE and POS_ORDER (posQuoteVoucher.ts passes none): two tills each
     // counted the same `startsWith` on their own replica and both minted
-    // `01-POSEV-2026-0001`. `resolveCounterNumber` falls back to this PC's own
-    // counter-setup.json, so the prefix separates the machines the way it always
-    // claimed to, and the office still numbers as 1.
-    const counterNumber = resolveCounterNumber(ctx);
+    // `01-POSEV-2026-0001`. `numberingCounter` answers with the counter the bill is
+    // raised at — this PC's own, or a relayed till's — so the prefix separates the
+    // counters the way it always claimed to, and the office still numbers as 1.
+    const counterNumber = await numberingCounter(tx, ctx);
     const startsWith = `${String(counterNumber).padStart(2, "0")}-${prefix}-${year}-`;
     // count(+1) is not atomic under READ COMMITTED: two transactions counting the same
     // prefix at once both mint the same number. The prefix used to be per till, so only

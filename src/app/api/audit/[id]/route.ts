@@ -3,23 +3,8 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission, userCanRestoreAudit } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { releaseSeriesNumber } from "@/modules/accountancy/lib/releaseSeriesNumber";
-import { SERIES_KINDS } from "@/modules/inventory/lib/stock";
-import type { InvVoucherType } from "@/generated/prisma/client";
+import { releaseSeriesNumber, seriesKindOf } from "@/modules/accountancy/lib/releaseSeriesNumber";
 import { auditSnapshotKind } from "@/shared/lib/accountancy/auditSnapshotKind";
-
-// The VoucherSeries a purged snapshot's number came out of, or null when that kind
-// is not series-numbered. Inventory kinds route through the SAME map the allocator
-// uses (`invNextRef`), so the legacy prefix kinds — POS_ESTIMATE, POS_ORDER and
-// friends, which count their own surviving rows and therefore re-use a freed number
-// by themselves — are excluded by construction. A GL voucher type IS its series kind.
-function seriesKindOf(entityType: string, subtype: string | null): string | null {
-    // Legacy JOURNAL_ENTRY rows carry no subtype — the entity type WAS the kind back
-    // then, and every one of them is a journal voucher.
-    if (!subtype) return entityType === "JOURNAL_ENTRY" ? "JOURNAL" : null;
-    if (entityType === "INV_VOUCHER") return SERIES_KINDS[subtype as InvVoucherType] ?? null;
-    return subtype;
-}
 
 // GET /api/audit/[id]
 // One recycle-bin snapshot in full — the removed voucher's header, its lines and

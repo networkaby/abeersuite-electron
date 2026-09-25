@@ -299,12 +299,17 @@ export async function engineGlArm(
     // …and which shift was standing there. Resolved in the same one place, so a
     // counter voucher carries its shift without any caller remembering to pass it.
     const shiftId = args.shiftId !== undefined ? args.shiftId : await shiftIdForCounter(tx, counterId);
+    // Born POSTED, so it takes its number now — the same allocator the attach branch
+    // uses. Without this a voucher the system raises for itself (a shift variance
+    // Journal, a gift-card issue) posted with no number at all.
+    const voucherNo = args.voucherNo?.trim()
+        || await allocateSpineNumber(tx, { type: args.type ?? "JOURNAL", date });
     const uv = await tx.universalVoucher.create({
         select: { id: true },
         data: {
             type:                 args.type ?? "JOURNAL",
             binding:              bindingForType(args.type ?? "JOURNAL"),   // 5D-9
-            voucherNo:            args.voucherNo?.trim() || null,
+            voucherNo,
             date,
             description,
             narration:            args.narration ?? null,
@@ -608,19 +613,12 @@ export async function enginePostSpine(
  * written, and it must be the same allocator the attach path uses.
  *
  * ── Which counter's run it numbers in ──────────────────────────────────
- * The MACHINE THAT WRITES decides — never the voucher's `sourceCounterId`. That is
- * `resolveCounterNumber`'s job and it is the only rule in the app: a till writing
- * to its own replica numbers under itself, and the office numbers as counter 1,
- * a relayed sale included. So this passes NO counter context and lets it answer.
- *
- * It used to read `sourceCounterId` and number under the till that raised the
- * voucher. That looked like provenance but it split the books: the same till,
- * billing live through the office, took `POS-1…` from the office run for a POS sale
- * and `SV-93…` from its own run for a Sale Invoice, in the same minute. The counter
- * segment on a relayed voucher read as "billed offline at 93" when nothing was
- * offline. Provenance lives in `sourceCounterId` itself, which is still stamped on
- * every row and is what the Day Book and the counter reports read; it is simply not
- * an input to numbering any more.
+ * The counter the voucher is raised at — `numberingCounter` in balance.ts, the only
+ * rule in the app. A till numbers under itself whether it writes locally or relays
+ * to the office; the office's own vouchers number as counter 1. It is the same
+ * resolution that stamps `sourceCounterId`, so this passes NO counter context.
+ * (From 2026-09-20 to 2026-09-25 the office numbered relayed vouchers as counter 1;
+ * the owner reversed that so every till keeps its own run.)
  *
  * The DATE still travels off the spine, not the wall clock: it is the VOUCHER's
  * date, so a 28-March voucher posted on 2 April does not roll the series into the

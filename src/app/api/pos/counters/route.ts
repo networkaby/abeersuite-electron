@@ -222,7 +222,7 @@ export async function POST(req: NextRequest) {
         // (blockStartFor in shared/lib/counter/idRange.ts), so two counters in different
         // branches must never share a number or their offline-minted ids collide.
         // Counter 1 is the OFFICE's numbering slot: a save with no counter (the web
-        // app) numbers vouchers as counter 1 (see resolveCounterNumber). A PC on
+        // app) numbers vouchers as counter 1 (see numberingCounter). A PC on
         // number 1 would share that series row with the office and the two would
         // overwrite each other's next number.
         if (counterNumber === 1) return NextResponse.json({ error: "Counter number 1 is reserved for the office. Use 2 or higher." }, { status: 422 });

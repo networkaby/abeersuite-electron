@@ -25,10 +25,24 @@
 // and one bill number can be issued twice. Accepted deliberately; a purge is a rare,
 // super-admin-only act.
 
-import type { Prisma } from "@/generated/prisma/client";
+import type { InvVoucherType, Prisma } from "@/generated/prisma/client";
+import { SERIES_KINDS } from "@/modules/inventory/lib/stock";
 import { assembleReference } from "./voucherRef";
 
 type Tx = Prisma.TransactionClient;
+
+// The VoucherSeries a purged snapshot's number came out of, or null when that kind
+// is not series-numbered. Inventory kinds route through the SAME map the allocator
+// uses (`invNextRef`), so the legacy prefix kinds — POS_ESTIMATE, POS_ORDER and
+// friends, which count their own surviving rows and therefore re-use a freed number
+// by themselves — are excluded by construction. A GL voucher type IS its series kind.
+export function seriesKindOf(entityType: string, subtype: string | null): string | null {
+    // Legacy JOURNAL_ENTRY rows carry no subtype — the entity type WAS the kind back
+    // then, and every one of them is a journal voucher.
+    if (!subtype) return entityType === "JOURNAL_ENTRY" ? "JOURNAL" : null;
+    if (entityType === "INV_VOUCHER") return SERIES_KINDS[subtype as InvVoucherType] ?? null;
+    return subtype;
+}
 
 /**
  * Hand `reference` back to series `seriesKind` when it is the last number issued.

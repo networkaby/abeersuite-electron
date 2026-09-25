@@ -23,6 +23,7 @@
  * it, one unpushable row would halt the counter's sync forever.
  */
 
+import type { Prisma } from "@/generated/prisma/client";
 import { prismaLive } from "@/shared/lib/prisma/prismaClient";
 import { SYNC_REGISTRY, type SyncRegistryEntry } from "./syncRegistry.generated";
 import type { OutboxRecord } from "./outbox";
@@ -53,6 +54,41 @@ function whereFor(entry: SyncRegistryEntry, rowKey: Record<string, unknown>): Re
     if (entry.pk.length === 1) return { [entry.pk[0]]: rowKey[entry.pk[0]] };
     const composite = entry.pk.join("_");
     return { [composite]: Object.fromEntries(entry.pk.map((c) => [c, rowKey[c]])) };
+}
+
+/**
+ * A till's number row never winds the cloud's copy back.
+ *
+ * Since 2026-09-25 numbering is counter-wise on every write mode, so a till's
+ * `VoucherSeriesCounter` row has TWO writers: the till itself while it writes to its
+ * own replica, and the office for every sale the till relays under `v_live`. The
+ * till's push carries its whole row image, and an image taken before the office's
+ * latest increments would set `nextSeq` back and re-issue numbers already printed.
+ *
+ * So within one generation (same `resetGen` and `fyStartYear`) the higher `nextSeq`
+ * wins. A cloud row already in a LATER generation — the office's reset, or the new
+ * financial year — makes the replay stale, and it is dropped. The worst this can
+ * cost is a gap in the run, never a repeated number.
+ *
+ * Returns the payload to write, or null to drop the record as superseded.
+ */
+async function mergeSeriesCounter(
+    payload: Record<string, unknown>,
+    where: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+    const cloud = await prismaLive.voucherSeriesCounter.findUnique({
+        where: where as Prisma.VoucherSeriesCounterWhereUniqueInput,
+        select: { nextSeq: true, resetGen: true, fyStartYear: true },
+    });
+    if (!cloud) return payload;
+    const gen = (resetGen: unknown, fy: unknown) => [Number(resetGen ?? 0), Number(fy ?? 0)] as const;
+    const [cReset, cFy] = gen(cloud.resetGen, cloud.fyStartYear);
+    const [iReset, iFy] = gen(payload.resetGen, payload.fyStartYear);
+    if (cReset > iReset || (cReset === iReset && cFy > iFy)) return null;
+    if (cReset === iReset && cFy === iFy && cloud.nextSeq > Number(payload.nextSeq ?? 0)) {
+        return { ...payload, nextSeq: cloud.nextSeq };
+    }
+    return payload;
 }
 
 /**
@@ -423,10 +459,10 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
             if (incoming && !Number.isNaN(incoming.getTime())) {
                 if (existing?.updatedAt && existing.updatedAt >= incoming) {
                     // A row this machine owns (`localAuthority`: VoucherSeriesCounter,
-                    // one row per counter and only that counter writes it) is never
-                    // "superseded" — a newer cloud copy is a write that should not have
-                    // happened, and dropping the local image loses an increment and
-                    // re-issues a printed invoice number. It goes up regardless.
+                    // one row per counter) is never "superseded" — dropping the local
+                    // image loses an increment and re-issues a printed invoice number.
+                    // It goes up regardless; since the office also numbers a relayed
+                    // till's row, `mergeSeriesCounter` below keeps the higher number.
                     if (!entry.localAuthority) {
                         pushedIds.push(rec.id);
                         continue;
@@ -441,6 +477,19 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
 
             if (rec.table_name === "pos_counters") {
                 payload = await reconcileCounterBinding(payload, where);
+            }
+
+            if (rec.table_name === "VoucherSeriesCounter") {
+                const merged = await mergeSeriesCounter(payload, where);
+                if (!merged) {
+                    console.warn(
+                        `[SyncPush] VoucherSeriesCounter ${JSON.stringify(where)}: dropping a replayed ` +
+                        `row — the cloud copy has already been reset or rolled into a new year.`,
+                    );
+                    pushedIds.push(rec.id);
+                    continue;
+                }
+                payload = merged;
             }
 
             // A closed shift is closed. Dropping counts as success — the counter must

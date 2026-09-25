@@ -83,6 +83,7 @@
     "vyapar:table-audit": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/table-audit.ts",
     "vyapar:payments": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/payments.ts",
     "vyapar:backfill-details": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/backfill-details.ts",
+    "vyapar:renumber": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/renumber-own-vouchers.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
