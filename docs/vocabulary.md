@@ -154,7 +154,7 @@ What still reads the cache is the two surfaces that want **every** account in on
 
 ## Staff ledger · Salary Payable
 
-**Definition:** Every staff member's own ledger, under the **Salary Payable** group (LIABILITY, Current Liabilities), opened the first time their HR profile is saved. Salary accrues INTO it (a later payroll journal), advances and salary payments go OUT of it (ordinary Payment vouchers), so its balance always reads "owed to them" (Cr) or "advance outstanding" (Dr). Not to be confused with the person's **salary expense ledger** (`Salary & Wages`, or a per-person one like `Naba Salary`) — that is the Dr side, chosen on the Job tab.
+**Definition:** Every staff member's own ledger, under the **Salary Payable** group (LIABILITY, Current Liabilities), opened the first time their HR profile is saved. Salary accrues INTO it (a later payroll journal), advances and salary payments go OUT of it (ordinary Payment vouchers), so its balance always reads "owed to them" (Cr) or "advance outstanding" (Dr). It cannot be deleted from the chart of accounts, even while empty — the Ledgers page tags it **Staff** and locks Delete, and the server refuses it, because a draft payroll run has already frozen its id. Not to be confused with the **salary expense ledger** — one org-wide `Salary & Wages`, the Dr side of every payroll run, held on the run and not on the person (the old per-person ones like `Naba Salary` are legacy, left as they were).
 
 ## Commission head · Override
 

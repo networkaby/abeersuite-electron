@@ -27,6 +27,8 @@ interface LedgerRow {
     isActive: boolean;
     personId: number | null;
     companyId: number | null;
+    /** A staff member's salary ledger — HR owns it, so Delete is locked. */
+    isStaffLedger: boolean;
     groupId: number | null;
     balance: number;
     /** Group-specific particulars — see PARTICULARS_SPECS. Carried straight
@@ -322,7 +324,9 @@ export default function LedgersPage() {
 
                                         // ── Ledger (leaf) row ─────────────────────────────
                                         const l = row.ledger;
-                                        const isIdentity = l.personId !== null || l.companyId !== null;
+                                        // Owned by a contact or a staff profile: tagged, and Delete is
+                                        // locked — the server refuses it anyway.
+                                        const ownerTag = l.personId ? "Customer" : l.companyId ? "Company" : l.isStaffLedger ? "Staff" : null;
                                         return (
                                             <tr
                                                 key={`l-${l.id}`}
@@ -336,9 +340,9 @@ export default function LedgersPage() {
                                                     <div style={{ paddingLeft: row.depth * 20 }}>
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-foreground">{l.name}</span>
-                                                            {isIdentity && (
+                                                            {ownerTag && (
                                                                 <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
-                                                                    {l.personId ? "Customer" : "Company"}
+                                                                    {ownerTag}
                                                                 </span>
                                                             )}
                                                             {!l.isActive && (
@@ -380,7 +384,7 @@ export default function LedgersPage() {
                                                             variant="ghost" size="icon-sm"
                                                             className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                                             onClick={() => deleteLedger(l)}
-                                                            disabled={isIdentity}
+                                                            disabled={ownerTag !== null}
                                                             aria-label={`Delete ${l.name}`}
                                                         >
                                                             <Trash2 size={14} />

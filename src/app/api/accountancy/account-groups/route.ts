@@ -28,6 +28,8 @@ type LedgerRow = {
     isActive: boolean;
     personId: number | null;
     companyId: number | null;
+    /** A staff member's salary ledger — HR owns it, so the tree locks its Delete. */
+    isStaffLedger: boolean;
     groupId: number | null;
     balance: number;
     /** Bank-ledger particulars (Bank-group ledgers only) — edited on the
@@ -143,7 +145,7 @@ export async function GET(req: Request) {
             return NextResponse.json(buildTree(flatGroups, new Map()));
         }
 
-        const [accounts, nbMap] = await Promise.all([
+        const [accounts, nbMap, staffLedgers] = await Promise.all([
             prisma.account.findMany({
                 where: { groupId: { not: null } },
                 orderBy: { name: "asc" },
@@ -158,7 +160,14 @@ export async function GET(req: Request) {
                 },
             }),
             loadNormalBalanceMap(),
+            // One row per staff member, so a separate read beats a relation join
+            // across every account in the chart.
+            prisma.staffProfile.findMany({
+                where:  { ledgerAccountId: { not: null } },
+                select: { ledgerAccountId: true },
+            }),
         ]);
+        const staffLedgerIds = new Set(staffLedgers.map((p) => p.ledgerAccountId));
 
         // Per-account closing, derived from JournalLine (same path as the
         // Balance Sheet) so group rollups agree with the reports.
@@ -171,6 +180,7 @@ export async function GET(req: Request) {
             arr.push({
                 ...a,
                 aliases: a.aliases.map((x) => x.alias),
+                isStaffLedger: staffLedgerIds.has(a.id),
                 openingBalance: a.openingBalance !== null ? toNumber(a.openingBalance) : null,
                 openingBalanceDate: a.openingBalanceDate
                     ? a.openingBalanceDate.toISOString().slice(0, 10)

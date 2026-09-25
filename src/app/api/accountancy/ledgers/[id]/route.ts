@@ -215,7 +215,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     const account = await prisma.account.findUnique({
         where: { id },
-        select: { id: true, personId: true, companyId: true, _count: { select: { children: true } } },
+        select: {
+            id: true, personId: true, companyId: true,
+            staffLedgerOf: { select: { user: { select: { name: true } } } },
+            _count: { select: { children: true } },
+        },
     });
     if (!account) return NextResponse.json({ error: "Ledger not found" }, { status: 404 });
 
@@ -223,6 +227,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (account.personId !== null || account.companyId !== null) {
         return NextResponse.json(
             { error: "This ledger belongs to a customer/company — delete the contact instead" },
+            { status: 409 },
+        );
+    }
+    // A staff member's salary ledger is HR's, opened with their profile. Even an
+    // empty one is not free to go: a draft payroll run has already frozen its id,
+    // and posting that run would credit a ledger that no longer exists.
+    if (account.staffLedgerOf) {
+        return NextResponse.json(
+            { error: `This is ${account.staffLedgerOf.user.name}'s salary ledger — it belongs to their staff profile and cannot be deleted` },
             { status: 409 },
         );
     }
