@@ -84,7 +84,6 @@ import {
     MessageCircleQuestion,
     MessageSquare,
     Milestone,
-    Monitor,
     ScanBarcode,
     CalendarClock,
     MonitorCog,
