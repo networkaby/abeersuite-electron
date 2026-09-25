@@ -99,7 +99,11 @@ export default function TillCard() {
     const verdict = !day ? "" :
         day.grade === "PRESENT"  ? "Full day"
       : day.grade === "HALF_DAY" ? "Half day"
-      :                            "Absent";   // never "not counted" — the drawer's "counted" sits right below
+      // He came and worked, just not 40% of duty yet — "Absent" would be wrong
+      // to his face. An office mark of absent, or no work at all, stays Absent.
+      // Never "not counted": the drawer's "counted" sits right below.
+      : day.workedMinutes > 0 && !day.officeMarked ? "Duty joined"
+      :                            "Absent";
 
     const filled = day && day.dutyMinutes > 0 ? Math.min(100, (day.workedMinutes / day.dutyMinutes) * 100) : null;
     const handedOver = shift?.status === "AWAITING_HANDOVER";
